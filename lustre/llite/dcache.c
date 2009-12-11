@@ -75,6 +75,7 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
+#ifdef DCACHE_LUSTRE_INVALID
 /* Compare if two dentries are the same.  Don't match if the existing dentry
  * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
  *
@@ -87,41 +88,41 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
         struct dentry *dchild;
         ENTRY;
 
-        /* XXX: d_name must be in-dentry structure */
-        dchild = container_of(d_name, struct dentry, d_name); /* ugh */
-
         if (d_name->len != name->len)
                 RETURN(1);
 
         if (memcmp(d_name->name, name->name, name->len))
                 RETURN(1);
 
-        CDEBUG(D_DENTRY,"found name %.*s(%p) - flags %d/%x - refc %d\n",
-               name->len, name->name, dchild,
-               d_mountpoint(dchild), dchild->d_flags & DCACHE_LUSTRE_INVALID,
-               atomic_read(&dchild->d_count));
-
-         /* mountpoint is always valid */
-        if (d_mountpoint(dchild))
-                RETURN(0);
-
-        if (dchild->d_flags & DCACHE_LUSTRE_INVALID)
+        /* XXX: d_name must be in-dentry structure */
+        dchild = container_of(d_name, struct dentry, d_name); /* ugh */
+        if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
+                CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
+                       dchild);
                 RETURN(1);
+        }
 
         RETURN(0);
 }
+#endif
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static int ll_ddelete(struct dentry *de)
 {
         ENTRY;
         LASSERT(de);
+#ifndef DCACHE_LUSTRE_INVALID
+#define DCACHE_LUSTRE_INVALID 0
+#endif
 
         CDEBUG(D_DENTRY, "%s dentry %.*s (%p, parent %p, inode %p) %s%s\n",
-               (de->d_flags & DCACHE_LUSTRE_INVALID ? "hiden" : "keeping"),
+               (de->d_flags & DCACHE_LUSTRE_INVALID ? "deleting" : "keeping"),
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                d_unhashed(de) ? "" : "hashed,",
                list_empty(&de->d_subdirs) ? "" : "subdirs");
+#if DCACHE_LUSTRE_INVALID == 0
+#undef DCACHE_LUSTRE_INVALID
+#endif
 
         RETURN(0);
 }
@@ -269,6 +270,17 @@ restart:
                                "ino=%lu\n", dentry, inode, inode->i_ino);
                         lustre_dump_dentry(dentry, 1);
                         libcfs_debug_dumpstack(NULL);
+                } else if (d_mountpoint(dentry)) {
+                        /* For mountpoints we skip removal of the dentry
+                           which happens solely because we have a lock on it
+                           obtained when this dentry was not a mountpoint yet */
+                        CDEBUG(D_DENTRY, "Skippind mountpoint dentry removal "
+                                         "%.*s (%p) parent %p\n",
+                                          dentry->d_name.len,
+                                          dentry->d_name.name,
+                                          dentry, dentry->d_parent);
+
+                        continue;
                 }
 
                 if (ll_drop_dentry(dentry))
@@ -307,7 +319,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
                 struct inode *inode = dentry->d_inode;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode, NULL);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
 
         /* drop lookup or getattr locks immediately */
@@ -344,7 +356,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
-        struct inode *parent = de->d_parent->d_inode;
         int first = 0, rc;
 
         ENTRY;
@@ -365,12 +376,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                         RETURN(0);
 #endif
 
-                rc = ll_have_md_lock(parent, MDS_INODELOCK_UPDATE);
+                rc = ll_have_md_lock(de->d_parent->d_inode,
+                                     MDS_INODELOCK_UPDATE);
                 GOTO(out_sa, rc);
         }
-
-        if ((de->d_flags & DCACHE_LUSTRE_INVALID) == 0)
-                GOTO(out_sa, rc = 1);
 
         exp = ll_i2mdcexp(de->d_inode);
 
@@ -379,19 +388,16 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         if (d_mountpoint(de))
                 GOTO(out_sa, rc = 1);
 
-        /*need to get attributes in case it got changed from other client*/
-        if (de == de->d_sb->s_root)  {
-                rc = __ll_inode_revalidate_it(de, it, MDS_INODELOCK_LOOKUP);
-                if (rc == 0)
-                        rc = 1;
-                GOTO(out_sa, rc);
-        }
+        /* Root of the lustre tree. Always valid.
+         * Attributes will be fixed up in ll_inode_revalidate_it */
+        if (de == de->d_sb->s_root)
+                GOTO(out_sa, rc = 1);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
-        ll_prepare_mdc_op_data(&op_data, parent, de->d_inode,
+        ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
                                de->d_name.name, de->d_name.len, 0, NULL);
 
         if ((it->it_op == IT_OPEN) && de->d_inode) {
@@ -439,21 +445,21 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         }
 
         if (it->it_op == IT_GETATTR)
-                first = ll_statahead_enter(parent, &de, 0);
+                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
-        it->it_create_mode |= M_CHECK_STALE;
+        it->it_flags |= O_CHECK_STALE;
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);
-        it->it_create_mode &= ~M_CHECK_STALE;
+        it->it_flags &= ~O_CHECK_STALE;
         if (it->it_op == IT_GETATTR && !first)
                 /* If there are too many locks on client-side, then some
                  * locks taken by statahead maybe dropped automatically
                  * before the real "revalidate" using them. */
-                ll_statahead_exit(parent, de, req == NULL ? rc : 0);
+                ll_statahead_exit(de, req == NULL ? rc : 0);
         else if (first == -EEXIST)
-                ll_statahead_mark(parent, de);
+                ll_statahead_mark(de);
 
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
@@ -467,6 +473,13 @@ do_lock:
                 if (rc != -ESTALE) {
                         CDEBUG(D_INFO, "ll_intent_lock: rc %d : it->it_status "
                                "%d\n", rc, it->d.lustre.it_status);
+                } else {
+#ifndef HAVE_VFS_INTENT_PATCHES
+                        if (it_disposition(it, DISP_OPEN_OPEN) &&
+                            !it_open_error(DISP_OPEN_OPEN, it))
+                                /* server have valid open - close file first*/
+                                ll_release_openhandle(de, it);
+#endif
                 }
                 GOTO(out, rc = 0);
         }
@@ -545,7 +558,7 @@ do_lookup:
                 it = &lookup_it;
         }
         /*do real lookup here */
-        ll_prepare_mdc_op_data(&op_data, parent, NULL,
+        ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, NULL,
                                de->d_name.name, de->d_name.len, 0, NULL);
         rc = mdc_intent_lock(exp, &op_data, NULL, 0,  it, 0, &req,
                              ll_mdc_blocking_ast, 0);
@@ -574,11 +587,11 @@ out_sa:
          * statahead windows; for rc == 0 case, the "lookup" will be done later.
          */
         if (it && it->it_op == IT_GETATTR && rc == 1) {
-                first = ll_statahead_enter(parent, &de, 0);
+                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
                 if (!first)
-                        ll_statahead_exit(parent, de, 1);
+                        ll_statahead_exit(de, 1);
                 else if (first == -EEXIST)
-                        ll_statahead_mark(parent, de);
+                        ll_statahead_mark(de);
         }
 
         return rc;
@@ -669,7 +682,7 @@ out_sa:
 }
 
 #ifdef HAVE_VFS_INTENT_PATCHES
-int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
         int rc;
         ENTRY;
@@ -713,20 +726,16 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
                                                (struct ptlrpc_request *)
                                                   it->d.lustre.it_data);
                         } else {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
-/* 2.6.1[456] have a bug in open_namei() that forgets to check
- * nd->intent.open.file for error, so we need to return it as lookup's result
- * instead */
                                 struct file *filp;
 
                                 nd->intent.open.file->private_data = it;
                                 filp = lookup_instantiate_filp(nd, dentry,NULL);
-                                if (IS_ERR(filp)) {
-                                        rc = PTR_ERR(filp);
-                                }
-#else
-                                nd->intent.open.file->private_data = it;
-                                (void)lookup_instantiate_filp(nd, dentry,NULL);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
+/* 2.6.1[456] have a bug in open_namei() that forgets to check
+ * nd->intent.open.file for error, so we need to return it as lookup's result
+ * instead */
+                                if (IS_ERR(filp))
+                                        rc = 0;
 #endif
                         }
 #else

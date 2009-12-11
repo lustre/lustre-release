@@ -529,15 +529,8 @@ check_trunc_hack(void)
 	struct stat statbuf;
 	int fd = get_fd();
 
-        /* should not ignore ftruncate(2)'s return value */
-        if (ftruncate(fd, (off_t)0) < 0) {
-                prterr("trunc_hack: ftruncate(0)");
-                exit(1);
-        }
-        if (ftruncate(fd, (off_t)100000) < 0) {
-                prterr("trunc_hack: ftruncate(100000)");
-                exit(1);
-        }
+	ftruncate(fd, (off_t)0);
+	ftruncate(fd, (off_t)100000);
 	if (fstat(fd, &statbuf)) {
 		prterr("trunc_hack: fstat");
 		statbuf.st_size = -1;
@@ -546,10 +539,7 @@ check_trunc_hack(void)
 		prt("no extend on truncate! not posix!\n");
 		exit(130);
 	}
-        if (ftruncate(fd, 0) < 0) {
-                prterr("trunc_hack: ftruncate(0) (2nd call)");
-                exit(1);
-        }
+	ftruncate(fd, 0);
 }
 
 static char *tf_buf = NULL;

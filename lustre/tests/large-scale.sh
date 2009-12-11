@@ -18,9 +18,9 @@ init_test_env $@
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
-[ -n "$CLIENTS" ] || { skip_env "$0: Need two or more clients" && exit 0; }
+[ -n "$CLIENTS" ] || { skip "$0: Need two or more clients" && exit 0; }
 [ $CLIENTCOUNT -ge 2 ] || \
-    { skip_env "$0: Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
+    { skip "$0: Need two or more clients, have $CLIENTCOUNT" && exit 0; }
 
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -39,10 +39,22 @@ check_vbr () {
 }
 
 check_vbr || \
-    { skip_env "$0: no version_recovery" && exit 0; }
+    { skip "$0: no version_recovery" && exit 0; }
 
 FAKE_NUM_MAX=${FAKE_NUM_MAX:-1000}
 [ "$SLOW" = "no" ] && FAKE_NUM_MAX=100
+
+do_and_time () {
+   local cmd=$1
+
+   local start_ts=`date +%s`
+
+   $cmd
+
+   local current_ts=`date +%s`
+   ELAPSED=`expr $current_ts - $start_ts`
+   echo "===== START $start_ts CURRENT $current_ts"
+}
 
 delete_fake_exports () {
     NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
@@ -75,8 +87,8 @@ test_1b() {
         NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
         [ $NUM -lt $FAKE_NUM ] && error "fake exports $NUM -ne $FAKE_NUM"
         echo "===== STALE EXPORTS: FAKE_NUM=$FAKE_NUM NUM=$NUM"
-        local elapsed=$(do_and_time "zconf_mount_clients $CLIENTS $DIR")
-        echo "==== $TESTNAME ===== CONNECTION TIME $elapsed: FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
+        do_and_time "zconf_mount_clients $CLIENTS $DIR"
+        echo "==== $TESTNAME ===== CONNECTION TIME $ELAPSED: FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
 
         # do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
         delete_fake_exports
@@ -90,7 +102,7 @@ run_test 1b "VBR: connect $CLIENTCOUNT clients with delayed exports"
 # fail fn does not do df on all clients
 fail_mds () {
     facet_failover mds
-    clients_up
+    client_df
 }
 
 test_1c() {
@@ -162,8 +174,8 @@ test_1d() {
         EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
         [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
-        local elapsed=$(do_and_time "zconf_mount_clients $CLIENTS $DIR")
-        echo "==== $TESTNAME===== CONNECTION TIME $elapsed: expired FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
+        do_and_time "zconf_mount_clients $CLIENTS $DIR"
+        echo "==== $TESTNAME===== CONNECTION TIME $ELAPSED: expired FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
 
         do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
     done

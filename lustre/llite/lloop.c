@@ -145,7 +145,7 @@ struct lloop_device {
         atomic_t           lo_pending;
         wait_queue_head_t  lo_bh_wait;
 
-        struct request_queue  *lo_queue;
+        request_queue_t    *lo_queue;
 
         /* data to handle bio for lustre. */
         struct lo_request_data {
@@ -317,7 +317,7 @@ static unsigned int loop_get_bio(struct lloop_device *lo, struct bio **req)
         return count;
 }
 
-static int loop_make_request(struct request_queue *q, struct bio *old_bio)
+static int loop_make_request(request_queue_t *q, struct bio *old_bio)
 {
         struct lloop_device *lo = q->queuedata;
         int rw = bio_rw(old_bio);
@@ -347,14 +347,14 @@ static int loop_make_request(struct request_queue *q, struct bio *old_bio)
         loop_add_bio(lo, old_bio);
         return 0;
 err:
-        cfs_bio_io_error(old_bio, old_bio->bi_size);
+        bio_io_error(old_bio, old_bio->bi_size);
         return 0;
 }
 
 /*
  * kick off io on the underlying address space
  */
-static void loop_unplug(struct request_queue *q)
+static void loop_unplug(request_queue_t *q)
 {
         struct lloop_device *lo = q->queuedata;
 
@@ -369,7 +369,7 @@ static inline void loop_handle_bio(struct lloop_device *lo, struct bio *bio)
         while (bio) {
                 struct bio *tmp = bio->bi_next;
                 bio->bi_next = NULL;
-                cfs_bio_endio(bio, bio->bi_size, ret);
+                bio_endio(bio, bio->bi_size, ret);
                 bio = tmp;
         }
 }
@@ -559,15 +559,9 @@ static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
         return 0;
 }
 
-#ifdef HAVE_BLKDEV_PUT_2ARGS
-static int lo_open(struct block_device *bdev, fmode_t mode)
-{
-        struct lloop_device *lo = bdev->bd_disk->private_data;
-#else
 static int lo_open(struct inode *inode, struct file *file)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
-#endif
 
         down(&lo->lo_ctl_mutex);
         lo->lo_refcnt++;
@@ -576,15 +570,9 @@ static int lo_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-#ifdef HAVE_BLKDEV_PUT_2ARGS
-static int lo_release(struct gendisk *disk, fmode_t mode)
-{
-        struct lloop_device *lo = disk->private_data;
-#else
 static int lo_release(struct inode *inode, struct file *file)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
-#endif
 
         down(&lo->lo_ctl_mutex);
         --lo->lo_refcnt;
@@ -594,18 +582,11 @@ static int lo_release(struct inode *inode, struct file *file)
 }
 
 /* lloop device node's ioctl function. */
-#ifdef HAVE_BLKDEV_PUT_2ARGS
-static int lo_ioctl(struct block_device *bdev, fmode_t mode,
-                    unsigned int cmd, unsigned long arg)
-{
-        struct lloop_device *lo = bdev->bd_disk->private_data;
-#else
 static int lo_ioctl(struct inode *inode, struct file *unused,
                     unsigned int cmd, unsigned long arg)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
         struct block_device *bdev = inode->i_bdev;
-#endif
         int err = 0;
 
         down(&lloop_mutex);
@@ -613,7 +594,7 @@ static int lo_ioctl(struct inode *inode, struct file *unused,
         case LL_IOC_LLOOP_DETACH: {
                 err = loop_clr_fd(lo, bdev, 2);
                 if (err == 0)
-                        ll_blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
+                        blkdev_put(bdev); /* grabbed in LLOOP_ATTACH */
                 break;
         }
 
@@ -701,7 +682,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 err = loop_set_fd(lo, NULL, bdev, file);
                 if (err) {
                         fput(file);
-                        ll_blkdev_put(bdev, 0);
+                        blkdev_put(bdev);
                 }
 
                 break;
@@ -725,7 +706,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 bdev = lo->lo_device;
                 err = loop_clr_fd(lo, bdev, 1);
                 if (err == 0)
-                        ll_blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
+                        blkdev_put(bdev); /* grabbed in LLOOP_ATTACH */
 
                 break;
         }
@@ -812,7 +793,7 @@ static int __init lloop_init(void)
 
 out_mem4:
         while (i--)
-                blk_cleanup_queue(loop_dev[i].lo_queue);
+                blk_put_queue(loop_dev[i].lo_queue);
         i = max_loop;
 out_mem3:
         while (i--)
@@ -834,7 +815,7 @@ static void lloop_exit(void)
         ll_iocontrol_unregister(ll_iocontrol_magic);
         for (i = 0; i < max_loop; i++) {
                 del_gendisk(disks[i]);
-                blk_cleanup_queue(loop_dev[i].lo_queue);
+                blk_put_queue(loop_dev[i].lo_queue);
                 put_disk(disks[i]);
         }
         if (ll_unregister_blkdev(lloop_major, "lloop"))

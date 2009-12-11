@@ -71,7 +71,6 @@
 #include <lustre/lustre_idl.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_user.h>
-#include <lustre_quota.h>
 
 #include "parser.h"
 #include "obdctl.h"
@@ -97,7 +96,6 @@ static int lfs_quotainv(int argc, char **argv);
 #endif
 static int lfs_join(int argc, char **argv);
 static int lfs_poollist(int argc, char **argv);
-static int lfs_path2fid(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -106,7 +104,7 @@ command_t cmdlist[] = {
          "set the default striping pattern on an existing directory or\n"
          "delete the default striping pattern from an existing directory\n"
          "usage: setstripe [--size|-s stripe_size] [--offset|-o start_ost]\n"
-         "                 [--count|-c stripe_count] [--pool|-p <pool>]\n"
+         "                 [--count|-c stripe_count] [--pool|-p pool_name]\n"
          "                 <dir|filename>\n"
          "       or \n"
          "       setstripe -d <dir>   (to delete default striping)\n"
@@ -115,26 +113,24 @@ command_t cmdlist[] = {
          "\t              respectively)\n"
          "\tstart_ost:    OST index of first stripe (-1 filesystem default)\n"
          "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"
-         "\tpool:         Name of OST pool"},
+         "\tpool_name:    Name of OST pool"},
         {"getstripe", lfs_getstripe, 0,
          "To list the striping info for a given file or files in a\n"
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
-         "                 [--count | -c ] [--size | -s ] [--index | -i ]\n"
-         "                 [--offset | -o ] [--pool | -p ]\n"
          "                 [--recursive | -r] <dir|file> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
-         "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
+         "usage: pool_list <fsname>[.<poolname>] | <pathname>\n"},
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
          "usage: find <dir|file> ... \n"
          "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
          "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
          "     [--print|-p] [--obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
-         "     [[!] --type|-t <filetype>] [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
-         "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
-         "     [[!] --pool <pool>]\n"
+         "     [[!] --type|-t <filetype>] [[!] --gid|-g N] [[!] --group|-G <name>]\n"
+         "     [[!] --uid|-u N] [[!] --user|-U <name>]\n"
+         "     [[!] --pool <name>]\n"
          "\t !: used before an option indicates 'NOT' the requested attribute\n"
          "\t -: used before an value indicates 'AT MOST' the requested value\n"
          "\t +: used before an option indicates 'AT LEAST' the requested value\n"},
@@ -153,8 +149,8 @@ command_t cmdlist[] = {
         {"osts", lfs_osts, 0, "osts"},
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
-         "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
-         "Usage: df [-i] [-h] [--pool|-p <fsname>[.<pool>] [path]"},
+         "of each MDS/OSD.\n"
+         "Usage: df [-i] [-h] [path]"},
 #ifdef HAVE_SYS_QUOTA_H
         {"quotachown",lfs_quotachown, 0,
          "Change files' owner or group on the specified filesystem.\n"
@@ -169,17 +165,14 @@ command_t cmdlist[] = {
         {"quotaoff", lfs_quotaoff, 0, "Turn filesystem quotas off.\n"
          "usage: quotaoff [ -ug ] <filesystem>"},
         {"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
-         "usage: setquota <-u|-g> <uname>|<uid>|<gname>|<gid>\n"
-         "                <block-softlimit> <block-hardlimit>\n"
-         "                <inode-softlimit> <inode-hardlimit>\n"
-         "                <filesystem>\n"
-         "       setquota <-u|--user|-g|--group> <uname>|<uid>|<gname>|<gid>\n"
+         "usage: setquota [ -u | -g ] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>\n"
+         "       setquota -t [ -u | -g ] <block-grace> <inode-grace> <filesystem>\n"
+         "       setquota [ -u | --user | -g | --group ] <name>\n"
          "                [--block-softlimit <block-softlimit>]\n"
          "                [--block-hardlimit <block-hardlimit>]\n"
          "                [--inode-softlimit <inode-softlimit>]\n"
          "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
-         "       setquota -t <-u|-g> <block-grace> <inode-grace> <filesystem>\n"
-         "       setquota -t <-u|--user|-g|--group>\n"
+         "       setquota [-t] [ -u | --user | -g | --group ]\n"
          "                [--block-grace <block-grace>]\n"
          "                [--inode-grace <inode-grace>] <filesystem>\n"
          "       -b can be used instead of --block-softlimit/--block-grace\n"
@@ -187,14 +180,10 @@ command_t cmdlist[] = {
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
          "       -I can be used instead of --inode-hardlimit"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [-v] [ -o obd_uuid ] [<-u|-g> <uname>|<uid>|<gname>|<gid>]\n"
-         "                <filesystem>\n"
-         "       quota [ -o obd_uuid ] -t <-u|-g> <filesystem>"},
+         "usage: quota [ -o obd_uuid ] [{-u|-g  <name>}|-t] <filesystem>"},
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
          "usage: quotainv [-u|-g] <filesystem>"},
 #endif
-        {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
-         "usage: path2fid <path>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -570,27 +559,45 @@ static int lfs_find(int argc, char **argv)
                         param.maxdepth = strtol(optarg, 0, 0);
                         break;
                 case 'g':
+                        new_fashion = 1;
+                        param.gid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+                                fprintf(stderr, "Bad gid: %s\n", optarg);
+                                return CMD_HELP;
+                        }
+                        param.exclude_gid = !!neg_opt;
+                        param.check_gid = 1;
+                        break;
                 case 'G':
                         new_fashion = 1;
-                        ret = name2id(&param.gid, optarg, GROUP);
-                        if (ret) {
-                                param.gid = strtoul(optarg, &endptr, 10);
-                                if (*endptr != '\0') {
+                        param.gid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+                                ret = name2id(&param.gid, optarg, GROUP);
+                                if (ret != 0) {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
                                         return -1;
                                 }
-                        }           
+                        }
                         param.exclude_gid = !!neg_opt;
                         param.check_gid = 1;
                         break;
                 case 'u':
+                        new_fashion = 1;
+                        param.uid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+                                fprintf(stderr, "Bad uid: %s\n", optarg);
+                                return CMD_HELP;
+                        }
+                        param.exclude_uid = !!neg_opt;
+                        param.check_uid = 1;
+                        break;
                 case 'U':
                         new_fashion = 1;
-                        ret = name2id(&param.uid, optarg, USER);
-                        if (ret) {
-                                param.uid = strtoul(optarg, &endptr, 10);
-                                if (*endptr != '\0') {
+                        param.uid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+                                ret = name2id(&param.uid, optarg, USER);
+                                if (ret != 0) {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
                                         return -1;
@@ -774,21 +781,15 @@ static int lfs_getstripe(int argc, char **argv)
                 {"obd", 1, 0, 'O'},
                 {"quiet", 0, 0, 'q'},
                 {"recursive", 0, 0, 'r'},
-                {"count", 0, 0, 'c'},
-                {"size", 0, 0, 's'},
-                {"index", 0, 0, 'i'},
-                {"offset", 0, 0, 'o'},
-                {"pool", 0, 0, 'p'},
                 {"verbose", 0, 0, 'v'},
-                {"directory", 0, 0, 'd'},
                 {0, 0, 0, 0}
         };
+        char short_opts[] = "hO:qrv";
         int c, rc;
         struct find_param param = { 0 };
 
-        param.maxdepth = 1;
         optind = 0;
-        while ((c = getopt_long(argc, argv, "cdhioO:pqrsv",
+        while ((c = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
@@ -802,37 +803,14 @@ static int lfs_getstripe(int argc, char **argv)
                         break;
                 case 'q':
                         param.quiet++;
-                        break;
-                case 'd':
-                        param.maxdepth = 0;
+                        param.verbose = 0;
                         break;
                 case 'r':
                         param.recursive = 1;
                         break;
                 case 'v':
-                        param.verbose = VERBOSE_ALL | VERBOSE_DETAIL;
-                        break;
-                case 'c':
-                        if (!(param.verbose & VERBOSE_DETAIL)) {
-                                param.verbose |= VERBOSE_COUNT;
-                                param.maxdepth = 0;
-                        }
-                        break;
-                case 's':
-                        if (!(param.verbose & VERBOSE_DETAIL)) {
-                                param.verbose |= VERBOSE_SIZE;
-                                param.maxdepth = 0;
-                        }
-                        break;
-                case 'i':
-                case 'o':
-                        if (!(param.verbose & VERBOSE_DETAIL)) {
-                                param.verbose |= VERBOSE_OFFSET;
-                                param.maxdepth = 0;
-                        }
-                        break;
-                case 'p':
-                        param.verbose |= VERBOSE_POOL;
+                        param.verbose++;
+                        param.quiet = 0;
                         break;
                 case '?':
                         return CMD_HELP;
@@ -846,13 +824,7 @@ static int lfs_getstripe(int argc, char **argv)
         if (optind >= argc)
                 return CMD_HELP;
 
-        if (param.recursive)
-                param.maxdepth = -1;
-
-        if (!param.verbose)
-                param.verbose = VERBOSE_ALL;
-        if (param.quiet)
-                param.verbose = VERBOSE_OBJID;
+        param.maxdepth = param.recursive ? -1 : 1;
 
         do {
                 rc = llapi_getstripe(argv[optind], &param);
@@ -866,46 +838,36 @@ static int lfs_getstripe(int argc, char **argv)
 
 static int lfs_osts(int argc, char **argv)
 {
-        char mntdir[PATH_MAX] = {'\0'};
+        FILE *fp;
+        struct mntent *mnt = NULL;
         struct find_param param;
-        int index = 0, rc = 0;
+        int rc=0;
 
         if (argc != 1)
                 return CMD_HELP;
 
-        while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
-                memset(&param, 0, sizeof(param));
-                rc = llapi_ostlist(mntdir, &param);
-                if (rc) {
-                        fprintf(stderr, "error: %s: failed on %s\n",
-                                argv[0], mntdir);
+        fp = setmntent(MOUNTED, "r");
+
+        if (fp == NULL) {
+                 fprintf(stderr, "%s: setmntent(%s): %s:", argv[0], MOUNTED,
+                        strerror (errno));
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) ==0) {
+                        memset(&param, 0, sizeof(param));
+                        if (llapi_is_lustre_mnt(mnt)) {
+                                rc = llapi_getstripe(mnt->mnt_dir, &param);
+                                if (rc)
+                                        fprintf(stderr,
+                                               "error: %s: failed on %s\n",
+                                               argv[0], mnt->mnt_dir);
+                        }
+                        mnt = getmntent(fp);
                 }
-                memset(mntdir, 0, PATH_MAX);
+                endmntent(fp);
         }
 
         return rc;
-}
-
-static int lfs_path2fid(int argc, char **argv)
-{
-        char *path;
-        lustre_fid fid;
-        int rc;
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        path = argv[1];
-        rc = llapi_path2fid(path, &fid);
-        if (rc) {
-                fprintf(stderr, "can't get fid for %s: %s\n", path,
-                        strerror(errno = -rc));
-                return rc;
-        }
-
-        printf(DFID"\n", PFID(&fid));
-
-        return 0;
 }
 
 #define COOK(value)                                                     \
@@ -924,6 +886,41 @@ static int lfs_path2fid(int argc, char **argv)
 #define HDF     "%6.1f"
 #define RSF     "%5s"
 #define RDF     "%4d%%"
+
+static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
+{
+        char rpath[PATH_MAX] = {'\0'};
+        struct mntent *mnt;
+        int rc, len, out_len = 0;
+
+        if (!realpath(path, rpath)) {
+                rc = -errno;
+                fprintf(stderr, "error: lfs df: invalid path '%s': %s\n",
+                        path, strerror(-rc));
+                return rc;
+        }
+
+        len = 0;
+        mnt = getmntent(fp);
+        while (feof(fp) == 0 && ferror(fp) == 0) {
+                if (llapi_is_lustre_mnt(mnt)) {
+                        len = strlen(mnt->mnt_dir);
+                        if (len > out_len &&
+                            !strncmp(rpath, mnt->mnt_dir, len)) {
+                                out_len = len;
+                                memset(mntdir, 0, dir_len);
+                                strncpy(mntdir, mnt->mnt_dir, dir_len);
+                        }
+                }
+                mnt = getmntent(fp);
+        }
+
+        if (out_len > 0)
+                return 0;
+
+        fprintf(stderr, "error: lfs df: %s isn't mounted on lustre\n", path);
+        return -EINVAL;
+}
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
                   char *uuid, int ishow, int cooked,
@@ -1006,25 +1003,12 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
         return 0;
 }
 
-static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
+static int mntdf(char *mntdir, int ishow, int cooked)
 {
         struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
         struct obd_uuid uuid_buf;
-        char *poolname = NULL;
         __u32 index;
         int rc;
-
-        if (pool) {
-                poolname = strchr(pool, '.');
-                if (poolname != NULL) {
-                        if (strncmp(fsname, pool, strlen(fsname))) {
-                                fprintf(stderr, "filesystem name incorrect\n");
-                                return -ENODEV;
-                        }
-                        poolname++;
-                } else
-                        poolname = pool;
-        }
 
         if (ishow)
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
@@ -1073,10 +1057,6 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
                 if (rc == -EAGAIN)
                         continue;
 
-                if (llapi_search_ost(fsname, poolname,
-                                     obd_uuid2str(&uuid_buf)) != 1)
-                        continue;
-
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
                         showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
@@ -1102,18 +1082,15 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
 
 static int lfs_df(int argc, char **argv)
 {
+        FILE *fp;
         char *path = NULL;
+        struct mntent *mnt = NULL;
         char *mntdir = NULL;
         int ishow = 0, cooked = 0;
         int c, rc = 0;
-        char fsname[PATH_MAX], *pool_name = NULL;
-        struct option long_opts[] = {
-                {"pool", required_argument, 0, 'p'},
-                {0, 0, 0, 0}
-        };
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "ihp:", long_opts, NULL)) != -1) {
+        while ((c = getopt(argc, argv, "ih")) != -1) {
                 switch (c) {
                 case 'i':
                         ishow = 1;
@@ -1121,15 +1098,20 @@ static int lfs_df(int argc, char **argv)
                 case 'h':
                         cooked = 1;
                         break;
-                case 'p':
-                        pool_name = optarg;
-                        break;
                 default:
                         return CMD_HELP;
                 }
         }
         if (optind < argc )
                 path = argv[optind];
+
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                rc = -errno;
+                fprintf(stderr, "error: %s: open %s failed( %s )\n",
+                        argv[0], MOUNTED, strerror(errno));
+                return rc;
+        }
 
         if ((mntdir = malloc(PATH_MAX)) == NULL) {
                 fprintf(stderr, "error: cannot allocate %d bytes\n",
@@ -1139,29 +1121,28 @@ static int lfs_df(int argc, char **argv)
         memset(mntdir, 0, PATH_MAX);
 
         if (path) {
-                char rpath[PATH_MAX] = {'\0'};
-
-                if (!realpath(path, rpath)) {
-                        rc = -errno;
-                        fprintf(stderr, "error: invalid path '%s': %s\n",
-                                path, strerror(-rc));
+                rc = path2mnt(path, fp, mntdir, PATH_MAX);
+                if (rc) {
+                        endmntent(fp);
+                        free(mntdir);
                         return rc;
                 }
 
-                rc = llapi_search_mounts(rpath, 0, mntdir, fsname);
-                if (rc == 0 && mntdir[0] != '\0') {
-                        rc = mntdf(mntdir, fsname, pool_name, ishow, cooked);
-                        printf("\n");
-                }
+                rc = mntdf(mntdir, ishow, cooked);
+                printf("\n");
+                endmntent(fp);
         } else {
-                int index = 0;
-
-                while (!llapi_search_mounts(NULL, index++, mntdir, fsname)) {
-                        rc = mntdf(mntdir, fsname, pool_name, ishow, cooked);
-                        if (rc)
-                                break;
-                        printf("\n");
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) == 0) {
+                        if (llapi_is_lustre_mnt(mnt)) {
+                                rc = mntdf(mnt->mnt_dir, ishow, cooked);
+                                if (rc)
+                                        break;
+                                printf("\n");
+                        }
+                        mnt = getmntent(fp);
                 }
+                endmntent(fp);
         }
 
         free(mntdir);
@@ -1171,8 +1152,9 @@ static int lfs_df(int argc, char **argv)
 static int lfs_check(int argc, char **argv)
 {
         int rc;
+        FILE *fp;
+        struct mntent *mnt = NULL;
         int num_types = 1;
-        char mntdir[PATH_MAX] = {'\0'};
         char *obd_types[2];
         char obd_type1[4];
         char obd_type2[4];
@@ -1197,14 +1179,26 @@ static int lfs_check(int argc, char **argv)
                         return CMD_HELP;
         }
 
-        rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
-        if (rc < 0 || mntdir[0] == '\0') {
-                fprintf(stderr, "No suitable Lustre mount found\n");
-                return rc;
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
+                        strerror (errno));
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) ==0) {
+                        if (llapi_is_lustre_mnt(mnt))
+                                break;
+                        mnt = getmntent(fp);
+                }
+                endmntent(fp);
         }
 
-        rc = llapi_target_iterate(num_types, obd_types,
-                                  mntdir, llapi_ping_target);
+        if (!mnt) {
+                fprintf(stderr, "No suitable Lustre mount found\n");
+                return -1;
+        }
+
+        rc = llapi_target_check(num_types, obd_types, mnt->mnt_dir);
 
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",
@@ -1216,7 +1210,8 @@ static int lfs_check(int argc, char **argv)
 
 static int lfs_catinfo(int argc, char **argv)
 {
-        char mntdir[PATH_MAX] = {'\0'};
+        FILE *fp;
+        struct mntent *mnt = NULL;
         int rc;
 
         if (argc < 2 || (!strcmp(argv[1],"config") && argc < 3))
@@ -1225,12 +1220,25 @@ static int lfs_catinfo(int argc, char **argv)
         if (strcmp(argv[1], "config") && strcmp(argv[1], "deletions"))
                 return CMD_HELP;
 
-        rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
-        if (rc == 0 && mntdir[0] != '\0') {
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
+                         strerror(errno));
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) == 0) {
+                        if (llapi_is_lustre_mnt(mnt))
+                                break;
+                        mnt = getmntent(fp);
+                }
+                endmntent(fp);
+        }
+
+        if (mnt) {
                 if (argc == 3)
-                        rc = llapi_catinfo(mntdir, argv[1], argv[2]);
+                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], argv[2]);
                 else
-                        rc = llapi_catinfo(mntdir, argv[1], NULL);
+                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], NULL);
         } else {
                 fprintf(stderr, "no lustre_lite mounted.\n");
                 rc = -1;
@@ -1427,12 +1435,7 @@ static int lfs_quotaon(int argc, char **argv)
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", obd_type,
                                 obd_uuid2str(&qctl.obd_uuid));
-                if (errno == ENOENT)
-                        fprintf(stderr, "error: cannot find quota database, "
-                                        "make sure you have run quotacheck\n");
-                else
-                        fprintf(stderr, "error: quotaon failed (%s)\n",
-                                strerror(errno));
+                fprintf(stderr, "%s failed: %s\n", argv[0], strerror(errno));
                 return rc;
         }
 
@@ -1761,7 +1764,6 @@ int lfs_setquota(int argc, char **argv)
                 {0, 0, 0, 0}
         };
         unsigned limit_mask = 0;
-        char *endptr;
 
         if (has_times_option(argc, argv))
                 return lfs_setquota_times(argc, argv);
@@ -1816,12 +1818,9 @@ int lfs_setquota(int argc, char **argv)
                         rc = name2id(&qctl.qc_id, optarg,
                                      (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                         if (rc) {
-                                qctl.qc_id = strtoul(optarg, &endptr, 10);
-                                if (*endptr != '\0') {
-                                        fprintf(stderr, "error: can't find id "
-                                                "for name %s\n", optarg); 
-                                        return CMD_HELP;
-                                }
+                                fprintf(stderr, "error: unknown id %s\n",
+                                        optarg);
+                                return CMD_HELP;
                         }
                         break;
                 case 'b':
@@ -1848,7 +1847,7 @@ int lfs_setquota(int argc, char **argv)
         }
 
         if (qctl.qc_type == UGQUOTA) {
-                fprintf(stderr, "error: neither -u nor -g was specified\n");
+                fprintf(stderr, "error: neither -u nor -g are specified\n");
                 return CMD_HELP;
         }
 
@@ -1873,10 +1872,8 @@ int lfs_setquota(int argc, char **argv)
 
                 rc = llapi_quotactl(mnt, &tmp_qctl);
                 if (rc < 0) {
-                        fprintf(stderr, "error: setquota failed while retrieving"
-                                        " current quota settings (%s)\n",
-                                        strerror(errno));
-                        return rc;
+                        fprintf(stderr, "error: getquota failed\n");
+                        return CMD_HELP;
                 }
 
                 if (!(limit_mask & BHLIMIT))
@@ -1887,17 +1884,6 @@ int lfs_setquota(int argc, char **argv)
                         dqb->dqb_ihardlimit = tmp_qctl.qc_dqblk.dqb_ihardlimit;
                 if (!(limit_mask & ISLIMIT))
                         dqb->dqb_isoftlimit = tmp_qctl.qc_dqblk.dqb_isoftlimit;
-
-                /* Keep grace times if we have got no softlimit arguments */
-                if ((limit_mask & BHLIMIT) && !(limit_mask & BSLIMIT)) {
-                        dqb->dqb_valid |= QIF_BTIME;
-                        dqb->dqb_btime = tmp_qctl.qc_dqblk.dqb_btime;
-                }
-
-                if ((limit_mask & IHLIMIT) && !(limit_mask & ISLIMIT)) {
-                        dqb->dqb_valid |= QIF_ITIME;
-                        dqb->dqb_itime = tmp_qctl.qc_dqblk.dqb_itime;
-                }
         }
 
         dqb->dqb_valid |= (limit_mask & (BHLIMIT | BSLIMIT)) ? QIF_BLIMITS : 0;
@@ -2162,7 +2148,6 @@ static int lfs_quota(int argc, char **argv)
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
         int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0;
         int pass = 0;
-        char *endptr;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:v")) != -1) {
@@ -2226,12 +2211,9 @@ ug_output:
                 rc = name2id(&qctl.qc_id, name,
                              (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
-                        qctl.qc_id = strtoul(name, &endptr, 10);
-                        if (*endptr != '\0') {
-                                fprintf(stderr, "error: can't find id for name "
-                                        "%s\n", name);
-                                return CMD_HELP;
-                        }
+                        fprintf(stderr,"error: can't find id for name %s: %s\n",
+                                name, strerror(errno));
+                        return CMD_HELP;
                 }
         } else if (optind + 1 != argc || qctl.qc_type == UGQUOTA) {
                 fprintf(stderr, "error: missing quota info argument(s)\n");
@@ -2296,5 +2278,5 @@ int main(int argc, char **argv)
         }
 
         obd_finalize(argc, argv);
-        return rc < 0 ? -rc : rc;
+        return rc;
 }

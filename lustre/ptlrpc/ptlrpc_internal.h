@@ -72,7 +72,7 @@ int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
-void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req, long amount);
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req);
 void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
                                      long q_usec, long work_usec);
 #else
@@ -89,6 +89,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
                           int pageoffset, int len);
+void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
 /* pinger.c */
 int ptlrpc_start_pinger(void);
@@ -97,13 +98,18 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 void ptlrpc_pinger_commit_expected(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
 void ptlrpc_ping_import_soon(struct obd_import *imp);
+#ifdef __KERNEL__
+int ping_evictor_wake(struct obd_export *exp);
+#else
+#define ping_evictor_wake(exp)     1
+#endif
 
 /* recov_thread.c */
 int llog_recov_init(void);
 void llog_recov_fini(void);
 
 static inline int ll_rpc_recoverable_error(int rc)
-{
+{ 
         return (rc == -ENOTCONN || rc == -ENODEV);
 }
 #endif /* PTLRPC_INTERNAL_H */

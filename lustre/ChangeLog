@@ -1,644 +1,73 @@
-tbd Sun Microsystems, Inc.
-	* version 1.8.2
-	* Support for kernels:
-	  2.6.16.60-0.42.4 (SLES 10),
-	  2.6.27.39-0.3.1 (SLES11),
-	  2.6.18-164.6.1.el5 (RHEL 5)
-	  2.6.18-164.6.1.0.1.el5 (OEL 5)
-	* Client support for unpatched kernels:
-	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.30 vanilla (kernel.org)
-	* Recommended e2fsprogs version: 1.41.6.sun1
+TBD Sun Microsystems, Inc.
 
-Severity   : enhancement
-Bugzilla   : 21511
-Description: Update kernel to SLES11 2.6.27.39-0.3.1.
-
-Severity   : normal
-Bugzilla   : 21513
-Description: Clear imp_force_reconnect correctly in ptlrpc_connect_interpret()
-
-Severity   : normal
-Bugzilla   : 21259
-Description: Allow non-root access for "lfs check".
-Details    : Added a check in obd_class_ioctl() for OBD_IOC_PING_TARGET.
-
-Severity   : enhancement
-Bugzilla   : 20773
-Description: Update kernel to RHEL5.4 2.6.18-164.6.1.el5 and
-	     OEL5 2.6.18-164.6.1.0.1.el5(Both in-kernel OFED enabled).
-
-Severity   : normal
-Bugzilla   : 21049
-Description: Sanity test_27p fails.
-Details    : OBD_FAIL_OST_ENOSPC has been moved to filter_statfs().
-	     Sanity tests 27 were cleaned up and improved.
-
-Severity   : enhancement
-Bugzilla   : 19325
-Description: Adjust locks' extents on their first enqueue, so that at the time
-	     they get granted, there is no need for another pass through the
-	     queues since they are already shaped into the proper forms.
-
-Severity   : normal
-Bugzilla   : 20020
-Description: Fix mds_shrink_intent_reply()/mds_intent_policy() to pass correct
-	     arguments and prevent LBUG() in lustre_shrink_reply_v2().
-
-Severity   : normal
-Bugzilla   : 19689
-Description: Change tunefs.lustre and mkfs.lustre --mountfsoptions so that
-	     exactly the specified mount options are used.  Leaving off
-	     any "mandatory" mount options is an error.  Leaving off any
-	     default mount options causes a warning, but is allowed.
-	     Change errors=remount-ro from mandatory to default.  Sanitize
-	     the mount string before storing it.  Update man pages accordingly.
-
-Severity   : normal
-Bugzilla   : 20302
-Description: mds_getattr() should return 0, even if mds_fid2entry() fails with
-	     -ENOENT. Also fix in ptlrpc_expire_one_request() to print signed
-	     time difference.
-
-Severity   : enhancement
-Bugzilla   : 19662
-Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
-
-Severity   : normal
-Bugzilla   : 19917
-Description: Drop unnecessary __GFP_NOMEMALLOC flag from filter_get_page()
-
-Severity   : normal
-Bugzilla   : 18674
-Description: Conf-sanity.sh test to check client reconnection to a busy server.
-
-Severity   : enhancement
-Bugzilla   : 16312
-Description: Build kernels (RHEL5, OEL5 and SLES10/11) using the vendor's own
-	     kernel spec file.
-
-Severity   : normal
-Bugzilla   : 16774
-Description: optimize the extent lock finding during read/write at client side
-
-Severity   : normal
-Bugzilla   : 19526
-Description: can't stat file in some situation.
-Details    : improve initialize osc date when target is added to mds and
-	     ability to resend too big getattr request is client isn't have info
-	     about ost.
-
-Severity   : enhancement
-Bugzilla   : 19848
-Description: Update kernel to SLES11 2.6.27.29-0.1.1.
-
-Severity   : normal
-Bugzilla   : 14951
-Description: Improved cleanup procedure for conf-sanity test_46a.
-
-Severity   : normal
-Bugzilla   : 19566
-Description: Prevent inconsistences between linux and lustre mount structures.
-Details    : Wait indefinitely in server_wait_finished() until mnt_count drops.
-	     Make the sleep interruptible.
-
-Severity   : enhancement
-Bugzilla   : 20200
-Description: Enhancement for lfs(1) command to use numeric uid/gid.
-
-Severity   : enhancement
-Bugzilla   : 18539
-Description: Communicate OST degraded/readonly state via statfs to MDS
-Details    : Flags in the statfs returned from OSTs indicate whether the
-	     OST is in a degraded RAID state, or if the filesystem has
-	     turned read-only after a filesystem error is detected.
-
-Severity   : enhancement
-Bugzilla   : 19808
-Description: Vanilla kernel 2.6.30 patchless client support.
-
-Severity   : normal
-Bugzilla   : 20122
-Frequency  : rare
-Description: don't panic if EPROTO was hit when reading symlink
-Details    : correctly handling request reference in error cases.
-
-Severity   : normal
-Bugzilla   : 17545
-Frequency  : common
-Description: open sometimes returns ENOENT instead of EACCES
-Details    : checking permission should be part of open part of mds_open, not
-	     lookup part. so server should be set DISP_OPEN_OPEN disposition
-	     before starting permission check.
-	     Also not need revalidate dentry if client already have LOOKUP lock.
-
-Severity   : normal
-Bugzilla   : 19854
-Description: enable client interface failover
-Frequency  : on servers with multiple network interfaces
-Details    : When a child reconnects from another NID, properly update export
-	     nid hash position and ldlm reverse import.
-
-Severity   : enhancement
-Bugzilla   : 18801
-Description: implemented direct I/O with arbitrary (nonaligned) memory
-	     addresses and file offsets.
-
-Severity   : enhancement
-Bugzilla   : 18948
-Description: added more recovery timeout options.
-
-Severity   : enhancement
-Bugzilla   : 16267
-Description: added llapi_file_open, llapi_file_create, llapi_file_get_stripe
-	     man pages.
-
-Severity   : normal
-Bugzilla   : 19529
-Description: Avoid deadlock for local client writes
-Frequency  : only on systems with clients writing to an OST on the same node
-Details    : Use new OBD_BRW_MEMALLOC flag to notify OST about writes in the
-	     memory freeing context. This allows OST threads to set the
-	     PF_MEMALLOC flag on task structures in order to allocate memory
-	     from reserved pools and complete IO.
-	     Use GFP_HIGHUSER for OST allocations for non-local client writes,
-	     so that the OST threads generate memory pressure and allow
-	     inactive pages to be reclaimed.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 18380
-Descriptoin: lock ordering violation between &cli->cl_sem and _lprocfs_lock
-Details    : move ldlm namespace creation in setup phase to avoid grab
-	     _lprocfs_lock with cli_sem held.
-
-Severity   : normal
-Bugzilla   : 18624
-Frequency  : only during format of test systems
-Description: Unable to run several mkfs.lustre on loop devices at the same time
-Details    : mkfs.lustre returns error 256 on the concurrent loop devices
-	     formatting. The solution is to proper handle the error.
-
-Severity   : enhancement
-Bugzilla   : 18357
-Description: implement async create (obd_async_create) method for osc, to avoid
-	     too long waiting new ost objects with holding ldlm lock.
-
-Severity   : enhancement
-Bugzilla   : 12069
-Descriptoin: OST grant too much space to client even there are not enough space.
-Details    : Client will shrink its grant cache to OST if there are no write
-	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
-	     this grant cache if there are already not enough avaible space
-	     (left_space < total_clients * 32M).
-
-Severity   : normal
-Bugzilla   : 18674
-Frequency  : occasionally during network problems
-Description: client not allowed to reconnect to OST because of active request
-Details    : abort bulk requests received by the OST once the client has timed
-	     out since the client will resend the request anyway. The client
-	     also now retries to reconnect to the same server if a connect
-	     request failed with EBUSY or -EAGAIN.
-
-Severity   : normal
-Bugzilla   : 18674
-Frequency  : occasionally during network problems
-Description: client not allowed to reconnect to OST because of active request
-Details    : The client also now retries to reconnect to the same server if a
-	     connect request failed with EBUSY or -EAGAIN. The patch has not
-	     been landed in the previous commits.
-
-Severity   : normal
-Frequency  : rare, if used wide striped file and one ost in down.
-Bugzilla   : 18382
-Descriptoin: don't return error if we created a subset of objects for file.
-Details    : lov_update_create_set() uses set->set_success as index for created
-	     objects, so if some requests failed, they will have hole at end of
-	     array and we can use qos_shrink_lsm for allocate correct lsm.
-
-Severity   : normal
-Bugzilla   : 19763
-Description: quotacheck performance/scaling issues
-Details    : reduce quotacheck time on empty filesystem by skipping uninit
-	     group.
-
-Severity   : normal
-Bugzilla   : 20978
-Description: Slow stale export processing during normal start up
-Details    : The global mgc lock prevents OST setup to be run in parallel.
-	     Replace the global lock with a per-config_llog_data semaphore.
-
-Severity   : normal
-Bugzilla   : 19128
-Description: Out or order replies might be lost on replay
-Details    : In ptlrpc_retain_replayable_request if we cannot find retained
-	     request with tid smaller then one currently being added, add it
-	     to the start, not end of the list.
-
-Severity   : major
-Bugzilla   : 20892
-Description: bad entry in directory xxx: inode out of bounds
-Details    : fix locking issue in the rename path which could race with any
-	     other operations updating the same directory.
-
-Severity   : normal
-Bugzilla   : 19557
-Description: BUG: soft lockup - CPU#1 stuck for 10s! [ll_mdt_07:4523]
-Details    : add cond_resched() calls to avoid hogging the cpu for too long
-	     in the hash code.
-
+        * version 1.8.0.2
+        * Support for kernels:
+	  2.6.16.60-0.37 (SLES 10),
+          2.6.18-128.1.6.el5 (RHEL 5),
+          2.6.22.14 vanilla (kernel.org)
+        * Client support for unpatched kernels:
+          (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+          2.6.16 - 2.6.22 vanilla (kernel.org)
+        * Recommended e2fsprogs version: 1.40.11-sun1
+	* File join has been disabled, refer to Bugzilla 16929.
+        * A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192.  Since the NFSv4 export
+	  of Lustre filesystem with 4K stack may cause a stack overflow.
+	  For more information, please refer to bugzilla 17630.
 
 -------------------------------------------------------------------------------
-2009-10-16 Sun Microsystems, Inc.
-	* version 1.8.1.1
+
+2009-06-22 Sun Microsystems, Inc.
+	* version 1.8.0.1
 	* Support for kernels:
-	 2.6.16.60-0.42.4 (SLES 10),
-	 2.6.27.29-0.1 (SLES11, i686 & x84_64 only),
-	 2.6.18-128.7.1.el5 (RHEL 5),
-	 2.6.18-128.7.1.el5 (OEL 5),
+	 2.6.16.60-0.37 (SLES 10),
+	 2.6.18-128.1.6.el5 (RHEL 5),
+	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.27 vanilla (kernel.org)
-	* Recommended e2fsprogs version: 1.41.6.sun1
-	* ext4 support for RHEL5 is experimental and thus should not be
-	  used in production.
-
-Severity   : enhancement
-Bugzilla   : 20539
-Description: Add OEL5 support.
-
-Severity   : enhancement
-Bugzilla   : 19848
-Description: Update kernel to SLES11 2.6.27.29-0.1.
-
-Severity   : major
-Bugzilla   : 20560
-Description: File checksum failures with OST read cache on
-Details    : Disable page poisoning when the bulk transfer has to be aborted
-	     because the client got evicted.
-
-Severity   : normal
-Bugzilla   : 19557
-Description: Don't allow make backward step on assiging osc next id.
-Details    : race between allocation next id and ll_sync thread can be cause
-	     of set wrong osc next id and can be kill valid ost objects.
-
-Severity   : enhancement
-Bugzilla   : 20400
-Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
-
-Severity   : enhancement
-Bugzilla   : 20758
-Description: Update kernel to SLES10 SP2 2.6.16.60-0.42.4.
-
-Severity   : normal
-Bugzilla   : 20533
-Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
-
-Severity   : normal
-Bugzilla   : 20533
-Description: Increase the default BLK_DEF_MAX_SECTORS value for RHEL5 and SLES11
-
-Severity   : normal
-Bugzilla   : 20482
-Description: Error handling in osc_statfs_interpret() has been improved.
-Details    : Check in osc_statfs_interpret() for EBADR.
-
-Severity   : normal
-Bugzilla   : 20482
-Description: Do not send statfs() requests to OSTs disabled by administrator.
-Details    : Check in lov_prep_statfs_set() for non-NULL ltd_exp.
-
-Severity   : normal
-Bugzilla   : 20146
-Description: Do not update ctime for the deleted inode.
-Details    : Check in mds_reint_unlink() before calling fsfilt_setattr().
-
-Severity   : normal
-Bugzilla   : 20146
-Description: Increase of the size of the LDLM resource hash.
-Details    : Bump up RES_HASH_BITS=12.
-
-Severity   : normal
-Bugzilla   : 19934
-Description: correctly send lsm on open replay
-Details    : MDS is trust to LSM size on replay open, but client can set wrong size
-	     of lsm buffer.
-
-Severity   : normal
-Bugzilla   : 20321
-Description: Deadlock between filter_destroy() and filter_commitrw_write().
-Details    : filter_destroy() does not hold the DLM lock over the whole
-	     operation. If the DLM lock is dropped, filter_commitrw() can go
-	     through, causing the deadlock between page lock and i_mutex.
-	     The i_alloc_sem should also be hold in filter_destroy() while
-	     truncating the file.
-
-Severity   : normal
-Bugzilla   : 20008
-Description: truncate starts GFP_FS allocation under transaction causing deadlock
-Details    : ldiskfs_truncate calls grab_cache_page which may start page
-	     allocation under an open transaction. This may lead to
-	     calling prune_icache with consequent lustre reentrance.
-
-Severity   : normal
-Frequency  : only when down/upgrading the MDS to 1.6/1.8 while 1.8 clients are
-	     still up and when the OST pool feature is used
-Bugzilla   : 20318
-Description: interop testing got LBUG when run dd with OST pool
-	     :LustreError: 30032:0:(llite_lib.c:1913:ll_replace_lsm()) LBUG
-Details    : down/upgrading the MDS to a version that doesn't/does support OST
-	     pool can cause clients to crash because the lsm has changed
-	     behind their back.
-
-Severity   : normal
-Bugzilla   : 20550
-Description: missing tree_status on 1.8.1 RPM build
-Details    : make rpms failed due because the tree_status file is missing.
-
-Severity   : normal
-Bugzilla   : 19551
-Description: continuing LustreError "mds adjust qunit failed!"
-Details    : don't print message on the console when ->adjust_qunit fails.
-
-Severity   : normal
-Bugzilla   : 18618
-Description: don't increase ldlm timeout if previous client was evicted
-Details    : if a client doesn't respond to a blocking callback within the
-	     adaptive ldlm enqueue timeout, don't adjust the adaptive estimate
-	     when the lock is next granted.
-
-Severity   : normal
-Bugzilla   : 20518
-Description: ost is being unmounted w/o all writes to last_rcvd landing on disk.
-	     affects recovery negatively.
-Details    : make sure all exports have been properly destroyed by the zombie
-	     thread processed before stopping the target.
-
-Severity   : normal
-Bugzilla   : 20205
-Description: Performance degradation with O_DIRECT between 1.6 & 1.8.1 b190
-Details    : disable write barrier for ext4/SLES11.
-
-Severity   : normal
-Bugzilla   : 18571
-Description: Kernel panic - not syncing: Out of memory and no killable
-	     processes... on OSS when iozone
-Details    : fix memory leak in the journal checksum patch.
-
-Severity   : normal
-Bugzilla   : 18793
-Description: group quota "too many blocks" OSS crashes
-Details    : we should keep the same uid/gid for lquota_chkquota() and
-	     lquota_pending_commit()
-
-Severity   : normal
-Bugzilla   : 18630
-Description: LustreError: 9153:0:(quota_context.c:622:dqacq_completion()) LBUG
-Details    : don't LBUG on release quota error. Just a workaround until the
-	     problem is understood.
-
-------------------------------------------------------------------------------
-2009-07-31 Sun Microsystems, Inc.
-	* version 1.8.1
-	* Support for kernels:
-	 2.6.16.60-0.39.3 (SLES 10),
-	 2.6.27.23-0.1 (SLES11, i686 & x84_64 only),
-	 2.6.18-128.1.14.el5 (RHEL 5),
-	* Client support for unpatched kernels:
-	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.27 vanilla (kernel.org)
-	* Recommended e2fsprogs version: 1.41.6.sun1
-	* File join has been disabled in this release, refer to Bugzilla 16929.
-	* NFS export disabled when stack size < 8192. Since the NFSv4 export
-	  of Lustre filesystem with 4K stack may cause a stack overflow. For
-	  more information, please refer to bugzilla 17630.
-	* ext4 support for RHEL5 is experimental and thus should not be
-	  used in production.
-
-Severity   : enhancement
-Bugzilla   : 19847
-Description: Update kernel to SLES10 SP2 2.6.16.60-0.39.3.
-
-Severity   : normal
-Frequency  : with 1.8 server and 1.6 clients
-Bugzilla   : 20020
-Description: correctly shrink reply for avoid send too big message to client.
-Details    : 1.8 mds is allocate to big buffer to LOV EA data and this produce
-	     some problems with sending this reply to 1.6 client.
-
-Severity   : normal
-Bugzilla   : 19917
-Description: Repeated atomic allocation failures.
-Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations
-	     to generate memory pressure and allow reclaiming of inactive pages.
-	     At the same time, do not allow to exhaust emergency pools.
-	     For local clients the use of GFP_NOFS will be introduced in 1.8.2
-
-Severity   : enhancement
-Bugzilla   : 19846, 18289
-Description: Update kernel to RHEL5 2.6.18-128.1.14.el5.
-
-Severity   : enhancement
-Bugzilla   : 19625, 16893, 18668, 19848
-Description: Add support for SLES11 2.6.27.23-0.1.
-
-Severity   : enhancement
-Bugzilla   : 14250
-Description: Update client support to vanila kernels up to 2.6.27.
+	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	* Recommended e2fsprogs version: 1.40.11-sun1
+	* File join has been disabled, refer to Bugzilla 16929.
+	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
 
 Severity   : enhancement
 Bugzilla   : 19212
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
 
 Severity   : enhancement
-Bugzilla   : 15981
-Description: Compile with -Werror by default for i686 and x86_64.
-
-Severity   : normal
-Bugzilla   : 19528
-Description: resolve race between obd_disconnect and class_disconnect_exports
-Details    : if obd_disconnect will be called to already disconnected export he
-	     forget release one reference and osc module can't unloaded.
-
-Severity   : enhancement
-Bugzilla   : 19293
-Description: move AT tunable parameters for more consistent usage
-Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
-
-Severity   : normal
-Bugzilla   : 19223
-Descriptoin: correctly skip time estimate if in recovery
-Details    : rq_send_state insn't bitmask so using bitwise ops is forbid.
-
-Severity   : normal
-Bugzilla   : 18399
-Descriptoin: OSS DeadLock
-Details    : Use trylock to prevent deadlock when shrink icache.
-
-Severity   : enhancement
-Bugzilla   : 18688
-Description: Allow tuning service thread via /proc
-Details    : For each service a new
-	     /proc/fs/lustre/{service}/*/thread_{min,max,started} entry is
-	     created that can be used to set min/max thread counts, and get the
-	     current number of running threads.
-
-Severity   : enhancement
-Bugzilla   : 18798
-Description: Add state history info file, enhance import info file
-Details    : Track import connection state changes in a new osc/mdc proc file;
-	     add overview-type data to the osc/mdc import proc file.
-
-Severity   : normal
-Bugzilla   : 18645
-Description: Reduce small size read RPC
-Details    : Set read-ahead limite for every file and only do read-ahead when
-	     available read-ahead pages are bigger than 1M to avoid small size
-	     read RPC.
-
-Severity   : normal
-Bugzilla   : 18204
-Description: free_entry erroneously used groups_free instead of put_group_info
-
-Severity   : enhancement
-Bugzilla   : 17817
-Description: Make read-ahead stripe size aligned.
-
-Severity   : enhancement
-Bugzilla   : 17536
-Description: MDS create should not wait for statfs RPC while holding DLM lock.
-
-Severity   : normal
-Frequency  : rare, connect and disconnect target at same time
-Bugzilla   : 17310
-Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
-Details    : don't call obd_disconnect under lov_lock. this long time
-	     operation and can block ptlrpcd which answer to connect request.
-
-Severity   : normal
-Frequency  : start MDS on uncleanly shutdowned MDS device
-Bugzilla   : 16839
-Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
-Details    : stay in waiting mds<>ost recovery finished produce random bugs
-	     due race between two ll_sync thread for one lov target. send
-	     ACTIVATE event only if connect realy finished and import have
-	     FULL state.
-
-Severity   : normal
-Frequency  : start MDS on uncleanly shutdowned MDS device
-Bugzilla   : 18049
-Descriptoin: aborting recovery hang on MDS
-Details    : don't throttle destroy RPCs for the MDT.
-
-Severity   : low
-Bugzilla   : 18016
-Description: Slow reads beyond 8Tb offsets.
-Details    : Page index integer overflow in ll_read_ahead_page
-
-Severity   : normal
-Bugzilla   : 18304
-Description: Soft lockup on OSS after MDS failover
-Details    : MSG_CONNECT_INITIAL is not set on the initial MDS->OST connect.
-	     As a conseqence, the patch from bug 18224 is not operational
-	     and the MDS export cannot be reused on the OSTs until it gets
-	     evicted.
-
-Severity   : major
-Frequency  : rare, only if using MMP with Linux RAID
-Bugzilla   : 17895
-Description: MMP doesn't work with Linux RAID
-Details    : While using HA for Lustre servers with Linux RAID, it is possible
-	     that MMP will not detect multiple mounts. To make this work we
-	     need to unplug the device queue in RAID when the MMP block is being
-	     written. Also while reading the MMP block, we should read it from
-	     disk and not the cached one.
-
-Severity   : minor
-Frequency  : rare, during recovery
-Bugzilla   : 17895
-Description: Assertion failure in ldlm_lock_put
-Details    : Do not put cancelled locks into replay list, hold references on
-	     locks in replay list
-
-Severity   : normal
-Bugzilla   : 18577
-Description: 1.6.5 mdsrate performance is slower than 1.4.11/12 (MDS is not cpu bound!)
-Details    : create_count always drops to the min value (=32) because grow_count
-	     is being changed before the precreate RPC completes.
-
-Severity   : normal
-Frequency  : Only in RHEL5 when mounting multiple ext3 filesystems
-	     simultaneously
-Bugzilla   : 19184
-Description: "kmem_cache_create: duplicate cache jbd_4k" error message
-Details    : add proper locking for creation of jbd_4k slab cache
-
-Severity   : normal
-Bugzilla   : 19058
-Description: MMP check in ext3_remount() fails without displaying any error
-Details    : When multiple mount protection fails during remount, proper error
-	     should be returned
-
-Severity   : Low
-Bugzilla   : 15010
-Description: Rare Client crash on resend if the file was deleted.
-Details    : When file is opened, but open reply is lost and file is
-	     subsequently deleted before resend, resend processing logic
-	     breaks trying to open the file again, should not try to open.
-
-Severity   : high
-Bugzilla   : 17569
-Description: add check for >8TB ldiskfs filesystems
-Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
-	     Don't allow >8TB ldiskfs filesystems to be mounted without
-	     force_over_8tb mount option
-
-Severity   : normal
-Bugzilla   : 20011
-Description: Client locked up when running multiple instances of an app. on
-	     multiple mount points
-Details    : ll_shrink_cache() can sleep while holding the ll_sb_lock.
-	     Convert ll_sb_lock to a read/write semaphore to fix the problem.
-
-Severity   : normal
-Bugzilla   : 19559
-Description: Cannot acces an NFS-mounted Lustre filesystem
-Details    : An NFS client cannot access the Lustre filesystem NFS-mounted
-	     from a Lustre-client exporting the Lustre filesystem via NFS.
-
-Severity   : normal
-Bugzilla   : 20139
-Description: panic in ll_statahead_thread
-Details    : grab dentry reference in parent process.
-
-
--------------------------------------------------------------------------------
-
-tbd Sun Microsystems, Inc.
-        * version 1.8.0.1
-        * Support for kernels:
-         2.6.16.60-0.31 (SLES 10),
-         2.6.18-128.1.6.el5 (RHEL 5),
-         2.6.22.14 vanilla (kernel.org)
-        * Client support for unpatched kernels:
-          (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-          2.6.16 - 2.6.22 vanilla (kernel.org)
-        * Recommended e2fsprogs version: 1.40.11-sun1
-        * File join has been disabled, refer to Bugzilla 16929.
-        * A new Lustre ADIO driver is available for MPICH2-1.0.7.
-        * NFS export disabled when stack size < 8192. Since the NFSv4 export of
-          Lustre filesystem with 4K stack may cause a stack overflow. For more
-          information, please refer to bugzilla 17630.
-
-Severity   : enhancement
 Bugzilla   : 19024
 Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
 
 Severity   : enhancement
+Bugzilla   : 19212
+Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
+
+Severity   : enhancement
 Bugzilla   : 17671
-Description: Update OFED release to 1.4.1 RC4
+Description: Add support for OFED 1.4.1.
+
+Severity   : enhancement
+Bugzilla   : 19731
+Description: build ofed 1.4.1 with mlx4_en (Mellanox ConnectX drivers in 10GbE
+	     mode) enabled
+
+Severity   : major (SLES10/OFED 1.4.1 only)
+Bugzilla   : 19553
+Description: client node hang while running dbench
+Details    : Work around bogus definition of cancel_dirty_page() in OFED 1.4.1
+	     Only the SLES10 backport is impacted. This causes processes to be
+	     stuck infinitely in blk_congestion_wait(). OFED bugzilla ticket:
+	     https://bugs.openfabrics.org/show_bug.cgi?id=1650
+
+Severity   : normal
+Bugzilla   : 19580
+Description: BUG: soft lockup - CPU#7 stuck for 10s! [ll_imp_inval:18451]
+Details    : ll_imp_inval can sleep on waiting for a semaphore while holding
+	     a spinlock. Convert lco_lock to a semaphore to address the
+	     problem.
 
 Severity   : major, only with big OST
 Bugzilla   : 18518
@@ -667,47 +96,24 @@ Details    : This patch fixes:
                 -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
                 -                RETURN(0);
 
+Severity   : enhancement
+Bugzilla   : 18775
+Description: improve lctl set/get_param
+Details    : handle the bad options, support more than one arguments,
+	     add '-F' option to append the indicator to the parameters.
+
 -------------------------------------------------------------------------------
 
-2008-12-31 Sun Microsystems, Inc.
+2009-04-30 Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
-	 2.6.5-7.314 (SLES 9),
-	 2.6.9-67.0.22.EL (RHEL 4),
 	 2.6.16.60-0.31 (SLES 10),
 	 2.6.18-92.1.17.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.22 vanilla (kernel.org)
-	* Client support for unpatched kernels:
-	  we do not recommend using patchless RHEL4 clients with kernels
-	  prior to 2.6.9-55EL (RHEL4U5).
 	* Recommended e2fsprogs version: 1.40.11-sun1
-	* Note that reiserfs quotas are disabled on SLES 10 in this kernel.
-	* RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
-	  removed cwd "./" (refer to Bugzilla 14399).
-	* A new quota file format has been introduced in 1.6.5.
-	  The format conversion from prior releases is handled transparently,
-	  but releases older than 1.4.12/1.6.5 don't understand this new
-	  format. The automatic format conversion can be avoided by running
-	  the following command on the MDS:
-		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
-	  For more information, please refer to bugzilla 13904.
-	* A new quota file format was introduced in 1.6.6/1.8.0 (kernels 2.6.16+).
-	  The format conversion from prior releases is handled transparently,
-	  but releases older than 1.6.6/1.8.0 don't understand this new
-	  format. The automatic format conversion can be avoided by running
-	  the following commands on the MDS and OSS servers (for
-	  pre 1.4.12-1.6.5 quota files):
-		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV',
-		'tunefs.lustre --param="ost.quota_type=ug1" $MDTDEV'
-		or (for 1.4.12/1.6.5 quota files)
-		'tunefs.lustre --param="mdt.quota_type=ug2" $MDTDEV',
-		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'
-	  For more information, please refer to bugzilla 13904.
-	* Output of lfs quota has been made less detailed by default,
-	  old (verbose) output can be obtained by using -v option.
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
@@ -747,7 +153,7 @@ Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
 Details    : allow skip disconnected ost for send statfs request and hide error
-             in this case.
+	     in this case.
 
 Severity   : normal
 Frequency  : rare, on llog test 6
@@ -756,33 +162,40 @@ Descriptoin: don't allow connect to already connected import
 Details    : allowing connect to already connected import is hide connecting problem.
 
 Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    : don't call obd_disconnect under lov_lock. this long time
+	     operation and can block ptlrpcd which answer to connect request.
+
+Severity   : normal
 Frequency  : rare, on failed llog setup
 Bugzilla   : 18896
 Descriptoin: don't leak obd reference on failed llog setup
 Details    : for failed llog setup - mgc forget call class_destroy_import for
-             client import, move destroy import to more generic place.
+	     client import, move destroy import to more generic place.
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 18902
 Descriptoin: allow kill process which wait statahead result
 Details    : for some reasons 'ls' can stick in waiting result from statahead,
-             in this case need way for kill this process.
+	     in this case need way for kill this process.
 
 Severity   : normal
 Frequency  : rare, at shutdown
 Bugzilla   : 18773
 Descriptoin: panic at umount
 Details    : llap_shrinker can be raced with killing super block from list and
-             this produce panic with access to already freeded pointer
+	     this produce panic with access to already freeded pointer
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 18154
 Descriptoin: don't lose wakeup for imp_recovery_waitq
 Details    : recover_import_no_retry or invalidate_import and import_close can
-             both sleep on imp_recovery_waitq, but we was send only one wakeup
-             to sleep queue.
+	     both sleep on imp_recovery_waitq, but we was send only one wakeup
+	     to sleep queue.
 
 Severity   : normal
 Frequency  : rare
@@ -798,12 +211,26 @@ Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
 Details    : release lock refernce only after add page to pages list.
 
 Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 16839
+Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
+Details    : stay in waiting mds<>ost recovery finished produce random bugs
+	     due race between two ll_sync thread for one lov target. send 
+	     ACTIVATE event only if connect realy finished and import have
+	     FULL state.
+
+Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
 Details    : mds don't control size of acl but they limited by reint/getattr
 	     reply buffer.
 
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 18049
+Descriptoin: aborting recovery hang on MDS
+Details    : don't throttle destroy RPCs for the MDT.
 
 Severity   : major
 Frequency  : on remount
@@ -840,6 +267,10 @@ Severity   : enhancement
 Bugzilla   : 17201
 Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
 
+Severity   : enhancement
+Bugzilla   : 17458
+Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
+
 Severity   : normal
 Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492
@@ -848,14 +279,6 @@ Details    : if ost was added after client connected to mds client can have
 	     hit lnet_try_match_md ... to big messages to wide striped files.
 	     in this case need teach client to handle config events about add
 	     lov target and update client max ea size at that event.
-
-Severity   : enhancement
-Bugzilla   : 17374
-Description: Update to sles9 kernel-2.6.5-7.314.
-
-Severity   : enhancement
-Bugzilla   : 17458
-Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
 
 Severity   : normal
 Frequency  : Create a symlink file with a very long name
@@ -870,8 +293,8 @@ Bugzilla   : 16492
 Description: mds is deadlocked
 Details    : in rare cases, inode in catalog can have i_no less than have parent
 	     i_no, this produce wrong order for locking during open, and
-	     parallel unlink can be lock open. this need teach mds_open to grab
-	     locks in resource id order, not at parent -> child order.
+	     parallel unlink can be lock open. this need teach mds_open to
+	     grab locks in resource id order, not at parent -> child order.
 
 Severity   : enhancement
 Bugzilla   : 1819
@@ -944,20 +367,12 @@ Details    : if client reconnected to restarted server we need join to recovery
 	     instead of find server handler is changed and process self eviction
 	     with cancel all locks.
 
-Severity   : enhancement
-Bugzilla   : 16633
-Description: Update to RHEL5 kernel-2.6.18-92.1.10.el5.
-
 Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
 	     away. So always drop flock locks when client is evicted and
 	     perform unlock regardless of successfulness of speaking to MDS.
-
-Severity   : enhancement
-Bugzilla   : 16547
-Description: Update to SLES10 SP2 kernel-2.6.16.60-0.27.
 
 Severity   : enhancement
 Bugzilla   : 16566
@@ -1029,14 +444,6 @@ Severity   : enhancement
 Bugzilla   : 16208
 Description: Implement lustre ll_show_options method.
 
-Severity   : enhancement
-Bugzilla   : 16188
-Description: Update to SLES9 kernel-2.6.5-7.312.
-
-Severity   : enhancement
-Bugzilla   : 16503
-Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
-
 Severity   : normal
 Bugzilla   : 16317
 Description: exports in /proc are broken
@@ -1061,14 +468,6 @@ Description: configure's --enable-quota should check the
 	   : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
 	   : no quota support is in kernel
-
-Severity   : enhancement
-Bugzilla   : 15308
-Description: Update to SLES10 SP2 kernel-2.6.16.60-0.23.
-
-Severity   : enhancement
-Bugzilla   : 16190
-Description: Update to RHEL5 kernel-2.6.18-92.1.6.el5.
 
 Severity   : normal
 Bugzilla   : 16318
@@ -1103,10 +502,6 @@ Frequency  : occasional
 Bugzilla   : 15210
 Description: add refcount for osc callbacks, so avoid panic on shutdown
 
-Severity   : enhancement
-Bugzilla   : 16189
-Description: Update to RHEL4 kernel-2.6.9-67.0.20.
-
 Severity   : normal
 Frequency  : testing only
 Bugzilla   : 12653
@@ -1118,10 +513,6 @@ Frequency  : only in unusual configurations
 Bugzilla   : 16014
 Description: Kernel panic with find ost index.
 Details    : lov_obd have panic if some OST's have sparse indexes.
-
-Severity   : enhancement
-Bugzilla   : 15865
-Description: Update to RHEL5 kernel-2.6.18-53.1.21.el5.
 
 Severity   : major
 Frequency  : rarely, if filesystem is mounted with -o flock
@@ -1164,14 +555,6 @@ Frequency  : only with broken builds/installations
 Bugzilla   : 15779
 Description: no LBUG if lquota.ko and fsfilt_ldiskfs.ko are different versions
 Details    : just return an error to a user, put a console error message
-
-Severity   : enhancement
-Bugzilla   : 15741
-Description: Update to RHEL5 kernel-2.6.18-53.1.19.el5.
-
-Severity   : enhancement
-Bugzilla   : 15742
-Description: Update to RHEL4 kernel-2.6.9-67.0.15.
 
 Severity   : enhancement
 Bugzilla   : 14134
@@ -1483,7 +866,7 @@ Details    : In case of memory pressure, list_del() can be called twice on
 
 Severity   : normal
 Bugzilla   : 17026
-Description: (ptllnd_peer.c:557:kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
+Description: kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
 Details    : fix stack overflow in the distributed lock manager by defering
 	     export eviction after a failed ast to the elt thread instead of
 	     handling it in the dlm interpret routine.
@@ -1504,10 +887,10 @@ Details    : Checks validity of on-disk block bitmap. Also it does better
 Severity   : normal
 Bugzilla   : 16438
 Frequency  : only for big-endian servers
-Description: Check for big-endian system while mounting fs with extents feature
+Description: Check if big-endian system while mounting fs with extents feature
 Details    : Mounting a filesystem with extents feature will fail on big-endian
 	     systems since ext3-based ldiskfs is not supported on big-endian
-	     systems.  Can be over-ridden with "bigendian_extents" mount option.
+	     systems.  Can be overridden with "bigendian_extents" mount option.
 
 Severity   : normal
 Bugzilla   : 16860
@@ -1519,6 +902,15 @@ Details    : With AT enabled, the recovery window can be excessively long (6000+
 	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
 	     time via pb_service_time.
 
+Severity   : normal
+Bugzilla   : 16522
+Description: Watchdog triggered on MDS failover
+Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
+	     the OSTs know that the MDS "UUID" can be reused for the same export
+	     from a different NID, so we do not need to wait for the export to
+	     be evicted.
+
+Severity   : enhancement
 Bugzilla   : 16919
 Descriptoin: Don't sync journal after every i/o
 Details    : Implement write RPC replay to allow server replies for write RPCs
@@ -1528,19 +920,38 @@ Details    : Implement write RPC replay to allow server replies for write RPCs
 	     by running the following command on the OSSs:
 	     lctl set_param obdfilter.*.sync_journal=0
 
-Severity   : normal
-Bugzilla   : 16522
-Description: Watchdog triggered on MDS failover
-Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
-	     the OSTs know that the MDS "UUID" can be reused for the same export
-	     from a different NID, so we do not need to wait for the export to
-	     be evicted.
+Severity   : low
+Bugzilla   : 18016
+Description: Slow reads beyond 8Tb offsets.
+Details    : Page index integer overflow in ll_read_ahead_page
+
+Severity   : major
+Frequency  : rare, only if using MMP with Linux RAID
+Bugzilla   : 17895
+Description: MMP doesn't work with Linux RAID
+Details    : While using HA for Lustre servers with Linux RAID, it is possible
+	     that MMP will not detect multiple mounts. To make this work we
+	     need to unplug the device queue in RAID when the MMP block is being
+	     written. Also while reading the MMP block, we should read it from
+	     disk and not the cached one.
+
+Severity   : minor
+Frequency  : rare, during recovery
+Bugzilla   : 17895
+Description: Assertion failure in ldlm_lock_put
+Details    : Do not put cancelled locks into replay list, hold references on
+	     locks in replay list
 
 Severity   : critical
 Bugzilla   : 18695
-Descriptoin: Lustre detected file system corruption with inode out of bounds
+Description: Lustre detected file system corruption with inode out of bounds
 Details    : don't update i_size on MDS_CLOSE for directories. This causes
 	     directory corruptions on the MDT.
+
+Severity   : normal
+Bugzilla   : 19223
+Description: client doesn't try to reconnect
+Details    : correctly skip time estimate if in recovery
 
 -------------------------------------------------------------------------------
 
@@ -2920,7 +2331,7 @@ Bugzilla   : 13129
 Description: server LBUG when shutting down
 Details    : Block umount forever until the mount refcount is zero rather
 	     than giving up after an arbitrary timeout.
-
+	
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
@@ -3349,7 +2760,7 @@ Details    : quota slave depends qctxt->lqc_import to send its quota request.
 	     This pointer will be invalid if mds did failover or broke its
 	     connect to osts, which leads to LBUG.
 
-Severity   : normal
+Severity   : normal	
 Frequency  : when qunit size is too small(less than 20M)
 Bugzilla   : 12588
 Description: write is stopped by improper -EDQUOT
@@ -3443,7 +2854,7 @@ Details    : If a client tried to create a new file before the MDT had
 	     connected to any OSTs, the create would return EIO.  Now
 	     the client will simply block until the MDT connects to the
 	     first OST and the create can succeed.
-
+	
 Severity   : normal
 Frequency  : only for SLES9
 Bugzilla   : 12543
@@ -3498,7 +2909,7 @@ Frequency  : rare
 Description: Sometimes precreate code can triger create object on wrong ost
 Details    : Wrong protected or not not restored variables aftre precreate loop
 	     can produce creation object on wrong ost.
-
+	
 Severity   : normal
 Frequency  : oss recovery
 Bugzilla   : 10800

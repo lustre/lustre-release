@@ -59,7 +59,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <ctype.h>
 #include "lustre-snmp-util.h"
 
 /**************************************************************************
@@ -365,7 +364,7 @@ void send_portals_catastrophe_trap(char *reason_string)
 
     /*And the data is a octet string, that contains the actually reason string*/
     var_trap[1].type = ASN_OCTET_STR;
-    var_trap[1].val.string = (unsigned char *)reason_string;
+    var_trap[1].val.string = reason_string;
     var_trap[1].val_len = strlen(reason_string);
 
     /*And now send off the trap*/
@@ -420,7 +419,7 @@ void send_obd_unhealthy_trap(char *obd_name,char *reason_string)
 
     /*And the data is a octet string, that contains the actually reason strong*/
     var_trap[1].type = ASN_OCTET_STR;
-    var_trap[1].val.string = (unsigned char *)obd_name;
+    var_trap[1].val.string = obd_name;
     var_trap[1].val_len = strlen(obd_name);
 
     /* 
@@ -435,7 +434,7 @@ void send_obd_unhealthy_trap(char *obd_name,char *reason_string)
 
     /*And the data is a octet string, that contains the actually reason strong*/
     var_trap[2].type = ASN_OCTET_STR;
-    var_trap[2].val.string = (unsigned char *)reason_string;
+    var_trap[2].val.string = reason_string;
     var_trap[2].val_len = strlen(reason_string);
 
     /*And now send off the trap*/

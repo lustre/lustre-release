@@ -7,7 +7,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/rai
  
 +	/* in order to support large I/Os */
 +	blk_queue_max_sectors(mddev->queue, conf->chunk_size * conf->previous_raid_disks >> 9);
-+	mddev->queue->max_phys_segments = conf->chunk_size * (conf->previous_raid_disks - conf->max_degraded) >> PAGE_SHIFT;
++	mddev->queue->max_phys_segments = conf->chunk_size * conf->previous_raid_disks >> PAGE_SHIFT;
 +	mddev->queue->max_hw_segments = conf->chunk_size * conf->previous_raid_disks >> PAGE_SHIFT;;
 +
  	return 0;

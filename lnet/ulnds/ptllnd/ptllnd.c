@@ -48,6 +48,7 @@ lnd_t               the_ptllnd = {
         .lnd_send       = ptllnd_send,
         .lnd_recv       = ptllnd_recv,
         .lnd_eager_recv = ptllnd_eager_recv,
+        .lnd_notify     = ptllnd_notify,
         .lnd_wait       = ptllnd_wait,
         .lnd_setasync   = ptllnd_setasync,
 };
@@ -291,8 +292,9 @@ ptllnd_get_tunables(lnet_ni_t *ni)
                                       "PTLLND_PEERCREDITS", PTLLND_PEERCREDITS);
         if (rc != 0)
                 return rc;
-        if (plni->plni_peer_credits > PTLLND_MSG_MAX_CREDITS) {
-                CERROR("PTLLND_PEERCREDITS must be <= %d\n", PTLLND_MSG_MAX_CREDITS);
+        /* kptl_msg_t::ptlm_credits is only a __u8 */
+        if (plni->plni_peer_credits > 255) {
+                CERROR("PTLLND_PEERCREDITS must be <= 255\n");
                 return -EINVAL;
         }
 

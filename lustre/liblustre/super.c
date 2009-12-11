@@ -790,7 +790,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
-                struct obdo oa = { 0 };
+                struct obdo oa;
                 struct lustre_handle lockh = { 0 };
                 obd_valid valid;
 
@@ -987,7 +987,6 @@ static int llu_readlink_internal(struct inode *inode,
         ENTRY;
 
         *request = NULL;
-        *symname = NULL;
 
         if (lli->lli_symlink_name) {
                 *symname = lli->lli_symlink_name;
@@ -1248,8 +1247,7 @@ static int llu_statfs(struct llu_sb_info *sbi, struct statfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = llu_statfs_internal(sbi, &osfs,
-                                 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS));
+        rc = llu_statfs_internal(sbi, &osfs, cfs_time_current_64() - HZ);
         if (rc)
                 return rc;
 
@@ -2075,10 +2073,6 @@ llu_fsswop_mount(const char *source,
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = ll_ocd_update;
-
-        /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
-         * targets */
-        obd_notify(obd, NULL, OBD_NOTIFY_CREATE, NULL);
 
         obd_register_lock_cancel_cb(obd, llu_extent_lock_cancel_cb);
 

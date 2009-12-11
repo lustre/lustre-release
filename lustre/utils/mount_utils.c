@@ -34,10 +34,6 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#if HAVE_CONFIG_H
-#  include "config.h"
-#endif /* HAVE_CONFIG_H */
-
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -118,8 +114,8 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
                 return errno;
         }
 
-        snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s/mountdata' %s",
-                 DEBUGFS, MOUNT_DATA_FILE, tmpdir, dev);
+        snprintf(cmd, cmdsz, "/sbin/debugfs -c -R 'dump /%s %s/mountdata' %s",
+                 MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
         if (ret) {
@@ -131,14 +127,8 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
         sprintf(filepnm, "%s/mountdata", tmpdir);
         filep = fopen(filepnm, "r");
         if (filep) {
-                size_t num_read;
                 vprint("Reading %s\n", MOUNT_DATA_FILE);
-                num_read = fread(mo_ldd, sizeof(*mo_ldd), 1, filep);
-                if (num_read < 1 && ferror(filep)) {
-                        fprintf(stderr, "%s: Unable to read from file (%s): %s\n",
-                                progname, filepnm, strerror(errno));
-                        goto out_close;
-                }
+                fread(mo_ldd, sizeof(*mo_ldd), 1, filep);
 	} else {
                 verrprint("%s: Unable to read %d.%d config %s.\n",
                           progname, LUSTRE_MAJOR, LUSTRE_MINOR, filepnm);

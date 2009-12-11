@@ -40,10 +40,6 @@
 
 /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
 
-#if HAVE_CONFIG_H
-#  include "config.h"
-#endif /* HAVE_CONFIG_H */
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -62,7 +58,6 @@
 #include <string.h>
 #include <getopt.h>
 #include <limits.h>
-#include <ctype.h>
 
 #ifdef __linux__
 /* kp30.h is not really needed here, but on SLES10/PPC, fs.h includes idr.h which
@@ -194,12 +189,7 @@ int get_os_version()
                         fprintf(stderr, "%s: Warning: Can't resolve kernel "
                                 "version, assuming 2.6\n", progname);
                 else {
-                        if (read(fd, release, 4) < 0) {
-                                fprintf(stderr, "reading from /proc/sys/kernel"
-                                                "/osrelease: %s\n", strerror(errno));
-                                close(fd);
-                                exit(-1);
-                        }
+                        read(fd, release, 4);
                         close(fd);
                 }
                 if (strncmp(release, "2.4.", 4) == 0)
@@ -269,10 +259,6 @@ int loop_setup(struct mkfs_opts *mop)
                         snprintf(cmd, cmdsz, "losetup %s %s", l_device,
                                  mop->mo_device);
                         ret = run_command(cmd, cmdsz);
-                        if (ret == 256)
-                                /* someone else picked up this loop device
-                                 * behind our back */
-                                continue;
                         if (ret) {
                                 fprintf(stderr, "%s: error %d on losetup: %s\n",
                                         progname, ret, strerror(ret));
@@ -380,25 +366,22 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
         static int msg_displayed;
 
         if (msg_displayed) {
-                fprintf(stderr, "WARNING: %s does not support %s "
-                        "feature.\n\n", E2FSPROGS, feature);
+                fprintf(stderr, "WARNING: e2fsprogs does not support %s "
+                        "feature.\n\n", feature);
                 return;
         }
 
         msg_displayed++;
 
-        fprintf(stderr, "WARNING: The %s package currently installed on "
-                "your system does not support \"%s\" feature.\n",
-                E2FSPROGS, feature);
-#if !(HAVE_LDISKFSPROGS)
-        fprintf(stderr, "Please install the latest version of e2fsprogs from\n"
-                "http://downloads.lustre.org/public/tools/e2fsprogs/\n"
-                "to enable this feature.\n");
-#endif
+        fprintf(stderr, "WARNING: The e2fsprogs package currently installed on "
+                "your system does not support \"%s\" feature.\nPlease install "
+                "the latest version of e2fsprogs from http://downloads.lustre.org"
+                "/public/tools/e2fsprogs/\nto enable this feature.\n", feature);
+
         if (make_backfs)
-                fprintf(stderr, "Feature will not be enabled until %s"
-                        "is updated and '%s -O %s %%{device}' "
-                        "is run.\n\n", E2FSPROGS, TUNE2FS, feature);
+                fprintf(stderr, "Feature will not be enabled until e2fsprogs "
+                        "is updated and 'tune2fs -O %s %%{device}' "
+                        "is run.\n\n", feature);
 }
 
 /* Check whether the file exists in the device */
@@ -411,8 +394,8 @@ static int file_in_dev(char *file_name, char *dev_name)
 
         /* Construct debugfs command line. */
         snprintf(debugfs_cmd, sizeof(debugfs_cmd),
-                "%s -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
-                DEBUGFS, file_name, dev_name);
+                "debugfs -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
+                file_name, dev_name);
 
         fp = popen(debugfs_cmd, "r");
         if (!fp) {
@@ -473,8 +456,8 @@ static int is_e2fsprogs_feature_supp(const char *feature)
         int fd = -1;
         int ret = 0;
 
-        snprintf(cmd, sizeof(cmd), "%s -c -R \"supported_features %s\" 2>&1",
-                 DEBUGFS, feature);
+        snprintf(cmd, sizeof(cmd),
+                 "debugfs -c -R \"supported_features %s\" 2>&1", feature);
 
         /* Using popen() instead of run_command() since debugfs does not return
          * proper error code if command is not supported */
@@ -492,8 +475,8 @@ static int is_e2fsprogs_feature_supp(const char *feature)
         if ((fd = mkstemp(imgname)) < 0)
                 return -1;
 
-        snprintf(cmd, sizeof(cmd), "%s -F -O %s %s 100 >/dev/null 2>&1",
-                 MKE2FS, feature, imgname);
+        snprintf(cmd, sizeof(cmd), "mke2fs -F -O %s %s 100 >/dev/null 2>&1",
+                 feature, imgname);
         /* run_command() displays the output of mke2fs when it fails for
          * some feature, so use system() directly */
         ret = system(cmd);
@@ -515,7 +498,7 @@ static void enable_default_backfs_features(struct mkfs_opts *mop)
         int maj_high, maj_low, min;
         int ret;
 
-        strscat(mop->mo_mkfsopts, " -O dir_index,extents", sizeof(mop->mo_mkfsopts));
+        strscat(mop->mo_mkfsopts, " -O dir_index", sizeof(mop->mo_mkfsopts));
 
         /* Upstream e2fsprogs called our uninit_groups feature uninit_bg,
          * check for both of them when testing e2fsprogs features. */
@@ -659,7 +642,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 strscat(mop->mo_mkfsopts, " -F", sizeof(mop->mo_mkfsopts));
 
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd),
-                         "%s -j -b %d -L %s ", MKE2FS, L_BLOCK_SIZE,
+                         "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
                          mop->mo_ldd.ldd_svname);
 
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
@@ -746,7 +729,6 @@ int write_local_files(struct mkfs_opts *mop)
         char *dev;
         FILE *filep;
         int ret = 0;
-        size_t num;
 
         /* Mount this device temporarily in order to write these files */
         if (!mkdtemp(mntpt)) {
@@ -792,12 +774,7 @@ int write_local_files(struct mkfs_opts *mop)
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         }
-        num = fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-        if (num < 1 && ferror(filep)) {
-                fprintf(stderr, "%s: Unable to write to file (%s): %s\n",
-                        progname, filepnm, strerror(errno));
-                goto out_umnt;
-        }
+        fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
 
         /* COMPAT_146 */
@@ -893,8 +870,8 @@ int read_local_files(struct mkfs_opts *mop)
                  filesystem */
 
         /* Construct debugfs command line. */
-        snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s/mountdata' '%s'",
-                 DEBUGFS, MOUNT_DATA_FILE, tmpdir, dev);
+        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' '%s'",
+                 MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
         if (ret)
@@ -904,14 +881,8 @@ int read_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/mountdata", tmpdir);
         filep = fopen(filepnm, "r");
         if (filep) {
-                size_t num_read;
                 vprint("Reading %s\n", MOUNT_DATA_FILE);
-                num_read = fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-                if (num_read < 1 && ferror(filep)) {
-                        fprintf(stderr, "%s: Unable to read from file (%s): %s\n",
-                                progname, filepnm, strerror(errno));
-                        goto out_close;
-                }
+                fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         } else {
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
@@ -923,8 +894,8 @@ int read_local_files(struct mkfs_opts *mop)
                 sprintf(filepnm, "%s/%s", tmpdir, LAST_RCVD);
 
                 /* Construct debugfs command line. */
-                snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s' %s",
-                         DEBUGFS, LAST_RCVD, filepnm, dev);
+                snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s' %s",
+                         LAST_RCVD, filepnm, dev);
 
                 ret = run_command(cmd, cmdsz);
                 if (ret) {
@@ -943,8 +914,7 @@ int read_local_files(struct mkfs_opts *mop)
                         snprintf(cmd, cmdsz, "ls -l %s/", tmpdir);
                         run_command(cmd, cmdsz);
                         verrprint("Contents of disk:\n");
-                        snprintf(cmd, cmdsz, "%s -c -R 'ls -l /' %s",
-                                 DEBUGFS, dev);
+                        snprintf(cmd, cmdsz, "debugfs -c -R 'ls -l /' %s", dev);
                         run_command(cmd, cmdsz);
 
                         goto out_rmdir;
@@ -976,8 +946,8 @@ int read_local_files(struct mkfs_opts *mop)
                 } else  {
                         /* If neither is set, we're pre-1.4.6, make a guess. */
                         /* Construct debugfs command line. */
-                        snprintf(cmd, cmdsz, "%s -c -R 'rdump /%s %s' %s",
-                                 DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
+                        snprintf(cmd, cmdsz, "debugfs -c -R 'rdump /%s %s' %s",
+                                 MDT_LOGS_DIR, tmpdir, dev);
                         run_command(cmd, cmdsz);
 
                         sprintf(filepnm, "%s/%s", tmpdir, MDT_LOGS_DIR);
@@ -1102,11 +1072,6 @@ static char *convert_hostnames(char *s1)
         lnet_nid_t nid;
 
         converted = malloc(left);
-        if (converted == NULL) {
-                fprintf(stderr, "out of memory: needed %d bytes\n",
-                        MAXNIDSTR);
-                return NULL;
-        }
         end = s1 + strlen(s1);
         c = converted;
         while ((left > 0) && (s1 < end)) {
@@ -1116,7 +1081,7 @@ static char *convert_hostnames(char *s1)
                 sep = *s2;
                 *s2 = '\0';
                 nid = libcfs_str2nid(s1);
-
+                
                 if (nid == LNET_NID_ANY) {
                         fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
                         free(converted);
@@ -1131,7 +1096,7 @@ static char *convert_hostnames(char *s1)
                         free(converted);
                         return NULL;
                 }
-
+                                        
                 c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
                 left = converted + MAXNIDSTR - c;
                 s1 = s2 + 1;
@@ -1360,10 +1325,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 return EINVAL;
         }
 
-        /* single argument: <device> */
-        if (argc == 2)
-                ++print_only;
-
 #ifndef TUNEFS
         if (mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT && 0 == upcall) {
                 if (access("/usr/sbin/l_getgroups", R_OK | X_OK)) {
@@ -1381,76 +1342,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 #endif
 
         return 0;
-}
-
-/* Search for opt in mntlist, returning true if found.
- */
-static int in_mntlist(char *opt, char *mntlist)
-{
-        char *ml, *mlp, *item, *ctx;
-
-        if (!(ml = strdup(mntlist))) {
-                fprintf(stderr, "%s: out of memory\n", progname);
-                exit(1);
-        }
-        mlp = ml;
-        while ((item = strtok_r(mlp, ",", &ctx))) {
-                if (!strcmp(opt, item))
-                        break;
-                mlp = NULL;
-        }
-        free(ml);
-        return (item != NULL);
-}
-
-/* Issue a message on stderr for every item in wanted_mountopts that is not
- * present in mountopts.  The justwarn boolean toggles between error and
- * warning message.  Return an error count.
- */
-static int check_mountfsoptions(char *mountopts, char *wanted_mountopts,
-                                int justwarn)
-{
-        char *ml, *mlp, *item, *ctx = NULL;
-        int errors = 0;
-
-        if (!(ml = strdup(wanted_mountopts))) {
-                fprintf(stderr, "%s: out of memory\n", progname);
-                exit(1);
-        }
-        mlp = ml;
-        while ((item = strtok_r(mlp, ",", &ctx))) {
-                if (!in_mntlist(item, mountopts)) {
-                        fprintf(stderr, "%s: %s mount option `%s' is missing\n",
-                                progname, justwarn ? "Warning: default"
-                                : "Error: mandatory", item);
-                        errors++;
-                }
-                mlp = NULL;
-        }
-        free(ml);
-        return errors;
-}
-
-/* Trim embedded white space, leading and trailing commas from string s.
- */
-static void trim_mountfsoptions(char *s)
-{
-        char *p;
-
-        for (p = s; *p; ) {
-                if (isspace(*p)) {
-                        memmove(p, p + 1, strlen(p + 1) + 1);
-                        continue;
-                }
-                p++;
-        }
-
-        while (s[0] == ',')
-                memmove(&s[0], &s[1], strlen(&s[1]) + 1);
-
-        p = s + strlen(s) - 1;
-        while (p >= s && *p == ',')
-                *p-- = '\0';
 }
 
 int main(int argc, char *const argv[])
@@ -1557,8 +1448,7 @@ int main(int argc, char *const argv[])
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS:
         case LDD_MT_LDISKFS2: {
-                strscat(default_mountopts, ",errors=remount-ro",
-                        sizeof(default_mountopts));
+                sprintf(always_mountopts, "errors=remount-ro");
                 if (IS_MDT(ldd) || IS_MGS(ldd))
                         strscat(always_mountopts, ",iopen_nopriv,user_xattr",
                                 sizeof(always_mountopts));
@@ -1578,7 +1468,7 @@ int main(int argc, char *const argv[])
         }
         case LDD_MT_SMFS: {
                 mop.mo_flags |= MO_IS_LOOP;
-                sprintf(always_mountopts, ",type=ext3,dev=%s",
+                sprintf(always_mountopts, "type=ext3,dev=%s",
                         mop.mo_device);
                 break;
         }
@@ -1593,13 +1483,10 @@ int main(int argc, char *const argv[])
         }
 
         if (mountopts) {
-                trim_mountfsoptions(mountopts);
-                (void)check_mountfsoptions(mountopts, default_mountopts, 1);
-                if (check_mountfsoptions(mountopts, always_mountopts, 0)) {
-                        ret = EINVAL;
-                        goto out;
-                }
-                sprintf(ldd->ldd_mount_opts, "%s", mountopts);
+                /* If user specifies mount opts, don't use defaults,
+                   but always use always_mountopts */
+                sprintf(ldd->ldd_mount_opts, "%s,%s",
+                        always_mountopts, mountopts);
         } else {
 #ifdef TUNEFS
                 if (ldd->ldd_mount_opts[0] == 0)
@@ -1608,7 +1495,6 @@ int main(int argc, char *const argv[])
                 {
                         sprintf(ldd->ldd_mount_opts, "%s%s",
                                 always_mountopts, default_mountopts);
-                        trim_mountfsoptions(ldd->ldd_mount_opts);
                 }
         }
 

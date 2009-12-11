@@ -45,27 +45,21 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/vfs.h>
-#include <sys/time.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <semaphore.h>
 #include <lustre/liblustreapi.h>
-#include <time.h>
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
 char msg[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
 char *buf, *buf_align;
 int bufsize = 0;
-sem_t sem;
 #define ALIGN 65535
-#define MAX_SHIFT 4096
 
 char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
-"        b[num] write optional length from random in-memory offset\n"
 "        c  close\n"
 "        C[num] create with optional stripes\n"
 "        d  mkdir\n"
@@ -93,19 +87,10 @@ char usage[] =
 "        z[num] seek [optional position, default 0]\n"
 "        _  wait for signal\n";
 
+static int usr1_received;
 void usr1_handler(int unused)
 {
-        int saved_errno = errno;
-
-        /*
-         * signal(7): POSIX.1-2004 ...requires an implementation to guarantee
-         * that the following functions can be safely called inside a signal
-         * handler:
-         *            sem_post()
-         */
-        sem_post(&sem);
-
-        errno = saved_errno;
+        usr1_received = 1;
 }
 
 static const char *
@@ -203,23 +188,22 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        memset(&st, 0, sizeof(st));
-        sem_init(&sem, 0, 0);
-        /* use sigaction instead of signal to avoid SA_ONESHOT semantics */
-        sigaction(SIGUSR1, &(const struct sigaction){.sa_handler = &usr1_handler},
-                  NULL);
-        srandom(time(NULL));
+        signal(SIGUSR1, usr1_handler);
 
         fname = argv[1];
 
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
                 case '_':
-                        if (verbose) {
-                                printf("PAUSING\n");
-                                fflush(stdout);
+                        if (usr1_received == 0) {
+                                if (verbose) {
+                                        printf("PAUSING %u\n", getpid());
+                                        fflush(stdout);
+                                }
+                                pause();
                         }
-                        while (sem_wait(&sem) == -1 && errno == EINTR);
+                        usr1_received = 0;
+                        signal(SIGUSR1, usr1_handler);
                         break;
                 case 'c':
                         if (close(fd) == -1) {
@@ -289,11 +273,6 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'M':
-                        if (st.st_size == 0) {
-                                fprintf(stderr, "mmap without preceeding stat, or on"
-                                        " zero length file.\n");
-                                exit(-1);
-                        }
                         mmap_len = st.st_size;
                         mmap_ptr = mmap(NULL, mmap_len, PROT_WRITE | PROT_READ,
                                         MAP_SHARED, fd, 0);
@@ -324,10 +303,7 @@ int main(int argc, char **argv)
                 case 'o':
                         len = get_flags(commands+1, &flags);
                         commands += len;
-                        if (flags & O_CREAT)
-                                fd = open(fname, flags, 0666);
-                        else
-                                fd = open(fname, flags);
+                        fd = open(fname, flags);
                         if (fd == -1) {
                                 save_errno = errno;
                                 perror("open");
@@ -413,15 +389,12 @@ int main(int argc, char **argv)
                 case 'v':
                         verbose = 1;
                         break;
-                case 'b':
                 case 'w':
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
                         if (bufsize < len) {
-                                int shift = (*commands == 'b') ?
-                                            (random() % MAX_SHIFT) : 0;
-                                buf = realloc(buf, len + ALIGN + shift);
+                                buf = realloc(buf, len + ALIGN);
                                 if (buf == NULL) {
                                         save_errno = errno;
                                         perror("allocating buf for write\n");
@@ -429,7 +402,7 @@ int main(int argc, char **argv)
                                 }
                                 bufsize = len;
                                 buf_align = (char *)((long)(buf + ALIGN) &
-                                                     ~ALIGN) + shift;
+                                                     ~ALIGN);
                                 strncpy(buf_align, msg, bufsize);
                         }
                         while (len > 0) {

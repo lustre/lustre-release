@@ -44,7 +44,7 @@
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
                                  OBD_INCOMPAT_FID)
 
-#define MDS_SERVICE_WATCHDOG_FACTOR 2
+#define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
 #define MAX_ATIME_DIFF 60
 
@@ -52,9 +52,7 @@ struct mds_filter_data {
         __u64 io_epoch;
 };
 
-#define MDS_FILTERDATA(inode) \
-                ((struct mds_filter_data *)INODE_PRIVATE_DATA(inode))
-
+#define MDS_FILTERDATA(inode) ((struct mds_filter_data *)(inode)->i_filterdata)
 
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
@@ -71,6 +69,7 @@ static inline void mds_export_evict(struct obd_export *exp)
 /* Open counts for files.  No longer atomic, must hold inode->i_sem */
 # define mds_inode_oatomic(inode)    ((inode)->i_cindex)
 
+#ifdef HAVE_I_ALLOC_SEM
 #define MDS_UP_READ_ORPHAN_SEM(i)          UP_READ_I_ALLOC_SEM(i)
 #define MDS_DOWN_READ_ORPHAN_SEM(i)        DOWN_READ_I_ALLOC_SEM(i)
 #define LASSERT_MDS_ORPHAN_READ_LOCKED(i)  LASSERT_I_ALLOC_SEM_READ_LOCKED(i)
@@ -79,6 +78,16 @@ static inline void mds_export_evict(struct obd_export *exp)
 #define MDS_DOWN_WRITE_ORPHAN_SEM(i)       DOWN_WRITE_I_ALLOC_SEM(i)
 #define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i)
 #define MDS_PACK_MD_LOCK 1
+#else
+#define MDS_UP_READ_ORPHAN_SEM(i)          do { up(&(i)->i_sem); } while (0)
+#define MDS_DOWN_READ_ORPHAN_SEM(i)        do { down(&(i)->i_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_READ_LOCKED(i)  LASSERT(down_trylock(&(i)->i_sem)!=0)
+
+#define MDS_UP_WRITE_ORPHAN_SEM(i)         do { up(&(i)->i_sem); } while (0)
+#define MDS_DOWN_WRITE_ORPHAN_SEM(i)       do { down(&(i)->i_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem)!=0)
+#define MDS_PACK_MD_LOCK 0
+#endif
 
 static inline int mds_orphan_open_count(struct inode *inode)
 {
@@ -187,10 +196,8 @@ struct dentry *mds_lookup(struct obd_device *obd,
                           struct dentry *dparent,
                           int fid_namelen);
 
-void mds_shrink_body_reply(struct ptlrpc_request *req, int req_mdoff,
-                           int reply_mdoff);
-void mds_shrink_intent_reply(struct ptlrpc_request *req,
-                             int opc, int reply_mdoff);
+void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
+                      struct mds_body *body, int md_off);
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
 int mds_version_get_check(struct ptlrpc_request *, struct inode *, int);
 /* mds/mds_lib.c */
@@ -218,8 +225,8 @@ int mds_log_op_orphan(struct obd_device *, struct lov_stripe_md *, obd_count);
 int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
-int mds_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int *index);
+int mds_llog_init(struct obd_device *obd, struct obd_device *tgt, int count,
+                  struct llog_catid *logid, struct obd_uuid *uuid);
 int mds_llog_finish(struct obd_device *obd, int count);
 
 /* mds/mds_lov.c */
@@ -267,7 +274,6 @@ int mds_update_client_epoch(struct obd_export *exp);
 void mds_update_last_epoch(struct obd_device *obd);
 int mds_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
-                          int reconnect,
                           void *client_nid);
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                    int cl_off, void *localdata);

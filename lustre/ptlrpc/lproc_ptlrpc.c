@@ -91,8 +91,6 @@ struct ll_rpc_opcode {
         { MDS_QUOTACTL,     "mds_quotactl" },
         { MDS_GETXATTR,     "mds_getxattr" },
         { MDS_SETXATTR,     "mds_setxattr" },
-        { MDS_WRITEPAGE,    "mds_writepage" },
-        { MDS_IS_SUBDIR,    "mds_is_subdir" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -180,7 +178,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         LASSERT(*procroot_ret == NULL);
         LASSERT(*stats_ret == NULL);
 
-        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES+LUSTRE_MAX_OPCODES,0);
+        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES, 0);
         if (svc_stats == NULL)
                 return;
 
@@ -283,81 +281,6 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
 
         spin_lock(&svc->srv_lock);
         svc->srv_max_history_rqbds = val;
-        spin_unlock(&svc->srv_lock);
-
-        return count;
-}
-
-static int
-ptlrpc_lprocfs_rd_threads_min(char *page, char **start, off_t off,
-                              int count, int *eof, void *data)
-{
-        struct ptlrpc_service *svc = data;
-
-        return snprintf(page, count, "%d\n", svc->srv_threads_min);
-}
-
-static int
-ptlrpc_lprocfs_wr_threads_min(struct file *file, const char *buffer,
-                              unsigned long count, void *data)
-{
-        struct ptlrpc_service *svc = data;
-        int                    val;
-        int                    rc = lprocfs_write_helper(buffer, count, &val);
-
-        if (rc < 0)
-                return rc;
-
-        if (val < 2)
-                return -ERANGE;
-
-        if (val > svc->srv_threads_max)
-                return -ERANGE;
-
-        spin_lock(&svc->srv_lock);
-        svc->srv_threads_min = val;
-        spin_unlock(&svc->srv_lock);
-
-        return count;
-}
-
-static int
-ptlrpc_lprocfs_rd_threads_started(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{
-        struct ptlrpc_service *svc = data;
-
-        return snprintf(page, count, "%d\n", svc->srv_threads_started);
-}
-
-static int
-ptlrpc_lprocfs_rd_threads_max(char *page, char **start, off_t off,
-                              int count, int *eof, void *data)
-{
-        struct ptlrpc_service *svc = data;
-
-        return snprintf(page, count, "%d\n", svc->srv_threads_max);
-}
-
-static int
-ptlrpc_lprocfs_wr_threads_max(struct file *file, const char *buffer,
-                              unsigned long count, void *data)
-{
-        struct ptlrpc_service *svc = data;
-        int                    val;
-        int                    rc = lprocfs_write_helper(buffer, count, &val);
-
-        if (rc < 0)
-                return rc;
-
-        if (val < 2)
-                return -ERANGE;
-
-        if (val < svc->srv_threads_min)
-                return -ERANGE;
-
-        spin_lock(&svc->srv_lock);
-        svc->srv_threads_max = val;
         spin_unlock(&svc->srv_lock);
 
         return count;
@@ -514,7 +437,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * must be just as careful as the service's request
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
-                seq_printf(s, LPD64":%s:%s:x"LPU64":%d:%s:%ld:%lds(%+lds) ",
+                seq_printf(s, LPD64":%s:%s:x"LPD64":%d:%s:%ld:%lds(%+lds) ",
                            req->rq_history_seq, libcfs_nid2str(req->rq_self),
                            libcfs_id2str(req->rq_peer), req->rq_xid,
                            req->rq_reqlen, ptlrpc_rqphase2str(req),
@@ -598,7 +521,7 @@ static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
 {
         struct ptlrpc_service *svc = data;
         int rc, val;
-
+        
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc < 0)
                 return rc;
@@ -615,30 +538,20 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
         struct lprocfs_vars lproc_vars[] = {
-                {.name       = "high_priority_ratio",
-                 .read_fptr  = ptlrpc_lprocfs_rd_hp_ratio,
-                 .write_fptr = ptlrpc_lprocfs_wr_hp_ratio,
-                 .data       = svc},
                 {.name       = "req_buffer_history_len",
+                 .write_fptr = NULL,
                  .read_fptr  = ptlrpc_lprocfs_read_req_history_len,
                  .data       = svc},
                 {.name       = "req_buffer_history_max",
                  .write_fptr = ptlrpc_lprocfs_write_req_history_max,
                  .read_fptr  = ptlrpc_lprocfs_read_req_history_max,
                  .data       = svc},
-                {.name       = "threads_min",
-                 .read_fptr  = ptlrpc_lprocfs_rd_threads_min,
-                 .write_fptr = ptlrpc_lprocfs_wr_threads_min,
-                 .data       = svc},
-                {.name       = "threads_max",
-                 .read_fptr  = ptlrpc_lprocfs_rd_threads_max,
-                 .write_fptr = ptlrpc_lprocfs_wr_threads_max,
-                 .data       = svc},
-                {.name       = "threads_started",
-                 .read_fptr  = ptlrpc_lprocfs_rd_threads_started,
-                 .data       = svc},
                 {.name       = "timeouts",
                  .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
+                 .data       = svc},
+                {.name       = "high_priority_ratio",
+                 .read_fptr  = ptlrpc_lprocfs_rd_hp_ratio,
+                 .write_fptr = ptlrpc_lprocfs_wr_hp_ratio,
                  .data       = svc},
                 {NULL}
         };
@@ -676,7 +589,7 @@ void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 
-void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req, long amount)
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 {
         struct lprocfs_stats *svc_stats;
         __u32 op = lustre_msg_get_opc(req->rq_reqmsg);
@@ -687,7 +600,7 @@ void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req, long amount)
                 return;
         LASSERT(opc < LUSTRE_MAX_OPCODES);
         if (!(op == LDLM_ENQUEUE || op == MDS_REINT))
-                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, amount);
+                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, 0);
 }
 
 void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes)
@@ -776,12 +689,16 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ENTRY;
 
         LPROCFS_CLIMP_CHECK(obd);
-        req = ptlrpc_prep_ping(obd->u.cli.cl_import);
+        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
+                              OBD_PING, 1, NULL, NULL);
         LPROCFS_CLIMP_EXIT(obd);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
+        req->rq_no_resend = 1;
+        req->rq_no_delay = 1;
 
         rc = ptlrpc_queue_wait(req);
 

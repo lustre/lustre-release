@@ -380,17 +380,15 @@ Index: linux-2.6.22.14/fs/ext3/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -2580,6 +2914,13 @@ static int ext3_remount (struct super_bl
+@@ -2580,6 +2914,11 @@ static int ext3_remount (struct super_bl
  				goto restore_opts;
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
 +			if (EXT3_HAS_INCOMPAT_FEATURE(sb,
 +						    EXT3_FEATURE_INCOMPAT_MMP))
 +				if (ext3_multi_mount_protect(sb,
-+						le64_to_cpu(es->s_mmp_block))) {
-+					err = -EROFS;
++						le64_to_cpu(es->s_mmp_block)))
 +					goto restore_opts;
-+				}
  		}
  	}
  #ifdef CONFIG_QUOTA

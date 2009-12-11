@@ -76,7 +76,7 @@
  
  /**
 @@ -881,6 +921,10 @@
- extern int	 journal_try_to_free_buffers(journal_t *, struct page *, gfp_t);
+ extern int	 journal_try_to_free_buffers(journal_t *, struct page *, int);
  extern int	 journal_stop(handle_t *);
  extern int	 journal_flush (journal_t *);
 +extern void	 journal_callback_set(handle_t *handle,
@@ -100,8 +100,8 @@
 --- 1.53/fs/jbd/commit.c	2004-10-19 03:40:17 -06:00
 +++ 1.54/fs/jbd/commit.c	2004-11-07 19:13:24 -07:00
 @@ -686,6 +686,30 @@
-            transaction can be removed from any checkpoint list it was on
-            before. */
+ 	if (err)
+ 		__journal_abort_hard(journal);
  
 +	/*
 +	 * Call any callbacks that had been registered for handles in this

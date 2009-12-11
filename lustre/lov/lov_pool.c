@@ -38,8 +38,6 @@
  * OST pool methods
  *
  * Author: Jacques-Charles LAFOUCRIERE <jc.lafoucriere@cea.fr>
- * Author: Alex Lyashkov <Alexey.Lyashkov@Sun.COM>
- * Author: Nathaniel Rutman <Nathan.Rutman@Sun.COM>
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
@@ -52,26 +50,6 @@
 
 #include <obd.h>
 #include "lov_internal.h"
-
-static void lov_pool_getref(struct pool_desc *pool)
-{
-        CDEBUG(D_INFO, "pool %p\n", pool);
-        atomic_inc(&pool->pool_refcount);
-}
-
-void lov_pool_putref(struct pool_desc *pool) 
-{
-        CDEBUG(D_INFO, "pool %p\n", pool);
-        if (atomic_dec_and_test(&pool->pool_refcount)) {
-                LASSERT(hlist_unhashed(&pool->pool_hash));
-                LASSERT(list_empty(&pool->pool_list));
-                LASSERT(pool->pool_proc_entry == NULL);
-                lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
-                lov_ost_pool_free(&(pool->pool_obds));
-                OBD_FREE_PTR(pool);
-                EXIT;
-        }
-}
 
 /*
  * hash function using a Rotating Hash algorithm
@@ -121,7 +99,6 @@ static void *pool_hashrefcount_get(struct hlist_node *hnode)
         struct pool_desc *pool;
 
         pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-        lov_pool_getref(pool);
         return (pool);
 }
 
@@ -130,7 +107,6 @@ static void *pool_hashrefcount_put(struct hlist_node *hnode)
         struct pool_desc *pool;
 
         pool = hlist_entry(hnode, struct pool_desc, pool_hash);
-        lov_pool_putref(pool);
         return (pool);
 }
 
@@ -173,14 +149,14 @@ static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
 
         /* iterate to find a non empty entry */
         prev_idx = iter->idx;
-        down_read(&pool_tgt_rw_sem(iter->pool));
+        read_lock(&pool_tgt_rwlock(iter->pool));
         iter->idx++;
         if (iter->idx == pool_tgt_count(iter->pool)) {
                 iter->idx = prev_idx; /* we stay on the last entry */
-                up_read(&pool_tgt_rw_sem(iter->pool));
+                read_unlock(&pool_tgt_rwlock(iter->pool));
                 return NULL;
         }
-        up_read(&pool_tgt_rw_sem(iter->pool));
+        read_unlock(&pool_tgt_rwlock(iter->pool));
         (*pos)++;
         /* return != NULL to continue */
         return iter;
@@ -191,16 +167,11 @@ static void *pool_proc_start(struct seq_file *s, loff_t *pos)
         struct pool_desc *pool = (struct pool_desc *)s->private;
         struct pool_iterator *iter;
 
-        lov_pool_getref(pool);
         if ((pool_tgt_count(pool) == 0) ||
-            (*pos >= pool_tgt_count(pool))) {
-                /* iter is not created, so stop() has no way to
-                 * find pool to dec ref */
-                lov_pool_putref(pool);
+            (*pos >= pool_tgt_count(pool)))
                 return NULL;
-        }
 
-        OBD_ALLOC_PTR(iter);
+        OBD_ALLOC(iter, sizeof(struct pool_iterator));
         if (!iter)
                 return ERR_PTR(-ENOMEM);
         iter->magic = POOL_IT_MAGIC;
@@ -235,8 +206,7 @@ static void pool_proc_stop(struct seq_file *s, void *v)
                 /* we restore s->private so next call to pool_proc_start()
                  * will work */
                 s->private = iter->pool;
-                lov_pool_putref(iter->pool);
-                OBD_FREE_PTR(iter);
+                OBD_FREE(iter, sizeof(struct pool_iterator));
         }
         return;
 }
@@ -250,9 +220,9 @@ static int pool_proc_show(struct seq_file *s, void *v)
         LASSERT(iter->pool != NULL);
         LASSERT(iter->idx <= pool_tgt_count(iter->pool));
 
-        down_read(&pool_tgt_rw_sem(iter->pool));
+        read_lock(&pool_tgt_rwlock(iter->pool));
         tgt = pool_tgt(iter->pool, iter->idx);
-        up_read(&pool_tgt_rw_sem(iter->pool));
+        read_unlock(&pool_tgt_rwlock(iter->pool));
         if (tgt)
                 seq_printf(s, "%s\n", obd_uuid2str(&(tgt->ltd_uuid)));
 
@@ -290,12 +260,9 @@ void lov_dump_pool(int level, struct pool_desc *pool)
 {
         int i;
 
-        lov_pool_getref(pool);
-
         CDEBUG(level, "pool "LOV_POOLNAMEF" has %d members\n",
                pool->pool_name, pool->pool_obds.op_count);
-        down_read(&pool_tgt_rw_sem(pool));
-
+        read_lock(&pool_tgt_rwlock(pool));
         for (i = 0; i < pool_tgt_count(pool) ; i++) {
                 if (!pool_tgt(pool, i) || !(pool_tgt(pool, i))->ltd_exp)
                         continue;
@@ -303,28 +270,23 @@ void lov_dump_pool(int level, struct pool_desc *pool)
                        pool->pool_name, i,
                        obd_uuid2str(&((pool_tgt(pool, i))->ltd_uuid)));
         }
-
-        up_read(&pool_tgt_rw_sem(pool));
-        lov_pool_putref(pool);
+        read_unlock(&pool_tgt_rwlock(pool));
 }
 
 #define LOV_POOL_INIT_COUNT 2
 int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
 {
-        ENTRY;
-
         if (count == 0)
                 count = LOV_POOL_INIT_COUNT;
         op->op_array = NULL;
         op->op_count = 0;
-        init_rwsem(&op->op_rw_sem);
+        op->op_rwlock = RW_LOCK_UNLOCKED;
         op->op_size = count;
         OBD_ALLOC(op->op_array, op->op_size * sizeof(op->op_array[0]));
         if (op->op_array == NULL) {
                 op->op_size = 0;
-                RETURN(-ENOMEM);
+                return -ENOMEM;
         }
-        EXIT;
         return 0;
 }
 
@@ -357,7 +319,7 @@ int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
         int rc = 0, i;
         ENTRY;
 
-        down_write(&op->op_rw_sem);
+        write_lock(&op->op_rwlock);
 
         rc = lov_ost_pool_extend(op, min_count);
         if (rc)
@@ -371,45 +333,40 @@ int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
         /* ost not found we add it */
         op->op_array[op->op_count] = idx;
         op->op_count++;
-        EXIT;
 out:
-        up_write(&op->op_rw_sem);
+        write_unlock(&op->op_rwlock);
         return rc;
 }
 
 int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
 {
         int i;
-        ENTRY;
 
-        down_write(&op->op_rw_sem);
+        write_lock(&op->op_rwlock);
         for (i = 0; i < op->op_count; i++) {
                 if (op->op_array[i] == idx) {
                         memmove(&op->op_array[i], &op->op_array[i + 1],
                                 (op->op_count - i - 1) * sizeof(op->op_array[0]));
                         op->op_count--;
-                        up_write(&op->op_rw_sem);
-                        EXIT;
+                        write_unlock(&op->op_rwlock);
                         return 0;
                 }
         }
-        up_write(&op->op_rw_sem);
-        RETURN(-EINVAL);
+        write_unlock(&op->op_rwlock);
+        return -EINVAL;
 }
 
 int lov_ost_pool_free(struct ost_pool *op)
 {
-        ENTRY;
-
         if (op->op_size == 0)
                 return 0;
 
-        down_write(&op->op_rw_sem);
+        write_lock(&op->op_rwlock);
         OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
         op->op_array = NULL;
         op->op_count = 0;
         op->op_size = 0;
-        up_write(&op->op_rw_sem);
+        write_unlock(&op->op_rwlock);
         return 0;
 }
 
@@ -419,78 +376,63 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         struct lov_obd *lov;
         struct pool_desc *new_pool;
         int rc;
-        ENTRY;
 
         lov = &(obd->u.lov);
 
         if (strlen(poolname) > LOV_MAXPOOLNAME)
-                RETURN(-ENAMETOOLONG);
+                return -ENAMETOOLONG;
 
         OBD_ALLOC_PTR(new_pool);
         if (new_pool == NULL)
-                RETURN(-ENOMEM);
+                return -ENOMEM;
 
         strncpy(new_pool->pool_name, poolname, LOV_MAXPOOLNAME);
         new_pool->pool_name[LOV_MAXPOOLNAME] = '\0';
         new_pool->pool_lov = lov;
-        /* ref count init to 1 because when created a pool is always used
-         * up to deletion
-         */
-        atomic_set(&new_pool->pool_refcount, 1);
         rc = lov_ost_pool_init(&new_pool->pool_obds, 0);
         if (rc)
                GOTO(out_err, rc);
 
         memset(&(new_pool->pool_rr), 0, sizeof(struct lov_qos_rr));
         rc = lov_ost_pool_init(&new_pool->pool_rr.lqr_pool, 0);
-        if (rc)
-                GOTO(out_free_pool_obds, rc);
+        if (rc) {
+                lov_ost_pool_free(&new_pool->pool_obds);
+                GOTO(out_err, rc);
+        }
 
         INIT_HLIST_NODE(&new_pool->pool_hash);
-
-#ifdef LPROCFS
-        /* we need this ifdef because seq_file is not implementated for liblustre */
-        /* get ref for /proc file */
-        lov_pool_getref(new_pool);
-        new_pool->pool_proc_entry = lprocfs_add_simple(lov->lov_pool_proc_entry,
-                                                       poolname, NULL, NULL,
-                                                       new_pool,
-                                                       &pool_proc_operations);
-        if (IS_ERR(new_pool->pool_proc_entry)) {
-                CWARN("Cannot add proc pool entry "LOV_POOLNAMEF"\n", poolname);
-                new_pool->pool_proc_entry = NULL;
-                lov_pool_putref(new_pool);
+        rc = lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
+                                    &new_pool->pool_hash);
+        if (rc) {
+                lov_ost_pool_free(&new_pool->pool_rr.lqr_pool);
+                lov_ost_pool_free(&new_pool->pool_obds);
+                GOTO(out_err, rc = -EEXIST);
         }
-        CDEBUG(D_INFO, "pool %p - proc %p\n", new_pool, new_pool->pool_proc_entry);
-#endif
 
         spin_lock(&obd->obd_dev_lock);
         list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
         lov->lov_pool_count++;
         spin_unlock(&obd->obd_dev_lock);
 
-        /* add to find only when it fully ready  */
-        rc = lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
-                                    &new_pool->pool_hash);
-        if (rc)
-                GOTO(out_err, rc = -EEXIST);
-
         CDEBUG(D_CONFIG, LOV_POOLNAMEF" is pool #%d\n",
                poolname, lov->lov_pool_count);
 
-        RETURN(0);
+#ifdef LPROCFS
+        /* ifdef needed for liblustre */
+        new_pool->pool_proc_entry = lprocfs_add_simple(lov->lov_pool_proc_entry,
+                                                       poolname, NULL, NULL,
+                                                       new_pool,
+                                                       &pool_proc_operations);
+#endif
+
+        if (IS_ERR(new_pool->pool_proc_entry)) {
+                CWARN("Cannot add proc pool entry "LOV_POOLNAMEF"\n", poolname);
+                new_pool->pool_proc_entry = NULL;
+        }
+
+        return 0;
 
 out_err:
-        spin_lock(&obd->obd_dev_lock);
-        list_del_init(&new_pool->pool_list);
-        lov->lov_pool_count--;
-        spin_unlock(&obd->obd_dev_lock);
-
-        lprocfs_remove(&new_pool->pool_proc_entry);
-
-        lov_ost_pool_free(&new_pool->pool_rr.lqr_pool);
-out_free_pool_obds:
-        lov_ost_pool_free(&new_pool->pool_obds);
         OBD_FREE_PTR(new_pool);
         return rc;
 }
@@ -499,30 +441,33 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
 {
         struct lov_obd *lov;
         struct pool_desc *pool;
-        ENTRY;
 
         lov = &(obd->u.lov);
 
-        /* lookup and kill hash reference */
-        pool = lustre_hash_del_key(lov->lov_pools_hash_body, poolname);
-        if (pool == NULL)
-                RETURN(-ENOENT);
-
-        if (pool->pool_proc_entry != NULL) {
-                CDEBUG(D_INFO, "proc entry %p\n", pool->pool_proc_entry);
-                lprocfs_remove(&pool->pool_proc_entry);
-                lov_pool_putref(pool);
+        spin_lock(&obd->obd_dev_lock);
+        pool = lustre_hash_lookup(lov->lov_pools_hash_body,
+                                  poolname);
+        if (pool == NULL) {
+                spin_unlock(&obd->obd_dev_lock);
+                return -ENOENT;
         }
 
-        spin_lock(&obd->obd_dev_lock);
-        list_del_init(&pool->pool_list);
+#ifdef LPROCFS
+        if (pool->pool_proc_entry != NULL)
+                remove_proc_entry(pool->pool_proc_entry->name,
+                                  pool->pool_proc_entry->parent);
+#endif
+
+        lustre_hash_del_key(lov->lov_pools_hash_body, poolname);
+
         lov->lov_pool_count--;
+
         spin_unlock(&obd->obd_dev_lock);
 
-        /* release last reference */
-        lov_pool_putref(pool);
-
-        RETURN(0);
+        /* pool struct is not freed because it may be used by
+         * some open in /proc. The struct is freed at lov_cleanup()
+        */
+        return 0;
 }
 
 
@@ -531,45 +476,45 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
         struct obd_uuid ost_uuid;
         struct lov_obd *lov;
         struct pool_desc *pool;
-        unsigned int lov_idx;
+        unsigned int i, lov_idx;
         int rc;
-        ENTRY;
 
         lov = &(obd->u.lov);
 
         pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
-                RETURN(-ENOENT);
+                return -ENOENT;
 
         obd_str2uuid(&ost_uuid, ostname);
 
+
         /* search ost in lov array */
-        obd_getref(obd);
-        for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
-                if (!lov->lov_tgts[lov_idx])
+        mutex_down(&lov->lov_lock);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                if (!lov->lov_tgts[i])
                         continue;
-                if (obd_uuid_equals(&ost_uuid,
-                                    &(lov->lov_tgts[lov_idx]->ltd_uuid)))
+                if (obd_uuid_equals(&ost_uuid, &(lov->lov_tgts[i]->ltd_uuid)))
                         break;
         }
+
         /* test if ost found in lov */
-        if (lov_idx == lov->desc.ld_tgt_count)
-                GOTO(out, rc = -EINVAL);
+        if (i == lov->desc.ld_tgt_count) {
+                mutex_up(&lov->lov_lock);
+                return -EINVAL;
+        }
+        mutex_up(&lov->lov_lock);
+
+        lov_idx = i;
 
         rc = lov_ost_pool_add(&pool->pool_obds, lov_idx, lov->lov_tgt_size);
         if (rc)
-                GOTO(out, rc);
+                return rc;
 
         pool->pool_rr.lqr_dirty = 1;
 
         CDEBUG(D_CONFIG, "Added %s to "LOV_POOLNAMEF" as member %d\n",
                ostname, poolname,  pool_tgt_count(pool));
-        rc = 0;
-        EXIT;
-out:
-        obd_putref(obd);
-        lov_pool_putref(pool);
-        return rc;
+        return 0;
 }
 
 int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
@@ -577,32 +522,37 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
         struct obd_uuid ost_uuid;
         struct lov_obd *lov;
         struct pool_desc *pool;
-        unsigned int lov_idx;
-        int rc;
-        ENTRY;
+        unsigned int i, lov_idx;
 
         lov = &(obd->u.lov);
 
-        /* hash have own locking */
+        spin_lock(&obd->obd_dev_lock);
         pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
-        if (pool == NULL)
-                RETURN(-ENOENT);
+        if (pool == NULL) {
+                spin_unlock(&obd->obd_dev_lock);
+                return -ENOENT;
+        }
 
         obd_str2uuid(&ost_uuid, ostname);
 
         /* search ost in lov array, to get index */
-        obd_getref(obd);
-        for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
-                if (!lov->lov_tgts[lov_idx])
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                if (!lov->lov_tgts[i])
                         continue;
 
-                if (obd_uuid_equals(&ost_uuid,
-                                    &(lov->lov_tgts[lov_idx]->ltd_uuid)))
+                if (obd_uuid_equals(&ost_uuid, &(lov->lov_tgts[i]->ltd_uuid)))
                         break;
         }
+
         /* test if ost found in lov */
-        if (lov_idx == lov->desc.ld_tgt_count)
-               GOTO(out, rc = -EINVAL);
+        if (i == lov->desc.ld_tgt_count) {
+                spin_unlock(&obd->obd_dev_lock);
+                return -EINVAL;
+        }
+
+        spin_unlock(&obd->obd_dev_lock);
+
+        lov_idx = i;
 
         lov_ost_pool_remove(&pool->pool_obds, lov_idx);
 
@@ -610,37 +560,23 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
         CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
                poolname);
-        rc = 0;
-        EXIT;
-out:
-        obd_putref(obd);
-        lov_pool_putref(pool);
-        return rc;
+
+        return 0;
 }
 
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool)
 {
-        int i, rc;
-        ENTRY;
+        int i;
 
-        /* caller may no have a ref on pool if it got the pool
-         * without calling lov_find_pool() (e.g. go through the lov pool
-         * list)
-         */
-        lov_pool_getref(pool);
-
-        down_read(&pool_tgt_rw_sem(pool));
+        read_lock(&pool_tgt_rwlock(pool));
         for (i = 0; i < pool_tgt_count(pool); i++) {
-                if (pool_tgt_array(pool)[i] == idx)
-                        GOTO(out, rc = 0);
+                if (pool_tgt_array(pool)[i] == idx) {
+                        read_unlock(&pool_tgt_rwlock(pool));
+                        return 0;
+                }
         }
-        rc = -ENOENT;
-        EXIT;
-out:
-        up_read(&pool_tgt_rw_sem(pool));
-
-        lov_pool_putref(pool);
-        return rc;
+        read_unlock(&pool_tgt_rwlock(pool));
+        return -ENOENT;
 }
 
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname)
@@ -656,8 +592,6 @@ struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname)
                 if ((pool != NULL) && (pool_tgt_count(pool) == 0)) {
                         CWARN("Request for an empty pool ("LOV_POOLNAMEF")\n",
                                poolname);
-                        /* pool is ignored, so we remove ref on it */
-                        lov_pool_putref(pool);
                         pool = NULL;
                 }
         }

@@ -102,7 +102,7 @@ static inline int extent_equal(struct interval_node_extent *e1,
         return (e1->start == e2->start) && (e1->end == e2->end);
 }
 
-static inline int extent_overlapped(struct interval_node_extent *e1,
+static inline int extent_overlapped(struct interval_node_extent *e1, 
                                     struct interval_node_extent *e2)
 {
         return (e1->start <= e2->end) && (e2->start <= e1->end);
@@ -196,7 +196,7 @@ enum interval_iter interval_iterate(struct interval_node *root,
         struct interval_node *node;
         enum interval_iter rc = INTERVAL_ITER_CONT;
         ENTRY;
-
+        
         interval_for_each(node, root) {
                 rc = func(node, data);
                 if (rc == INTERVAL_ITER_STOP)
@@ -214,7 +214,7 @@ enum interval_iter interval_iterate_reverse(struct interval_node *root,
         struct interval_node *node;
         enum interval_iter rc = INTERVAL_ITER_CONT;
         ENTRY;
-
+        
         interval_for_each_reverse(node, root) {
                 rc = func(node, data);
                 if (rc == INTERVAL_ITER_STOP)
@@ -323,10 +323,10 @@ static void __rotate_right(struct interval_node *node,
 } while (0)
 
 /*
- * Operations INSERT and DELETE, when run on a tree with n keys,
- * take O(logN) time.Because they modify the tree, the result
- * may violate the red-black properties.To restore these properties,
- * we must change the colors of some of the nodes in the tree
+ * Operations INSERT and DELETE, when run on a tree with n keys, 
+ * take O(logN) time.Because they modify the tree, the result 
+ * may violate the red-black properties.To restore these properties, 
+ * we must change the colors of some of the nodes in the tree 
  * and also change the pointer structure.
  */
 static void interval_insert_color(struct interval_node *node,
@@ -385,6 +385,7 @@ static void interval_insert_color(struct interval_node *node,
 
 struct interval_node *interval_insert(struct interval_node *node,
                                       struct interval_node **root)
+                     
 {
         struct interval_node **p, *parent = NULL;
         ENTRY;
@@ -402,7 +403,7 @@ struct interval_node *interval_insert(struct interval_node *node,
 
                 if (node_compare(node, parent) < 0)
                         p = &parent->in_left;
-                else
+                else 
                         p = &parent->in_right;
         }
 
@@ -499,8 +500,8 @@ static void interval_erase_color(struct interval_node *node,
         EXIT;
 }
 
-/*
- * if the @max_high value of @node is changed, this function traverse  a path
+/* 
+ * if the @max_high value of @node is changed, this function traverse  a path 
  * from node  up to the root to update max_high for the whole tree.
  */
 static void update_maxhigh(struct interval_node *node,
@@ -656,13 +657,13 @@ enum interval_iter interval_search(struct interval_node *node,
                                 node = node->in_right;
                                 continue;
                         }
-                }
+                } 
 
                 parent = node->in_parent;
                 while (parent) {
                         if (node_is_left_child(node) &&
                             parent->in_right) {
-                                /* If we ever got the left, it means that the
+                                /* If we ever got the left, it means that the 
                                  * parent met ext->end<interval_low(parent), or
                                  * may_overlap(parent). If the former is true,
                                  * we needn't go back. So stop early and check
@@ -701,7 +702,7 @@ EXPORT_SYMBOL(interval_is_overlapped);
  * some extents, because programs seldom do IO backward.
  *
  * The recursive algorithm of expanding low:
- * interval_expand_low {
+ * expand_low {
  *        struct interval_node *tmp;
  *        static __u64 res = 0;
  *
@@ -723,7 +724,7 @@ EXPORT_SYMBOL(interval_is_overlapped);
  *        return res;
  * }
  *
- * It's much easy to eliminate the recursion, see interval_search for
+ * It's much easy to eliminate the recursion, see interval_search for 
  * an example. -jay
  */
 static inline __u64 interval_expand_low(struct interval_node *root, __u64 low)
@@ -741,7 +742,7 @@ static inline __u64 interval_expand_high(struct interval_node *node, __u64 high)
         while (node != NULL) {
                 if (node->in_max_high < high)
                         break;
-
+                        
                 if (interval_low(node) > high) {
                         result = interval_low(node) - 1;
                         node = node->in_left;

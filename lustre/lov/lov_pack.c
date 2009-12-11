@@ -54,57 +54,72 @@
 
 #include "lov_internal.h"
 
-static void lov_dump_lmm_common(int level, void *lmmp)
+void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
-        struct lov_mds_md *lmm = lmmp;
+        struct lov_ost_data_v1 *lod;
+        int i;
 
         CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
-               (__u64)le64_to_cpu(lmm->lmm_object_id),
-               le32_to_cpu(lmm->lmm_magic),
+               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
-}
 
-static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
-                                 int stripe_count)
-{
-        int i;
-
-        if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
+        if (le32_to_cpu(lmm->lmm_stripe_count) <= LOV_V1_INSANE_STRIPE_COUNT) {
+                for (i = 0, lod = lmm->lmm_objects;
+                     i < (int)le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
+                         CDEBUG(level,
+                                "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                                i, le32_to_cpu(lod->l_ost_idx),
+                                le64_to_cpu(lod->l_object_gr),
+                                le64_to_cpu(lod->l_object_id));
+        } else {
                 CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
-                       stripe_count, LOV_V1_INSANE_STRIPE_COUNT);
+                       le32_to_cpu(lmm->lmm_stripe_count),
+                       LOV_V1_INSANE_STRIPE_COUNT);
         }
-
-        for (i = 0; i < stripe_count; ++i, ++lod) {
-                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n", i,
-                       le32_to_cpu(lod->l_ost_idx),
-                       (__u64)le64_to_cpu(lod->l_object_gr),
-                       (__u64)le64_to_cpu(lod->l_object_id));
-        }
-}
-
-void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
-{
-        lov_dump_lmm_common(level, lmm);
-        lov_dump_lmm_objects(level, lmm->lmm_objects,
-                             le32_to_cpu(lmm->lmm_stripe_count));
 }
 
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
-        lov_dump_lmm_common(level, &lmmj->lmmj_md);
-        CDEBUG(level, "extent_count %u\n",
+
+        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+               le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
+               le32_to_cpu(lmmj->lmmj_md.lmm_magic),
+               le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
+        CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
+               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_size),
+               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count),
                le32_to_cpu(lmmj->lmmj_extent_count));
 }
 
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
 {
-        lov_dump_lmm_common(level, lmm);
+        struct lov_ost_data_v1 *lod;
+        int i;
+
+        CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
+               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
+               le32_to_cpu(lmm->lmm_pattern));
+        CDEBUG(level,"stripe_size %u, stripe_count %u\n",
+               le32_to_cpu(lmm->lmm_stripe_size),
+               le32_to_cpu(lmm->lmm_stripe_count));
         CDEBUG(level,"pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
-        lov_dump_lmm_objects(level, lmm->lmm_objects,
-                             le32_to_cpu(lmm->lmm_stripe_count));
+
+        if (le32_to_cpu(lmm->lmm_stripe_count) <= LOV_V1_INSANE_STRIPE_COUNT) {
+                for (i = 0, lod = lmm->lmm_objects;
+                     i < (int)le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
+                         CDEBUG(level,
+                                "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                                i, le32_to_cpu(lod->l_ost_idx),
+                                le64_to_cpu(lod->l_object_gr),
+                                le64_to_cpu(lod->l_object_id));
+        } else {
+                CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
+                       le32_to_cpu(lmm->lmm_stripe_count),
+                       LOV_V1_INSANE_STRIPE_COUNT);
+        }
 }
 
 void lov_dump_lmm(int level, void *lmm)
@@ -472,16 +487,12 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                             (typeof(lumv1->lmm_stripe_offset))(-1)) {
                                 rc = lov_check_index_in_pool(
                                         lumv1->lmm_stripe_offset, pool);
-                                if (rc < 0) {
-                                        lov_pool_putref(pool);
+                                if (rc < 0)
                                         RETURN(-EINVAL);
-                                }
                         }
 
                         if (stripe_count > pool_tgt_count(pool))
                                 stripe_count = pool_tgt_count(pool);
-
-                        lov_pool_putref(pool);
                 }
         }
 
@@ -580,7 +591,7 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
             (lum.lmm_magic != LOV_USER_MAGIC_V3))
                 RETURN(-EINVAL);
 
-        if (lum.lmm_stripe_count &&
+        if (lum.lmm_stripe_count && 
             (lum.lmm_stripe_count < lsm->lsm_stripe_count)) {
                 /* Return right size of stripe to user */
                 lum.lmm_stripe_count = lsm->lsm_stripe_count;
@@ -622,7 +633,7 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lmm_size = lum_size;
         else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
                 RETURN(-EOVERFLOW);
-        /*
+        /* 
          * Have a difference between lov_mds_md & lov_user_md.
          * So we have to re-order the data before copy to user.
          */
@@ -637,7 +648,7 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lmmk->lmm_stripe_count = lum.lmm_stripe_count;
                 lustre_swab_lov_mds_md(lmmk);
         }
-
+        
         obd_free_diskmd(exp, &lmmk);
 
         RETURN(rc);

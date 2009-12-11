@@ -50,7 +50,7 @@ run_test 0a "empty replay"
 test_0b() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    # this test attempts to trigger a race in the precreation code,
+    # this test attempts to trigger a race in the precreation code, 
     # and must run before any other objects are created on the filesystem
     fail ost1
     createmany -o $DIR/$tfile 20 || return 1
@@ -63,7 +63,7 @@ test_0c() {
     umount $DIR
     facet_failover mds
     zconf_mount `hostname` $DIR || error "mount fails"
-    clients_up || error "post-failover df failed"
+    df $DIR || error "post-failover df failed"
 }
 run_test 0c "expired recovery with no clients"
 
@@ -135,11 +135,11 @@ test_4a() {	# was test_4
     replay_barrier mds
     for i in `seq 10`; do
         echo "tag-$i" > $DIR/$tfile-$i
-    done
+    done 
     fail mds
     for i in `seq 10`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
-    done
+    done 
 }
 run_test 4a "|x| 10 open(O_CREAT)s"
 
@@ -151,17 +151,17 @@ test_4b() {
 }
 run_test 4b "|x| rm 10 files"
 
-# The idea is to get past the first block of precreated files on both
+# The idea is to get past the first block of precreated files on both 
 # osts, and then replay.
 test_5() {
     replay_barrier mds
     for i in `seq 220`; do
         echo "tag-$i" > $DIR/$tfile-$i
-    done
+    done 
     fail mds
     for i in `seq 220`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
-    done
+      grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
+    done 
     rm -rf $DIR/$tfile-*
     sleep 3
     # waiting for commitment of removal
@@ -186,7 +186,7 @@ test_6b() {
     replay_barrier mds
     rm -rf $DIR/$tdir
     fail mds
-    $CHECKSTAT -t dir $DIR/$tdir && return 1 || true
+    $CHECKSTAT -t dir $DIR/$tdir && return 1 || true 
 }
 run_test 6b "|X| rmdir"
 
@@ -252,7 +252,7 @@ test_11() {
     mv $DIR/$tfile $DIR/$tfile-2
     replay_barrier mds
     echo "new" > $DIR/$tfile
-    grep new $DIR/$tfile
+    grep new $DIR/$tfile 
     grep old $DIR/$tfile-2
     fail mds
     grep new $DIR/$tfile || return 1
@@ -261,7 +261,7 @@ test_11() {
 run_test 11 "create open write rename |X| create-old-name read"
 
 test_12() {
-    mcreate $DIR/$tfile
+    mcreate $DIR/$tfile 
     multiop_bg_pause $DIR/$tfile o_tSc || return 3
     pid=$!
     rm -f $DIR/$tfile
@@ -277,9 +277,9 @@ run_test 12 "open, unlink |X| close"
 
 
 # 1777 - replay open after committed chmod that would make
-#        a regular open a failure
+#        a regular open a failure    
 test_13() {
-    mcreate $DIR/$tfile
+    mcreate $DIR/$tfile 
     multiop_bg_pause $DIR/$tfile O_wc || return 3
     pid=$!
     chmod 0 $DIR/$tfile
@@ -290,7 +290,6 @@ test_13() {
     wait $pid || return 1
 
     $CHECKSTAT -s 1 -p 0 $DIR/$tfile || return 2
-    rm $DIR/$tfile || return 4
     return 0
 }
 run_test 13 "open chmod 0 |x| write close"
@@ -408,15 +407,11 @@ test_20b() { # bug 10480
     lfs getstripe $DIR/$tfile || return 1
     rm -f $DIR/$tfile || return 2       # make it an orphan
     mds_evict_client
-    client_up || client_up || true    # reconnect
+    df -P $DIR || df -P $DIR || true    # reconnect
 
     fail mds                            # start orphan recovery
+    df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete mds || error "MDS recovery not done"
-
-    # For interop with 2.0 only:
-    # FIXME just because recovery is done doesn't mean we've finished
-    # orphan cleanup.  Fake it with a sleep for now...
-    sleep 10
 
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
@@ -435,12 +430,13 @@ test_20c() { # bug 10480
     ls -la $DIR/$tfile
 
     mds_evict_client
-    client_up || client_up || true    # reconnect
+
+    df -P $DIR || df -P $DIR || true    # reconnect
 
     kill -USR1 $pid
-    wait $pid || return 1
-    [ -s $DIR/$tfile ] || error "File was truncated"
+    test -s $DIR/$tfile || error "File was truncated"
 
+    wait $pid || return 1
     return 0
 }
 run_test 20c "check that client eviction does not affect file content"
@@ -649,7 +645,7 @@ test_32() {
     multiop_bg_pause $DIR/$tfile O_c || return 3
     pid2=$!
     mds_evict_client
-    client_up || client_up || return 1
+    df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     wait $pid1 || return 4
@@ -661,10 +657,10 @@ run_test 32 "close() notices client eviction; close() after client eviction"
 # Abort recovery before client complete
 test_33a() {	# was test_33
     replay_barrier mds
-    createmany -o $DIR/$tfile-%d 100
+    createmany -o $DIR/$tfile-%d 100 
     fail_abort mds
     # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile-* && return 3
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 
     unlinkmany $DIR/$tfile-%d 0 100
     return 0
 }
@@ -685,7 +681,7 @@ test_34() {
 }
 run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)"
 
-# bug 2278 - generate one orphan on OST, then destroy it during llog recovery
+# bug 2278 - generate one orphan on OST, then destroy it during recovery from llog 
 test_35() {
     touch $DIR/$tfile
 
@@ -709,7 +705,7 @@ test_36() {
     checkstat $DIR/$tfile
     facet_failover mds
     cancel_lru_locks mdc
-    if dmesg | grep "unknown lock cookie"; then
+    if dmesg | grep "unknown lock cookie"; then 
 	echo "cancel after replay failed"
 	return 1
     fi
@@ -765,7 +761,7 @@ count_ost_writes() {
 
 #b=2477,2532
 test_40(){
-    $LCTL mark multiop $MOUNT/$tfile OS_c
+    $LCTL mark multiop $MOUNT/$tfile OS_c 
     multiop $MOUNT/$tfile OS_c  &
     PID=$!
     writeme -s $MOUNT/${tfile}-2 &
@@ -779,7 +775,7 @@ test_40(){
     sleep $TIMEOUT
     stat2=`count_ost_writes`
     echo "$stat1, $stat2"
-    if [ $stat1 -lt $stat2 ]; then
+    if [ $stat1 -lt $stat2 ]; then 
        echo "writes continuing during recovery"
        RC=0
     else
@@ -788,7 +784,7 @@ test_40(){
     fi
     echo "waiting for writeme $WRITE_PID"
     kill $WRITE_PID
-    wait $WRITE_PID
+    wait $WRITE_PID 
 
     echo "waiting for multiop $PID"
     wait $PID || return 2
@@ -797,6 +793,7 @@ test_40(){
     return $RC
 }
 run_test 40 "cause recovery in ptlrpc, ensure IO continues"
+
 
 #b=2814
 # make sure that a read to one osc doesn't try to double-unlock its page just
@@ -807,12 +804,12 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # assert on trying to unlock the unlocked page.
 test_41() {
     [ $OSTCOUNT -lt 2 ] && \
-	skip_env "skipping test 41: we don't have a second OST to test with" && \
+	skip "skipping test 41: we don't have a second OST to test with" && \
 	return
 
     local f=$MOUNT/$tfile
     # make sure the start of the file is ost1
-    lfs setstripe $f -s $((128 * 1024)) -i 0
+    lfs setstripe $f -s $((128 * 1024)) -i 0 
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
@@ -834,7 +831,7 @@ test_42() {
     debugsave
     lctl set_param debug=-1
     facet_failover ost1
-
+    
     # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
     #blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
     #[ $blocks_after -lt $blocks ] || return 1
@@ -862,27 +859,25 @@ test_43() { # bug 2530
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
-test_44a() { # was test_44
+test_44a() {	# was test_44
     local at_max_saved=0
 
     mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || return 2
-    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
+    [ "$mdcdev" ] || exit 2
 
     # adaptive timeouts slow this way down
-    if at_is_enabled; then
+    if at_is_valid && at_is_enabled; then
         at_max_saved=$(at_max_get mds)
         at_max_set 40 mds
     fi
 
     for i in `seq 1 10`; do
-        echo "$i of 10 ($(date +%s))"
-        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
-        #define OBD_FAIL_TGT_CONN_RACE     0x701
-        do_facet mds "lctl set_param fail_loc=0x80000701"
-        # lctl below may fail, it is valid case
-        $LCTL --device $mdcdev recover
-        df $MOUNT
+	echo "$i of 10 ($(date +%s))"
+	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+	#define OBD_FAIL_TGT_CONN_RACE     0x701
+	do_facet mds "lctl set_param fail_loc=0x80000701"
+	$LCTL --device $mdcdev recover
+	df $MOUNT
     done
 
     do_facet mds "lctl set_param fail_loc=0"
@@ -892,18 +887,15 @@ test_44a() { # was test_44
 run_test 44a "race in target handle connect"
 
 test_44b() {
-    local mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || return 2
-    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
-
+    mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
+    [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
-        echo "$i of 10 ($(date +%s))"
-        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
-        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-        do_facet mds "lctl set_param fail_loc=0x80000704"
-        # lctl below may fail, it is valid case
-        $LCTL --device $mdcdev recover
-        df $MOUNT
+	echo "$i of 10 ($(date +%s))"
+	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+	do_facet mds "lctl set_param fail_loc=0x80000704"
+	$LCTL --device $mdcdev recover
+	df $MOUNT
     done
     do_facet mds "lctl set_param fail_loc=0"
     return 0
@@ -912,16 +904,14 @@ run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    local mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || return 2
-    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
-
-    $LCTL --device $mdcdev recover || return 6 
+    mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
+    [ "$mdcdev" ] || exit 2
+    $LCTL --device $mdcdev recover
 
     multiop_bg_pause $DIR/$tfile O_c || return 1
     pid=$!
 
-    # This will cause the CLOSE to fail before even
+    # This will cause the CLOSE to fail before even 
     # allocating a reply buffer
     $LCTL --device $mdcdev deactivate || return 4
 
@@ -951,20 +941,20 @@ run_test 46 "Don't leak file handle after open resend (3325)"
 test_47() { # bug 2824
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    # create some files to make sure precreate has been done on all
+    # create some files to make sure precreate has been done on all 
     # OSTs. (just in case this test is run independently)
     createmany -o $DIR/$tfile 20  || return 1
 
     # OBD_FAIL_OST_CREATE_NET 0x204
     fail ost1
     do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    client_up || return 2
+    df $MOUNT || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
-    # and recover again.
+    # and recover again.  
     sleep $((3 * TIMEOUT))
 
-    # Without 2824, this createmany would hang
+    # Without 2824, this createmany would hang 
     createmany -o $DIR/$tfile 20 || return 3
     unlinkmany $DIR/$tfile 20 || return 4
 
@@ -975,14 +965,14 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-    [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
 
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
+    # OBD_FAIL_OST_EROFS 0x216
     facet_failover mds
-    #define OBD_FAIL_OST_EROFS 0x216
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
-    client_up || return 2
+    df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
@@ -990,52 +980,11 @@ test_48() {
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
-test_49a() {
-    multiop $DIR/$tfile O_c &
-    pid=$!
-    sleep 1
-    rm -rf $DIR/$tfile
-
-#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
-    do_facet mds "lctl set_param fail_loc=0x80000122"
-    kill -USR1 $pid
-    do_facet mds "lctl set_param fail_loc=0"
-
-    replay_barrier_nodf mds
-    fail mds
-
-    wait $pid || return 1
-    $CHECKSTAT -t file $DIR/$tfile && return 2
-    return 0
-}
-run_test 49a "mds fail after close reply is dropped: open|create "
-
-test_49c() {
-    touch $DIR/$tfile
-    multiop $DIR/$tfile o_c &
-    pid=$!
-    sleep 1
-    rm -rf $DIR/$tfile
-
-#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
-    do_facet mds "lctl set_param fail_loc=0x80000122"
-    kill -USR1 $pid
-    do_facet mds "lctl set_param fail_loc=0"
-
-    replay_barrier_nodf mds
-    fail mds
-
-    wait $pid || return 1
-    $CHECKSTAT -t file $DIR/$tfile && return 2
-    return 0
-}
-run_test 49c "mds fail after close reply is dropped: open"
-
 test_50() {
     local oscdev=`do_facet mds lctl get_param -n devices | grep ${ost1_svc}-osc | awk '{print $1}' | head -1`
     [ "$oscdev" ] || return 1
-    do_facet mds $LCTL --device $oscdev recover || return 2
-    do_facet mds $LCTL --device $oscdev recover || return 3
+    do_facet mds $LCTL --device $oscdev recover || return 2 
+    do_facet mds $LCTL --device $oscdev recover || return 3 
     # give the mds_lov_sync threads a chance to run
     sleep 5
 }
@@ -1072,7 +1021,7 @@ test_53a() {
     cancel_lru_locks mdc # force the close
     do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
-
+    
     # close should still be here
     [ -d /proc/$close_pid ] || return 2
     replay_barrier_nodf mds
@@ -1090,8 +1039,7 @@ test_53b() {
 
     mkdir -p $DIR/$tdir-1
     mkdir -p $DIR/$tdir-2
-
-    multiop_bg_pause $DIR/$tdir-1/f O_c || return 6
+    multiop $DIR/$tdir-1/f O_c &
     close_pid=$!
 
     #define OBD_FAIL_MDS_REINT_NET 0x107
@@ -1125,13 +1073,11 @@ test_53c() {
     multiop $DIR/${tdir}-1/f O_c &
     close_pid=$!
 
-#define OBD_FAIL_MDS_REINT_NET           0x107
     do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
 
-#define OBD_FAIL_MDS_CLOSE_NET           0x115
     do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
     cancel_lru_locks mdc  # force the close
@@ -1160,7 +1106,7 @@ test_53d() {
     # give multiop a chance to open
     sleep 1
 
-#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
+    # define OBD_FAIL_MDS_CLOSE_NET_REP 0X138    
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
     cancel_lru_locks mdc  # force the close
@@ -1218,13 +1164,11 @@ test_53f() {
         multiop $DIR/${tdir}-1/f O_c &
         close_pid=$!
 
-#define OBD_FAIL_MDS_REINT_NET_REP       0x119
         do_facet mds "lctl set_param fail_loc=0x80000119"
         mcreate $DIR/${tdir}-2/f &
         open_pid=$!
         sleep 1
 
-#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
         do_facet mds "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc
@@ -1251,13 +1195,11 @@ test_53g() {
         multiop $DIR/${tdir}-1/f O_c &
         close_pid=$!
 
-#define OBD_FAIL_MDS_REINT_NET_REP       0x119
         do_facet mds "lctl set_param fail_loc=0x80000119"
         mcreate $DIR/${tdir}-2/f &
         open_pid=$!
         sleep 1
 
-#define OBD_FAIL_MDS_CLOSE_NET           0x115
         do_facet mds "lctl set_param fail_loc=0x80000115"
         kill -USR1 $close_pid
         cancel_lru_locks mdc # force the close
@@ -1284,13 +1226,11 @@ test_53h() {
     multiop $DIR/${tdir}-1/f O_c &
     close_pid=$!
 
-#define OBD_FAIL_MDS_REINT_NET           0x107
     do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
 
-#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
     cancel_lru_locks mdc  # force the close
@@ -1425,7 +1365,7 @@ test_60() {
     fail mds
     unlinkmany $DIR/$tdir/$tfile-%d 100 100
     local no_ctxt=`dmesg | grep "No ctxt"`
-    [ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery"
+    [ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery" 
 }
 run_test 60 "test llog post recovery init vs llog unlink"
 
@@ -1435,12 +1375,12 @@ test_61a() {
 
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
-    replay_barrier ost1
-#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
-    unlinkmany $DIR/$tdir/$tfile-%d 800
+    replay_barrier ost1 
+#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221 
+    unlinkmany $DIR/$tdir/$tfile-%d 800 
     do_facet ost "lctl set_param fail_loc=0x80000221"
     facet_failover ost1
-    sleep 10
+    sleep 10 
     fail ost1
     sleep 30
     do_facet ost "lctl set_param fail_loc=0x0"
@@ -1451,9 +1391,9 @@ run_test 61a "test race llog recovery vs llog cleanup"
 
 #test race  mds llog sync vs llog cleanup
 test_61b() {
-#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a
+#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a 
     do_facet mds "lctl set_param fail_loc=0x8000013a"
-    facet_failover mds
+    facet_failover mds 
     sleep 10
     fail mds
     do_facet client dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 || return 1
@@ -1464,10 +1404,10 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 test_61c() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
-    touch $DIR/$tfile
+#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222 
+    touch $DIR/$tfile 
     do_facet ost "lctl set_param fail_loc=0x80000222"
-    rm $DIR/$tfile
+    rm $DIR/$tfile    
     sleep 10
     fail ost1
 }
@@ -1489,7 +1429,8 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet mds "lctl set_param fail_loc=0x80000707"
-    fail mds
+    facet_failover mds
+    df $MOUNT || return 1
     do_facet mds "lctl set_param fail_loc=0"
     unlinkmany $DIR/$tdir/$tfile- 25 || return 2
     return 0
@@ -1506,9 +1447,9 @@ at_cleanup () {
 
     echo "Cleaning up AT ..."
     if [ -n "$ATOLDBASE" ]; then
-        local at_history=$($LCTL get_param -n at_history)
-        do_facet mds "lctl set_param at_history=$at_history" || true
-        do_facet ost1 "lctl set_param at_history=$at_history" || true
+        local at_history=$(do_facet mds "find /sys/ -name at_history")
+        do_facet mds "echo $ATOLDBASE >> $at_history" || true
+        do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
     fi
 
     if [ $AT_MAX_SET -ne 0 ]; then
@@ -1527,6 +1468,10 @@ at_cleanup () {
 at_start()
 {
     local at_max_new=600
+    if ! at_is_valid; then
+        skip "AT env is invalid"
+        return 1
+    fi
 
     # Save at_max original values
     local facet
@@ -1547,10 +1492,12 @@ at_start()
     done
 
     if [ -z "$ATOLDBASE" ]; then
-	ATOLDBASE=$(do_facet mds "lctl get_param -n at_history")
+	local at_history=$(do_facet mds "find /sys/ -name at_history")
+	[ -z "$at_history" ] && skip "missing /sys/.../at_history " && return 1
+	ATOLDBASE=$(do_facet mds "cat $at_history")
         # speed up the timebase so we can check decreasing AT
-        do_facet mds "lctl set_param at_history=8" || true
-        do_facet ost1 "lctl set_param at_history=8" || true
+	do_facet mds "echo 8 >> $at_history"
+	do_facet ost1 "echo 8 >> $at_history"
 
 	# sleep for a while to cool down, should be > 8s and also allow
 	# at least one ping to be sent. simply use TIMEOUT to be safe.
@@ -1578,7 +1525,7 @@ test_65a() #bug 3055
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
-    $LCTL dk | grep "Early reply #" || error "No early reply"
+    $LCTL dk | grep "Early reply #" || error "No early reply" 
     # client should show REQ_DELAY estimates
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
     sleep 9
@@ -1645,7 +1592,7 @@ test_66a() #bug 3055
     CUR=$(lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | awk '/portal 12/ {print $5}')
     WORST=$(lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | awk '/portal 12/ {print $7}')
     echo "Current MDT timeout $CUR, worst $WORST"
-    [ $CUR -lt $WORST ] || error "Current $CUR should be less than worst $WORST"
+    [ $CUR -lt $WORST ] || error "Current $CUR should be less than worst $WORST" 
 }
 run_test 66a "AT: verify MDT service time adjusts with no early replies"
 
@@ -1663,7 +1610,7 @@ test_66b() #bug 3055
     CUR=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
     WORST=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $6}')
     echo "network timeout orig $ORIG, cur $CUR, worst $WORST"
-    [ $WORST -gt $ORIG ] || error "Worst $WORST should be worse than orig $ORIG"
+    [ $WORST -gt $ORIG ] || error "Worst $WORST should be worse than orig $ORIG" 
 }
 run_test 66b "AT: verify net latency adjusts"
 
@@ -1772,7 +1719,7 @@ test_70a () {
 				error "dd failed on $CLIENT"
 	done
 
-	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/')
+	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/') 
 	for C in ${CLIENTS//,/ }; do
 		do_node $prev_client dd if=$DIR/${tfile}_${C} of=/dev/null 2>/dev/null || \
 			error "dd if=$DIR/${tfile}_${C} failed on $prev_client"
@@ -1784,38 +1731,33 @@ test_70a () {
 run_test 70a "check multi client t-f"
 
 test_70b () {
-	local clients=${CLIENTS:-$HOSTNAME}
+	[ -z "$CLIENTS" ] && \
+		{ skip "Need two or more clients." && return; }
+	[ $CLIENTCOUNT -lt 2 ] && \
+		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
 
-	zconf_mount_clients $clients $DIR
+	zconf_mount_clients $CLIENTS $DIR
 	
-	local duration=300
+	local duration=120
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	do_nodes $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
+	do_nodes $CLIENTS "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
 		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
 		LCTL=$LCTL $cmd" &
 	PID=$!
 	log "Started rundbench load PID=$PID ..."
 
-	ELAPSED=0
-	NUM_FAILOVERS=0
-	START_TS=$(date +%s)
-	CURRENT_TS=$START_TS
-	while [ $ELAPSED -lt $duration ]; do
-		sleep 1
-		replay_barrier mds
-		sleep 1 # give clients a time to do operations
-		# Increment the number of failovers
-		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
-		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
-		facet_failover mds
-		CURRENT_TS=$(date +%s)
-		ELAPSED=$((CURRENT_TS - START_TS))
-	done
+	sleep $((duration / 4))
+	replay_barrier mds 
+	sleep 3 # give clients a time to do operations
+
+	log "$TESTNAME fail mds 1"
+	fail mds
 
 	wait $PID || error "rundbench load on $CLIENTS failed!"
+
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
@@ -1830,7 +1772,7 @@ test_71a() {
     umount $DIR
     facet_failover mds
     zconf_mount `hostname` $DIR || error "mount fails"
-    client_up || error "post-failover df failed"
+    df $DIR || error "post-failover df failed"
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" || \
         error "no delayed exports"
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
@@ -1982,7 +1924,7 @@ run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 
 test_80a() {
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
-
+    
     replay_barrier ost1
     lfs setstripe -i 0 -c 1 $DIR/$tfile
     dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
@@ -1999,7 +1941,7 @@ run_test 80a "write replay"
 
 test_80b() {
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
-
+    
     replay_barrier ost1
     lfs setstripe -i 0 -c 1 $DIR/$tfile
     dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
@@ -2054,8 +1996,8 @@ test_82() { #bug 18927
 run_test 82 "second open|creat in replay with open orphan"
 
 test_83() { #bug 19224
-#define OBD_FAIL_MDS_SPLIT_OPEN  0x142
-    do_facet mds "lctl set_param fail_loc=0x80000142"
+#define OBD_FAIL_MDS_SPLIT_OPEN  0x141
+    do_facet mds "lctl set_param fail_loc=0x80000141"
     # open will sleep after first transaction
     touch $DIR/$tfile &
     PID=$!
@@ -2072,16 +2014,7 @@ test_83() { #bug 19224
 }
 run_test 83 "open replay with barrier between transactions"
 
-test_84() {
-#define OBD_FAIL_OBD_FAIL_MDS_SPLIT_OPEN 0x142
-    do_facet mds "lctl set_param fail_loc=0x80000142"
-    createmany -o $DIR/$tfile- 1 &
-    PID=$!
-    mds_evict_client
-    wait $PID || true
-    client_up || client_up || true    # reconnect
-}
-run_test 84 "stale open during export disconnect"
+
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

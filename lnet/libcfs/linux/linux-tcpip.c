@@ -63,11 +63,7 @@ libcfs_sock_ioctl(int cmd, unsigned long arg)
                 return rc;
         }
 
-#ifdef HAVE_SOCK_MAP_FD_2ARG
-        fd = sock_map_fd(sock,0);
-#else
         fd = sock_map_fd(sock);
-#endif
         if (fd < 0) {
                 rc = fd;
                 sock_release(sock);

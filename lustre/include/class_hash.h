@@ -59,7 +59,7 @@ typedef struct lustre_hash {
         int                         lh_flags;       /* hash flags */
         atomic_t                    lh_count;       /* current entries */
         atomic_t                    lh_rehash_count;/* resize count */
-        struct lustre_hash_bucket **lh_buckets;     /* hash buckets */
+        struct lustre_hash_bucket  *lh_buckets;     /* hash buckets */
         struct lustre_hash_ops     *lh_ops;         /* hash operations */
         rwlock_t                    lh_rwlock;      /* lustre_hash */
         char                        lh_name[LUSTRE_MAX_HASH_NAME];
@@ -85,9 +85,11 @@ lh_hash(lustre_hash_t *lh, void *key, unsigned mask)
 {
         LASSERT(lh);
         LASSERT(LHO(lh));
-        LASSERT(LHP(lh, hash));
 
-        return LHP(lh, hash)(lh, key, mask);
+        if (LHP(lh, hash))
+                return LHP(lh, hash)(lh, key, mask);
+
+        return -EOPNOTSUPP;
 }
 
 static inline void *
@@ -180,7 +182,7 @@ __lustre_hash_bucket_validate(lustre_hash_t *lh, lustre_hash_bucket_t *lhb,
 
         if (unlikely(lh->lh_flags & LH_DEBUG)) {
                 i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_mask);
-                LASSERT(lh->lh_buckets[i] == lhb);
+                LASSERT(&lh->lh_buckets[i] == lhb);
         }
 }
 
@@ -223,22 +225,8 @@ __lustre_hash_bucket_del(lustre_hash_t *lh,
         return lh_put(lh, hnode);
 }
 
-/* Some hash init argument constants */
-#define HASH_POOLS_CUR_BITS 3
-#define HASH_POOLS_MAX_BITS 7
-#define HASH_UUID_CUR_BITS 7
-#define HASH_UUID_MAX_BITS 12
-#define HASH_NID_CUR_BITS 7
-#define HASH_NID_MAX_BITS 12
-#define HASH_NID_STATS_CUR_BITS 7
-#define HASH_NID_STATS_MAX_BITS 12
-#define HASH_LQS_CUR_BITS 7
-#define HASH_LQS_MAX_BITS 12
-#define HASH_CONN_CUR_BITS 5
-#define HASH_CONN_MAX_BITS 15
-
 /* Hash init/cleanup functions */
-lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits,
+lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits, 
                                 unsigned int max_bits,
                                 lustre_hash_ops_t *ops, int flags);
 void lustre_hash_exit(lustre_hash_t *lh);
@@ -264,9 +252,9 @@ void lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb, void *data);
 void lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
                               lh_for_each_cb, void *data);
 
-/*
+/* 
  * Rehash - Theta is calculated to be the average chained
- * hash depth assuming a perfectly uniform hash funcion.
+ * hash depth assuming a perfectly uniform hash funcion. 
  */
 int lustre_hash_rehash(lustre_hash_t *lh, int bits);
 void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key,
@@ -284,7 +272,7 @@ static inline int __lustre_hash_theta_int(int theta)
 /* Return a fractional value between 0 and 999 */
 static inline int __lustre_hash_theta_frac(int theta)
 {
-        return ((theta * 1000) >> LH_THETA_BITS) -
+        return ((theta * 1000) >> LH_THETA_BITS) - 
                (__lustre_hash_theta_int(theta) * 1000);
 }
 
@@ -346,7 +334,7 @@ lh_u64_hash(__u64 key, unsigned mask)
 #define lh_for_each_bucket(lh, lhb, pos)         \
         for (pos = 0;                            \
              pos <= lh->lh_cur_mask &&           \
-             ({ lhb = lh->lh_buckets[i]; 1; });  \
+             ({ lhb = &lh->lh_buckets[i]; 1; }); \
              pos++)
 
 #endif /* __CLASS_HASH_H */

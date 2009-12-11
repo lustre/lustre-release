@@ -130,17 +130,16 @@ Index: linux-2.6.16.i686/fs/block_dev.c
  	up(&bdev->bd_sem);
 Index: linux-2.6.16.i686/include/linux/fs.h
 ===================================================================
---- linux-2.6.16.i686.orig/include/linux/blkdev.h
-+++ linux-2.6.16.i686/include/linux/blkdev.h
-@@ -1595,6 +1595,11 @@ extern void file_kill(struct file *f);
- } \
- )
- #endif 
-+
+--- linux-2.6.16.i686.orig/include/linux/fs.h
++++ linux-2.6.16.i686/include/linux/fs.h
+@@ -1595,6 +1595,10 @@ extern void file_kill(struct file *f);
+ struct bio;
+ extern void submit_bio(int, struct bio *);
+ extern int bdev_read_only(struct block_device *);
 +#define HAVE_CLEAR_RDONLY_ON_PUT
 +void dev_set_rdonly(struct block_device *bdev);
 +int dev_check_rdonly(struct block_device *bdev);
 +void dev_clear_rdonly(struct block_device *bdev);
- 
- #define MODULE_ALIAS_BLOCKDEV(major,minor) \
- 	MODULE_ALIAS("block-major-" __stringify(major) "-" __stringify(minor))
+ extern int set_blocksize(struct block_device *, int);
+ extern int sb_set_blocksize(struct super_block *, int);
+ extern int sb_min_blocksize(struct super_block *, int);

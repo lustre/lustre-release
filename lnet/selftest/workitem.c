@@ -193,7 +193,7 @@ swi_scheduler_main (void *arg)
                                    swi_data.wi_waitq,
                                    !swi_sched_cansleep(&swi_data.wi_runq));
                 else
-                        cfs_cond_resched();
+                        our_cond_resched();
 
                 spin_lock(&swi_data.wi_lock);
         }
@@ -218,15 +218,14 @@ swi_serial_scheduler_main (void *arg)
                 int             rc;
                 swi_workitem_t *wi;
 
-                while (!list_empty(&swi_data.wi_serial_runq) &&
+                while (!list_empty(&swi_data.wi_serial_runq) && 
                        nloops < SWI_RESCHED) {
                         wi = list_entry(swi_data.wi_serial_runq.next,
                                         swi_workitem_t, wi_list);
                         list_del_init(&wi->wi_list);
 
-                        LASSERTF (!wi->wi_running && wi->wi_scheduled,
-                                  "wi %p running %d scheduled %d\n",
-                                  wi, wi->wi_running, wi->wi_scheduled);
+                        LASSERT (!wi->wi_running);
+                        LASSERT (wi->wi_scheduled);
 
                         nloops++;
                         wi->wi_running   = 1;
@@ -244,10 +243,10 @@ swi_serial_scheduler_main (void *arg)
 
                 if (nloops < SWI_RESCHED)
                         wait_event_interruptible_exclusive(
-                             swi_data.wi_serial_waitq,
+                             swi_data.wi_serial_waitq, 
                              !swi_sched_cansleep(&swi_data.wi_serial_runq));
                 else
-                        cfs_cond_resched();
+                        our_cond_resched();
 
                 spin_lock(&swi_data.wi_lock);
         }

@@ -269,41 +269,32 @@ for trgt in $targets; do
     ndevs=$((ndevs+1))
 done
 if [ $case == "netdisk" ]; then
-        if [ "$targets" ]; then
-            for ((i = 0; i < $ndevs; i++)); do
-                setup_osc_for_remote_ost ${host_names[$i]} \
-                                         ${client_names[$i]} $i
-                osc_name=${client_names[$i]}_osc
-                ec_using_osc $osc_name
-	        cleanup_oscs="$cleanup_oscs $osc_name"
-            done
-        else
-            client_names_str=$($lctl dl | grep -v mdt | \
-                awk '{if ($2 == "UP" && $3 == "osc") {print $4} }')
-            count=0;
-            for name in $client_names_str; do
-                client_names[$count]=`echo $name | sed 's/-osc-.*$//'`
-                count=$((count+1))
-            done
-
-            host_names_str=$($lctl dl -t | grep -v mdt | \
-                awk '{if ($2 == "UP" && $3 == "osc") {print $7} }')
-            count=0;
-            for name in $host_names_str; do
-                host_names[$count]=`echo $name | sed 's/@.*$//'`
-                count=$((count+1))
-            done
-
-            for (( i = 0; i < $count; i++ )) do
-                setup_osc_for_remote_ost ${host_names[$i]} \
-                                         ${client_names[$i]} $i
-                osc_name=${client_names[$i]}_osc
-                ec_using_osc $osc_name
-	        cleanup_oscs="$cleanup_oscs $osc_name"
-            done
-        fi
-
-        echo_clients=$($lctl dl | grep echo_client | awk "{if (\$2 == \"UP\" && \$3 == \"echo_client\") {print \$4} }")
+    if [ "$targets" ]; then
+        for ((i = 0; i < $ndevs; i++)); do
+             setup_osc_for_remote_ost ${host_names[$i]} ${client_names[$i]} $i
+	     cleanup_oscs="$cleanup_oscs ${client_names[$i]}_osc"
+	     host_names[$i]=localhost
+        done
+    fi
+        declare -a osc_names
+        declare -a osc_uuids
+        osc_names_str=$(lctl dl |grep osc | awk "{if (\$2 == \"UP\" && \$3 == \"osc\") {print \$4} }")
+        count=0;
+        for name in $osc_names_str; do
+            osc_names[$count]=$name
+            count=$((count+1))
+        done
+        osc_uuid_str=$(lctl dl |grep osc | awk "{if (\$2 == \"UP\" && \$3 == \"osc\") {print \$5} }")
+        count=0;
+        for uuid in $osc_uuid_str; do
+            osc_uuids[$count]=$uuid
+            count=$((count+1))
+        done
+        for (( i = 0; i < $count; i++ ))
+        do
+            ec_using_osc ${osc_names[$i]}
+        done
+        echo_clients=$(lctl dl | grep echo_client | awk "{if (\$2 == \"UP\" && \$3 == \"echo_client\") {print \$4} }")
         cnt=0;
         for name in $echo_clients; do
             client_names[$cnt]=$name
@@ -324,21 +315,21 @@ if [ $case == "network" ]; then
     fi
     # Now do the server setup
     setup_srv_obd $server_nid "echo_srv"
-    oss_on_srv=`dsh $server_nid root "$lctl dl | grep OSS" | awk '{ print $4 }'`
+    oss_on_srv=`dsh $server_nid root "lctl dl | grep OSS" | awk '{ print $4 }'`
     if [ -z $oss_on_srv ]; then
         setup_OSS $server_nid
         clean_srv_OSS=1
     fi
-    if ! dsh $server_nid root "$lctl dl | grep obdecho > /dev/null 2>&1"; then
+    if ! dsh $server_nid root "lctl dl | grep obdecho > /dev/null 2>&1"; then
         echo "obdecho not setup on server"
         exit 1
     fi
-    if ! dsh $server_nid root "$lctl dl | grep ost > /dev/null 2>&1"; then
+    if ! dsh $server_nid root "lctl dl | grep ost > /dev/null 2>&1"; then
         echo "ost not setup on server"
         exit 1
     fi
     # Now start client setup
-    osc_names_str=$($lctl dl| grep osc | grep -v mdt | grep UP)
+    osc_names_str=$(lctl dl)
     if [ -n "$osc_names_str" ]; then
         echo "The existing setup must be cleaned";
         exit 0;
@@ -418,7 +409,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 	    actual_size=$((actual_rsz*count*thr))
             total_size=$((actual_size*ndevs))
 	    # show computed parameters
-	    str=`printf 'ost %2d sz %8dK rsz %4dK obj %4d thr %4d ' \
+	    str=`printf 'ost %2d sz %8dK rsz %4d obj %4d thr %4d ' \
 		     $ndevs $total_size $actual_rsz $total_nobj $total_thr`
 	    echo "=======================> $str" >> $workf
 	    print_summary -n "$str"
@@ -489,7 +480,6 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
                 for host in ${unique_hosts[@]}; do
                     rm ${cmdsf}_${host}
                 done
-
 		# compute bandwidth from total data / elapsed time
 		str=`awk "BEGIN {printf \"%7.2f \",\
 		         $total_size / (( $t1 - $t0 ) * 1024)}"`

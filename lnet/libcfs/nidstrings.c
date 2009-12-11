@@ -64,6 +64,9 @@
  * between getting its string and using it.
  */
 
+#define LNET_NIDSTR_COUNT  128     /* # of nidstrings */
+#define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
+
 static char      libcfs_nidstrings[LNET_NIDSTR_COUNT][LNET_NIDSTR_SIZE];
 static int       libcfs_nidstring_idx = 0;
 
@@ -412,7 +415,7 @@ libcfs_nid2str(lnet_nid_t nid)
 static struct netstrfns *
 libcfs_str2net_internal(const char *str, __u32 *net)
 {
-        struct netstrfns *nf = NULL;
+        struct netstrfns *nf;
         int               nob;
         int               netnum;
         int               i;

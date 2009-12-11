@@ -39,3 +39,4 @@ modulefs_DATA = mgs$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES := $(mgs-objs:%.o=%.c) mgs_internal.h

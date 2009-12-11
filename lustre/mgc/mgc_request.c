@@ -122,7 +122,7 @@ static int config_log_get(struct config_llog_data *cld)
         RETURN(0);
 }
 
-/* Drop a reference to a config log.  When no longer referenced,
+/* Drop a reference to a config log.  When no longer referenced, 
    we can free the config log data */
 static void config_log_put(struct config_llog_data *cld)
 {
@@ -137,7 +137,7 @@ static void config_log_put(struct config_llog_data *cld)
                 spin_unlock(&config_list_lock);
                 OBD_FREE(cld->cld_logname, strlen(cld->cld_logname) + 1);
                 if (cld->cld_cfg.cfg_instance != NULL)
-                        OBD_FREE(cld->cld_cfg.cfg_instance,
+                        OBD_FREE(cld->cld_cfg.cfg_instance, 
                                  strlen(cld->cld_cfg.cfg_instance) + 1);
                 OBD_FREE(cld, sizeof(*cld));
         }
@@ -145,7 +145,7 @@ static void config_log_put(struct config_llog_data *cld)
 }
 
 /* Find a config log by name */
-static struct config_llog_data *config_log_find(char *logname,
+static struct config_llog_data *config_log_find(char *logname, 
                                                struct config_llog_instance *cfg)
 {
         struct list_head *tmp;
@@ -166,10 +166,10 @@ static struct config_llog_data *config_log_find(char *logname,
         spin_lock(&config_list_lock);
         list_for_each(tmp, &config_llog_list) {
                 cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
-                if (match_instance && cld->cld_cfg.cfg_instance &&
+                if (match_instance && cld->cld_cfg.cfg_instance && 
                     strcmp(logid, cld->cld_cfg.cfg_instance) == 0)
                         goto out_found;
-                if (!match_instance &&
+                if (!match_instance &&  
                     strcmp(logid, cld->cld_logname) == 0)
                         goto out_found;
         }
@@ -183,7 +183,7 @@ out_found:
         RETURN(cld);
 }
 
-/* Add this log to our list of active logs.
+/* Add this log to our list of active logs. 
    We have one active log per "mount" - client instance or servername.
    Each instance may be at a different point in the log. */
 static int config_log_add(char *logname, struct config_llog_instance *cfg,
@@ -195,12 +195,12 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         ENTRY;
 
         CDEBUG(D_MGC, "adding config log %s:%s\n", logname, cfg->cfg_instance);
-
+        
         OBD_ALLOC(cld, sizeof(*cld));
-        if (!cld)
+        if (!cld) 
                 RETURN(-ENOMEM);
         OBD_ALLOC(cld->cld_logname, strlen(logname) + 1);
-        if (!cld->cld_logname) {
+        if (!cld->cld_logname) { 
                 OBD_FREE(cld, sizeof(*cld));
                 RETURN(-ENOMEM);
         }
@@ -210,13 +210,12 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         atomic_set(&cld->cld_refcount, 1);
-        init_mutex(&cld->cld_sem);
-
+        
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(lsi->lsi_mgc->obd_self_export);
-
+        
         if (cfg->cfg_instance != NULL) {
-                OBD_ALLOC(cld->cld_cfg.cfg_instance,
+                OBD_ALLOC(cld->cld_cfg.cfg_instance, 
                           strlen(cfg->cfg_instance) + 1);
                 strcpy(cld->cld_cfg.cfg_instance, cfg->cfg_instance);
         }
@@ -224,31 +223,33 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         spin_lock(&config_list_lock);
         list_add(&cld->cld_list_chain, &config_llog_list);
         spin_unlock(&config_list_lock);
-
+        
         if (rc) {
                 config_log_put(cld);
                 RETURN(rc);
         }
-
+        
         RETURN(rc);
 }
 
+DECLARE_MUTEX(llog_process_lock);
+
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
-{
+{       
         struct config_llog_data *cld;
         int rc = 0;
         ENTRY;
-
+                                       
         cld = config_log_find(logname, cfg);
-        if (IS_ERR(cld))
+        if (IS_ERR(cld)) 
                 RETURN(PTR_ERR(cld));
         /* drop the ref from the find */
         config_log_put(cld);
 
-        down(&cld->cld_sem);
+        down(&llog_process_lock);
         cld->cld_stopping = 1;
-        up(&cld->cld_sem);
+        up(&llog_process_lock);
 
         /* drop the start ref */
         config_log_put(cld);
@@ -265,7 +266,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 static int rq_state = 0;
 static cfs_waitq_t rq_waitq;
 
-static int mgc_process_log(struct obd_device *mgc,
+static int mgc_process_log(struct obd_device *mgc, 
                            struct config_llog_data *cld);
 
 static int mgc_requeue_thread(void *data)
@@ -275,9 +276,9 @@ static int mgc_requeue_thread(void *data)
         char name[] = "ll_cfg_requeue";
         int rc = 0;
         ENTRY;
-
-        cfs_daemonize(name);
-
+        
+        ptlrpc_daemonize(name);
+        
         CDEBUG(D_MGC, "Starting requeue thread\n");
 
         lwi_later = LWI_TIMEOUT(60 * HZ, NULL, NULL);
@@ -287,37 +288,37 @@ static int mgc_requeue_thread(void *data)
         spin_lock(&config_list_lock);
         while (rq_state & (RQ_NOW | RQ_LATER)) {
                 /* Any new or requeued lostlocks will change the state */
-                rq_state &= ~(RQ_NOW | RQ_LATER);
+                rq_state &= ~(RQ_NOW | RQ_LATER); 
                 spin_unlock(&config_list_lock);
 
-                /* Always wait a few seconds to allow the server who
+                /* Always wait a few seconds to allow the server who 
                    caused the lock revocation to finish its setup, plus some
                    random so everyone doesn't try to reconnect at once. */
                 lwi_now = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0xff) * (HZ / 100),
                                       NULL, NULL);
                 l_wait_event(rq_waitq, rq_state & RQ_STOP, &lwi_now);
-
+                
                 spin_lock(&config_list_lock);
                 list_for_each_entry_safe(cld, n, &config_llog_list,
                                          cld_list_chain) {
                         spin_unlock(&config_list_lock);
-
+                        
                         if (cld->cld_lostlock) {
-                                CDEBUG(D_MGC, "updating log %s\n",
+                                CDEBUG(D_MGC, "updating log %s\n", 
                                        cld->cld_logname);
                                 cld->cld_lostlock = 0;
                                 rc = mgc_process_log(cld->cld_mgcexp->exp_obd,
                                                      cld);
-                                /* Whether we enqueued again or not in
-                                   mgc_process_log, we're done with the ref
-                                   from the old enqueue */
+                                /* Whether we enqueued again or not in 
+                                   mgc_process_log, we're done with the ref 
+                                   from the old enqueue */        
                                 config_log_put(cld);
                         }
 
                         spin_lock(&config_list_lock);
                 }
                 spin_unlock(&config_list_lock);
-
+                
                 /* Wait a bit to see if anyone else needs a requeue */
                 l_wait_event(rq_waitq, rq_state & (RQ_NOW | RQ_STOP),
                              &lwi_later);
@@ -326,7 +327,7 @@ static int mgc_requeue_thread(void *data)
         /* spinlock and while guarantee RQ_NOW and RQ_LATER are not set */
         rq_state &= ~RQ_RUNNING;
         spin_unlock(&config_list_lock);
-
+        
         CDEBUG(D_MGC, "Ending requeue thread\n");
         RETURN(rc);
 }
@@ -337,7 +338,7 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
 {
         int rc = 0;
 
-        CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n",
+        CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n", 
                cld->cld_logname, later, atomic_read(&cld->cld_refcount),
                cld->cld_stopping, rq_state);
 
@@ -378,7 +379,7 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
 
 /********************** class fns **********************/
 
-static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
+static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
                         struct vfsmount *mnt)
 {
         struct lvfs_run_ctxt saved;
@@ -400,7 +401,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
                 up(&cli->cl_mgc_sem);
-                CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd),
+                CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd), 
                        PTR_ERR(obd->obd_fsops));
                 RETURN(PTR_ERR(obd->obd_fsops));
         }
@@ -414,12 +415,12 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         obd->obd_lvfs_ctxt.fs = get_ds();
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, cfs_fs_pwd(current->fs),
+        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, current->fs->pwd,
                                 strlen(MOUNT_CONFIGS_DIR));
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (IS_ERR(dentry)) {
                 err = PTR_ERR(dentry);
-                CERROR("cannot lookup %s directory: rc = %d\n",
+                CERROR("cannot lookup %s directory: rc = %d\n", 
                        MOUNT_CONFIGS_DIR, err);
                 GOTO(err_ops, err);
         }
@@ -436,7 +437,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         /* We keep the cl_mgc_sem until mgc_fs_cleanup */
         RETURN(0);
 
-err_ops:
+err_ops:        
         fsfilt_put_ops(obd->obd_fsops);
         obd->obd_fsops = NULL;
         cli->cl_mgc_vfsmnt = NULL;
@@ -456,15 +457,15 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 struct lvfs_run_ctxt saved;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 l_dput(cli->cl_mgc_configs_dir);
-                cli->cl_mgc_configs_dir = NULL;
+                cli->cl_mgc_configs_dir = NULL; 
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 class_decref(obd);
         }
 
         cli->cl_mgc_vfsmnt = NULL;
-        if (obd->obd_fsops)
+        if (obd->obd_fsops) 
                 fsfilt_put_ops(obd->obd_fsops);
-
+        
         up(&cli->cl_mgc_sem);
 
         RETURN(rc);
@@ -477,11 +478,11 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         ENTRY;
 
         switch (stage) {
-        case OBD_CLEANUP_EARLY:
+        case OBD_CLEANUP_EARLY: 
                 break;
         case OBD_CLEANUP_EXPORTS:
                 if (atomic_dec_and_test(&mgc_count)) {
-                        /* Kick the requeue waitq - cld's should all be
+                        /* Kick the requeue waitq - cld's should all be 
                            stopping */
                         spin_lock(&config_list_lock);
                         rq_state |= RQ_STOP;
@@ -518,10 +519,10 @@ static int mgc_cleanup(struct obd_device *obd)
         ENTRY;
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-
-        /* COMPAT_146 - old config logs may have added profiles we don't
+        
+        /* COMPAT_146 - old config logs may have added profiles we don't 
            know about */
-        if (obd->obd_type->typ_refcnt <= 1)
+        if (obd->obd_type->typ_refcnt <= 1) 
                 /* Only for the last mgc */
                 class_del_profiles();
 
@@ -544,7 +545,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, obd, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -560,7 +561,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                 cfs_waitq_init(&rq_waitq);
         }
         spin_unlock(&config_list_lock);
-
+        
         RETURN(rc);
 
 err_cleanup:
@@ -589,20 +590,20 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         case LDLM_CB_CANCELING: {
                 /* We've given up the lock, prepare ourselves to update. */
                 LDLM_DEBUG(lock, "MGC cancel CB");
-
+                
                 CDEBUG(D_MGC, "Lock res "LPX64" (%.8s)\n",
-                       lock->l_resource->lr_name.name[0],
+                       lock->l_resource->lr_name.name[0], 
                        (char *)&lock->l_resource->lr_name.name[0]);
-
+                
                 if (!cld) {
                         CERROR("missing data, won't requeue\n");
                         break;
                 }
                 /* Are we done with this log? */
                 if (cld->cld_stopping) {
-                        CDEBUG(D_MGC, "log %s: stopping, won't requeue\n",
+                        CDEBUG(D_MGC, "log %s: stopping, won't requeue\n", 
                                cld->cld_logname);
-                        config_log_put(cld);
+                        config_log_put(cld);    
                         break;
                 }
                 /* Make sure not to re-enqueue when the mgc is stopping
@@ -611,7 +612,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                     !lock->l_conn_export->exp_obd->u.cli.cl_conn_count) {
                         CDEBUG(D_MGC, "log %s: disconnecting, won't requeue\n",
                                cld->cld_logname);
-                        config_log_put(cld);
+                        config_log_put(cld);    
                         break;
                 }
                 /* Did we fail to get the lock? */
@@ -632,7 +633,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 
         if (rc) {
-                CERROR("%s CB failed %d:\n", flag == LDLM_CB_BLOCKING ?
+                CERROR("%s CB failed %d:\n", flag == LDLM_CB_BLOCKING ? 
                        "blocking" : "cancel", rc);
                 LDLM_ERROR(lock, "MGC ast");
         }
@@ -645,7 +646,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                        int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
                        void *data, __u32 lvb_len, void *lvb_swabber,
                        struct lustre_handle *lockh)
-{
+{                       
         struct config_llog_data *cld = (struct config_llog_data *)data;
         struct ldlm_enqueue_info einfo = { type, mode, mgc_blocking_ast,
                 ldlm_completion_ast, NULL, data};
@@ -655,7 +656,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         CDEBUG(D_MGC, "Enqueue for %s (res "LPX64")\n", cld->cld_logname,
                cld->cld_resid.name[0]);
-
+                
         /* We can only drop this config log ref when we drop the lock */
         if (config_log_get(cld))
                 RETURN(ELDLM_LOCK_ABORTED);
@@ -665,15 +666,14 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         rc = ldlm_cli_enqueue(exp, NULL, &einfo, cld->cld_resid,
                               NULL, flags, NULL, 0, NULL, lockh, 0);
-        /* A failed enqueue should still call the mgc_blocking_ast,
-           where it will be requeued if needed ("grant failed"). */
+        /* A failed enqueue should still call the mgc_blocking_ast, 
+           where it will be requeued if needed ("grant failed"). */ 
 
         RETURN(rc);
 }
 
 static int mgc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
-                      __u32 mode, struct lustre_handle *lockh, int flags,
-                      obd_off end)
+                      __u32 mode, struct lustre_handle *lockh)
 {
         ENTRY;
 
@@ -753,15 +753,14 @@ static int mgc_target_register(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_mti = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_mti));
-        if (!req_mti) {
-                ptlrpc_req_finished(req);
+        if (!req_mti) 
                 RETURN(-ENOMEM);
-        }
-
         memcpy(req_mti, mti, sizeof(*req_mti));
-        ptlrpc_req_set_repsize(req, 2, rep_size);
-        CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 
+        ptlrpc_req_set_repsize(req, 2, rep_size);
+
+        CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
+        
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_mti = lustre_swab_repbuf(req, REPLY_REC_OFF,
@@ -793,14 +792,11 @@ static int mgc_set_mgs_param(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_msp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_msp));
-        if (!req_msp) {
-                ptlrpc_req_finished(req);
+        if (!req_msp)
                 RETURN(-ENOMEM);
-        }
 
         memcpy(req_msp, msp, sizeof(*req_msp));
         ptlrpc_req_set_repsize(req, 2, rep_size);
-
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_msp = lustre_swab_repbuf(req, REPLY_REC_OFF,
@@ -814,7 +810,7 @@ static int mgc_set_mgs_param(struct obd_export *exp,
 }
 
 int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
-                       void *key, obd_count vallen, void *val,
+                       void *key, obd_count vallen, void *val, 
                        struct ptlrpc_request_set *set)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
@@ -840,17 +836,17 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 value = *(int *)val;
                 spin_lock(&imp->imp_lock);
                 imp->imp_initial_recov_bk = value > 0;
-                /* Even after the initial connection, give up all comms if
+                /* Even after the initial connection, give up all comms if 
                    nobody answers the first time. */
                 imp->imp_recon_bk = 1;
                 spin_unlock(&imp->imp_lock);
-                CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n",
+                CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n", 
                        imp->imp_obd->obd_name, value, imp->imp_initial_recov,
-                       imp->imp_deactive, imp->imp_invalid,
+                       imp->imp_deactive, imp->imp_invalid, 
                        imp->imp_replayable, imp->imp_obd->obd_replayable,
                        ptlrpc_import_state_name(imp->imp_state));
                 /* Resurrect if we previously died */
-                if (imp->imp_invalid || value > 1)
+                if (imp->imp_invalid || value > 1) 
                         ptlrpc_reconnect_import(imp);
                 RETURN(0);
         }
@@ -930,19 +926,20 @@ static int mgc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                         int *index)
+static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                         int count, struct llog_catid *logid,
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
@@ -988,7 +985,7 @@ static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
         return(rc <= 1);
 }
 
-static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
+static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
                             void *data)
 {
         struct llog_rec_hdr local_rec = *rec;
@@ -1000,12 +997,12 @@ static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
         /* Append all records */
         local_rec.lrh_len -= sizeof(*rec) + sizeof(struct llog_rec_tail);
-        rc = llog_write_rec(local_llh, &local_rec, NULL, 0,
+        rc = llog_write_rec(local_llh, &local_rec, NULL, 0, 
                             (void *)cfg_buf, -1);
 
         lcfg = (struct lustre_cfg *)cfg_buf;
-        CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
-               rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command,
+        CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n", 
+               rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command, 
                lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
 
         RETURN(rc);
@@ -1025,7 +1022,7 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
            upon successful completion. */
 
         OBD_ALLOC(temp_log, strlen(logname) + 1);
-        if (!temp_log)
+        if (!temp_log) 
                 RETURN(-ENOMEM);
         sprintf(temp_log, "%sT", logname);
 
@@ -1034,7 +1031,7 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         if (rc)
                 GOTO(out, rc);
         rc = llog_init_handle(local_llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc)
+        if (rc) 
                 GOTO(out, rc);
         rc = llog_destroy(local_llh);
         llog_free_handle(local_llh);
@@ -1093,7 +1090,7 @@ out:
 
 /* Get a config log from the MGS and process it.
    This func is called for both clients and servers. */
-static int mgc_process_log(struct obd_device *mgc,
+static int mgc_process_log(struct obd_device *mgc, 
                            struct config_llog_data *cld)
 {
         struct llog_ctxt *ctxt, *lctxt;
@@ -1110,10 +1107,14 @@ static int mgc_process_log(struct obd_device *mgc,
                 RETURN(-EINVAL);
         }
 
-        /* Serialize update from the same log */
-        down(&cld->cld_sem);
+        /* I don't want mutliple processes running process_log at once -- 
+           sounds like badness.  It actually might be fine, as long as 
+           we're not trying to update from the same log
+           simultaneously (in which case we should use a per-log sem.) */
+        down(&llog_process_lock);
+
         if (cld->cld_stopping) {
-                up(&cld->cld_sem);
+                up(&llog_process_lock);
                 RETURN(0);
         }
 
@@ -1121,33 +1122,33 @@ static int mgc_process_log(struct obd_device *mgc,
 
         lsi = s2lsi(cld->cld_cfg.cfg_sb);
 
-        CDEBUG(D_MGC, "Process log %s:%s from %d\n", cld->cld_logname,
+        CDEBUG(D_MGC, "Process log %s:%s from %d\n", cld->cld_logname, 
                cld->cld_cfg.cfg_instance, cld->cld_cfg.cfg_last_idx + 1);
 
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
-                up(&cld->cld_sem);
                 CERROR("missing llog context\n");
+                up(&llog_process_lock);
                 RETURN(-EINVAL);
         }
 
         /* Get the cfg lock on the llog */
-        rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL,
-                          LCK_CR, &flags, NULL, NULL, NULL,
+        rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL, 
+                          LCK_CR, &flags, NULL, NULL, NULL, 
                           cld, 0, NULL, &lockh);
-        if (rcl)
+        if (rcl) 
                 CDEBUG(D_MGC, "Can't get cfg lock: %d\n", rcl);
-
+        
         lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
 
-        /* Copy the setup log locally if we can. Don't mess around if we're
+        /* Copy the setup log locally if we can. Don't mess around if we're 
            running an MGS though (logs are already local). */
-        if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) &&
+        if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) && 
             (lsi->lsi_srv_mnt == cli->cl_mgc_vfsmnt) &&
             !IS_MGS(lsi->lsi_ldd)) {
                 push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
-                if (rcl == 0)
+                if (rcl == 0) 
                         /* Only try to copy log if we have the lock. */
                         rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
                 if (rcl || rc) {
@@ -1162,36 +1163,37 @@ static int mgc_process_log(struct obd_device *mgc,
                                cld->cld_logname);
                 }
                 /* Now, whether we copied or not, start using the local llog.
-                   If we failed to copy, we'll start using whatever the old
+                   If we failed to copy, we'll start using whatever the old 
                    log has. */
                 llog_ctxt_put(ctxt);
                 ctxt = lctxt;
         }
 
-        /* logname and instance info should be the same, so use our
+        /* logname and instance info should be the same, so use our 
            copy of the instance for the update.  The cfg_last_idx will
            be updated here. */
         rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
-
+ 
 out_pop:
         llog_ctxt_put(ctxt);
         if (ctxt != lctxt)
                 llog_ctxt_put(lctxt);
-        if (must_pop)
+        if (must_pop) 
                 pop_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
 
-        /* Now drop the lock so MGS can revoke it */
+        /* Now drop the lock so MGS can revoke it */ 
         if (!rcl) {
-                rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, NULL,
-                                 LCK_CR, &lockh, 0, 0);
-                if (rcl)
+                rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, NULL, 
+                                 LCK_CR, &lockh);
+                if (rcl) 
                         CERROR("Can't drop cfg lock: %d\n", rcl);
         }
-        up(&cld->cld_sem);
-
+        
         CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
                mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
 
+        up(&llog_process_lock);
+        
         RETURN(rc);
 }
 
@@ -1207,18 +1209,18 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 /* Add any new target, not just osts */
                 struct mgs_target_info *mti;
 
-                if (LUSTRE_CFG_BUFLEN(lcfg, 1) !=
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) != 
                     sizeof(struct mgs_target_info))
                         GOTO(out, rc = -EINVAL);
 
                 mti = (struct mgs_target_info *)lustre_cfg_buf(lcfg, 1);
-                CDEBUG(D_MGC, "add_target %s %#x\n",
+                CDEBUG(D_MGC, "add_target %s %#x\n",    
                        mti->mti_svname, mti->mti_flags);
                 rc = mgc_target_register(obd->u.cli.cl_mgc_mgsexp, mti);
                 break;
         }
         case LCFG_LOV_DEL_OBD:
-                /* Remove target from the fs? */
+                /* Remove target from the fs? */  
                 /* FIXME */
                 CERROR("lov_del_obd unimplemented\n");
                 rc = -ENOSYS;
@@ -1230,29 +1232,29 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 char *logname = lustre_cfg_string(lcfg, 1);
                 cfg = (struct config_llog_instance *)lustre_cfg_buf(lcfg, 2);
                 sb = *(struct super_block **)lustre_cfg_buf(lcfg, 3);
-
-                CDEBUG(D_MGC, "parse_log %s from %d\n", logname,
+                
+                CDEBUG(D_MGC, "parse_log %s from %d\n", logname, 
                        cfg->cfg_last_idx);
 
                 /* We're only called through here on the initial mount */
                 rc = config_log_add(logname, cfg, sb);
-                if (rc)
+                if (rc) 
                         break;
                 cld = config_log_find(logname, cfg);
                 if (IS_ERR(cld)) {
                         rc = PTR_ERR(cld);
                         break;
                 }
-
+                
                 /* COMPAT_146 */
                 /* FIXME only set this for old logs!  Right now this forces
                    us to always skip the "inside markers" check */
                 cld->cld_cfg.cfg_flags |= CFG_F_COMPAT146;
-
+                
                 rc = mgc_process_log(obd, cld);
                 config_log_put(cld);
-
-                break;
+                
+                break;       
         }
         case LCFG_LOG_END: {
                 struct config_llog_instance *cfg = NULL;

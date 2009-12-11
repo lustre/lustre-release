@@ -8,7 +8,6 @@ TAGS
 .*.cmd
 autoMakefile.in
 autoMakefile
-modules.order
 *.ko
 *.mod.c
 .*.flags

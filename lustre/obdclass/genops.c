@@ -121,7 +121,7 @@ struct obd_type *class_get_type(const char *name)
                 const char *modname = name;
                 if (strcmp(modname, LUSTRE_MDT_NAME) == 0)
                         modname = LUSTRE_MDS_NAME;
-                if (!request_module("%s", modname)) {
+                if (!request_module(modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
                 } else {
@@ -940,12 +940,10 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
 }
 EXPORT_SYMBOL(class_connect);
 
-/* This function removes 1-3 references from the export:
- * 1 - for export pointer passed
- * and if disconnect really need
- * 2 - removing from hash
- * 3 - in client_unlink_export
- * The export pointer passed to this function can destroyed */
+/* This function removes two references from the export: one for the
+ * hash entry and one for the export pointer passed in.  The export
+ * pointer passed to this function is destroyed should not be used
+ * again. */
 int class_disconnect(struct obd_export *export)
 {
         int already_disconnected;
@@ -960,57 +958,40 @@ int class_disconnect(struct obd_export *export)
         spin_lock(&export->exp_lock);
         already_disconnected = export->exp_disconnected;
         export->exp_disconnected = 1;
-        spin_unlock(&export->exp_lock);
-
-
-        /* class_cleanup(), abort_recovery(), and class_fail_export()
-         * all end up in here, and if any of them race we shouldn't
-         * call extra class_export_puts(). */
-        if (already_disconnected)
-                GOTO(no_disconn, already_disconnected);
-
-        CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
-               export->exp_handle.h_cookie);
-
 
         if (!hlist_unhashed(&export->exp_nid_hash))
                 lustre_hash_del(export->exp_obd->obd_nid_hash,
                                 &export->exp_connection->c_peer.nid,
                                 &export->exp_nid_hash);
 
-        class_unlink_export(export);
+        spin_unlock(&export->exp_lock);
 
-no_disconn:
+        /* class_cleanup(), abort_recovery(), and class_fail_export()
+         * all end up in here, and if any of them race we shouldn't
+         * call extra class_export_puts(). */
+        if (already_disconnected)
+                RETURN(0);
+
+        CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
+               export->exp_handle.h_cookie);
+
+        class_unlink_export(export);
         class_export_put(export);
         RETURN(0);
 }
-
-/* Return non-zero for a fully connected export */
-int class_connected_export(struct obd_export *exp)
-{
-        if (exp) {
-                int connected;
-                spin_lock(&exp->exp_lock);
-                connected = (exp->exp_conn_cnt > 0);
-                spin_unlock(&exp->exp_lock);
-                return connected;
-        }
-        return 0;
-}
-EXPORT_SYMBOL(class_connected_export);
 
 static void class_disconnect_export_list(struct list_head *list,
                                          enum obd_option flags)
 {
         int rc;
-        struct obd_export *exp;
+        struct lustre_handle fake_conn;
+        struct obd_export *fake_exp, *exp;
         ENTRY;
 
         /* It's possible that an export may disconnect itself, but
          * nothing else will be added to this list. */
         while (!list_empty(list)) {
                 exp = list_entry(list->next, struct obd_export, exp_obd_chain);
-                /* need for safe call CDEBUG after obd_disconnect */
                 class_export_get(exp);
 
                 spin_lock(&exp->exp_lock);
@@ -1029,14 +1010,22 @@ static void class_disconnect_export_list(struct list_head *list,
                         continue;
                 }
 
-                class_export_get(exp);
+                fake_conn.cookie = exp->exp_handle.h_cookie;
+                fake_exp = class_conn2export(&fake_conn);
+                if (!fake_exp) {
+                        class_export_put(exp);
+                        continue;
+                }
+
+                spin_lock(&fake_exp->exp_lock);
+                fake_exp->exp_flags = flags;
+                spin_unlock(&fake_exp->exp_lock);
+
                 CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
                        "last request at %ld\n",
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
                        exp, exp->exp_last_request_time);
-
-                /* release one export reference anyway */
-                rc = obd_disconnect(exp);
+                rc = obd_disconnect(fake_exp);
                 CDEBUG(D_HA, "disconnected export at %s (%p): rc %d\n",
                        obd_export_nid2str(exp), exp, rc);
                 class_export_put(exp);
@@ -1070,6 +1059,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
         struct list_head work_list;
         struct list_head *pos, *n;
         struct obd_export *exp;
+        int cnt = 0;
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&work_list);
@@ -1078,13 +1068,13 @@ void class_disconnect_stale_exports(struct obd_device *obd,
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
                 if (exp->exp_replay_needed) {
                         list_move(&exp->exp_obd_chain, &work_list);
-                        obd->obd_stale_clients++;
+                        cnt++;
                 }
         }
         spin_unlock(&obd->obd_dev_lock);
 
-        CDEBUG(D_HA, "%s: disconnecting %d stale clients\n",
-               obd->obd_name, obd->obd_stale_clients);
+        CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n",
+               obd->obd_name, cnt);
         class_disconnect_export_list(&work_list, flags);
         EXIT;
 }
@@ -1153,7 +1143,6 @@ void class_handle_stale_exports(struct obd_device *obd)
 {
         struct list_head delay_list, evict_list;
         struct obd_export *exp, *n;
-        int delayed = 0;
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&delay_list);
@@ -1166,20 +1155,16 @@ void class_handle_stale_exports(struct obd_device *obd)
                         continue;
                 /* connected non-vbr clients are evicted */
                 if (exp->exp_in_recovery && !exp_connect_vbr(exp)) {
-                        obd->obd_stale_clients++;
                         list_move_tail(&exp->exp_obd_chain, &evict_list);
                         continue;
                 }
-                if (obd->obd_version_recov || !exp->exp_in_recovery) {
+                if (obd->obd_version_recov || !exp->exp_in_recovery)
                         list_move_tail(&exp->exp_obd_chain, &delay_list);
-                        delayed++;
-                }
         }
 #ifndef HAVE_DELAYED_RECOVERY
         /* delayed recovery is turned off, evict all delayed exports */
         list_splice_init(&delay_list, &evict_list);
         list_splice_init(&obd->obd_delayed_exports, &evict_list);
-        obd->obd_stale_clients += delayed;
 #endif
         spin_unlock(&obd->obd_dev_lock);
 
@@ -1472,7 +1457,7 @@ void obd_zombie_impexp_cull(void)
 
                 if (export != NULL)
                         class_export_destroy(export);
-                cfs_cond_resched();
+
         } while (import != NULL || export != NULL);
 }
 
@@ -1480,7 +1465,6 @@ static struct completion        obd_zombie_start;
 static struct completion        obd_zombie_stop;
 static unsigned long            obd_zombie_flags;
 static cfs_waitq_t              obd_zombie_waitq;
-static pid_t                    obd_zombie_pid;
 
 enum {
         OBD_ZOMBIE_STOP = 1
@@ -1505,35 +1489,6 @@ static void obd_zombie_impexp_notify(void)
         cfs_waitq_signal(&obd_zombie_waitq);
 }
 
-/**
- * check whether obd_zombie is idle
- */
-static int obd_zombie_is_idle(void)
-{
-        int rc;
-
-        LASSERT(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags));
-        spin_lock(&obd_zombie_impexp_lock);
-        rc = list_empty(&obd_zombie_imports) &&
-             list_empty(&obd_zombie_exports);
-        spin_unlock(&obd_zombie_impexp_lock);
-        return rc;
-}
-
-/**
- * wait when obd_zombie import/export queues become empty
- */
-void obd_zombie_barrier(void)
-{
-        struct l_wait_info lwi = { 0 };
-
-        if (obd_zombie_pid == cfs_curproc_pid())
-                /* don't wait for myself */
-                return;
-        l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
-}
-EXPORT_SYMBOL(obd_zombie_barrier);
-
 #ifdef __KERNEL__
 
 static int obd_zombie_impexp_thread(void *unused)
@@ -1547,20 +1502,12 @@ static int obd_zombie_impexp_thread(void *unused)
 
         complete(&obd_zombie_start);
 
-        obd_zombie_pid = cfs_curproc_pid();
-
         while(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
                 struct l_wait_info lwi = { 0 };
 
                 l_wait_event(obd_zombie_waitq, !obd_zombi_impexp_check(NULL), &lwi);
 
                 obd_zombie_impexp_cull();
-
-                /*
-                 * Notify obd_zombie_barrier callers that queues
-                 * may be empty.
-                 */
-                cfs_waitq_signal(&obd_zombie_waitq);
         }
 
         complete(&obd_zombie_stop);
@@ -1598,7 +1545,6 @@ int obd_zombie_impexp_init(void)
         init_completion(&obd_zombie_start);
         init_completion(&obd_zombie_stop);
         cfs_waitq_init(&obd_zombie_waitq);
-        obd_zombie_pid = 0;
 
 #ifdef __KERNEL__
         rc = cfs_kernel_thread(obd_zombie_impexp_thread, NULL, 0);

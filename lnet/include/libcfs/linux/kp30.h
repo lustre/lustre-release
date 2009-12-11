@@ -98,6 +98,11 @@ do {                                                                          \
 #define PageUptodate Page_Uptodate
 #define our_recalc_sigpending(current) recalc_sigpending(current)
 #define num_online_cpus() smp_num_cpus
+static inline void our_cond_resched(void)
+{
+        if (current->need_resched)
+               schedule ();
+}
 #define work_struct_t                   struct tq_struct
 #define cfs_get_work_data(type,field,data)   (data)
 #else
@@ -125,6 +130,10 @@ do {                                                                          \
 #define wait_on_page wait_on_page_locked
 #define our_recalc_sigpending(current) recalc_sigpending()
 #define strtok(a,b) strpbrk(a, b)
+static inline void our_cond_resched(void)
+{
+        cond_resched();
+}
 #define work_struct_t      struct work_struct
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
@@ -373,8 +382,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
  #define _LWORDSIZE __WORDSIZE
 #endif
 
-#if (defined(__KERNEL__) && defined(HAVE_KERN__U64_LONG_LONG)) || \
-    (!defined(__KERNEL__) && defined(HAVE_USER__U64_LONG_LONG))
+#if defined(HAVE_U64_LONG_LONG)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
@@ -403,18 +411,5 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 #endif
 
 #undef _LWORDSIZE
-
-#ifndef get_cpu
-# ifdef CONFIG_PREEMPT
-#  define cfs_get_cpu()  ({ preempt_disable(); smp_processor_id(); })
-#  define cfs_put_cpu()  preempt_enable()
-# else
-#  define cfs_get_cpu()  smp_processor_id()
-#  define cfs_put_cpu()
-# endif
-#else
-# define cfs_get_cpu()   get_cpu()
-# define cfs_put_cpu()   put_cpu()
-#endif /* get_cpu & put_cpu */
 
 #endif

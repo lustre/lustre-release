@@ -51,7 +51,6 @@ lnd_t the_ksocklnd = {
         .lnd_send       = ksocknal_send,
         .lnd_recv       = ksocknal_recv,
         .lnd_notify     = ksocknal_notify,
-        .lnd_query      = ksocknal_query,
         .lnd_accept     = ksocknal_accept,
 };
 
@@ -131,10 +130,8 @@ ksocknal_create_peer (ksock_peer_t **peerp, lnet_ni_t *ni, lnet_process_id_t id)
         cfs_atomic_set (&peer->ksnp_refcount, 1);   /* 1 ref for caller */
         peer->ksnp_closing = 0;
         peer->ksnp_accepting = 0;
+        peer->ksnp_zc_next_cookie = 1;
         peer->ksnp_proto = NULL;
-        peer->ksnp_last_alive = 0;
-        peer->ksnp_zc_next_cookie = SOCKNAL_KEEPALIVE_PING + 1;
-
         CFS_INIT_LIST_HEAD (&peer->ksnp_conns);
         CFS_INIT_LIST_HEAD (&peer->ksnp_routes);
         CFS_INIT_LIST_HEAD (&peer->ksnp_tx_queue);
@@ -1046,7 +1043,6 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         ksock_hello_msg_t *hello;
         unsigned int       irq;
         ksock_tx_t        *tx;
-        ksock_tx_t        *txtmp;
         int                rc;
         int                active;
         char              *warn = NULL;
@@ -1075,13 +1071,14 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         ksocknal_lib_save_callback(sock, conn);
         cfs_atomic_set (&conn->ksnc_conn_refcount, 1); /* 1 ref for me */
 
+        conn->ksnc_zc_capable = ksocknal_lib_zc_capable(sock);
         conn->ksnc_rx_ready = 0;
         conn->ksnc_rx_scheduled = 0;
 
         CFS_INIT_LIST_HEAD (&conn->ksnc_tx_queue);
         conn->ksnc_tx_ready = 0;
         conn->ksnc_tx_scheduled = 0;
-        conn->ksnc_tx_carrier = NULL;
+        conn->ksnc_tx_mono = NULL;
         cfs_atomic_set (&conn->ksnc_tx_nob, 0);
 
         LIBCFS_ALLOC(hello, offsetof(ksock_hello_msg_t,
@@ -1114,12 +1111,10 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 cfs_write_unlock_bh(global_lock);
 
                 if (conn->ksnc_proto == NULL) {
-                         conn->ksnc_proto = &ksocknal_protocol_v3x;
+                        conn->ksnc_proto = &ksocknal_protocol_v2x;
 #if SOCKNAL_VERSION_DEBUG
-                         if (*ksocknal_tunables.ksnd_protocol == 2)
-                                 conn->ksnc_proto = &ksocknal_protocol_v2x;
-                         else if (*ksocknal_tunables.ksnd_protocol == 1)
-                                 conn->ksnc_proto = &ksocknal_protocol_v1x;
+                        if (*ksocknal_tunables.ksnd_protocol != 2)
+                                conn->ksnc_proto = &ksocknal_protocol_v1x;
 #endif
                 }
 
@@ -1274,14 +1269,12 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
         conn->ksnc_peer = peer;                 /* conn takes my ref on peer */
         peer->ksnp_last_alive = cfs_time_current();
-        peer->ksnp_send_keepalive = 0;
         peer->ksnp_error = 0;
 
         sched = ksocknal_choose_scheduler_locked (irq);
         sched->kss_nconns++;
         conn->ksnc_scheduler = sched;
 
-        conn->ksnc_tx_last_post = cfs_time_current();
         /* Set the deadline for the outgoing HELLO to drain */
         conn->ksnc_tx_bufnob = libcfs_sock_wmem_queued(sock);
         conn->ksnc_tx_deadline = cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
@@ -1292,12 +1285,12 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
         ksocknal_new_packet(conn, 0);
 
-        conn->ksnc_zc_capable = ksocknal_lib_zc_capable(conn);
-
-        /* Take packets blocking for this connection. */
-        list_for_each_entry_safe(tx, txtmp, &peer->ksnp_tx_queue, tx_list) {
-                if (conn->ksnc_proto->pro_match_tx(conn, tx, tx->tx_nonblk) == SOCKNAL_MATCH_NO)
-                                continue;
+        /* Take all the packets blocking for a connection.
+         * NB, it might be nicer to share these blocked packets among any
+         * other connections that are becoming established. */
+        while (!list_empty (&peer->ksnp_tx_queue)) {
+                tx = list_entry (peer->ksnp_tx_queue.next,
+                                 ksock_tx_t, tx_list);
 
                 list_del (&tx->tx_list);
                 ksocknal_queue_tx_locked (tx, conn);
@@ -1355,10 +1348,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
         if (rc != 0) {
                 cfs_write_lock_bh(global_lock);
-                if (!conn->ksnc_closing) {
-                        /* could be closed by another thread */
-                        ksocknal_close_conn_locked(conn, rc);
-                }
+                ksocknal_close_conn_locked(conn, rc);
                 cfs_write_unlock_bh(global_lock);
         } else if (ksocknal_connsock_addref(conn) == 0) {
                 /* Allow I/O to proceed. */
@@ -1469,21 +1459,6 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
         if (list_empty (&peer->ksnp_conns)) {
                 /* No more connections to this peer */
 
-                if (!list_empty(&peer->ksnp_tx_queue)) {
-                        ksock_tx_t *tx;
-
-                        LASSERT (conn->ksnc_proto == &ksocknal_protocol_v3x);
-
-                        /* throw them to the last connection...,
-                         * these TXs will be send to /dev/null by scheduler */
-                        list_for_each_entry(tx, &peer->ksnp_tx_queue, tx_list)
-                                ksocknal_tx_prep(conn, tx);
-
-                        spin_lock_bh(&conn->ksnc_scheduler->kss_lock);
-                        list_splice_init(&peer->ksnp_tx_queue, &conn->ksnc_tx_queue);
-                        spin_unlock_bh(&conn->ksnc_scheduler->kss_lock);
-                }
-
                 peer->ksnp_proto = NULL;        /* renegotiate protocol version */
                 peer->ksnp_error = error;       /* stash last conn close reason */
 
@@ -1505,8 +1480,8 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 void
 ksocknal_peer_failed (ksock_peer_t *peer)
 {
-        int        notify = 0;
-        cfs_time_t last_alive = 0;
+        time_t    last_alive = 0;
+        int       notify = 0;
 
         /* There has been a connection failure or comms error; but I'll only
          * tell LNET I think the peer is dead if it's to another kernel and
@@ -1519,7 +1494,9 @@ ksocknal_peer_failed (ksock_peer_t *peer)
             peer->ksnp_accepting == 0 &&
             ksocknal_find_connecting_route_locked(peer) == NULL) {
                 notify = 1;
-                last_alive = peer->ksnp_last_alive;
+                last_alive = cfs_time_current_sec() -
+                        cfs_duration_sec(cfs_time_current() -
+                                         peer->ksnp_last_alive);
         }
 
         cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
@@ -1547,9 +1524,9 @@ ksocknal_finalize_zcreq(ksock_conn_t *conn)
                 if (tx->tx_conn != conn)
                         continue;
 
-                LASSERT (tx->tx_msg.ksm_zc_cookies[0] != 0);
+                LASSERT (tx->tx_msg.ksm_zc_req_cookie != 0);
 
-                tx->tx_msg.ksm_zc_cookies[0] = 0;
+                tx->tx_msg.ksm_zc_req_cookie = 0;
                 list_del(&tx->tx_zc_list);
                 list_add(&tx->tx_zc_list, &zlist);
         }
@@ -1793,61 +1770,6 @@ ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive)
 
         /* ...otherwise do nothing.  We can only establish new connections
          * if we have autroutes, and these connect on demand. */
-}
-
-void
-ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
-{
-        int                connect = 1;
-        cfs_time_t         last_alive = 0;
-        ksock_peer_t      *peer = NULL;
-        rwlock_t          *glock = &ksocknal_data.ksnd_global_lock;
-        lnet_process_id_t  id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
-
-        read_lock(glock);
-
-        peer = ksocknal_find_peer_locked(ni, id);
-        if (peer != NULL) {
-                struct list_head *tmp;
-                ksock_conn_t     *conn;
-                int               bufnob;
-
-                list_for_each (tmp, &peer->ksnp_conns) {
-                        conn = list_entry(tmp, ksock_conn_t, ksnc_list);
-                        bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
-
-                        if (bufnob < conn->ksnc_tx_bufnob) {
-                                /* something got ACKed */
-                                conn->ksnc_tx_deadline =
-                                        cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
-                                peer->ksnp_last_alive = cfs_time_current();
-                                conn->ksnc_tx_bufnob = bufnob;
-                        }
-                }
-
-                last_alive = peer->ksnp_last_alive;
-                if (ksocknal_find_connectable_route_locked(peer) == NULL)
-                        connect = 0;
-        }
-
-        read_unlock(glock);
-
-        if (last_alive != 0)
-                *when = last_alive;
-
-        if (!connect)
-                return;
-
-        ksocknal_add_peer(ni, id, LNET_NIDADDR(nid), lnet_acceptor_port());
-
-        write_lock_bh(glock);
-
-        peer = ksocknal_find_peer_locked(ni, id);
-        if (peer != NULL)
-                ksocknal_launch_all_connections_locked(peer);
-
-        write_unlock_bh(glock);
-        return;
 }
 
 void
@@ -2591,10 +2513,8 @@ ksocknal_startup (lnet_ni_t *ni)
         cfs_spin_lock_init(&net->ksnn_lock);
         net->ksnn_incarnation = ksocknal_lib_new_incarnation();
         ni->ni_data = net;
-        ni->ni_peertimeout    = *ksocknal_tunables.ksnd_peertimeout;
-        ni->ni_maxtxcredits   = *ksocknal_tunables.ksnd_credits;
-        ni->ni_peertxcredits  = *ksocknal_tunables.ksnd_peertxcredits;
-        ni->ni_peerrtrcredits = *ksocknal_tunables.ksnd_peerrtrcredits;
+        ni->ni_maxtxcredits = *ksocknal_tunables.ksnd_credits;
+        ni->ni_peertxcredits = *ksocknal_tunables.ksnd_peercredits;
 
         if (ni->ni_interfaces[0] == NULL) {
                 rc = ksocknal_enumerate_interfaces(net);
@@ -2659,8 +2579,7 @@ ksocknal_module_init (void)
         int    rc;
 
         /* check ksnr_connected/connecting field large enough */
-        CLASSERT (SOCKLND_CONN_NTYPES <= 4);
-        CLASSERT (SOCKLND_CONN_ACK == SOCKLND_CONN_BULK_IN);
+        CLASSERT(SOCKLND_CONN_NTYPES <= 4);
 
         rc = ksocknal_lib_tunables_init();
         if (rc != 0)
@@ -2672,7 +2591,7 @@ ksocknal_module_init (void)
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Kernel TCP Socket LND v3.0.0");
+MODULE_DESCRIPTION("Kernel TCP Socket LND v2.0.0");
 MODULE_LICENSE("GPL");
 
-cfs_module(ksocknal, "3.0.0", ksocknal_module_init, ksocknal_module_fini);
+cfs_module(ksocknal, "2.0.0", ksocknal_module_init, ksocknal_module_fini);

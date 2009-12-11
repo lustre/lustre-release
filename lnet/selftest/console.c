@@ -1465,7 +1465,9 @@ lstcon_ndlist_stat(struct list_head *ndlist,
                 return rc;
         }
 
-        lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
+        timeout = (timeout > LST_TRANS_MIN_TIMEOUT) ? timeout :
+                                                      LST_TRANS_MIN_TIMEOUT;
+        lstcon_rpc_trans_postwait(trans, timeout);
 
         rc = lstcon_rpc_trans_interpreter(trans, result_up,
                                           lstcon_statrpc_readent);
@@ -1552,7 +1554,10 @@ lstcon_debug_ndlist(struct list_head *ndlist,
                 return rc;
         }
 
-        lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
+        timeout = (timeout > LST_TRANS_MIN_TIMEOUT) ? timeout :
+                                                      LST_TRANS_MIN_TIMEOUT;
+
+        lstcon_rpc_trans_postwait(trans, timeout);
 
         rc = lstcon_rpc_trans_interpreter(trans, result_up,
                                           lstcon_sesrpc_readent);
@@ -1703,8 +1708,8 @@ lstcon_session_new(char *name, int key,
         if (rc != 0) {
                 lstcon_batch_t *bat;
 
-                if (lstcon_batch_find(LST_DEFAULT_BATCH, &bat) == 0)
-                        lstcon_batch_destroy(bat);
+                lstcon_batch_find(LST_DEFAULT_BATCH, &bat);
+                lstcon_batch_destroy(bat);
 
                 return rc;
         }
@@ -1979,9 +1984,9 @@ lstcon_console_fini(void)
 {
         int     i;
 
-        libcfs_deregister_ioctl(&lstcon_ioctl_handler);
-
         mutex_down(&console_session.ses_mutex);
+
+        libcfs_deregister_ioctl(&lstcon_ioctl_handler);
 
         srpc_shutdown_service(&lstcon_acceptor_service);
         srpc_remove_service(&lstcon_acceptor_service);

@@ -66,8 +66,6 @@ cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
 
-extern unsigned int ldlm_cancel_unused_locks_before_replay;
-
 #ifdef LPROCFS
 static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
                              unsigned long count, void *data)
@@ -82,9 +80,6 @@ int ldlm_proc_setup(void)
         int rc;
         struct lprocfs_vars list[] = {
                 { "dump_namespaces", NULL, ldlm_proc_dump_ns, NULL },
-                { "cancel_unused_locks_before_replay", 
-                  lprocfs_rd_uint, lprocfs_wr_uint, 
-                  &ldlm_cancel_unused_locks_before_replay, NULL },
                 { NULL }};
         ENTRY;
         LASSERT(ldlm_ns_proc_dir == NULL);
@@ -274,6 +269,13 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].write_fptr = lprocfs_wr_lru_size;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/shrink_thumb",
+                         ns->ns_name);
+                lock_vars[0].data = ns;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_max_age",
                          ns->ns_name);
                 lock_vars[0].data = &ns->ns_max_age;
@@ -342,6 +344,7 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
         if (!ns->ns_name)
                 GOTO(out_hash, NULL);
 
+        ns->ns_shrink_thumb = LDLM_LOCK_SHRINK_THUMB;
         ns->ns_appetite = apt;
 
         LASSERT(obd != NULL);
@@ -505,23 +508,18 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                         cleanup_resource(res, &res->lr_waiting, flags);
 
                         spin_lock(&ns->ns_hash_lock);
-                        tmp = tmp->next;
+                        tmp  = tmp->next;
 
                         /* XXX: former stuff caused issues in case of race
                          * between ldlm_namespace_cleanup() and lockd() when
                          * client gets blocking ast when lock gets distracted by
                          * server. This is 1_4 branch solution, let's see how
                          * will it behave. */
-                        if (!ldlm_resource_putref_locked(res)) {
-                                CERROR("Namespace %s resource refcount nonzero "
+                        if (!ldlm_resource_putref_locked(res))
+                                CDEBUG(D_INFO,
+                                       "Namespace %s resource refcount nonzero "
                                        "(%d) after lock cleanup; forcing cleanup.\n",
                                        ns->ns_name, atomic_read(&res->lr_refcount));
-                                CERROR("Resource: %p ("LPU64"/"LPU64"/"LPU64"/"
-                                       LPU64") (rc: %d)\n", res,
-                                       res->lr_name.name[0], res->lr_name.name[1],
-                                       res->lr_name.name[2], res->lr_name.name[3],
-                                       atomic_read(&res->lr_refcount));
-                        }
                 }
                 spin_unlock(&ns->ns_hash_lock);
         }
@@ -583,6 +581,8 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
+        /* Make sure that nobody can find this ns in its list. */
+        ldlm_namespace_unregister(ns, ns->ns_client);
 
         /* Can fail with -EINTR when force == 0 in which case try harder */
         rc = __ldlm_namespace_free(ns, force);
@@ -607,9 +607,6 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
                 EXIT;
                 return;
         }
-
-        /* Make sure that nobody can find this ns in its list. */
-        ldlm_namespace_unregister(ns, ns->ns_client);
 
         /* Fini pool _before_ parent proc dir is removed. This is important
          * as ldlm_pool_fini() removes own proc dir which is child to @dir.
@@ -666,6 +663,7 @@ void ldlm_namespace_free(struct ldlm_namespace *ns,
 
 void ldlm_namespace_get_locked(struct ldlm_namespace *ns)
 {
+        LASSERT(ns->ns_refcount >= 0);
         ns->ns_refcount++;
 }
 

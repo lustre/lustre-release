@@ -498,10 +498,10 @@ int main(int argc, char **argv)
 	FILE *countfile = NULL;
 	char filecount[PATH_MAX];
 	unsigned long dir_num = 0, dir_num_orig = 0;/* starting directory */
-	int c;
+	char c;
 
 	progname = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
-	while ((c = getopt_long(argc, argv, "t:rwvplo:h",
+	while ((c = (char)getopt_long(argc, argv, "t:rwvplo:h",
 				      longopts, NULL)) != -1) {
 		switch (c) {
 		case 'c':

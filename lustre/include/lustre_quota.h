@@ -47,8 +47,8 @@
 #error Unsupported operating system.
 #endif
 
-#include <lustre_net.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_net.h>
 #include <lvfs.h>
 #include <obd_support.h>
 #include <class_hash.h>
@@ -60,27 +60,7 @@ struct client_obd;
 #define NR_DQHASH 45
 #endif
 
-#ifndef QUOTABLOCK_BITS
-#define QUOTABLOCK_BITS 10
-#endif
-
-#ifndef QUOTABLOCK_SIZE
-#define QUOTABLOCK_SIZE (1 << QUOTABLOCK_BITS)
-#endif
-
-#ifndef toqb
-#define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
-#endif
-
 #ifdef HAVE_QUOTA_SUPPORT
-
-#ifndef MAX_IQ_TIME
-#define MAX_IQ_TIME  604800     /* (7*24*60*60) 1 week */
-#endif
-
-#ifndef MAX_DQ_TIME
-#define MAX_DQ_TIME  604800     /* (7*24*60*60) 1 week */
-#endif
 
 #ifdef __KERNEL__
 
@@ -170,12 +150,7 @@ struct lustre_dquot {
 struct dquot_id {
         struct list_head        di_link;
         __u32                   di_id;
-        __u32                   di_flag;
 };
-/* set inode quota limitation on a quota uid/gid */
-#define QI_SET                (1 << 30)
-/* set block quota limitation on a quota uid/gid */
-#define QB_SET                (1 << 31)
 
 #define QFILE_CHK               1
 #define QFILE_RD_INFO           2
@@ -196,11 +171,7 @@ int lustre_get_qids(struct file *file, struct inode *inode, int type,
                     struct list_head *list);
 int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
 
-#ifdef HAVE_VFS_DQ_OFF
-#define LL_DQUOT_OFF(sb, remount)    vfs_dq_off(sb, remount)
-#else
-#define LL_DQUOT_OFF(sb, remount)    DQUOT_OFF(sb)
-#endif
+#define LL_DQUOT_OFF(sb)    DQUOT_OFF(sb)
 
 typedef int (*dqacq_handler_t) (struct obd_device * obd, struct qunit_data * qd,
                                 int opc);
@@ -255,16 +226,13 @@ struct lustre_quota_ctxt {
         int           lqc_sync_blk;         /* when blk qunit reaches this value,
                                              * later write reqs from client
                                              * should be sync b=16642 */
-        spinlock_t    lqc_lock;             /* guard lqc_imp_valid now */
+        spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
         cfs_waitq_t   lqc_wait_for_qmaster; /* when mds isn't connected, threads
                                              * on osts who send the quota reqs
                                              * with wait==1 will be put here
                                              * b=14840 */
         struct proc_dir_entry *lqc_proc_dir;
         struct lprocfs_stats  *lqc_stats; /* lquota statistics */
-
-        atomic_t      lqc_lqs;              /* the number of used hashed lqs */
-        cfs_waitq_t   lqc_lqs_waitq;        /* no lqs are in use */
 };
 
 #define QUOTA_MASTER_READY(qctxt)   (qctxt)->lqc_setup = 1
@@ -273,8 +241,7 @@ struct lustre_quota_ctxt {
 struct lustre_qunit_size {
         struct hlist_node lqs_hash; /* the hash entry */
         unsigned int lqs_id;        /* id of user/group */
-        unsigned long lqs_flags;    /* 31st bit is QB_SET, 30th bit is QI_SET
-                                     * other bits are same as LQUOTA_FLAGS_* */
+        unsigned long lqs_flags;    /* is user/group; FULLBUF or LESSBUF */
         unsigned long lqs_iunit_sz; /* Unit size of file quota currently */
         unsigned long lqs_itune_sz; /* Trigger dqacq when available file quota
                                      * less than this value, trigger dqrel
@@ -293,7 +260,7 @@ struct lustre_qunit_size {
         cfs_time_t lqs_last_bshrink;   /* time of last block shrink */
         cfs_time_t lqs_last_ishrink;   /* time of last inode shrink */
         spinlock_t lqs_lock;
-        unsigned long long lqs_key; /* hash key */
+        struct quota_adjust_qunit lqs_key; /* hash key */
         struct lustre_quota_ctxt *lqs_ctxt; /* quota ctxt */
 };
 
@@ -305,18 +272,9 @@ struct lustre_qunit_size {
 #define LQS_SET_ADJBLK(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJBLK)
 #define LQS_SET_ADJINO(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJINO)
 
-/* In the hash for lustre_qunit_size, the key is decided by
- * grp_or_usr and uid/gid, in here, I combine these two values,
- * which will make comparing easier and more efficient */
-#define LQS_KEY(is_grp, id)  ((is_grp ? 1ULL << 32: 0) + id)
-#define LQS_KEY_ID(key)      (key & 0xffffffff)
-#define LQS_KEY_GRP(key)     (key >> 32)
-
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
 {
-        if (atomic_inc_return(&lqs->lqs_refcount) == 2) /* quota_create_lqs */
-                atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
-
+        atomic_inc(&lqs->lqs_refcount);
         CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
                lqs, atomic_read(&lqs->lqs_refcount));
 }
@@ -325,11 +283,17 @@ static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
         LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
 
-        if (atomic_dec_return(&lqs->lqs_refcount) == 1)
-                if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
-                        cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               lqs, atomic_read(&lqs->lqs_refcount));
+        /* killing last ref, let's let hash table kill it */
+        if (atomic_read(&lqs->lqs_refcount) == 1) {
+                lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
+                                &lqs->lqs_key, &lqs->lqs_hash);
+                OBD_FREE_PTR(lqs);
+        } else {
+                atomic_dec(&lqs->lqs_refcount);
+                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+                       lqs, atomic_read(&lqs->lqs_refcount));
+
+        }
 }
 
 static inline void lqs_initref(struct lustre_qunit_size *lqs)
@@ -349,7 +313,7 @@ struct lustre_quota_ctxt {
 
 #else
 
-#define LL_DQUOT_OFF(sb, remount) do {} while(0)
+#define LL_DQUOT_OFF(sb) do {} while(0)
 
 struct lustre_quota_info {
 };
@@ -411,7 +375,7 @@ typedef struct {
         /* For quota slave, check whether specified uid/gid's remaining quota
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary */
-        int (*quota_chkquota) (struct obd_export *, unsigned int, unsigned int,
+        int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
                                int, int [], quota_acquire,
                                struct obd_trans_info *, struct inode *, int);
 
@@ -627,7 +591,7 @@ static inline int lquota_acquire(quota_interface_t *interface,
 }
 
 static inline int lquota_chkquota(quota_interface_t *interface,
-                                  struct obd_export *exp,
+                                  struct obd_device *obd,
                                   unsigned int uid, unsigned int gid, int count,
                                   int pending[2], struct obd_trans_info *oti,
                                   struct inode *inode, int frags)
@@ -637,7 +601,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, chkquota)(exp, uid, gid, count, pending,
+        rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, pending,
                                            QUOTA_OP(interface, acquire), oti,
                                            inode, frags);
         RETURN(rc);

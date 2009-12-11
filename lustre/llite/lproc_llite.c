@@ -236,48 +236,6 @@ static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
         return count;
 }
 
-static int ll_rd_max_readahead_per_file_mb(char *page, char **start, off_t off,
-                                          int count, int *eof, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        long pages_number;
-        int mult;
-
-        spin_lock(&sbi->ll_lock);
-        pages_number = sbi->ll_ra_info.ra_max_pages_per_file;
-        spin_unlock(&sbi->ll_lock);
-
-        mult = 1 << (20 - CFS_PAGE_SHIFT);
-        return lprocfs_read_frac_helper(page, count, pages_number, mult);
-}
-
-static int ll_wr_max_readahead_per_file_mb(struct file *file, const char *buffer,
-                                          unsigned long count, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int mult, rc, pages_number;
-
-        mult = 1 << (20 - CFS_PAGE_SHIFT);
-        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
-        if (rc)
-                return rc;
-
-        if (pages_number < 0 ||
-                pages_number > sbi->ll_ra_info.ra_max_pages) {
-                CERROR("can't set file readahead more than"
-                       "max_read_ahead_mb %lu MB\n", sbi->ll_ra_info.ra_max_pages);
-                return -ERANGE;
-        }
-
-        spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_pages_per_file = pages_number;
-        spin_unlock(&sbi->ll_lock);
-
-        return count;
-}
-
 static int ll_rd_max_read_ahead_whole_mb(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 {
@@ -308,11 +266,10 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
 
         /* Cap this at the current max readahead window size, the readahead
          * algorithm does this anyway so it's pointless to set it larger. */
-        if (pages_number < 0 ||
-            pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
+        if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
                 CERROR("can't set max_read_ahead_whole_mb more than "
-                       "max_read_ahead_per_file_mb: %lu\n",
-                        sbi->ll_ra_info.ra_max_pages_per_file >> (20 - CFS_PAGE_SHIFT));
+                       "max_read_ahead_mb: %lu\n",
+                       sbi->ll_ra_info.ra_max_pages >> (20 - CFS_PAGE_SHIFT));
                 return -ERANGE;
         }
 
@@ -576,27 +533,6 @@ static int ll_wr_lockless_truncate(struct file *file, const char *buffer,
                 ?: count;
 }
 
-static int ll_rd_direct_io_default(char *page, char **start, off_t off,
-                                     int count, int *eof, void *data)
-{
-        struct super_block *sb = data;
-
-        *eof = 1;
-        return snprintf(page, count, "%u\n",
-                        ll_s2sbi(sb)->ll_direct_io_default);
-}
-
-static int ll_wr_direct_io_default(struct file *file, const char *buffer,
-                                     unsigned long count, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        return lprocfs_write_helper(buffer, count,
-                                    &sbi->ll_direct_io_default)
-                ?: count;
-}
-
 static int ll_rd_statahead_max(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -689,8 +625,6 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "max_read_ahead_mb", ll_rd_max_readahead_mb,
                                ll_wr_max_readahead_mb, 0 },
-        { "max_read_ahead_per_file_mb", ll_rd_max_readahead_per_file_mb,
-                                        ll_wr_max_readahead_per_file_mb, 0 },
         { "max_read_ahead_whole_mb", ll_rd_max_read_ahead_whole_mb,
                                      ll_wr_max_read_ahead_whole_mb, 0 },
         { "max_cached_mb",  ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
@@ -704,8 +638,6 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
                                 ll_wr_contention_time, 0},
         { "lockless_truncate", ll_rd_lockless_truncate,
                                ll_wr_lockless_truncate, 0},
-        { "direct_io_default", ll_rd_direct_io_default,
-                               ll_wr_direct_io_default, 0},
         { "statahead_max",      ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_stats",    ll_rd_statahead_stats, 0, 0 },
         { "lazystatfs",         ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
@@ -780,10 +712,10 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
                  sbi->ll_stats_track_id == current->pid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
         else if (sbi->ll_stats_track_type == STATS_TRACK_PPID &&
-                 sbi->ll_stats_track_id == current->parent->pid)
+                 sbi->ll_stats_track_id == current->p_pptr->pid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
         else if (sbi->ll_stats_track_type == STATS_TRACK_GID &&
-                 sbi->ll_stats_track_id == cfs_curproc_gid())
+                 sbi->ll_stats_track_id == current->gid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
 }
 EXPORT_SYMBOL(ll_stats_ops_tally);
@@ -834,7 +766,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         entry->data = sbi;
 
         sbi->ll_ra_stats = lprocfs_alloc_stats(LL_RA_STAT,
-                                               LPROCFS_STATS_FLAG_NONE);
+                                               LPROCFS_STATS_FLAG_PERCPU);
         for (id = 0; id < LL_RA_STAT; id++)
                 lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
                         ra_stats_string[id], "pages");
@@ -862,7 +794,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 
         /* File operations stats */
         sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
-                                            LPROCFS_STATS_FLAG_NONE);
+                                            LPROCFS_STATS_FLAG_PERCPU);
         if (sbi->ll_stats == NULL)
                 GOTO(out, err = -ENOMEM);
         /* do counter init */
@@ -951,7 +883,7 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
                                 seq_putc(seq, '|');                     \
                         seq_puts(seq, #flag);                           \
                 }                                                       \
-        } while(0)
+        } while(0);
 
 static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
 {

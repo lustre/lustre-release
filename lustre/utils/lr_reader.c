@@ -39,10 +39,6 @@
  */
  /* Safely read the last_rcvd file from a device */
 
-#if HAVE_CONFIG_H
-#  include "config.h"
-#endif /* HAVE_CONFIG_H */
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -126,8 +122,8 @@ int main(int argc, char *const argv[])
 
         memset(cmd, 0, sizeof(cmd));
         sprintf(cmd,
-                "%s -c -R 'dump /%s %s/%s' %s",
-                DEBUGFS, LAST_RCVD, tmpdir, LAST_RCVD, dev);
+                "debugfs -c -R 'dump /%s %s/%s' %s",
+                LAST_RCVD, tmpdir, LAST_RCVD, dev);
 
         ret = run_command(cmd);
         if (ret) {
@@ -197,8 +193,8 @@ int main(int argc, char *const argv[])
                 /* Construct debugfs command line. */
                 memset(cmd, 0, sizeof(cmd));
                 sprintf(cmd,
-                        "%s -c -R 'rdump /%s %s' %s",
-                        DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
+                        "debugfs -c -R 'rdump /%s %s' %s",
+                        MDT_LOGS_DIR, tmpdir, dev);
 
                 run_command(cmd);
 

@@ -138,7 +138,7 @@ static void ll_close_done_writing(struct inode *inode)
         struct ll_inode_info *lli = ll_i2info(inode);
         ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        struct obdo obdo = { 0 };
+        struct obdo obdo;
         struct mdc_op_data data = { { 0 } };
         obd_flag valid;
         int rc, ast_flags = 0;

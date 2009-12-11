@@ -37,7 +37,7 @@
 #ifndef OST_INTERNAL_H
 #define OST_INTERNAL_H
 
-#define OSS_SERVICE_WATCHDOG_FACTOR 2
+#define OSS_SERVICE_WATCHDOG_FACTOR 2000
 
 /*
  * tunables for per-thread page pool (bug 5137)
@@ -56,11 +56,14 @@ struct ptlrpc_request;
  */
 struct ost_thread_local_cache {
         /*
-         * pool of nio buffers used by write-path
+         * pool of pages and nio buffers used by write-path
          */
+        struct page          *page  [OST_THREAD_POOL_SIZE];
         struct niobuf_local   local [OST_THREAD_POOL_SIZE];
-        unsigned int          temporary:1;
+        struct niobuf_remote  remote[OST_THREAD_POOL_SIZE];
 };
+
+struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
 
 #define OSS_DEF_CREATE_THREADS  2UL
 #define OSS_MAX_CREATE_THREADS 16UL

@@ -123,7 +123,7 @@ ptllnd_close_peer(ptllnd_peer_t *peer, int error)
             !list_empty(&peer->plp_noopq) ||
             !list_empty(&peer->plp_activeq) ||
             error != 0) {
-                CWARN("Closing %s: %d\n", libcfs_id2str(peer->plp_id), error);
+                CWARN("Closing %s\n", libcfs_id2str(peer->plp_id));
                 if (plni->plni_debug)
                         ptllnd_dump_debug(ni, peer->plp_id);
         }
@@ -341,6 +341,40 @@ ptllnd_dump_debug(lnet_ni_t *ni, lnet_process_id_t id)
         ptllnd_dump_history();
 }
 
+void
+ptllnd_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive)
+{
+        lnet_process_id_t  id;
+        ptllnd_peer_t     *peer;
+        time_t             start = cfs_time_current_sec();
+        ptllnd_ni_t       *plni = ni->ni_data;
+        int                w = plni->plni_long_wait;
+
+        /* This is only actually used to connect to routers at startup! */
+        LASSERT(alive);
+
+        id.nid = nid;
+        id.pid = LUSTRE_SRV_LNET_PID;
+
+        peer = ptllnd_find_peer(ni, id, 1);
+        if (peer == NULL)
+                return;
+
+        /* wait for the peer to reply */
+        while (!peer->plp_recvd_hello) {
+                if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+                        CWARN("Waited %ds to connect to %s\n",
+                              (int)(cfs_time_current_sec() - start),
+                              libcfs_id2str(id));
+                        w *= 2;
+                }
+
+                ptllnd_wait(ni, w);
+        }
+
+        ptllnd_peer_decref(peer);
+}
+
 int
 ptllnd_setasync(lnet_ni_t *ni, lnet_process_id_t id, int nasync)
 {
@@ -484,7 +518,7 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
         ptllnd_peer_addref(peer);
         plni->plni_ntxs++;
 
-        CDEBUG(D_NET, "tx=%p\n", tx);
+        CDEBUG(D_NET, "tx=%p\n",tx);
 
         return tx;
 }
@@ -825,7 +859,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 list_add_tail(&tx->tx_list, &peer->plp_activeq);
 
                 CDEBUG(D_NET, "Sending at TX=%p type=%s (%d)\n",tx,
-                       ptllnd_msgtype2str(tx->tx_type),tx->tx_type);
+                        ptllnd_msgtype2str(tx->tx_type),tx->tx_type);
 
                 if (tx->tx_type == PTLLND_MSG_TYPE_NOOP &&
                     !ptllnd_peer_send_noop(peer)) {
@@ -841,10 +875,9 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 /*
                  * Return all the credits we have
                  */
-                tx->tx_msg.ptlm_credits = MIN(PTLLND_MSG_MAX_CREDITS,
-                                              peer->plp_outstanding_credits);
-                peer->plp_sent_credits += tx->tx_msg.ptlm_credits;
-                peer->plp_outstanding_credits -= tx->tx_msg.ptlm_credits;
+                tx->tx_msg.ptlm_credits = peer->plp_outstanding_credits;
+                peer->plp_sent_credits += peer->plp_outstanding_credits;
+                peer->plp_outstanding_credits = 0;
 
                 /*
                  * One less credit
@@ -926,14 +959,15 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
 
         if (tx == NULL) {
                 CERROR("Can't allocate %s tx for %s\n",
-                       ptllnd_msgtype2str(type), libcfs_id2str(peer->plp_id));
+                       type == PTLLND_MSG_TYPE_GET ? "GET" : "PUT/REPLY",
+                       libcfs_id2str(peer->plp_id));
                 return -ENOMEM;
         }
 
         rc = ptllnd_set_txiov(tx, niov, iov, offset, len);
         if (rc != 0) {
-                CERROR("Can't allocate iov %d for %s\n",
-                       niov, libcfs_id2str(peer->plp_id));
+                CERROR ("Can't allocate iov %d for %s\n",
+                        niov, libcfs_id2str(peer->plp_id));
                 rc = -ENOMEM;
                 goto failed;
         }
@@ -951,24 +985,12 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
 
         start = cfs_time_current_sec();
         w = plni->plni_long_wait;
-        ptllnd_set_tx_deadline(tx);
 
-        while (!peer->plp_recvd_hello) {    /* wait to validate plp_match */
+        while (!peer->plp_recvd_hello) {        /* wait to validate plp_match */
                 if (peer->plp_closing) {
                         rc = -EIO;
                         goto failed;
                 }
-
-                /* NB must check here to avoid unbounded wait - tx not yet
-                 * on peer->plp_txq, so ptllnd_watchdog can't expire it */
-                if (tx->tx_deadline < cfs_time_current_sec()) {
-                        CERROR("%s tx for %s timed out\n",
-                               ptllnd_msgtype2str(type),
-                               libcfs_id2str(peer->plp_id));
-                        rc = -ETIMEDOUT;
-                        goto failed;
-                }
-
                 if (w > 0 && cfs_time_current_sec() > start + w/1000) {
                         CWARN("Waited %ds to connect to %s\n",
                               (int)(cfs_time_current_sec() - start),
@@ -1042,7 +1064,6 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         return 0;
 
  failed:
-        tx->tx_status = rc;
         ptllnd_tx_done(tx);
         return rc;
 }
@@ -1073,8 +1094,8 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
 
         rc = ptllnd_set_txiov(tx, niov, iov, offset, len);
         if (rc != 0) {
-                CERROR("Can't allocate iov %d for %s\n",
-                       niov, libcfs_id2str(peer->plp_id));
+                CERROR ("Can't allocate iov %d for %s\n",
+                        niov, libcfs_id2str(peer->plp_id));
                 rc = -ENOMEM;
                 goto failed;
         }
@@ -1405,13 +1426,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 if (plni->plni_abort_on_nak)
                         abort();
 
-                plp = ptllnd_find_peer(ni, srcid, 0);
-                if (plp == NULL) {
-                        CERROR("Ignore NAK from %s: no peer\n", libcfs_id2str(srcid));
-                        return;
-                }
-                ptllnd_close_peer(plp, -EPROTO);
-                ptllnd_peer_decref(plp);
                 return;
         }
 
@@ -1595,8 +1609,8 @@ ptllnd_buf_event (lnet_ni_t *ni, ptl_event_t *event)
                 /* Portals can't force message alignment - someone sending an
                  * odd-length message could misalign subsequent messages */
                 if ((event->mlength & 7) != 0) {
-                        CERROR("Message from %s has odd length "LPU64
-                               " probable version incompatibility\n",
+                        CERROR("Message from %s has odd length %u: "
+                               "probable version incompatibility\n",
                                ptllnd_ptlid2str(event->initiator),
                                event->mlength);
                         LBUG();
@@ -1771,12 +1785,7 @@ ptllnd_check_peer(ptllnd_peer_t *peer)
         if (tx == NULL)
                 return;
 
-        CERROR("%s (sent %d recvd %d, credits %d/%d/%d/%d/%d): timed out %p %p\n",
-               libcfs_id2str(peer->plp_id), peer->plp_sent_hello, peer->plp_recvd_hello,
-               peer->plp_credits, peer->plp_outstanding_credits,
-               peer->plp_sent_credits, peer->plp_lazy_credits,
-               peer->plp_extra_lazy_credits, tx, tx->tx_lnetmsg);
-        ptllnd_debug_tx(tx);
+        CERROR("%s: timed out\n", libcfs_id2str(peer->plp_id));
         ptllnd_close_peer(peer, -ETIMEDOUT);
 }
 

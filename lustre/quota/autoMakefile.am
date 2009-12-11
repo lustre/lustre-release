@@ -46,3 +46,4 @@ modulefs_DATA = lquota$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES := $(lquota-objs:%.o=%.c) quota_internal.h

@@ -68,14 +68,6 @@ enum lustre_imp_state {
         LUSTRE_IMP_EVICTED    = 10,
 };
 
-struct ptlrpc_at_array {
-        struct list_head *paa_reqs_array; /* array to hold requests */
-        __u32             paa_size;       /* the size of array */
-        __u32             paa_count;      /* the total count of reqs */
-        time_t            paa_deadline;   /* the earliest deadline of reqs */
-        __u32            *paa_reqs_count; /* the count of reqs in each entry */
-};
-
 static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
 {
         static char* import_state_names[] = {
@@ -110,13 +102,6 @@ struct imp_at {
         struct adaptive_timeout iat_service_estimate[IMP_AT_MAX_PORTALS];
 };
 
-/* state history */
-#define IMP_STATE_HIST_LEN 16
-struct import_state_hist {
-        enum lustre_imp_state ish_state;
-        time_t                ish_time;
-};
-
 struct obd_import {
         struct portals_handle     imp_handle;
         atomic_t                  imp_refcount;
@@ -139,11 +124,8 @@ struct obd_import {
         atomic_t                  imp_inflight;
         atomic_t                  imp_unregistering;
         atomic_t                  imp_replay_inflight;
-        atomic_t                  imp_inval_count;  /* in-progress invalidations */
-        atomic_t                  imp_timeouts;
+        atomic_t                  imp_inval_count;
         enum lustre_imp_state     imp_state;
-        struct import_state_hist  imp_state_hist[IMP_STATE_HIST_LEN];
-        int                       imp_state_hist_idx;
         int                       imp_generation;
         __u32                     imp_conn_cnt;
         int                       imp_last_generation_checked;
@@ -176,8 +158,7 @@ struct obd_import {
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
                                   imp_recon_bk:1,         /* turn off reconnect if all failovers fail */
-                                  imp_last_recon:1,       /* internally used by above */
-                                  imp_force_reconnect:1;  /* import must be reconnected instead of chouse new connection */
+                                  imp_last_recon:1;       /* internally used by above */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;

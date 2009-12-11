@@ -5,10 +5,9 @@ configure
 Makefile
 .deps
 TAGS
+.*.cmd
 autoMakefile.in
 autoMakefile
-modules.order
-.*.cmd
 *.ko
 *.mod.c
 .*.flags

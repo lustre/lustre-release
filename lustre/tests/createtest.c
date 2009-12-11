@@ -96,9 +96,9 @@ int main(int argc, char *argv[])
 			if (i == S_IFCHR || i == S_IFBLK) {
 				if (st.st_rdev != 0x1234) {
 					fprintf(stderr, "%s: ERROR rdev %s: "
-						"%llu != 0x1234",
-						argv[0], name,
-						(unsigned long long)st.st_rdev);
+					        "%llu != 0x1234",
+					        argv[0], name,
+                                                (unsigned long long)st.st_rdev);
 					exit(13);
 				}
 			}

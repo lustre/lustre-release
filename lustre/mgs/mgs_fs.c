@@ -59,15 +59,14 @@
 #include "mgs_internal.h"
 
 
-int mgs_export_stats_init(struct obd_device *obd,
+static int mgs_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 int reconnect,
                                  void *localdata)
 {
         lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -80,25 +79,22 @@ int mgs_export_stats_init(struct obd_device *obd,
                 num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                              LPROC_MGS_LAST - 1;
                 exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
-                                                LPROCFS_STATS_FLAG_NOPERCPU);
+                                                         LPROCFS_STATS_FLAG_NOPERCPU);
                 if (exp->exp_ops_stats == NULL)
                         return -ENOMEM;
                 lprocfs_init_ops_stats(LPROC_MGS_LAST, exp->exp_ops_stats);
                 mgs_stats_counter_init(exp->exp_ops_stats);
-                lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats",
-                                       exp->exp_ops_stats);
+                lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats", exp->exp_ops_stats);
 
                 /* Always add in ldlm_stats */
-                exp->exp_nid_stats->nid_ldlm_stats =
-                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
-                                            LPROCFS_STATS_FLAG_NOPERCPU);
+                exp->exp_nid_stats->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                                         LDLM_FIRST_OPC, 0);
                 if (exp->exp_nid_stats->nid_ldlm_stats == NULL)
                         return -ENOMEM;
 
                 lprocfs_init_ldlm_stats(exp->exp_nid_stats->nid_ldlm_stats);
 
-                rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc,
-                                            "ldlm_stats",
+                rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "ldlm_stats",
                                             exp->exp_nid_stats->nid_ldlm_stats);
         }
 
@@ -113,7 +109,7 @@ int mgs_client_add(struct obd_device *obd,
                    struct obd_export *exp,
                    void *localdata)
 {
-        return 0;
+        return mgs_export_stats_init(obd, exp, localdata);
 }
 
 /* Remove client export data from the MGS */
@@ -219,7 +215,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         /* Setup the configs dir */
-        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, MOUNT_CONFIGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, MOUNT_CONFIGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
@@ -230,7 +226,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* Need the iopen dir for fid2dentry, required by
            LLOG_ORIGIN_HANDLE_READ_HEADER */
-        dentry = lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
+        dentry = lookup_one_len("__iopen__", current->fs->pwd,
                                 strlen("__iopen__"));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -265,12 +261,16 @@ int mgs_fs_cleanup(struct obd_device *obd)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (mgs->mgs_configs_dir) {
+                /*CERROR("configs dir dcount=%d\n",
+                       atomic_read(&mgs->mgs_configs_dir->d_count));*/
                 l_dput(mgs->mgs_configs_dir);
                 mgs->mgs_configs_dir = NULL;
         }
 
+        shrink_dcache_parent(mgs->mgs_fid_de);
+        /*CERROR("fid dir dcount=%d\n",
+               atomic_read(&mgs->mgs_fid_de->d_count));*/
         dput(mgs->mgs_fid_de);
-        shrink_dcache_sb(mgs->mgs_sb);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 

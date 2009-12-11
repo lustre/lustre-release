@@ -84,7 +84,7 @@ typedef struct cfs_waitq {
 void cfs_waitq_init(struct cfs_waitq *waitq);
 void cfs_waitlink_init(struct cfs_waitlink *link);
 void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link);
-void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
+void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, 
                              struct cfs_waitlink *link);
 void cfs_waitq_forward(struct cfs_waitlink *link, struct cfs_waitq *waitq);
 void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
@@ -99,7 +99,6 @@ int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeou
                 cfs_waitlink_t    l;            \
                 cfs_waitq_timedwait(&l, s, t);  \
         } while (0)
-#define cfs_cond_resched() do {} while(0)
 
 #define CFS_TASK_INTERRUPTIBLE  (0)
 #define CFS_TASK_UNINT          (0)
@@ -274,7 +273,7 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 static inline void cfs_pause(cfs_duration_t d)
 {
         struct timespec s;
-
+        
         cfs_duration_nsec(d, &s);
         nanosleep(&s, NULL);
 }
@@ -295,7 +294,6 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 #define cfs_sigfillset(l) do {}         while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
 #define cfs_kernel_thread(l,m,n)        LBUG()
-#define cfs_kthread_run(fn,d,fmt,...)   LBUG()
 
 #ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);

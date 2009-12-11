@@ -102,11 +102,15 @@ static int ll_readlink_internal(struct inode *inode,
         /* do not return an error if we cannot cache the symlink locally */
         if (lli->lli_symlink_name) {
                 memcpy(lli->lli_symlink_name, *symname, symlen);
+                ptlrpc_req_finished (*request);
+                *request = NULL;
                 *symname = lli->lli_symlink_name;
         }
+
         RETURN(0);
 
-failed:
+ failed:
+        ptlrpc_req_finished (*request);
         RETURN (rc);
 }
 
@@ -127,8 +131,8 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
                 GOTO(out, rc);
 
         rc = vfs_readlink(dentry, buffer, buflen, symname);
- out:
         ptlrpc_req_finished(request);
+ out:
         up(&lli->lli_size_sem);
         RETURN(rc);
 }
@@ -176,7 +180,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
                 up(&lli->lli_size_sem);
         }
         if (rc) {
-                cfs_path_put(nd); /* Kernel assumes that ->follow_link()
+                path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
                 GOTO(out, rc);
         }
@@ -190,7 +194,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
            we delay request releasing until ll_put_link then. */
         RETURN(request);
 # else
-        if (lli->lli_symlink_name == NULL) {
+        if (request != NULL) {
                 /* falling back to recursive follow link if the request
                  * needs to be cleaned up still. */
                 rc = vfs_follow_link(nd, symname);

@@ -43,7 +43,6 @@
 #error sorry, lustre requires at least 2.6.5
 #endif
 
-#include <linux/fs_struct.h>
 #include <libcfs/linux/portals_compat25.h>
 
 #include <linux/lustre_patchless_compat.h>
@@ -57,25 +56,7 @@ struct ll_iattr_struct {
 #define ll_iattr_struct iattr
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
-#ifdef HAVE_FS_STRUCT_USE_PATH
-static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
-                struct dentry *dentry)
-{
-        struct path path;
-	struct path old_pwd;
-
-        path.mnt = mnt;
-        path.dentry = dentry;
-        write_lock(&fs->lock);
-        old_pwd = fs->pwd;
-        path_get(&path);
-        fs->pwd = path;
-        write_unlock(&fs->lock);
-
-	if (old_pwd.dentry)
-		path_put(&old_pwd);
-}
-#else
+#ifndef HAVE_SET_FS_PWD
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 struct dentry *dentry)
 {
@@ -94,7 +75,9 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 mntput(old_pwdmnt);
         }
 }
-#endif /* HAVE_FS_STRUCT_USE_PATH */
+#else
+#define ll_set_fs_pwd set_fs_pwd
+#endif /* HAVE_SET_FS_PWD */
 
 #ifdef HAVE_INODE_I_MUTEX
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
@@ -138,8 +121,8 @@ struct group_info *groups_alloc(int gidsetsize);
 void groups_free(struct group_info *ginfo);
 #else /* >= 2.6.4 */
 
-#define current_ngroups current_cred()->group_info->ngroups
-#define current_groups current_cred()->group_info->small_block
+#define current_ngroups current->group_info->ngroups
+#define current_groups current->group_info->small_block
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4) */
 
@@ -168,12 +151,7 @@ void groups_free(struct group_info *ginfo);
 #endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
-#ifndef HAVE_TRYLOCK_PAGE
 #define TryLockPage(page)               TestSetPageLocked(page)
-#else
-#define TryLockPage(page)               (!trylock_page(page))
-#endif
-
 #define Page_Uptodate(page)             PageUptodate(page)
 #define ll_redirty_page(page)           set_page_dirty(page)
 
@@ -181,12 +159,7 @@ void groups_free(struct group_info *ginfo);
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
-
-#ifdef HAVE_EXPORT_INODE_PERMISSION
-#define ll_permission(inode,mask,nd)    inode_permission(inode,mask)
-#else
 #define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
-#endif
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
@@ -203,19 +176,7 @@ void groups_free(struct group_info *ginfo);
 #define to_kdev_t(dev)                  (dev)
 #define kdev_t_to_nr(dev)               (dev)
 #define val_to_kdev(dev)                (dev)
-#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, (void *)(data));
-
-#ifdef HAVE_BLKDEV_PUT_2ARGS
-#define ll_blkdev_put(a, b) blkdev_put(a, b)
-#else
-#define ll_blkdev_put(a, b) blkdev_put(a)
-#endif
-
-#ifdef HAVE_DENTRY_OPEN_4ARGS
-#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c, d)
-#else
-#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c)
-#endif
+#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, data);
 
 #include <linux/writeback.h>
 
@@ -253,8 +214,6 @@ static inline int cleanup_group_info(void)
 #if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
 #define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
 extern void __d_rehash(struct dentry *dentry, int lock);
-#else
-extern void d_rehash_cond(struct dentry*, int lock);
 #endif
 
 #if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
@@ -304,13 +263,8 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #endif
 
 #ifdef HAVE_SECURITY_PLUG
-#ifdef HAVE_VFS_SYMLINK_5ARGS
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                 vfs_symlink(dir, dentry, mnt, path, mode)
-#else
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                vfs_symlink(dir, dentry, mnt, path)
-#endif
 #else
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
@@ -319,7 +273,7 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                        vfs_symlink(dir, dentry, path)
 #endif
-#endif /* HAVE_SECURITY_PLUG */
+#endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 #define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
@@ -337,16 +291,30 @@ static inline int mapping_has_pages(struct address_space *mapping)
                 (type *)( (char *)__mptr - offsetof(type,member) );})
 #endif
 
-#define UP_WRITE_I_ALLOC_SEM(i)   up_write(&(i)->i_alloc_sem)
-#define DOWN_WRITE_I_ALLOC_SEM(i) down_write(&(i)->i_alloc_sem)
+#ifdef HAVE_I_ALLOC_SEM
+#define UP_WRITE_I_ALLOC_SEM(i)   do { up_write(&(i)->i_alloc_sem); } while (0)
+#define DOWN_WRITE_I_ALLOC_SEM(i) do { down_write(&(i)->i_alloc_sem); } while(0)
 #define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
 
-#define UP_READ_I_ALLOC_SEM(i)    up_read(&(i)->i_alloc_sem)
-#define DOWN_READ_I_ALLOC_SEM(i)  down_read(&(i)->i_alloc_sem)
+#define UP_READ_I_ALLOC_SEM(i)    do { up_read(&(i)->i_alloc_sem); } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i)  do { down_read(&(i)->i_alloc_sem); } while (0)
 #define LASSERT_I_ALLOC_SEM_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
+#else
+#define UP_READ_I_ALLOC_SEM(i)              do { } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i)            do { } while (0)
+#define LASSERT_I_ALLOC_SEM_READ_LOCKED(i)  do { } while (0)
+
+#define UP_WRITE_I_ALLOC_SEM(i)             do { } while (0)
+#define DOWN_WRITE_I_ALLOC_SEM(i)           do { } while (0)
+#define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) do { } while (0)
+#endif
 
 #ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
 #define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
+#endif
+
+#ifndef HAVE_FILEMAP_FDATAWRITE
+#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #endif
 
 #include <linux/mpage.h>        /* for generic_writepages */
@@ -369,7 +337,7 @@ static inline int filemap_fdatawrite_range(struct address_space *mapping,
         wbc.end = end;
 #endif
 
-#ifdef HAVE_MAPPING_CAP_WRITEBACK_DIRTY
+#ifdef mapping_cap_writeback_dirty
         if (!mapping_cap_writeback_dirty(mapping))
 		rc = 0;
 #else
@@ -386,10 +354,11 @@ static inline int filemap_fdatawrite_range(struct address_space *mapping,
 #else
 int filemap_fdatawrite_range(struct address_space *mapping,
                              loff_t start, loff_t end);
-#endif /* HAVE_FILEMAP_FDATAWRITE_RANGE */
+#endif
 
 #ifdef HAVE_VFS_KERN_MOUNT
-static inline struct vfsmount *
+static inline 
+struct vfsmount *
 ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 {
         struct file_system_type *type = get_fs_type(fstype);
@@ -410,8 +379,9 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb), (sfs))
 #endif
 
-#ifndef HAVE_D_OBTAIN_ALIAS
-#define d_obtain_alias(inode) d_alloc_anon(inode)
+/* task_struct */
+#ifndef HAVE_TASK_PPTR
+#define p_pptr parent
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
@@ -437,25 +407,8 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
 #endif
 
-#ifdef HAVE_FILE_REMOVE_SUID
-#define ll_remove_suid(file, mnt)       file_remove_suid(file)
-#else
- #ifdef HAVE_SECURITY_PLUG
-  #ifdef HAVE_PATH_REMOVE_SUID
-   #define ll_remove_suid(file,mnt)      remove_suid(&file->f_path)
-  #else
-   #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry,mnt)
-  #endif
- #else
-  #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry)
- #endif
-#endif
-
-#ifndef HAVE_SYNCHRONIZE_RCU
-#define synchronize_rcu() synchronize_kernel()
-#endif
-
 #ifdef HAVE_SECURITY_PLUG
+#define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mnt,mode)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,mnt,dir,new,mnt1)
@@ -463,19 +416,30 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)            \
                 vfs_mknod(dir,entry,mnt,mode,dev)
 #define ll_security_inode_unlink(dir,entry,mnt)         \
-                security_inode_unlink(dir,entry,mnt)
+                security_inode_unlink(dir,entry,mnt)     
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
 #else
+#define ll_remove_suid(inode,mnt)               remove_suid(inode)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mode)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
 #define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)    vfs_mknod(dir,entry,mode,dev)
-#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)
+#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)     
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,new,new_dir)
-#endif /* HAVE_SECURITY_PLUG */
+#endif
+
+#ifndef get_cpu
+#ifdef CONFIG_PREEMPT
+#define get_cpu()       ({ preempt_disable(); smp_processor_id(); })
+#define put_cpu()       preempt_enable()
+#else
+#define get_cpu()       smp_processor_id()
+#define put_cpu()
+#endif
+#endif /* get_cpu & put_cpu */
 
 #ifndef for_each_possible_cpu
 #define for_each_possible_cpu(i) for_each_cpu(i)
@@ -483,62 +447,6 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 
 #ifndef cpu_to_node
 #define cpu_to_node(cpu)         0
-#endif
-
-#ifdef HAVE_REGISTER_SHRINKER
-
-#define SHRINKER_MASK_T gfp_t
-
-typedef int (*shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
-
-static inline
-struct shrinker *set_shrinker(int seek, shrinker_t func)
-{
-        struct shrinker *s;
-
-        s = kmalloc(sizeof(*s), GFP_KERNEL);
-        if (s == NULL)
-                return (NULL);
-
-        s->shrink = func;
-        s->seeks = seek;
-
-        register_shrinker(s);
-
-        return s;
-}
-
-static inline
-void remove_shrinker(struct shrinker *shrinker) 
-{
-        if (shrinker == NULL)
-                return;
-
-        unregister_shrinker(shrinker);
-        kfree(shrinker);
-}
-#endif /* HAVE_REGISTER_SHRINKER */
-
-#ifdef HAVE_BIO_ENDIO_2ARG
-#define cfs_bio_io_error(a,b)   bio_io_error((a))
-#define cfs_bio_endio(a,b,c)    bio_endio((a),(c))
-#else
-#define cfs_bio_io_error(a,b)   bio_io_error((a),(b))
-#define cfs_bio_endio(a,b,c)    bio_endio((a),(b),(c))
-#endif
-
-#ifdef HAVE_FS_STRUCT_USE_PATH
-#define cfs_fs_pwd(fs)       ((fs)->pwd.dentry)
-#define cfs_fs_mnt(fs)       ((fs)->pwd.mnt)
-#define cfs_path_put(nd)     path_put(&(nd)->path)
-#else
-#define cfs_fs_pwd(fs)       ((fs)->pwd)
-#define cfs_fs_mnt(fs)       ((fs)->pwdmnt)
-#define cfs_path_put(nd)     path_release(nd)
-#endif
-
-#ifndef list_for_each_safe_rcu
-#define list_for_each_safe_rcu(a,b,c) list_for_each_rcu(a, c)
 #endif
 
 #ifndef abs
@@ -564,67 +472,9 @@ static inline long labs(long x)
 #define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
 #endif
 
-#ifndef SLAB_DESTROY_BY_RCU
-#define SLAB_DESTROY_BY_RCU 0
-#endif
-
-#ifdef HAVE_INODE_IPRIVATE
-#define INODE_PRIVATE_DATA(inode)       ((inode)->i_private)
-#else
-#define INODE_PRIVATE_DATA(inode)       ((inode)->u.generic_ip)
-#endif
-
 #ifndef	HAVE_SYSCTL_VFS_CACHE_PRESSURE
 #define	sysctl_vfs_cache_pressure	100
 #endif
 
-#ifdef HAVE_SB_HAS_QUOTA_ACTIVE
-#define ll_sb_has_quota_active(sb, type) sb_has_quota_active(sb, type)
-#else
-#define ll_sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
-#endif
-
-#ifdef HAVE_SB_ANY_QUOTA_ACTIVE
-#define ll_sb_any_quota_active(sb) sb_any_quota_active(sb)
-#else
-#define ll_sb_any_quota_active(sb) sb_any_quota_enabled(sb)
-#endif
-
-static inline int
-ll_quota_on(struct super_block *sb, int off, int ver, char *name, int remount)
-{
-        if (sb->s_qcop->quota_on) {
-                return sb->s_qcop->quota_on(sb, off, ver, name
-#ifdef HAVE_QUOTA_ON_5ARGS
-                                            , remount
-#endif
-                                           );
-        }
-        else
-                return -ENOSYS;
-}
-
-static inline int ll_quota_off(struct super_block *sb, int off, int remount)
-{
-        if (sb->s_qcop->quota_off) {
-                return sb->s_qcop->quota_off(sb, off
-#ifdef HAVE_QUOTA_OFF_3ARGS
-                                             , remount
-#endif
-                                            );
-        }
-        else
-                return -ENOSYS;
-}
-
-#ifndef HAVE_BI_HW_SEGMENTS
-#define bio_hw_segments(q, bio) 0
-#endif
-
-#ifdef HAVE_FILE_UPDATE_TIME
-#define ll_update_time(file) file_update_time(file)
-#else
-#define ll_update_time(file) inode_update_time(file->f_mapping->host, 1)
-#endif
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

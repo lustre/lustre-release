@@ -37,8 +37,8 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
-#include <lustre_dlm.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_dlm.h>
 #include <lprocfs_status.h>
 #include <class_hash.h>
 
@@ -63,7 +63,7 @@ struct mds_export_data {
 
 struct osc_creator {
         spinlock_t              oscc_lock;
-        struct list_head        oscc_wait_create_list;
+        struct list_head        oscc_list;
         struct obd_device       *oscc_obd;
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
@@ -87,6 +87,7 @@ struct filter_export_data {
         struct list_head           fed_mod_list; /* files being modified */
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
+        struct brw_stats           fed_brw_stats;
 };
 
 #define fed_lcd_lock    fed_led.led_lcd_lock
@@ -94,30 +95,23 @@ struct filter_export_data {
 #define fed_lr_off      fed_led.led_lr_off
 #define fed_lr_idx      fed_led.led_lr_idx
 
+typedef struct nid_stat_uuid {
+        struct list_head ns_uuid_list;
+        struct obd_uuid  ns_uuid;
+} nid_stat_uuid_t;
+
 typedef struct nid_stat {
         lnet_nid_t               nid;
         struct hlist_node        nid_hash;
         struct list_head         nid_list;
+        struct list_head         nid_uuid_list;
         struct obd_device       *nid_obd;
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
         struct brw_stats        *nid_brw_stats;
         struct lprocfs_stats    *nid_ldlm_stats;
-        atomic_t                 nid_exp_ref_count; /* for obd_nid_stats_hash
-                                                           exp_nid_stats */
+        int                      nid_exp_ref_count;
 } nid_stat_t;
-
-#define nidstat_getref(nidstat)                                                \
-do {                                                                           \
-        atomic_inc(&(nidstat)->nid_exp_ref_count);                             \
-} while(0)
-
-#define nidstat_putref(nidstat)                                                \
-do {                                                                           \
-        atomic_dec(&(nidstat)->nid_exp_ref_count);                             \
-        LASSERTF(atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,              \
-                 "stat %p nid_exp_ref_count < 0\n", nidstat);                  \
-} while(0)
 
 enum obd_option {
         OBD_OPT_FORCE =         0x0001,
@@ -163,10 +157,7 @@ struct obd_export {
                                   exp_vbr_failed:1,
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
-                                  exp_libclient:1, /* liblustre client? */
-                                  /* client timed out and tried to reconnect,
-                                   * but couldn't because of active rpcs */
-                                  exp_abort_active_req:1;
+                                  exp_libclient:1; /* liblustre client? */
         struct list_head          exp_queued_rpc;  /* RPC to be handled */
         /* VBR: per-export last committed */
         __u64                     exp_last_committed;

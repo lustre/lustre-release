@@ -226,11 +226,10 @@ int class_attach(struct lustre_cfg *lcfg)
         cfs_waitq_init(&obd->obd_next_transno_waitq);
         cfs_waitq_init(&obd->obd_evict_inprogress_waitq);
         cfs_waitq_init(&obd->obd_llog_waitq);
+        init_mutex(&obd->obd_llog_alloc);
         init_mutex(&obd->obd_llog_cat_process);
-        init_rwsem(&obd->obd_observer_link_sem);
         CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
-        CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
@@ -306,25 +305,19 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
-        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH",
-                                              HASH_UUID_CUR_BITS,
-                                              HASH_UUID_MAX_BITS,
+        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH", 7, 7,
                                               &uuid_hash_ops, 0);
         if (!obd->obd_uuid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-export lustre hash */
-        obd->obd_nid_hash = lustre_hash_init("NID_HASH",
-                                             HASH_NID_CUR_BITS,
-                                             HASH_NID_MAX_BITS,
+        obd->obd_nid_hash = lustre_hash_init("NID_HASH", 7, 7,
                                              &nid_hash_ops, 0);
         if (!obd->obd_nid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-stats lustre hash */
-        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS",
-                                                   HASH_NID_STATS_CUR_BITS,
-                                                   HASH_NID_STATS_MAX_BITS,
+        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS", 7, 7,
                                                    &nid_stat_hash_ops, 0);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
@@ -746,28 +739,6 @@ void class_del_profiles(void)
         EXIT;
 }
 
-static int class_set_global(char *ptr, int val) {
-        ENTRY;
-
-        if (class_match_param(ptr, PARAM_AT_MIN, NULL) == 0)
-            at_min = val;
-        else if (class_match_param(ptr, PARAM_AT_MAX, NULL) == 0)
-                at_max = val;
-        else if (class_match_param(ptr, PARAM_AT_EXTRA, NULL) == 0)
-                at_extra = val;
-        else if (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, NULL) == 0)
-                at_early_margin = val;
-        else if (class_match_param(ptr, PARAM_AT_HISTORY, NULL) == 0)
-                at_history = val;
-        else
-                RETURN(-EINVAL);
-
-        CDEBUG(D_IOCTL, "global %s = %d\n", ptr, val);
-
-        RETURN(0);
-}
-
-
 /* We can't call ll_process_config directly because it lives in a module that
    must be loaded after this one. */
 static int (*client_process_config)(struct lustre_cfg *lcfg) = NULL;
@@ -835,15 +806,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 obd_timeout = max(lcfg->lcfg_num, 1U);
                 GOTO(out, err = 0);
         }
-        case LCFG_SET_LDLM_TIMEOUT: {
-                CDEBUG(D_IOCTL, "changing lustre ldlm_timeout from %d to %d\n",
-                       ldlm_timeout, lcfg->lcfg_num);
-                ldlm_timeout = max(lcfg->lcfg_num, 1U);
-                if (ldlm_timeout >= obd_timeout)
-                        ldlm_timeout = max(obd_timeout / 3, 1U);
-
-                GOTO(out, err = 0);
-        }
         case LCFG_SET_UPCALL: {
                 LCONSOLE_ERROR_MSG(0x15a, "recovery upcall is deprecated\n");
                 /* COMPAT_146 Don't fail on old configs */
@@ -857,24 +819,13 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         case LCFG_PARAM: {
-                char *tmp;
                 /* llite has no obd */
                 if ((class_match_param(lustre_cfg_string(lcfg, 1),
                                        PARAM_LLITE, 0) == 0) &&
                     client_process_config) {
                         err = (*client_process_config)(lcfg);
                         GOTO(out, err);
-                } else if ((class_match_param(lustre_cfg_string(lcfg, 1),
-                                              PARAM_SYS, &tmp) == 0)) {
-                        /* Global param settings */
-                        err = class_set_global(tmp, lcfg->lcfg_num);
-                        /* Note that since LCFG_PARAM is LCFG_REQUIRED, new
-                           unknown globals would cause config to fail */
-                        if (err)
-                                CWARN("Ignoring unknown param %s\n", tmp);
-                        GOTO(out, 0);
                 }
-
                 /* Fall through */
                 break;
         }
@@ -1008,7 +959,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 if (!matched) {
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
-                        /* rc = -EINVAL;        continue parsing other params */
+                        /* rc = -EINVAL;	continue parsing other params */
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n",
                                       lustre_cfg_string(lcfg, 0),
@@ -1529,7 +1480,7 @@ nidstats_get(struct hlist_node *hnode)
         struct nid_stat *ns;
 
         ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-        nidstat_getref(ns);
+        ns->nid_exp_ref_count++;
 
         RETURN(ns);
 }
@@ -1540,7 +1491,7 @@ nidstats_put(struct hlist_node *hnode)
         struct nid_stat *ns;
 
         ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-        nidstat_putref(ns);
+        ns->nid_exp_ref_count--;
 
         RETURN(ns);
 }

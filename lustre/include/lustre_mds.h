@@ -181,7 +181,7 @@ static inline void it_clear_disposition(struct lookup_intent *it, int flag)
 }
 
 int it_open_error(int phase, struct lookup_intent *it);
-void mdc_set_lock_data(__u64 *lockh, void *data, __u32 *lockbits);
+void mdc_set_lock_data(__u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
                       ldlm_iterator_t it, void *data);
 int mdc_revalidate_lock(struct obd_export *exp,
@@ -303,15 +303,9 @@ struct md_enqueue_info {
         struct lookup_intent    mi_it;
         struct lustre_handle    mi_lockh;
         struct dentry          *mi_dentry;
-        struct inode           *mi_dir;
         md_enqueue_cb_t         mi_cb;
         unsigned int            mi_generation;
         void                   *mi_cbdata;
 };
-
-/* these are local flags, used only on the client, private */
-#define M_CHECK_STALE           0200000000 
-#define M_JOIN_FILE             0400000000 /* its counterpart is
-                                            * MDS_OPEN_JOIN_FILE */
 
 #endif

@@ -45,7 +45,7 @@
 #ifndef _LUSTRE_FIEMAP_H
 #define _LUSTRE_FIEMAP_H
 
-#if !defined(HAVE_LINUX_FIEMAP_H) || !defined(__KERNEL__)
+#ifndef HAVE_LINUX_FIEMAP_H
 
 #include <linux/lustre_types.h>
 
@@ -77,6 +77,11 @@ struct ll_user_fiemap {
 
 #define FIEMAP_FLAG_SYNC         0x00000001 /* sync file data before map */
 #define FIEMAP_FLAG_XATTR        0x00000002 /* map extended attribute tree */
+#define FIEMAP_FLAG_DEVICE_ORDER 0x40000000 /* return device ordered mapping */
+
+#define FIEMAP_FLAGS_COMPAT    (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR | \
+                                FIEMAP_FLAG_DEVICE_ORDER)
+
 
 #define FIEMAP_EXTENT_LAST              0x00000001 /* Last extent in file. */
 #define FIEMAP_EXTENT_UNKNOWN           0x00000002 /* Data location unknown. */
@@ -98,11 +103,15 @@ struct ll_user_fiemap {
                                                     * support extents. Result
                                                     * merged for efficiency. */
 
+/* Lustre specific flags - use a high bit, don't conflict with upstream flag */
+#define FIEMAP_EXTENT_NO_DIRECT         0x40000000 /* Data mapping undefined */
+#define FIEMAP_EXTENT_NET               0x80000000 /* Data stored remotely.
+                                                    * Sets NO_DIRECT flag */
+
 #else
 
 #define ll_fiemap_extent fiemap_extent
 #define ll_user_fiemap   fiemap
-#define fe_device        fe_reserved[0]
 
 #endif /* HAVE_LINUX_FIEMAP_H */
 
@@ -117,16 +126,5 @@ static inline unsigned fiemap_size_to_count(size_t array_size)
         return ((array_size - sizeof(struct ll_user_fiemap)) /
                                                sizeof(struct ll_fiemap_extent));
 }
-
-#define FIEMAP_FLAG_DEVICE_ORDER 0x40000000 /* return device ordered mapping */
-
-#ifdef FIEMAP_FLAGS_COMPAT
-#undef FIEMAP_FLAGS_COMPAT
-#endif
-
-/* Lustre specific flags - use a high bit, don't conflict with upstream flag */
-#define FIEMAP_EXTENT_NO_DIRECT         0x40000000 /* Data mapping undefined */
-#define FIEMAP_EXTENT_NET               0x80000000 /* Data stored remotely.
-                                                    * Sets NO_DIRECT flag */
 
 #endif /* _LUSTRE_FIEMAP_H */

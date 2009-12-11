@@ -221,7 +221,7 @@ test_17() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
     # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
-    if at_is_enabled; then
+    if at_is_valid && at_is_enabled; then
         at_max_saved=$(at_max_get ost1)
         at_max_set $TIMEOUT ost1
     fi
@@ -242,13 +242,13 @@ test_17() {
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp $SAMPLE_FILE $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
-    [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved ost1
+    [ $at_max_saved -ne 0 ] && $(at_max_set $at_max_saved ost1)
     return 0
 }
 run_test 17 "timeout bulk get, don't evict client (2732)"
 
 test_18a() {
-    [ -z ${ost2_svc} ] && skip_env "needs 2 osts" && return 0
+    [ -z ${ost2_svc} ] && skip "needs 2 osts" && return 0
 
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
@@ -303,7 +303,7 @@ test_18b() {
     df $MOUNT > /dev/null 2>&1
     sleep 2
     # my understanding is that there should be nothing in the page
-    # cache after the client reconnects?
+    # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
     rm -f $f
@@ -339,7 +339,7 @@ test_18c() {
     df $MOUNT > /dev/null 2>&1
     sleep 2
     # my understanding is that there should be nothing in the page
-    # cache after the client reconnects?
+    # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
     rm -f $f
@@ -623,7 +623,7 @@ run_test 21h "drop open request and close reply while close and open are both in
 test_22() {
     f1=$DIR/${tfile}-1
     f2=$DIR/${tfile}-2
-
+    
     do_facet mds "lctl set_param fail_loc=0x80000115"
     multiop $f2 Oc &
     close_pid=$!
@@ -686,11 +686,6 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 	remote_mds || { skip "local MDS" && return 0; }
 
-	if [ $(facet_host mgs) = $(facet_host ost1) ]; then
-		skip "mgs and ost1 are at the same node"
-		return 0
-	fi
-
 	check_timeout || return 1
 
 	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
@@ -713,16 +708,9 @@ run_test 26a "evict dead exports"
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-	if [ $(facet_host mgs) = $(facet_host ost1) ]; then
-		skip "mgs and ost1 are at the same node"
-		return 0
-	fi
-
 	check_timeout || return 1
-	clients_up
-	zconf_mount `hostname` $MOUNT2 ||
-                { error "Failed to mount $MOUNT2"; return 2; }
-	sleep 1 # wait connections being established
+	client_df
+	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
 
 	local MDS_NEXP=$(do_facet mds lctl get_param -n mds.${mds_svc}.num_exports | cut -d' ' -f2)
 	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
@@ -732,19 +720,16 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	#force umount a client; exports should get evicted
 	zconf_umount `hostname` $MOUNT2 -f
 
-	# PING_INTERVAL max(obd_timeout / 4, 1U)
-	# PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
-
 	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
 	# But if there's a race to start the evictor from various obds, 
 	# the loser might have to wait for the next ping.
-	# = 9 * PING_INTERVAL + PING_INTERVAL
-	# = 10 PING_INTERVAL = 10 obd_timeout / 4 = 2.5 obd_timeout
-	# let's wait $((TIMEOUT * 3)) # bug 19887
+	# PING_INTERVAL max(obd_timeout / 4, 1U)
+	# sleep (2*PING_INTERVAL) 
+
         local rc=0
-        wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 3)) || \
+        wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4)) || \
 		error "Client was not evicted by ost" rc=1
-	wait_client_evicted mds $MDS_NEXP $((TIMEOUT * 3)) || \
+	wait_client_evicted mds $MDS_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4)) || \
 		error "Client was not evicted by mds"
 }
 run_test 26b "evict dead exports"
@@ -781,9 +766,9 @@ test_28() {      # bug 6086 - error adding new clients
 	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
 	do_facet mds lctl set_param fail_loc=0x8000012f
 	# fail once (evicted), reconnect fail (fail_loc), ok
-	client_up || client_up || client_up || error "reconnect failed"
+	df || (sleep 1; df) || (sleep 1; df) || error "reconnect failed"
 	rm -f $DIR/$tfile
-	fail mds # verify MDS last_rcvd can be loaded
+	fail mds		# verify MDS last_rcvd can be loaded
 }
 run_test 28 "handle error adding new clients (bug 6086)"
 
@@ -1031,31 +1016,6 @@ test_59() { # bug 10589
 	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 59 "Read cancel race on client eviction"
-
-test_61()
-{
-	local cflags='osc.*-OST0000-osc.connect_flags'
-	do_facet mds "lctl get_param -n $cflags |grep -q skip_orphan"
-	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
-
-	mkdir -p $DIR/d61 || error "mkdir dir $DIR/d61 failed"
-	# Set the default stripe of $DIR/d61 to put the files to ost1
-	$LFS setstripe -c 1 --index 0 $DIR/d61
-
-	replay_barrier mds
-	createmany -o $DIR/d61/$tfile-%d 10 
-	local oid=`do_facet ost1 "lctl get_param -n obdfilter.*OST0000.last_id"`
-
-	fail_abort mds
-	
-	touch $DIR/d61/$tfile
-	local id=`$LFS getstripe $DIR/d61/$tfile | awk '$2 ~ /^[1-9]+/ {print $2}'`
-	[ $id -le $oid ] && error "the orphan objid was reused, failed"
-
-	# Cleanup
-	rm -rf $DIR/d61
-}
-run_test 61 "Verify to not reuse orphan objects - bug 17485"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

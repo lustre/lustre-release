@@ -41,7 +41,7 @@
 
 /* Minimal MGC for liblustre: only used to read the config log from the MGS
    at setup time, no updates. */
-
+ 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -66,7 +66,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, obd, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -87,7 +87,7 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         ENTRY;
 
         switch (stage) {
-        case OBD_CLEANUP_EARLY:
+        case OBD_CLEANUP_EARLY: 
         case OBD_CLEANUP_EXPORTS:
                 /* client import will not have been cleaned. */
                 down_write(&obd->u.cli.cl_sem);
@@ -119,21 +119,22 @@ static int mgc_cleanup(struct obd_device *obd)
         ENTRY;
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-
+        
         ptlrpcd_decref();
 
         rc = client_obd_cleanup(obd);
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                         int *index)
+static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                         int count, struct llog_catid *logid, 
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);

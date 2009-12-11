@@ -168,15 +168,7 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_QUOTACHECK);
         LASSERTF(MDS_QUOTACTL == 48, " found %lld\n",
                  (long long)MDS_QUOTACTL);
-        LASSERTF(MDS_GETXATTR == 49, " found %lld\n",
-                 (long long)MDS_GETXATTR);
-        LASSERTF(MDS_SETXATTR == 50, " found %lld\n",
-                 (long long)MDS_SETXATTR);
-        LASSERTF(MDS_WRITEPAGE == 51, " found %lld\n",
-                 (long long)MDS_WRITEPAGE);
-        LASSERTF(MDS_IS_SUBDIR == 52, " found %lld\n",
-                 (long long)MDS_IS_SUBDIR);
-        LASSERTF(MDS_LAST_OPC == 53, " found %lld\n",
+        LASSERTF(MDS_LAST_OPC == 51, " found %lld\n",
                  (long long)MDS_LAST_OPC);
         LASSERTF(REINT_SETATTR == 1, " found %lld\n",
                  (long long)REINT_SETATTR);
@@ -539,8 +531,8 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_JOIN == 0x2000ULL);
         CLASSERT(OBD_CONNECT_ATTRFID == 0x4000ULL);
         CLASSERT(OBD_CONNECT_NODEVOH == 0x8000ULL);
-        CLASSERT(OBD_CONNECT_RMT_CLIENT == 0x10000ULL);
-        CLASSERT(OBD_CONNECT_RMT_CLIENT_FORCE == 0x20000ULL);
+        CLASSERT(OBD_CONNECT_LCL_CLIENT == 0x10000ULL);
+        CLASSERT(OBD_CONNECT_RMT_CLIENT == 0x20000ULL);
         CLASSERT(OBD_CONNECT_BRW_SIZE == 0x40000ULL);
         CLASSERT(OBD_CONNECT_QUOTA64 == 0x80000ULL);
         CLASSERT(OBD_CONNECT_MDS_CAPA == 0x100000ULL);
@@ -722,7 +714,6 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_FL_TRUNCLOCK == (0x00000800));
         CLASSERT(OBD_FL_CKSUM_CRC32 == (0x00001000));
         CLASSERT(OBD_FL_CKSUM_ADLER == (0x00002000));
-        CLASSERT(OBD_FL_SHRINK_GRANT == (0x00020000));
         CLASSERT(OBD_CKSUM_CRC32 == 1);
         CLASSERT(OBD_CKSUM_ADLER == 2);
 

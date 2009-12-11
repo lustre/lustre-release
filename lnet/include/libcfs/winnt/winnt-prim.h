@@ -427,7 +427,8 @@ typedef sigset_t cfs_sigset_t;
  * Task struct
  */
 
-#define CFS_MAX_SCHEDULE_TIMEOUT ((long_ptr)(~0UL>>12))
+#define MAX_SCHEDULE_TIMEOUT    ((long_ptr)(~0UL>>12))
+
 
 #define NGROUPS 1
 #define CFS_CURPROC_COMM_MAX (16)
@@ -541,14 +542,6 @@ int     wake_up_process(cfs_task_t * task);
 #define cfs_schedule_timeout(state, time)  schedule_timeout(time)
 void sleep_on(cfs_waitq_t *waitq);
 
-/* XXX cfs_cond_resched() is sometimes called at each loop iteration
- * (e.g. lustre_hash_for_each_empty()), so this definition is pretty
- * unefficient and can be harmful if we have many elements to process */
-static inline void cfs_cond_resched()
-{
-    schedule_timeout(1i64);
-}
-
 #define CFS_DECL_JOURNAL_DATA	
 #define CFS_PUSH_JOURNAL	    do {;} while(0)
 #define CFS_POP_JOURNAL		    do {;} while(0)
@@ -563,7 +556,7 @@ static inline void cfs_cond_resched()
 #define __init
 #endif
 
-#define request_module(x, y) (0)
+#define request_module(x) (0)
 
 #define EXPORT_SYMBOL(s)
 #define MODULE_AUTHOR(s)

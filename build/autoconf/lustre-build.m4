@@ -45,6 +45,19 @@ AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])# LB_CHECK_FILE
 
+#
+# LB_CHECK_FILES
+#
+# LB_CHECK_FILE over multiple files
+#
+AC_DEFUN([LB_CHECK_FILES],
+[AC_FOREACH([AC_FILE_NAME], [$1],
+  [LB_CHECK_FILE(AC_FILE_NAME,
+                 [AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_[]AC_FILE_NAME), 1,
+                                    [Define to 1 if you have the
+                                     file `]AC_File['.])
+$2],
+                 [$3])])])
 
 #
 # LB_ARG_LIBS_INCLUDES
@@ -152,7 +165,7 @@ AC_CONFIG_SUBDIRS(libsysio)
 # Handle internal/external lustre-iokit
 #
 AC_DEFUN([LB_PATH_LUSTREIOKIT],
-[AC_ARG_WITH([lustre-iokit],
+[AC_ARG_WITH([],
 	AC_HELP_STRING([--with-lustre-iokit=path],
 			[set path to lustre-iokit source (default is included lustre-iokit)]),
 	[],[
@@ -202,10 +215,6 @@ AC_DEFUN([LB_PATH_LDISKFS],
 			with_ldiskfs=no
 		fi
 	])
-AC_ARG_WITH([ldiskfs-inkernel],
-	AC_HELP_STRING([--with-ldiskfs-inkernel],
-			[use ldiskfs built in to the kernel]),
-	[with_ldiskfs=inkernel], [])
 AC_MSG_CHECKING([location of ldiskfs])
 case x$with_ldiskfs in
 	xyes)
@@ -219,12 +228,6 @@ case x$with_ldiskfs in
 	xno)
 		AC_MSG_RESULT([disabled])
 		;;
-	xinkernel)
-		AC_MSG_RESULT([inkernel])
-		LB_CHECK_FILE([$LINUX/include/linux/ldiskfs_fs.h],[],[
-			AC_MSG_ERROR([ldiskfs was not found in $LINUX/include/linux/ldiskfs_fs.h])
-		])
-		;;
 	*)
 		AC_MSG_RESULT([$with_ldiskfs])
 		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/linux/ldiskfs_fs.h],[],[
@@ -236,54 +239,9 @@ esac
 AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
 AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
-AM_CONDITIONAL(LDISKFS_IN_KERNEL, test x$with_ldiskfs = xinkernel)
-
-if test x$enable_ext4 = xyes ; then
-	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
-fi
 
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
-])
-
-AC_DEFUN([LC_KERNEL_WITH_EXT4],
-[if test -f $LINUX/fs/ext4/ext4.h ; then
-$1
-else
-$2
-fi
-])
-
-#
-# LB_HAVE_EXT4_ENABLED
-#
-AC_DEFUN([LB_HAVE_EXT4_ENABLED],
-[
-if test x$RHEL_KERNEL = xyes; then
-	AC_ARG_ENABLE([ext4],
-		 AC_HELP_STRING([--enable-ext4],
-				[enable building of ldiskfs based on ext4]),
-		[],
-		[
-			if test x$ldiskfs_is_ext4 = xyes; then
-				enable_ext4=yes
-			else
-				enable_ext4=no
-			fi
-		])
-else
-	case $LINUXRELEASE in
-	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
-	2.6.2[0-6]*) enable_ext4='no' ;;
-	*)  LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
-				[enable_ext4='no']) ;;
-	esac
-fi
-if test x$enable_ext4 = xyes; then
-	 ac_configure_args="$ac_configure_args --enable-ext4"
-fi
-AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
-AC_MSG_RESULT([$enable_ext4])
 ])
 
 # Define no libcfs by default.
@@ -315,129 +273,6 @@ AC_DEFUN([LB_DEFINE_LDISKFS_OPTIONS],
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFSDEV_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFSDEV_FS_XATTR, 1, [enable extented attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFSDEV_FS_SECURITY, 1, [enable fs security for ldiskfs])
-])
-
-#
-# LB_DEFINE_E2FSPROGS_NAMES
-#
-# Enable the use of alternate naming of ldiskfs-enabled e2fsprogs package.
-#
-AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
-[AC_ARG_WITH([ldiskfsprogs],
-        AC_HELP_STRING([--with-ldiskfsprogs],
-                       [use alternate names for ldiskfs-enabled e2fsprogs]),
-	[],[withval='no'])
-
-if test x$withval = xyes ; then
-	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
-	E2FSPROGS="ldiskfsprogs"
-	MKE2FS="mkfs.ldiskfs"
-	DEBUGFS="debug.ldiskfs"
-	TUNE2FS="tune.ldiskfs"
-	E2LABEL="label.ldiskfs"
-	DUMPE2FS="dump.ldiskfs"
-	E2FSCK="fsck.ldiskfs"
-	AC_MSG_RESULT([enabled])
-else
-	E2FSPROGS="e2fsprogs"
-	MKE2FS="mke2fs"
-	DEBUGFS="debugfs"
-	TUNE2FS="tune2fs"
-	E2LABEL="e2label"
-	DUMPE2FS="dumpe2fs"
-	E2FSCK="e2fsck"
-	AC_MSG_RESULT([disabled])
-fi
-	AC_DEFINE_UNQUOTED(E2FSPROGS, "$E2FSPROGS", [name of ldiskfs e2fsprogs package])
-	AC_DEFINE_UNQUOTED(MKE2FS, "$MKE2FS", [name of ldiskfs mkfs program])
-	AC_DEFINE_UNQUOTED(DEBUGFS, "$DEBUGFS", [name of ldiskfs debug program])
-	AC_DEFINE_UNQUOTED(TUNE2FS, "$TUNE2FS", [name of ldiskfs tune program])
-	AC_DEFINE_UNQUOTED(E2LABEL, "$E2LABEL", [name of ldiskfs label program])
-	AC_DEFINE_UNQUOTED(DUMPE2FS,"$DUMPE2FS", [name of ldiskfs dump program])
-	AC_DEFINE_UNQUOTED(E2FSCK, "$E2FSCK", [name of ldiskfs fsck program])
-])
-
-#
-# LB_DEFINE_E2FSPROGS_NAMES
-#
-# Enable the use of alternate naming of ldiskfs-enabled e2fsprogs package.
-#
-AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
-[AC_ARG_WITH([ldiskfsprogs],
-        AC_HELP_STRING([--with-ldiskfsprogs],
-                       [use alternate names for ldiskfs-enabled e2fsprogs]),
-	[],[withval='no'])
-
-if test x$withval = xyes ; then
-	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
-	E2FSPROGS="ldiskfsprogs"
-	MKE2FS="mkfs.ldiskfs"
-	DEBUGFS="debug.ldiskfs"
-	TUNE2FS="tune.ldiskfs"
-	E2LABEL="label.ldiskfs"
-	DUMPE2FS="dump.ldiskfs"
-	E2FSCK="fsck.ldiskfs"
-	AC_MSG_RESULT([enabled])
-else
-	E2FSPROGS="e2fsprogs"
-	MKE2FS="mke2fs"
-	DEBUGFS="debugfs"
-	TUNE2FS="tune2fs"
-	E2LABEL="e2label"
-	DUMPE2FS="dumpe2fs"
-	E2FSCK="e2fsck"
-	AC_MSG_RESULT([disabled])
-fi
-	AC_DEFINE_UNQUOTED(E2FSPROGS, "$E2FSPROGS", [name of ldiskfs e2fsprogs package])
-	AC_DEFINE_UNQUOTED(MKE2FS, "$MKE2FS", [name of ldiskfs mkfs program])
-	AC_DEFINE_UNQUOTED(DEBUGFS, "$DEBUGFS", [name of ldiskfs debug program])
-	AC_DEFINE_UNQUOTED(TUNE2FS, "$TUNE2FS", [name of ldiskfs tune program])
-	AC_DEFINE_UNQUOTED(E2LABEL, "$E2LABEL", [name of ldiskfs label program])
-	AC_DEFINE_UNQUOTED(DUMPE2FS,"$DUMPE2FS", [name of ldiskfs dump program])
-	AC_DEFINE_UNQUOTED(E2FSCK, "$E2FSCK", [name of ldiskfs fsck program])
-])
-
-#
-# LB_DEFINE_E2FSPROGS_NAMES
-#
-# Enable the use of alternate naming of ldiskfs-enabled e2fsprogs package.
-#
-AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
-[AC_ARG_WITH([ldiskfsprogs],
-        AC_HELP_STRING([--with-ldiskfsprogs],
-                       [use alternate names for ldiskfs-enabled e2fsprogs]),
-	[],[withval='no'])
-
-if test x$withval = xyes ; then
-	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
-	E2FSPROGS="ldiskfsprogs"
-	MKE2FS="mkfs.ldiskfs"
-	DEBUGFS="debug.ldiskfs"
-	TUNE2FS="tune.ldiskfs"
-	E2LABEL="label.ldiskfs"
-	DUMPE2FS="dump.ldiskfs"
-	E2FSCK="fsck.ldiskfs"
-	AC_MSG_RESULT([enabled])
-else
-	E2FSPROGS="e2fsprogs"
-	MKE2FS="mke2fs"
-	DEBUGFS="debugfs"
-	TUNE2FS="tune2fs"
-	E2LABEL="e2label"
-	DUMPE2FS="dumpe2fs"
-	E2FSCK="e2fsck"
-	AC_MSG_RESULT([disabled])
-fi
-	AC_DEFINE_UNQUOTED(E2FSPROGS, "$E2FSPROGS", [name of ldiskfs e2fsprogs package])
-	AC_DEFINE_UNQUOTED(MKE2FS, "$MKE2FS", [name of ldiskfs mkfs program])
-	AC_DEFINE_UNQUOTED(DEBUGFS, "$DEBUGFS", [name of ldiskfs debug program])
-	AC_DEFINE_UNQUOTED(TUNE2FS, "$TUNE2FS", [name of ldiskfs tune program])
-	AC_DEFINE_UNQUOTED(E2LABEL, "$E2LABEL", [name of ldiskfs label program])
-	AC_DEFINE_UNQUOTED(DUMPE2FS,"$DUMPE2FS", [name of ldiskfs dump program])
-	AC_DEFINE_UNQUOTED(E2FSCK, "$E2FSCK", [name of ldiskfs fsck program])
 ])
 
 #
@@ -524,73 +359,21 @@ AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
 # LB_PATH_DMU
 #
 AC_DEFUN([LB_PATH_DMU],
-[AC_ARG_ENABLE([dmu],
-	AC_HELP_STRING([--enable-dmu],
-	               [enable the DMU backend]),
-	[],[with_dmu='default'])
-AC_MSG_CHECKING([whether to enable DMU])
-case x$with_dmu in
-	xyes)
-		dmu_osd='yes'
-		;;
-	xno)
-		dmu_osd='no'
-		;;
-	xdefault)
-		if test x$enable_uoss = xyes -a x$posix_osd != xyes; then
-			# Enable the DMU if we're configuring a userspace server
-			dmu_osd='yes'
-		else
-			# Enable the DMU by default on the b_hd_kdmu branch
-			if test -d $PWD/zfs -a x$linux25$enable_server = xyesyes; then
-				dmu_osd='yes'
-			else
-				dmu_osd='no'
-			fi
-		fi
-		;;
-	*)
-		dmu_osd='yes'
-		;;
-esac
-AC_MSG_RESULT([$dmu_osd])
-if test x$dmu_osd = xyes; then
+[AC_MSG_CHECKING([whether to enable DMU])
+if test x$enable_uoss = xyes -a x$enable_posix_osd != xyes; then
+	DMU_SRC="$PWD/lustre/zfs-lustre"
 	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
-	if test x$enable_uoss = xyes; then
-		# Userspace DMU
-		DMU_SRC="$PWD/lustre/zfs-lustre"
-		AC_SUBST(DMU_SRC)
-		LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
-			AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
-		])
-		AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
-	else
-		# Kernel DMU
-		SPL_SUBDIR="spl"
-		ZFS_SUBDIR="zfs"
-
-		SPL_DIR="$PWD/$SPL_SUBDIR"
-		ZFS_DIR="$PWD/$ZFS_SUBDIR"
-
-		LB_CHECK_FILE([$SPL_DIR/module/spl/spl-generic.c],[],[
-			AC_MSG_ERROR([A complete SPL tree was not found in $SPL_DIR.])
-		])
-
-		LB_CHECK_FILE([$ZFS_DIR/module/zfs/dmu.c],[],[
-			AC_MSG_ERROR([A complete kernel DMU tree was not found in $ZFS_DIR.])
-		])
-
-		AC_CONFIG_SUBDIRS(spl)
-		ac_configure_args="$ac_configure_args --with-spl=$SPL_DIR"
-		AC_CONFIG_SUBDIRS(zfs)
-	fi
+	AC_MSG_RESULT([yes])
+	LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
+		AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
+	])
+	AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
+	dmu_osd='yes'
+else
+	AC_MSG_RESULT([no])
 fi
-AC_SUBST(SPL_SUBDIR)
-AC_SUBST(ZFS_SUBDIR)
-AC_SUBST(SPL_DIR)
-AC_SUBST(ZFS_DIR)
+AC_SUBST(DMU_SRC)
 AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
-AM_CONDITIONAL(KDMU, test x$dmu_osd$enable_uoss = xyesno)
 ])
 
 #
@@ -901,32 +684,24 @@ LB_PROG_CC
 
 LB_UOSS
 LB_POSIX_OSD
+LB_PATH_DMU
 
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
 LC_CONFIG_CLIENT_SERVER
 
-# two macros for cmd3 
+# three macros for cmd3 
 m4_ifdef([LC_CONFIG_SPLIT], [LC_CONFIG_SPLIT])
 LN_CONFIG_CDEBUG
 LC_QUOTA
 
 LB_CONFIG_MODULES
-LN_CONFIG_USERSPACE
-LB_HAVE_EXT4_ENABLED
 
-LB_PATH_DMU
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LDISKFS
 LB_PATH_LUSTREIOKIT
-
-LB_DEFINE_E2FSPROGS_NAMES
-
-LB_DEFINE_E2FSPROGS_NAMES
-
-LB_DEFINE_E2FSPROGS_NAMES
 
 LC_CONFIG_LIBLUSTRE
 LIBCFS_CONFIGURE

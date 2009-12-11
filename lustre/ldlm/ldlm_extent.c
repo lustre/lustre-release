@@ -727,7 +727,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                                  * break earlier because otherwise, we will go
                                  * to restart and ldlm_resource_unlink will be
                                  * called and it causes the interval node to be
-                                 * freed. Then we will fail at
+                                 * freed. Then we will fail at 
                                  * ldlm_extent_add_lock() */
                                 *flags &= ~(LDLM_FL_BLOCK_GRANTED | LDLM_FL_BLOCK_CONV |
                                             LDLM_FL_BLOCK_WAIT);

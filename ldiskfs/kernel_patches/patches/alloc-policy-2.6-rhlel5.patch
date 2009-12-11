@@ -1,0 +1,100 @@
+Index: linux-stage/fs/ext3/ialloc.c
+===================================================================
+--- linux-stage.orig/fs/ext3/ialloc.c	2009-05-07 10:04:27.000000000 +0800
++++ linux-stage/fs/ext3/ialloc.c	2009-05-07 10:07:52.000000000 +0800
+@@ -821,6 +821,36 @@
+ 	return ERR_PTR(err);
+ }
+ 
++unsigned long ext3_find_reverse(struct super_block *sb)
++{
++	struct ext3_group_desc *desc;
++	struct buffer_head *bitmap_bh = NULL;
++	int group;
++	unsigned long ino, offset;
++
++	for (offset = (EXT3_INODES_PER_GROUP(sb) >> 1); offset >= 0;
++	     offset >>= 1) {
++		for (group = EXT3_SB(sb)->s_groups_count - 1; group >= 0;
++		     --group) {
++			desc = ext3_get_group_desc(sb, group, NULL);
++			if (desc->bg_free_inodes_count == 0)
++				continue;
++
++			bitmap_bh = read_inode_bitmap(sb, group);
++			if (!bitmap_bh)
++				continue;
++
++			ino = ext3_find_next_zero_bit((unsigned long *)
++					bitmap_bh->b_data,
++					EXT3_INODES_PER_GROUP(sb), offset);
++			if (ino < EXT3_INODES_PER_GROUP(sb))
++				return(group * EXT3_INODES_PER_GROUP(sb) +
++				       ino + 1);
++		}
++	}
++	return 0;
++}
++
+ /* Verify that we are loading a valid orphan from disk */
+ struct inode *ext3_orphan_get(struct super_block *sb, unsigned long ino)
+ {
+Index: linux-stage/fs/ext3/namei.c
+===================================================================
+--- linux-stage.orig/fs/ext3/namei.c	2009-05-07 10:04:28.000000000 +0800
++++ linux-stage/fs/ext3/namei.c	2009-05-07 10:09:35.000000000 +0800
+@@ -146,14 +146,23 @@
+ 	u16 size;
+ };
+ 
++/*
++ * dentry_param used by ext3_new_inode_wantedi()
++ */
+ #define LVFS_DENTRY_PARAM_MAGIC		20070216UL
+ struct lvfs_dentry_params
+ {
+-	unsigned long   p_inum;
+-	void            *p_ptr;	
+-	u32		magic;
++	unsigned long   ldp_inum;
++	long            ldp_flags;
++	u32		ldp_magic;
+ };
+ 
++/* Only use the least 3 bits of ldp_flags for goal policy */
++typedef enum {
++	DP_GOAL_POLICY       = 0,
++	DP_LASTGROUP_REVERSE = 1,
++} dp_policy_t;
++
+ #ifdef CONFIG_EXT3_INDEX
+ static inline unsigned dx_get_block (struct dx_entry *entry);
+ static void dx_set_block (struct dx_entry *entry, unsigned value);
+@@ -1752,8 +1761,13 @@
+ 	if (dentry->d_fsdata != NULL) {
+ 		struct lvfs_dentry_params *param = dentry->d_fsdata;
+ 
+-		if (param->magic == LVFS_DENTRY_PARAM_MAGIC)
+-			inum = param->p_inum;
++		if (param->ldp_magic == LVFS_DENTRY_PARAM_MAGIC) {
++			if ((dp_policy_t)(param->ldp_flags & 0x7) ==
++			    DP_LASTGROUP_REVERSE)
++				inum = ext3_find_reverse(dir->i_sb);
++                        else /* DP_GOAL_POLICY */
++				inum = param->ldp_inum;
++                }
+ 	}
+ 	return ext3_new_inode(handle, dir, mode, inum);
+ }
+Index: linux-stage/include/linux/ext3_fs.h
+===================================================================
+--- linux-stage.orig/include/linux/ext3_fs.h	2009-05-07 10:04:28.000000000 +0800
++++ linux-stage/include/linux/ext3_fs.h	2009-05-07 10:09:59.000000000 +0800
+@@ -972,6 +972,7 @@
+ /* ialloc.c */
+ extern struct inode * ext3_new_inode (handle_t *, struct inode *, int,
+ 				      unsigned long);
++extern unsigned long ext3_find_reverse(struct super_block *);
+ extern void ext3_free_inode (handle_t *, struct inode *);
+ extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
+ extern unsigned long ext3_count_free_inodes (struct super_block *);

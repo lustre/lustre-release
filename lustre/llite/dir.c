@@ -439,26 +439,15 @@ static inline __u32 hash_x_index(__u32 value)
         return ((__u32)~0) - value;
 }
 
-/**
+/*
  * Layout of readdir pages, as transmitted on wire.
- */
+ */     
 struct lu_dirent {
-        /** valid if LUDA_FID is set. */
         struct lu_fid lde_fid;
-        /** a unique entry identifier: a hash or an offset. */
         __u64         lde_hash;
-        /** total record length, including all attributes. */
         __u16         lde_reclen;
-        /** name length */
         __u16         lde_namelen;
-        /** optional variable size attributes following this entry.
-         *  taken from enum lu_dirent_attrs.
-         */
-        __u32         lde_attrs;
-        /** name is followed by the attributes indicated in ->ldp_attrs, in
-         *  their natural order. After the last attribute, padding bytes are
-         *  added to make ->lde_reclen a multiple of 8.
-         */
+        __u32         lde_padding;
         char          lde_name[0];
 };
 
@@ -471,73 +460,9 @@ struct lu_dirpage {
         struct lu_dirent ldp_entries[0];
 };
 
-/*
- * Definitions of optional directory entry attributes formats.
- *
- * Individual attributes do not have their length encoded in a generic way. It
- * is assumed that consumer of an attribute knows its format. This means that
- * it is impossible to skip over an unknown attribute, except by skipping over all
- * remaining attributes (by using ->lde_reclen), which is not too
- * constraining, because new server versions will append new attributes at
- * the end of an entry.
- */
-
-/**
- * Fid directory attribute: a fid of an object referenced by the entry. This
- * will be almost always requested by the client and supplied by the server.
- *
- * Aligned to 8 bytes.
- */
-/* To have compatibility with 1.8, lets have fid in lu_dirent struct. */
-
-/**
- * File type.
- *
- * Aligned to 2 bytes.
- */
-struct luda_type {
-        __u16 lt_type;
-};
-
 enum lu_dirpage_flags {
         LDF_EMPTY = 1 << 0
 };
-
-static inline int lu_dirent_calc_size(int namelen, __u16 attr)
-{
-        int size;
-
-        if (attr & LUDA_TYPE) {
-                const unsigned align = sizeof(struct luda_type) - 1;
-                size = (sizeof(struct lu_dirent) + namelen + align) & ~align;
-                size += sizeof(struct luda_type);
-        } else
-                size = sizeof(struct lu_dirent) + namelen;
-
-        return (size + 7) & ~7;
-}
-
-/**
- * return IF_* type for given lu_dirent entry.
- * IF_* flag shld be converted to particular OS file type in
- * platform llite module.
- */
-__u16 ll_dirent_type_get(struct lu_dirent *ent)
-{
-        __u16 type = 0;
-        struct luda_type *lt;
-        int len = 0;
-
-        if (le32_to_cpu(ent->lde_attrs) & LUDA_TYPE) {
-                const unsigned align = sizeof(struct luda_type) - 1;
-
-                len = le16_to_cpu(ent->lde_namelen);
-                len = (len + align) & ~align;
-                lt = (void *) ent->lde_name + len;
-                type = CFS_IFTODT(le16_to_cpu(lt->lt_type));
-        }
-        return type;
-}
 
 static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
 {
@@ -562,8 +487,8 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 static inline int lu_dirent_size(struct lu_dirent *ent)
 {
         if (le16_to_cpu(ent->lde_reclen) == 0) {
-                return lu_dirent_calc_size(le16_to_cpu(ent->lde_namelen),
-                                           le32_to_cpu(ent->lde_attrs));
+                return (sizeof(*ent) +
+                        le16_to_cpu(ent->lde_namelen) + 3) & ~3;
         }
         return le16_to_cpu(ent->lde_reclen);
 }
@@ -810,7 +735,6 @@ static int ll_readdir_20(struct file *filp, void *cookie, filldir_t filldir)
         int rc;
         int done;
         int shift;
-        __u16 type;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu\n",
@@ -870,9 +794,9 @@ static int ll_readdir_20(struct file *filp, void *cookie, filldir_t filldir)
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
                                 ino  = ll_fid_build_ino(sbi, (struct ll_fid*)&fid);
-                                type = ll_dirent_type_get(ent);
+
                                 done = filldir(cookie, name, namelen,
-                                               (loff_t)hash, ino, type);
+                                               (loff_t)hash, ino, DT_UNKNOWN);
                         }
                         next = le64_to_cpu(dp->ldp_hash_end);
                         ll_put_page(page);
@@ -1130,11 +1054,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
         switch(cmd) {
-        case FSFILT_IOC_GETFLAGS:
-        case FSFILT_IOC_SETFLAGS:
+        case EXT3_IOC_GETFLAGS:
+        case EXT3_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case FSFILT_IOC_GETVERSION_OLD:
-        case FSFILT_IOC_GETVERSION:
+        case EXT3_IOC_GETVERSION_OLD:
+        case EXT3_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
@@ -1491,7 +1415,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                 GOTO(out_quotactl, rc = -EPERM);
                         break;
                 case Q_GETQUOTA:
-                        if (((type == USRQUOTA && cfs_curproc_euid() != id) ||
+                        if (((type == USRQUOTA && current->euid != id) ||
                              (type == GRPQUOTA && !in_egroup_p(id))) &&
                             !cfs_capable(CFS_CAP_SYS_ADMIN))
                                 GOTO(out_quotactl, rc = -EPERM);
@@ -1582,13 +1506,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (copy_to_user((void *)arg, obd->obd_name,
                                 strlen(obd->obd_name) + 1))
                         RETURN (-EFAULT);
-                RETURN(0);
-        }
-        case LL_IOC_PATH2FID: {
-                if (copy_to_user((void *)arg, ll_inode_lu_fid(inode),
-                                 sizeof(struct lu_fid)))
-                        RETURN(-EFAULT);
-
                 RETURN(0);
         }
         default:

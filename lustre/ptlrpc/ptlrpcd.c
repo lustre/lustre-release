@@ -69,33 +69,11 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
         cfs_waitq_signal(&rq_set->set_waitq);
 }
 
-/*
- * Move all request from an existing request set to the ptlrpcd queue.
- * All requests from the set must be in phase RQ_PHASE_NEW.
- */
-void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
-{
-        struct list_head *tmp, *pos;
-
-        list_for_each_safe(pos, tmp, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        list_entry(pos, struct ptlrpc_request, rq_set_chain);
-
-                LASSERT(req->rq_phase == RQ_PHASE_NEW);
-                list_del_init(&req->rq_set_chain);
-                req->rq_set = NULL;
-                ptlrpcd_add_req(req);
-                set->set_remaining--;
-        }
-        LASSERT(set->set_remaining == 0);
-}
-EXPORT_SYMBOL(ptlrpcd_add_rqset);
-
-/*
+/* 
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
-int ptlrpcd_add_req(struct ptlrpc_request *req)
+void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc;
         int rc;
@@ -106,6 +84,11 @@ int ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_recovery_pc;
         rc = ptlrpc_set_add_new_req(pc, req);
         if (rc) {
+                int (*interpreter)(struct ptlrpc_request *,
+                                   void *, int);
+                                
+                interpreter = req->rq_interpret_reply;
+
                 /*
                  * Thread is probably in stop now so we need to
                  * kill this rpc as it was not added. Let's call
@@ -113,12 +96,12 @@ int ptlrpcd_add_req(struct ptlrpc_request *req)
                  * so that higher levels might free assosiated
                  * resources.
                 */
-
-                ptlrpc_req_interpret(req, -EBADR);
+                req->rq_status = -EBADR;
+                interpreter(req, &req->rq_async_args,
+                            req->rq_status);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
         }
-        return rc;
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
@@ -133,8 +116,8 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
                 list_del_init(&req->rq_set_chain);
                 ptlrpc_set_add_req(pc->pc_set, req);
-                /*
-                 * Need to calculate its timeout.
+                /* 
+                 * Need to calculate its timeout. 
                  */
                 rc = 1;
         }
@@ -143,9 +126,9 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         if (pc->pc_set->set_remaining) {
                 rc = rc | ptlrpc_check_set(pc->pc_set);
 
-                /*
+                /* 
                  * XXX: our set never completes, so we prune the completed
-                 * reqs after each iteration. boy could this be smarter.
+                 * reqs after each iteration. boy could this be smarter. 
                  */
                 list_for_each_safe(pos, tmp, &pc->pc_set->set_requests) {
                         req = list_entry(pos, struct ptlrpc_request,
@@ -160,8 +143,8 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         }
 
         if (rc == 0) {
-                /*
-                 * If new requests have been added, make sure to wake up.
+                /* 
+                 * If new requests have been added, make sure to wake up. 
                  */
                 spin_lock(&pc->pc_set->set_new_req_lock);
                 rc = !list_empty(&pc->pc_set->set_new_requests);
@@ -172,7 +155,7 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 }
 
 #ifdef __KERNEL__
-/*
+/* 
  * ptlrpc's code paths like to execute in process context, so we have this
  * thread which spins on a set which contains the io rpcs. llite specifies
  * ptlrpcd's set when it pushes pages down into the oscs.
@@ -190,18 +173,18 @@ static int ptlrpcd(void *arg)
 
         complete(&pc->pc_starting);
 
-        /*
+        /* 
          * This mainloop strongly resembles ptlrpc_set_wait() except that our
          * set never completes.  ptlrpcd_check() calls ptlrpc_check_set() when
-         * there are requests in the set. New requests come in on the set's
-         * new_req_list and ptlrpcd_check() moves them into the set.
+         * there are requests in the set. New requests come in on the set's 
+         * new_req_list and ptlrpcd_check() moves them into the set. 
          */
         do {
                 struct l_wait_info lwi;
                 int timeout;
 
                 timeout = ptlrpc_set_next_timeout(pc->pc_set);
-                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),
+                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1), 
                                   ptlrpc_expired_set, pc->pc_set);
 
                 l_wait_event(pc->pc_set->set_waitq, ptlrpcd_check(pc), &lwi);
@@ -215,14 +198,14 @@ static int ptlrpcd(void *arg)
                         exit++;
                 }
 
-                /*
+                /* 
                  * Let's make one more loop to make sure that ptlrpcd_check()
                  * copied all raced new rpcs into the set so we can kill them.
                  */
         } while (exit < 2);
 
-        /*
-         * Wait for inflight requests to drain.
+        /* 
+         * Wait for inflight requests to drain. 
          */
         if (!list_empty(&pc->pc_set->set_requests))
                 ptlrpc_set_wait(pc->pc_set);
@@ -242,8 +225,8 @@ int ptlrpcd_check_async_rpcs(void *arg)
         struct ptlrpcd_ctl *pc = arg;
         int                  rc = 0;
 
-        /*
-         * Single threaded!!
+        /* 
+         * Single threaded!! 
          */
         pc->pc_recurred++;
 
@@ -251,8 +234,8 @@ int ptlrpcd_check_async_rpcs(void *arg)
                 rc = ptlrpcd_check(pc);
                 if (!rc)
                         ptlrpc_expired_set(pc->pc_set);
-                /*
-                 * XXX: send replay requests.
+                /* 
+                 * XXX: send replay requests. 
                  */
                 if (pc == &ptlrpcd_recovery_pc)
                         rc = ptlrpcd_check(pc);
@@ -276,9 +259,9 @@ int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
         int rc = 0;
         ENTRY;
-
-        /*
-         * Do not allow start second thread for one pc.
+ 
+        /* 
+         * Do not allow start second thread for one pc. 
          */
         if (test_bit(LIOD_START, &pc->pc_flags)) {
                 CERROR("Starting second thread (%s) for same pc %p\n",
@@ -290,7 +273,7 @@ int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
         spin_lock_init(&pc->pc_lock);
-        strncpy(pc->pc_name, name, sizeof(pc->pc_name) - 1);
+        snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)

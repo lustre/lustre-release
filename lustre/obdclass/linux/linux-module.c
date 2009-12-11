@@ -204,8 +204,7 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
         int err = 0;
         ENTRY;
 
-        /* Allow non-root access for OBD_IOC_PING_TARGET - used by lfs check */
-        if (!cfs_capable(CFS_CAP_SYS_ADMIN) && (cmd != OBD_IOC_PING_TARGET))
+        if (current->fsuid != 0)
                 RETURN(err = -EACCES);
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);
@@ -420,14 +419,13 @@ int class_procfs_init(void)
         ENTRY;
 
         obd_sysctl_init();
-        proc_lustre_root = lprocfs_register("fs/lustre", NULL,
-                                              lprocfs_base, NULL);
+        proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
         if (!proc_lustre_root) {
                 printk(KERN_ERR
                        "LustreError: error registering /proc/fs/lustre\n");
                 RETURN(-ENOMEM);
         }
-
+        proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
         entry = create_proc_entry("devices", 0444, proc_lustre_root);
         if (entry == NULL) {
                 CERROR("error registering /proc/fs/lustre/devices\n");

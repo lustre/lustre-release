@@ -238,23 +238,23 @@ var_clusterFileSystems(struct variable *vp,
 
     case SYSVERSION:
         sprintf(file_path, "%s%s", LUSTRE_PATH,"version");
-        if( SUCCESS != read_string(file_path, (char *)string,sizeof(string)))
+        if( SUCCESS != read_string(file_path, string,sizeof(string)))
             return NULL;
-        *var_len = strlen((char *)string);
+        *var_len = strlen(string);
         return (unsigned char *) string;
 
     case SYSKERNELVERSION:
         sprintf(file_path, "%s%s", LUSTRE_PATH,"kernel_version");
-        if( SUCCESS != read_string(file_path, (char *)string,sizeof(string)))
+        if( SUCCESS != read_string(file_path, string,sizeof(string)))
             return NULL;
-        *var_len = strlen((char *)string);
+        *var_len = strlen(string);
         return (unsigned char *) string;
 
     case SYSHEALTHCHECK:
         sprintf(file_path, "%s%s", LUSTRE_PATH,FILENAME_SYSHEALTHCHECK);
-        if( SUCCESS != read_string(file_path, (char *)string,sizeof(string)))
+        if( SUCCESS != read_string(file_path, string,sizeof(string)))
             return NULL;
-        *var_len = strlen((char*)string);
+        *var_len = strlen(string);
         return (unsigned char *) string;
 
     case SYSSTATUS:
@@ -574,7 +574,7 @@ write_sysStatus(int      action,
 {
   static long *long_ret;
   int size;
-  int new_value;
+  int pid, new_value;
 
 
 

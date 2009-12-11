@@ -81,19 +81,10 @@ extern int llapi_file_open_pool(const char *name, int flags, int mode,
                                 unsigned long long stripe_size,
                                 int stripe_offset, int stripe_count,
                                 int stripe_pattern, char *pool_name);
-extern int llapi_poollist(const char *name);
+extern int llapi_poollist(char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
-
-#define VERBOSE_COUNT   0x1
-#define VERBOSE_SIZE    0x2
-#define VERBOSE_OFFSET  0x4 
-#define VERBOSE_POOL    0x8
-#define VERBOSE_OBJID   0x10
-#define VERBOSE_DETAIL  0x20 
-#define VERBOSE_ALL     (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
-                         VERBOSE_POOL | VERBOSE_OBJID)
 
 struct find_param {
         unsigned int maxdepth;
@@ -149,7 +140,6 @@ struct find_param {
         char poolname[LOV_MAXPOOLNAME + 1];
 };
 
-extern int llapi_ostlist(char *path, struct find_param *param);
 extern int llapi_getstripe(char *path, struct find_param *param);
 extern int llapi_find(char *path, struct find_param *param);
 
@@ -163,17 +153,8 @@ extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
 extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
-extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
-extern int llapi_search_mounts(const char *pathname, int index, 
-                               char *mntdir, char *fsname);
-extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
-
-extern void llapi_ping_target(char *obd_type, char *obd_name,
-                              char *obd_uuid, void *args);
-extern int llapi_path2fid(const char *path, lustre_fid *fid);
-
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);

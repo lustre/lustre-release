@@ -19,11 +19,8 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
+TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-random-scale}
 DEBUGLOG=$TESTSUITELOG.debug
-
-cleanup_logs
-
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
 env >&2
@@ -115,7 +112,7 @@ summary_and_cleanup () {
     # actually failed though.  the first node in the END_RUN_NODE is
     # the one we are really interested in.
         if [ -n "$END_RUN_NODE" ]; then
-            var=$(client_var_name $END_RUN_NODE)_load
+            var=${END_RUN_NODE}_load
             echo "Client load failed on node $END_RUN_NODE" 
             echo
             echo "client $END_RUN_NODE load stdout and debug files :
@@ -158,16 +155,13 @@ Status: $result: rc=$rc"
 
     if [ $rc -ne 0 ]; then
         print_logs $NODES_TO_USE
-        # we are interested in only on failed clients and servers
-        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
-        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
-        local product=$(gather_logs $(comma_list $(osts_nodes) \
-                                 $mds_HOST $mdsfailover_HOST $failedclients))
-        echo logs files $product
     fi
 
-    [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
-
+    if [ $rc -eq 0 ]; then
+        zconf_mount $(hostname) $MOUNT
+    else
+        error "exited with rc=$rc"
+    fi
     exit $rc
 }
 
@@ -218,7 +212,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     it_time_start=$(date +%s)
     
     FAIL_CLIENT=$(get_random_entry $NODES_TO_USE)
-    client_var=$(client_var_name $FAIL_CLIENT)_nums
+    client_var=${FAIL_CLIENT}_nums
 
     # store the list of failed clients
     # lists are comma separated
@@ -299,10 +293,6 @@ Failed to meet interval $reqfail times ( REQFAIL=$REQFAIL ); have sleep=$sleep"
 
     log " Number of failovers:
 $(numfailovers)                and counting..."
-
-    if [ $((ELAPSED + sleep)) -gt $DURATION ]; then
-         break
-    fi
 
     if [ $sleep -gt 0 ]; then 
         echo "sleeping $sleep seconds ... "

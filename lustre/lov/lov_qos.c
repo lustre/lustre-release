@@ -47,7 +47,6 @@
 
 #include <obd_class.h>
 #include <obd_lov.h>
-#include <lustre/lustre_idl.h>
 #include "lov_internal.h"
 
 /* #define QOS_DEBUG 1 */
@@ -55,6 +54,8 @@
 
 #define TGT_BAVAIL(i)  (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail*\
                         lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bsize)
+#define TGT_FFREE(i)   (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_ffree)
+
 
 int qos_add_tgt(struct obd_device *obd, __u32 index)
 {
@@ -496,13 +497,12 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
                         continue;
                 /* check if objects has been created on this ost */
                 for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
-                        /* we try send create to this ost but he is failed */
                         if (stripe == req->rq_stripe)
                                 continue;
-                        /* already have object at this stripe */
                         if (ost_idx == lsm->lsm_oinfo[stripe]->loi_ost_idx)
                                 break;
                 }
+
                 if (stripe >= lsm->lsm_stripe_count) {
                         req->rq_idx = ost_idx;
                         rc = obd_create(lov->lov_tgts[ost_idx]->ltd_exp,
@@ -543,7 +543,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 osts = &(lov->lov_packed);
                 lqr = &(lov->lov_qos.lq_rr);
         } else {
-                down_read(&pool_tgt_rw_sem(pool));
+                read_lock(&pool_tgt_rwlock(pool));
                 osts = &(pool->pool_obds);
                 lqr = &(pool->pool_rr);
         }
@@ -620,12 +620,8 @@ repeat_find:
 
         *stripe_cnt = idx_pos - idx_arr;
 out:
-        if (pool != NULL) {
-                up_read(&pool_tgt_rw_sem(pool));
-                /* put back ref got by lov_find_pool() */
-                lov_pool_putref(pool);
-        }
-
+        if (pool != NULL)
+                read_unlock(&pool_tgt_rwlock(pool));
         RETURN(rc);
 }
 
@@ -644,7 +640,7 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
         if (pool == NULL) {
                 osts = &(lov->lov_packed);
         } else {
-                down_read(&pool_tgt_rw_sem(pool));
+                read_lock(&pool_tgt_rwlock(pool));
                 osts = &(pool->pool_obds);
         }
 
@@ -712,11 +708,8 @@ repeat_find:
                lsm->lsm_stripe_count);
         rc = -EFBIG;
 out:
-        if (pool != NULL) {
-                up_read(&pool_tgt_rw_sem(pool));
-                /* put back ref got by lov_find_pool() */
-                lov_pool_putref(pool);
-        }
+        if (pool != NULL)
+                read_unlock(&pool_tgt_rwlock(pool));
         RETURN(rc);
 }
 
@@ -728,8 +721,10 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                      char *poolname, int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
-        __u64 total_weight = 0;
-        int nfound, good_osts, i, rc = 0;
+        static time_t last_warn = 0;
+        time_t now = cfs_time_current_sec();
+        __u64 total_bavail, total_weight = 0;
+        int nfound, good_osts, i, warn = 0, rc = 0;
         int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         struct pool_desc *pool;
         struct ost_pool *osts;
@@ -744,17 +739,12 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 osts = &(lov->lov_packed);
                 lqr = &(lov->lov_qos.lq_rr);
         } else {
-                down_read(&pool_tgt_rw_sem(pool));
+                read_lock(&pool_tgt_rwlock(pool));
                 osts = &(pool->pool_obds);
                 lqr = &(pool->pool_rr);
         }
 
-        obd_getref(exp->exp_obd);
-        /* wait for fresh statfs info if needed, the rpcs are sent in
-         * lov_create() */
-        qos_statfs_update(exp->exp_obd,
-                          cfs_time_shift_64(-2 * lov->desc.ld_qos_maxage), 1);
-
+        lov_getref(exp->exp_obd);
         down_write(&lov->lov_qos.lq_rw_sem);
 
         if (lov->desc.ld_active_tgt_count < 2)
@@ -764,12 +754,35 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         if (rc)
                 GOTO(out, rc);
 
+        total_bavail = 0;
         good_osts = 0;
+        /* Warn users about zero available space/inode every 30 min */
+        if (cfs_time_sub(now, last_warn) > 60 * 30)
+                warn = 1;
         /* Find all the OSTs that are valid stripe candidates */
         for (i = 0; i < osts->op_count; i++) {
+                __u64 bavail;
+
                 if (!lov->lov_tgts[osts->op_array[i]] ||
                     !lov->lov_tgts[osts->op_array[i]]->ltd_active)
                         continue;
+                bavail = TGT_BAVAIL(osts->op_array[i]);
+                if (!bavail) {
+                        if (warn) {
+                                CDEBUG(D_QOS, "no free space on %s\n",
+                                     obd_uuid2str(&lov->lov_tgts[osts->op_array[i]]->ltd_uuid));
+                                last_warn = now;
+                        }
+                        continue;
+                }
+                if (!TGT_FFREE(osts->op_array[i])) {
+                        if (warn) {
+                                CDEBUG(D_QOS, "no free inodes on %s\n",
+                                     obd_uuid2str(&lov->lov_tgts[osts->op_array[i]]->ltd_uuid));
+                                last_warn = now;
+                        }
+                        continue;
+                }
 
                 /* Fail Check before osc_precreate() is called
                    so we can only 'fail' single OSC. */
@@ -781,6 +794,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
                 lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_usable = 1;
                 qos_calc_weight(lov, osts->op_array[i]);
+                total_bavail += bavail;
                 total_weight += lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_weight;
 
                 good_osts++;
@@ -792,6 +806,9 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
         if (good_osts < stripe_cnt_min)
                 GOTO(out, rc = -EAGAIN);
+
+        if (!total_bavail)
+                GOTO(out, rc = -ENOSPC);
 
         /* We have enough osts */
         if (good_osts < *stripe_cnt)
@@ -868,16 +885,13 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 out:
         up_write(&lov->lov_qos.lq_rw_sem);
 
-        if (pool != NULL) {
-                up_read(&pool_tgt_rw_sem(pool));
-                /* put back ref got by lov_find_pool() */
-                lov_pool_putref(pool);
-        }
+        if (pool != NULL)
+                        read_unlock(&pool_tgt_rwlock(pool));
 
         if (rc == -EAGAIN)
                 rc = alloc_rr(lov, idx_arr, stripe_cnt, poolname, flags);
 
-        obd_putref(exp->exp_obd);
+        lov_putref(exp->exp_obd);
         RETURN(rc);
 }
 
@@ -1012,7 +1026,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 req->rq_stripe = i;
                 /* create data objects with "parent" OA */
                 memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
-                req->rq_oi.oi_cb_up = cb_create_update;
 
                 /* XXX When we start creating objects on demand, we need to
                  *     make sure that we always create the object on the
@@ -1030,10 +1043,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 
         if (stripes < lsm->lsm_stripe_count)
                 qos_shrink_lsm(set);
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LOV_PREP_CREATE)) {
-                qos_shrink_lsm(set);
-                rc = -EIO;
-        }
 
         if (oti && (src_oa->o_valid & OBD_MD_FLCOOKIE)) {
                 oti_alloc_cookies(oti, set->set_count);
@@ -1054,111 +1063,4 @@ void qos_update(struct lov_obd *lov)
 {
         ENTRY;
         lov->lov_qos.lq_dirty = 1;
-}
-
-void qos_statfs_done(struct lov_obd *lov)
-{
-        LASSERT(lov->lov_qos.lq_statfs_in_progress);
-        down_write(&lov->lov_qos.lq_rw_sem);
-        lov->lov_qos.lq_statfs_in_progress = 0;
-        /* wake up any threads waiting for the statfs rpcs to complete */
-        cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
-        up_write(&lov->lov_qos.lq_rw_sem);
-}
-
-static int qos_statfs_ready(struct obd_device *obd, __u64 max_age)
-{
-        struct lov_obd         *lov = &obd->u.lov;
-        int rc;
-        ENTRY;
-        down_read(&lov->lov_qos.lq_rw_sem);
-        rc = lov->lov_qos.lq_statfs_in_progress == 0 ||
-             cfs_time_beforeq_64(max_age, obd->obd_osfs_age);
-        up_read(&lov->lov_qos.lq_rw_sem);
-        RETURN(rc);
-}
-
-/*
- * Update statfs data if the current osfs age is older than max_age.
- * If wait is not set, it means that we are called from lov_create()
- * and we should just issue the rpcs without waiting for them to complete.
- * If wait is set, we are called from alloc_qos() and we just have
- * to wait for the request set to complete.
- */
-void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait)
-{
-        struct lov_obd         *lov = &obd->u.lov;
-        struct obd_info        *oinfo;
-        int                     rc = 0;
-        struct ptlrpc_request_set *set = NULL;
-        ENTRY;
-
-        if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
-                /* statfs data are quite recent, don't need to refresh it */
-                RETURN_EXIT;
-
-        if (!wait && lov->lov_qos.lq_statfs_in_progress)
-                /* statfs already in progress */
-                RETURN_EXIT;
-
-        down_write(&lov->lov_qos.lq_rw_sem);
-        if (lov->lov_qos.lq_statfs_in_progress) {
-                up_write(&lov->lov_qos.lq_rw_sem);
-                GOTO(out, rc = 0);
-        }
-        /* no statfs in flight, send rpcs */
-        lov->lov_qos.lq_statfs_in_progress = 1;
-        up_write(&lov->lov_qos.lq_rw_sem);
-
-        if (wait)
-                CDEBUG(D_QOS, "%s: did not manage to get fresh statfs data "
-                       "in a timely manner (osfs age "LPU64", max age "LPU64")"
-                       ", sending new statfs rpcs\n",
-                       obd_uuid2str(&lov->desc.ld_uuid), obd->obd_osfs_age,
-                       max_age);
-
-        /* need to send statfs rpcs */
-        CDEBUG(D_QOS, "sending new statfs requests\n");
-        memset(lov->lov_qos.lq_statfs_data, 0,
-               sizeof(*lov->lov_qos.lq_statfs_data));
-        oinfo = &lov->lov_qos.lq_statfs_data->lsd_oi;
-        oinfo->oi_osfs = &lov->lov_qos.lq_statfs_data->lsd_statfs;
-        oinfo->oi_flags = OBD_STATFS_NODELAY;
-        set = ptlrpc_prep_set();
-        if (!set)
-                GOTO(out_failed, rc = -ENOMEM);
-
-        rc = obd_statfs_async(obd, oinfo, max_age, set);
-        if (rc || list_empty(&set->set_requests)) {
-                if (rc)
-                        CWARN("statfs failed with %d\n", rc);
-                GOTO(out_failed, rc);
-        }
-        /* send requests via ptlrpcd */
-        oinfo->oi_flags |= OBD_STATFS_PTLRPCD;
-        ptlrpcd_add_rqset(set);
-        GOTO(out, rc);
-
-out_failed:
-        down_write(&lov->lov_qos.lq_rw_sem);
-        lov->lov_qos.lq_statfs_in_progress = 0;
-        /* wake up any threads waiting for the statfs rpcs to complete */
-        cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
-        up_write(&lov->lov_qos.lq_rw_sem);
-        wait = 0;
-out:
-        if (set)
-                ptlrpc_set_destroy(set);
-        if (wait) {
-                struct l_wait_info lwi = { 0 };
-                CDEBUG(D_QOS, "waiting for statfs requests to complete\n");
-                l_wait_event(lov->lov_qos.lq_statfs_waitq,
-                             qos_statfs_ready(obd, max_age), &lwi);
-                if (cfs_time_before_64(obd->obd_osfs_age, max_age))
-                        CDEBUG(D_QOS, "%s: still no fresh statfs data after "
-                                      "waiting (osfs age "LPU64", max age "
-                                      LPU64")\n",
-                                      obd_uuid2str(&lov->desc.ld_uuid),
-                                      obd->obd_osfs_age, max_age);
-        }
 }

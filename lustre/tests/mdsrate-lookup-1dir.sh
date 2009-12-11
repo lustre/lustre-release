@@ -54,14 +54,21 @@ else
     mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d' --ignore
 
     log "===== $0 Test preparation: creating ${NUM_FILES} files."
+    echo "Test preparation: creating ${NUM_FILES} files."
 
+    MDSCOUNT=1
+    NUM_CLIENTS=$(get_node_count ${NODES_TO_USE//,/ })
+    NUM_THREADS=$((NUM_CLIENTS * MDSCOUNT))
+    if [ $NUM_CLIENTS -gt 50 ]; then
+        NUM_THREADS=$NUM_CLIENTS
+    fi
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
     echo "+" ${COMMAND}
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
+    mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
 
     # No lockup if error occurs on file creation, abort.
-    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
+    [ ${PIPESTATUS[0]} != 0 ] && error "mpirun ... mdsrate ... file creation failed, aborting"
 fi
 
 COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --lookup --time ${TIME_PERIOD} ${SEED_OPTION}
@@ -72,27 +79,28 @@ if [ -n "$NOSINGLE" ]; then
     echo "NO Test for lookups on a single client."
 else
     log "===== $0 ### 1 NODE LOOKUPS ###"
+    echo "Running lookups on 1 node(s)."
     echo "+" ${COMMAND}
     mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate lookups on a single client failed, aborting"
+        [ -f $LOG ] && cat $LOG
+        error "mpirun ... mdsrate ... failed, aborting"
     fi
 fi
 
 # 2
-[ $NUM_CLIENTS -eq 1 ] && NOMULTI=yes
 if [ -n "$NOMULTI" ]; then
     echo "NO test for lookups on multiple nodes."
 else
     log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
+    echo "Running lookups on ${NUM_CLIENTS} node(s)."
     echo "+" ${COMMAND}
     mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate lookups on multiple nodes failed, aborting"
+        [ -f $LOG ] && cat $LOG
+        error "mpirun ... mdsrate ... failed, aborting"
     fi
 fi
 

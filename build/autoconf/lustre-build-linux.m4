@@ -104,18 +104,29 @@ AC_MSG_CHECKING([that RedHat kernel])
 LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 	],[
-		#ifndef RHEL_RELEASE_CODE
+		#ifndef RHEL_MAJOR
 		#error "not redhat kernel"
 		#endif
 	],[
 		RHEL_KENEL="yes"
-		RHEL_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
 	        AC_MSG_RESULT([no])
 ])
 
-LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
+AC_MSG_CHECKING([that SuSe kernel])
+LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		#ifndef SLE_VERSION_CODE
+		#error "not sles kernel"
+		#endif
+	],[
+		SUSE_KERNEL="yes"
+		AC_MSG_RESULT([yes])
+	],[
+	        AC_MSG_RESULT([no])
+])
 
 ])
 
@@ -130,13 +141,7 @@ AC_DEFUN([LB_LINUX_PATH],
 AC_ARG_WITH([linux],
 	AC_HELP_STRING([--with-linux=path],
 		       [set path to Linux source (default=/usr/src/linux)]),
-	[
-		if ! [[[ $with_linux = /* ]]]; then
-			AC_MSG_ERROR([You must provide an absolute pathname to the --with-linux= option.])
-		else
-			LINUX=$with_linux
-		fi
-	],
+	[LINUX=$with_linux],
 	[LINUX=/usr/src/linux])
 AC_MSG_RESULT([$LINUX])
 AC_SUBST(LINUX)
@@ -181,9 +186,9 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 # at 2.6.19 # $LINUX/include/linux/config.h is removed
 # and at more old has only one line
 # include <autoconf.h>
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[],
-	[AC_MSG_ERROR([Run make config in $LINUX.])])
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
+LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
+		$LINUX_OBJ/include/linux/version.h
+		],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
 
 # ------------ rhconfig.h includes runtime-generated bits --
@@ -294,7 +299,7 @@ if test -e $LINUX/include/asm-um ; then
 		UML_CFLAGS='-O0'
 		AC_MSG_RESULT(yes)
     	else
-		AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no (asm doesn't point at asm-um)])
 	fi
 else
 	AC_MSG_RESULT([no (asm-um missing)])
@@ -340,7 +345,7 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LB_LINUX_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`uname -m|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
@@ -356,7 +361,7 @@ AC_DEFUN([LB_LINUX_ARCH],
          [AC_MSG_CHECKING([Linux kernel architecture])
           AS_IF([rm -f $PWD/build/arch
                  make -s --no-print-directory echoarch -f $PWD/build/Makefile \
-                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $ARCH_UM \
+                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX_OBJ $ARCH_UM \
                      ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
                 [AC_MSG_RESULT([$LINUX_ARCH])],
                 [AC_MSG_ERROR([Could not determine the kernel architecture.])])
@@ -530,6 +535,10 @@ LB_LINUX_CONFIG([MODULES],[],[
 
 LB_LINUX_CONFIG([MODVERSIONS])
 
+LB_LINUX_CONFIG([PREEMPT],[
+	AC_MSG_ERROR([Lustre does not support kernels with preempt enabled.])
+])
+
 LB_LINUX_CONFIG([KALLSYMS],[],[
 if test "x$ARCH_UM" = "x" ; then
 	AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
@@ -562,22 +571,22 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 
 #
 # LB_CHECK_SYMBOL_EXPORT
-# check symbol exported or not
+# check symbol exported or not 
 # $1 - symbol
 # $2 - file(s) for find.
 # $3 - do 'yes'
 # $4 - do 'no'
 #
 # 2.6 based kernels - put modversion info into $LINUX/Module.modvers
-# or check
+# or check 
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
-[AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
+[AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
     export=0
     for file in $2; do
-    	grep -q -E "EXPORT_SYMBOL.*\($1\)" "$LINUX/$file" 2>/dev/null
+    	grep -q -E "EXPORT_SYMBOL.*($1)" "$LINUX/$file" 2>/dev/null
     	rc=$?
 	if test $rc -eq 0; then
 		export=1
@@ -610,4 +619,17 @@ AC_CACHE_CHECK([for $1], ac_Header,
 				  [AS_VAR_SET(ac_Header, [no])])])
 AS_IF([test AS_VAR_GET(ac_Header) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([ac_Header])dnl
+])
+
+#
+# Like AC_CHECK_HEADERS but for kernel space headers
+#
+AC_DEFUN([LB_CHECK_LINUX_HEADERS],
+[AH_CHECK_HEADERS([$1])dnl
+for ac_header in $1
+do
+LB_CHECK_LINUX_HEADER($ac_header,
+		[AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_$ac_header)) $2],
+		[$3])dnl
+done
 ])

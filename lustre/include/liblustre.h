@@ -265,7 +265,7 @@ static inline int misc_deregister(void *foo)
         return 0;
 }
 
-static inline int request_module(const char *name, ...)
+static inline int request_module(char *name)
 {
         return (-EINVAL);
 }
@@ -360,8 +360,7 @@ void get_random_bytes(void *ptr, int size);
 /* memory */
 
 /* memory size: used for some client tunables */
-#define num_physpages      (256 * 1024) /* 1GB */
-#define CFS_NUM_CACHEPAGES num_physpages
+#define num_physpages (256 * 1024) /* 1GB */
 
 static inline int copy_from_user(void *a,void *b, int c)
 {
@@ -381,7 +380,6 @@ typedef struct {
          int size;
 } kmem_cache_t;
 #define SLAB_HWCACHE_ALIGN 0
-#define SLAB_DESTROY_BY_RCU 0
 static inline kmem_cache_t *
 kmem_cache_create(const char *name, size_t objsize, size_t cdum,
                   unsigned long d,
@@ -619,8 +617,6 @@ typedef struct task_struct cfs_task_t;
 #define cfs_current()           current
 #define cfs_curproc_pid()       (current->pid)
 #define cfs_curproc_comm()      (current->comm)
-#define cfs_curproc_fsuid()     (current->fsuid)
-#define cfs_curproc_fsgid()     (current->fsgid)
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
@@ -737,8 +733,6 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
 #define atomic_sub_return(n,a) ((a)->counter -= n)
 #define atomic_dec_return(a)  atomic_sub_return(1,a)
-#define atomic_add_unless(v, a, u) ((v)->counter != u ? (v)->counter += a : 0)
-#define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
 
 #ifndef likely
 #define likely(exp) (exp)
@@ -746,10 +740,6 @@ typedef struct { volatile int counter; } atomic_t;
 #ifndef unlikely
 #define unlikely(exp) (exp)
 #endif
-
-#define libcfs_memory_pressure_get() (0) 
-#define libcfs_memory_pressure_set() do {} while (0) 
-#define libcfs_memory_pressure_clr() do {} while (0)
 
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for
@@ -913,10 +903,10 @@ void posix_acl_release(struct posix_acl *acl)
 }
 
 #ifdef LIBLUSTRE_POSIX_ACL
- #ifndef posix_acl_xattr_entry
+ #ifndef posix_acl_xattr_entry 
   #define posix_acl_xattr_entry xattr_acl_entry
  #endif
- #ifndef posix_acl_xattr_header
+ #ifndef posix_acl_xattr_header 
   #define posix_acl_xattr_header xattr_acl_header
  #endif
  #ifndef posix_acl_xattr_size

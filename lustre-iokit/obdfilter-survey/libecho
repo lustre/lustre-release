@@ -176,7 +176,7 @@ get_devnos () {
 # do cleanup for netdisk case.
 cleanup_netdisk () {
     for osc in $@; do
-        $lctl <<EOF
+        lctl <<EOF
         cfg_device $osc 
         cleanup
         detach
@@ -187,18 +187,18 @@ EOF
 # do cleanup for network case.
 cleanup_network () {
     local clean_srv_OSS=$1
-    $lctl <<EOF
+    lctl <<EOF
     cfg_device echotmp 
     cleanup
     detach
 EOF
-    remote_shell "root@$server_nid" "$lctl << EOF
+    remote_shell "root@$server_nid" "lctl << EOF
         cfg_device echo_srv
         cleanup
         detach
 EOF"
     if [ $clean_srv_OSS ]; then
-        remote_shell "root@$server_nid" "$lctl << EOF
+        remote_shell "root@$server_nid" "lctl << EOF
             cfg_device OSS
             cleanup
             detach
@@ -248,7 +248,7 @@ cleanup () {
 }
 trap cleanup SIGHUP SIGINT SIGTERM
 
-# gets echoclient device number and attach it to the client UUID
+# gets echoclient device number and attch it to the client UUID
 # 
 # parameter: 1. hostname
 #	     2. client name, ex:- ns8:ECHO_ns8
@@ -384,7 +384,7 @@ split_hostname () {
 
 check_cleanup () {
     type_obj="$1"
-    osc_names_str=$($lctl dl | grep $type_obj)
+    osc_names_str=$(lctl dl | grep $type_obj)
     count=0;
     for name in $osc_names_str; do
         count=$((count+1))
@@ -399,7 +399,7 @@ check_cleanup () {
 
 check_setup () {
     type_obj="$1"
-    osc_names_str=$($lctl dl | grep $type_obj)
+    osc_names_str=$(lctl dl | grep $type_obj)
     count=0;
     for name in $osc_names_str; do
         count=$((count+1))

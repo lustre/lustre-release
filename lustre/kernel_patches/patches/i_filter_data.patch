@@ -1,10 +1,10 @@
-Index: linux-2.6.18-128.1.14/include/linux/fs.h
+Index: linux-2.6.18.8/include/linux/fs.h
 ===================================================================
---- linux-2.6.18-128.1.14.orig/include/linux/fs.h	2009-06-19 12:33:13.000000000 -0600
-+++ linux-2.6.18-128.1.14/include/linux/fs.h	2009-06-19 12:33:26.000000000 -0600
-@@ -580,6 +580,7 @@
- 		struct cdev		*i_cdev;
- 	};
+--- linux-2.6.18.8.orig/include/linux/fs.h	2007-06-05 12:55:19.000000000 +0200
++++ linux-2.6.18.8/include/linux/fs.h	2007-06-05 12:55:44.000000000 +0200
+@@ -533,6 +533,7 @@ struct inode {
+ 	struct block_device	*i_bdev;
+ 	struct cdev		*i_cdev;
  	int			i_cindex;
 +	void                    *i_filterdata;
  

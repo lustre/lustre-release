@@ -150,10 +150,8 @@ static inline int lustre_msg_size_v2(int count, __u32 *lengths)
         int i;
 
         size = lustre_msg_hdr_size_v2(count);
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < count; i++)
                 size += size_round(lengths[i]);
-                CDEBUG(D_INFO, "size %d - len %d\n", size, lengths[i]);
-        }
 
         return size;
 }
@@ -615,8 +613,7 @@ void lustre_shrink_reply_v1(struct ptlrpc_request *req, int segment,
         LASSERT(req->rq_reply_state);
         LASSERT(msg);
         LASSERT(segment >= 0);
-        LASSERTF(msg->lm_bufcount > segment, "message have %d - requested %d\n",
-                 msg->lm_bufcount,segment);
+        LASSERT(msg->lm_bufcount > segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)
@@ -653,11 +650,9 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
         char *tail = NULL, *newpos;
         int tail_len = 0, n;
 
-        CDEBUG(D_INFO, "shrink req %p seg %d - len %d\n", req, segment, newlen);
         LASSERT(req->rq_reply_state);
         LASSERT(msg);
-        LASSERTF(msg->lm_bufcount > segment, "message have %d - requested %d\n",
-                 msg->lm_bufcount,segment);
+        LASSERT(msg->lm_bufcount > segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)
@@ -2308,6 +2303,20 @@ static void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
         EXIT;
 }
 
+void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
+{
+        ENTRY;
+        CDEBUG(D_IOCTL, "swabbing lov_user_md_join\n");
+        __swab32s(&lumj->lmm_magic);
+        __swab32s(&lumj->lmm_pattern);
+        __swab64s(&lumj->lmm_object_id);
+        __swab64s(&lumj->lmm_object_gr);
+        __swab32s(&lumj->lmm_stripe_size);
+        __swab32s(&lumj->lmm_stripe_count);
+        __swab32s(&lumj->lmm_extent_count);
+        EXIT;
+}
+
 int lustre_swab_lov_user_md(struct lov_user_md_v1 *lum)
 {
         ENTRY;
@@ -2340,20 +2349,6 @@ void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
         __swab64s(&lmm->lmm_object_gr);
         __swab32s(&lmm->lmm_stripe_size);
         __swab32s(&lmm->lmm_stripe_count);
-        EXIT;
-}
-
-void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
-{
-        ENTRY;
-        CDEBUG(D_IOCTL, "swabbing lov_user_md_join\n");
-        __swab32s(&lumj->lmm_magic);
-        __swab32s(&lumj->lmm_pattern);
-        __swab64s(&lumj->lmm_object_id);
-        __swab64s(&lumj->lmm_object_gr);
-        __swab32s(&lumj->lmm_stripe_size);
-        __swab32s(&lumj->lmm_stripe_count);
-        __swab32s(&lumj->lmm_extent_count);
         EXIT;
 }
 
@@ -2721,7 +2716,7 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         va_start(args, fmt);
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask,
                 data->msg_file, data->msg_fn, data->msg_line, fmt, args,
-                " req@%p x"LPU64"/t"LPD64" o%d->%s@%s:%d/%d lens %d/%d e %d "
+                " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d/%d lens %d/%d e %d "
                 "to %d dl %ld ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                 req, req->rq_xid, req->rq_transno, opc,
                 req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :

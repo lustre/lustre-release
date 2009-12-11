@@ -11,7 +11,8 @@ TMP=${TMP:-/tmp}
 MULTIOP_PID_FILE=${MULTIOP_PID_FILE:-$TMP/multiop_bg.pid}
 rm -f $MULTIOP_PID_FILE
 
-multiop_bg_pause $*
-rc=$?
-[ "$rc" = 0 ] && echo $! > $MULTIOP_PID_FILE
+pid=$(multiop_bg_pause $* | tail -1)
+rc=${PIPESTATUS[0]}
+
+[ "$rc" = 0 ] && echo $pid > $MULTIOP_PID_FILE
 exit $rc

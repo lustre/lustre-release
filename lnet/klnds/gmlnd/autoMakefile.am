@@ -41,3 +41,4 @@ endif
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES = $(kgmlnd-objs:%.o=%.c) gmlnd.h

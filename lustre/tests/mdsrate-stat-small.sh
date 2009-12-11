@@ -59,13 +59,21 @@ else
     mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d' --ignore
 
     log "===== $0 Test preparation: creating ${NUM_FILES} files."
+    echo "Test preparation: creating ${NUM_FILES} files."
 
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
     echo "+" ${COMMAND}
 
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1
-    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
+    MDSCOUNT=1
+    NUM_CLIENTS=$(get_node_count ${NODES_TO_USE//,/ })
+    NUM_THREADS=$((NUM_CLIENTS * MDSCOUNT))
+    if [ $NUM_CLIENTS -gt 50 ]; then
+        NUM_THREADS=$NUM_CLIENTS
+    fi
+
+    mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1
+    [ ${PIPESTATUS[0]} != 0 ] && error "Error running mdsrate, aborting..."
 
 fi
 
@@ -78,29 +86,30 @@ if [ -n "$NOSINGLE" ]; then
     echo "NO Test for stats on a single client."
 else
     log "===== $0 ### 1 NODE STAT ###"
+    echo "Running stats on 1 node(s)."
     echo "+" ${COMMAND}
 
     mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
     
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate on a single client failed, aborting"
+        [ -f $LOG ] && cat $LOG
+        error "mpirun ... mdsrate ... failed, aborting"
     fi
 fi
 
 # 2
-[ $NUM_CLIENTS -eq 1 ] && NOMULTI=yes
 if [ -n "$NOMULTI" ]; then
     echo "NO test for stats on multiple nodes."
 else
     log "===== $0 ### ${NUM_CLIENTS} NODES STAT ###"
+    echo "Running stats on ${NUM_CLIENTS} node(s)."
     echo "+" ${COMMAND}
 
     mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate stats on multiple nodes failed, aborting"
+        [ -f $LOG ] && cat $LOG
+        error "mpirun ... mdsrate ... failed, aborting"
     fi
 fi
 

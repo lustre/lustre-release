@@ -50,9 +50,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#ifdef HAVE_QUOTAIO_V1_H
-# include <linux/quotaio_v1.h>
-#endif
+#include <linux/quotaio_v1.h>
 
 #include <asm/byteorder.h>
 #include <asm/uaccess.h>
@@ -131,9 +129,7 @@ static int quota_convert_v1_to_v2(struct file *fp_v1, struct file *fp_v2,
                 struct lustre_disk_dqblk fakedquot;
 
                 memset(buf, 0, LUSTRE_DQBLKSIZE);
-
-                if ((ret = lustre_read_quota(fp_v1, NULL, type, buf, LUSTRE_DQBLKSIZE,
-                                 blk_item->blk << LUSTRE_DQBLKSIZE_BITS)) < 0) {
+                if ((ret = quota_read(fp_v1, NULL, type, blk_item->blk, buf))<0) {
                         CERROR("VFS: Can't read quota tree block %u.\n",
                                blk_item->blk);
                         GOTO(out_free, rc = ret);

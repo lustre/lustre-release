@@ -49,6 +49,7 @@
 # include <string.h>
 # include <sys/types.h>
 #else
+# include <asm/semaphore.h>
 # include <linux/rwsem.h>
 # include <linux/sched.h>
 # include <linux/signal.h>

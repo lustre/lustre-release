@@ -5,7 +5,4 @@ llite_lloop-objs := lloop.o
 
 lustre-objs += rw26.o super25.o
 
-EXTRA_DIST := $(lustre-objs:.o=.c) llite_internal.h rw26.c super25.c
-EXTRA_DIST += $(llite_lloop-objs:.o=.c)
-
 @INCLUDE_RULES@

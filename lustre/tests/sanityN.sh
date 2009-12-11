@@ -603,8 +603,6 @@ test_31b() {
         cat $DIR2/$tdir/$tfile > /dev/null 2>&1
         lctl set_param fail_loc=0
         do_facet ost1 lctl set_param fail_loc=0
-        # cleanup: reconnect the client back
-        df $DIR2
 }
 run_test 31b "voluntary OST cancel / blocking ast race=============="
 
@@ -714,6 +712,8 @@ test_33() { #16129
                 echo writing on client1
                 dd if=/dev/zero of=$DIR1/$tfile count=100 conv=notrunc > /dev/null 2>&1
                 sync &
+                # wait for the flush
+                sleep 1
                 echo reading on client2
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout
@@ -839,65 +839,9 @@ test_37() { # bug 18695
 	kill -USR1 $MULTIPID
 	nr_files=`lfs find $DIR1/$tdir -type f | wc -l`
 	[ $nr_files -eq 10000 ] || error "$nr_files != 10000 truncated directory?"
+
 }
 run_test 37 "check i_size is not updated for directory on close (bug 18695) =============="
-
-test_38() { # bug 18801, based on the code of test_32b
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-
-        local node
-        local p="$TMP/sanityN-$TESTNAME.parameters"
-        local random="$TMP/sanityN-$TESTNAME.random"
-        # 1. locked unaligned non-DIRECT_IO write of 8192 bytes to file A
-        # 2a. locked unaligned DIRECT_IO write of 4000 bytes to file B
-        # 2b. locked unaligned DIRECT_IO write of 4000 bytes to file B
-        # 3. unaligned "lockless DIRECT_IO" write of 192 bytes in the end of file B
-        # 4. compare A and B
-        log "creating the initial file"
-        multiop $random Ob4000b4000b192c || error "failed creating random file"
-        log "creating a file with the same contents"
-        multiop $DIR1/$tfile oO_CREAT:O_DIRECT:O_RDWR:b4000c || error "first multiop failed"
-        multiop $DIR1/$tfile oO_CREAT:O_DIRECT:O_RDWR:z4000b4000c || error "second multiop failed"
-        save_lustre_params $HOSTNAME "llite.*.contention_seconds" > $p
-        for node in $(osts_nodes); do
-                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
-                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
-                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
-        done
-        log "enforcing lockless I/O"
-        clear_llite_stats
-        # agressive lockless i/o settings
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
-        done
-        lctl set_param -n llite.*.contention_seconds 60
-        multiop $DIR2/$tfile oO_DIRECT:O_RDWR:z8000b192c || error "the last multiop failed"
-        [ $(calc_llite_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered"
-        restore_lustre_params <$p
-        log "comparing"
-        cmp $DIR1/$tfile $random || error "O_DIRECT+lockless results do not match the original file"
-        rm -f $DIR1/$tfile
-        rm -f $p
-        rm -f $random
-}
-run_test 38 "lockless i/o with O_DIRECT and unaligned writes"
-
-test_39() {
-        local originaltime
-        local updatedtime
-        local delay=3
-
-        touch $DIR1/$tfile
-        originaltime=$(stat -c %Y $DIR1/$tfile)
-        log "original modification time is $originaltime"
-        sleep $delay
-        multiop $DIR1/$tfile oO_DIRECT:O_WRONLY:w$((10*1048576))c || error "multiop has failed"
-        updatedtime=$(stat -c %Y $DIR2/$tfile)
-        log "updated modification time is $updatedtime"
-        [ $((updatedtime - originaltime)) -ge $delay ] || error "invalid modification time"
-        rm -rf $DIR/$tfile
-}
-run_test 39 "direct I/O writes should update mtime ========="
 
 log "cleanup: ======================================================"
 

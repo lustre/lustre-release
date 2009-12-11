@@ -54,6 +54,7 @@ struct lc_watchdog {
         void             *lcw_data;
 
         pid_t             lcw_pid;
+        cfs_duration_t    lcw_time; /* time until watchdog fires, jiffies */
 
         enum {
                 LC_WATCHDOG_DISABLED,
@@ -96,44 +97,40 @@ static spinlock_t lcw_pending_timers_lock = SPIN_LOCK_UNLOCKED; /* BH lock! */
 static struct list_head lcw_pending_timers = \
         LIST_HEAD_INIT(lcw_pending_timers);
 
-/* Last time a watchdog expired */
-static cfs_time_t lcw_last_watchdog_time;
-static int lcw_recent_watchdog_count;
-static spinlock_t lcw_last_watchdog_lock = SPIN_LOCK_UNLOCKED;
-
+#ifdef HAVE_TASKLIST_LOCK
 static void
 lcw_dump(struct lc_watchdog *lcw)
 {
+        cfs_task_t *tsk;
         ENTRY;
 
-#if defined(HAVE_TASKLIST_LOCK)
         read_lock(&tasklist_lock);
-#elif defined(HAVE_TASK_RCU)
-        rcu_read_lock();
-#else
-        CERROR("unable to dump stack because of missing export\n"); 
-        RETURN_EXIT;
-#endif
-        if (lcw->lcw_task == NULL) {
-                CWARN("Process %d was not found in the task list; "
-                      "watchdog callback may be incomplete\n",
-                      (int)lcw->lcw_pid);
-        } else {
-                libcfs_debug_dumpstack(lcw->lcw_task);
-        }
+        tsk = find_task_by_pid(lcw->lcw_pid);
 
-#if defined(HAVE_TASKLIST_LOCK)
+        if (tsk == NULL) {
+                CWARN("Process %d was not found in the task list; "
+                      "watchdog callback may be incomplete\n", (int)lcw->lcw_pid);
+        } else if (tsk != lcw->lcw_task) {
+                CWARN("The current process %d did not set the watchdog; "
+                      "watchdog callback may be incomplete\n", (int)lcw->lcw_pid);
+        } else {
+                libcfs_debug_dumpstack(tsk);
+        }
+        
         read_unlock(&tasklist_lock);
-#elif defined(HAVE_TASK_RCU)
-        rcu_read_unlock();
-#endif
         EXIT;
 }
+#else
+static void
+lcw_dump(struct lc_watchdog *lcw)
+{
+        CERROR("unable to dump stack because of missing export\n");
+}
+#endif
 
 static void lcw_cb(unsigned long data)
 {
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
-        cfs_time_t current_time;
         cfs_duration_t delta_time;
         struct timeval timediff;
 
@@ -145,44 +142,17 @@ static void lcw_cb(unsigned long data)
         }
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
-        current_time = cfs_time_current();
-
-        delta_time = cfs_time_sub(current_time, lcw->lcw_last_touched);
+        delta_time = cfs_time_sub(cfs_time_current(), lcw->lcw_last_touched);
         cfs_duration_usec(delta_time, &timediff);
 
-        /* Check to see if we should throttle the watchdog timer to avoid
-         * too many dumps going to the console thus triggering an NMI.
-         * Normally we would not hold the spin lock over the CWARN but in
-         * this case we hold it to ensure non ratelimited lcw_dumps are not
-         * interleaved on the console making them hard to read. */
-        spin_lock_bh(&lcw_last_watchdog_lock);
-        delta_time = cfs_duration_sec(cfs_time_sub(current_time,
-                                                   lcw_last_watchdog_time));
+        /* NB this warning should appear on the console, but may not get into
+         * the logs since we're running in a softirq handler */
 
-        if (delta_time < libcfs_watchdog_ratelimit &&
-            lcw_recent_watchdog_count > 3) {
-                CWARN("Refusing to fire watchdog for pid %d: it was inactive "
-                      "for %lu.%.02lus. Rate limiting 3 per %d seconds.\n",
-                      (int)lcw->lcw_pid, timediff.tv_sec,
-                      timediff.tv_usec / 10000, libcfs_watchdog_ratelimit);
-        } else {
-                if (delta_time < libcfs_watchdog_ratelimit) {
-                        lcw_recent_watchdog_count++;
-                } else {
-                        memcpy(&lcw_last_watchdog_time, &current_time,
-                               sizeof(current_time));
-                        lcw_recent_watchdog_count = 0;
-                }
+        CWARN("Watchdog triggered for pid %d: it was inactive for "
+              "%lu.%.02lus\n", (int)lcw->lcw_pid, timediff.tv_sec,
+              timediff.tv_usec / 10000);
+        lcw_dump(lcw);
 
-		/* This warning should appear on the console, but may not get
-		 * into the logs since we're running in a softirq handler */
-                CWARN("Watchdog triggered for pid %d: it was inactive for "
-                      "%lu.%.02lus\n", (int)lcw->lcw_pid, timediff.tv_sec,
-                      timediff.tv_usec / 10000);
-                lcw_dump(lcw);
-	}
-
-        spin_unlock_bh(&lcw_last_watchdog_lock);
         spin_lock_bh(&lcw_pending_timers_lock);
 
         if (list_empty(&lcw->lcw_list)) {
@@ -250,8 +220,9 @@ static int lcw_dispatch_main(void *data)
                         list_del_init(&lcw->lcw_list);
                         spin_unlock_bh(&lcw_pending_timers_lock);
 
-                        CDEBUG(D_INFO, "found lcw for pid %d\n",
-                               (int)lcw->lcw_pid);
+                        CDEBUG(D_INFO, "found lcw for pid %d: inactive for "
+                               "%lds\n", (int)lcw->lcw_pid,
+                               cfs_duration_sec(lcw->lcw_time));
 
                         if (lcw->lcw_state != LC_WATCHDOG_DISABLED)
                                 lcw->lcw_callback(lcw->lcw_pid, lcw->lcw_data);
@@ -307,7 +278,7 @@ static void lcw_dispatch_stop(void)
         EXIT;
 }
 
-struct lc_watchdog *lc_watchdog_add(int timeout,
+struct lc_watchdog *lc_watchdog_add(int timeout_ms,
                                     void (*callback)(pid_t, void *),
                                     void *data)
 {
@@ -322,6 +293,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 
         lcw->lcw_task     = cfs_current();
         lcw->lcw_pid      = cfs_curproc_pid();
+        lcw->lcw_time     = cfs_time_seconds(timeout_ms) / 1000;
         lcw->lcw_callback = (callback != NULL) ? callback : lc_watchdog_dumplog;
         lcw->lcw_data     = data;
         lcw->lcw_state    = LC_WATCHDOG_DISABLED;
@@ -330,7 +302,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 
         lcw->lcw_timer.function = lcw_cb;
         lcw->lcw_timer.data = (unsigned long)lcw;
-        lcw->lcw_timer.expires = jiffies + cfs_time_seconds(timeout);
+        lcw->lcw_timer.expires = jiffies + lcw->lcw_time;
         init_timer(&lcw->lcw_timer);
 
         down(&lcw_refcount_sem);
@@ -365,7 +337,7 @@ static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
         lcw->lcw_last_touched = newtime;
 }
 
-void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
 {
         ENTRY;
         LASSERT(lcw != NULL);
@@ -377,9 +349,17 @@ void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
         lcw_update_time(lcw, "touched");
         lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
-        mod_timer(&lcw->lcw_timer, jiffies + cfs_time_seconds(timeout));
+        mod_timer(&lcw->lcw_timer, jiffies +
+                  cfs_time_seconds(timeout_ms) / 1000);
 
         EXIT;
+}
+EXPORT_SYMBOL(lc_watchdog_touch_ms);
+
+/* deprecated - use above instead */
+void lc_watchdog_touch(struct lc_watchdog *lcw)
+{
+        lc_watchdog_touch_ms(lcw, cfs_duration_sec(lcw->lcw_time) * 1000);
 }
 EXPORT_SYMBOL(lc_watchdog_touch);
 
@@ -437,7 +417,7 @@ EXPORT_SYMBOL(lc_watchdog_dumplog);
 
 #else   /* !defined(WITH_WATCHDOG) */
 
-struct lc_watchdog *lc_watchdog_add(int timeout,
+struct lc_watchdog *lc_watchdog_add(int timeout_ms,
                                     void (*callback)(pid_t pid, void *),
                                     void *data)
 {
@@ -446,7 +426,12 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 }
 EXPORT_SYMBOL(lc_watchdog_add);
 
-void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_touch_ms);
+
+void lc_watchdog_touch(struct lc_watchdog *lcw)
 {
 }
 EXPORT_SYMBOL(lc_watchdog_touch);

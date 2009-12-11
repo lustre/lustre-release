@@ -64,13 +64,12 @@
 
 int mds_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 int reconnect,
                                  void *localdata)
 {
         lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -86,7 +85,7 @@ int mds_export_stats_init(struct obd_device *obd,
                 num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                              LPROC_MDS_LAST - 1;
                 tmp->nid_stats = lprocfs_alloc_stats(num_stats,
-                                            LPROCFS_STATS_FLAG_NOPERCPU);
+                                                     LPROCFS_STATS_FLAG_NOPERCPU);
                 if (tmp->nid_stats == NULL)
                         return -ENOMEM;
 
@@ -99,9 +98,9 @@ int mds_export_stats_init(struct obd_device *obd,
                 mds_stats_counter_init(tmp->nid_stats);
 
                 /* Always add in ldlm_stats */
-                tmp->nid_ldlm_stats =
-                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
-                                            LPROCFS_STATS_FLAG_NOPERCPU);
+                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                          LDLM_FIRST_OPC,
+                                                          0);
                 if (tmp->nid_ldlm_stats == NULL)
                         return -ENOMEM;
 
@@ -229,7 +228,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         med->med_lr_off = le32_to_cpu(mds->mds_server_data->lsd_client_start) +
                 (cl_idx * le16_to_cpu(mds->mds_server_data->lsd_client_size));
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
-        mds_export_stats_init(obd, exp, 0, localdata);
+        mds_export_stats_init(obd, exp, localdata);
 
         if (new_client) {
                 struct lvfs_run_ctxt *saved = NULL;
@@ -464,7 +463,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         struct mds_obd *mds = &obd->u.mds;
         struct lr_server_data *lsd;
         struct lsd_client_data *lcd = NULL;
-        struct lustre_mount_info *lmi;
         loff_t off = 0;
         unsigned long last_rcvd_size = i_size_read(file->f_dentry->d_inode);
         __u64 mount_count;
@@ -499,7 +497,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
-                lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
                 lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT);
         } else {
@@ -515,7 +512,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                                            obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(err_msd, rc = -EINVAL);
                 }
-                lsd->lsd_feature_compat |= cpu_to_le32(OBD_COMPAT_MDT);
                 /* COMPAT_146 */
                 /* Assume old last_rcvd format unless I_C_LR is set */
                 if (!(lsd->lsd_feature_incompat &
@@ -538,16 +534,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 /* Do something like remount filesystem read-only */
                 GOTO(err_msd, rc = -EINVAL);
         }
-        /* evict all clients as it is first boot with 2.0 last_rcvd */
-        if (lsd->lsd_feature_compat & cpu_to_le32(OBD_COMPAT_20)) {
-                LCONSOLE_WARN("Mounting %s at first time on 2.0 FS, remove all"
-                              " clients for interop needs\n", obd->obd_name);
-                simple_truncate(mds->mds_vfsmnt->mnt_sb->s_root,
-                                mds->mds_vfsmnt, LAST_RCVD,
-                                lsd->lsd_client_start);
-                last_rcvd_size = lsd->lsd_client_start;
-                lsd->lsd_feature_compat &= ~cpu_to_le32(OBD_COMPAT_20);
-        }
+
+        lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
 
         target_trans_table_init(obd);
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
@@ -611,8 +599,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                                cl_idx);
                         continue;
                 }
-
-                check_lcd(obd->obd_name, cl_idx, lcd);
 
                 last_transno = lsd_last_transno(lcd);
                 last_epoch = le32_to_cpu(lcd->lcd_last_epoch);
@@ -690,28 +676,16 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = 0;
                 obd->obd_recovery_end = 0;
+                obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
+#ifdef CRAY_XT3
+                /* bz13079: this won't be changed for mds */
+                obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
+#endif
         } else {
                 LASSERT(!obd->obd_recovering);
                 /* VBR: update boot epoch after recovery */
                 mds_update_last_epoch(obd);
         }
-
-        obd->obd_recovery_timeout = OBD_RECOVERY_TIME_SOFT;
-        obd->obd_recovery_time_hard = OBD_RECOVERY_TIME_HARD;
-
-        lmi = server_find_mount_locked(obd->obd_name);
-        if (lmi) {
-                struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
-
-                if (lsi->lsi_lmd && lsi->lsi_lmd->lmd_recovery_time_soft)
-                        obd->obd_recovery_timeout =
-                                lsi->lsi_lmd->lmd_recovery_time_soft;
-
-                if (lsi->lsi_lmd && lsi->lsi_lmd->lmd_recovery_time_hard)
-                        obd->obd_recovery_time_hard =
-                                lsi->lsi_lmd->lmd_recovery_time_hard;
-        }
-
         mds->mds_mount_count = mount_count + 1;
         lsd->lsd_mount_count = lsd->lsd_compat14 =
                 cpu_to_le64(mds->mds_mount_count);
@@ -769,7 +743,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* setup the directory tree */
         push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "ROOT", 0755, 0);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
@@ -782,7 +756,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         dput(dentry);
 
-        dentry = lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
+        dentry = lookup_one_len("__iopen__", current->fs->pwd,
                                 strlen("__iopen__"));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -797,7 +771,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_fid, rc);
         }
 
-        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "PENDING", 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create PENDING directory: rc = %d\n", rc);
@@ -806,7 +780,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_pending_dir = dentry;
 
         /* COMPAT_146 */
-        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, MDT_LOGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, MDT_LOGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
@@ -816,7 +790,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_logs_dir = dentry;
         /* end COMPAT_146 */
 
-        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "OBJECTS", 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
@@ -857,7 +831,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 CERROR("cannot open/create %s file: rc = %d\n",HEALTH_CHECK,rc);
                 GOTO(err_lov_objid, rc = PTR_ERR(file));
         }
-        mds->mds_obt.obt_health_check_filp = file;
+        mds->mds_health_check_filp = file;
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", HEALTH_CHECK,
                        file->f_dentry->d_inode->i_mode);
@@ -872,8 +846,8 @@ err_pop:
         return rc;
 
 err_health_check:
-        if (mds->mds_obt.obt_health_check_filp &&
-            filp_close(mds->mds_obt.obt_health_check_filp, 0))
+        if (mds->mds_health_check_filp &&
+            filp_close(mds->mds_health_check_filp, 0))
                 CERROR("can't close %s after error\n", HEALTH_CHECK);
 err_lov_objid:
          mds_lov_destroy_objids(obd);
@@ -910,12 +884,6 @@ int mds_fs_cleanup(struct obd_device *obd)
                               "will be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd); /* cleans up client info too */
-
-       /* some exports may still be in the zombie queue, so we make sure that
-        * all the exports have been processed, otherwise the last_rcvd slot
-        * may not be updated on time */
-        obd_zombie_barrier();
-
         mds_server_free_data(mds);
 
         push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
@@ -928,9 +896,9 @@ int mds_fs_cleanup(struct obd_device *obd)
 
         mds_lov_destroy_objids(obd);
 
-        if (mds->mds_obt.obt_health_check_filp) {
-                rc = filp_close(mds->mds_obt.obt_health_check_filp, 0);
-                mds->mds_obt.obt_health_check_filp = NULL;
+        if (mds->mds_health_check_filp) {
+                rc = filp_close(mds->mds_health_check_filp, 0);
+                mds->mds_health_check_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", HEALTH_CHECK,rc);
         }
@@ -951,9 +919,9 @@ int mds_fs_cleanup(struct obd_device *obd)
 
         pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
         OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
+        shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
-        LL_DQUOT_OFF(obd->u.obt.obt_sb, 0);
-        shrink_dcache_sb(mds->mds_obt.obt_sb);
+        LL_DQUOT_OFF(obd->u.obt.obt_sb);
 
         return rc;
 }
@@ -1025,8 +993,10 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle))
                 GOTO(out_dput2, rc = PTR_ERR(handle));
 
+        lock_kernel();
         rc = ll_vfs_rename(parent_inode, dchild, mds->mds_vfsmnt,
                            parent_inode, new_child, mds->mds_vfsmnt);
+        unlock_kernel();
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);

@@ -1,5 +1,5 @@
-cvs -qz3
-diff -Nup
-checkout -P
-update -dP
-remove -f
+cvs -z3 -q
+diff -u -p
+co -d -P
+update -d -P
+commit
