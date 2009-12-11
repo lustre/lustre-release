@@ -286,7 +286,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_cksum_type = cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
 #endif
         atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
-        atomic_set(&cli->cl_quota_resends, CLIENT_QUOTA_DEFAULT_RESENDS);
 
         /* This value may be changed at connect time in
            ptlrpc_connect_interpret. */
@@ -342,18 +341,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                                name, obddev->obd_name,
                                cli->cl_target_uuid.uuid);
                         spin_lock(&imp->imp_lock);
-                        imp->imp_deactive = 1;
+                        imp->imp_invalid = 1;
                         spin_unlock(&imp->imp_lock);
                 }
-        }
-
-        obddev->obd_namespace = ldlm_namespace_new(obddev, obddev->obd_name,
-                                                   LDLM_NAMESPACE_CLIENT,
-                                                   LDLM_NAMESPACE_GREEDY);
-        if (obddev->obd_namespace == NULL) {
-                CERROR("Unable to create client namespace - %s\n",
-                       obddev->obd_name);
-                GOTO(err_import, rc = -ENOMEM);
         }
 
         cli->cl_qchk_stat = CL_NOT_QUOTACHECKED;
@@ -372,10 +362,6 @@ err:
 int client_obd_cleanup(struct obd_device *obddev)
 {
         ENTRY;
-
-        ldlm_namespace_free_post(obddev->obd_namespace);
-        obddev->obd_namespace = NULL;
-
         ldlm_put_ref();
         RETURN(0);
 }
@@ -389,16 +375,14 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         struct obd_import *imp = cli->cl_import;
         struct obd_export **exp = localdata;
         struct obd_connect_data *ocd;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc;
         ENTRY;
 
         down_write(&cli->cl_sem);
-        CDEBUG(D_INFO, "connect %s - %d\n", obd->obd_name,
-               cli->cl_conn_count);
-
         if (cli->cl_conn_count > 0)
                 GOTO(out_sem, rc = -EALREADY);
-
+        
         rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
@@ -406,7 +390,13 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         cli->cl_conn_count++;
         *exp = class_conn2export(dlm_handle);
 
-        LASSERT(obd->obd_namespace);
+        if (obd->obd_namespace != NULL)
+                CERROR("already have namespace!\n");
+        obd->obd_namespace = ldlm_namespace_new(obd, obd->obd_name,
+                                                LDLM_NAMESPACE_CLIENT,
+                                                LDLM_NAMESPACE_GREEDY);
+        if (obd->obd_namespace == NULL)
+                GOTO(out_disco, rc = -ENOMEM);
 
         imp->imp_dlm_handle = *dlm_handle;
         rc = ptlrpc_init_import(imp);
@@ -437,12 +427,18 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         if (rc) {
 out_ldlm:
+                ldlm_namespace_free_prior(obd->obd_namespace, imp, 0);
+                to_be_freed = obd->obd_namespace;
+                obd->obd_namespace = NULL;
+out_disco:
                 cli->cl_conn_count--;
                 class_disconnect(*exp);
                 *exp = NULL;
-        }
+        } 
 out_sem:
         up_write(&cli->cl_sem);
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed);
         return rc;
 }
 
@@ -451,6 +447,7 @@ int client_disconnect_export(struct obd_export *exp)
         struct obd_device *obd = class_exp2obd(exp);
         struct client_obd *cli;
         struct obd_import *imp;
+        struct ldlm_namespace *to_be_freed = NULL;
         int rc = 0, err;
         ENTRY;
 
@@ -464,9 +461,6 @@ int client_disconnect_export(struct obd_export *exp)
         imp = cli->cl_import;
 
         down_write(&cli->cl_sem);
-        CDEBUG(D_INFO, "disconnect %s - %d\n", obd->obd_name,
-               cli->cl_conn_count);
-
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
@@ -496,11 +490,16 @@ int client_disconnect_export(struct obd_export *exp)
                                        NULL);
                 ldlm_namespace_free_prior(obd->obd_namespace, imp,
                                           obd->obd_force);
+                to_be_freed = obd->obd_namespace;
         }
 
         rc = ptlrpc_disconnect_import(imp, 0);
 
         ptlrpc_invalidate_import(imp);
+        /* set obd_namespace to NULL only after invalidate, because we can have
+         * some connect requests in flight, and his need store a connect flags
+         * in obd_namespace. bug 14260 */
+        obd->obd_namespace = NULL;
 
         if (imp->imp_rq_pool) {
                 ptlrpc_free_rq_pool(imp->imp_rq_pool);
@@ -517,46 +516,10 @@ int client_disconnect_export(struct obd_export *exp)
         err = class_disconnect(exp);
         if (!rc && err)
                 rc = err;
+
         up_write(&cli->cl_sem);
-
-        RETURN(rc);
-}
-
-int server_disconnect_export(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp);
-
-        /* close import for avoid sending any requests */
-        if (exp->exp_imp_reverse)
-                ptlrpc_cleanup_imp(exp->exp_imp_reverse);
-
-        if (exp->exp_obd->obd_namespace != NULL)
-                ldlm_cancel_locks_for_export(exp);
-
-        /* complete all outstanding replies */
-        spin_lock(&exp->exp_lock);
-        while (!list_empty(&exp->exp_outstanding_replies)) {
-                struct ptlrpc_reply_state *rs =
-                        list_entry(exp->exp_outstanding_replies.next,
-                                   struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_service;
-
-                spin_lock(&svc->srv_lock);
-                list_del_init(&rs->rs_exp_list);
-                ptlrpc_schedule_difficult_reply(rs);
-                spin_unlock(&svc->srv_lock);
-        }
-        spin_unlock(&exp->exp_lock);
-
-
-        /* release nid stat refererence */
-        lprocfs_exp_cleanup(exp);
-
-
+        if (to_be_freed)
+                ldlm_namespace_free_post(to_be_freed);
         RETURN(rc);
 }
 
@@ -649,10 +612,9 @@ int target_recovery_check_and_stop(struct obd_device *obd)
         }
         /* always check versions now */
         obd->obd_version_recov = 1;
-        cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
         /* reset timer, recovery will proceed with versions now */
-        reset_recovery_timer(obd, OBD_RECOVERY_TIME_SOFT, 1);
+        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
         return 0;
 }
 EXPORT_SYMBOL(target_recovery_check_and_stop);
@@ -822,9 +784,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 export = NULL;
                 rc = 0;
         } else if (export->exp_connection &&
-                   req->rq_peer.nid != export->exp_connection->c_peer.nid &&
-                   (lustre_msg_get_op_flags(req->rq_reqmsg) &
-                    MSG_CONNECT_INITIAL)) {
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
                 CWARN("%s: cookie %s seen on new NID %s when "
                       "existing NID %s is already connected\n",
                       target->obd_name, cluuid.uuid,
@@ -873,12 +833,6 @@ no_export:
                       "with %d active RPCs\n", target->obd_name, cluuid.uuid,
                       libcfs_nid2str(req->rq_peer.nid),
                       export, atomic_read(&export->exp_rpc_count) - 1);
-                spin_lock(&export->exp_lock);
-                if (req->rq_export->exp_conn_cnt <
-                    lustre_msg_get_conn_cnt(req->rq_reqmsg))
-                        /* try to abort active requests */
-                        req->rq_export->exp_abort_active_req = 1;
-                spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EBUSY);
         } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
                 CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
@@ -999,9 +953,7 @@ no_export:
                 spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EALREADY);
         }
-        LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
         export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
-        export->exp_abort_active_req = 0;
 
         /* request from liblustre?  Don't evict it for not pinging. */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
@@ -1015,17 +967,8 @@ no_export:
                 spin_unlock(&export->exp_lock);
         }
 
-        if (export->exp_connection != NULL) {
-                /* Check to see if connection came from another NID */
-                if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
-                    !hlist_unhashed(&export->exp_nid_hash))
-                        lustre_hash_del(export->exp_obd->obd_nid_hash,
-                                        &export->exp_connection->c_peer.nid,
-                                        &export->exp_nid_hash);
-
+        if (export->exp_connection != NULL)
                 ptlrpc_connection_put(export->exp_connection);
-        }
-
         export->exp_connection = ptlrpc_connection_get(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
@@ -1038,8 +981,6 @@ no_export:
 
         if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT) {
                 revimp = class_import_get(export->exp_imp_reverse);
-                ptlrpc_connection_put(revimp->imp_connection);
-                revimp->imp_connection = NULL;
                 GOTO(set_flags, rc = 0);
         }
 
@@ -1056,13 +997,13 @@ no_export:
         if (export->exp_imp_reverse != NULL)
                 class_destroy_import(export->exp_imp_reverse);
         revimp = export->exp_imp_reverse = class_new_import(target);
+        revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         revimp->imp_client = &export->exp_obd->obd_ldlm_client;
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
 
 set_flags:
-        revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V1 &&
             lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_NEXT_VER) {
                 revimp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
@@ -1167,26 +1108,12 @@ static void target_exp_dequeue_req_replay(struct ptlrpc_request *req)
         spin_unlock(&req->rq_export->exp_lock);
 }
 
-static void target_request_copy_get(struct ptlrpc_request *req)
+static void target_release_saved_req(struct ptlrpc_request *req)
 {
-        /* mark that request is in recovery queue, so request handler will not
-         * drop rpc count in export, bug 19870*/
-        LASSERT(!req->rq_copy_queued);
-        req->rq_copy_queued = 1;
-        /* increase refcount to keep request in queue */
-        atomic_inc(&req->rq_refcount);
-}
-
-static void target_request_copy_put(struct ptlrpc_request *req)
-{
-        LASSERTF(list_empty(&req->rq_replay_list), "next: %p, prev: %p\n",
-                 req->rq_replay_list.next, req->rq_replay_list.prev);
-        /* class_export_rpc_get was done before handling request,
-         * drop it early to allow new requests, see bug 19870.
-         */
-        LASSERT(req->rq_copy_queued);
-        class_export_rpc_put(req->rq_export);
-        ptlrpc_server_drop_request(req);
+        ptlrpc_req_drop_rs(req);
+        class_export_put(req->rq_export);
+        OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
+        OBD_FREE(req, sizeof *req);
 }
 
 static void target_send_delayed_replies(struct obd_device *obd)
@@ -1211,7 +1138,7 @@ static void target_send_delayed_replies(struct obd_device *obd)
                 list_del_init(&req->rq_list);
                 DEBUG_REQ(D_HA, req, "delayed:");
                 ptlrpc_reply(req);
-                target_request_copy_put(req);
+                target_release_saved_req(req);
         }
         obd->obd_recovery_end = cfs_time_current_sec();
 }
@@ -1265,7 +1192,10 @@ static void abort_recovery_queue(struct obd_device *obd)
                 else
                         DEBUG_REQ(D_ERROR, req,
                                   "packing failed for abort-reply; skipping");
-                target_request_copy_put(req);
+
+                LASSERT(req->rq_copy);
+                class_export_rpc_put(req->rq_export);
+                target_release_saved_req(req);
         }
 }
 
@@ -1300,7 +1230,7 @@ void target_cleanup_recovery(struct obd_device *obd)
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 list_del(&req->rq_list);
-                target_request_copy_put(req);
+                target_release_saved_req(req);
         }
 
         CFS_INIT_LIST_HEAD(&clean_list);
@@ -1311,7 +1241,10 @@ void target_cleanup_recovery(struct obd_device *obd)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 target_exp_dequeue_req_replay(req);
                 list_del_init(&req->rq_list);
-                target_request_copy_put(req);
+                
+                LASSERT(req->rq_copy);
+                class_export_rpc_put(req->rq_export);
+                target_release_saved_req(req);
         }
         EXIT;
 }
@@ -1371,21 +1304,6 @@ static void target_recovery_expired(unsigned long castmeharder)
         obd->obd_abort_recovery = 1;
         cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
-
-        /* bug 18948:
-         * The recovery timer expired and target_check_and_stop_recovery()
-         * must be called.  We cannot call it directly because we are in
-         * interrupt context, so we need to wake up another thread to call it.
-         * This may happen if there are obd->obd_next_transno_waitq waiters,
-         * or if we happen to handle a connect request.  However, we cannot
-         * count on either of those things so we wake up the ping evictor
-         * and leverage it's context to complete recovery.
-         *
-         * Note: HEAD has a separate recovery thread and handle this.
-         */
-        spin_lock(&obd->obd_dev_lock);
-        ping_evictor_wake(obd->obd_self_export);
-        spin_unlock(&obd->obd_dev_lock);
 }
 
 /* obd_processing_task_lock should be held */
@@ -1416,11 +1334,15 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
         else if (!extend && (duration > obd->obd_recovery_timeout))
                 /* Track the client's largest expected replay time */
                 obd->obd_recovery_timeout = duration;
-
-        /* Hard limit of obd_recovery_time_hard which should not happen */
-        if(obd->obd_recovery_timeout > obd->obd_recovery_time_hard)
-                obd->obd_recovery_timeout = obd->obd_recovery_time_hard;
-
+#ifdef CRAY_XT3
+        /*
+         * If total recovery time already exceed the
+         * obd_recovery_max_time, then CRAY XT3 will
+         * abort the recovery
+         */
+        if(obd->obd_recovery_timeout > obd->obd_recovery_max_time)
+                obd->obd_recovery_timeout = obd->obd_recovery_max_time;
+#endif
         obd->obd_recovery_end = obd->obd_recovery_start +
                                 obd->obd_recovery_timeout;
         if (cfs_time_before(now, obd->obd_recovery_end)) {
@@ -1442,6 +1364,8 @@ static void check_and_start_recovery_timer(struct obd_device *obd,
         }
         CDEBUG(D_HA, "%s: starting recovery timer\n", obd->obd_name);
         obd->obd_recovery_start = cfs_time_current_sec();
+        /* minimum */
+        obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
         obd->obd_recovery_handler = handler;
         cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1578,7 +1502,14 @@ static void process_recovery_queue(struct obd_device *obd)
                 obd->obd_next_recovery_transno++;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 target_exp_dequeue_req_replay(req);
-                target_request_copy_put(req);
+
+                LASSERT(req->rq_copy);
+                class_export_rpc_put(req->rq_export);
+
+                class_export_put(req->rq_export);
+                ptlrpc_req_drop_rs(req);
+                OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
+                OBD_FREE(req, sizeof *req);
                 OBD_RACE(OBD_FAIL_TGT_REPLAY_DELAY);
                 spin_lock_bh(&obd->obd_processing_task_lock);
                 if (list_empty(&obd->obd_recovery_queue)) {
@@ -1598,7 +1529,10 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         struct list_head *tmp;
         int inserted = 0;
         __u64 transno = lustre_msg_get_transno(req->rq_reqmsg);
-        ENTRY;
+        struct ptlrpc_request *saved_req, *orig_req;
+        struct lustre_msg *reqmsg;
+        int rc = 0;
+
         /* CAVEAT EMPTOR: The incoming request message has been swabbed
          * (i.e. buflens etc are in my own byte order), but type-dependent
          * buffers (eg mds_body, ost_body etc) have NOT been swabbed. */
@@ -1606,10 +1540,20 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         if (!transno) {
                 CFS_INIT_LIST_HEAD(&req->rq_list);
                 DEBUG_REQ(D_HA, req, "not queueing");
-                RETURN(1);
+                return 1;
         }
 
+        /* XXX If I were a real man, these LBUGs would be sane cleanups. */
+        /* XXX just like the request-dup code in queue_final_reply */
+        OBD_ALLOC(saved_req, sizeof *saved_req);
+        if (!saved_req)
+                LBUG();
+        OBD_ALLOC(reqmsg, req->rq_reqlen);
+        if (!reqmsg)
+                LBUG();
+
         spin_lock_bh(&obd->obd_processing_task_lock);
+
         /* If we're processing the queue, we want don't want to queue this
          * message.
          *
@@ -1625,18 +1569,27 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 /* Processing the queue right now, don't re-add. */
                 LASSERT(list_empty(&req->rq_list));
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                RETURN(1);
+                GOTO(err_free, rc = 1);
         }
 
         if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_REPLAY_DROP))) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                RETURN(0);
+                GOTO(err_free, rc = 0);
         }
+
+        memcpy(saved_req, req, sizeof *req);
+        memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
+        orig_req = req;
+        req = saved_req;
+        req->rq_reqmsg = reqmsg;
+        class_export_get(req->rq_export);
+        CFS_INIT_LIST_HEAD(&req->rq_list);
+        CFS_INIT_LIST_HEAD(&req->rq_replay_list);
 
         if (target_exp_enqueue_req_replay(req)) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 DEBUG_REQ(D_ERROR, req, "dropping resent queued req");
-                RETURN(0);
+                GOTO(err_exp, rc = 0);
         }
 
         /* XXX O(n^2) */
@@ -1656,7 +1609,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                         DEBUG_REQ(D_ERROR, req, "dropping replay: transno "
                                   "has been claimed by another client");
                         target_exp_dequeue_req_replay(req);
-                        RETURN(0);
+                        GOTO(err_exp, rc = 0);
                 }
         }
 
@@ -1664,8 +1617,9 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 list_add_tail(&req->rq_list, &obd->obd_recovery_queue);
         }
 
-        target_request_copy_get(req);
         obd->obd_requests_queued_for_recovery++;
+        orig_req->rq_copy_queued = 1;
+        req->rq_copy = 1;
 
         if (obd->obd_processing_task != 0) {
                 /* Someone else is processing this queue, we'll leave it to
@@ -1673,7 +1627,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                  */
                 cfs_waitq_signal(&obd->obd_next_transno_waitq);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                RETURN(0);
+                return 0;
         }
 
         /* Nobody is processing, and we know there's (at least) one to process
@@ -1685,7 +1639,14 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         process_recovery_queue(obd);
-        RETURN(0);
+        return 0;
+
+err_exp:
+        class_export_put(req->rq_export);
+err_free:
+        OBD_FREE(reqmsg, req->rq_reqlen);
+        OBD_FREE(saved_req, sizeof(*saved_req));
+        return rc;
 }
 
 struct obd_device * target_req2obd(struct ptlrpc_request *req)
@@ -1696,6 +1657,8 @@ struct obd_device * target_req2obd(struct ptlrpc_request *req)
 int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
 {
         struct obd_device *obd = target_req2obd(req);
+        struct ptlrpc_request *saved_req;
+        struct lustre_msg *reqmsg;
         struct obd_export *exp = req->rq_export;
         int recovery_done = 0, delayed_done = 0;
 
@@ -1711,6 +1674,17 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
 
         LASSERT(!req->rq_reply_state->rs_difficult);
         LASSERT(list_empty(&req->rq_list));
+        /* XXX a bit like the request-dup code in queue_recovery_request */
+        OBD_ALLOC(saved_req, sizeof *saved_req);
+        if (!saved_req)
+                return -ENOMEM;
+        OBD_ALLOC(reqmsg, req->rq_reqlen);
+        if (!reqmsg) {
+                OBD_FREE(saved_req, sizeof *req);
+                return -ENOMEM;
+        }
+        *saved_req = *req;
+        memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
         /* Don't race cleanup */
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -1720,7 +1694,12 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
         }
 
         if (!exp->exp_vbr_failed) {
-                target_request_copy_get(req);
+                ptlrpc_rs_addref(req->rq_reply_state);  /* +1 ref for saved reply */
+                req = saved_req;
+                req->rq_reqmsg = reqmsg;
+                CFS_INIT_LIST_HEAD(&req->rq_list);
+                CFS_INIT_LIST_HEAD(&req->rq_replay_list);
+                class_export_get(exp);
                 list_add(&req->rq_list, &obd->obd_delayed_reply_queue);
         }
 
@@ -1782,6 +1761,8 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
                 CWARN("%s: disconnect export %s\n", obd->obd_name,
                       exp->exp_client_uuid.uuid);
                 class_fail_export(exp);
+                OBD_FREE(reqmsg, req->rq_reqlen);
+                OBD_FREE(saved_req, sizeof *req);
                 req->rq_status = 0;
                 ptlrpc_send_reply(req, 0);
         }
@@ -1789,6 +1770,8 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
         return 1;
 
 out_noconn:
+        OBD_FREE(reqmsg, req->rq_reqlen);
+        OBD_FREE(saved_req, sizeof *req);
         req->rq_status = -ENOTCONN;
         /* rv is ignored anyhow */
         return -ENOTCONN;
@@ -2025,7 +2008,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
 {
 #ifdef __KERNEL__
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_device *master_obd = NULL, *lov_obd = NULL;
+        struct obd_device *master_obd;
         struct lustre_quota_ctxt *qctxt;
         struct qunit_data *qdata = NULL;
         int rc = 0;
@@ -2056,13 +2039,13 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         }
 
         /* we use the observer */
-        if (obd_pin_observer(obd, &lov_obd) ||
-            obd_pin_observer(lov_obd, &master_obd)) {
+        if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
                 CERROR("Can't find the observer, it is recovering\n");
                 req->rq_status = -EAGAIN;
                 GOTO(send_reply, rc = -EAGAIN);
         }
 
+        master_obd = obd->obd_observer->obd_observer;
         qctxt = &master_obd->u.obt.obt_qctxt;
 
         if (!qctxt->lqc_setup) {
@@ -2097,10 +2080,6 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
  send_reply:
         rc = ptlrpc_reply(req);
 out:
-        if (master_obd)
-                obd_unpin_observer(lov_obd);
-        if (lov_obd)
-                obd_unpin_observer(obd);
         OBD_FREE(qdata, sizeof(struct qunit_data));
         RETURN(rc);
 #else

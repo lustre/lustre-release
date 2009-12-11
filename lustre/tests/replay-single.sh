@@ -19,8 +19,8 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
 # Skip these tests
-# bug number:
-ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
+# bug number:  15587 18382
+ALWAYS_EXCEPT="40    48 $REPLAY_SINGLE_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
@@ -63,7 +63,7 @@ test_0c() {
     umount $DIR
     facet_failover mds
     zconf_mount `hostname` $DIR || error "mount fails"
-    clients_up || error "post-failover df failed"
+    df $DIR || error "post-failover df failed"
 }
 run_test 0c "expired recovery with no clients"
 
@@ -408,9 +408,10 @@ test_20b() { # bug 10480
     lfs getstripe $DIR/$tfile || return 1
     rm -f $DIR/$tfile || return 2       # make it an orphan
     mds_evict_client
-    client_up || client_up || true    # reconnect
+    df -P $DIR || df -P $DIR || true    # reconnect
 
     fail mds                            # start orphan recovery
+    df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete mds || error "MDS recovery not done"
 
     # For interop with 2.0 only:
@@ -435,12 +436,13 @@ test_20c() { # bug 10480
     ls -la $DIR/$tfile
 
     mds_evict_client
-    client_up || client_up || true    # reconnect
+
+    df -P $DIR || df -P $DIR || true    # reconnect
 
     kill -USR1 $pid
-    wait $pid || return 1
-    [ -s $DIR/$tfile ] || error "File was truncated"
+    test -s $DIR/$tfile || error "File was truncated"
 
+    wait $pid || return 1
     return 0
 }
 run_test 20c "check that client eviction does not affect file content"
@@ -649,7 +651,7 @@ test_32() {
     multiop_bg_pause $DIR/$tfile O_c || return 3
     pid2=$!
     mds_evict_client
-    client_up || client_up || return 1
+    df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     wait $pid1 || return 4
@@ -807,7 +809,7 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # assert on trying to unlock the unlocked page.
 test_41() {
     [ $OSTCOUNT -lt 2 ] && \
-	skip_env "skipping test 41: we don't have a second OST to test with" && \
+	skip "skipping test 41: we don't have a second OST to test with" && \
 	return
 
     local f=$MOUNT/$tfile
@@ -862,7 +864,7 @@ test_43() { # bug 2530
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
-test_44a() { # was test_44
+test_44a() {	# was test_44
     local at_max_saved=0
 
     mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
@@ -876,13 +878,12 @@ test_44a() { # was test_44
     fi
 
     for i in `seq 1 10`; do
-        echo "$i of 10 ($(date +%s))"
-        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
-        #define OBD_FAIL_TGT_CONN_RACE     0x701
-        do_facet mds "lctl set_param fail_loc=0x80000701"
-        # lctl below may fail, it is valid case
-        $LCTL --device $mdcdev recover
-        df $MOUNT
+	echo "$i of 10 ($(date +%s))"
+	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+	#define OBD_FAIL_TGT_CONN_RACE     0x701
+	do_facet mds "lctl set_param fail_loc=0x80000701"
+	$LCTL --device $mdcdev recover || return 4
+	df $MOUNT
     done
 
     do_facet mds "lctl set_param fail_loc=0"
@@ -897,13 +898,12 @@ test_44b() {
     [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
 
     for i in `seq 1 10`; do
-        echo "$i of 10 ($(date +%s))"
-        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
-        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-        do_facet mds "lctl set_param fail_loc=0x80000704"
-        # lctl below may fail, it is valid case
-        $LCTL --device $mdcdev recover
-        df $MOUNT
+	echo "$i of 10 ($(date +%s))"
+	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+	do_facet mds "lctl set_param fail_loc=0x80000704"
+	$LCTL --device $mdcdev recover || return 4
+	df $MOUNT
     done
     do_facet mds "lctl set_param fail_loc=0"
     return 0
@@ -958,7 +958,7 @@ test_47() { # bug 2824
     # OBD_FAIL_OST_CREATE_NET 0x204
     fail ost1
     do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    client_up || return 2
+    df $MOUNT || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
     # and recover again.
@@ -975,14 +975,14 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-    [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
 
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     facet_failover mds
     #define OBD_FAIL_OST_EROFS 0x216
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
-    client_up || return 2
+    df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
@@ -1090,8 +1090,7 @@ test_53b() {
 
     mkdir -p $DIR/$tdir-1
     mkdir -p $DIR/$tdir-2
-
-    multiop_bg_pause $DIR/$tdir-1/f O_c || return 6
+    multiop $DIR/$tdir-1/f O_c &
     close_pid=$!
 
     #define OBD_FAIL_MDS_REINT_NET 0x107
@@ -1489,7 +1488,8 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet mds "lctl set_param fail_loc=0x80000707"
-    fail mds
+    facet_failover mds
+    df $MOUNT || return 1
     do_facet mds "lctl set_param fail_loc=0"
     unlinkmany $DIR/$tdir/$tfile- 25 || return 2
     return 0
@@ -1830,7 +1830,7 @@ test_71a() {
     umount $DIR
     facet_failover mds
     zconf_mount `hostname` $DIR || error "mount fails"
-    client_up || error "post-failover df failed"
+    df $DIR || error "post-failover df failed"
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" || \
         error "no delayed exports"
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
@@ -2079,7 +2079,6 @@ test_84() {
     PID=$!
     mds_evict_client
     wait $PID || true
-    client_up || client_up || true    # reconnect
 }
 run_test 84 "stale open during export disconnect"
 

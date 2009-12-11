@@ -164,10 +164,9 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 }
 
 static int osc_getattr_interpret(struct ptlrpc_request *req,
-                                 void *data, int rc)
+                                 struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
-        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc != 0)
@@ -301,10 +300,9 @@ out:
 }
 
 static int osc_setattr_interpret(struct ptlrpc_request *req,
-                                 void *data, int rc)
+                                 struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
-        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc != 0)
@@ -451,10 +449,9 @@ out:
 }
 
 static int osc_punch_interpret(struct ptlrpc_request *req,
-                               void *data, int rc)
+                               struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
-        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc != 0)
@@ -516,10 +513,9 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
 }
 
 static int osc_sync_interpret(struct ptlrpc_request *req,
-                              void *data, int rc)
+                              struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
-        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc)
@@ -860,9 +856,8 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                               struct ptlrpc_request_set *set);
 
 static int osc_shrink_grant_interpret(struct ptlrpc_request *req,
-                                      void *data, int rc)
+                                      struct osc_grant_args *aa, int rc)
 {
-        struct osc_grant_args *aa = data;
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obdo *oa = aa->aa_oa;
         struct ost_body *body;
@@ -1023,7 +1018,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
  * via the LOV, and it _knows_ it's reading inside the file, it's just that
  * this stripe never got written at or beyond this stripe offset yet. */
 static void handle_short_read(int nob_read, obd_count page_count,
-                              struct brw_page **pga, int pshift)
+                              struct brw_page **pga)
 {
         char *ptr;
         int i = 0;
@@ -1035,7 +1030,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
                 if (pga[i]->count > nob_read) {
                         /* EOF inside this page */
                         ptr = cfs_kmap(pga[i]->pg) +
-                              (OSC_FILE2MEM_OFF(pga[i]->off,pshift)&~CFS_PAGE_MASK);
+                                (pga[i]->off & ~CFS_PAGE_MASK);
                         memset(ptr + nob_read, 0, pga[i]->count - nob_read);
                         cfs_kunmap(pga[i]->pg);
                         page_count--;
@@ -1050,8 +1045,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
         /* zero remaining pages */
         while (page_count-- > 0) {
-                ptr = cfs_kmap(pga[i]->pg) +
-                      (OSC_FILE2MEM_OFF(pga[i]->off, pshift) & ~CFS_PAGE_MASK);
+                ptr = cfs_kmap(pga[i]->pg) + (pga[i]->off & ~CFS_PAGE_MASK);
                 memset(ptr, 0, pga[i]->count);
                 cfs_kunmap(pga[i]->pg);
                 i++;
@@ -1113,7 +1107,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 
 static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
                                    struct brw_page **pga, int opc,
-                                   cksum_type_t cksum_type, int pshift)
+                                   cksum_type_t cksum_type)
 {
         __u32 cksum;
         int i = 0;
@@ -1122,7 +1116,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
         cksum = init_checksum(cksum_type);
         while (nob > 0 && pg_count > 0) {
                 unsigned char *ptr = cfs_kmap(pga[i]->pg);
-                int off = OSC_FILE2MEM_OFF(pga[i]->off, pshift) & ~CFS_PAGE_MASK;
+                int off = pga[i]->off & ~CFS_PAGE_MASK;
                 int count = pga[i]->count > nob ? nob : pga[i]->count;
 
                 /* corrupt the data before we compute the checksum, to
@@ -1150,7 +1144,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
                                 struct brw_page **pga,
-                                struct ptlrpc_request **reqp, int pshift)
+                                struct ptlrpc_request **reqp)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1211,10 +1205,9 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 struct brw_page *pg = pga[i];
 
                 LASSERT(pg->count > 0);
-                LASSERTF((OSC_FILE2MEM_OFF(pg->off, pshift) & ~CFS_PAGE_MASK) +
-                         pg->count <= CFS_PAGE_SIZE,
-                         "i: %d pg: %p off: "LPU64", count: %u, shift: %d\n",
-                         i, pg, pg->off, pg->count, pshift);
+                LASSERTF((pg->off & ~CFS_PAGE_MASK) + pg->count <= CFS_PAGE_SIZE,
+                         "i: %d pg: %p off: "LPU64", count: %u\n", i, pg,
+                         pg->off, pg->count);
 #ifdef __linux__
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
@@ -1230,8 +1223,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 LASSERT((pga[0]->flag & OBD_BRW_SRVLOCK) ==
                         (pg->flag & OBD_BRW_SRVLOCK));
 
-                ptlrpc_prep_bulk_page(desc, pg->pg,
-                                      OSC_FILE2MEM_OFF(pg->off,pshift)&~CFS_PAGE_MASK,
+                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~CFS_PAGE_MASK,
                                       pg->count);
                 requested_nob += pg->count;
 
@@ -1273,7 +1265,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
                                                              page_count, pga,
                                                              OST_WRITE,
-                                                             cksum_type, pshift);
+                                                             cksum_type);
                         CDEBUG(D_PAGE, "checksum at write origin: %x\n",
                                body->oa.o_cksum);
                         /* save this in 'oa', too, for later checking */
@@ -1308,7 +1300,6 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         aa->aa_resends = 0;
         aa->aa_ppga = pga;
         aa->aa_cli = cli;
-        aa->aa_pshift = pshift;
         CFS_INIT_LIST_HEAD(&aa->aa_oaps);
 
         *reqp = req;
@@ -1322,7 +1313,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                                 __u32 client_cksum, __u32 server_cksum, int nob,
                                 obd_count page_count, struct brw_page **pga,
-                                cksum_type_t client_cksum_type, int pshift)
+                                cksum_type_t client_cksum_type)
 {
         __u32 new_cksum;
         char *msg;
@@ -1339,7 +1330,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 cksum_type = OBD_CKSUM_CRC32;
 
         new_cksum = osc_checksum_bulk(nob, page_count, pga, OST_WRITE,
-                                      cksum_type, pshift);
+                                      cksum_type);
 
         if (cksum_type != client_cksum_type)
                 msg = "the server did not use the checksum type specified in "
@@ -1419,8 +1410,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                     check_write_checksum(&body->oa, peer, client_cksum,
                                          body->oa.o_cksum, aa->aa_requested_nob,
                                          aa->aa_page_count, aa->aa_ppga,
-                                         cksum_type_unpack(aa->aa_oa->o_flags),
-                                         aa->aa_pshift))
+                                         cksum_type_unpack(aa->aa_oa->o_flags)))
                         RETURN(-EAGAIN);
 
                 rc = check_write_rcs(req, aa->aa_requested_nob,aa->aa_nio_count,
@@ -1442,7 +1432,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         }
 
         if (rc < aa->aa_requested_nob)
-                handle_short_read(rc, aa->aa_page_count, aa->aa_ppga, aa->aa_pshift);
+                handle_short_read(rc, aa->aa_page_count, aa->aa_ppga);
 
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
                 static int cksum_counter;
@@ -1457,7 +1447,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                         cksum_type = OBD_CKSUM_CRC32;
                 client_cksum = osc_checksum_bulk(rc, aa->aa_page_count,
                                                  aa->aa_ppga, OST_READ,
-                                                 cksum_type, aa->aa_pshift);
+                                                 cksum_type);
 
                 if (peer->nid == req->rq_bulk->bd_sender) {
                         via = router = "";
@@ -1532,7 +1522,7 @@ static int osc_brw_internal(int cmd, struct obd_export *exp,struct obdo *oa,
 
 restart_bulk:
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
-                                  page_count, pga, &request, 0);
+                                  page_count, pga, &request);
         if (rc != 0)
                 return (rc);
 
@@ -1583,8 +1573,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                                         OST_WRITE ? OBD_BRW_WRITE :OBD_BRW_READ,
                                   aa->aa_cli, aa->aa_oa,
                                   NULL /* lsm unused by osc currently */,
-                                  aa->aa_page_count, aa->aa_ppga, &new_req,
-                                  aa->aa_pshift);
+                                  aa->aa_page_count, aa->aa_ppga, &new_req);
         if (rc)
                 RETURN(rc);
 
@@ -1636,8 +1625,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
 
 static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
                           struct lov_stripe_md *lsm, obd_count page_count,
-                          struct brw_page **pga, struct ptlrpc_request_set *set,
-                          int pshift)
+                          struct brw_page **pga, struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request     *request;
         struct client_obd         *cli = &exp->exp_obd->u.cli;
@@ -1647,8 +1635,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
         /* Consume write credits even if doing a sync write -
          * otherwise we may run out of space on OST due to grant. */
-        /* FIXME: unaligned writes must use write grants too */
-        if (cmd == OBD_BRW_WRITE && pshift == 0) {
+        if (cmd == OBD_BRW_WRITE) {
                 client_obd_list_lock(&cli->cl_loi_list_lock);
                 for (i = 0; i < page_count; i++) {
                         if (cli->cl_avail_grant >= CFS_PAGE_SIZE)
@@ -1658,7 +1645,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
-                                  page_count, pga, &request, pshift);
+                                  page_count, pga, &request);
 
         CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
 
@@ -1727,15 +1714,14 @@ static void sort_brw_pages(struct brw_page **array, int num)
         } while (stride > 1);
 }
 
-static obd_count max_unfragmented_pages(struct brw_page **pg, obd_count pages,
-                                        int pshift)
+static obd_count max_unfragmented_pages(struct brw_page **pg, obd_count pages)
 {
         int count = 1;
         int offset;
         int i = 0;
 
         LASSERT (pages > 0);
-        offset = OSC_FILE2MEM_OFF(pg[i]->off, pshift) & ~CFS_PAGE_MASK;
+        offset = pg[i]->off & (~CFS_PAGE_MASK);
 
         for (;;) {
                 pages--;
@@ -1746,7 +1732,7 @@ static obd_count max_unfragmented_pages(struct brw_page **pg, obd_count pages,
                         return count;   /* doesn't end on page boundary */
 
                 i++;
-                offset = OSC_FILE2MEM_OFF(pg[i]->off, pshift) & ~CFS_PAGE_MASK;
+                offset = pg[i]->off & (~CFS_PAGE_MASK);
                 if (offset != 0)        /* doesn't start on page boundary */
                         return count;
 
@@ -1816,7 +1802,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
                 else
                         pages_per_brw = page_count;
 
-                pages_per_brw = max_unfragmented_pages(ppga, pages_per_brw, 0);
+                pages_per_brw = max_unfragmented_pages(ppga, pages_per_brw);
 
                 if (saved_oa != NULL) {
                         /* restore previously saved oa */
@@ -1851,7 +1837,7 @@ out:
 static int osc_brw_async(int cmd, struct obd_export *exp,
                          struct obd_info *oinfo, obd_count page_count,
                          struct brw_page *pga, struct obd_trans_info *oti,
-                         struct ptlrpc_request_set *set, int pshift)
+                         struct ptlrpc_request_set *set)
 {
         struct brw_page **ppga, **orig;
         int page_count_orig;
@@ -1879,13 +1865,10 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                 struct obdo *oa;
                 obd_count pages_per_brw;
 
-                /* one page less under unaligned direct i/o */
                 pages_per_brw = min_t(obd_count, page_count,
-                    class_exp2cliimp(exp)->imp_obd->u.cli.cl_max_pages_per_rpc -
-                                      !!pshift);
+                    class_exp2cliimp(exp)->imp_obd->u.cli.cl_max_pages_per_rpc);
 
-                pages_per_brw = max_unfragmented_pages(ppga, pages_per_brw,
-                                                       pshift);
+                pages_per_brw = max_unfragmented_pages(ppga, pages_per_brw);
 
                 /* use ppga only if single RPC is going to fly */
                 if (pages_per_brw != page_count_orig || ppga != orig) {
@@ -1908,7 +1891,7 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                 }
 
                 rc = async_internal(cmd, exp, oa, oinfo->oi_md, pages_per_brw,
-                                    copy, set, pshift);
+                                    copy, set);
 
                 if (rc != 0) {
                         if (copy != ppga)
@@ -2299,7 +2282,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         }
 
         sort_brw_pages(pga, page_count);
-        rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count, pga, &req, 0);
+        rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count, pga, &req);
         if (rc != 0) {
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
@@ -2787,48 +2770,39 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         RETURN(-EDQUOT);
 }
 
-static int osc_get_lock(struct obd_export *exp, struct lov_stripe_md *lsm,
-                        void **res, int rw, obd_off start, obd_off end,
-                        struct lustre_handle *lockh, int flags)
+static int osc_reget_short_lock(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                void **res, int rw,
+                                obd_off start, obd_off end,
+                                void **cookie)
 {
-        struct ldlm_lock *lock = NULL;
-        int rc, release = 0;
+        struct osc_async_page *oap = *res;
+        int rc;
 
         ENTRY;
 
-        if (lockh && lustre_handle_is_used(lockh)) {
-                /* if a valid lockh is passed, just check that the corresponding
-                 * lock covers the extent */
-                lock = ldlm_handle2lock(lockh);
-                release = 1;
-        } else {
-                struct osc_async_page *oap = *res;
-                spin_lock(&oap->oap_lock);
-                lock = oap->oap_ldlm_lock;
-                if (likely(lock))
-                        LDLM_LOCK_GET(lock);
-                spin_unlock(&oap->oap_lock);
-        }
-        /* lock can be NULL in case race obd_get_lock vs lock cancel
-         * so we should be don't try match this */
-        if (unlikely(!lock))
-                return 0;
+        spin_lock(&oap->oap_lock);
+        rc = ldlm_lock_fast_match(oap->oap_ldlm_lock, rw,
+                                  start, end, cookie);
+        spin_unlock(&oap->oap_lock);
 
-        rc = ldlm_lock_fast_match(lock, rw, start, end, lockh);
-        if (release == 1 && rc == 1)
-                /* if a valid lockh was passed, we just need to check
-                 * that the lock covers the page, no reference should be
-                 * taken*/
-                ldlm_lock_decref(lockh,
-                                 rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
-        LDLM_LOCK_PUT(lock);
         RETURN(rc);
+}
+
+static int osc_release_short_lock(struct obd_export *exp,
+                                  struct lov_stripe_md *lsm, obd_off end,
+                                  void *cookie, int rw)
+{
+        ENTRY;
+        ldlm_lock_fast_release(cookie, rw);
+        /* no error could have happened at this layer */
+        RETURN(0);
 }
 
 int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                         struct lov_oinfo *loi, cfs_page_t *page,
                         obd_off offset, struct obd_async_page_ops *ops,
-                        void *data, void **res, int flags,
+                        void *data, void **res, int nocache,
                         struct lustre_handle *lockh)
 {
         struct osc_async_page *oap;
@@ -2861,7 +2835,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         spin_lock_init(&oap->oap_lock);
 
         /* If the page was marked as notcacheable - don't add to any locks */
-        if (!(flags & OBD_PAGE_NO_CACHE)) {
+        if (!nocache) {
                 osc_build_res_name(loi->loi_id, loi->loi_gr, &oid);
                 /* This is the only place where we can call cache_add_extent
                    without oap_lock, because this page is locked now, and
@@ -2935,9 +2909,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_page_off = off;
         oap->oap_count = count;
         oap->oap_brw_flags = brw_flags;
-        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
-        if (libcfs_memory_pressure_get())
-                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
         spin_lock(&oap->oap_lock);
         oap->oap_async_flags = async_flags;
         spin_unlock(&oap->oap_lock);
@@ -3067,9 +3038,6 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_page_off = off;
         oap->oap_count = count;
         oap->oap_brw_flags = brw_flags;
-        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
-        if (libcfs_memory_pressure_get())
-                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
         spin_lock(&oap->oap_lock);
         oap->oap_async_flags = async_flags;
         spin_unlock(&oap->oap_lock);
@@ -3301,9 +3269,8 @@ static int osc_enqueue_fini(struct obd_device *obd, struct ptlrpc_request *req,
 }
 
 static int osc_enqueue_interpret(struct ptlrpc_request *req,
-                                 void *data, int rc)
+                                 struct osc_enqueue_args *aa, int rc)
 {
-        struct osc_enqueue_args *aa = data;
         int intent = aa->oa_oi->oi_flags & LDLM_FL_HAS_INTENT;
         struct lov_stripe_md *lsm = aa->oa_oi->oi_md;
         struct ldlm_lock *lock;
@@ -3502,8 +3469,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int osc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
-                      __u32 mode, struct lustre_handle *lockh, int flags,
-                      obd_off end)
+                      __u32 mode, struct lustre_handle *lockh)
 {
         ENTRY;
 
@@ -3546,12 +3512,9 @@ static int osc_join_lru(struct obd_export *exp,
 }
 
 static int osc_statfs_interpret(struct ptlrpc_request *req,
-                                void *data, int rc)
+                                struct osc_async_args *aa, int rc)
 {
-        struct osc_async_args *aa = data;
-        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obd_statfs *msfs;
-        __u64 used;
         ENTRY;
 
         if (rc == -EBADR)
@@ -3575,44 +3538,6 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
                 CERROR("Can't unpack obd_statfs\n");
                 GOTO(out, rc = -EPROTO);
         }
-
-        /* Reinitialize the RDONLY and DEGRADED flags at the client
-         * on each statfs, so they don't stay set permanently. */
-        spin_lock(&cli->cl_oscc.oscc_lock);
-
-        if (unlikely(msfs->os_state & OS_STATE_DEGRADED))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
-        else if (unlikely(cli->cl_oscc.oscc_flags & OSCC_FLAG_DEGRADED))
-                cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_DEGRADED;
-
-        if (unlikely(msfs->os_state & OS_STATE_READONLY))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_RDONLY;
-        else if (unlikely(cli->cl_oscc.oscc_flags & OSCC_FLAG_RDONLY))
-                cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_RDONLY;
-
-        /* Add a bit of hysteresis so this flag isn't continually flapping,
-         * and ensure that new files don't get extremely fragmented due to
-         * only a small amount of available space in the filesystem.
-         * We want to set the NOSPC flag when there is less than ~0.1% free
-         * and clear it when there is at least ~0.2% free space, so:
-         *                   avail < ~0.1% max          max = avail + used
-         *            1025 * avail < avail + used       used = blocks - free
-         *            1024 * avail < used
-         *            1024 * avail < blocks - free
-         *                   avail < ((blocks - free) >> 10)
-         *
-         * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
-         * lose that amount of space so in those cases we report no space left
-         * if their is less than 1 GB left.                             */
-        used = min_t(__u64, (msfs->os_blocks - msfs->os_bfree) >> 10, 1 << 30);
-        if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) == 0) &&
-                     ((msfs->os_ffree < 32) || (msfs->os_bavail < used))))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC;
-        else if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) != 0) &&
-                (msfs->os_ffree > 64) && (msfs->os_bavail > (used << 1))))
-                        cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_NOSPC;
-
-        spin_unlock(&cli->cl_oscc.oscc_lock);
 
         memcpy(aa->aa_oi->oi_osfs, msfs, sizeof(*msfs));
 out:
@@ -4030,7 +3955,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                  * from ll_sync thread */
                 spin_lock(&oscc->oscc_lock);
                 new_val = *((obd_id*)val) + 1;
-                if (new_val > oscc->oscc_next_id)
+                if (new_val >= oscc->oscc_next_id);
                         oscc->oscc_next_id = new_val;
                 spin_unlock(&oscc->oscc_lock);
 
@@ -4038,6 +3963,15 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name,
                        oscc->oscc_next_id);
 
+                RETURN(0);
+        }
+
+        if (KEY_IS(KEY_UNLINKED)) {
+                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
+
+                spin_lock(&oscc->oscc_lock);
+                oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
+                spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
 
@@ -4112,37 +4046,31 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_mds_ost_orig_logops;
-static int osc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                         int *index)
+static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                         int count, struct llog_catid *catid,
+                         struct obd_uuid *uuid)
 {
-        struct llog_catid catid;
-        static char name[32] = CATLIST;
         int rc;
         ENTRY;
 
-        LASSERT(index);
-
-        mutex_down(&disk_obd->obd_llog_cat_process);
-
-        rc = llog_get_cat_list(disk_obd, disk_obd, name, *index, 1, &catid);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out_unlock, rc);
+        spin_lock(&obd->obd_dev_lock);
+        if (osc_mds_ost_orig_logops.lop_setup != llog_obd_origin_setup) {
+                osc_mds_ost_orig_logops = llog_lvfs_ops;
+                osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
+                osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
+                osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
+                osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
         }
-#if 0
-        CDEBUG(D_INFO, "%s: Init llog for %s/%d - catid "LPX64"/"LPX64":%x\n",
-               obd->obd_name, uuid->uuid, idx, catid.lci_logid.lgl_oid,
-               catid.lci_logid.lgl_ogr, catid.lci_logid.lgl_ogen);
-#endif
+        spin_unlock(&obd->obd_dev_lock);
 
-        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, disk_obd, 1,
-                        &catid.lci_logid, &osc_mds_ost_orig_logops);
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
+                        &catid->lci_logid, &osc_mds_ost_orig_logops);
         if (rc) {
                 CERROR("failed LLOG_MDS_OST_ORIG_CTXT\n");
                 GOTO (out, rc);
         }
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, disk_obd, 1, NULL,
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
                         &osc_size_repl_logops);
         if (rc) {
                 struct llog_ctxt *ctxt =
@@ -4153,19 +4081,11 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
         }
 out:
         if (rc) {
-                CERROR("osc '%s' tgt '%s' rc=%d\n",
-                       obd->obd_name, disk_obd->obd_name, rc);
+                CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",
+                       obd->obd_name, tgt->obd_name, count, catid, rc);
                 CERROR("logid "LPX64":0x%x\n",
-                       catid.lci_logid.lgl_oid, catid.lci_logid.lgl_ogen);
-        } else {
-                rc = llog_put_cat_list(disk_obd, disk_obd, name, *index, 1,
-                                       &catid);
-                if (rc)
-                        CERROR("rc: %d\n", rc);
+                       catid->lci_logid.lgl_oid, catid->lci_logid.lgl_ogen);
         }
-out_unlock:
-        mutex_up(&disk_obd->obd_llog_cat_process);
-
         RETURN(rc);
 }
 
@@ -4339,28 +4259,6 @@ static int osc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
-/* determine whether the lock can be canceled before replaying the lock
- * during recovery, see bug16774 for detailed information 
- *
- * return values:
- *  zero  - the lock can't be canceled
- *  other - ok to cancel
- */
-static int osc_cancel_for_recovery(struct ldlm_lock *lock)
-{
-        check_res_locked(lock->l_resource);
-        if (lock->l_granted_mode == LCK_GROUP || 
-            lock->l_resource->lr_type != LDLM_EXTENT)
-                RETURN(0);
-
-        /* cancel all unused extent locks with granted mode LCK_PR or LCK_CR */
-        if (lock->l_granted_mode == LCK_PR ||
-            lock->l_granted_mode == LCK_CR)
-                RETURN(1);
-
-        RETURN(0);       
-}
-
 int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         int rc;
@@ -4402,8 +4300,6 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                 }
                 CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
                 sema_init(&cli->cl_grant_sem, 1);
-
-                ns_register_cancel(obd->obd_namespace, osc_cancel_for_recovery);
         }
 
         RETURN(rc);
@@ -4457,11 +4353,17 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 
 int osc_cleanup(struct obd_device *obd)
 {
+        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
         int rc;
 
         ENTRY;
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
+
+        spin_lock(&oscc->oscc_lock);
+        oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
+        oscc->oscc_flags |= OSCC_FLAG_EXITING;
+        spin_unlock(&oscc->oscc_lock);
 
         /* free memory of osc quota cache */
         lquota_cleanup(quota_interface, obd);
@@ -4552,7 +4454,6 @@ struct obd_ops osc_obd_ops = {
         .o_unpackmd             = osc_unpackmd,
         .o_precreate            = osc_precreate,
         .o_create               = osc_create,
-        .o_create_async         = osc_create_async,
         .o_destroy              = osc_destroy,
         .o_getattr              = osc_getattr,
         .o_getattr_async        = osc_getattr_async,
@@ -4561,7 +4462,8 @@ struct obd_ops osc_obd_ops = {
         .o_brw                  = osc_brw,
         .o_brw_async            = osc_brw_async,
         .o_prep_async_page      = osc_prep_async_page,
-        .o_get_lock             = osc_get_lock,
+        .o_reget_short_lock     = osc_reget_short_lock,
+        .o_release_short_lock   = osc_release_short_lock,
         .o_queue_async_io       = osc_queue_async_io,
         .o_set_async_flags      = osc_set_async_flags,
         .o_queue_group_io       = osc_queue_group_io,
@@ -4607,12 +4509,6 @@ int __init osc_init(void)
                         PORTAL_SYMBOL_PUT(osc_quota_interface);
                 RETURN(rc);
         }
-
-        osc_mds_ost_orig_logops = llog_lvfs_ops;
-        osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
-        osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-        osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
-        osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
 
         RETURN(rc);
 }

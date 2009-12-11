@@ -135,7 +135,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
-        struct obd_info *oinfo;
+        struct obd_info oinfo = { { { 0 } } };
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
@@ -149,18 +149,12 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        OBD_ALLOC_PTR(oinfo);
-        if (NULL == oinfo)
-                RETURN(-ENOMEM);
-
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
-        oinfo->oi_oa = &repbody->oa;
-        req->rq_status = obd_getattr(exp, oinfo);
-
-        OBD_FREE_PTR(oinfo);
+        oinfo.oi_oa = &repbody->oa;
+        req->rq_status = obd_getattr(exp, &oinfo);
         RETURN(0);
 }
 
@@ -178,8 +172,9 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
-                                    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
-                                    0);
+                                    cfs_time_current_64() - HZ, 0);
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -207,7 +202,6 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         oti->oti_logcookies = &repbody->oa.o_lcookie;
-
         req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
@@ -278,7 +272,7 @@ static void ost_punch_lock_put(struct obd_export *exp, struct obdo *oa,
 static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
-        struct obd_info *oinfo;
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
@@ -292,48 +286,41 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
-        OBD_ALLOC_PTR(oinfo);
-        if (NULL == oinfo)
-                RETURN(-ENOMEM);
+        oinfo.oi_oa = &body->oa;
+        oinfo.oi_policy.l_extent.start = oinfo.oi_oa->o_size;
+        oinfo.oi_policy.l_extent.end = oinfo.oi_oa->o_blocks;
 
-        oinfo->oi_oa = &body->oa;
-        oinfo->oi_policy.l_extent.start = oinfo->oi_oa->o_size;
-        oinfo->oi_policy.l_extent.end = oinfo->oi_oa->o_blocks;
-
-        if ((oinfo->oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+        if ((oinfo.oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
-                GOTO(out, rc);
+                RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        rc = ost_punch_lock_get(exp, oinfo->oi_oa, &lh);
+        rc = ost_punch_lock_get(exp, oinfo.oi_oa, &lh);
         if (rc == 0) {
-                if (oinfo->oi_oa->o_valid & OBD_MD_FLFLAGS &&
-                    oinfo->oi_oa->o_flags == OBD_FL_TRUNCLOCK)
+                if (oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
+                    oinfo.oi_oa->o_flags == OBD_FL_TRUNCLOCK)
                         /*
                          * If OBD_FL_TRUNCLOCK is the only bit set in
                          * ->o_flags, clear OBD_MD_FLFLAGS to avoid falling
                          * through filter_setattr() to filter_iocontrol().
                          */
-                        oinfo->oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
+                        oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
-                req->rq_status = obd_punch(exp, oinfo, oti, NULL);
-                ost_punch_lock_put(exp, oinfo->oi_oa, &lh);
+                req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
+                ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
         }
-
-        repbody->oa = *oinfo->oi_oa;
-out:
-        OBD_FREE_PTR(oinfo);
+        repbody->oa = *oinfo.oi_oa;
         RETURN(rc);
 }
 
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        struct obd_info *oinfo;
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
@@ -348,19 +335,13 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        OBD_ALLOC_PTR(oinfo);
-        if (NULL == oinfo)
-                RETURN(-ENOMEM);
-
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
 
-        oinfo->oi_oa = &body->oa;
-        req->rq_status = obd_sync(exp, oinfo, repbody->oa.o_size,
+        oinfo.oi_oa = &body->oa;
+        req->rq_status = obd_sync(exp, &oinfo, repbody->oa.o_size,
                                   repbody->oa.o_blocks, NULL);
-        repbody->oa = *oinfo->oi_oa;
-
-        OBD_FREE_PTR(oinfo);
+        repbody->oa = *oinfo.oi_oa;
         RETURN(0);
 }
 
@@ -370,7 +351,7 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
-        struct obd_info *oinfo = NULL;
+        struct obd_info oinfo = { { { 0 } } };
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -382,18 +363,12 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
-        OBD_ALLOC_PTR(oinfo);
-        if (NULL == oinfo)
-                RETURN(-ENOMEM);
-
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
-        oinfo->oi_oa = &repbody->oa;
-        req->rq_status = obd_setattr(exp, oinfo, oti);
-
-        OBD_FREE_PTR(oinfo);
+        oinfo.oi_oa = &repbody->oa;
+        req->rq_status = obd_setattr(exp, &oinfo, oti);
         RETURN(0);
 }
 
@@ -480,12 +455,8 @@ static void ost_brw_lock_put(int mode,
         LASSERT(mode == LCK_PR || mode == LCK_PW);
         LASSERT((obj->ioo_bufcnt > 0 && (niob[0].flags & OBD_BRW_SRVLOCK)) ==
                 lustre_handle_is_used(lh));
-        if (lustre_handle_is_used(lh)) {
-                struct ldlm_lock *lock = ldlm_handle2lock(lh);
-                ldlm_res_lvbo_update(lock->l_resource, NULL, 0, 1);
-                LDLM_LOCK_PUT(lock);
+        if (lustre_handle_is_used(lh))
                 ldlm_lock_decref(lh, mode);
-        }
         EXIT;
 }
 
@@ -729,11 +700,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (desc == NULL)
                 GOTO(out_lock, rc = -ENOMEM);
 
-        if (!lustre_handle_is_used(&lockh))
-                /* no needs to try to prolong lock if server is asked
-                 * to handle locking (= OBD_BRW_SRVLOCK) */
-                ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa,
-                                     LCK_PW | LCK_PR);
+        ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa, LCK_PW | LCK_PR);
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -788,8 +755,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                         obd_evict_inprogress),
                                           &lwi);
                 }
-                /* Check if client was evicted or tried to reconnect already */
-                if (exp->exp_failed || exp->exp_abort_active_req)
+                if (exp->exp_failed)
                         rc = -ENOTCONN;
                 else
                         rc = ptlrpc_start_bulk_transfer(desc);
@@ -798,7 +764,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         do {
                                 long timeoutl = req->rq_deadline -
                                         cfs_time_current_sec();
-                                cfs_duration_t timeout = timeoutl <= 0 ?
+                                cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
                                         CFS_TICK : cfs_time_seconds(timeoutl);
                                 lwi = LWI_TIMEOUT_INTERVAL(timeout,
                                                            cfs_time_seconds(1),
@@ -806,9 +772,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                            desc);
                                 rc = l_wait_event(desc->bd_waitq,
                                                   !ptlrpc_server_bulk_active(desc) ||
-                                                  exp->exp_failed ||
-                                                  exp->exp_abort_active_req,
-                                                  &lwi);
+                                                  exp->exp_failed, &lwi);
                                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                                 /* Wait again if we changed deadline */
                         } while ((rc == -ETIMEDOUT) &&
@@ -824,11 +788,6 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         } else if (exp->exp_failed) {
                                 DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
                                 rc = -ENOTCONN;
-                                ptlrpc_abort_bulk(desc);
-                        } else if (exp->exp_abort_active_req) {
-                                DEBUG_REQ(D_ERROR, req, "Reconnect on bulk PUT");
-                                /* we don't reply anyway */
-                                rc = -ETIMEDOUT;
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
@@ -933,10 +892,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
-        if ((body->oa.o_flags & OBD_BRW_MEMALLOC) &&
-            (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
-                libcfs_memory_pressure_set();
-
         objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
                    sizeof(*ioo);
         ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
@@ -982,10 +937,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
-        if (!lustre_handle_is_used(&lockh))
-                /* no needs to try to prolong lock if server is asked
-                 * to handle locking (= OBD_BRW_SRVLOCK) */
-                ost_rw_prolong_locks(req, ioo, remote_nb,&body->oa,  LCK_PW);
+        ost_rw_prolong_locks(req, ioo, remote_nb,&body->oa,  LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
@@ -1020,10 +972,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                       local_nb[i].offset & ~CFS_PAGE_MASK,
                                       local_nb[i].len);
 
-        /* Check if client was evicted or tried to reconnect while we
-         * were doing i/o before touching network */
-        if (desc->bd_export->exp_failed ||
-            desc->bd_export->exp_abort_active_req)
+        /* Check if client was evicted while we were doing i/o before touching
+           network */
+        if (desc->bd_export->exp_failed)
                 rc = -ENOTCONN;
         else
                 rc = ptlrpc_start_bulk_transfer(desc);
@@ -1032,15 +983,13 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 do {
                         long timeoutl = req->rq_deadline -
                                 cfs_time_current_sec();
-                        cfs_duration_t timeout = timeoutl <= 0 ?
+                        cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
                                 CFS_TICK : cfs_time_seconds(timeoutl);
                         lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
                                                    ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
                                           !ptlrpc_server_bulk_active(desc) ||
-                                          desc->bd_export->exp_failed ||
-                                          desc->bd_export->exp_abort_active_req,
-                                          &lwi);
+                                          desc->bd_export->exp_failed, &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         /* Wait again if we changed deadline */
                 } while ((rc == -ETIMEDOUT) &&
@@ -1056,11 +1005,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 } else if (desc->bd_export->exp_failed) {
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
                         rc = -ENOTCONN;
-                        ptlrpc_abort_bulk(desc);
-                } else if (desc->bd_export->exp_abort_active_req) {
-                        DEBUG_REQ(D_ERROR, req, "Reconnect on bulk GET");
-                        /* we don't reply anyway */
-                        rc = -ETIMEDOUT;
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
@@ -1114,12 +1058,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa, objcount, ioo,
                           remote_nb, npages, local_nb, oti, rc);
-
-        if (rc == -ENOTCONN)
-                /* quota acquire process has been given up because
-                 * either the client has been evicted or the client
-                 * has timed out the request already */
-                no_reply = 1;
 
         if (unlikely(client_cksum != server_cksum && rc == 0)) {
                 int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
@@ -1211,7 +1149,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                       exp->exp_connection->c_remote_uuid.uuid,
                       libcfs_id2str(req->rq_peer));
         }
-        libcfs_memory_pressure_clr();
         RETURN(rc);
 }
 
@@ -1772,10 +1709,11 @@ static int ost_handle(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(current->journal_info == NULL);
+        /* XXX identical to MDS */
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
                 int recovering;
 
-                if (!class_connected_export(req->rq_export)) {
+                if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
                                lustre_msg_get_opc(req->rq_reqmsg),
                                libcfs_id2str(req->rq_peer));
@@ -1822,6 +1760,8 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "create\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
                 OBD_FAIL_TIMEOUT_MS(OBD_FAIL_OST_PAUSE_CREATE, obd_fail_val);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                        GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_create(req->rq_export, req, oti);
@@ -1854,7 +1794,7 @@ static int ost_handle(struct ptlrpc_request *req)
                         GOTO(out, rc = -EPROTO);
                 }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
@@ -2061,7 +2001,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 oss_max_threads = oss_min_threads = oss_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                oss_min_threads = num_possible_cpus() * CFS_NUM_CACHEPAGES >>
+                oss_min_threads = num_possible_cpus() * num_physpages >>
                         (27 - CFS_PAGE_SHIFT);
                 if (oss_min_threads < OSS_THREADS_MIN)
                         oss_min_threads = OSS_THREADS_MIN;

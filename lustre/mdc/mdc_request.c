@@ -164,8 +164,6 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
         lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
-        mdc_update_max_ea_from_body(exp, body);
-
         if (body->eadatasize != 0) {
                 /* reply indicates presence of eadata; check it's there... */
                 eadata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
@@ -305,8 +303,8 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                 rec = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
                                      sizeof(struct mdt_rec_setxattr));
                 rec->sx_opcode = REINT_SETXATTR;
-                rec->sx_fsuid  = cfs_curproc_fsuid();
-                rec->sx_fsgid  = cfs_curproc_fsgid();
+                rec->sx_fsuid  = current->fsuid;
+                rec->sx_fsgid  = current->fsgid;
                 rec->sx_cap    = cfs_curproc_cap_pack();
                 rec->sx_suppgid1 = -1;
                 rec->sx_suppgid2 = -1;
@@ -1356,23 +1354,6 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         RETURN(rc);
 }
 
-/* determine whether the lock can be canceled before replaying it during
- * recovery, non zero value will be return if the lock can be canceled, 
- * or zero returned for not */
-static int mdc_cancel_for_recovery(struct ldlm_lock *lock)
-{
-        if (lock->l_resource->lr_type != LDLM_IBITS)
-                RETURN(0);
-
-	/* FIXME: if we ever get into a situation where there are too many
-	 * opened files with open locks on a single node, then we really
-	 * should replay these open locks to reget it */
-        if (lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_OPEN)
-                RETURN(0);
-
-        RETURN(1);
-}
-
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -1404,9 +1385,7 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
                 ptlrpc_lprocfs_register_obd(obd);
 
-        ns_register_cancel(obd->obd_namespace, mdc_cancel_for_recovery);
-
-        rc = obd_llog_init(obd, obd, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
@@ -1516,14 +1495,15 @@ static int mdc_cleanup(struct obd_device *obd)
 }
 
 
-static int mdc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                         int *index)
+static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                         int count, struct llog_catid *logid,
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
@@ -1531,7 +1511,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                 llog_ctxt_put(ctxt);
         }
 
-        rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
                        &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);

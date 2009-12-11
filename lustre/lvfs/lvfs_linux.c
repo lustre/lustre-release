@@ -86,13 +86,9 @@ static void push_group_info(struct lvfs_run_ctxt *save,
                 current_ngroups = 0;
         } else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
-                struct cred *cred;
                 task_lock(current);
-                save->group_info = current_cred()->group_info;
-                if ((cred = prepare_creds())) {
-                        cred->group_info = ginfo;
-                        commit_creds(cred);
-                }
+                save->group_info = current->group_info;
+                current->group_info = ginfo;
                 task_unlock(current);
 #else
                 LASSERT(ginfo->ngroups <= NGROUPS);
@@ -120,12 +116,8 @@ static void pop_group_info(struct lvfs_run_ctxt *save,
                 current_ngroups = save->ngroups;
         } else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
-                struct cred *cred;
                 task_lock(current);
-                if ((cred = prepare_creds())) {
-                        cred->group_info = save->group_info;
-                        commit_creds(cred);
-                }
+                current->group_info = save->group_info;
                 task_unlock(current);
 #else
                 current->ngroups = save->group_info.ngroups;
@@ -168,18 +160,13 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
-                struct cred *cred;
-                save->luc.luc_fsuid = current_fsuid();
-                save->luc.luc_fsgid = current_fsgid();
-                save->luc.luc_cap = current_cap();
+                save->luc.luc_fsuid = current->fsuid;
+                save->luc.luc_fsgid = current->fsgid;
+                save->luc.luc_cap = current->cap_effective;
 
-                if ((cred = prepare_creds())) {
-                        cred->fsuid = uc->luc_fsuid;
-                        cred->fsgid = uc->luc_fsgid;
-                        cred->cap_effective = uc->luc_cap;
-                        commit_creds(cred);
-                }
-
+                current->fsuid = uc->luc_fsuid;
+                current->fsgid = uc->luc_fsgid;
+                current->cap_effective = uc->luc_cap;
                 push_group_info(save, uc->luc_uce);
         }
         current->fs->umask = 0; /* umask already applied on client */
@@ -230,14 +217,9 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
         mntput(saved->pwdmnt);
         current->fs->umask = saved->luc.luc_umask;
         if (uc) {
-                struct cred *cred;
-                if ((cred = prepare_creds())) {
-                        cred->fsuid = saved->luc.luc_fsuid;
-                        cred->fsgid = saved->luc.luc_fsgid;
-                        cred->cap_effective = saved->luc.luc_cap;
-                        commit_creds(cred);
-                }
-
+                current->fsuid = saved->luc.luc_fsuid;
+                current->fsgid = saved->luc.luc_fsgid;
+                current->cap_effective = saved->luc.luc_cap;
                 pop_group_info(saved, uc->luc_uce);
         }
 
@@ -437,7 +419,7 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
                              int flags)
 {
         mntget(ctxt->pwdmnt);
-        return ll_dentry_open(de, ctxt->pwdmnt, flags, current_cred());
+        return dentry_open(de, ctxt->pwdmnt, flags);
 }
 EXPORT_SYMBOL(l_dentry_open);
 

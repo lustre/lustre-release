@@ -40,7 +40,6 @@
 #endif
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/fs_struct.h>
 #include <libcfs/libcfs.h>
 
 #if defined(CONFIG_KGDB)
@@ -62,7 +61,14 @@ void cfs_daemonize(char *str) {
         unsigned long flags;
 
         lock_kernel();
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63))
         daemonize(str);
+#else
+        daemonize();
+        exit_files(current);
+        reparent_to_init();
+        snprintf (current->comm, sizeof (current->comm), "%s", str);
+#endif
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
@@ -71,23 +77,18 @@ void cfs_daemonize(char *str) {
 }
 
 int cfs_daemonize_ctxt(char *str) {
-
-        cfs_daemonize(str);
-#ifndef HAVE_UNSHARE_FS_STRUCT
-        {
         struct task_struct *tsk = current;
         struct fs_struct *fs = NULL;
+
+        cfs_daemonize(str);
         fs = copy_fs_struct(tsk->fs);
         if (fs == NULL)
                 return -ENOMEM;
         exit_fs(tsk);
         tsk->fs = fs;
-        }
-#else
-        unshare_fs_struct();
-#endif
         return 0;
 }
+
 
 sigset_t
 cfs_get_blockedsigs(void)

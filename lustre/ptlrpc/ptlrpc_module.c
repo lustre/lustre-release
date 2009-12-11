@@ -162,8 +162,6 @@ EXPORT_SYMBOL(ptlrpc_add_rqs_to_pool);
 EXPORT_SYMBOL(ptlrpc_init_rq_pool);
 EXPORT_SYMBOL(ptlrpc_free_rq_pool);
 EXPORT_SYMBOL(ptlrpc_prep_req_pool);
-EXPORT_SYMBOL(ptlrpc_prep_fakereq);
-EXPORT_SYMBOL(ptlrpc_fakereq_finished);
 EXPORT_SYMBOL(ptlrpc_at_set_req_timeout);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_unregister_reply);
@@ -200,6 +198,7 @@ EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
+EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
 EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 

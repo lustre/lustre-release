@@ -150,8 +150,6 @@
 #define SEQ_DATA_PORTAL                31
 #define SEQ_CONTROLLER_PORTAL          32
 
-/* Portal 63 is reserved for the Cray Inc DVS - nic@cray.com, roe@cray.com, n8851@cray.com */
-
 #define SVC_KILLED               1
 #define SVC_EVENT                2
 #define SVC_SIGNAL               4
@@ -613,6 +611,36 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
+enum obd_statfs_state {
+        OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
+        OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
+        OS_STATE_RDONLY_1       = 0x00000004, /**< obsolete 1.6, was EROFS=30 */
+        OS_STATE_RDONLY_2       = 0x00000008, /**< obsolete 1.6, was EROFS=30 */
+        OS_STATE_RDONLY_3       = 0x00000010, /**< obsolete 1.6, was EROFS=30 */
+};
+
+struct obd_statfs {
+        __u64           os_type;
+        __u64           os_blocks;
+        __u64           os_bfree;
+        __u64           os_bavail;
+        __u64           os_files;
+        __u64           os_ffree;
+        __u8            os_fsid[40];
+        __u32           os_bsize;
+        __u32           os_namelen;
+        __u64           os_maxbytes;
+        __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
+        __u32           os_spare1;
+        __u32           os_spare2;
+        __u32           os_spare3;
+        __u32           os_spare4;
+        __u32           os_spare5;
+        __u32           os_spare6;
+        __u32           os_spare7;
+        __u32           os_spare8;
+        __u32           os_spare9;
+};
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
@@ -639,7 +667,6 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_NOQUOTA        0x100
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 #define OBD_BRW_ASYNC          0x400 /* Server may delay commit to disk */
-#define OBD_BRW_MEMALLOC       0x800 /* Client runs in the "kswapd" context */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -771,6 +798,21 @@ enum lu_dirent_attrs {
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
+struct lu_fid {
+        __u64 f_seq;  /* holds fid sequence. Lustre should support 2^64
+                       * objects, thus even if one sequence has one object we
+                       * reach this value. */
+        __u32 f_oid;  /* fid number within its sequence. */
+        __u32 f_ver;  /* holds fid version. */
+};
+
+#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
+
+#define PFID(fid)     \
+        fid_seq(fid), \
+        fid_oid(fid), \
+        fid_ver(fid)
+
 enum {
         /** put FID sequence at this offset in ldlm_res_id. */
         LUSTRE_RES_ID_SEQ_OFF = 0,
@@ -856,6 +898,37 @@ enum {
 enum lu_cli_type {
         LUSTRE_SEQ_METADATA,
         LUSTRE_SEQ_DATA
+};
+
+struct lu_client_seq {
+        /* Sequence-controller export. */
+        struct obd_export      *lcs_exp;
+        struct semaphore        lcs_sem;
+
+        /*
+         * Range of allowed for allocation sequences. When using lu_client_seq
+         * on clients, this contains meta-sequence range. And for servers this
+         * contains super-sequence range.
+         */
+        struct lu_seq_range         lcs_space;
+
+        /* This holds last allocated fid in last obtained seq */
+        struct lu_fid           lcs_fid;
+
+        /* LUSTRE_SEQ_METADATA or LUSTRE_SEQ_DATA */
+        enum lu_cli_type        lcs_type;
+        /*
+         * Service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs.
+         */
+        char                    lcs_name[80];
+
+        /*
+         * Sequence width, that is how many objects may be allocated in one
+         * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH.
+         */
+        __u64                   lcs_width;
+
 };
 
 /*
@@ -2084,7 +2157,7 @@ static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
         obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
 
         LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
-
+        
         memcpy(lobdo, wobdo, sizeof(*lobdo));
         lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
         lobdo->o_flags |= local_flags;

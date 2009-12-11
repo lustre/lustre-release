@@ -477,6 +477,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                  * from a list */
                 LDLM_LOCK_PUT(lock);
 
+        LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
         return ret;
 }
 
@@ -1338,6 +1339,8 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 RETURN(0);
 
+        LDLM_DEBUG_NOLOCK("server-side cancel handler START: %d locks",
+                          count - first);
         for (i = first; i < count; i++) {
                 lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
                 if (!lock) {
@@ -1367,6 +1370,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                 ldlm_reprocess_all(pres);
                 ldlm_resource_putref(pres);
         }
+        LDLM_DEBUG_NOLOCK("server-side cancel handler END");
         RETURN(done);
 }
 
@@ -1821,14 +1825,12 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                        libcfs_id2str(req->rq_peer),
                        lustre_msg_get_handle(req->rq_reqmsg)->cookie);
 
-                if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_CANCEL) {
-                        dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
-                                                     sizeof(*dlm_req),
-                                                     lustre_swab_ldlm_request);
-                        if (dlm_req != NULL)
-                                ldlm_lock_dump_handle(D_ERROR,
-                                                      &dlm_req->lock_handle[0]);
-                }
+                dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
+                                             sizeof(*dlm_req),
+                                             lustre_swab_ldlm_request);
+                if (dlm_req != NULL)
+                        ldlm_lock_dump_handle(D_ERROR,
+                                              &dlm_req->lock_handle[0]);
 
                 ldlm_callback_reply(req, -ENOTCONN);
                 RETURN(0);
@@ -2355,6 +2357,7 @@ EXPORT_SYMBOL(__ldlm_handle2lock);
 EXPORT_SYMBOL(ldlm_lock_get);
 EXPORT_SYMBOL(ldlm_lock_put);
 EXPORT_SYMBOL(ldlm_lock_fast_match);
+EXPORT_SYMBOL(ldlm_lock_fast_release);
 EXPORT_SYMBOL(ldlm_lock_match);
 EXPORT_SYMBOL(ldlm_lock_cancel);
 EXPORT_SYMBOL(ldlm_lock_addref);
@@ -2365,6 +2368,7 @@ EXPORT_SYMBOL(ldlm_lock_set_data);
 EXPORT_SYMBOL(ldlm_it2str);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_lock_dump_handle);
+EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(ldlm_reprocess_all_ns);
 EXPORT_SYMBOL(ldlm_lock_allow_match);
 
@@ -2421,7 +2425,6 @@ EXPORT_SYMBOL(client_obd_setup);
 EXPORT_SYMBOL(client_obd_cleanup);
 EXPORT_SYMBOL(client_connect_import);
 EXPORT_SYMBOL(client_disconnect_export);
-EXPORT_SYMBOL(server_disconnect_export);
 EXPORT_SYMBOL(target_abort_recovery);
 EXPORT_SYMBOL(target_cleanup_recovery);
 EXPORT_SYMBOL(target_handle_connect);

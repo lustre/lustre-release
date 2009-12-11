@@ -152,7 +152,7 @@ AC_CONFIG_SUBDIRS(libsysio)
 # Handle internal/external lustre-iokit
 #
 AC_DEFUN([LB_PATH_LUSTREIOKIT],
-[AC_ARG_WITH([lustre-iokit],
+[AC_ARG_WITH([],
 	AC_HELP_STRING([--with-lustre-iokit=path],
 			[set path to lustre-iokit source (default is included lustre-iokit)]),
 	[],[
@@ -202,10 +202,6 @@ AC_DEFUN([LB_PATH_LDISKFS],
 			with_ldiskfs=no
 		fi
 	])
-AC_ARG_WITH([ldiskfs-inkernel],
-	AC_HELP_STRING([--with-ldiskfs-inkernel],
-			[use ldiskfs built in to the kernel]),
-	[with_ldiskfs=inkernel], [])
 AC_MSG_CHECKING([location of ldiskfs])
 case x$with_ldiskfs in
 	xyes)
@@ -219,12 +215,6 @@ case x$with_ldiskfs in
 	xno)
 		AC_MSG_RESULT([disabled])
 		;;
-	xinkernel)
-		AC_MSG_RESULT([inkernel])
-		LB_CHECK_FILE([$LINUX/include/linux/ldiskfs_fs.h],[],[
-			AC_MSG_ERROR([ldiskfs was not found in $LINUX/include/linux/ldiskfs_fs.h])
-		])
-		;;
 	*)
 		AC_MSG_RESULT([$with_ldiskfs])
 		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/linux/ldiskfs_fs.h],[],[
@@ -236,7 +226,6 @@ esac
 AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
 AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
-AM_CONDITIONAL(LDISKFS_IN_KERNEL, test x$with_ldiskfs = xinkernel)
 
 if test x$enable_ext4 = xyes ; then
 	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
@@ -244,46 +233,6 @@ fi
 
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
-])
-
-AC_DEFUN([LC_KERNEL_WITH_EXT4],
-[if test -f $LINUX/fs/ext4/ext4.h ; then
-$1
-else
-$2
-fi
-])
-
-#
-# LB_HAVE_EXT4_ENABLED
-#
-AC_DEFUN([LB_HAVE_EXT4_ENABLED],
-[
-if test x$RHEL_KERNEL = xyes; then
-	AC_ARG_ENABLE([ext4],
-		 AC_HELP_STRING([--enable-ext4],
-				[enable building of ldiskfs based on ext4]),
-		[],
-		[
-			if test x$ldiskfs_is_ext4 = xyes; then
-				enable_ext4=yes
-			else
-				enable_ext4=no
-			fi
-		])
-else
-	case $LINUXRELEASE in
-	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
-	2.6.2[0-6]*) enable_ext4='no' ;;
-	*)  LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
-				[enable_ext4='no']) ;;
-	esac
-fi
-if test x$enable_ext4 = xyes; then
-	 ac_configure_args="$ac_configure_args --enable-ext4"
-fi
-AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
-AC_MSG_RESULT([$enable_ext4])
 ])
 
 # Define no libcfs by default.
@@ -318,6 +267,8 @@ AC_DEFUN([LB_DEFINE_LDISKFS_OPTIONS],
 	AC_DEFINE(CONFIG_LDISKFSDEV_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFSDEV_FS_XATTR, 1, [enable extented attributes for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFSDEV_FS_SECURITY, 1, [enable fs security for ldiskfs])
+	AC_DEFINE(CONFIG_LDISKFS_FS_NFS4ACL, 1, [enable fs security for ldiskfs])
+
 ])
 
 #
@@ -566,11 +517,12 @@ if test x$dmu_osd = xyes; then
 		AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
 	else
 		# Kernel DMU
-		SPL_SUBDIR="spl"
-		ZFS_SUBDIR="zfs"
+		SPL_DIR="$PWD/spl"
+		ZFS_DIR="$PWD/zfs"
+		AC_SUBST(SPL_DIR)
+		AC_SUBST(ZFS_DIR)
 
-		SPL_DIR="$PWD/$SPL_SUBDIR"
-		ZFS_DIR="$PWD/$ZFS_SUBDIR"
+		AC_SUBST(spl_src)
 
 		LB_CHECK_FILE([$SPL_DIR/module/spl/spl-generic.c],[],[
 			AC_MSG_ERROR([A complete SPL tree was not found in $SPL_DIR.])
@@ -585,10 +537,6 @@ if test x$dmu_osd = xyes; then
 		AC_CONFIG_SUBDIRS(zfs)
 	fi
 fi
-AC_SUBST(SPL_SUBDIR)
-AC_SUBST(ZFS_SUBDIR)
-AC_SUBST(SPL_DIR)
-AC_SUBST(ZFS_DIR)
 AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
 AM_CONDITIONAL(KDMU, test x$dmu_osd$enable_uoss = xyesno)
 ])
@@ -913,8 +861,8 @@ LN_CONFIG_CDEBUG
 LC_QUOTA
 
 LB_CONFIG_MODULES
+
 LN_CONFIG_USERSPACE
-LB_HAVE_EXT4_ENABLED
 
 LB_PATH_DMU
 LB_PATH_LIBSYSIO

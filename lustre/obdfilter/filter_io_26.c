@@ -129,7 +129,7 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 #define DIO_RETURN(a)
 static void dio_complete_routine(struct bio *bio, int error)
 #else
-#define DIO_RETURN(a)   a
+#define DIO_RETURN(a)   (a)
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 #endif
 {
@@ -148,11 +148,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 	 * the bio_end_io routine is never called for partial completions,
 	 * so this check is no longer needed. */
 	if (bio->bi_size)		       /* Not complete */
-                return DIO_RETURN(1);
+		return DIO_RETURN(1);
 #endif
 
         if (unlikely(iobuf == NULL)) {
-                LCONSOLE_ERROR("bio->bi_private is NULL!  This should never "
+                CERROR("***** bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
                        "report this to <http://bugzilla.lustre.org/> , along "
@@ -162,11 +162,10 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        "IO - you will probably have to reboot this node.\n");
                 CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
                        "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
-                       "bi_private: %p, error: %d\n",
-                       bio->bi_next, bio->bi_flags,
+                       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
                        bio->bi_end_io, atomic_read(&bio->bi_cnt),
-                       bio->bi_private, error);
+                       bio->bi_private);
                 return DIO_RETURN(0);
         }
 
@@ -590,7 +589,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         void *wait_handle = NULL;
         int total_size = 0;
         int quota_pending[2] = {0, 0}, quota_pages = 0;
-        unsigned int qcids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
+        unsigned int qcids[MAXQUOTAS] = { oa->o_uid, oa->o_gid };
         int sync_journal_commit = obd->u.filter.fo_syncjournal;
         ENTRY;
 
@@ -665,11 +664,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
-        rc = lquota_chkquota(filter_quota_interface_ref, exp, qcids[0],
-                             qcids[1], quota_pages, quota_pending, oti,
-                             inode, obj->ioo_bufcnt);
-        if (rc == -ENOTCONN)
-                GOTO(cleanup, rc);
+        lquota_chkquota(filter_quota_interface_ref, obd, qcids[0], qcids[1],
+                        quota_pages, quota_pending, oti, inode,
+                        obj->ioo_bufcnt);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;

@@ -576,8 +576,7 @@ static int check_file_size(char *file, off_t size)
                 return(1);
         }
         if (statbuf.st_size != size) {
-                printf("size of %s: %lld != %lld\n", file,
-                       (long long)statbuf.st_size, (long long )size);
+                printf("size of %s: %ld != %lld\n", file, statbuf.st_size, (unsigned long long )size);
                 return(-1);
         }
         return 0;
@@ -612,7 +611,7 @@ int t20(char *name)
         int fd;
         struct iovec iov[2];
         char buf[100];
-        long ret;
+        ssize_t ret;
         ENTER("trap app's general bad pointer for file i/o");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t20_file", lustre_path);
 
@@ -729,7 +728,7 @@ int t22(char *name)
         int fd;
         char *str = "1234567890";
         char buf[100];
-        long ret;
+        ssize_t ret;
         ENTER("make sure O_APPEND take effect");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t22_file", lustre_path);
 
@@ -1091,14 +1090,8 @@ int t52(char *name)
         printf("st_atime=%s", ctime(&statbuf.st_atime));
         atime = statbuf.st_atime;
         for (i = 0; i < 3; i++) {
-                ssize_t num_read;
                 sleep(2);
-                /* should not ignore read(2)'s return value */
-                num_read = read(fd, buf, sizeof(buf));
-                if (num_read < 0 ) {
-                        printf("read from %s: %s\n", file, strerror(errno));
-                        return -1;
-                }
+                read(fd, buf, sizeof(buf));
                 stat(file, &statbuf);
                 printf("st_atime=%s", ctime(&statbuf.st_atime));
                 diff = statbuf.st_atime - atime;
@@ -1365,7 +1358,7 @@ int t56(char *name)
         int fd;
         size_t nbytes;
         off_t basep = 0;
-        long rc = 0;
+        ssize_t rc = 0;
         struct dirent dir;
 
         ENTER("getdirentries should fail if nbytes is too small");

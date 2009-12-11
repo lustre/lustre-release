@@ -360,7 +360,6 @@ typedef struct {
         stt_timer_t       sn_timer;
         struct list_head  sn_batches; /* list of batches */
         char              sn_name[LST_NAME_SIZE];
-        atomic_t          sn_refcount;
         atomic_t          sn_brw_errors;
         atomic_t          sn_ping_errors;
 } sfw_session_t;
@@ -448,7 +447,6 @@ void sfw_unpack_message(srpc_msg_t *msg);
 void sfw_free_pages(srpc_server_rpc_t *rpc);
 void sfw_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i);
 int sfw_alloc_pages(srpc_server_rpc_t *rpc, int npages, int sink);
-int sfw_make_session (srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply);
 
 srpc_client_rpc_t *
 srpc_create_client_rpc(lnet_process_id_t peer, int service,

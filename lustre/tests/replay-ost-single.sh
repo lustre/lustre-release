@@ -17,7 +17,7 @@ init_test_env $@
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
-    skip_env "$0: Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    skip "$0: Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
     exit 0
 fi
 
@@ -142,7 +142,7 @@ iozone_bg () {
 }
 
 test_5() {
-    [ -z "`which iozone 2> /dev/null`" ] && skip_env "iozone missing" && return 0
+    [ -z "`which iozone 2> /dev/null`" ] && skip "iozone missing" && return 0
 
     # striping is -c 1, get min of available
     local minavail=$(lctl get_param -n osc.*[oO][sS][cC][-_]*.kbytesavail | sort -n | head -1)

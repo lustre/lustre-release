@@ -67,13 +67,7 @@
 # define V2_DQTREEOFF    QT_TREEOFF
 #endif
 #include <linux/parser.h>
-#if defined(HAVE_EXT3_XATTR_H)
 #include <ext3/xattr.h>
-#else
-/* ext3 xattr.h not available in rh style kernel-devel rpm */
-extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
-extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, const void *, size_t, int);
-#endif
 
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
@@ -136,18 +130,6 @@ struct fsfilt_cb_data {
 #define ext3_ext_store_pblock(ex, pblock)  ((ex)->ee_start = cpu_to_le32(pblock))
 #define ext3_inode_bitmap(sb,desc) le32_to_cpu((desc)->bg_inode_bitmap)
 #endif
-
-#ifndef ext3_find_next_bit
-#define ext3_find_next_bit           ext2_find_next_bit
-#endif
-
-#ifndef ext2_find_next_bit
-#ifdef __LITTLE_ENDIAN
-#define ext2_find_next_bit(addr, size, off) find_next_bit((unsigned long *)(addr), (size), (off))
-#else
-error "Need implementation of find_next_bit on big-endian systems"
-#endif	/* __LITTLE_ENDIAN */
-#endif	/* !ext2_find_next_le_bit */
 
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
@@ -1251,9 +1233,9 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
                 size = i_size_read(inode) - *offs;
                 unlock_kernel();
                 if (size < 0) {
-                        CDEBUG(D_EXT2, "size %llu is too short for read @%llu\n",
-                               i_size_read(inode), *offs);
-                        return -EBADR;
+                        CERROR("size %llu is too short for read %u@%llu\n",
+                               i_size_read(inode), size, *offs);
+                        return -EIO;
                 } else if (size == 0) {
                         return 0;
                 }
@@ -1709,9 +1691,8 @@ static inline int read_old_dqinfo(struct super_block *sb, int type,
         RETURN(rc);
 }
 
-#ifndef HAVE_EXT4_LDISKFS
 static inline struct ext3_group_desc *
-get_group_desc(struct super_block *sb, int group, struct buffer_head **bh)
+get_group_desc(struct super_block *sb, int group)
 {
         unsigned long desc_block, desc;
         struct ext3_group_desc *gdp;
@@ -1724,24 +1705,36 @@ get_group_desc(struct super_block *sb, int group, struct buffer_head **bh)
         return gdp + desc;
 }
 
+#ifndef HAVE_EXT4_LDISKFS
 static inline struct buffer_head *
 ext3_read_inode_bitmap(struct super_block *sb, unsigned long group)
 {
         struct ext3_group_desc *desc;
         struct buffer_head *bh;
 
-        desc = get_group_desc(sb, group, NULL);
+        desc = get_group_desc(sb, group);
         bh = sb_bread(sb, ext3_inode_bitmap(sb, desc));
         return bh;
 }
-
-static __u32 ext3_itable_unused_count(struct super_block *sb,
-                               struct ext3_group_desc *bg) {
-       return le16_to_cpu(bg->bg_itable_unused);
-}
-#else
-#define get_group_desc ext3_get_group_desc
 #endif
+
+static inline struct inode *ext3_iget_inuse(struct super_block *sb,
+                                     struct buffer_head *bitmap_bh,
+                                     int index, unsigned long ino)
+{
+        struct inode *inode = NULL;
+
+        if (ext3_test_bit(index, bitmap_bh->b_data))
+#ifdef HAVE_READ_INODE_IN_SBOPS
+                inode = iget(sb, ino);
+#else
+                inode = ext3_iget(sb, ino);
+#endif
+        if (IS_ERR(inode))
+	        /* Newer kernels return an error instead of a NULL pointer */
+                inode = NULL;
+        return inode;
+}
 
 struct qchk_ctxt {
         struct hlist_head       qckt_hash[NR_DQHASH];        /* quotacheck hash */
@@ -1985,18 +1978,14 @@ static int prune_chkquots(struct super_block *sb,
         return error;
 }
 
-#ifndef EXT3_FEATURE_RO_COMPAT_GDT_CSUM
-#define EXT3_FEATURE_RO_COMPAT_GDT_CSUM 0x0010
-#endif
-
 static int fsfilt_ext3_quotacheck(struct super_block *sb,
                                   struct obd_quotactl *oqc)
 {
         struct ext3_sb_info *sbi = EXT3_SB(sb);
-        int i, group, uninit_feat = 0;
+        int i, group;
         struct qchk_ctxt *qctxt;
         struct buffer_head *bitmap_bh = NULL;
-        unsigned long ino, inode_inuse;
+        unsigned long ino;
         struct inode *inode;
         int rc = 0;
         ENTRY;
@@ -2027,62 +2016,21 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         GOTO(out, rc);
                 }
         }
-        if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT3_FEATURE_RO_COMPAT_GDT_CSUM))
-                /* This filesystem supports the uninit group feature */
-                uninit_feat = 1;
-
-        /* number of inodes that have been allocated */
-        inode_inuse = sbi->s_inodes_per_group * sbi->s_groups_count -
-                      percpu_counter_sum(&sbi->s_freeinodes_counter);
 
         /* check quota and update in hash */
-        for (group = 0; group < sbi->s_groups_count && inode_inuse > 0;
-             group++) {
-                unsigned long used_count = sbi->s_inodes_per_group;
-
-                if (uninit_feat) {
-                        struct ext3_group_desc *desc;
-                        desc = get_group_desc(sb, group, NULL);
-                        if (!desc)
-                                GOTO(out, -EIO);
-
-                        /* we don't really need to take the group lock here,
-                         * but it may be useful if one day we support online
-                         * quotacheck */
-                        spin_lock(sb_bgl_lock(sbi, group));
-                        if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
-                                /* no inode in use in this group, just skip it */
-                                spin_unlock(sb_bgl_lock(sbi, group));
-                                continue;
-                        }
-                        used_count -= ext3_itable_unused_count(sb, desc);
-                        spin_unlock(sb_bgl_lock(sbi, group));
-                }
-
+        for (group = 0; group < sbi->s_groups_count; group++) {
+                ino = group * sbi->s_inodes_per_group + 1;
                 bitmap_bh = ext3_read_inode_bitmap(sb, group);
                 if (!bitmap_bh) {
-                        CERROR("%s: ext3_read_inode_bitmap group %d failed\n",
-                               sb->s_id, group);
+                        CERROR("ext3_read_inode_bitmap group %d failed", group);
                         GOTO(out, -EIO);
                 }
 
-                i = 0;
-                while (i < used_count &&
-                       (i = ext3_find_next_bit(bitmap_bh->b_data,
-                                               used_count, i)) < used_count) {
-                        inode_inuse--;
-                        i++;
-                        ino = i + group * sbi->s_inodes_per_group;
+                for (i = 0; i < sbi->s_inodes_per_group; i++, ino++) {
                         if (ino < sbi->s_first_ino)
                                 continue;
-#if defined(HAVE_EXT4_LDISKFS) || !defined(HAVE_READ_INODE_IN_SBOPS)
-                        inode = ext3_iget(sb, ino);
-#else
-                        inode = iget(sb, ino);
-#endif
-                        if (!inode || IS_ERR(inode))
-                                continue;
 
+                        inode = ext3_iget_inuse(sb, bitmap_bh, i, ino);
                         rc = add_inode_quota(inode, qctxt, oqc);
                         iput(inode);
                         if (rc) {
@@ -2090,6 +2038,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                                 GOTO(out, rc);
                         }
                 }
+
                 brelse(bitmap_bh);
         }
 
@@ -2109,7 +2058,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
                 LASSERT(sb_dqopt(sb)->files[i] != NULL);
                 INIT_LIST_HEAD(&id_list);
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
+#ifndef KERNEL_SUPPORTS_QUOTA_READ 
                 rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
 #else
                 rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
@@ -2253,66 +2202,6 @@ static int fsfilt_ext3_get_mblk(struct super_block *sb, int *count,
 static lvfs_sbdev_type fsfilt_ext3_journal_sbdev(struct super_block *sb)
 {
         return (EXT3_SB(sb)->journal_bdev);
-}
-
-ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
-                          char *buf, int count, loff_t pos)
-{
-        loff_t p = pos;
-        int rc;
-
-        /* Support for both adm and op quota files must be provided */
-        if (f) {
-                rc = fsfilt_ext3_read_record(f, buf, count, &p);
-                rc = rc < 0 ? rc : p - pos;
-        } else {
-                struct super_block *sb = inode->i_sb;
-                rc = sb->s_op->quota_read(sb, type, buf, count, pos);
-        }
-        return rc;
-}
-
-ssize_t lustre_write_quota(struct file *f, char *buf, int count, loff_t pos)
-{
-        loff_t p = pos;
-        int rc;
-
-        /* Only adm quota files are supported, op updates are handled by vfs */
-        rc = fsfilt_ext3_write_record(f, buf, count, &p, 0);
-        rc = rc < 0 ? rc : p - pos;
-
-        return rc;
-}
-
-void *lustre_quota_journal_start(struct inode *inode, int delete)
-{
-        handle_t *handle;
-        unsigned block_count;
-
-        if (delete) {
-                /* each indirect block (+4) may become free, attaching to the
-                 * header list of free blocks (+1); the data block (+1) may
-                 * become a free block (+0) or a block with free dqentries (+0) */
-                block_count = (4 + 1) + 1;
-                handle = ext3_journal_start(inode,
-                            block_count*FSFILT_DATA_TRANS_BLOCKS(inode->i_sb)+2);
-        } else {
-                /* indirect blocks are touched (+4), each causes file expansion (+0) or
-                 * freeblk reusage with a header update (+1); dqentry is either reused
-                 * causing update of the entry block (+1), prev (+1) and next (+1) or
-                 * a new block allocation (+1) with a header update (+1)              */
-                block_count = (4 + 1) + 3;
-                handle = ext3_journal_start(inode,
-                             block_count*FSFILT_DATA_TRANS_BLOCKS(inode->i_sb)+2);
-
-        }
-
-        return handle;
-}
-
-void lustre_quota_journal_stop(void *handle)
-{
-        ext3_journal_stop((handle_t *)handle);
 }
 
 static struct fsfilt_operations fsfilt_ext3_ops = {

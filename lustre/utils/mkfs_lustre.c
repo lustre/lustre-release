@@ -62,7 +62,6 @@
 #include <string.h>
 #include <getopt.h>
 #include <limits.h>
-#include <ctype.h>
 
 #ifdef __linux__
 /* kp30.h is not really needed here, but on SLES10/PPC, fs.h includes idr.h which
@@ -194,12 +193,7 @@ int get_os_version()
                         fprintf(stderr, "%s: Warning: Can't resolve kernel "
                                 "version, assuming 2.6\n", progname);
                 else {
-                        if (read(fd, release, 4) < 0) {
-                                fprintf(stderr, "reading from /proc/sys/kernel"
-                                                "/osrelease: %s\n", strerror(errno));
-                                close(fd);
-                                exit(-1);
-                        }
+                        read(fd, release, 4);
                         close(fd);
                 }
                 if (strncmp(release, "2.4.", 4) == 0)
@@ -269,10 +263,6 @@ int loop_setup(struct mkfs_opts *mop)
                         snprintf(cmd, cmdsz, "losetup %s %s", l_device,
                                  mop->mo_device);
                         ret = run_command(cmd, cmdsz);
-                        if (ret == 256)
-                                /* someone else picked up this loop device
-                                 * behind our back */
-                                continue;
                         if (ret) {
                                 fprintf(stderr, "%s: error %d on losetup: %s\n",
                                         progname, ret, strerror(ret));
@@ -746,7 +736,6 @@ int write_local_files(struct mkfs_opts *mop)
         char *dev;
         FILE *filep;
         int ret = 0;
-        size_t num;
 
         /* Mount this device temporarily in order to write these files */
         if (!mkdtemp(mntpt)) {
@@ -792,12 +781,7 @@ int write_local_files(struct mkfs_opts *mop)
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         }
-        num = fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-        if (num < 1 && ferror(filep)) {
-                fprintf(stderr, "%s: Unable to write to file (%s): %s\n",
-                        progname, filepnm, strerror(errno));
-                goto out_umnt;
-        }
+        fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
 
         /* COMPAT_146 */
@@ -904,14 +888,8 @@ int read_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/mountdata", tmpdir);
         filep = fopen(filepnm, "r");
         if (filep) {
-                size_t num_read;
                 vprint("Reading %s\n", MOUNT_DATA_FILE);
-                num_read = fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-                if (num_read < 1 && ferror(filep)) {
-                        fprintf(stderr, "%s: Unable to read from file (%s): %s\n",
-                                progname, filepnm, strerror(errno));
-                        goto out_close;
-                }
+                fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         } else {
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
@@ -1383,76 +1361,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         return 0;
 }
 
-/* Search for opt in mntlist, returning true if found.
- */
-static int in_mntlist(char *opt, char *mntlist)
-{
-        char *ml, *mlp, *item, *ctx;
-
-        if (!(ml = strdup(mntlist))) {
-                fprintf(stderr, "%s: out of memory\n", progname);
-                exit(1);
-        }
-        mlp = ml;
-        while ((item = strtok_r(mlp, ",", &ctx))) {
-                if (!strcmp(opt, item))
-                        break;
-                mlp = NULL;
-        }
-        free(ml);
-        return (item != NULL);
-}
-
-/* Issue a message on stderr for every item in wanted_mountopts that is not
- * present in mountopts.  The justwarn boolean toggles between error and
- * warning message.  Return an error count.
- */
-static int check_mountfsoptions(char *mountopts, char *wanted_mountopts,
-                                int justwarn)
-{
-        char *ml, *mlp, *item, *ctx = NULL;
-        int errors = 0;
-
-        if (!(ml = strdup(wanted_mountopts))) {
-                fprintf(stderr, "%s: out of memory\n", progname);
-                exit(1);
-        }
-        mlp = ml;
-        while ((item = strtok_r(mlp, ",", &ctx))) {
-                if (!in_mntlist(item, mountopts)) {
-                        fprintf(stderr, "%s: %s mount option `%s' is missing\n",
-                                progname, justwarn ? "Warning: default"
-                                : "Error: mandatory", item);
-                        errors++;
-                }
-                mlp = NULL;
-        }
-        free(ml);
-        return errors;
-}
-
-/* Trim embedded white space, leading and trailing commas from string s.
- */
-static void trim_mountfsoptions(char *s)
-{
-        char *p;
-
-        for (p = s; *p; ) {
-                if (isspace(*p)) {
-                        memmove(p, p + 1, strlen(p + 1) + 1);
-                        continue;
-                }
-                p++;
-        }
-
-        while (s[0] == ',')
-                memmove(&s[0], &s[1], strlen(&s[1]) + 1);
-
-        p = s + strlen(s) - 1;
-        while (p >= s && *p == ',')
-                *p-- = '\0';
-}
-
 int main(int argc, char *const argv[])
 {
         struct mkfs_opts mop;
@@ -1557,8 +1465,7 @@ int main(int argc, char *const argv[])
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS:
         case LDD_MT_LDISKFS2: {
-                strscat(default_mountopts, ",errors=remount-ro",
-                        sizeof(default_mountopts));
+                sprintf(always_mountopts, "errors=remount-ro");
                 if (IS_MDT(ldd) || IS_MGS(ldd))
                         strscat(always_mountopts, ",iopen_nopriv,user_xattr",
                                 sizeof(always_mountopts));
@@ -1578,7 +1485,7 @@ int main(int argc, char *const argv[])
         }
         case LDD_MT_SMFS: {
                 mop.mo_flags |= MO_IS_LOOP;
-                sprintf(always_mountopts, ",type=ext3,dev=%s",
+                sprintf(always_mountopts, "type=ext3,dev=%s",
                         mop.mo_device);
                 break;
         }
@@ -1593,13 +1500,10 @@ int main(int argc, char *const argv[])
         }
 
         if (mountopts) {
-                trim_mountfsoptions(mountopts);
-                (void)check_mountfsoptions(mountopts, default_mountopts, 1);
-                if (check_mountfsoptions(mountopts, always_mountopts, 0)) {
-                        ret = EINVAL;
-                        goto out;
-                }
-                sprintf(ldd->ldd_mount_opts, "%s", mountopts);
+                /* If user specifies mount opts, don't use defaults,
+                   but always use always_mountopts */
+                sprintf(ldd->ldd_mount_opts, "%s,%s",
+                        always_mountopts, mountopts);
         } else {
 #ifdef TUNEFS
                 if (ldd->ldd_mount_opts[0] == 0)
@@ -1608,7 +1512,6 @@ int main(int argc, char *const argv[])
                 {
                         sprintf(ldd->ldd_mount_opts, "%s%s",
                                 always_mountopts, default_mountopts);
-                        trim_mountfsoptions(ldd->ldd_mount_opts);
                 }
         }
 

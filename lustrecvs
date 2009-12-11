@@ -25,8 +25,6 @@ Usage: $progname <lustretag> <pindate>
 EOF
 }
 
-[ "$1" = "-r" ] && shift
-
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
     echo "$progname: updating lustrecvs"
 
@@ -40,6 +38,8 @@ if [ -z "$LUSTRECVS_UPDATED" ] ; then
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
+
+[ "$1" = "-r" ] && shift
 
 buildtag="HEAD"
 lustretag="$1"
@@ -187,68 +187,6 @@ EOF
     fi
 
     if [ $? != 0 ] ; then
-        error_modules="$dir $error_modules"
-    fi
-}
-
-git_cmd ()
-{
-    dir="$1"
-    repository="$2"
-    branch="$3"
-    base_url="$4"
-
-    if [ ! "$branch" ]; then
-        return
-    fi
-
-    if ! which git &> /dev/null; then
-    cat <<EOF
-
-Error: git is missing, try 'yum install git', 'apt-get install
-git' or try http://rpmfind.net/linux/rpm2html/search.php?query=git
-EOF
-        error_modules="$dir $error_modules"
-        return
-    fi
-
-    url=`printf "$base_url" "$repository"`
-
-    if [ -n "$pindate" ]; then
-        echo "\nSorry, pindate is not supported with git."
-        error_modules="$dir $error_modules"
-        return
-    fi
-
-    if [ -d "$dir" ]; then
-        echo "$progname: Updating $dir"
-
-        pushd "$dir" > /dev/null
-
-        # Fetch new objects
-        git fetch "$url" "$branch"
-
-        # Create branch if it doesn't exist already (e.g. we switched branches)
-        [ $? -eq 0 ] && $($(git branch -b $branch origin/$branch &> /dev/null) || true)
-
-        # Rebase local commits
-        [ $? -eq 0 ] && git rebase origin/$branch $branch
-
-        rc=$?
-
-        popd > /dev/null
-    else
-        echo "$progname: Checking out $dir"
-        git clone "$url" "$dir"
-        rc=$?
-
-        if [ $rc -eq 0 -a "$branch" != "master" ]; then
-            ( cd "$dir" && git checkout -b $branch origin/$branch )
-            rc=$?
-        fi
-    fi
-
-    if [ $rc -ne 0 ] ; then
         error_modules="$dir $error_modules"
     fi
 }

@@ -541,8 +541,6 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "checksums",       osc_rd_checksum, osc_wr_checksum, 0 },
         { "checksum_type",   osc_rd_checksum_type, osc_wd_checksum_type, 0 },
         { "resend_count",  osc_rd_resend_count, osc_wr_resend_count, 0},
-        { "quota_resend_count",  lprocfs_rd_quota_resend_count,
-                                 lprocfs_wr_quota_resend_count, 0},
         { "timeouts",        lprocfs_rd_timeouts,      0, 0 },
         { "import",          lprocfs_rd_import,    0, 0 },
         { "state",           lprocfs_rd_state,         0, 0 },

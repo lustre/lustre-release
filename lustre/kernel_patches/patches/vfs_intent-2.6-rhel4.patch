@@ -51,17 +51,13 @@ diff -rup RH_2_6_9_55.orig/fs/exec.c RH_2_6_9_55/fs/exec.c
  	file = ERR_PTR(err);
  
  	if (!err) {
-@@ -501,9 +503,10 @@ struct file *open_exec(const char *name)
+@@ -501,7 +503,7 @@ struct file *open_exec(const char *name)
 			int err = permission(inode, MAY_EXEC, &nd);
  			file = ERR_PTR(err);
  			if (!err) {
--				file = dentry_open(nd.dentry, nd.mnt, 
-+				file = dentry_open_it(nd.dentry, nd.mnt, 
-					force_o_largefile() ? 
--					O_RDONLY|O_LARGEFILE : O_RDONLY);
-+					O_RDONLY|O_LARGEFILE : O_RDONLY,
-+                                       &nd.intent);
-				if (!IS_ERR(file)) {
+-				file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++				file = dentry_open_it(nd.dentry, nd.mnt, O_RDONLY, &nd.intent);
+ 				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
 diff -rup RH_2_6_9_55.orig/fs/inode.c RH_2_6_9_55/fs/inode.c

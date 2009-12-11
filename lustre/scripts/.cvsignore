@@ -7,7 +7,6 @@ Makefile
 Makefile.in
 .deps
 TAGS
-version_tag.pl
 lustre_createcsv
 lustre_config
 lustre_start

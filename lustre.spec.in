@@ -87,8 +87,6 @@ to be used by the Lustre testing framework.
 
 %prep
 %setup -qn lustre-%{version}
-ln lustre/ChangeLog ChangeLog-lustre
-ln lnet/ChangeLog ChangeLog-lnet
 
 %build
 # if RPM_BUILD_NCPUS unset, set it
@@ -195,8 +193,6 @@ popd >/dev/null
 
 %files modules -f lustre-modules.files
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) %doc ChangeLog-lustre
-%attr(-, root, root) %doc ChangeLog-lnet
 
 %files source
 %attr(-, root, root) /usr/src/lustre-%{version}

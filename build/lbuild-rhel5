@@ -3,7 +3,6 @@
 # increment this if you have made a change that should force a new kernel
 # to build built
 #BUILD_GEN=1
-#BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
 BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
 
 DEVEL_KERNEL_TYPE="devel"
@@ -39,6 +38,7 @@ EOF
     # edit the SPEC with our changes
     sed -i -e 's/^\(%define signmodules \).*/\10/' \
            -e "s/^#% \(define buildid\).*/%\1 ${buildid}/" \
+           -e 's/^\(Name:.*kernel\)/\1-lustre/' \
            -e '/-e $RPM_SOURCE_DIR\/kabi_whitelist_/i\
     rm -f $RPM_SOURCE_DIR/kabi_whitelist_%{_target_cpu}$Flavour' \
            -e '/_sourcedir\/kabitool -b \./a\
@@ -52,35 +52,23 @@ Patch99995: linux-%{kversion}-lustre.patch' \
 ' \
            -e '/^%prep$/,/^# END OF PATCH APPLICATIONS$/s/kernel-%{kversion}/%{name}-%{kversion}/g' \
            -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
-    cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3 \
-    cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
-          SPECS/kernel-2.6.spec
-
-    if $KERNEL_LUSTRE_NAMING; then
-        # these are all of the changes needed because we change the package names
-        # to kernel-lustre-*.  these should all go away when we stop this insanity
-        sed -i -e 's/^\(Name:.*kernel\)/\1-lustre/' \
-               -e '/^Provides: glibc-kernheaders = /a\
+    cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3' \
+           -e '/^Provides: glibc-kernheaders = /a\
 Provides: kernel-headers = %{rpmversion}-%{release}
-Obsoletes: kernel-headers
 ' \
-               -e '/^Provides: kernel-%{_target_cpu} = %{rpmversion}-%{release}$/a\
+           -e '/^Provides: kernel-%{_target_cpu} = %{rpmversion}-%{release}$/a\
 Provides: kernel = %{rpmversion}-%{release}
 ' \
-               -e '/^Provides: kernel-devel-%{_target_cpu} = %{rpmversion}-%{release}$/a\
+           -e '/^Provides: kernel-devel-%{_target_cpu} = %{rpmversion}-%{release}$/a\
 Provides: kernel-devel = %{rpmversion}-%{release}
-Obsoletes: kernel-devel
 ' \
-               -e '/^Provides: %{name}-debuginfo-common-%{_target_cpu} = %{KVERREL}$/a\
+           -e '/^Provides: %{name}-debuginfo-common-%{_target_cpu} = %{KVERREL}$/a\
 Provides: kernel-debuginfo-common = %{KVERREL}
-Obsoletes: kernel-debuginfo-common
 ' \
-               -e '/^Provides: %{name}-debuginfo-%{_target_cpu} = %{KVERREL}$/a\
+           -e '/^Provides: %{name}-debuginfo-%{_target_cpu} = %{KVERREL}$/a\
 Provides: kernel-debuginfo = %{KVERREL}
-Obsoletes: kernel-debuginfo
 ' \
-              SPECS/kernel-2.6.spec
-    fi
+          SPECS/kernel-2.6.spec
 
     # XXX - a building-on-Ubuntu hack
     if grep -q "Ubuntu" /etc/issue; then
@@ -184,9 +172,5 @@ rpm_BUILD_kernel_dirname() {
     local lnxmin="$3"
     local arch="$4"
 
-    local lustre=""
-    if $KERNEL_LUSTRE_NAMING; then
-        $lustre="-lustre"
-    fi
-    echo kernel${lustre}${lnxmaj}${lnxmin}/linux-${lnxmaj}.$arch
+    echo kernel-lustre${lnxmaj}${lnxmin}/linux-${lnxmaj}.$arch
 }

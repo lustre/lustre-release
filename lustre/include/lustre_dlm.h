@@ -184,7 +184,7 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
-/*
+/* 
  * --------------------------------------------------------------------------
  * NOTE! Starting from this point, that is, LDLM_FL_* flags with values above
  * 0x80000000 will not be sent over the wire.
@@ -267,13 +267,13 @@ struct ldlm_pool_ops {
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
 
-/**
- * One second for pools thread check interval. Each pool has own period.
+/** 
+ * One second for pools thread check interval. Each pool has own period. 
  */
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
-/**
- * 5% margin for modest pools. See ldlm_pool.c for details.
+/** 
+ * 5% margin for modest pools. See ldlm_pool.c for details. 
  */
 #define LDLM_POOLS_MODEST_MARGIN (5)
 
@@ -358,8 +358,6 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
                                void *req_cookie, ldlm_mode_t mode, int flags,
                                void *data);
 
-typedef int (*ldlm_cancel_for_recovery)(struct ldlm_lock *lock);
-
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res, struct ptlrpc_request *r,
@@ -422,9 +420,6 @@ struct ldlm_namespace {
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
         /* backward link to obd, required for ldlm pool to store new SLV. */
         struct obd_device     *ns_obd;
-
-        /* callback to cancel locks before replaying it during recovery */
-        ldlm_cancel_for_recovery ns_cancel_for_recovery;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -453,12 +448,6 @@ static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)
         return !!(ns->ns_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
-static inline void ns_register_cancel(struct ldlm_namespace *ns,
-                                      ldlm_cancel_for_recovery arg)
-{
-        LASSERT(ns != NULL);
-        ns->ns_cancel_for_recovery = arg;
-}
 /*
  *
  * Resource hash table
@@ -542,7 +531,7 @@ struct ldlm_lock {
          * on this waitq to learn when it becomes granted. */
         cfs_waitq_t           l_waitq;
 
-        cfs_time_t            l_last_activity;  /* seconds */
+        cfs_time_t            l_last_activity;  /* seconds */ 
         cfs_time_t            l_last_used;      /* jiffies */
         struct ldlm_extent    l_req_extent;
 
@@ -782,8 +771,8 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
-int ldlm_lock_fast_match(struct ldlm_lock *, int, obd_off, obd_off,
-                         struct lustre_handle *);
+int ldlm_lock_fast_match(struct ldlm_lock *, int, obd_off, obd_off, void **);
+void ldlm_lock_fast_release(void *, int);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             struct ldlm_res_id *, ldlm_type_t type,
                             ldlm_policy_data_t *, ldlm_mode_t mode,
@@ -791,6 +780,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
+void ldlm_cancel_locks_for_export(struct obd_export *export);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_reprocess_all_ns(struct ldlm_namespace *ns);
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos);

@@ -137,19 +137,5 @@ static inline int mdc_exp_is_2_0_server(struct obd_export *exp) {
 
 static inline int mdc_req_is_2_0_server(struct ptlrpc_request *req) {
        LASSERT(req);
-       return mdc_exp_is_2_0_server(req->rq_export);
-}
-
-static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
-                                               struct mds_body *body)
-{
-        if (body->valid & OBD_MD_FLMODEASIZE) {
-                if (exp->exp_obd->u.cli.cl_max_mds_easize < body->max_mdsize) 
-                        exp->exp_obd->u.cli.cl_max_mds_easize = 
-                                                body->max_mdsize;
-                if (exp->exp_obd->u.cli.cl_max_mds_cookiesize < 
-                                                body->max_cookiesize)
-                        exp->exp_obd->u.cli.cl_max_mds_cookiesize = 
-                                                body->max_cookiesize;
-        }
+        return mdc_exp_is_2_0_server(req->rq_export);
 }

@@ -325,11 +325,19 @@ static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
         LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
 
-        if (atomic_dec_return(&lqs->lqs_refcount) == 1)
-                if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
-                        cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               lqs, atomic_read(&lqs->lqs_refcount));
+        /* killing last ref, let's let hash table kill it */
+        if (atomic_read(&lqs->lqs_refcount) == 1) {
+                lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
+                                &lqs->lqs_key, &lqs->lqs_hash);
+                OBD_FREE_PTR(lqs);
+        } else {
+                if (atomic_dec_return(&lqs->lqs_refcount) == 1)
+                        if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
+                                cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
+                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+                       lqs, atomic_read(&lqs->lqs_refcount));
+
+        }
 }
 
 static inline void lqs_initref(struct lustre_qunit_size *lqs)
@@ -411,7 +419,7 @@ typedef struct {
         /* For quota slave, check whether specified uid/gid's remaining quota
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary */
-        int (*quota_chkquota) (struct obd_export *, unsigned int, unsigned int,
+        int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
                                int, int [], quota_acquire,
                                struct obd_trans_info *, struct inode *, int);
 
@@ -627,7 +635,7 @@ static inline int lquota_acquire(quota_interface_t *interface,
 }
 
 static inline int lquota_chkquota(quota_interface_t *interface,
-                                  struct obd_export *exp,
+                                  struct obd_device *obd,
                                   unsigned int uid, unsigned int gid, int count,
                                   int pending[2], struct obd_trans_info *oti,
                                   struct inode *inode, int frags)
@@ -637,7 +645,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, chkquota)(exp, uid, gid, count, pending,
+        rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, pending,
                                            QUOTA_OP(interface, acquire), oti,
                                            inode, frags);
         RETURN(rc);

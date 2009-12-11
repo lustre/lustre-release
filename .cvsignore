@@ -14,8 +14,8 @@ autoMakefile.in
 tags
 TAGS
 lustre*.tar.gz
-cscope.*
-ID
+cscope.files
+cscope.out
 autom4te-2.53.cache
 autom4te.cache
 depcomp
@@ -35,7 +35,6 @@ Module.symvers
 Module.symvers.old
 Modules.symvers
 modules.order
-modules-deb
 stamp-h1
 INSTALL
 .pc
@@ -43,5 +42,3 @@ patches
 series
 lustre.spec
 acl.size
-.git
-doxygen.*

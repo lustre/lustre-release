@@ -126,14 +126,14 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_lov_exp, &lsm, mlcd->mlcd_lmm,
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
                        (int)(mlcd->mlcd_cookielen/sizeof(*mlcd->mlcd_cookies)),
                        rc);
         } else {
-                rc = obd_checkmd(obd->u.mds.mds_lov_exp, obd->obd_self_export,
+                rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export,
                                  lsm);
                 if (rc)
                         CERROR("Can not revalidate lsm %p \n", lsm);
@@ -609,13 +609,13 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         LASSERT(lmm);
 
-        rc = obd_unpackmd(mds->mds_lov_exp, &oinfo.oi_md, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p for inode %lu\n", lmm, inode->i_ino);
                 GOTO(out, rc);
         }
 
-        rc = obd_checkmd(mds->mds_lov_exp, obd->obd_self_export, oinfo.oi_md);
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, oinfo.oi_md);
         if (rc) {
                 CERROR("Error revalidate lsm %p \n", oinfo.oi_md);
                 GOTO(out, rc);
@@ -637,13 +637,13 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
         /* do async setattr from mds to ost not waiting for responses. */
-        rc = obd_setattr_async(mds->mds_lov_exp, &oinfo, &oti, NULL);
+        rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
         if (rc)
                 CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
                        " on ost error %d\n", oinfo.oi_md->lsm_object_id, rc);
 out:
         if (oinfo.oi_md)
-                obd_free_memmd(mds->mds_lov_exp, &oinfo.oi_md);
+                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
         OBDO_FREE(oinfo.oi_oa);
         RETURN(rc);
 }
@@ -814,12 +814,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                 GOTO(cleanup, rc);
                 } else {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_lov_exp, 0,
+                                           mds->mds_osc_exp, 0,
                                            &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(cleanup, rc);
 
-                        obd_free_memmd(mds->mds_lov_exp, &lsm);
+                        obd_free_memmd(mds->mds_osc_exp, &lsm);
 
                         rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
                                            rec->ur_eadatalen, "lov");
@@ -839,7 +839,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
 
-        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_lov_obd)) {
+        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_osc_obd)) {
                 OBD_ALLOC(mlcd, sizeof(*mlcd) + rec->ur_cookielen +
                           rec->ur_eadatalen);
                 if (mlcd) {
@@ -1061,7 +1061,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
          * be NULL, b=14840 */
         ids[0] = current->fsuid;
         ids[1] = gid;
-        lquota_chkquota(mds_quota_interface_ref, req->rq_export, ids[0], ids[1],
+        lquota_chkquota(mds_quota_interface_ref, obd, ids[0], ids[1],
                         1, quota_pending, NULL, NULL, 0);
 
         switch (type) {
@@ -1673,9 +1673,6 @@ retry_locks:
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (IS_DEADDIR((*dparentp)->d_inode))
-                GOTO(cleanup, -ENOENT);
-
         /* Step 4: Re-lookup child to verify it hasn't changed since locking */
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
                               parent_mode, &child_res_id, child_lockh, dchildp,
@@ -1712,6 +1709,9 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
  * part thereof, because we don't have the inode to check for link
  * count/open status until after it is locked.
  *
+ * For lock ordering, caller must get child->i_mutex first, then
+ * pending->i_mutex before starting journal transaction.
+ *
  * returns 1 on success
  * returns 0 if we lost a race and didn't make a new link
  * returns negative on error
@@ -1729,6 +1729,9 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 
         LASSERT(inode != NULL);
         LASSERT(!mds_inode_is_orphan(inode));
+#ifndef HAVE_I_ALLOC_SEM
+        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
+#endif
         LASSERT(TRYLOCK_INODE_MUTEX(pending_dir) == 0);
 
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
@@ -1755,8 +1758,6 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
          * for linking and return real mode back then -bzzz */
         mode = inode->i_mode;
         inode->i_mode = S_IFREG;
-        /* avoid vfs_link upon 0 nlink inode */
-        ++inode->i_nlink;
         rc = ll_vfs_link(dentry, mds->mds_vfsmnt, pending_dir, pending_child,
                          mds->mds_vfsmnt);
         if (rc)
@@ -1767,17 +1768,14 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 
         /* return mode and correct i_nlink if inode is directory */
         inode->i_mode = mode;
-        LASSERTF(inode->i_nlink == 2, "%s nlink == %d\n",
+        LASSERTF(inode->i_nlink == 1, "%s nlink == %d\n",
                  S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : "other",
                  inode->i_nlink);
         if (S_ISDIR(mode)) {
+                inode->i_nlink++;
                 pending_dir->i_nlink++;
-                if (pending_dir->i_sb->s_op->dirty_inode)
-                        pending_dir->i_sb->s_op->dirty_inode(pending_dir);
-        } else {
-                --inode->i_nlink;
-                if (inode->i_sb->s_op->dirty_inode)
-                        inode->i_sb->s_op->dirty_inode(inode);
+                mark_inode_dirty(inode);
+                mark_inode_dirty(pending_dir);
         }
 
         GOTO(out_dput, rc = 1);
@@ -1789,84 +1787,36 @@ out_dput:
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         int count = le32_to_cpu(lmm->lmm_stripe_count);
-        int real_csize = count * sizeof(struct llog_cookie);
+        int real_csize = count * sizeof(struct llog_cookie); 
         return real_csize;
 }
 
-static void mds_shrink_reply(struct ptlrpc_request *req,
-                           int reply_mdoff, int have_md, int have_acl)
+void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
+                      struct mds_body *body, int md_off)
 {
-        struct obd_device *obd = req->rq_export->exp_obd;
-        struct mds_body *reply_body;
         int cookie_size = 0, md_size = 0;
-        ENTRY;
 
-        /* LSM and cookie is always placed after mds_body */
-        reply_body =  lustre_msg_buf(req->rq_repmsg, reply_mdoff,
-                                     sizeof(*reply_body));
-        reply_mdoff++;
+       if (body) {
+                if (body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) {
+                        md_size = body->eadatasize;
+                } else if (body->valid & OBD_MD_LINKNAME)
+                        md_size = body->eadatasize;
 
-        if (reply_body && (have_md || have_acl)) {
-                if (reply_body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) {
-                        md_size = reply_body->eadatasize;
-                } else if (reply_body->valid & OBD_MD_LINKNAME)
-                        md_size = reply_body->eadatasize;
-
-                if (reply_body->valid & OBD_MD_FLCOOKIE) {
-                        LASSERT(reply_body->valid & OBD_MD_FLEASIZE);
+                if (body->valid & OBD_MD_FLCOOKIE) {
+                        LASSERT(body->valid & OBD_MD_FLEASIZE);
                         cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
                                                           req->rq_repmsg,
-                                                          reply_mdoff, 0));
-                } else if (reply_body->valid & OBD_MD_FLACL) {
-                        cookie_size = reply_body->aclsize;
+                                                          md_off, 0));
+                } else if (body->valid & OBD_MD_FLACL) {
+                        cookie_size = body->aclsize;
                 }
         }
-        CDEBUG(D_INFO, "Shrink %d/%d to md_size %d cookie_size %d \n",
-               have_md, have_acl, md_size, cookie_size);
+        CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
+               cookie_size);
 
-        if (likely(have_md))
-                lustre_shrink_reply(req, reply_mdoff, md_size, 1);
+        lustre_shrink_reply(req, md_off, md_size, 1);
 
-        if (likely(have_acl))
-                lustre_shrink_reply(req, reply_mdoff + (md_size > 0),
-                                    cookie_size, 1);
-}
-
-void mds_shrink_body_reply(struct ptlrpc_request *req,
-                           int req_mdoff,
-                           int reply_mdoff)
-{
-        struct mds_body *rq_body;
-        const long long have_acl = OBD_MD_FLCOOKIE | OBD_MD_FLACL;
-        const long have_md = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
-        ENTRY;
-
-        /* LSM and cookie is always placed after mds_body */
-        rq_body =  lustre_msg_buf(req->rq_reqmsg, req_mdoff,
-                                  sizeof(*rq_body));
-        LASSERT(rq_body);
-
-        /* this check is need for avoid hit asset in case
-         * OBD_MDS_FLFLAGS */
-        mds_shrink_reply(req, reply_mdoff,
-                         rq_body->valid & have_md,
-                         rq_body->valid & have_acl);
-}
-
-void mds_shrink_intent_reply(struct ptlrpc_request *req,
-                             int opc, int reply_mdoff)
-{
-        switch (opc) {
-                case REINT_UNLINK:
-                case REINT_RENAME:
-                        mds_shrink_reply(req, reply_mdoff, 1, 1);
-                        break;
-                case REINT_OPEN:
-                        mds_shrink_reply(req, reply_mdoff, 1, 0);
-                        break;
-                default:
-                        break;
-        }
+        lustre_shrink_reply(req, md_off + (md_size > 0), cookie_size, 1); 
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
@@ -2095,7 +2045,9 @@ cleanup:
         inodes[0] = dparent ? dparent->d_inode : NULL;
         inodes[1] = child_inode;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
-
+        if (!rc)
+                (void)obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_UNLINKED),
+                                         KEY_UNLINKED, 0, NULL, NULL);
 cleanup_no_trans:
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
@@ -2128,6 +2080,8 @@ cleanup_no_trans:
                 LBUG();
         }
         req->rq_status = rc;
+
+        mds_shrink_reply(obd, req, body, offset + 1);
 
         /* trigger dqrel on the owner of child and parent */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
@@ -2672,13 +2626,11 @@ no_unlink:
                 unlock_rename(de_tgtdir, de_srcdir);
                 GOTO(cleanup, rc = -ENOTEMPTY);
         }
-
         de_old->d_fsdata = req;
         de_new->d_fsdata = req;
 
         rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt,
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
-
         unlock_rename(de_tgtdir, de_srcdir);
 
         if (rc == 0) {
@@ -2801,6 +2753,8 @@ cleanup_no_trans:
                 LBUG();
         }
         req->rq_status = rc;
+
+        mds_shrink_reply(obd, req, body, offset + 1);
 
         /* acquire/release qunit */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,

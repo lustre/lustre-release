@@ -1,10 +1,10 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.18-128.1.6/fs/ext3/ioctl.c
+Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext3/ioctl.c
-+++ linux-2.6.18-128.1.6/fs/ext3/ioctl.c
+--- linux-2.6.18-92.1.22.orig/fs/ext3/ioctl.c
++++ linux-2.6.18-92.1.22/fs/ext3/ioctl.c
 @@ -15,7 +15,161 @@
  #include <linux/time.h>
  #include <asm/uaccess.h>
@@ -167,7 +167,7 @@ Index: linux-2.6.18-128.1.6/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -276,7 +430,9 @@ flags_err:
+@@ -272,7 +426,9 @@ flags_err:
  
  		return err;
  	}
@@ -178,10 +178,10 @@ Index: linux-2.6.18-128.1.6/fs/ext3/ioctl.c
  
  	default:
  		return -ENOTTY;
-Index: linux-2.6.18-128.1.6/include/linux/ext3_fs.h
+Index: linux-2.6.18-92.1.22/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/ext3_fs.h
-+++ linux-2.6.18-128.1.6/include/linux/ext3_fs.h
+--- linux-2.6.18-92.1.22.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-92.1.22/include/linux/ext3_fs.h
 @@ -258,15 +258,19 @@ struct ext3_new_group_data {
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
@@ -222,10 +222,10 @@ Index: linux-2.6.18-128.1.6/include/linux/ext3_fs.h
  #endif	/* __KERNEL__ */
  
  /* EXT3_IOC_CREATE_INUM at bottom of file (visible to kernel and user). */
-Index: linux-2.6.18-128.1.6/include/linux/ext3_extents.h
+Index: linux-2.6.18-92.1.22/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/ext3_extents.h
-+++ linux-2.6.18-128.1.6/include/linux/ext3_extents.h
+--- linux-2.6.18-92.1.22.orig/include/linux/ext3_extents.h
++++ linux-2.6.18-92.1.22/include/linux/ext3_extents.h
 @@ -142,8 +142,10 @@ struct ext3_ext_path {
   * callback must return valid extent (passed or newly created)
   */
@@ -279,10 +279,10 @@ Index: linux-2.6.18-128.1.6/include/linux/ext3_extents.h
  extern int ext3_ext_search_left(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_ext_search_right(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_extent_tree_init(handle_t *, struct inode *);
-Index: linux-2.6.18-128.1.6/fs/ext3/extents.c
+Index: linux-2.6.18-92.1.22/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext3/extents.c
-+++ linux-2.6.18-128.1.6/fs/ext3/extents.c
+--- linux-2.6.18-92.1.22.orig/fs/ext3/extents.c
++++ linux-2.6.18-92.1.22/fs/ext3/extents.c
 @@ -41,6 +41,7 @@
  #include <linux/string.h>
  #include <linux/slab.h>
@@ -312,7 +312,7 @@ Index: linux-2.6.18-128.1.6/fs/ext3/extents.c
 +		       void *data)
 +{
 +	struct fiemap_extent_info *fieinfo = data;
-+	unsigned char blksize_bits = inode->i_sb->s_blocksize_bits;
++	unsigned long blksize_bits = inode->i_sb->s_blocksize_bits;
 +	__u64   logical;
 +	__u64   physical;
 +	__u64   length;
@@ -359,8 +359,8 @@ Index: linux-2.6.18-128.1.6/fs/ext3/extents.c
 +	 *
 +	 * XXX this might miss a single-block extent at EXT_MAX_BLOCK
 +	 */
-+	if (ext3_ext_next_allocated_block(path) == EXT_MAX_BLOCK ||
-+	    newex->ec_block + newex->ec_len - 1 == EXT_MAX_BLOCK)
++	if (logical + length - 1 == EXT_MAX_BLOCK ||
++	    ext3_ext_next_allocated_block(path) == EXT_MAX_BLOCK)
 +		flags |= FIEMAP_EXTENT_LAST;
 +
 +	error = fiemap_fill_next_extent(fieinfo, logical, physical,
@@ -404,10 +404,10 @@ Index: linux-2.6.18-128.1.6/fs/ext3/extents.c
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
  EXPORT_SYMBOL(ext3_ext_insert_extent);
-Index: linux-2.6.18-128.1.6/fs/ext3/fiemap.h
+Index: linux-2.6.18-92.1.22/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.18-128.1.6/fs/ext3/fiemap.h
++++ linux-2.6.18-92.1.22/fs/ext3/fiemap.h
 @@ -0,0 +1,85 @@
 +/*
 + * FIEMAP ioctl infrastructure.

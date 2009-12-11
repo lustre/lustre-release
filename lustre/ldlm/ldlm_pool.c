@@ -113,7 +113,7 @@
 /*
  * 50 ldlm locks for 1MB of RAM.
  */
-#define LDLM_POOL_HOST_L ((CFS_NUM_CACHEPAGES >> (20 - CFS_PAGE_SHIFT)) * 50)
+#define LDLM_POOL_HOST_L ((num_physpages >> (20 - CFS_PAGE_SHIFT)) * 50)
 
 /*
  * Maximal possible grant step plan in %.
@@ -528,7 +528,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
          * Do not cancel locks in case lru resize is disabled for this ns.
          */
         if (!ns_connect_lru_resize(ns))
-                return 0;
+                RETURN(0);
 
         /*
          * Make sure that pool knows last SLV and Limit from obd.
@@ -1308,7 +1308,7 @@ static int ldlm_pools_thread_start(void)
 
         /*
          * CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-         * just drop the VM and FILES in cfs_daemonize() right away.
+         * just drop the VM and FILES in ptlrpc_daemonize() right away.
          */
         rc = cfs_kernel_thread(ldlm_pools_thread_main, ldlm_pools_thread,
                                CLONE_VM | CLONE_FILES);

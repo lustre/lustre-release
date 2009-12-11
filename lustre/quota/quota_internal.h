@@ -127,10 +127,8 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
 int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
                         unsigned int qpids[], int rc, int opc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *aver,
-                          lustre_quota_version_t *over);
-int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t aver,
-                          lustre_quota_version_t over);
+int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *ver);
+int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t ver);
 int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
 
@@ -202,16 +200,4 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
 int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
-
-static inline int client_quota_recoverable_error(int rc)
-{
-        return (rc == -ETIMEDOUT || rc == -EAGAIN);
-}
-
-static inline int client_quota_should_resend(int resend, struct client_obd *cli)
-{
-        return atomic_read(&cli->cl_quota_resends) ?
-                atomic_read(&cli->cl_quota_resends) > resend : 1;
-}
-
 #endif

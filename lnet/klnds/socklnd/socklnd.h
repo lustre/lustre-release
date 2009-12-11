@@ -548,7 +548,7 @@ extern void ksocknal_next_tx_carrier(ksock_conn_t *conn);
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
 extern void ksocknal_txlist_done (lnet_ni_t *ni, struct list_head *txlist, int error);
 extern void ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive);
-extern void ksocknal_query (struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when);
+extern void ksocknal_query (struct lnet_ni *ni, lnet_nid_t nid, time_t *when);
 extern int ksocknal_thread_start (int (*fn)(void *arg), void *arg);
 extern void ksocknal_thread_fini (void);
 extern void ksocknal_launch_all_connections_locked (ksock_peer_t *peer);

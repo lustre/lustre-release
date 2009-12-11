@@ -1337,7 +1337,7 @@ AC_DEFUN([LN_FUNC_DUMP_TRACE],
 [kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
 	tmp_flags="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="-Werror"
-	AC_MSG_CHECKING([whether we can really use dump_trace])
+	AC_MSG_CHECKING([whether we can really use dump_stack])
 	LB_LINUX_TRY_COMPILE([
 		struct task_struct;
 		struct pt_regs;
@@ -1394,7 +1394,6 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LN_SCATTERLIST_SETPAGE],
 [AC_MSG_CHECKING([for exist sg_set_page])
 LB_LINUX_TRY_COMPILE([
-        #include <asm/types.h>
         #include <linux/scatterlist.h>
 ],[
 	sg_set_page(NULL,NULL,0,0);
@@ -1441,16 +1440,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# since 2.6.27 have linux/cred.h defined current_* macro
-AC_DEFUN([LN_HAVE_LINUX_CRED_H],
-[LB_CHECK_FILE([$LINUX/include/linux/cred.h],[
-        AC_DEFINE(HAVE_LINUX_CRED_H, 1,
-                [kernel has include/linux/cred.h])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 #
 #
 # LN_CONFIG_USERSPACE
@@ -1459,50 +1448,6 @@ AC_DEFUN([LN_HAVE_LINUX_CRED_H],
 AC_DEFUN([LN_CONFIG_USERSPACE],
 [
 LN_USER__U64_LONG_LONG
-])
-
-#
-# LN_STRUCT_CRED_IN_TASK
-#
-# struct cred was introduced in 2.6.29 to streamline credentials in task struct
-#
-AC_DEFUN([LN_STRUCT_CRED_IN_TASK],
-[AC_MSG_CHECKING([if kernel has struct cred])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/sched.h>
-],[
-	struct task_struct *tsk = NULL;
-	tsk->real_cred = NULL;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_STRUCT_CRED, 1, [struct cred found])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
-# LN_FUNC_UNSHARE_FS_STRUCT
-#
-# unshare_fs_struct was introduced in 2.6.30 to prevent others to directly
-# mess with copy_fs_struct
-#
-AC_DEFUN([LN_FUNC_UNSHARE_FS_STRUCT],
-[AC_MSG_CHECKING([if kernel defines unshare_fs_struct()])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-	#include <linux/sched.h>
-	#include <linux/fs_struct.h>
-],[
-	unshare_fs_struct();
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_UNSHARE_FS_STRUCT, 1, [unshare_fs_struct found])
-],[
-	AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
@@ -1557,11 +1502,6 @@ LN_SEM_COUNT
 # 2.6.27
 LN_SOCK_MAP_FD_2ARG
 LN_FUNC_DUMP_TRACE
-LN_HAVE_LINUX_CRED_H
-#2.6.29
-LN_STRUCT_CRED_IN_TASK
-# 2.6.30
-LN_FUNC_UNSHARE_FS_STRUCT
 ])
 
 #

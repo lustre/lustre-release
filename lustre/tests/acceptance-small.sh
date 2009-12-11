@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE METADATA_UPDATES OST_POOLS SANITY_BENCHMARK"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE OST_POOLS"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -54,7 +54,7 @@ setup_if_needed() {
 
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
-        check_config_clients $MOUNT
+        check_config $MOUNT
         init_facets_vars
         init_param_vars
         return
@@ -102,6 +102,11 @@ for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	. $LUSTRE/tests/cfg/$NAME.sh
 
+	if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
+	    ! -f `dirname $0`/../mds/mds.ko ]; then
+	    export CLIENTMODSONLY=true
+	fi
+	
 	assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 	assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 	assert_env FSNAME MOUNT MOUNT2
@@ -280,7 +285,15 @@ for NAME in $CONFIGS; do
 
 	if [ "$SANITYN" != "no" ]; then
 	        title sanityN
-		bash sanityN.sh
+		$DEBUG_OFF
+
+		mkdir -p $MOUNT2
+		mount_client $MOUNT2
+		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
+		START=: CLEAN=: bash sanityN.sh
+		[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
+
+		$DEBUG_ON
 		$CLEANUP
 		$SETUP
 		SANITYN="done"
@@ -341,12 +354,6 @@ for NAME in $CONFIGS; do
 		RACER="done"
 	fi
 done
-
-if [ "$SANITY_BENCHMARK" != "no" ]; then
-        title sanity-benchmark
-        bash sanity-benchmark.sh
-        SANITY_BENCHMARK="done"
-fi
 
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
 if [ "$REPLAY_SINGLE" != "no" ]; then
@@ -452,12 +459,6 @@ if [ "$PARALLEL_SCALE" != "no" ]; then
         title parallel-scale
         bash parallel-scale.sh
         PARALLEL_SCALE="done"
-fi
-
-if [ "$METADATA_UPDATES" != "no" ]; then
-        title metadata-updates
-        bash metadata-updates.sh
-        METADATA_UPDATES="done"
 fi
 
 [ "$OST_POOLS" != "no" ] && skip_remmds ost-pools && OST_POOLS=no && MSKIPPED=1

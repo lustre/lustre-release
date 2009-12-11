@@ -203,12 +203,13 @@ int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
 
         /* Collect the needed information */
         oq_type = obd->u.obt.obt_qctxt.lqc_flags;
+        oq_version = obt->obt_qfmt;
         if (is_mds) {
-                rc = mds_quota_get_version(obd, &aq_version, &oq_version);
+                rc = mds_quota_get_version(obd, &aq_version);
                 if (rc)
                         return -EPROTO;
-        } else {
-                oq_version = obt->obt_qfmt;
+                /* Here we can also assert that aq_type == oq_type
+                 * except for quota startup/shutdown states     */
         }
 
         /* Transform the collected data into a user-readable string */
@@ -276,22 +277,20 @@ static int auto_quota_on(struct obd_device *obd, int type,
                 down(&mds->mds_qonoff_sem);
                 /* turn on cluster wide quota */
                 rc = mds_admin_quota_on(obd, oqctl);
-                if (rc && rc != -ENOENT)
-                        CERROR("%s: auto-enable admin quota failed. rc=%d\n",
-                               obd->obd_name, rc);
+                if (rc)
+                        CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
+                               "auto-enable admin quota failed. rc=%d\n", rc);
                 up(&mds->mds_qonoff_sem);
 
         }
         if (!rc) {
                 /* turn on local quota */
                 rc = fsfilt_quotactl(obd, sb, oqctl);
-                if (rc) {
-                        if (rc != -ENOENT)
-                                CERROR("%s: auto-enable local quota failed with"
-                                       " rc=%d\n", obd->obd_name, rc);
-                } else {
+                if (rc)
+                        CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
+                               "auto-enable local quota failed. rc=%d\n", rc);
+                else
                         obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
-                }
         }
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -321,14 +320,12 @@ static int filter_quota_set_version(struct obd_device *obd,
                 return -EBUSY;
         }
 
-        /* do not complain of being busy if we actually have nothing to do */
-        if (obt->obt_qfmt != version) {
-                if (obt->obt_qctxt.lqc_flags&(LQC_USRQUOTA_FLAG|LQC_GRPQUOTA_FLAG)){
-                        atomic_inc(&obt->obt_quotachecking);
-                        return -EBUSY;
-                }
-                obt->obt_qfmt = version;
+        if (obt->obt_qctxt.lqc_flags & (LQC_USRQUOTA_FLAG | LQC_GRPQUOTA_FLAG)) {
+                atomic_inc(&obt->obt_quotachecking);
+                return -EBUSY;
         }
+
+        obt->obt_qfmt = version;
 
         atomic_inc(&obt->obt_quotachecking);
 
@@ -394,22 +391,19 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                                 return -EINVAL;
 #endif
                         if (is_mds) {
-                                rc = mds_quota_set_version(obd, s2av[idx],
-                                                           s2ov[idx]);
+                                rc = mds_quota_set_version(obd, s2av[idx]);
                                 if (rc) {
                                         CDEBUG(D_QUOTA, "failed to set admin "
                                                "quota to spec %c! %d\n",
                                                stype[i], rc);
                                         return rc;
                                 }
-                        } else {
-                                rc = filter_quota_set_version(obd, s2ov[idx]);
-                                if (rc) {
-                                        CDEBUG(D_QUOTA, "failed to set op"
-                                               " quota to spec %c! %d\n",
-                                               stype[i], rc);
-                                        return rc;
-                                }
+                        }
+                        rc = filter_quota_set_version(obd, s2ov[idx]);
+                        if (rc) {
+                                CDEBUG(D_QUOTA, "failed to set operational quota"
+                                       " to spec %c! %d\n", stype[i], rc);
+                                return rc;
                         }
                         break;
                 default  : /* just skip stray symbols like \n */
@@ -697,8 +691,8 @@ int lquota_proc_setup(struct obd_device *obd, int is_master)
                                                lprocfs_quota_common_vars, obd);
         if (IS_ERR(qctxt->lqc_proc_dir)) {
                 rc = PTR_ERR(qctxt->lqc_proc_dir);
-                CERROR("%s: error %d setting up lprocfs\n",
-                       obd->obd_name, rc);
+                CERROR("error %d setting up lprocfs for %s\n", rc,
+                       obd->obd_name);
                 qctxt->lqc_proc_dir = NULL;
                 GOTO(out, rc);
         }
@@ -707,8 +701,8 @@ int lquota_proc_setup(struct obd_device *obd, int is_master)
                 rc = lprocfs_add_vars(qctxt->lqc_proc_dir,
                                       lprocfs_quota_master_vars, obd);
                 if (rc) {
-                        CERROR("%s: error %d setting up lprocfs for "
-                               "quota master\n", obd->obd_name, rc);
+                        CERROR("error %d setting up lprocfs for %s"
+                               "(quota master)\n", rc, obd->obd_name);
                         GOTO(out_free_proc, rc);
                 }
         }

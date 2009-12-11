@@ -70,10 +70,6 @@ struct lustre_intent_data {
 #define FMODE_EXEC 0
 #endif
 
-#ifndef DCACHE_LUSTRE_INVALID
-#define DCACHE_LUSTRE_INVALID 0x100
-#endif
-
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 
@@ -307,8 +303,6 @@ enum stats_track_type {
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
 /* default value for lockless_truncate_enable */
 #define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 1
-/* default value for ll_direct_io_default */
-#define SBI_DEFAULT_DIRECT_IO_DEFAULT 0
 
 /* percpu data structure for lustre lru page list */
 struct ll_pglist_data {
@@ -368,7 +362,6 @@ struct ll_sb_info {
 
         unsigned                  ll_contention_time; /* seconds */
         unsigned                  ll_lockless_truncate_enable; /* true/false */
-        unsigned                  ll_direct_io_default; /* true/false */
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
@@ -607,6 +600,8 @@ struct ll_async_page {
                          llap_origin:3,
                          llap_ra_used:1,
                          llap_ignore_quota:1,
+                         llap_nocache:1,
+                         llap_lockless_io_page:1,
                          llap_reserved:7;
         unsigned int     llap_pglist_cpu:16;
         void            *llap_cookie;
@@ -628,9 +623,35 @@ enum {
         LLAP_ORIGIN_COMMIT_WRITE,
         LLAP_ORIGIN_WRITEPAGE,
         LLAP_ORIGIN_REMOVEPAGE,
+        LLAP_ORIGIN_LOCKLESS_IO,
         LLAP__ORIGIN_MAX,
 };
 extern char *llap_origins[];
+
+#ifdef HAVE_REGISTER_CACHE
+#include <linux/cache_def.h>
+#define ll_register_cache(cache) register_cache(cache)
+#define ll_unregister_cache(cache) unregister_cache(cache)
+#elif defined(HAVE_SHRINKER_CACHE)
+struct cache_definition {
+        const char *name;
+        shrinker_t shrink;
+        struct shrinker *shrinker;
+};
+
+#define ll_register_cache(cache) do {                                   \
+        struct cache_definition *c = (cache);                           \
+        c->shrinker = set_shrinker(DEFAULT_SEEKS, c->shrink);           \
+} while(0)
+
+#define ll_unregister_cache(cache) do {                                 \
+        remove_shrinker((cache)->shrinker);                             \
+        (cache)->shrinker = NULL;                                       \
+} while(0)
+#else
+#define ll_register_cache(cache) do {} while (0)
+#define ll_unregister_cache(cache) do {} while (0)
+#endif
 
 void ll_ra_read_init(struct file *f, struct ll_ra_read *rar,
                      loff_t offset, size_t count);
@@ -748,8 +769,6 @@ int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lustre_handle *, int ast_flags);
 int ll_extent_unlock(struct ll_file_data *, struct inode *,
                      struct lov_stripe_md *, int mode, struct lustre_handle *);
-int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,  __u64 bits);
-int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
@@ -785,7 +804,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm,
                      int *lmm_size, struct ptlrpc_request **request);
 int ll_fsync(struct file *file, struct dentry *dentry, int data);
-int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
+int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
 
 /* llite/dcache.c */
@@ -814,7 +833,6 @@ void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb);
 void ll_put_super(struct super_block *sb);
 void ll_kill_super(struct super_block *sb);
-int ll_shrink_cache(int nr_to_scan, SHRINKER_MASK_T gfp_mask);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
@@ -916,26 +934,6 @@ int ll_tree_lock_iov(struct ll_lock_tree *tree,
                      const struct iovec *iov, unsigned long nr_segs,
                      int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);
-
-enum ll_lock_style {
-        LL_LOCK_STYLE_NOLOCK   = 0,
-        LL_LOCK_STYLE_FASTLOCK = 1,
-        LL_LOCK_STYLE_TREELOCK = 2
-};
-
-struct ll_thread_data {
-        int ltd_magic;
-        int lock_style;
-        struct list_head *tree_list;
-        union {
-                struct ll_lock_tree tree;
-                struct lustre_handle lockh;
-        } u;
-};
-struct ll_thread_data *ll_td_get(void);
-void ll_td_set(struct ll_thread_data *ltd);
-struct lustre_handle *ltd2lockh(struct ll_thread_data *ltd, __u64 start,
-                                __u64 end);
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
@@ -1058,20 +1056,15 @@ struct ll_statahead_info {
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
-void ll_statahead_exit(struct inode *dir, struct dentry *dentry, int result);
+void ll_statahead_exit(struct dentry *dentry, int result);
 void ll_stop_statahead(struct inode *inode, void *key);
 
 static inline
-void ll_statahead_mark(struct inode *dir, struct dentry *dentry)
+void ll_statahead_mark(struct dentry *dentry)
 {
-        struct ll_inode_info  *lli;
+        struct ll_inode_info *lli = ll_i2info(dentry->d_parent->d_inode);
         struct ll_dentry_data *ldd = ll_d2d(dentry);
 
-        /* dentry has been move to other directory, no need mark */
-        if (unlikely(dir != dentry->d_parent->d_inode))
-                return;
-
-        lli = ll_i2info(dir);
         /* not the same process, don't mark */
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return;
@@ -1085,25 +1078,20 @@ void ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 static inline
 int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 {
-        struct ll_inode_info  *lli;
-        struct ll_sb_info     *sbi;
-        struct ll_dentry_data *ldd = ll_d2d(*dentryp);
-
-        if (unlikely(dir == NULL))
-                return -EAGAIN;
-
-        sbi = ll_i2sbi(dir);
-        /* temporarily disable dir stat ahead in interoperability mode */
-        if (sbi->ll_mdc_exp->exp_connect_flags & OBD_CONNECT_FID)
-                return -ENOTSUPP;
+        struct ll_sb_info        *sbi = ll_i2sbi(dir);
+        struct ll_inode_info     *lli = ll_i2info(dir);
+        struct ll_dentry_data    *ldd = ll_d2d(*dentryp);
 
         if (sbi->ll_sa_max == 0)
                 return -ENOTSUPP;
 
-        lli = ll_i2info(dir);
+        /* temporarily disable dir stat ahead in interoperability mode */
+        if (sbi->ll_mdc_exp->exp_connect_flags & OBD_CONNECT_FID)
+                return -ENOTSUPP;
+
         /* not the same process, don't statahead */
         if (lli->lli_opendir_pid != cfs_curproc_pid())
-                return -EAGAIN;
+                return -EBADF;
 
         /*
          * When "ls" a dentry, the system trigger more than once "revalidate" or

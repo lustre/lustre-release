@@ -187,7 +187,7 @@ union ptlrpc_async_args {
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
         void      *pointer_arg[9];
-        __u64      space[5];
+        __u64      space[4];
 };
 
 struct ptlrpc_request_set;
@@ -321,12 +321,13 @@ struct ptlrpc_request {
                 rq_no_delay:1, rq_net_err:1, rq_early:1, rq_must_unlink:1,
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
+                rq_sent_final:1,    /* stop sending early replies */
                 rq_hp:1,            /* high priority RPC */
                 rq_at_linked:1,     /* link into service's srv_at_array */
-                rq_reply_truncate:1, /* reply is truncated */
-                rq_fake:1,          /* fake request - just for timeout only */
-                /* the request is queued to replay during recovery */
-                rq_copy_queued:1;
+                /* a copy of the request is queued to replay during recovery */
+                rq_copy_queued:1,
+                /* whether the rquest is a copy of another replay request */
+                rq_copy:1;
         enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
@@ -398,24 +399,11 @@ struct ptlrpc_request {
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
         struct ptlrpc_request_set *rq_set;
-        int (*rq_interpret_reply)(struct ptlrpc_request *req, void *data,
-                                  int rc); /* async interpret handler */
+        void *rq_interpret_reply;               /* Async completion handler */
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */
 };
-
-static inline int ptlrpc_req_interpret(struct ptlrpc_request *req, int rc)
-{
-        if (req->rq_interpret_reply != NULL) {
-                int (*interpreter)(struct ptlrpc_request *, void *, int) =
-                     req->rq_interpret_reply;
-
-                req->rq_status = interpreter(req, &req->rq_async_args, rc);
-                return req->rq_status;
-        }
-        return rc;
-}
 
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 {
@@ -855,12 +843,6 @@ ptlrpc_init_rq_pool(int, int,
                     void (*populate_pool)(struct ptlrpc_request_pool *, int));
 
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req);
-struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
-                                           unsigned int timeout,
-                                           int (*interpreter)(struct ptlrpc_request *,
-                                                              void *, int));
-void ptlrpc_fakereq_finished(struct ptlrpc_request *req);
-
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, __u32 *lengths,
                                        char **bufs);
@@ -907,7 +889,6 @@ int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
-void ptlrpc_server_drop_request(struct ptlrpc_request *req);
 
 
 struct ptlrpc_svc_data {
@@ -1135,7 +1116,6 @@ int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
                            int priority);
 int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
 int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
-int server_disconnect_export(struct obd_export *exp);
 
 /* ptlrpc/pinger.c */
 enum timeout_event {
@@ -1155,21 +1135,16 @@ int ptlrpc_obd_ping(struct obd_device *obd);
 #ifdef __KERNEL__
 void ping_evictor_start(void);
 void ping_evictor_stop(void);
-int ping_evictor_wake(struct obd_export *exp);
 #else
 #define ping_evictor_start()    do {} while (0)
 #define ping_evictor_stop()     do {} while (0)
-static inline int ping_evictor_wake(struct obd_export *exp)
-{
-        return 1;
-}
 #endif
 
 /* ptlrpc/ptlrpcd.c */
 int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
-int ptlrpcd_add_req(struct ptlrpc_request *req);
+void ptlrpcd_add_req(struct ptlrpc_request *req);
 void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);

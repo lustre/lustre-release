@@ -87,7 +87,8 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        rc =  mgs_export_stats_init(obd, exp, 0, localdata);
+        rc = mgs_client_add(obd, exp, localdata);
+
         if (rc) {
                 class_disconnect(exp);
                 lprocfs_exp_cleanup(exp);
@@ -115,7 +116,7 @@ static int mgs_reconnect(struct obd_export *exp, struct obd_device *obd,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        RETURN(mgs_export_stats_init(obd, exp, 1, localdata));
+        RETURN(0);
 }
 
 static int mgs_disconnect(struct obd_export *exp)
@@ -128,7 +129,26 @@ static int mgs_disconnect(struct obd_export *exp)
         class_export_get(exp);
         mgs_counter_incr(exp, LPROC_MGS_DISCONNECT);
 
-        rc = server_disconnect_export(exp);
+        /* Disconnect early so that clients can't keep using export */
+        rc = class_disconnect(exp);
+        ldlm_cancel_locks_for_export(exp);
+
+        lprocfs_exp_cleanup(exp);
+
+        /* complete all outstanding replies */
+        spin_lock(&exp->exp_lock);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_service;
+
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&svc->srv_lock);
+        }
+        spin_unlock(&exp->exp_lock);
 
         class_export_put(exp);
         RETURN(rc);
@@ -197,11 +217,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         mgs_init_fsdb_list(obd);
         sema_init(&mgs->mgs_sem, 1);
 
-        /* Setup proc */
-        lprocfs_mgs_init_vars(&lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
-                lproc_mgs_setup(obd);
-
         /* Start the service threads */
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
@@ -221,6 +236,12 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_thread, rc);
 
+        /* Setup proc */
+        lprocfs_mgs_init_vars(&lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
+                lproc_mgs_setup(obd);
+        }
+
         ping_evictor_start();
 
         LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
@@ -230,7 +251,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
 err_llog:
-        lproc_mgs_cleanup(obd);
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         if (ctxt)
                 llog_cleanup(ctxt);
@@ -549,7 +569,7 @@ int mgs_handle(struct ptlrpc_request *req)
         LASSERT(current->journal_info == NULL);
         opc = lustre_msg_get_opc(req->rq_reqmsg);
         if (opc != MGS_CONNECT) {
-                if (!class_connected_export(req->rq_export)) {
+                if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
                                opc);
                         req->rq_status = -ENOTCONN;

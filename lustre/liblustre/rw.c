@@ -366,7 +366,7 @@ int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK) || mode == LCK_NL)
                 RETURN(0);
 
-        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh, 0, 0);
+        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
 
         RETURN(rc);
 }
@@ -508,8 +508,7 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                                          (obd_off)page->index << CFS_PAGE_SHIFT,
                                          &llu_async_page_ops,
                                          llap, &llap->llap_cookie,
-                                         /* no cache in liblustre at all */
-                                         OBD_PAGE_NO_CACHE,
+                                         1 /* no cache in liblustre at all */,
                                          NULL);
                 if (rc) {
                         LASSERT(rc < 0);
@@ -708,7 +707,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                         } else {
                                 /* If objective page index exceed end-of-file
                                  * page index, return directly. --bug 17336 */
-                                loff_t size = st->st_size;
+                                size_t size = st->st_size;
                                 unsigned long cur_index = pos >> CFS_PAGE_SHIFT;
 
                                 if ((size == 0 && cur_index != 0) ||

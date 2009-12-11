@@ -88,7 +88,7 @@ void build_lqs(struct obd_device *obd)
                                  i, &id_list);
 #endif
                 if (rc) {
-                        CERROR("%s: failed to get %s qids\n", obd->obd_name,
+                        CDEBUG(D_ERROR, "fail to get %s qids!\n",
                                i ? "group" : "user");
                         continue;
                 }
@@ -104,8 +104,8 @@ void build_lqs(struct obd_device *obd)
                                 lqs->lqs_flags |= dqid->di_flag;
                                 lqs_putref(lqs);
                         } else {
-                                CERROR("%s: failed to create a lqs for %sid %u"
-                                       "\n", obd->obd_name, i ? "g" : "u",
+                                CDEBUG(D_ERROR, "fail to create a lqs"
+                                       "(%s id: %u)!\n", i ? "group" : "user",
                                        dqid->di_id);
                         }
 
@@ -257,9 +257,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 0);
                 if (lqs == NULL || IS_ERR(lqs)){
-                        CERROR("fail to create lqs during setquota operation "
-                               "for %sid %u\n", oqctl->qc_type ? "g" : "u",
-                               oqctl->qc_id);
+                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
                 } else {
                         lqs->lqs_flags &= ~QB_SET;
                         lqs_putref(lqs);
@@ -301,9 +299,7 @@ adjust:
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 1);
                 if (lqs == NULL || IS_ERR(lqs)){
-                        CERROR("fail to create lqs during setquota operation "
-                               "for %sid %u\n", oqctl->qc_type ? "g" : "u",
-                               oqctl->qc_id);
+                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
                         break;
                 } else {
                         lqs->lqs_flags |= QB_SET;
@@ -350,7 +346,7 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
-        int ver, opc, rc, resends = 0;
+        int ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -363,8 +359,6 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
         }
 
-restart_request:
-
         req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -373,8 +367,6 @@ restart_request:
         *oqc = *oqctl;
 
         ptlrpc_req_set_repsize(req, 2, size);
-        ptlrpc_at_set_req_timeout(req);
-        req->rq_no_resend = 1;
 
         rc = ptlrpc_queue_wait(req);
         if (rc) {
@@ -395,19 +387,6 @@ restart_request:
         EXIT;
 out:
         ptlrpc_req_finished(req);
-
-        if (client_quota_recoverable_error(rc)) {
-                resends++;
-                if (!client_quota_should_resend(resends, &exp->exp_obd->u.cli)) {
-                        CERROR("too many resend retries, returning error "
-                               "(cmd = %d, id = %u, type = %d)\n",
-                               oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type);
-                        RETURN(-EIO);
-                }
-
-                goto restart_request;
-        }
-
         return rc;
 }
 

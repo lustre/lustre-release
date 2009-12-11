@@ -11,6 +11,11 @@ init_clients_lists
 
 [ -n "$FUNCTIONS" ] && . $FUNCTIONS || true
 
+MPIBIN=${MPIBIN:-/testsuite/tests/`arch`/bin}
+export PATH=:$PATH:$MPIBIN
+MPIRUN=$(which mpirun) || true
+MPI_USER=${MPI_USER:-mpiuser}
+
 # for recovery scale tests
 # default boulder cluster iozone location
 export PATH=/opt/iozone/bin:$PATH

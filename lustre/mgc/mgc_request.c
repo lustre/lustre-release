@@ -210,7 +210,6 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         atomic_set(&cld->cld_refcount, 1);
-        init_mutex(&cld->cld_sem);
 
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(lsi->lsi_mgc->obd_self_export);
@@ -233,6 +232,8 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         RETURN(rc);
 }
 
+DECLARE_MUTEX(llog_process_lock);
+
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {
@@ -246,9 +247,9 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         /* drop the ref from the find */
         config_log_put(cld);
 
-        down(&cld->cld_sem);
+        down(&llog_process_lock);
         cld->cld_stopping = 1;
-        up(&cld->cld_sem);
+        up(&llog_process_lock);
 
         /* drop the start ref */
         config_log_put(cld);
@@ -276,7 +277,7 @@ static int mgc_requeue_thread(void *data)
         int rc = 0;
         ENTRY;
 
-        cfs_daemonize(name);
+        ptlrpc_daemonize(name);
 
         CDEBUG(D_MGC, "Starting requeue thread\n");
 
@@ -544,7 +545,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, obd, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -672,8 +673,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int mgc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
-                      __u32 mode, struct lustre_handle *lockh, int flags,
-                      obd_off end)
+                      __u32 mode, struct lustre_handle *lockh)
 {
         ENTRY;
 
@@ -930,19 +930,20 @@ static int mgc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                         int *index)
+static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                         int count, struct llog_catid *logid,
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, disk_obd, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
@@ -1110,10 +1111,14 @@ static int mgc_process_log(struct obd_device *mgc,
                 RETURN(-EINVAL);
         }
 
-        /* Serialize update from the same log */
-        down(&cld->cld_sem);
+        /* I don't want mutliple processes running process_log at once --
+           sounds like badness.  It actually might be fine, as long as
+           we're not trying to update from the same log
+           simultaneously (in which case we should use a per-log sem.) */
+        down(&llog_process_lock);
+
         if (cld->cld_stopping) {
-                up(&cld->cld_sem);
+                up(&llog_process_lock);
                 RETURN(0);
         }
 
@@ -1126,8 +1131,8 @@ static int mgc_process_log(struct obd_device *mgc,
 
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
-                up(&cld->cld_sem);
                 CERROR("missing llog context\n");
+                up(&llog_process_lock);
                 RETURN(-EINVAL);
         }
 
@@ -1183,14 +1188,15 @@ out_pop:
         /* Now drop the lock so MGS can revoke it */
         if (!rcl) {
                 rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, NULL,
-                                 LCK_CR, &lockh, 0, 0);
+                                 LCK_CR, &lockh);
                 if (rcl)
                         CERROR("Can't drop cfg lock: %d\n", rcl);
         }
-        up(&cld->cld_sem);
 
         CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
                mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
+
+        up(&llog_process_lock);
 
         RETURN(rc);
 }

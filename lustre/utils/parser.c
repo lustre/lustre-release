@@ -118,11 +118,6 @@ void Parser_ignore_errors(int ignore)
         ignore_errors = ignore;
 }
 
-/* Returns:
-        0 on success
-        >0 CMD_* values
-        <0 errnos
-*/
 int Parser_execarg(int argc, char **argv, command_t cmds[])
 {
         command_t *cmd;
@@ -134,12 +129,12 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
                         fprintf(stderr, "%s\n", cmd->pc_help);
                 return rc;
         } else {
-                printf("Try interactive use without arguments or use one of:\n");
+		printf("Try interactive use without arguments or use one of:\n");
                 for (cmd = cmds; cmd->pc_name; cmd++)
                         printf("\"%s\"\n", cmd->pc_name);
                 printf("as argument.\n");
         }
-        return -EINVAL;
+        return -1;
 }
 
 /* returns the command_t * (NULL if not found) corresponding to a
@@ -259,9 +254,9 @@ static char **command_completion(char * text, int start, int end)
         char        * pos;
 
         match_tbl = top_level;
-
+        
         for (table = find_cmd(rl_line_buffer, match_tbl, &pos);
-             table; table = find_cmd(pos, match_tbl, &pos))
+             table; table = find_cmd(pos, match_tbl, &pos)) 
         {
 
                 if (*(pos - 1) == ' ') match_tbl = table->pc_sub_cmd;

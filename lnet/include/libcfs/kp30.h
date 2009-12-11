@@ -95,7 +95,7 @@
          else {                                                         \
                  libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,       \
                                   __FILE__, __FUNCTION__,__LINE__,      \
-                                  "ASSERTION(" #cond ") failed: " fmt,  \
+                                  "ASSERTION(" #cond ") failed:" fmt,   \
                                   ## a);                                \
                  LBUG();                                                \
          }                                                              \
@@ -116,7 +116,7 @@
         if (unlikely(!(cond))) {                                        \
                 libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,        \
                                  __FILE__, __FUNCTION__,__LINE__,       \
-                                 "ASSERTION(" #cond ") failed: " fmt,   \
+                                 "ASSERTION(" #cond ") failed:" fmt,    \
                                  ## a);                                 \
                 LBUG();                                                 \
         }                                                               \
@@ -158,26 +158,26 @@ do {                                            \
 # define libcfs_kmem_dec(ptr, size) do {} while (0)
 #endif /* LIBCFS_DEBUG */
 
-#define LIBCFS_VMALLOC_SIZE        (2 << CFS_PAGE_SHIFT) /* 2 pages */
+#define LIBCFS_VMALLOC_SIZE        16384
 
 #define LIBCFS_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
         LASSERT(!in_interrupt() ||                                        \
                (size <= LIBCFS_VMALLOC_SIZE && mask == CFS_ALLOC_ATOMIC));\
-        if (unlikely((size) > LIBCFS_VMALLOC_SIZE))                       \
+        if (unlikely((size) > LIBCFS_VMALLOC_SIZE))                     \
                 (ptr) = cfs_alloc_large(size);                            \
         else                                                              \
                 (ptr) = cfs_alloc((size), (mask));                        \
-        if (unlikely((ptr) == NULL)) {                                    \
+        if (unlikely((ptr) == NULL)) {                                  \
                 CERROR("LNET: out of memory at %s:%d (tried to alloc '"   \
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
                 CERROR("LNET: %d total bytes allocated by lnet\n",        \
                        atomic_read(&libcfs_kmemory));                     \
-                break;                                                    \
+        } else {                                                          \
+                libcfs_kmem_inc((ptr), (size));                           \
+                if (!((mask) & CFS_ALLOC_ZERO))                           \
+                       memset((ptr), 0, (size));                          \
         }                                                                 \
-        libcfs_kmem_inc((ptr), (size));                                   \
-        /* always zero out memory */                                      \
-        memset((ptr), 0, (size));                                         \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read (&libcfs_kmemory));        \
 } while (0)
@@ -275,9 +275,6 @@ int libcfs_debug_cleanup(void);
 
 /* !__KERNEL__ */
 #endif
-
-#define LIBCFS_ALLOC_PTR(ptr) LIBCFS_ALLOC(ptr, sizeof *(ptr))
-#define LIBCFS_FREE_PTR(ptr)  LIBCFS_FREE(ptr, sizeof *(ptr))
 
 /*
  * compile-time assertions. @cond has to be constant expression.

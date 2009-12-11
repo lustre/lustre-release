@@ -5,12 +5,6 @@
 #set -x
 shopt -s extdebug
 
-# include the exit_traps library
-. ${0%/lbuild}/exit_traps.sh
-
-# our children should die when we do
-push_exit_trap "kill -INT -$$ || true" kill_children
-
 TOPDIR=$PWD
 
 # CVSROOT is inherited from the environment
@@ -52,8 +46,6 @@ XEN=false
 LINUXOBJ=
 DISTRO=
 KERNELTREE=
-# default to not adding -lustre- into the kernel RPM package names
-KERNEL_LUSTRE_NAMING=false
 
 # patchless build
 KERNELRPMSBASE=
@@ -401,137 +393,27 @@ download_srpm() {
 
 }
 
-download_file() {
-    local from="$1"
-    local to="$2"
-    local force="$3"
-
-    local file=${from##*/}
-
-    if [ -d $to ]; then
-        to="$to/$file"
-    fi
-
-    local semaphore="$to-downloading"
-
-    is_downloading() {
-        if [ ! -f $semaphore ]; then
-            return 1
-        fi
-
-        # make sure the download has not been aborted
-        local now=$(date +%s)
-        local file_mtime=$(stat -c %Y "$to")
-        local staleness=$((now - file_mtime))
-        # let's assume an active download will write at least once a minute
-        if [ $staleness -gt 60 ]; then
-            return 1
-        fi
-
-        return 0
-    }
-
-    is_downloaded() {
-        # if the semaphore file exists, the file is either still downloading
-        # or a download was aborted and we cannot trust the target file
-        if [ -f $semaphore ]; then
-            return 1
-        fi
-
-        if ! $(is_downloading) && [ -r "$to" ] && [ -s "$to" ]; then
-            return 0
-        fi
-
-        return 1
-    }
-
-    if $force || ! $(is_downloaded); then
-        if $(is_downloading); then
-            echo "Somebody else is downloading $from..."
-            while $(is_downloading); do
-                echo "Waiting for $to to finish downloading"
-                sleep 60
-            done
-            if $(is_downloaded); then
-                return 0
-            else
-                echo "The download we were waiting for seems to have been aborted"
-            fi
-
-        fi
-
-        if $DOWNLOAD; then
-            echo "Downloading $from..."
-            # flag others so they don't try to download also
-            push_exit_trap "rm -f $to $semaphore" "download"
-            touch $semaphore
-            if ! wget -nv "$from" -O "$to" || [ ! -s "$to" ]; then
-                # the trap will remove the files via the fatal below
-                fatal 1 "Could not download ${to##*/} from ${from%%/*}/."
-            fi
-            rm -f $semaphore
-            delete_exit_trap "download"
-        else
-            fatal 1 "${to##*/} not found in directory ${to%/*}."
-        fi
-    fi
-
-    return 0
-
-}
-
 download_ofed() {
     local force="${1:-false}"
 
-    local location="http://downloads.lustre.org/public/OFED/"
-
-    local Mmv daily
-    if [[ $OFED_VERSION = daily-* ]]; then
-        OFED_VERSION=${OFED_VERSION/daily-/}
-        Mmv=${OFED_VERSION%%-*}
-        daily=${OFED_VERSION##$Mmv-}
-        location="http://www.openfabrics.org/downloads/OFED/ofed-${Mmv}-daily/"
-        # find the filename for the version for the date specified
-        OFED_VERSION=$(curl -s "$location" | sed -nre "/${daily}-/s/.*href=\"OFED-([0-9]+\.[0-9]+-${daily}-[0-9]{4,4}).tgz.*$/\1/p" | tail -1)
-        if [ -z "$OFED_VERSION" ]; then
-            fatal 1 "Could not determine the filename of the OFED snapshot for ${daily}"
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] &&
+       ( $force || [ ! -r "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ||
+           [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ); then
+        if $DOWNLOAD; then
+            local location="http://downloads.lustre.org/public/OFED/"
+            echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
+            if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
+                -O "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ||
+               [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ]; then
+                rm -f $KERNELTREE/OFED-${OFED_VERSION}.tgz
+                fatal 1 "Could not download OFED-${OFED_VERSION}.tgz" \
+                        "from downloads.lustre.org."
+            fi
+        else
+            fatal 1 "OFED-${OFED_VERSION}.tgz not found in kernel" \
+                    "directory $KERNELTREE."
         fi
     fi
-
-    if [ -z "$OFED_VERSION" -o "$OFED_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    local file="OFED-${OFED_VERSION}.tgz"
-    download_file "$location/$file" "$KERNELTREE" "$force"
-
-}
-
-download_rdac() {
-    local force="${1:-false}"
-
-    local location="http://downloads.lustre.org/public/RDAC/"
-
-    if [ -z "$RDAC_VERSION" -o "$RDAC_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    local file="rdac-LINUX-${RDAC_VERSION}-source.tar.gz"
-    download_file "$location/$file" "$KERNELTREE" "$force"
-
-}
-
-download_mptlinux() {
-    local force="${1:-false}"
-
-    local location="http://downloads.lustre.org/public/MPTLINUX/"
-
-    if [ -z "$MPTLINUX_VERSION" -o "$MPTLINUX_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    file="MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip"
-    download_file "$location/$file" "$KERNELTREE" "$force"
 
 }
 
@@ -547,15 +429,7 @@ load_target() {
 
     echo "Loading target config file $TARGET.target..."
 
-    # if the caller specified an OFED_VERSION it should override whatever
-    # the target file specifies
-    local env_OFED_VERSION="$OFED_VERSION"
-
     . "$TARGET_FILE"
-
-    if [ -n "$env_OFED_VERSION" ]; then
-        OFED_VERSION="$env_OFED_VERSION"
-    fi
 
     # doesn't make any sense to build OFED for xen domX's
     if $XEN; then
@@ -678,24 +552,6 @@ unpack_ofed() {
 
 }
 
-unpack_rdac() {
-
-    if ! untar "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz"; then
-        return 1
-    fi
-    [ -d rdac-LINUX ] || ln -sf rdac-LINUX-[0-9][0-9].* rdac-LINUX
-
-}
-
-unpack_mptlinux() {
-
-    if ! unzip -p $KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-4.16.00.00-2.zip | tar xzvf - srpms-2/mptlinux-4.16.00.00-2.src.rpm; then
-        return 1
-    fi
-    mv srpms-2/mptlinux-4.16.00.00-2.src.rpm .
-
-}
-
 unpack_lustre() {
 
     if [ -z "$LUSTRE" ]; then
@@ -764,25 +620,23 @@ do_patch_linux() {
 }
 
 build_lustre() {
-    local linux="$1"
-    local linuxobj="$2"
 
     cp "$LUSTRE" SOURCES
 
     pushd lustre >/dev/null
 
     echo "Building Lustre RPMs for: $BUILD_ARCHS..."
-    local targets arch
+    targets=
     for arch in $BUILD_ARCHS; do
         targets="--target $arch $targets"
     done
 
-    local confoptions="--with-linux=${linux}"
+    local confoptions="--with-linux=${LINUX}"
     if $PATCHLESS; then
-        confoptions="--with-linux=${linux} --disable-server"
+        confoptions="--with-linux=${LINUX} --disable-server"
     fi
-    if [ "$linuxobj" != "" ]; then
-        confoptions="$confoptions --with-linux-obj=${linuxobj}"
+    if [ ! "$LINUXOBJ" = "" ]; then
+        confoptions="$confoptions --with-linux-obj=${LINUXOBJ}"
     fi
 
     ./configure $confoptions ${CONFIGURE_FLAGS}
@@ -820,7 +674,7 @@ build_lustre() {
 
     # convert the $PATCHLESS boolean to an empty/no-empty boolean
     # as silly as this seems, it makes the syntax of the rpmbuild command
-    # simpler and not need an eval to deal with the quotes in the quotes
+    # simpler and not need an eval to deal with the quotes in the quotes 
     local is_patchless=""
     if $PATCHLESS; then
         is_patchless="yes"
@@ -1030,113 +884,71 @@ find_linux_devel_paths() {
     local RC=0
 
     pushd $path
-        # RHEL-style and SLES-style rpms
-        # XXX - until bug 19336 cleans this up, we need to extricate the
-        #       ${lnxmin}- from the $lnxrel
-        local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
+    # RHEL-style and SLES-style rpms
+    # XXX - until bug 19336 cleans this up, we need to extricate the
+    #       ${lnxmin}- from the $lnxrel
+    local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
 
-        local path
-        for path in $paths; do
-            local src='usr/src'
+    local path
+    for path in $paths; do
+        local src='usr/src'
 
-            if [ -d "$src/$path/" ]; then
-                LINUX="$(pwd)/$src/$path"
-            fi
-            # SLES has a separate -obj tree
-            if [ -d "$src/${path}-obj" ]; then
-                local src="$src/${path}-obj"
-                local objects="$TARGET_ARCH/$RPMSMPTYPE"
-
-                # Novell, are you *TRYING* to make life hard for me?
-                if [ -d "$src/powerpc" ]; then
-                    objects="powerpc/$TARGET_ARCH"
-                elif [ $TARGET_ARCH == 'i686' ]; then
-                    objects="i386/$RPMSMPTYPE"
-                fi
-
-                LINUXOBJ="$(pwd)/$src/$objects"
-            fi
-        done
-        if [ -z "$LINUX" ]; then
-            RC=255
-        else
-            # dig out the release version
-            LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
-            if [ -z "$LINUXRELEASE" ]; then
-                echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
-                RC=255
-            fi
+        if [ -d "$src/$path/" ]; then
+            LINUX="$(pwd)/$src/$path"
         fi
+        # SLES has a separate -obj tree
+        if [ -d "$src/${path}-obj" ]; then
+            local src="$src/${path}-obj"
+            local objects="$TARGET_ARCH/$RPMSMPTYPE"
+
+            # Novell, are you *TRYING* to make life hard for me?
+            if [ -d "$src/powerpc" ]; then
+                objects="powerpc/$TARGET_ARCH"
+            elif [ $TARGET_ARCH == 'i686' ]; then
+                objects="i386/$RPMSMPTYPE"
+            fi
+
+            LINUXOBJ="$(pwd)/$src/$objects"
+        fi
+    done
+    if [ -z "$LINUX" ]; then
+        RC=255
+    else
+        # dig out the release version
+        LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
+        if [ -z "$LINUXRELEASE" ]; then
+            echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
+            RC=255
+        fi
+    fi
     popd
     return $RC
 }
 
 build_kernel_ib() {
-    local linux="$1"
-
     # build kernel-ib{,-devel}
+    # some I/B drivers are architecture dependent and kernel-ib's configure
+    # does not figure it out for us ~sigh~
+    local configure_options=""
+    case "$TARGET_ARCH" in
+	x86_64 | ia64)
+	    configure_options="--with-ipath_inf-mod"
+	    ;;
+	ppc64)
+	    configure_options="--with-ipath_inf-mod --with-ehca-mod"
+	    ;;
+    esac
     local K_SRC="K_SRC"
     # ofed 1.3 had a bug in the rpm spec
     if [ "$OFED_VERSION" = "1.3" ]; then
         K_SRC="KSRC"
     fi
-
-    local OFED_CORE="--with-core-mod --with-ipoib-mod --with-sdp-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-rds-mod --with-qlgc_vnic-mod --with-madeye-mod"
-    local OFED_HARDWARE="--with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod"
-    # some I/B drivers are architecture dependent and kernel-ib's configure
-    # does not figure it out for us ~sigh~
-    case "$TARGET_ARCH" in
-        ppc64)
-            OFED_HARDWARE="$OFED_HARDWARE --with-ehca-mod"
-            ;;
-    esac
-    # we're no longer shipping the OFED iSCSI
-    #OFED_ISCSI="--with-srp-mod --with-srp-target-mod"
-    ## ISER module has no backport support as of OFED 1.5 (i.e. only builds on
-    ##kernels >= 2.6.30)
-    #if [[ $OFED_VERSION = 1.[0-4]* ]]; then
-    #   OFED_ISCSI="$OFED_ISCSI --with-iser-mod"
-    #fi
-
-    # assume we are just rebuilding the SRPM
-    local BUILD_TYPE=${BUILD_TYPE:-"--rebuild"}
-    local SOURCE="${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm"
-
-    # but switch to building from the SPEC if we need to apply patches
-    if ls ${TOPDIR}/lustre/build/patches/ofed/* >/dev/null; then
-        BUILD_TYPE="-bb"
-        rpm --define "_topdir ${TOPDIR}" -ivh $SOURCE
-        SOURCE="${TOPDIR}/SPECS/ofa_kernel.spec"
-        local file ed_fragment1 ed_fragment2 n=1
-        for file in ${TOPDIR}/lustre/build/patches/ofed/*; do
-            ed_fragment1="$ed_fragment1
-Patch$n: ${file%%*/}"
-            ed_fragment2="$ed_fragment2
-%patch$n -p0"
-            cp $file ${TOPDIR}/SOURCES
-            let n=$n+1
-        done
-
-        ed $SOURCE <<EOF
-/^Source: /a
-$ed_fragment1
-.
-/^%setup /a
-$ed_fragment2
-.
-wq
-EOF
-    fi
-
-    local linuxrelease=$(find_linux_release "$linux")
-    $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
-              --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
-              --define "KVERSION ${linuxrelease}" \
-              --define "$K_SRC ${linux}" \
-              --define "LIB_MOD_DIR /lib/modules/${linuxrelease}/updates" \
-              ${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
-              --define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
-              ${SOURCE}
+    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+	      --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
+	      --define "KVERSION ${LINUXRELEASE}" \
+	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
+	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -1171,7 +983,7 @@ store_for_reuse() {
                 error "Failed to copy \"$article\" to \"$location\" in store_for_reuse()"
                 # rename the cache location so that it's not cached
                 # product, but is around for analysis
-                mv "$location"{,-bad-$(date +%s)} ||
+                mv "$location"{,-bad-$(date +%s)} || 
                     error "failed to clean up a failed cache attempt" \
                           "in \"$location\" -- manual cleanup will be" \
                           "necessary"
@@ -1196,9 +1008,9 @@ reuse() {
     if [ -n "$REUSEBUILD" ] && [ -d "$REUSEBUILD/$signature/$module" ]; then
         if [ ! -f "$REUSEBUILD/$signature/$module/.lastused" ]; then
             # the .lastused flag is populated at the end of the caching to
-            # signal that the caching was completed.  if that flag is not
-            # there, then the cache is invalid (and should be removed in fact)
-            mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} ||
+            # signal that the caching was completeld.  if that flag is not
+            # there, then the cache is invalid (and should be removed in fact) 
+            mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} || 
                 fatal 1 "failed to clean up a bad cache in location" \
                       "\"$REUSEBUILD/$signature/$module\" -- manual cleanup" \
                       "will be necessary"
@@ -1238,7 +1050,7 @@ reuse() {
                 find $dir -type f |
                   xargs ln -t $dest/RPMS/${dir##*/} -s
             done
-
+                     
         fi
         return 0
     else
@@ -1269,7 +1081,7 @@ find_rpm() {
         fatal 1 "Unable to chdir to directory \"$dir\" in find_rpm()"
 
     local file
-    for file in $(ls *.rpm); do
+    for file in $(ls); do
         if [ ! -f "$file" ]; then
             continue
         fi
@@ -1296,16 +1108,12 @@ find_rpm() {
 build_kernel_with_srpm() {
 
     # need to generate the patch for this target
-    do_patch_linux false >&2    # sets global $FULL_PATCH (yeah, yuck)
+    do_patch_linux false >&2	# sets global $FULL_PATCH (yeah, yuck)
 
     # get an md5sum of the kernel patch + config for reuse check
     # XXX really, there needs to be a signature and a CONFIG_FILE per arch
     #     in BUILD_ARCHS
-    local release_str
-    if $RELEASE; then
-        local release_str="RELEASE=$RELEASE\n"
-    fi
-    local REUSE_SIGNATURE=$({ echo -en $release_str; echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } | md5sum | cut -d" " -f1)
+    local REUSE_SIGNATURE=$({ echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } | md5sum | cut -d" " -f1)
 
     # see if we can link to the reuse pool
     # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
@@ -1345,7 +1153,7 @@ build_kernel_with_srpm() {
             echo "unknown"
             return 1
         fi
-    fi  # build reuse
+    fi	# build reuse
 
     # figure out the EXTRA_VERSION of the kernel we built or are re-using
     local KERNEL_RPM
@@ -1366,199 +1174,6 @@ build_kernel_with_srpm() {
 
 }
 
-build_mptlinux() {
-    local linux="$1"
-    local version="$2"
-
-    if [ -z "$version" -o "$version" = "inkernel" ]; then
-        return 0
-    fi
-
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-    fi
-
-    # if only we could just rebuild the src.rpm.  but the included spec
-    # is a real pig's breakfast.  just check out the patch we need to
-    # apply to it to make it useful.
-    #$RPMBUILD --rebuild \
-    #          --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
-    #          ${TOPDIR}/mptlinux-*.src.rpm
-    rpm -ivh --define "_topdir ${TOPDIR}" ${TOPDIR}/mptlinux-*.src.rpm
-
-    # now the big honkin' patch to the spec file
-    pushd ${TOPDIR}/SPECS
-    # to regen this patch use:
-    # !!cd ~/rpm/SPECS/ && diff -u mptlinux.spec{.dist,}
-    patch -p0 < ${TOPDIR}/lustre/build/mptlinux.spec.patch || fatal 1 "failed to patch mptlinux.spec"
-    popd
-
-    local targets arch
-        for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-    fi
-
-    if ! $RPMBUILD $targets $rpmbuildopt \
-                  --define "_tmppath /var/tmp" \
-                  --define "_topdir ${TOPDIR}" \
-                  --define "kernel_obj $linux" \
-                  ${TOPDIR}/SPECS/mptlinux.spec; then
-        return 1
-    fi
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs \
-                      --define "_tmppath /var/tmp" \
-                      --define "_topdir ${TOPDIR}" \
-                      --define "kernel_obj $linux" \
-                      ${TOPDIR}/SPECS/mptlinux.spec; then
-            return 1
-        fi
-    fi
-
-    return 0
-
-}
-
-# build RDAC
-build_rdac() {
-    local linux="$1"
-    local version="$2"
-
-    if [ -z "$version" -o "$version" = "inkernel" ]; then
-        return 0
-    fi
-
-    # note that we use an _, not a . before the spec on purpose.  we are not
-    # allowed to have more than one file with a .spec trailer in a tarball
-    # that is supposed to be usable with rpmbuild
-    cp lustre/build/rdac_spec ${TOPDIR}/SPECS/rdac.spec || fatal 1 "Could not find rdac.spec in lustre/build" 
-
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-    fi
-
-    local distro
-    case $DISTRO in
-     rhel5)     distro="REDHAT"
-                ;;
-    sles1*)     distro="SUSE"
-                ;;
-         *)     echo "$DISTRO not supported by RDAC, skipping"
-                return 0
-                ;;
-    esac
-    if ! $RPMBUILD $targets $rpmbuildopt --define "dist $distro" \
-                  --define "_tmppath /var/tmp" \
-                  --define "_topdir ${TOPDIR}" \
-                  --define "kernel_obj $linux" \
-                  ${TOPDIR}/SPECS/rdac.spec; then
-        return 1
-    fi
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs --define "dist $distro" \
-                      --define "_tmppath /var/tmp" \
-                      --define "_topdir ${TOPDIR}" \
-                      --define "kernel_obj $linux" \
-                      ${TOPDIR}/SPECS/rdac.spec; then
-            return 1
-        fi
-    fi
-
-    return 0
-}
-
-# build OFED
-# globals used:
-#    TOPDIR
-#    REUSEBUILD, REUSERPM
-#    CONFIGURE_FLAGS
-
-build_ofed() {
-    local linux="$1"
-    local ofed_version="$2"
-
-    # before lustre, build kernel-ib
-    if [ -z "$ofed_version" -o "$ofed_version" = "inkernel" ]; then
-        return 0
-    fi
-
-    if [ -n "$REUSEBUILD" ]; then
-        # see if we can link to the reuse pool
-            # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
-            #       "library"
-        local CAN_LINK_FOR_REUSE=false
-        touch $REUSEBUILD/$$
-        if cp -al $REUSEBUILD/$$ $TOPDIR/; then
-            CAN_LINK_FOR_REUSE=true
-        fi
-        rm $REUSEBUILD/$$
-    fi
-
-    local REUSE_SIGNATURE=$({ echo "$ofed_version";
-                              echo "$(find_linux_release ${linux})";
-                              cat "${linux}/include/linux/autoconf.h"; } |
-                            md5sum | cut -d" " -f1)
-    if ! $REUSERPM || ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
-                                   "$REUSE_SIGNATURE"; then
-        # stash away the existing built articles for a moment
-        mkdir bak
-        mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
-        function mv_back {
-            pushd bak
-            find . | cpio -pudlm ..
-            popd
-            rm -rf bak
-        }
-        create_rpmbuild_dirs
-        # build it
-        build_kernel_ib "${linux}"
-        if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
-                             "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
-                             "$CAN_LINK_FOR_REUSE"; then
-            error "Failed to store OFED RPMS for reuse"
-            mv_back
-            return 1
-        fi
-        # put the stuff we stashed away back
-        mv_back
-    fi
-
-    pushd "$TOPDIR" >/dev/null
-    rm -rf kernel-ib-devel
-    mkdir kernel-ib-devel
-    cd kernel-ib-devel
-    # the actual ofed RPMs don't have the -rc$n or -$date string appened that
-    # might be present on the file
-    local linuxrelease=$(find_linux_release "$linux")
-    ofed_version=$(echo $ofed_version |
-                   sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
-    local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
-    rpm2cpio -itv < $rpm | cpio -id
-    CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
-    popd >/dev/null
-
-}
-
 build_with_srpm() {
 
     if ! $PATCHLESS; then
@@ -1568,8 +1183,9 @@ build_with_srpm() {
         fi
 
         for arch in $BUILD_ARCHS; do
+
             local kernel_devel_rpm
-            if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^$(devel_kernel_name $KERNEL_LUSTRE_NAMING) ="); then
+            if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^$(devel_kernel_name true) ="); then
                 fatal 1 "Failed to find a kernel development RPM in $TOPDIR/RPMS/$arch/"
             fi
 
@@ -1593,23 +1209,62 @@ build_with_srpm() {
         fi
     fi
 
-    build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
-        fatal 1 "error building OFED"
+    # before lustre, build kernel-ib
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
+        # see if we can link to the reuse pool
+        # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
+        local CAN_LINK_FOR_REUSE=false
+        touch $REUSEBUILD/$$
+        if cp -al $REUSEBUILD/$$ $TOPDIR/; then
+            CAN_LINK_FOR_REUSE=true
+        fi
+        rm $REUSEBUILD/$$
 
-    if ! $PATCHLESS; then
-        # only need RDAC for the server
-        build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
-            fatal 1 "error building RDAC"
+        local REUSE_SIGNATURE=$({ echo "$OFED_VERSION"; echo "$(find_linux_release ${LINUXOBJ:-$LINUX})"; cat "${LINUXOBJ:-${LINUX}}/include/linux/autoconf.h"; } | md5sum | cut -d" " -f1)
+        if ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+                        "$REUSE_SIGNATURE"; then
+            # stash away the existing built articles for a moment
+            mkdir bak
+            mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
+            function mv_back {
+                pushd bak
+                find . | cpio -pudlm ..
+                popd
+                rm -rf bak
+            }
+            create_rpmbuild_dirs
+            # build it
+            build_kernel_ib
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                                 "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                                 "$CAN_LINK_FOR_REUSE"; then
+                error "Failed to store OFED RPMS for reuse"
+                mv_back
+                return 1
+            fi
+            # put the stuff we stashed away back
+            mv_back
+        fi
+
+        pushd "$TOPDIR" >/dev/null
+        rm -rf kernel-ib-devel
+        mkdir kernel-ib-devel
+        cd kernel-ib-devel
+        # the actual ofed RPMs don't have the -rc$n or -$date string appened that
+        # might be present on the file
+        local ofed_version=$(echo $OFED_VERSION |
+                         sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
+        local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${LINUXRELEASE//-/_}.*.rpm)
+        rpm2cpio -itv < $rpm | cpio -id
+        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+        popd >/dev/null
     fi
 
-    build_mptlinux "${LINUXOBJ:-$LINUX}" "$MPTLINUX_VERSION" ||
-        fatal 1 "error building mptlinux"
-
     # now build Lustre
-    if build_lustre "$LINUX" "$LINUXOBJ"; then
+    if build_lustre; then
         # the build worked.  resolve any symlinked files (i.e. from reuse)
         # in RPMS/$arch to real files so that that that huge mess of
-        # complication known as LTS can copy them yet somewhere else.
+        # complication knows as LTS can copy them yet somewhere else.
         # is it any wonder this whole process is so damn so?  anyone ever
         # heard of hardlinks?  it this cool new thing that allows you save
         # tons of time and space by creating... well you can go read about
@@ -1694,7 +1349,7 @@ backtrace() {
                 args="${args:+${args} }'${newarg}'"
             done
             let p+=${BASH_ARGC[$n - 1]}
-        fi
+	fi
         echo "  ${funcname} ${args:+${args} }at ${sourcefile}:${lineno}"
     done
 
@@ -1721,7 +1376,7 @@ backtrace() {
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1821,10 +1476,6 @@ while [ "$1" ]; do
             DO_SRC=false
             shift 1
             ;;
-        --ofed-version)
-            OFED_VERSION="$2"
-            shift 2
-            ;;
         --publish)
             shift
             ;;
@@ -1884,38 +1535,15 @@ if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     unpack_ofed || fatal 1 "Error unpacking OFED tarball"
 fi
 
-if [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ]; then
-    download_mptlinux
-    unpack_mptlinux || fatal 1 "Error unpacking MPTLINUX distribution"
-fi
-
 # make sure the RPM build environment is set up
 create_rpmbuild_dirs
 
-if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
-    download_rdac
-    # we don't actually need to unpack this.  just put it in the SOURCES dir
-    #unpack_rdac || fatal 1 "Error unpacking RDAC tarball"
-    cp "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ${TOPDIR}/SOURCES/ ||
-        fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
-fi
-
-push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache_summary"
-# should remove the ccache trap if lbuild is interrupted
-trap 'delete_exit_trap "ccache_summary"; exit 1' INT TERM HUP
+trap '[ -n "$CCACHE" ] && ccache -s' EXIT
 
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
 if [ -n "$LINUX" ]; then
-    build_mptlinux "${LINUXOBJ:-$LINUX}" "$MPTLINUX_VERSION" ||
-        fatal 1 "error building mptlinux"
-    build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
-        fatal 1 "error building OFED"
-    if ! $PATCHLESS; then
-        build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
-            fatal 1 "error building RDAC"
-    fi
-    build_lustre "$LINUX" "$LINUXOBJ"
+    build_lustre
 else
     if [ -f "${0%/*}/lbuild-$DISTRO" ]; then
         seen_list=$(new_list)

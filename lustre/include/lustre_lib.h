@@ -518,8 +518,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_ENQUEUE               _IOWR('f', 202, OBD_IOC_DATA_TYPE)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_GET_OBJ_VERSION        _IOR('f', 210, OBD_IOC_DATA_TYPE)
-
 /* XXX _IOWR('f', 250, long) has been defined in
  * lnet/include/libcfs/kp30.h for debug, don't use it
  */

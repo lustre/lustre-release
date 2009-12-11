@@ -54,7 +54,6 @@
 # define list_for_each_safe_rcu  list_for_each_safe
 # define rcu_read_lock()         spin_lock(&bucket->lock)
 # define rcu_read_unlock()       spin_unlock(&bucket->lock)
-# define list_for_each_entry_rcu list_for_each_entry
 #endif /* ifndef HAVE_RCU */
 
 static __u64 handle_base;
@@ -162,7 +161,7 @@ void class_handle_unhash(struct portals_handle *h)
 void *class_handle2object(__u64 cookie)
 {
         struct handle_bucket *bucket;
-        struct portals_handle *h;
+        struct list_head *tmp;
         void *retval = NULL;
         ENTRY;
 
@@ -173,7 +172,9 @@ void *class_handle2object(__u64 cookie)
         bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
 
         rcu_read_lock();
-        list_for_each_entry_rcu(h, &bucket->head, h_link) {
+        list_for_each_rcu(tmp, &bucket->head) {
+                struct portals_handle *h;
+                h = list_entry(tmp, struct portals_handle, h_link);
                 if (h->h_cookie != cookie)
                         continue;
 
@@ -206,8 +207,6 @@ void class_handle_free_cb(struct rcu_head *rcu)
 int class_handle_init(void)
 {
         struct handle_bucket *bucket;
-        struct timeval tv;
-        int seed[2];
 
         LASSERT(handle_hash == NULL);
 
@@ -222,11 +221,6 @@ int class_handle_init(void)
                 spin_lock_init(&bucket->lock);
         }
 
-        /** bug 21430: add randomness to the initial base */
-        ll_get_random_bytes(seed, sizeof(seed));
-        do_gettimeofday(&tv);
-        ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
-
         ll_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);
 
@@ -238,9 +232,13 @@ static void cleanup_all_handles(void)
         int i;
 
         for (i = 0; i < HANDLE_HASH_SIZE; i++) {
-                struct portals_handle *h;
+                struct list_head *pos, *n;
+                n = NULL;
                 spin_lock(&handle_hash[i].lock);
-                list_for_each_entry_rcu(h, &(handle_hash[i].head), h_link) {
+                list_for_each_safe_rcu(pos, n, &(handle_hash[i].head)) {
+                        struct portals_handle *h;
+                        h = list_entry(pos, struct portals_handle, h_link);
+
                         CERROR("force clean handle "LPX64" addr %p addref %p\n",
                                h->h_cookie, h, h->h_addref);
 

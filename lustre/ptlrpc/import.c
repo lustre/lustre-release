@@ -482,7 +482,7 @@ static int import_select_connection(struct obd_import *imp)
         }
 
         /* if not found, simply choose the current one */
-        if (!imp_conn || imp->imp_force_reconnect) {
+        if (!imp_conn) {
                 LASSERT(imp->imp_conn_current);
                 imp_conn = imp->imp_conn_current;
                 tried_all = 0;
@@ -499,8 +499,8 @@ static int import_select_connection(struct obd_import *imp)
                 if (at_get(&imp->imp_at.iat_net_latency) <
                     CONNECTION_SWITCH_MAX) {
                         at_add(&imp->imp_at.iat_net_latency,
-                               MIN(at_get(&imp->imp_at.iat_net_latency) +
-                               CONNECTION_SWITCH_INC, CONNECTION_SWITCH_MAX));
+                               at_get(&imp->imp_at.iat_net_latency) +
+                               CONNECTION_SWITCH_INC);
                 }
                 LASSERT(imp_conn->oic_last_attempt);
                 CWARN("%s: tried all connections, increasing latency to %ds\n",
@@ -761,11 +761,6 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
         EXIT;
 }
 
-static int ptlrpc_busy_reconnect(int rc)
-{
-        return (rc == -EBUSY) || (rc == -EAGAIN);
-}
-
 static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                     void * data, int rc)
 {
@@ -782,22 +777,18 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
+        spin_unlock(&imp->imp_lock);
 
-        if (rc) {
-                /* if this reconnect to busy export - not need select new target
-                 * for connecting*/
-                imp->imp_force_reconnect = ptlrpc_busy_reconnect(rc);
-                spin_unlock(&imp->imp_lock);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         LASSERT(imp->imp_conn_current);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
         /* All imports are pingable */
+        spin_lock(&imp->imp_lock);
         imp->imp_pingable = 1;
-        imp->imp_force_reconnect = 0;
 
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
@@ -1215,10 +1206,8 @@ static int signal_completed_replay(struct obd_import *imp)
 
         if (imp->imp_delayed_recovery)
                 lustre_msg_add_flags(req->rq_reqmsg, MSG_DELAY_REPLAY);
+        req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
-
-        if (AT_OFF)
-                req->rq_timeout *= 3;
 
         ptlrpcd_add_req(req);
         RETURN(0);
@@ -1231,7 +1220,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ENTRY;
 
-        cfs_daemonize_ctxt("ll_imp_inval");
+        ptlrpc_daemonize("ll_imp_inval");
 
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),

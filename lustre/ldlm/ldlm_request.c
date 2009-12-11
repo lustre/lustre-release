@@ -50,9 +50,6 @@ int ldlm_enqueue_min = OBD_TIMEOUT_DEFAULT;
 CFS_MODULE_PARM(ldlm_enqueue_min, "i", int, 0644,
                 "lock enqueue timeout minimum");
 
-/* in client side, whether the cached locks will be canceled before replay */
-unsigned int ldlm_cancel_unused_locks_before_replay = 0;
-
 static void interrupted_completion_wait(void *data)
 {
 }
@@ -536,6 +533,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                 memcpy(lvb, lock->l_lvb_data, lvb_len);
         }
 
+        LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;
 cleanup:
         if (cleanup_phase == 1 && rc)
@@ -676,6 +674,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         if (is_replay) {
                 lock = ldlm_handle2lock(lockh);
                 LASSERT(lock != NULL);
+                LDLM_DEBUG(lock, "client-side enqueue START");
                 LASSERT(exp == lock->l_conn_export);
         } else {
                 lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
@@ -758,6 +757,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 RETURN(0);
         }
 
+        LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
         err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
                                     einfo->ei_mode, flags, lvb, lvb_len,
@@ -1181,33 +1181,6 @@ static int ldlm_cancel_list(struct list_head *cancels, int count, int flags)
         RETURN(count);
 }
 
-/* cancel as many locks as possible w/o sending any rpcs (e.g. to write back
- * dirty data, to close a file, ...) or waiting for any rpcs in-flight (e.g.
- * readahead requests, ...) */
-static ldlm_policy_res_t ldlm_cancel_no_wait_policy(struct ldlm_namespace *ns,
-                                                    struct ldlm_lock *lock,
-                                                    int unused, int added,
-                                                    int count)
-{
-        ldlm_policy_res_t result = LDLM_POLICY_CANCEL_LOCK;
-        ldlm_cancel_for_recovery cb = ns->ns_cancel_for_recovery;
-        check_res_locked(lock->l_resource);
-
-        /* don't check added & count since we want to process all locks
-         * from unused list */
-        switch (lock->l_resource->lr_type) {
-                case LDLM_EXTENT:
-                case LDLM_IBITS:
-                        if (cb && cb(lock))
-                                break;
-                default:
-                        result = LDLM_POLICY_SKIP_LOCK;
-                        break;
-        }
-
-        RETURN(result);
-}
-
 /* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
@@ -1290,9 +1263,6 @@ typedef ldlm_policy_res_t (*ldlm_cancel_lru_policy_t)(struct ldlm_namespace *,
 static ldlm_cancel_lru_policy_t
 ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
 {
-        if (flags & LDLM_CANCEL_NO_WAIT)
-                return ldlm_cancel_no_wait_policy;
-
         if (ns_connect_lru_resize(ns)) {
                 if (flags & LDLM_CANCEL_SHRINK)
                         /* We kill passed number of old locks. */
@@ -1334,23 +1304,17 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
  *                              memory pressre policy function;
  *
  * flags & LDLM_CANCEL_AGED -   cancel locks according to "aged policy".
- *
- * flags & LDLM_CANCEL_NO_WAIT - cancel as many unused locks as possible
- *                               (typically before replaying locks) w/o
- *                               sending any rpcs or waiting for any
- *                               outstanding rpc to complete
  */
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int cancel_flags, int flags)
 {
         ldlm_cancel_lru_policy_t pf;
         struct ldlm_lock *lock, *next;
-        int added = 0, unused, remained;
+        int added = 0, unused;
         ENTRY;
 
         spin_lock(&ns->ns_unused_lock);
         unused = ns->ns_nr_unused;
-        remained = unused;
 
         if (!ns_connect_lru_resize(ns))
                 count += unused - ns->ns_max_unused;
@@ -1359,12 +1323,6 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
         LASSERT(pf != NULL);
 
         while (!list_empty(&ns->ns_unused_list)) {
-                ldlm_policy_res_t result;
-
-                /* Are all unused locks checked? */
-                if (remained-- <= 0)
-                        break;
-
                 /* For any flags, stop scanning if @max is reached. */
                 if (max && added >= max)
                         break;
@@ -1383,10 +1341,6 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 if (&lock->l_lru == &ns->ns_unused_list)
                         break;
 
-                LDLM_LOCK_GET(lock); /* dropped by bl thread */
-                spin_unlock(&ns->ns_unused_lock);
-
-                lock_res_and_lock(lock);
                 /* Pass the lock through the policy filter and see if it
                  * should stay in lru.
                  *
@@ -1400,20 +1354,13 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                  * old locks, but additionally chose them by
                  * their weight. Big extent locks will stay in
                  * the cache. */
-                result = pf(ns, lock, unused, added, count);
-                if (result == LDLM_POLICY_KEEP_LOCK) {
-                        unlock_res_and_lock(lock);
-                        LDLM_LOCK_PUT(lock);
-                        spin_lock(&ns->ns_unused_lock);
+                if (pf(ns, lock, unused, added, count) == LDLM_POLICY_KEEP_LOCK)
                         break;
-                }
-                if (result == LDLM_POLICY_SKIP_LOCK) {
-                        unlock_res_and_lock(lock);
-                        LDLM_LOCK_PUT(lock);
-                        spin_lock(&ns->ns_unused_lock);
-                        continue;
-                }
 
+                LDLM_LOCK_GET(lock); /* dropped by bl thread */
+                spin_unlock(&ns->ns_unused_lock);
+
+                lock_res_and_lock(lock);
                 /* Check flags again under the lock. */
                 if ((lock->l_flags & LDLM_FL_CANCELING) ||
                     (ldlm_lock_remove_from_lru(lock) == 0)) {
@@ -1867,9 +1814,8 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 }
 
 static int replay_lock_interpret(struct ptlrpc_request *req,
-                                 void *data, int rc)
+                                 struct ldlm_async_args *aa, int rc)
 {
-        struct ldlm_async_args *aa = data;
         struct lustre_handle  old_hash_key;
         struct ldlm_lock     *lock;
         struct ldlm_reply    *reply;
@@ -2002,34 +1948,6 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         RETURN(0);
 }
 
-/* cancel as many unused locks as possible before replay. since we are
- * in recovery, we can't wait for any outstanding RPCs ro send any RPC
- * to the server.
- *
- * callced only in recovery before replaying locks. there is no need to
- * replay locks that are unused. since the clients may hold thousands of
- * cached unused locks, dropping the unused locks can greatly reduce the
- * load on the servers at recovery time.
- */
-static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
-{
-        int canceled;
-        CFS_LIST_HEAD(cancels);
-
-        CDEBUG(D_DLMTRACE, "Dropping as many as unused locks as possible before"                           "replay for namespace %s (%d)\n", ns->ns_name,
-                           ns->ns_nr_unused);
-
-        /* we don't need to care whether or not LRU resize is enabled 
-         * because the LDLM_CANCLE_NO_WAIT policy doesn't use the
-         * count parameter */
-        canceled = ldlm_cancel_lru_local(ns, &cancels, ns->ns_nr_unused, 0,
-                                         LDLM_FL_LOCAL_ONLY,
-                                         LDLM_CANCEL_NO_WAIT);
-
-        CDEBUG(D_DLMTRACE, "Canceled %d unused locks from namespace %s\n",
-                           canceled, ns->ns_name);
-}
-
 int ldlm_replay_locks(struct obd_import *imp)
 {
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
@@ -2044,9 +1962,6 @@ int ldlm_replay_locks(struct obd_import *imp)
 
         /* ensure this doesn't fall to 0 before all have been queued */
         atomic_inc(&imp->imp_replay_inflight);
-
-        if (ldlm_cancel_unused_locks_before_replay)
-                ldlm_cancel_unused_locks_for_replay(ns);
 
         if (imp->imp_no_lock_replay) {
                 /* VBR: locks should be cancelled here */

@@ -18,6 +18,7 @@ ext3-sector_t-overflow-2.6.9-rhel4.patch
 ext3-check-jbd-errors-2.6.9.patch
 ext3-uninit-2.6.9.patch
 ext3-nanosecond-2.6-rhel4.patch
+ext3-unlink-race.patch
 ext3-mmp-2.6-rhel4.patch
 ext3-fiemap-2.6-sles10.patch
 ext3-external-journal-2.6.9.patch

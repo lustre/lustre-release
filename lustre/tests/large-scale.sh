@@ -18,9 +18,9 @@ init_test_env $@
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
-[ -n "$CLIENTS" ] || { skip_env "$0: Need two or more clients" && exit 0; }
+[ -n "$CLIENTS" ] || { skip "$0: Need two or more clients" && exit 0; }
 [ $CLIENTCOUNT -ge 2 ] || \
-    { skip_env "$0: Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
+    { skip "$0: Need two or more clients, have $CLIENTCOUNT" && exit 0; }
 
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -39,7 +39,7 @@ check_vbr () {
 }
 
 check_vbr || \
-    { skip_env "$0: no version_recovery" && exit 0; }
+    { skip "$0: no version_recovery" && exit 0; }
 
 FAKE_NUM_MAX=${FAKE_NUM_MAX:-1000}
 [ "$SLOW" = "no" ] && FAKE_NUM_MAX=100
@@ -90,7 +90,7 @@ run_test 1b "VBR: connect $CLIENTCOUNT clients with delayed exports"
 # fail fn does not do df on all clients
 fail_mds () {
     facet_failover mds
-    clients_up
+    client_df
 }
 
 test_1c() {

@@ -193,7 +193,7 @@ int main (int argc, char *argv[]) {
 
                         for (i = 0; i < noProcessors; i++) {
                                 char command[4096];
-                                int j, rc;
+                                int j;
                                 if (!memcmp(read_buf + (i * CHUNK_SIZE(n)),
                                             chunk_buf[i], CHUNK_SIZE(n)))
                                         continue;
@@ -218,7 +218,7 @@ int main (int argc, char *argv[]) {
                                 }
 
                                 sprintf(command, "od -Ad -a %s", filename);
-                                rc = system(command);
+                                system(command);
                                 rprintf(0, n, "data check error - exiting\n");
                         }
                 }

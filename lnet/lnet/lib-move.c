@@ -790,17 +790,8 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 }
 
 int
-lnet_compare_routes(lnet_route_t *r1, lnet_route_t *r2)
+lnet_compare_routers(lnet_peer_t *p1, lnet_peer_t *p2)
 {
-        lnet_peer_t *p1 = r1->lr_gateway;
-        lnet_peer_t *p2 = r2->lr_gateway;
-
-        if (r1->lr_hops < r2->lr_hops)
-                return 1;
-
-        if (r1->lr_hops > r2->lr_hops)
-                return -1;
-
         if (p1->lp_txqnob < p2->lp_txqnob)
                 return 1;
 
@@ -911,17 +902,18 @@ lnet_eager_recv_locked(lnet_msg_t *msg)
 void
 lnet_ni_peer_alive(lnet_peer_t *lp)
 {
-        cfs_time_t  last_alive = 0;
+        time_t      last_alive = 0;
         lnet_ni_t  *ni = lp->lp_ni;
 
-        LASSERT (lnet_peer_aliveness_enabled(lp));
+        LASSERT (ni != NULL);
+        LASSERT (ni->ni_peertimeout > 0);
         LASSERT (ni->ni_lnd->lnd_query != NULL);
 
         LNET_UNLOCK();
         (ni->ni_lnd->lnd_query)(ni, lp->lp_nid, &last_alive);
         LNET_LOCK();
 
-        lp->lp_last_query = cfs_time_current();
+        lp->lp_last_query = cfs_time_current_sec();
 
         if (last_alive != 0) /* NI has updated timestamp */
                 lp->lp_last_alive = last_alive;
@@ -930,71 +922,64 @@ lnet_ni_peer_alive(lnet_peer_t *lp)
 
 /* NB: always called with LNET_LOCK held */
 static inline int
-lnet_peer_is_alive (lnet_peer_t *lp, cfs_time_t now)
+lnet_peer_is_alive (lnet_peer_t *lp, time_t now)
 {
-        int        alive;
-        cfs_time_t deadline;
+        lnet_ni_t  *ni = lp->lp_ni;
+        time_t      deadline;
+        int         alive;
 
-        LASSERT (lnet_peer_aliveness_enabled(lp));
+        LASSERT (ni != NULL);
+        LASSERT (ni->ni_peertimeout > 0);
 
-        /* Trust lnet_notify() if it has more recent aliveness news, but
-         * ignore the initial assumed death (see lnet_peers_start_down()).
-         */
         if (!lp->lp_alive && lp->lp_alive_count > 0 &&
             cfs_time_aftereq(lp->lp_timestamp, lp->lp_last_alive))
-                return 0;
+                        return 0;
 
-        deadline = cfs_time_add(lp->lp_last_alive,
-                                cfs_time_seconds(lp->lp_ni->ni_peertimeout));
+        deadline = cfs_time_add(lp->lp_last_alive, ni->ni_peertimeout);
         alive = cfs_time_after(deadline, now);
-
-        /* Update obsolete lp_alive except for routers assumed to be dead
-         * initially, because router checker would update aliveness in this
-         * case, and moreover lp_last_alive at peer creation is assumed.
-         */
-        if (alive && !lp->lp_alive &&
-            !(lnet_isrouter(lp) && lp->lp_alive_count == 0))
+        if (alive && !lp->lp_alive) /* update obsolete lp_alive */
                 lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
 
         return alive;
 }
 
+/* don't query LND about aliveness of a dead peer more frequently than: */
+static int lnet_queryinterval = 1; /* 1 second */
 
 /* NB: returns 1 when alive, 0 when dead, negative when error;
  *     may drop the LNET_LOCK */
 int
 lnet_peer_alive_locked (lnet_peer_t *lp)
 {
-        cfs_time_t now = cfs_time_current();
+        lnet_ni_t  *ni = lp->lp_ni;
+        time_t      now = cfs_time_current_sec();
 
-        if (!lnet_peer_aliveness_enabled(lp))
+        LASSERT (ni != NULL);
+
+        if (ni->ni_peertimeout <= 0)  /* disabled */
                 return -ENODEV;
 
         if (lnet_peer_is_alive(lp, now))
                 return 1;
 
-        /* Peer appears dead, but we should avoid frequent NI queries (at
-         * most once per lnet_queryinterval seconds). */
+        /* peer appears dead, should we query right now? */
         if (lp->lp_last_query != 0) {
-                static const int lnet_queryinterval = 1;
+                time_t deadline =
+                        cfs_time_add(lp->lp_last_query,
+                                     lnet_queryinterval);
 
-                cfs_time_t next_query =
-                           cfs_time_add(lp->lp_last_query,
-                                        cfs_time_seconds(lnet_queryinterval));
-
-                if (cfs_time_before(now, next_query)) {
+                if (cfs_time_before(now, deadline)) {
                         if (lp->lp_alive)
                                 CWARN("Unexpected aliveness of peer %s: "
                                       "%d < %d (%d/%d)\n",
                                       libcfs_nid2str(lp->lp_nid),
-                                      (int)now, (int)next_query,
-                                      lnet_queryinterval,
-                                      lp->lp_ni->ni_peertimeout);
+                                      (int)now, (int)deadline,
+                                      lnet_queryinterval, ni->ni_peertimeout);
                         return 0;
                 }
         }
 
-        /* query NI for latest aliveness news */
+        /* query LND for latest aliveness news */
         lnet_ni_peer_alive(lp);
 
         if (lnet_peer_is_alive(lp, now))
@@ -1346,7 +1331,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         lnet_ni_decref_locked(local_ni);
                         lnet_ni_decref_locked(src_ni);
                         LNET_UNLOCK();
-                        CERROR("No route to %s via from %s\n",
+                        CERROR("no route to %s via from %s\n",
                                libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
                         return -EINVAL;
                 }
@@ -1377,19 +1362,6 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                 }
                 LASSERT (lp->lp_ni == src_ni);
         } else {
-#ifndef __KERNEL__
-                LNET_UNLOCK();
-
-                /* NB
-                 * - once application finishes computation, check here to update
-                 *   router states before it waits for pending IO in LNetEQPoll
-                 * - recursion breaker: router checker sends no message
-                 *   to remote networks */
-                if (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING)
-                        lnet_router_checker();
-
-                LNET_LOCK();
-#endif
                 /* sending to a remote network */
                 rnet = lnet_find_net_locked(LNET_NIDNET(dst_nid));
                 if (rnet == NULL) {
@@ -1408,10 +1380,8 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         lp2 = route->lr_gateway;
 
                         if (lp2->lp_alive &&
-                            lnet_router_down_ni(lp2, rnet->lrn_net) <= 0 &&
                             (src_ni == NULL || lp2->lp_ni == src_ni) &&
-                            (lp == NULL ||
-                             lnet_compare_routes(route, best_route) > 0)) {
+                            (lp == NULL || lnet_compare_routers(lp2, lp) > 0)) {
                                 best_route = route;
                                 lp = lp2;
                         }
@@ -1421,10 +1391,8 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         if (src_ni != NULL)
                                 lnet_ni_decref_locked(src_ni);
                         LNET_UNLOCK();
-
-                        CERROR("No route to %s via %s (all routers down)\n",
-                               libcfs_id2str(msg->msg_target),
-                               libcfs_nid2str(src_nid));
+                        CERROR("No route to %s (all routers down)\n",
+                               libcfs_id2str(msg->msg_target));
                         return -EHOSTUNREACH;
                 }
 
@@ -2103,6 +2071,7 @@ lnet_print_hdr(lnet_hdr_t * hdr)
 
 }
 
+
 int
 lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, 
            void *private, int rdma_req)
@@ -2157,19 +2126,6 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                        libcfs_nid2str(from_nid),
                        libcfs_nid2str(src_nid), type);
                 return -EPROTO;
-        }
-
-        if (the_lnet.ln_routing) {
-                cfs_time_t now = cfs_time_current();
-
-                LNET_LOCK();
-
-                ni->ni_last_alive = now;
-                if (ni->ni_status != NULL &&
-                    ni->ni_status->ns_status == LNET_NI_STATUS_DOWN)
-                        ni->ni_status->ns_status = LNET_NI_STATUS_UP;
-
-                LNET_UNLOCK();
         }
 
         /* Regard a bad destination NID as a protocol error.  Senders should
@@ -2625,6 +2581,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
         struct list_head *e;
         lnet_ni_t        *ni;
+        lnet_route_t     *route;
         lnet_remotenet_t *rnet;
         __u32             dstnet = LNET_NIDNET(dstnid);
         int               hops;
@@ -2680,21 +2637,12 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
                 rnet = list_entry(e, lnet_remotenet_t, lrn_list);
 
                 if (rnet->lrn_net == dstnet) {
-                        lnet_route_t *route;
-                        lnet_route_t *shortest = NULL;
-
                         LASSERT (!list_empty(&rnet->lrn_routes));
-
-                        list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
-                                if (shortest == NULL ||
-                                    route->lr_hops < shortest->lr_hops)
-                                        shortest = route;
-                        }
-
-                        LASSERT (shortest != NULL);
-                        hops = shortest->lr_hops;
+                        route = list_entry(rnet->lrn_routes.next,
+                                           lnet_route_t, lr_list);
+                        hops = rnet->lrn_hops;
                         if (srcnidp != NULL)
-                                *srcnidp = shortest->lr_gateway->lp_ni->ni_nid;
+                                *srcnidp = route->lr_gateway->lp_ni->ni_nid;
                         if (orderp != NULL)
                                 *orderp = order;
                         LNET_UNLOCK();

@@ -175,8 +175,10 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
                 RETURN(0);
 
         OBD_ALLOC_PTR(oqctl);
-        if (!oqctl)
+        if (!oqctl) {
+                CERROR("Not enough memory!");
                 RETURN(-ENOMEM);
+        }
 
         /* set over quota flags for a uid/gid */
         oa->o_valid |= OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA;
@@ -293,8 +295,8 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                                 LASSERT(inode && frags > 0);
                                 if (fsfilt_get_mblk(obd, qctxt->lqc_sb, &mb,
                                                     inode, frags) < 0)
-                                        CERROR("%s: can't get extra meta "
-                                               "blocks\n", obd->obd_name);
+                                        CDEBUG(D_ERROR,
+                                               "can't get extra meta blocks.\n");
                                 else
                                         pending[i] += mb;
                                 lqs->lqs_bwrite_pending += pending[i];
@@ -356,13 +358,12 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 RETURN(rc);
 }
 
-static int quota_chk_acq_common(struct obd_export *exp, unsigned int uid,
+static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                                 unsigned int gid, int count, int pending[2],
                                 int isblk, quota_acquire acquire,
                                 struct obd_trans_info *oti, struct inode *inode,
                                 int frags)
 {
-        struct obd_device *obd = exp->exp_obd;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         struct timeval work_start;
         struct timeval work_end;
@@ -372,12 +373,6 @@ static int quota_chk_acq_common(struct obd_export *exp, unsigned int uid,
         ENTRY;
 
         CDEBUG(D_QUOTA, "check quota for %s\n", obd->obd_name);
-        if (isblk && (exp->exp_failed || exp->exp_abort_active_req))
-                /* If the client has been evicted or if it
-                 * timed out and tried to reconnect already,
-                 * abort the request immediately */
-                RETURN(-ENOTCONN);
-
         /* Unfortunately, if quota master is too busy to handle the
          * pre-dqacq in time and quota hash on ost is used up, we
          * have to wait for the completion of in flight dqacq/dqrel,
@@ -424,11 +419,6 @@ static int quota_chk_acq_common(struct obd_export *exp, unsigned int uid,
                         break;
                 }
 
-                if (isblk && (exp->exp_failed || exp->exp_abort_active_req))
-                        /* The client has been evicted or tried to
-                         * to reconnect already, abort the request */
-                        RETURN(-ENOTCONN);
-
                 /* -EBUSY and others, wait a second and try again */
                 if (rc < 0) {
                         cfs_waitq_t        waitq;
@@ -471,8 +461,6 @@ static int quota_chk_acq_common(struct obd_export *exp, unsigned int uid,
                                     LQUOTA_WAIT_FOR_CHK_INO,
                             timediff);
 
-        if (rc > 0)
-                rc = 0;
         RETURN(rc);
 }
 
@@ -499,13 +487,13 @@ int quota_is_set(struct obd_device *obd, unsigned int uid,
         return q_set;
 }
 
-static int filter_quota_check(struct obd_export *exp, unsigned int uid,
+static int filter_quota_check(struct obd_device *obd, unsigned int uid,
                               unsigned int gid, int npage, int pending[2],
                               quota_acquire acquire, struct obd_trans_info *oti,
                               struct inode *inode, int frags)
 {
-        return quota_is_set(exp->exp_obd, uid, gid, QB_SET) ?
-                quota_chk_acq_common(exp, uid, gid, npage, pending,
+        return quota_is_set(obd, uid, gid, QB_SET) ?
+                quota_chk_acq_common(obd, uid, gid, npage, pending,
                                      LQUOTA_FLAGS_BLK, acquire, oti, inode,
                                      frags) : 0;
 }
@@ -620,8 +608,7 @@ static int mds_quota_setup(struct obd_device *obd)
         sema_init(&mds->mds_qonoff_sem, 1);
         rc = qctxt_init(obd, dqacq_handler);
         if (rc) {
-                CERROR("%s: initialize quota context failed! (rc:%d)\n",
-                       obd->obd_name, rc);
+                CERROR("initialize quota context failed! (rc:%d)\n", rc);
                 RETURN(rc);
         }
         RETURN(rc);
@@ -648,13 +635,13 @@ static int mds_quota_fs_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mds_quota_check(struct obd_export *exp, unsigned int uid,
+static int mds_quota_check(struct obd_device *obd, unsigned int uid,
                            unsigned int gid, int inodes, int pending[2],
                            quota_acquire acquire, struct obd_trans_info *oti,
                            struct inode *inode, int frags)
 {
-        return quota_is_set(exp->exp_obd, uid, gid, QI_SET) ?
-                quota_chk_acq_common(exp, uid, gid, inodes, pending, 0,
+        return quota_is_set(obd, uid, gid, QI_SET) ?
+                quota_chk_acq_common(obd, uid, gid, inodes, pending, 0,
                                      acquire, oti, inode, frags) : 0;
 }
 
@@ -799,23 +786,26 @@ int osc_quota_setdq(struct client_obd *cli, unsigned int uid, unsigned int gid,
                     (flags & OBD_FL_NO_USRQUOTA) : (flags & OBD_FL_NO_GRPQUOTA);
 
                 oqi = alloc_qinfo(cli, id, cnt);
-                if (!oqi) {
+                if (oqi) {
+                        spin_lock(&qinfo_list_lock);
+
+                        old = find_qinfo(cli, id, cnt);
+                        if (old && !noquota)
+                                remove_qinfo_hash(old);
+                        else if (!old && noquota)
+                                insert_qinfo_hash(oqi);
+
+                        spin_unlock(&qinfo_list_lock);
+
+                        if (old || !noquota)
+                                free_qinfo(oqi);
+                        if (old && !noquota)
+                                free_qinfo(old);
+                } else {
+                        CERROR("not enough mem!\n");
                         rc = -ENOMEM;
                         break;
                 }
-
-                spin_lock(&qinfo_list_lock);
-                old = find_qinfo(cli, id, cnt);
-                if (old && !noquota)
-                        remove_qinfo_hash(old);
-                else if (!old && noquota)
-                        insert_qinfo_hash(oqi);
-                spin_unlock(&qinfo_list_lock);
-
-                if (old || !noquota)
-                        free_qinfo(oqi);
-                if (old && !noquota)
-                        free_qinfo(old);
         }
 
         RETURN(rc);

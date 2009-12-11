@@ -498,7 +498,7 @@ test_18() {
                 [ $SPACE -gt $((MIN / 20)) ] && OK=1 && myMDSSIZE=$MIN && \
                         log "use file $MDSDEV with MIN=$MIN"
 
-        [ -z "$OK" ] && skip_env "$MDSDEV too small for ${MIN}kB MDS" && return
+        [ -z "$OK" ] && skip "$MDSDEV too small for ${MIN}kB MDS" && return
 
 
         echo "mount mds with large journal..."
@@ -600,8 +600,6 @@ test_22() {
 	stop_ost
 	mount_client $MOUNT
 	# check_mount will block trying to contact ost
-	mcreate $DIR/$tfile || return 40
-	rm -f $DIR/$tfile || return 42
 	umount_client $MOUNT
 	pass
 
@@ -694,7 +692,7 @@ test_24a() {
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
 		do_facet mds [ -b "$MDSDEV" ] && \
-		skip_env "mixed loopback and real device not working" && return
+		skip "mixed loopback and real device not working" && return
 	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -739,7 +737,7 @@ run_test 24a "Multiple MDTs on a single node"
 test_24b() {
 	if [ -z "$fs2mds_DEV" ]; then
 		do_facet mds [ -b "$MDSDEV" ] && \
-		skip_env "mixed loopback and real device not working" && return
+		skip "mixed loopback and real device not working" && return
 	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -835,7 +833,7 @@ test_28() {
 run_test 28 "permanent parameter setting"
 
 test_29() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2, skipping" && return
         setup > /dev/null 2>&1
 	start_ost2
 	sleep 10
@@ -968,18 +966,18 @@ cleanup_32() {
 
 test_32a() {
 	# this test is totally useless on a client-only system
-	client_only && skip "client only testing" && return 0
+	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
+	[ -z "$TUNEFS" ] && skip "No tunefs" && return 0
 
 	local DISK1_6=$LUSTRE/tests/disk1_6.tar.bz2
-	[ ! -r $DISK1_6 ] && skip_env "Cant find $DISK1_6, skipping" && return
+	[ ! -r $DISK1_6 ] && skip "Cant find $DISK1_6, skipping" && return
 
 	local tmpdir=$TMP/conf32a
 	mkdir -p $tmpdir
 
 	tar xjvf $DISK1_6 -C $tmpdir ||
-		{ skip_env "Cant untar $DISK1_6, skipping" && return ; }
+		{ skip "Cant untar $DISK1_6, skipping" && return ; }
 	load_modules
 	lctl set_param debug=$PTLDEBUG
 
@@ -1026,18 +1024,18 @@ run_test 32a "Upgrade from 1.6 (not live)"
 
 test_32b() {
 	# this test is totally useless on a client-only system
-	client_only && skip "client only testing" && return 0
+	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
+	[ -z "$TUNEFS" ] && skip "No tunefs" && return
 
 	local DISK1_6=$LUSTRE/tests/disk1_6.tar.bz2
-	[ ! -r $DISK1_6 ] && skip_env "Cant find $DISK1_6, skipping" && return
+	[ ! -r $DISK1_6 ] && skip "Cant find $DISK1_6, skipping" && return
 
 	local tmpdir=$TMP/conf32b
         mkdir -p $tmpdir
 
         tar xjvf $DISK1_6 -C $tmpdir ||
-                { skip_env "Cant untar $DISK1_6, skipping" && return ; }
+                { skip "Cant untar $DISK1_6, skipping" && return ; }
 
 	load_modules
 	lctl set_param debug=$PTLDEBUG
@@ -1102,7 +1100,7 @@ test_33a() { # bug 12333, was test_33
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
                 do_facet mds [ -b "$MDSDEV" ] && \
-                skip_env "mixed loopback and real device not working" && return
+                skip "mixed loopback and real device not working" && return
         fi
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -1190,7 +1188,7 @@ test_34c() {
 }
 run_test 34c "force umount with failed ost should be normal"
 
-test_35a() { # bug 12459
+test_35() { # bug 12459
 	setup
 
 	debugsave
@@ -1203,7 +1201,7 @@ test_35a() { # bug 12459
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
 
-	MSG="conf-sanity.sh test_35a `date +%F%kh%Mm%Ss`"
+	MSG="conf-sanity.sh test_35 `date +%F%kh%Mm%Ss`"
 	$LCTL clear
 	log "$MSG"
 	log "Stopping the MDT:"
@@ -1234,72 +1232,7 @@ test_35a() { # bug 12459
 	[ "$NEXTCONN" != "0" ] && log "The client didn't try to reconnect to the last active server (tried ${NEXTCONN} instead)" && return 7
 	cleanup
 }
-run_test 35a "Reconnect to the last active server first"
-
-test_35b() { # bug 18674
-	remote_mds || { skip "local MDS" && return 0; }
-	setup
-
-	debugsave
-	$LCTL set_param debug="ha"
-	$LCTL clear
-	MSG="conf-sanity.sh test_35b `date +%F%kh%Mm%Ss`"
-	log "$MSG"
-
-	log "Set up a fake failnode for the MDS"
-	FAKENID="127.0.0.2"
-	do_facet mds $LCTL conf_param ${FSNAME}-MDT0000.failover.node=$FAKENID || \
-		return 1
-
-	local at_max_saved=0
-	# adaptive timeouts may prevent seeing the issue 
-	if at_is_enabled; then
-		at_max_saved=$(at_max_get mds)
-		at_max_set 0 mds client
-	fi
-
-	mkdir -p $MOUNT/testdir
-	touch $MOUNT/testdir/test
-
-	log "Injecting EBUSY on MDS"
-	# Setting OBD_FAIL_MDS_RESEND=0x136
-	do_facet mds "$LCTL set_param fail_loc=0x80000136" || return 2
-
-	log "Stat on a test file"
-	stat $MOUNT/testdir/test
-
-	log "Stop injecting EBUSY on MDS"
-	do_facet mds "$LCTL set_param fail_loc=0" || return 3
-	rm -f $MOUNT/testdir/test
-
-	log "done"
-	# restore adaptive timeout
-	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds client
-
-	$LCTL dk $TMP/lustre-log-$TESTNAME.log
-
-	# retrieve from the log if the client has ever tried to
-	# contact the fake server after the loss of connection
-	FAILCONN=`awk "BEGIN {ret = 0;}
-		       /import_select_connection.*${FSNAME}-MDT0000-mdc.* using connection/ {
-				ret = 1;
-				if (\\\$NF ~ /$FAKENID/) {
-					ret = 2;
-					exit;
-				}
-		       }
-		       END {print ret}" $TMP/lustre-log-$TESTNAME.log`
-
-	[ "$FAILCONN" == "0" ] && \
-		log "ERROR: The client reconnection has not been triggered" && \
-		return 4
-	[ "$FAILCONN" == "2" ] && \
-		log "ERROR: The client tried to reconnect to the failover server while the primary was busy" && \
-		return 5
-
-        cleanup
-}
-run_test 35b "Continue reconnection retries, if the active server is busy"
+run_test 35 "Reconnect to the last active server first"
 
 test_36() { # 12743
         local rc
@@ -1311,9 +1244,9 @@ test_36() { # 12743
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
 		do_facet mds [ -b "$MDSDEV" ] && \
-		skip_env "mixed loopback and real device not working" && return
+		skip "mixed loopback and real device not working" && return
         fi
-        [ $OSTCOUNT -lt 2 ] && skip_env "skipping test for single OST" && return
+        [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
 
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
@@ -1375,7 +1308,7 @@ test_36() { # 12743
 run_test 36 "df report consistency on OSTs with different block size"
 
 test_37() {
-	client_only && skip "client only testing" && return 0
+	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	LOCAL_MDSDEV="$TMP/mdt.img"
 	SYM_MDSDEV="$TMP/sym_mdt.img"
 
@@ -1660,7 +1593,7 @@ test_47() { #17674
 
         facet_failover ost1
         facet_failover mds
-        client_up || return 3
+        df -h $MOUNT || return 3
 
         count=0
         for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
@@ -1935,34 +1868,8 @@ test_50f() {
 	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
-	writeconf
 }
 run_test 50f "normal statfs one server in down =========================="
-
-test_50g() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
-	setup
-	start_ost2 || error "Unable to start OST2"
-
-	local PARAM="${FSNAME}-OST0001.osc.active"
-
-	$LFS setstripe -c -1 $DIR/$tfile || error "Unable to lfs setstripe"
-	do_facet mgs $LCTL conf_param $PARAM=0 || error "Unable to deactivate OST"
-
-	umount_client $MOUNT || error "Unable to unmount client"
-	mount_client $MOUNT || error "Unable to mount client"
-	# This df should not cause a panic
-	df -k $MOUNT
-
-	do_facet mgs $LCTL conf_param $PARAM=1 || error "Unable to activate OST"
-	rm -f $DIR/$tfile
-	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost2 || error "Unable to stop OST2"
-	stop_ost || error "Unable to stop OST1"
-	stop_mds || error "Unable to stop MDS"
-	writeconf
-}
-run_test 50g "deactivated OST should not cause panic====================="
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

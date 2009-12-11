@@ -37,7 +37,6 @@ do_racer_cleanup () {
 	local INTERVAL=5
         local pids
 	local rc=0
-	local TMAX
 
 	local RDIR=$1
 
@@ -46,19 +45,11 @@ do_racer_cleanup () {
 	# Check if all processes are killed
 
 	local clients=$CLIENTS
-	local num_clients=$(get_node_count ${clients//,/ })
 
-        if at_is_enabled; then
-            TMAX=$(at_max_get mds)
-        else
-            TMAX=$(lctl get_param -n timeout)
-        fi
-
-	[ $TMAX -gt $((num_clients * 60)) ] || TMAX=$((num_clients * 60))
 	# 1.Let chance to racer to kill all it's processes
 	# FIXME: not sure how long does it take for racer to kill all processes
 	# 80 is sometimes are enough for 2 clients; sometimes it takes more than 150 sec
-	while [ $WAIT -lt $TMAX ]; do
+	while [ $WAIT -lt 90 ]; do
 		running=$(do_nodes $clients "ps uax | grep $RDIR " | egrep -v "(acceptance|grep|pdsh|bash)" || true)
 		[ -z "$running" ] && rc=0 && break
 		echo "clients $clients are still running the racer processes. Waited $WAIT secs"
@@ -77,8 +68,8 @@ do_racer_cleanup () {
 				echo "client $C still running racer processes after $WAIT seconds. Killing $pids"
 				do_node $C "ps uax | grep $RDIR " | egrep -v "(acceptance|grep|PATH)"
 				do_node $C kill -TERM $pids || true
-				# let processes to be killed, there maybe many threads to be killed, so give 20 sec gap
-				sleep 20
+				# let processes to be killed
+				sleep 2
 	# 3. Check if the processes were killed
 	# exit error if the processes still exist
 				for pid in $pids; do

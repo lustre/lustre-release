@@ -66,39 +66,9 @@
 /* FIEMAP flags supported by Lustre */
 #define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)
 
-enum obd_statfs_state {
-        OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
-        OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
-        OS_STATE_RDONLY_1       = 0x00000004, /**< obsolete 1.6, was EROFS=30 */
-        OS_STATE_RDONLY_2       = 0x00000008, /**< obsolete 1.6, was EROFS=30 */
-        OS_STATE_RDONLY_3       = 0x00000010, /**< obsolete 1.6, was EROFS=30 */
-};
+struct obd_statfs;
 
-struct obd_statfs {
-        __u64           os_type;
-        __u64           os_blocks;
-        __u64           os_bfree;
-        __u64           os_bavail;
-        __u64           os_files;
-        __u64           os_ffree;
-        __u8            os_fsid[40];
-        __u32           os_bsize;
-        __u32           os_namelen;
-        __u64           os_maxbytes;
-        __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
-        __u32           os_spare1;
-        __u32           os_spare2;
-        __u32           os_spare3;
-        __u32           os_spare4;
-        __u32           os_spare5;
-        __u32           os_spare6;
-        __u32           os_spare7;
-        __u32           os_spare8;
-        __u32           os_spare9;
-};
-
-
-/*
+/* 
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir
  * *_OBD_*  - gets data for both OSC or MDC (LOV, LMV indirectly)
@@ -129,8 +99,6 @@ struct obd_statfs {
 #define LL_IOC_LLOOP_INFO               _IOWR('f', 168, OBD_IOC_DATA_TYPE)
 #define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 169, OBD_IOC_DATA_TYPE)
 
-#define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
-
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
 
@@ -146,11 +114,9 @@ struct obd_statfs {
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
-#define LL_FILE_IGNORE_LOCK         0x00000001
-#define LL_FILE_GROUP_LOCKED        0x00000002
-#define LL_FILE_READAHEAD           0x00000004
-#define LL_FILE_LOCKED_DIRECTIO     0x00000008 /* client-side locks with dio */
-#define LL_FILE_LOCKLESS_IO         0x00000010 /* server-side locks with cio */
+#define LL_FILE_IGNORE_LOCK             0x00000001
+#define LL_FILE_GROUP_LOCKED            0x00000002
+#define LL_FILE_READAHEAD               0x00000004
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
@@ -254,7 +220,7 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 }
 
 /* For printf's only, make sure uuid is terminated */
-static inline char *obd_uuid2str(struct obd_uuid *uuid)
+static inline char *obd_uuid2str(struct obd_uuid *uuid) 
 {
         if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
                 /* Obviously not safe, but for printfs, no real harm done...
@@ -266,35 +232,6 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         }
         return (char *)(uuid->uuid);
 }
-
-struct lu_fid {
-        __u64 f_seq;  /* holds fid sequence. Lustre should support 2^64
-                       * objects, thus even if one sequence has one object we
-                       * reach this value. */
-        __u32 f_oid;  /* fid number within its sequence. */
-        __u32 f_ver;  /* holds fid version. */
-};
-
-/* Userspace should treat lu_fid as opaque, and only use the following methods
-   to print or parse them.  Other functions (e.g. compare, swab) could be moved
-   here from lustre_idl.h if needed. */
-typedef struct lu_fid lustre_fid;
-
-/* printf display format
-   e.g. printf("file FID is "DFID"\n", PFID(fid)); */
-#define DFID "["LPX64":0x%x:0x%x]"
-#define PFID(fid)     \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
-
-/* scanf input parse format -- strip '[' first.
-   e.g. sscanf(fidstr, SFID, RFID(&fid)); */
-#define SFID "0x%"LPF64"x:0x%x:0x%x"
-#define RFID(fid)     \
-        &((fid)->f_seq), \
-        &((fid)->f_oid), \
-        &((fid)->f_ver)
 
 /* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
 #define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */

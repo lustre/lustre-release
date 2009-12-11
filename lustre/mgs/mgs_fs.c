@@ -59,15 +59,14 @@
 #include "mgs_internal.h"
 
 
-int mgs_export_stats_init(struct obd_device *obd,
+static int mgs_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 int reconnect,
                                  void *localdata)
 {
         lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -113,7 +112,7 @@ int mgs_client_add(struct obd_device *obd,
                    struct obd_export *exp,
                    void *localdata)
 {
-        return 0;
+        return mgs_export_stats_init(obd, exp, localdata);
 }
 
 /* Remove client export data from the MGS */
@@ -265,12 +264,16 @@ int mgs_fs_cleanup(struct obd_device *obd)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (mgs->mgs_configs_dir) {
+                /*CERROR("configs dir dcount=%d\n",
+                       atomic_read(&mgs->mgs_configs_dir->d_count));*/
                 l_dput(mgs->mgs_configs_dir);
                 mgs->mgs_configs_dir = NULL;
         }
 
+        shrink_dcache_parent(mgs->mgs_fid_de);
+        /*CERROR("fid dir dcount=%d\n",
+               atomic_read(&mgs->mgs_fid_de->d_count));*/
         dput(mgs->mgs_fid_de);
-        shrink_dcache_sb(mgs->mgs_sb);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 

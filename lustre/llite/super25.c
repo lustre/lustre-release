@@ -104,8 +104,6 @@ struct super_operations lustre_super_operations =
 
 void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 
-static struct shrinker *ll_shrinker;
-
 static int __init init_lustre_lite(void)
 {
         int i, rc, seed[2];
@@ -129,7 +127,7 @@ static int __init init_lustre_lite(void)
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
         init_rwsem(&ll_sb_sem);
-        ll_shrinker = set_shrinker(DEFAULT_SEEKS, ll_shrink_cache);
+        ll_register_cache(&ll_cache_definition);
 
         lustre_register_client_fill_super(ll_fill_super);
         lustre_register_kill_super_cb(ll_kill_super);
@@ -164,7 +162,7 @@ static void __exit exit_lustre_lite(void)
 
         lustre_register_client_process_config(NULL);
 
-        remove_shrinker(ll_shrinker);
+        ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
         rc = cfs_mem_cache_destroy(ll_file_data_slab);

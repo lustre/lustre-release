@@ -72,8 +72,7 @@ enum {
         LDLM_CANCEL_AGED   = 1 << 0, /* Cancel aged locks (non lru resize). */
         LDLM_CANCEL_PASSED = 1 << 1, /* Cancel passed number of locks. */
         LDLM_CANCEL_SHRINK = 1 << 2, /* Cancel locks from shrinker. */
-        LDLM_CANCEL_LRUR   = 1 << 3, /* Cancel locks from lru resize. */
-        LDLM_CANCEL_NO_WAIT = 1 << 4 /* Cancel locks w/o blocking (neither                                            * sending nor waiting fro any rpcs) */
+        LDLM_CANCEL_LRUR   = 1 << 3  /* Cancel locks from lru resize. */
 };
 
 int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
@@ -127,8 +126,6 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru(struct ldlm_lock *lock);
 void ldlm_lock_touch_in_lru(struct ldlm_lock *lock);
 void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
-
-void ldlm_cancel_locks_for_export(struct obd_export *export);
 
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
@@ -195,8 +192,7 @@ void ldlm_exit(void);
 
 enum ldlm_policy_res {
         LDLM_POLICY_CANCEL_LOCK,
-        LDLM_POLICY_KEEP_LOCK,
-        LDLM_POLICY_SKIP_LOCK
+        LDLM_POLICY_KEEP_LOCK
 };
 
 typedef enum ldlm_policy_res ldlm_policy_res_t;

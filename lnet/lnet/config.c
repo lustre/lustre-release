@@ -131,7 +131,7 @@ lnet_net_unique(__u32 net, struct list_head *nilist)
                 if (LNET_NIDNET(ni->ni_nid) == net)
                         return 0;
         }
-
+        
         return 1;
 }
 
@@ -145,21 +145,20 @@ lnet_new_ni(__u32 net, struct list_head *nilist)
                                    libcfs_net2str(net));
                 return NULL;
         }
-
+        
         LIBCFS_ALLOC(ni, sizeof(*ni));
         if (ni == NULL) {
                 CERROR("Out of memory creating network %s\n",
                        libcfs_net2str(net));
                 return NULL;
         }
-
+        
         /* zero counters/flags, NULL pointers... */
         memset(ni, 0, sizeof(*ni));
 
         /* LND will fill in the address part of the NID */
         ni->ni_nid = LNET_MKNID(net, 0);
         CFS_INIT_LIST_HEAD(&ni->ni_txq);
-        ni->ni_last_alive = cfs_time_current();
 
         list_add_tail(&ni->ni_list, nilist);
         return ni;

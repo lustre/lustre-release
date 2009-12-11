@@ -81,10 +81,7 @@ struct lov_request_set {
         struct brw_page         *set_pga;
         struct lov_lock_handles *set_lockh;
         struct list_head         set_list;
-        cfs_waitq_t              set_waitq;
-        spinlock_t               set_lock;
 };
-
 
 #define LOV_AP_MAGIC 8200
 
@@ -190,7 +187,6 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);
-int lov_finished_set(struct lov_request_set *set);
 void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc);
 int lov_update_common_set(struct lov_request_set *set,
@@ -199,7 +195,6 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oifo,
                         struct lov_stripe_md **ea, struct obdo *src_oa,
                         struct obd_trans_info *oti,
                         struct lov_request_set **reqset);
-int cb_create_update(struct obd_info *oinfo, int rc);
 int lov_update_create_set(struct lov_request_set *set,
                           struct lov_request *req, int rc);
 int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea);
@@ -269,7 +264,7 @@ int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int *index);
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

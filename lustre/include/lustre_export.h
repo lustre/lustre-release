@@ -63,7 +63,7 @@ struct mds_export_data {
 
 struct osc_creator {
         spinlock_t              oscc_lock;
-        struct list_head        oscc_wait_create_list;
+        struct list_head        oscc_list;
         struct obd_device       *oscc_obd;
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
@@ -163,10 +163,7 @@ struct obd_export {
                                   exp_vbr_failed:1,
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
-                                  exp_libclient:1, /* liblustre client? */
-                                  /* client timed out and tried to reconnect,
-                                   * but couldn't because of active rpcs */
-                                  exp_abort_active_req:1;
+                                  exp_libclient:1; /* liblustre client? */
         struct list_head          exp_queued_rpc;  /* RPC to be handled */
         /* VBR: per-export last committed */
         __u64                     exp_last_committed;

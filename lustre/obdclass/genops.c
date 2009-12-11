@@ -121,7 +121,7 @@ struct obd_type *class_get_type(const char *name)
                 const char *modname = name;
                 if (strcmp(modname, LUSTRE_MDT_NAME) == 0)
                         modname = LUSTRE_MDS_NAME;
-                if (!request_module("%s", modname)) {
+                if (!request_module(modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
                 } else {
@@ -985,20 +985,6 @@ no_disconn:
         RETURN(0);
 }
 
-/* Return non-zero for a fully connected export */
-int class_connected_export(struct obd_export *exp)
-{
-        if (exp) {
-                int connected;
-                spin_lock(&exp->exp_lock);
-                connected = (exp->exp_conn_cnt > 0);
-                spin_unlock(&exp->exp_lock);
-                return connected;
-        }
-        return 0;
-}
-EXPORT_SYMBOL(class_connected_export);
-
 static void class_disconnect_export_list(struct list_head *list,
                                          enum obd_option flags)
 {
@@ -1472,7 +1458,7 @@ void obd_zombie_impexp_cull(void)
 
                 if (export != NULL)
                         class_export_destroy(export);
-                cfs_cond_resched();
+
         } while (import != NULL || export != NULL);
 }
 

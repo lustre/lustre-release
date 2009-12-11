@@ -2,7 +2,7 @@ lustre_version.patch
 vfs_races-2.6-rhel5.patch
 i_filter_data.patch
 jbd-jcberr-2.6.18-vanilla.patch
-export_symbols-2.6.12.patch
+export_symbols-2.6.18-vanilla.patch
 dev_read_only-2.6.18-vanilla.patch
 export-2.6.18-vanilla.patch
 export-show_task-2.6.18-vanilla.patch
@@ -26,4 +26,3 @@ jbd-slab-race-2.6-rhel5.patch
 mpt-fusion-max-sge.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
-md-avoid-bug_on-when-bmc-overflow.patch

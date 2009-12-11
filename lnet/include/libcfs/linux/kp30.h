@@ -98,6 +98,11 @@ do {                                                                          \
 #define PageUptodate Page_Uptodate
 #define our_recalc_sigpending(current) recalc_sigpending(current)
 #define num_online_cpus() smp_num_cpus
+static inline void our_cond_resched(void)
+{
+        if (current->need_resched)
+               schedule ();
+}
 #define work_struct_t                   struct tq_struct
 #define cfs_get_work_data(type,field,data)   (data)
 #else
@@ -125,6 +130,10 @@ do {                                                                          \
 #define wait_on_page wait_on_page_locked
 #define our_recalc_sigpending(current) recalc_sigpending()
 #define strtok(a,b) strpbrk(a, b)
+static inline void our_cond_resched(void)
+{
+        cond_resched();
+}
 #define work_struct_t      struct work_struct
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */

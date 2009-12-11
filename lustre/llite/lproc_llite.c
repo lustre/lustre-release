@@ -576,27 +576,6 @@ static int ll_wr_lockless_truncate(struct file *file, const char *buffer,
                 ?: count;
 }
 
-static int ll_rd_direct_io_default(char *page, char **start, off_t off,
-                                     int count, int *eof, void *data)
-{
-        struct super_block *sb = data;
-
-        *eof = 1;
-        return snprintf(page, count, "%u\n",
-                        ll_s2sbi(sb)->ll_direct_io_default);
-}
-
-static int ll_wr_direct_io_default(struct file *file, const char *buffer,
-                                     unsigned long count, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        return lprocfs_write_helper(buffer, count,
-                                    &sbi->ll_direct_io_default)
-                ?: count;
-}
-
 static int ll_rd_statahead_max(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -704,8 +683,6 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
                                 ll_wr_contention_time, 0},
         { "lockless_truncate", ll_rd_lockless_truncate,
                                ll_wr_lockless_truncate, 0},
-        { "direct_io_default", ll_rd_direct_io_default,
-                               ll_wr_direct_io_default, 0},
         { "statahead_max",      ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_stats",    ll_rd_statahead_stats, 0, 0 },
         { "lazystatfs",         ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
@@ -780,10 +757,10 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
                  sbi->ll_stats_track_id == current->pid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
         else if (sbi->ll_stats_track_type == STATS_TRACK_PPID &&
-                 sbi->ll_stats_track_id == current->parent->pid)
+                 sbi->ll_stats_track_id == current->p_pptr->pid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
         else if (sbi->ll_stats_track_type == STATS_TRACK_GID &&
-                 sbi->ll_stats_track_id == cfs_curproc_gid())
+                 sbi->ll_stats_track_id == current->gid)
                 lprocfs_counter_add(sbi->ll_stats, op, count);
 }
 EXPORT_SYMBOL(ll_stats_ops_tally);
@@ -951,7 +928,7 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
                                 seq_putc(seq, '|');                     \
                         seq_puts(seq, #flag);                           \
                 }                                                       \
-        } while(0)
+        } while(0);
 
 static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
 {

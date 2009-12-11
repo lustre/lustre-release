@@ -1491,7 +1491,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                 GOTO(out_quotactl, rc = -EPERM);
                         break;
                 case Q_GETQUOTA:
-                        if (((type == USRQUOTA && cfs_curproc_euid() != id) ||
+                        if (((type == USRQUOTA && current->euid != id) ||
                              (type == GRPQUOTA && !in_egroup_p(id))) &&
                             !cfs_capable(CFS_CAP_SYS_ADMIN))
                                 GOTO(out_quotactl, rc = -EPERM);
@@ -1582,13 +1582,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (copy_to_user((void *)arg, obd->obd_name,
                                 strlen(obd->obd_name) + 1))
                         RETURN (-EFAULT);
-                RETURN(0);
-        }
-        case LL_IOC_PATH2FID: {
-                if (copy_to_user((void *)arg, ll_inode_lu_fid(inode),
-                                 sizeof(struct lu_fid)))
-                        RETURN(-EFAULT);
-
                 RETURN(0);
         }
         default:

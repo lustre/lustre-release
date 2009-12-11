@@ -468,9 +468,11 @@ usocklnd_startup(lnet_ni_t *ni)
 
         ni->ni_data = net;
 
-        rc = usocklnd_assign_ni_nid(ni);
-        if (rc != 0)
-                goto startup_failed_1;
+        if (!(the_lnet.ln_pid & LNET_PID_USERFLAG)) {
+                rc = usocklnd_assign_ni_nid(ni);
+                if (rc != 0)
+                        goto startup_failed_1;
+        }
 
         LASSERT (ni->ni_lnd == &the_tcplnd);
 

@@ -213,7 +213,7 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 static void
 print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
 {
-        printk("%s", (char *)data);
+	printk(data);
 	print_symbol(msg, symbol);
 	printk("\n");
 }

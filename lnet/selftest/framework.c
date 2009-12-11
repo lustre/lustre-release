@@ -51,11 +51,9 @@ static int session_timeout = 100;
 CFS_MODULE_PARM(session_timeout, "i", int, 0444,
                 "test session timeout in seconds (100 by default, 0 == never)");
 
-static int rpc_timeout = 64;
-CFS_MODULE_PARM(rpc_timeout, "i", int, 0644,
-                "rpc timeout in seconds (64 by default, 0 == never)");
-
 #define SFW_TEST_CONCURRENCY     1792
+#define SFW_TEST_RPC_TIMEOUT     64
+#define SFW_CLIENT_RPC_TIMEOUT   64  /* in seconds */
 #define SFW_EXTRA_TEST_BUFFERS   8 /* tolerate buggy peers with extra buffers */
 
 #define sfw_test_buffers(tsi)    ((tsi)->tsi_loop + SFW_EXTRA_TEST_BUFFERS)
@@ -289,7 +287,6 @@ sfw_init_session (sfw_session_t *sn, lst_sid_t sid, const char *name)
         memset(sn, 0, sizeof(sfw_session_t));
         CFS_INIT_LIST_HEAD(&sn->sn_list);
         CFS_INIT_LIST_HEAD(&sn->sn_batches);
-        atomic_set(&sn->sn_refcount, 1);        /* +1 for caller */
         atomic_set(&sn->sn_brw_errors, 0);
         atomic_set(&sn->sn_ping_errors, 0);
         strncpy(&sn->sn_name[0], name, LST_NAME_SIZE);
@@ -445,24 +442,13 @@ sfw_make_session (srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply)
                 return 0;
         }
 
-        if (sn != NULL) {
-                reply->mksn_status  = 0;
-                reply->mksn_sid     = sn->sn_id;
-                reply->mksn_timeout = sn->sn_timeout;
-
-                if (sfw_sid_equal(request->mksn_sid, sn->sn_id)) {
-                        atomic_inc(&sn->sn_refcount);
-                        return 0;
-                }
-
-                if (!request->mksn_force) {
-                        reply->mksn_status = EBUSY;
-                        strncpy(&reply->mksn_name[0], &sn->sn_name[0], LST_NAME_SIZE);
-                        return 0;
-                }
+        if (sn != NULL && !request->mksn_force) {
+                reply->mksn_sid    = sn->sn_id;
+                reply->mksn_status = EBUSY;
+                strncpy(&reply->mksn_name[0], &sn->sn_name[0], LST_NAME_SIZE);
+                return 0;
         }
-
-        /* brand new or create by force */
+        
         LIBCFS_ALLOC(sn, sizeof(sfw_session_t));
         if (sn == NULL) {
                 CERROR ("Dropping RPC (mksn) under memory pressure.\n");
@@ -499,11 +485,6 @@ sfw_remove_session (srpc_rmsn_reqst_t *request, srpc_rmsn_reply_t *reply)
 
         if (sn == NULL || !sfw_sid_equal(request->rmsn_sid, sn->sn_id)) {
                 reply->rmsn_status = (sn == NULL) ? ESRCH : EBUSY;
-                return 0;
-        }
-
-        if (!atomic_dec_and_test(&sn->sn_refcount)) {
-                reply->rmsn_status = 0;
                 return 0;
         }
 
@@ -943,7 +924,7 @@ sfw_run_test (swi_workitem_t *wi)
         list_add_tail(&rpc->crpc_list, &tsi->tsi_active_rpcs);
         spin_unlock(&tsi->tsi_lock);
 
-        rpc->crpc_timeout = rpc_timeout;
+        rpc->crpc_timeout = SFW_TEST_RPC_TIMEOUT;
 
         spin_lock(&rpc->crpc_lock);
         srpc_post_rpc(rpc);
@@ -971,9 +952,9 @@ sfw_run_batch (sfw_batch_t *tsb)
         sfw_test_instance_t *tsi;
 
         if (sfw_batch_active(tsb)) {
-                CDEBUG(D_NET, "Batch already active: "LPU64" (%d)\n",
-                       tsb->bat_id.bat_id, atomic_read(&tsb->bat_nactive));
-                return 0;
+                CDEBUG (D_NET, "Can't start active batch: "LPU64" (%d)\n",
+                        tsb->bat_id.bat_id, atomic_read(&tsb->bat_nactive));
+                return -EPERM;
         }
 
         list_for_each_entry (tsi, &tsb->bat_tests, tsi_list) {
@@ -1003,10 +984,8 @@ sfw_stop_batch (sfw_batch_t *tsb, int force)
         sfw_test_instance_t *tsi;
         srpc_client_rpc_t   *rpc;
 
-        if (!sfw_batch_active(tsb)) {
-                CDEBUG(D_NET, "Batch "LPU64" inactive\n", tsb->bat_id.bat_id);
-                return 0;
-        }
+        if (!sfw_batch_active(tsb))
+                return -EPERM;
 
         list_for_each_entry (tsi, &tsb->bat_tests, tsi_list) {
                 spin_lock(&tsi->tsi_lock);
@@ -1515,7 +1494,7 @@ sfw_post_rpc (srpc_client_rpc_t *rpc)
         LASSERT (list_empty(&rpc->crpc_list));
         LASSERT (!sfw_data.fw_shuttingdown);
 
-        rpc->crpc_timeout = rpc_timeout;
+        rpc->crpc_timeout = SFW_CLIENT_RPC_TIMEOUT;
         srpc_post_rpc(rpc);
 
         spin_unlock(&rpc->crpc_lock);
@@ -1574,9 +1553,6 @@ sfw_startup (void)
 
         s = getenv("BRW_INJECT_ERRORS");
         brw_inject_errors = s != NULL ? atoi(s) : brw_inject_errors;
-
-        s = getenv("RPC_TIMEOUT");
-        rpc_timeout = s != NULL ? atoi(s) : rpc_timeout;
 #endif
 
         if (session_timeout < 0) {
@@ -1585,19 +1561,9 @@ sfw_startup (void)
                 return -EINVAL;
         }
 
-        if (rpc_timeout < 0) {
-                CERROR ("RPC timeout must be non-negative: %d\n",
-                        rpc_timeout);
-                return -EINVAL;
-        }
-
         if (session_timeout == 0)
                 CWARN ("Zero session_timeout specified "
                        "- test sessions never expire.\n");
-
-        if (rpc_timeout == 0)
-                CWARN ("Zero rpc_timeout specified "
-                       "- test RPC never expire.\n");
 
         memset(&sfw_data, 0, sizeof(struct smoketest_framework));
 

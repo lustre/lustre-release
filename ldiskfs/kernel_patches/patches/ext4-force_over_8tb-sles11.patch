@@ -1,7 +1,7 @@
 Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-07-07 15:00:32.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-07-07 15:01:30.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
++++ linux-2.6.27.21-0.1/fs/ext4/super.c
 @@ -52,6 +52,8 @@
  
  struct proc_dir_entry *ext4_proc_root;
@@ -11,24 +11,24 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
  			     unsigned long journal_devnum);
  static int ext4_create_journal(struct super_block *, struct ext4_super_block *,
-@@ -1287,7 +1289,7 @@
- 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
- 	Opt_grpquota, Opt_extents, Opt_noextents, Opt_i_version,
--	Opt_mballoc,
-+	Opt_mballoc, Opt_force_over_8tb,
+@@ -1295,7 +1297,7 @@ enum {
  	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_inode_readahead_blks, Opt_bigendian_extents,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-@@ -1349,6 +1351,7 @@
- 	{Opt_stripe, "stripe=%u"},
- 	{Opt_resize, "resize"},
+-	Opt_mballoc
++	Opt_mballoc, Opt_force_over_8tb
+ };
+ 
+ static match_table_t tokens = {
+@@ -1358,6 +1360,7 @@ static match_table_t tokens = {
+ 	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
+ 	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_mballoc, "mballoc"},
 +	{Opt_force_over_8tb, "force_over_8tb"},
- 	{Opt_delalloc, "delalloc"},
- 	{Opt_nodelalloc, "nodelalloc"},
- 	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
-@@ -1773,6 +1776,9 @@
+ 	{Opt_err, NULL},
+ };
+ 
+@@ -1778,6 +1781,9 @@ set_qf_format:
  			break;
  		case Opt_mballoc:
  			break;
@@ -38,7 +38,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  		default:
  			printk(KERN_ERR
  			       "EXT4-fs: Unrecognized mount option \"%s\" "
-@@ -2634,6 +2640,17 @@
+@@ -2639,6 +2645,17 @@ static int ext4_fill_super(struct super_
  		goto failed_mount;
  	}
  

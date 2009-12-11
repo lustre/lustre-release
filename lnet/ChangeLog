@@ -1,41 +1,32 @@
-tbd  Sun Microsystems, Inc.
-	* version 1.8.2
+TBD Sun Microsystems, Inc.
+        * version 1.8.1.2
 	* Support for networks:
-	  socklnd   - any kernel supported by Lustre,
-	  qswlnd    - Qsnet kernel modules 5.20 and later,
-	  openiblnd - IbGold 1.8.2,
-	  o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
-	  viblnd    - Voltaire ibhost 3.4.5 and later,
-	  ciblnd    - Topspin 3.2.0,
-	  iiblnd    - Infiniserv 3.3 + PathBits patch,
-	  gmlnd     - GM 2.1.22 and later,
-	  mxlnd     - MX 1.2.10 or later,
-	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
-Severity   : minor
-Bugzilla   : 21459
-Description: should update lp_alive for non-router peers.
 
-Severity   : enhancement
-Bugzilla   : 15332
-Description: LNet router shuffler.
-
-Severity   : enhancement
-Bugzilla   : 15332
-Description: LNet fine grain routing support.
-
-Severity   : normal
-Bugzilla   : 20171
-Description: router checker stops working when system wall clock goes backward
-Details    : use monotonic timing source instead of system wall clock time.
-
-Severity   : enhancement
-Bugzilla   : 18460
-Description: avoid asymmetrical router failures
-
-Severity   : enhancement
-Bugzilla   : 19735
-Description: multiple-instance support for kptllnd
+------------------------------------------------------------------------------- 
+2009-10-16 Sun Microsystems, Inc.
+        * version 1.8.1.1
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
 Bugzilla   : 20897
@@ -43,30 +34,8 @@ Description: ksocknal_close_conn_locked connection race
 Details    : A race was possible when ksocknal_create_conn calls
              ksocknal_close_conn_locked for already closed conn.
 
-Severity   : enhancement
-Bugzilla   : 13065
-Description: port router pinger to userspace
-
-Severity   : normal
-Bugzilla   : 17546
-Description: kptllnd HELLO protocol deadlock
-Details    : kptllnd HELLO protocol doesn't run to completion in finite time
-
-Severity   : normal
-Bugzilla   : 18075
-Description: LNet selftest fixes and enhancements
-
-Severity   : enhancement
-Bugzilla   : 19156
-Description: allow a test node to be a member of multiple test groups
-
-Severity   : enhancement
-Bugzilla   : 18654
-Description: MXLND: eliminate hosts file, use arp for peer nic_id resolution
-Details    : an update from the upstream developer Scott Atchley.
-
-
 ------------------------------------------------------------------------------- 
+
 2009-07-31  Sun Microsystems, Inc.
 	* version 1.8.1
 	* Support for networks:
@@ -85,6 +54,15 @@ Severity   : normal
 Bugzilla   : 18102
 Description: router_proc.c is rewritten to use sysctl-interface for parameters
              residing in /proc/sys/lnet
+
+Severity   : normal
+Bugzilla   : 18075
+Description: LNet selftest fixes and enhancements
+
+Severity   : enhancement
+Bugzilla   : 18654
+Description: MXLND: eliminate hosts file, use arp for peer nic_id resolution
+Details    : an update from the upstream developer Scott Atchley.
 
 Severity   : enhancement
 Bugzilla   : 15332

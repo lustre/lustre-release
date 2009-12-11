@@ -76,7 +76,24 @@ static int echo_disconnect(struct obd_export *exp)
 {
         LASSERT (exp != NULL);
 
-        return server_disconnect_export(exp);
+        ldlm_cancel_locks_for_export(exp);
+
+        /* complete all outstanding replies */
+        spin_lock(&exp->exp_lock);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_service;
+
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&svc->srv_lock);
+        }
+        spin_unlock(&exp->exp_lock);
+
+        return class_disconnect(exp);
 }
 
 static int echo_init_export(struct obd_export *exp)
@@ -133,7 +150,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 }
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                 struct lov_stripe_md *ea, struct obd_trans_info *oti, 
                  struct obd_export *md_exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -171,7 +188,7 @@ static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -195,7 +212,7 @@ static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -330,7 +347,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                 (*left)--;
                 (*pages)++;
         }
-
+        
         return 0;
 }
 
@@ -502,14 +519,12 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
         int                        rc;
         int                        lock_flags = 0;
         struct ldlm_res_id         res_id = {.name = {1}};
-        char                       ns_name[48];
         ENTRY;
 
         spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
+        obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
                                                 LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
@@ -517,9 +532,9 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
-                                    NULL, LCK_NL, &lock_flags, NULL,
-                                    ldlm_completion_ast, NULL, NULL,
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN, 
+                                    NULL, LCK_NL, &lock_flags, NULL, 
+                                    ldlm_completion_ast, NULL, NULL, 
                                     0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
@@ -551,6 +566,7 @@ static int echo_cleanup(struct obd_device *obd)
 
         /* XXX Bug 3413; wait for a bit to ensure the BL callback has
          * happened before calling ldlm_namespace_free() */
+        set_current_state (TASK_UNINTERRUPTIBLE);
         cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);

@@ -450,6 +450,7 @@ void libcfs_debug_dumplog_internal(void *arg)
 
 int libcfs_debug_dumplog_thread(void *arg)
 {
+        cfs_daemonize("");
         libcfs_debug_dumplog_internal(arg);
         cfs_waitq_signal(&debug_ctlwq);
         return 0;
@@ -457,8 +458,8 @@ int libcfs_debug_dumplog_thread(void *arg)
 
 void libcfs_debug_dumplog(void)
 {
+        int            rc;
         cfs_waitlink_t wait;
-        cfs_task_t    *dumper;
         ENTRY;
 
         /* we're being careful to ensure that the kernel thread is
@@ -468,12 +469,12 @@ void libcfs_debug_dumplog(void)
         set_current_state(TASK_INTERRUPTIBLE);
         cfs_waitq_add(&debug_ctlwq, &wait);
 
-        dumper = cfs_kthread_run(libcfs_debug_dumplog_thread,
-                                 (void*)(long)cfs_curproc_pid(),
-                                 "libcfs_debug_dumper");
-        if (IS_ERR(dumper))
+        rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
+                               (void *)(long)cfs_curproc_pid(),
+                               CLONE_VM | CLONE_FS | CLONE_FILES);
+        if (rc < 0)
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
-                       "%ld\n", PTR_ERR(dumper));
+                       "%d\n", rc);
         else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
 
@@ -488,14 +489,8 @@ int libcfs_debug_init(unsigned long bufsize)
         int    max = libcfs_debug_mb;
 
         cfs_waitq_init(&debug_ctlwq);
-
-        if (libcfs_console_max_delay <= 0 || /* not set by user or */
-            libcfs_console_min_delay <= 0 || /* set to invalid values */
-            libcfs_console_min_delay >= libcfs_console_max_delay) {
-                libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
-                libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
-        }
-
+        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
+        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
         /* If libcfs_debug_mb is set to an invalid value or uninitialized
          * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
         if (max > trace_max_debug_mb() || max < num_possible_cpus()) {

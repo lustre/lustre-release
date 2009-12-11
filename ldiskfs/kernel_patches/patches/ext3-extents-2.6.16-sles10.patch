@@ -2395,16 +2395,17 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/inode.c
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
-Index: linux-2.6.18.8/fs/ext3/Makefile
+Index: linux-2.6.16.54-0.2.5/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.18.8.orig/fs/ext3/Makefile	2007-07-17 09:18:11.000000000 +0200
-+++ linux-2.6.18.8/fs/ext3/Makefile	2007-07-17 11:08:11.000000000 +0200
-@@ -5,7 +5,7 @@
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/Makefile
++++ linux-2.6.16.54-0.2.5/fs/ext3/Makefile
+@@ -5,7 +5,8 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
 -	   ioctl.o namei.o super.o symlink.o hash.o resize.o
-+	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o
++	   ioctl.o namei.o super.o symlink.o hash.o resize.o \
++	   extents.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
@@ -2592,7 +2593,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_extents.h
 +do {							\
 +	if (test_opt((tree)->inode->i_sb, EXTDEBUG))	\
 +		printk(fmt, ##a);			\
-+} while (0)
++} while (0);
 +#else
 +#define ext_debug(tree,fmt,a...)
 +#endif

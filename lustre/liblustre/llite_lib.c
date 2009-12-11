@@ -406,7 +406,7 @@ void __liblustre_cleanup_(void)
          * but it can't fix the situation that liblustre is mounted
          * at "/".
          */
-        if (!chdir("/")) {}
+        chdir("/");
 #if 0
         umount(lustre_path);
 #endif

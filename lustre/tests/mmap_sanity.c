@@ -158,11 +158,7 @@ static int mmap_tst1(char *mnt)
                 perror(mmap_file);
                 return errno;
         }
-        if (ftruncate(fd, region) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out_close;
-        }
+        ftruncate(fd, region);
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
@@ -197,11 +193,7 @@ static int mmap_tst2(char *mnt)
                 perror(mmap_file);
                 return errno;
         }
-        if (ftruncate(fd, page_size) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out_close;
-        }
+        ftruncate(fd, page_size);
 
         ptr = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
         if (ptr == MAP_FAILED) {
@@ -258,11 +250,7 @@ static int mmap_tst3(char *mnt)
                 perror(mmap_file);
                 return errno;
         }
-        if (ftruncate(fd, region) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out_close;
-        }
+        ftruncate(fd, region);
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
@@ -340,22 +328,14 @@ static int mmap_tst4(char *mnt)
                 perror(fileb);
                 return errno;
         }
-        if (ftruncate(fdr, region) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out_close;
-        }
+        ftruncate(fdr, region);
         fdw = open(filea, O_CREAT|O_RDWR, 0600);
         if (fdw < 0) {
                 perror(filea);
                 rc = errno;
                 goto out_close;
         }
-        if (ftruncate(fdw, region) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out_close;
-        }
+        ftruncate(fdw, region);
         
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fdr, 0);
         if (ptr == MAP_FAILED) {
@@ -514,11 +494,7 @@ static int mmap_tst5(char *mnt)
                 perror(mmap_file);
                 return errno;
         }
-        if (ftruncate(fd, region) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out_close;
-        }
+        ftruncate(fd, region);
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
@@ -573,11 +549,7 @@ static int mmap_tst6(char *mnt)
                 perror(mmap_file);
                 return errno;
         }
-        if (ftruncate(fd, page_size) < 0) {
-                perror("ftruncate()");
-                rc = errno;
-                goto out;
-        }
+        ftruncate(fd, page_size);
 
         fd2 = open(mmap_file2, O_RDWR, 0600);
         if (fd2 < 0) {

@@ -478,6 +478,7 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
          */
         if ((lock->l_resource->lr_type == LDLM_IBITS) &&
             (exp && !(exp->exp_connect_flags & OBD_CONNECT_IBITS))) {
+                struct ldlm_resource res = *lock->l_resource;
 
                 /* Make sure all the right bits are set in this lock we
                    are going to pass to client */
@@ -486,8 +487,8 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
                          "Inappropriate inode lock bits during "
                          "conversion " LPU64 "\n",
                          lock->l_policy_data.l_inodebits.bits);
-                ldlm_res2desc(lock->l_resource, &desc->l_resource);
-                desc->l_resource.lr_type = LDLM_PLAIN;
+                res.lr_type = LDLM_PLAIN;
+                ldlm_res2desc(&res, &desc->l_resource);
                 /* Convert "new" lock mode to something old client can
                    understand */
                 if ((lock->l_req_mode == LCK_CR) ||
@@ -950,10 +951,9 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
 
 int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
                          obd_off start, obd_off end,
-                         struct lustre_handle *lockh)
+                         void **cookie)
 {
         LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
-        LASSERT(lockh != NULL);
 
         if (!lock)
                 return 0;
@@ -975,15 +975,24 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
             !lock->l_writers && !lock->l_readers)
                 goto no_match;
 
-        ldlm_lock_addref_internal_nolock(lock,
-                                         rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
         unlock_res_and_lock(lock);
-        ldlm_lock2handle(lock, lockh);
+        *cookie = (void *)lock;
         return 1; /* avoid using rc for stack relief */
 
 no_match:
         unlock_res_and_lock(lock);
         return 0;
+}
+
+void ldlm_lock_fast_release(void *cookie, int rw)
+{
+        struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
+
+        LASSERT(lock != NULL);
+        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
+        LASSERT(rw == OBD_BRW_READ || (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
+        ldlm_lock_decref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
 }
 
 /* Can be called in two ways:
@@ -1332,12 +1341,7 @@ int ldlm_run_bl_ast_work(struct list_head *rpc_list)
         int rc = 0;
         ENTRY;
 
-        if (list_empty(rpc_list))
-                RETURN(0);
-
         arg.set = ptlrpc_prep_set();
-        if (NULL == arg.set)
-                RETURN(-ERESTART);
         atomic_set(&arg.restart, 0);
         arg.type = LDLM_BL_CALLBACK;
 
@@ -1394,12 +1398,7 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
         int rc = 0;
         ENTRY;
 
-        if (list_empty(rpc_list))
-                RETURN(0);
-
         arg.set = ptlrpc_prep_set();
-        if (NULL == arg.set)
-                RETURN(-ERESTART);
         atomic_set(&arg.restart, 0);
         arg.type = LDLM_CP_CALLBACK;
 
@@ -1568,13 +1567,13 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         }
 
         ldlm_del_waiting_lock(lock);
+
         /* Releases res lock */
         ldlm_cancel_callback(lock);
 
         /* Yes, second time, just in case it was added again while we were
            running with no res lock in ldlm_cancel_callback */
         ldlm_del_waiting_lock(lock);
-
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
 

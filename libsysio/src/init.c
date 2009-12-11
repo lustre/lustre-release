@@ -104,7 +104,7 @@ struct trace_callback {
 		(__tcb)->f = (__f); \
 		(__tcb)->data = (__d); \
 		(__tcb)->destructor = (__destroy); \
-	} while (0)
+	} while (0);
 
 /*
  * Trace queue head record.

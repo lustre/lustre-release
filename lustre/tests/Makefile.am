@@ -17,11 +17,10 @@ noinst_SCRIPTS += large-scale.sh runracer performance-sanity.sh
 noinst_SCRIPTS += mdsrate-create-small.sh mdsrate-create-large.sh
 noinst_SCRIPTS += mdsrate-lookup-1dir.sh mdsrate-lookup-10dirs.sh
 noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh replay-vbr.sh
-noinst_SCRIPTS += sanity-benchmark.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
 noinst_SCRIPTS += recovery-mds-scale.sh run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
-noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh metadata-updates.sh
+noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh
 noinst_SCRIPTS += ost-pools.sh rpc.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
@@ -47,6 +46,7 @@ noinst_PROGRAMS += small_write multiop ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
+noinst_PROGRAMS += ll_getstripe_info
 # noinst_PROGRAMS += copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
@@ -60,6 +60,7 @@ endif # TESTS
 mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
+ll_getstripe_info_LDADD=$(LIBLUSTREAPI)
 multiop_LDADD=$(LIBLUSTREAPI) -lrt
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c

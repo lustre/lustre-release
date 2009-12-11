@@ -2543,7 +2543,7 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +do {                                                    \
 +	if (test_opt(inode->i_sb, EXTDEBUG))             \
 +		printk(fmt, ##a);                        \
-+} while (0)
++} while (0);
 +#else
 +#define ext_debug(inode,fmt,a...)
 +#endif
@@ -2761,9 +2761,9 @@ Index: linux-2.6.18.8/include/linux/ext3_fs.h
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
 @@ -816,6 +821,9 @@ extern int ext3_get_inode_loc(struct ino
+ extern void ext3_truncate (struct inode *);
+ extern void ext3_set_inode_flags(struct inode *);
  extern void ext3_set_aops(struct inode *inode);
- extern int ext3_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
-		       u64 start, u64 len);
 +extern int ext3_writepage_trans_blocks(struct inode *);
 +extern int ext3_block_truncate_page(handle_t *handle, struct page *page,
 +		struct address_space *mapping, loff_t from);

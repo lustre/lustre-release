@@ -156,8 +156,6 @@ struct lustre_mount_data {
         __u32      lmd_flags;         /* lustre mount flags */
         int        lmd_mgs_failnodes; /* mgs failover node count */
         int        lmd_exclude_count;
-        int        lmd_recovery_time_soft;
-        int        lmd_recovery_time_hard;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
@@ -200,8 +198,6 @@ struct lustre_mount_data {
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
 /* end COMPAT_146 */
-/* interop flag to show server 20 was used */
-#define OBD_COMPAT_20           0x00000008
 
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
 #define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */
@@ -266,8 +262,8 @@ struct lsd_client_data {
 static inline void check_lcd(char *obd_name, int index,
                              struct lsd_client_data *lcd)
 {
-        int length = sizeof(lcd->lcd_uuid);
-        if (strnlen((const char *)lcd->lcd_uuid, length) == length) {
+        size_t length = sizeof(lcd->lcd_uuid);
+        if (strnlen((char*)lcd->lcd_uuid, length) == length) {
                 lcd->lcd_uuid[length - 1] = '\0';
 
                 LCONSOLE_ERROR("the client UUID (%s) on %s for exports"
@@ -332,7 +328,6 @@ int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
 int lustre_end_log(struct super_block *sb, char *logname, 
                        struct config_llog_instance *cfg);
-struct lustre_mount_info *server_find_mount_locked(char *name);
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);

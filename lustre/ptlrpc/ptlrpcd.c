@@ -95,7 +95,7 @@ EXPORT_SYMBOL(ptlrpcd_add_rqset);
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
-int ptlrpcd_add_req(struct ptlrpc_request *req)
+void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc;
         int rc;
@@ -106,6 +106,11 @@ int ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_recovery_pc;
         rc = ptlrpc_set_add_new_req(pc, req);
         if (rc) {
+                int (*interpreter)(struct ptlrpc_request *,
+                                   void *, int);
+
+                interpreter = req->rq_interpret_reply;
+
                 /*
                  * Thread is probably in stop now so we need to
                  * kill this rpc as it was not added. Let's call
@@ -113,12 +118,12 @@ int ptlrpcd_add_req(struct ptlrpc_request *req)
                  * so that higher levels might free assosiated
                  * resources.
                 */
-
-                ptlrpc_req_interpret(req, -EBADR);
+                req->rq_status = -EBADR;
+                interpreter(req, &req->rq_async_args,
+                            req->rq_status);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
         }
-        return rc;
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
@@ -290,7 +295,7 @@ int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
         spin_lock_init(&pc->pc_lock);
-        strncpy(pc->pc_name, name, sizeof(pc->pc_name) - 1);
+        snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)

@@ -366,22 +366,15 @@ static void print_rec(struct dbg_line ***linevp, int used, int fdout)
                 struct dbg_line *line = linev[i];
                 struct ptldebug_header *hdr = line->hdr;
                 char out[4097];
-                char *buf = out;
                 int bytes;
-                ssize_t bytes_written;
 
                 bytes = sprintf(out, "%08x:%08x:%u:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
                                 hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
                                 hdr->ph_sec, (unsigned long long)hdr->ph_usec,
                                 hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
                                 line->file, hdr->ph_line_num, line->fn, line->text);
-                while (bytes > 0) {
-                        bytes_written = write(fdout, buf, bytes);
-                        if (bytes_written <= 0)
-                                break;
-                        bytes -= bytes_written;
-                        buf += bytes_written;
-                }
+
+                write(fdout, out, bytes);
                 free(line->hdr);
                 free(line);
         }
@@ -638,8 +631,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 return 1;
         }
         if (argc > 1) {
-                fdout = open(argv[1], O_WRONLY | O_CREAT | O_TRUNC,
-                             S_IRUSR | S_IWUSR);
+                fdout = open(argv[1], O_WRONLY | O_CREAT | O_TRUNC);
                 if (fdout < 0) {
                         fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
                                 strerror(errno));

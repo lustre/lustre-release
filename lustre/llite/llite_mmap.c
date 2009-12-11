@@ -481,34 +481,6 @@ static void ll_put_extent_lock(struct vm_area_struct *vma, int save_flags,
         ll_extent_unlock(fd, inode, ll_i2info(inode)->lli_smd, mode, lockh);
 }
 
-struct lustre_handle *ltd2lockh(struct ll_thread_data *ltd,
-                                __u64 start, __u64 end) {
-        ENTRY;
-        if (NULL == ltd)
-                RETURN(NULL);
-        switch(ltd->lock_style) {
-                case LL_LOCK_STYLE_FASTLOCK:
-                        RETURN(&ltd->u.lockh);
-                        break;
-                case LL_LOCK_STYLE_TREELOCK: {
-                        struct ll_lock_tree_node *node;
-                        if (ltd->tree_list == NULL)
-                                ltd->tree_list = &ltd->u.tree.lt_locked_list;
-
-                        list_for_each_entry(node, ltd->tree_list, lt_locked_item) {
-                                if (node->lt_policy.l_extent.start <= start &&
-                                    node->lt_policy.l_extent.end >= end) {
-                                        ltd->tree_list = node->lt_locked_item.prev;
-                                        RETURN(&node->lt_lockh);
-                                }
-                        }
-                }
-                default:
-                        break;
-        }
-        RETURN(NULL);
-}
-
 #ifndef HAVE_VM_OP_FAULT
 /**
  * Page fault handler.

@@ -45,13 +45,11 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/vfs.h>
-#include <sys/time.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <semaphore.h>
 #include <lustre/liblustreapi.h>
-#include <time.h>
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
@@ -60,12 +58,10 @@ char *buf, *buf_align;
 int bufsize = 0;
 sem_t sem;
 #define ALIGN 65535
-#define MAX_SHIFT 4096
 
 char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
-"        b[num] write optional length from random in-memory offset\n"
 "        c  close\n"
 "        C[num] create with optional stripes\n"
 "        d  mkdir\n"
@@ -208,8 +204,6 @@ int main(int argc, char **argv)
         /* use sigaction instead of signal to avoid SA_ONESHOT semantics */
         sigaction(SIGUSR1, &(const struct sigaction){.sa_handler = &usr1_handler},
                   NULL);
-        srandom(time(NULL));
-
         fname = argv[1];
 
         for (commands = argv[2]; *commands; commands++) {
@@ -413,15 +407,12 @@ int main(int argc, char **argv)
                 case 'v':
                         verbose = 1;
                         break;
-                case 'b':
                 case 'w':
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
                         if (bufsize < len) {
-                                int shift = (*commands == 'b') ?
-                                            (random() % MAX_SHIFT) : 0;
-                                buf = realloc(buf, len + ALIGN + shift);
+                                buf = realloc(buf, len + ALIGN);
                                 if (buf == NULL) {
                                         save_errno = errno;
                                         perror("allocating buf for write\n");
@@ -429,7 +420,7 @@ int main(int argc, char **argv)
                                 }
                                 bufsize = len;
                                 buf_align = (char *)((long)(buf + ALIGN) &
-                                                     ~ALIGN) + shift;
+                                                     ~ALIGN);
                                 strncpy(buf_align, msg, bufsize);
                         }
                         while (len > 0) {

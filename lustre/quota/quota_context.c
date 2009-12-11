@@ -277,8 +277,8 @@ check_cur_qunit(struct obd_device *obd,
         lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
                                qctxt, 0);
         if (IS_ERR(lqs) || lqs == NULL) {
-                CERROR("fail to find a lqs for %sid: %u)!\n",
-                       QDATA_IS_GRP(qdata) ? "g" : "u", qdata->qd_id);
+                CDEBUG(D_ERROR, "fail to find a lqs(%s id: %u)!\n",
+                       QDATA_IS_GRP(qdata) ? "group" : "user", qdata->qd_id);
                 GOTO (out, ret = 0);
         }
         spin_lock(&lqs->lqs_lock);
@@ -504,9 +504,8 @@ void* quota_barrier(struct lustre_quota_ctxt *qctxt,
 
         OBD_SLAB_ALLOC(qunit, qunit_cachep, CFS_ALLOC_IO, sizeof(*qunit));
         if (qunit == NULL) {
-                CERROR("locating %sunit failed for %sid %u\n",
-                       isblk ? "b" : "i", oqctl->qc_type ? "g" : "u",
-                       oqctl->qc_id);
+                CERROR("locating qunit failed.(id=%u isblk=%d %s)\n",
+                       oqctl->qc_id, isblk, oqctl->qc_type ? "grp" : "usr");
                 qctxt_wait_pending_dqacq(qctxt, oqctl->qc_id,
                                          oqctl->qc_type, isblk);
                 return NULL;
@@ -794,7 +793,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         if (rc1 < 0) {
                 DEBUG_REQ(D_ERROR, req,
                           "error unpacking qunit_data(rc: %d)\n", rc1);
-                *qdata = qunit->lq_data;
+                GOTO(exit, rc = rc1);
         }
 
         QDATA_DEBUG(qdata, "qdata: interpret rc(%d).\n", rc);
@@ -802,14 +801,14 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
 
         if (qdata->qd_id != qunit->lq_data.qd_id ||
             OBD_FAIL_CHECK_ONCE(OBD_FAIL_QUOTA_RET_QDATA)) {
-                CERROR("the returned qd_id isn't expected!"
+                CDEBUG(D_ERROR, "the returned qd_id isn't expected!"
                        "(qdata: %u, lq_data: %u)\n", qdata->qd_id,
                        qunit->lq_data.qd_id);
                 qdata->qd_id = qunit->lq_data.qd_id;
                 rc = -EPROTO;
         }
         if (QDATA_IS_GRP(qdata) != QDATA_IS_GRP(&qunit->lq_data)) {
-                CERROR("the returned grp/usr isn't expected!"
+                CDEBUG(D_ERROR, "the returned grp/usr isn't expected!"
                        "(qdata: %u, lq_data: %u)\n", qdata->qd_flags,
                        qunit->lq_data.qd_flags);
                 if (QDATA_IS_GRP(&qunit->lq_data))
@@ -819,7 +818,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
                 rc = -EPROTO;
         }
         if (qdata->qd_count > qunit->lq_data.qd_count) {
-                CERROR("the returned qd_count isn't expected!"
+                CDEBUG(D_ERROR, "the returned qd_count isn't expected!"
                        "(qdata: "LPU64", lq_data: "LPU64")\n", qdata->qd_count,
                        qunit->lq_data.qd_count);
                 rc = -EPROTO;
@@ -828,6 +827,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         rc = dqacq_completion(obd, qctxt, qdata, rc,
                               lustre_msg_get_opc(req->rq_reqmsg));
 
+exit:
         OBD_FREE(qdata, sizeof(struct qunit_data));
 
         RETURN(rc);
@@ -950,7 +950,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 /* this is for quota_search_lqs */
                 lqs_putref(lqs);
         } else {
-                CERROR("Can't find the lustre qunit size!\n");
+                CDEBUG(D_ERROR, "Can't find the lustre qunit size!\n");
         }
 
         QDATA_DEBUG(qdata, "obd(%s): send %s quota req\n",
@@ -1037,7 +1037,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         rc = quota_copy_qdata(req, qdata, QUOTA_REQUEST, QUOTA_IMPORT);
         if (rc < 0) {
-                CERROR("Can't pack qunit_data(rc: %d)\n", rc);
+                CDEBUG(D_ERROR, "Can't pack qunit_data(rc: %d)\n", rc);
                 dqacq_completion(obd, qctxt, qdata, rc, opc);
                 class_import_put(imp);
                 /* this is for qunit_get() */
@@ -1234,11 +1234,11 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
                                                HASH_LQS_MAX_BITS,
                                                &lqs_hash_ops, 0);
         if (!qctxt->lqc_lqs_hash)
-                CERROR("%s: initialize hash lqs failed\n", obd->obd_name);
+                CERROR("initialize hash lqs for %s error!\n", obd->obd_name);
 
 #ifdef LPROCFS
         if (lquota_proc_setup(obd, is_master(obd, qctxt, 0, 0)))
-                CERROR("%s: initialize proc failed\n", obd->obd_name);
+                CERROR("initialize proc for %s error!\n", obd->obd_name);
 #endif
 
         RETURN(rc);
@@ -1333,7 +1333,7 @@ static int qslave_recovery_main(void *arg)
         int rc = 0;
         ENTRY;
 
-        cfs_daemonize_ctxt("qslave_recovd");
+        ptlrpc_daemonize("qslave_recovd");
 
         complete(&data->comp);
 
@@ -1390,8 +1390,9 @@ static int qslave_recovery_main(void *arg)
                                 rc = 0;
                         }
 
-                        if (rc && rc != -EBUSY)
-                                CERROR("qslave recovery failed! (id:%d type:%d "
+                        if (rc)
+                                CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR,
+                                       "qslave recovery failed! (id:%d type:%d "
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:
                         OBD_FREE_PTR(dqid);
@@ -1470,7 +1471,10 @@ lqs_get(struct hlist_node *hnode)
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        lqs_getref(q);
+        if (atomic_inc_return(&q->lqs_refcount) == 2) /* quota_search_lqs */
+                atomic_inc(&q->lqs_ctxt->lqc_lqs);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               q, atomic_read(&q->lqs_refcount));
 
         RETURN(q);
 }
@@ -1482,7 +1486,14 @@ lqs_put(struct hlist_node *hnode)
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        lqs_putref(q);
+        LASSERT(atomic_read(&q->lqs_refcount) > 0);
+
+        if (atomic_dec_return(&q->lqs_refcount) == 1)
+                if (atomic_dec_and_test(&q->lqs_ctxt->lqc_lqs))
+                        cfs_waitq_signal(&q->lqs_ctxt->lqc_lqs_waitq);
+
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               q, atomic_read(&q->lqs_refcount));
 
         RETURN(q);
 }

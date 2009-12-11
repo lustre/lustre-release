@@ -51,6 +51,12 @@
 
 #define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
 
+
+static inline void our_cond_resched()
+{
+    schedule_timeout(1i64);
+}
+
 #ifdef CONFIG_SMP
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0) /* XXX */
 #else

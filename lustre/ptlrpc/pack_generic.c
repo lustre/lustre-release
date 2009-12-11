@@ -150,10 +150,8 @@ static inline int lustre_msg_size_v2(int count, __u32 *lengths)
         int i;
 
         size = lustre_msg_hdr_size_v2(count);
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < count; i++)
                 size += size_round(lengths[i]);
-                CDEBUG(D_INFO, "size %d - len %d\n", size, lengths[i]);
-        }
 
         return size;
 }
@@ -615,8 +613,7 @@ void lustre_shrink_reply_v1(struct ptlrpc_request *req, int segment,
         LASSERT(req->rq_reply_state);
         LASSERT(msg);
         LASSERT(segment >= 0);
-        LASSERTF(msg->lm_bufcount > segment, "message have %d - requested %d\n",
-                 msg->lm_bufcount,segment);
+        LASSERT(msg->lm_bufcount > segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)
@@ -653,11 +650,9 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
         char *tail = NULL, *newpos;
         int tail_len = 0, n;
 
-        CDEBUG(D_INFO, "shrink req %p seg %d - len %d\n", req, segment, newlen);
         LASSERT(req->rq_reply_state);
         LASSERT(msg);
-        LASSERTF(msg->lm_bufcount > segment, "message have %d - requested %d\n",
-                 msg->lm_bufcount,segment);
+        LASSERT(msg->lm_bufcount > segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)

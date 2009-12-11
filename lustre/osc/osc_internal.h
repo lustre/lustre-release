@@ -88,14 +88,10 @@ struct osc_cache_waiter {
 #define OSCC_FLAG_SYNC_IN_PROGRESS   0x08 /* only allow one thread to sync */
 #define OSCC_FLAG_LOW                0x10
 #define OSCC_FLAG_EXITING            0x20
-#define OSCC_FLAG_DEGRADED           0x40
-#define OSCC_FLAG_RDONLY             0x80
 
 int osc_precreate(struct obd_export *exp);
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti);
-int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
-                     struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md **ea, struct obd_trans_info *oti);
 void oscc_init(struct obd_device *obd);
@@ -135,5 +131,5 @@ static inline int osc_exp_is_2_0_server(struct obd_export *exp) {
        return !!(exp->exp_connect_flags & OBD_CONNECT_FID);
 }
 
-#define OSC_FILE2MEM_OFF(fileoff,pshift) ((fileoff) + (pshift))
+
 #endif /* OSC_INTERNAL_H */

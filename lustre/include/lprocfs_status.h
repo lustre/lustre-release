@@ -396,7 +396,7 @@ struct obd_export;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
                                    cfs_proc_dir_entry_t *entry);
 extern int lprocfs_exp_setup(struct obd_export *exp,
-                             lnet_nid_t *peer_nid, int reconnect, int *newnid);
+                             lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
                                                 char *name,
@@ -473,7 +473,6 @@ extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
-
 struct adaptive_timeout;
 extern int lprocfs_at_hist_helper(char *page, int count, int rc,
                                   struct adaptive_timeout *at);
@@ -485,11 +484,6 @@ extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
-
-extern int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data);
-extern int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
-                                         unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
@@ -506,7 +500,6 @@ extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
-
 
 extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);
@@ -542,8 +535,8 @@ extern struct rw_semaphore _lprocfs_lock;
 
 /* to begin from 2.6.23, Linux defines self file_operations (proc_reg_file_ops)
  * in procfs, the proc file_operation defined by Lustre (lprocfs_generic_fops)
- * will be wrapped into the new defined proc_reg_file_ops, which instroduces
- * user count in proc_dir_entrey(pde_users) to protect the proc entry from
+ * will be wrapped into the new defined proc_reg_file_ops, which instroduces 
+ * user count in proc_dir_entrey(pde_users) to protect the proc entry from 
  * being deleted. then the protection lock (_lprocfs_lock) defined by Lustre
  * isn't necessary anymore for lprocfs_generic_fops(e.g. lprocfs_fops_read).
  * see bug19706 for detailed information.
@@ -579,7 +572,7 @@ extern struct rw_semaphore _lprocfs_lock;
 } while(0)
 #define LPROCFS_CHECK_DELETED(dp) ((dp)->deleted)
 
-#elif defined HAVE_PROCFS_USERS
+#elif HAVE_PROCFS_USERS
 
 #define LPROCFS_CHECK_DELETED(dp) ({            \
         int deleted = 0;                        \
@@ -589,14 +582,14 @@ extern struct rw_semaphore _lprocfs_lock;
         spin_unlock(&(dp)->pde_unload_lock);    \
         deleted;                                \
 })
-
+             
 #define LPROCFS_ENTRY_AND_CHECK(dp) do {        \
         if (LPROCFS_CHECK_DELETED(dp))          \
                 return -ENODEV;                 \
 } while(0)
 
 #else
-
+        
 #define LPROCFS_ENTRY_AND_CHECK(dp) \
         LPROCFS_ENTRY();
 #define LPROCFS_CHECK_DELETED(dp) (0)
@@ -664,15 +657,15 @@ struct file_operations name##_fops = {                                     \
 struct ptlrpc_request;
 extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
 
-int lprocfs_obd_rd_recovery_time_soft(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data);
-int lprocfs_obd_wr_recovery_time_soft(struct file *file, const char *buffer,
-                                      unsigned long count, void *data);
-int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data);
-int lprocfs_obd_wr_recovery_time_hard(struct file *file, const char *buffer,
-                                      unsigned long count, void *data);
+#ifdef CRAY_XT3
+/* lprocfs_status.c: read recovery max time bz13079 */
+int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data);
 
+/* lprocfs_status.c: write recovery max time bz13079 */
+int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
+                                    unsigned long count, void *data);
+#endif
 #ifdef HAVE_DELAYED_RECOVERY
 int lprocfs_obd_rd_stale_export_age(char *page, char **start, off_t off,
                                     int count, int *eof, void *data);
@@ -774,8 +767,8 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 { return 0; }
-static inline int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid,
-                                    int reconnect, int *newnid)
+static inline int lprocfs_exp_setup(struct obd_export *exp,
+                                    lnet_nid_t *peer_nid, int *newnid)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
