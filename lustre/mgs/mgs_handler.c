@@ -549,7 +549,7 @@ int mgs_handle(struct ptlrpc_request *req)
         LASSERT(current->journal_info == NULL);
         opc = lustre_msg_get_opc(req->rq_reqmsg);
         if (opc != MGS_CONNECT) {
-                if (!class_connected_export(req->rq_export)) {
+                if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
                                opc);
                         req->rq_status = -ENOTCONN;

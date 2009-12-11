@@ -1754,6 +1754,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.17
           LC_DQUOTOFF_MUTEX
+          LC_VFS_RENAME_MUTEX
 
           # 2.6.18
           LC_NR_PAGECACHE

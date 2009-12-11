@@ -62,8 +62,8 @@ Index: linux-stage/fs/ext4/namei.c
 +
 +out_journal:
 +	if (journal) {
-+		BUFFER_TRACE(dir_block, "call ext4_journal_dirty_metadata");
-+		err = ext4_journal_dirty_metadata(handle, dir_block);
++		BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
++		err = ext4_handle_dirty_metadata(handle, dir, dir_block);
 +		ext4_mark_inode_dirty(handle, dir);
 +	}
 +	brelse (dir_block);

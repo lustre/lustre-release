@@ -409,7 +409,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 /* check if things like lfs setstripe are sending us the ea */
                 if (rec->ur_flags & MDS_OPEN_HAS_EA) {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_lov_exp,
+                                           mds->mds_osc_exp,
                                            0, &oinfo.oi_md, rec->ur_eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
@@ -425,13 +425,13 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                                         req->rq_export->exp_connect_flags);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                                   mds->mds_lov_exp,
+                                                   mds->mds_osc_exp,
                                                    0, &oinfo.oi_md, lmm);
                         OBD_FREE(lmm, lmm_sz);
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
-                rc = obd_create(mds->mds_lov_exp, oinfo.oi_oa,
+                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa,
                                 &oinfo.oi_md, &oti);
                 if (rc) {
                         int level = D_ERROR;
@@ -448,7 +448,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         GOTO(out_oa, rc);
                 }
         } else {
-                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_lov_exp,
+                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_osc_exp,
                                    0, &oinfo.oi_md, rec->ur_eadata);
                 if (rc) {
                         GOTO(out_oa, rc);
@@ -468,7 +468,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 oinfo.oi_policy.l_extent.start = i_size_read(inode);
                 oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
 
-                rc = obd_punch_rqset(mds->mds_lov_exp, &oinfo, &oti);
+                rc = obd_punch_rqset(mds->mds_osc_exp, &oinfo, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
                                inode->i_ino, rc);
@@ -486,7 +486,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         LASSERT(oinfo.oi_md && oinfo.oi_md->lsm_object_id);
         lmm = NULL;
-        rc = obd_packmd(mds->mds_lov_exp, &lmm, oinfo.oi_md);
+        rc = obd_packmd(mds->mds_osc_exp, &lmm, oinfo.oi_md);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
                 GOTO(out_oa, rc);
@@ -509,13 +509,13 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         *objid = lmm_buf; /* save for mds_lov_update_objid */
 
  free_diskmd:
-        obd_free_diskmd(mds->mds_lov_exp, &lmm);
+        obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
         OBDO_FREE(oinfo.oi_oa);
  out_ids:
         if (oinfo.oi_md)
-                obd_free_memmd(mds->mds_lov_exp, &oinfo.oi_md);
+                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
         RETURN(rc);
 }
 

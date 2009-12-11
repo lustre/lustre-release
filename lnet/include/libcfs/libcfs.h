@@ -553,7 +553,7 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
              (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
                 libcfs_debug_vmsg(cdls, DEBUG_SUBSYSTEM, (mask),              \
                                   (file), (func), (line), fmt, args);         \
-} while(0)
+} while(0);
 
 #define cdebug(cdls, mask, file, func, line, fmt, a...) do {                  \
         CHECK_STACK();                                                        \
@@ -563,7 +563,7 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
              (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),               \
                                  (file), (func), (line), fmt, ## a);          \
-} while(0)
+} while(0);
 
 extern void libcfs_assertion_failed(const char *expr, const char *file,
                                     const char *fn, const int line);
@@ -615,7 +615,7 @@ static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
 #define JOURNAL_EXIT(info) do {                 \
         if (info != NULL)                       \
                 current->journal_info = info;   \
-} while(0)
+} while(0);
 
 /*
  * Universal memory allocator API

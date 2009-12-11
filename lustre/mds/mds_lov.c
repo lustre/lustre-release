@@ -272,7 +272,7 @@ static int mds_log_lost_precreated(struct obd_device *obd,
         ENTRY;
 
         if (*lsmp == NULL) {
-                rc = obd_alloc_memmd(obd->u.mds.mds_lov_exp, &lsm);
+                rc = obd_alloc_memmd(obd->u.mds.mds_osc_exp, &lsm);
                 if (rc < 0)
                         RETURN(rc);
                 /* need only one stripe, save old value */
@@ -341,7 +341,7 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
         if (lsm) {
                 /* restore stripes number */
                 lsm->lsm_stripe_count = stripes;
-                obd_free_memmd(mds->mds_lov_exp, &lsm);
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
         }
 #endif
         EXIT;
@@ -471,36 +471,28 @@ static int mds_lov_get_objid(struct obd_device * obd,
                              obd_id idx)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_export *lov_exp = mds->mds_lov_exp;
+        struct obd_export *osc_exp = mds->mds_osc_exp;
         unsigned int page;
         unsigned int off;
         obd_id *data;
-        __u64 connect_flags;
-        __u32 size;
         int rc = 0;
         ENTRY;
 
-        LASSERT(lov_exp != NULL);
+        LASSERT(osc_exp != NULL);
 
         page = idx / OBJID_PER_PAGE();
         off = idx % OBJID_PER_PAGE();
 
         data = mds->mds_lov_page_array[page];
-        size = sizeof(__u64);
-        connect_flags = idx;
-        rc = obd_get_info(lov_exp, sizeof(KEY_CONNECT_FLAG), KEY_CONNECT_FLAG, 
-                          &size, &connect_flags, NULL);
-        if (rc)
-                GOTO(out, rc);
-
-        if (data[off] < 2 || connect_flags & OBD_CONNECT_SKIP_ORPHAN) {
+        if (data[off] < 2 ||
+            !(osc_exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN)) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
+                __u32 size = sizeof(lastid);
 
-                size = sizeof(lastid);
                 lastid.idx = idx;
                 lastid.data = &data[off];
-                rc = obd_get_info(lov_exp, sizeof(KEY_LAST_ID),
+                rc = obd_get_info(mds->mds_osc_exp, sizeof(KEY_LAST_ID),
                                   KEY_LAST_ID, &size, &lastid, NULL);
                 if (rc)
                         GOTO(out, rc);
@@ -536,7 +528,7 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         if (ost_uuid != NULL)
                 oti.oti_ost_uuid = ost_uuid;
 
-        rc = obd_create(mds->mds_lov_exp, &oa, &empty_ea, &oti);
+        rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);
 }
@@ -553,7 +545,7 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
 
         info.idx = idx;
         info.data = id;
-        rc = obd_set_info_async(mds->mds_lov_exp, sizeof(KEY_NEXT_ID),
+        rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_NEXT_ID),
                                 KEY_NEXT_ID, sizeof(info), &info, NULL);
         if (rc)
                 CERROR ("%s: mds_lov_set_nextid failed (%d)\n",
@@ -576,7 +568,7 @@ static int mds_lov_update_desc(struct obd_device *obd, __u32 index,
         if (!ld)
                 RETURN(-ENOMEM);
 
-        rc = obd_get_info(mds->mds_lov_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
+        rc = obd_get_info(mds->mds_osc_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
                           &valsize, ld, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -669,14 +661,14 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         int rc;
         ENTRY;
 
-        if (IS_ERR(mds->mds_lov_obd))
-                RETURN(PTR_ERR(mds->mds_lov_obd));
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
 
-        if (mds->mds_lov_obd)
+        if (mds->mds_osc_obd)
                 RETURN(0);
 
-        mds->mds_lov_obd = class_name2obd(lov_name);
-        if (!mds->mds_lov_obd) {
+        mds->mds_osc_obd = class_name2obd(lov_name);
+        if (!mds->mds_osc_obd) {
                 CERROR("MDS cannot locate LOV %s\n", lov_name);
                 GOTO(error_exit, rc = -ENOTCONN);
         }
@@ -692,7 +684,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         /* Deny new client connections until we are sure we have some OSTs */
         obd->obd_no_conn = 1;
 
-        rc = obd_register_observer(mds->mds_lov_obd, obd);
+        rc = obd_register_observer(mds->mds_osc_obd, obd);
         if (rc) {
                 CERROR("MDS cannot register as observer of LOV %s (%d)\n",
                        lov_name, rc);
@@ -701,7 +693,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 
         /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
          * targets */
-        obd_notify(obd->u.mds.mds_lov_obd, NULL, OBD_NOTIFY_CREATE, NULL);
+        obd_notify(obd->u.mds.mds_osc_obd, NULL, OBD_NOTIFY_CREATE, NULL);
 
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
@@ -715,7 +707,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 #endif
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
-        rc = obd_connect(&conn, mds->mds_lov_obd, &obd->obd_uuid, data, &mds->mds_lov_exp);
+        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data, &mds->mds_osc_exp);
         OBD_FREE(data, sizeof(*data));
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
@@ -728,8 +720,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         RETURN(rc);
 
 error_exit:
-        mds->mds_lov_exp = NULL;
-        mds->mds_lov_obd = ERR_PTR(rc);
+        mds->mds_osc_exp = NULL;
+        mds->mds_osc_obd = ERR_PTR(rc);
         RETURN(rc);
 }
 
@@ -739,16 +731,16 @@ int mds_lov_disconnect(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        if (!IS_ERR(mds->mds_lov_obd) && mds->mds_lov_exp != NULL) {
-                obd_register_observer(mds->mds_lov_obd, NULL);
+        if (!IS_ERR(mds->mds_osc_obd) && mds->mds_osc_exp != NULL) {
+                obd_register_observer(mds->mds_osc_obd, NULL);
 
                 /* The actual disconnect of the mds_lov will be called from
                  * class_disconnect_exports from mds_lov_clean. So we have to
                  * ensure that class_cleanup doesn't fail due to the extra ref
                  * we're holding now. The mechanism to do that already exists -
                  * the obd_force flag. We'll drop the final ref to the
-                 * mds_lov_exp in mds_cleanup. */
-                mds->mds_lov_obd->obd_force = 1;
+                 * mds_osc_exp in mds_cleanup. */
+                mds->mds_osc_obd->obd_force = 1;
         }
 
         RETURN(rc);
@@ -926,7 +918,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 rc = obd_llog_init(obd, obd, NULL);
                 llog_ctxt_put(ctxt);
-                rc2 = obd_set_info_async(mds->mds_lov_exp,
+                rc2 = obd_set_info_async(mds->mds_osc_exp,
                                          sizeof(KEY_MDS_CONN), KEY_MDS_CONN,
                                          0, NULL, NULL);
                 if (!rc)
@@ -1037,7 +1029,7 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
 
-        rc = obd_set_info_async(mds->mds_lov_exp, sizeof(KEY_MDS_CONN),
+        rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_MDS_CONN),
                                 KEY_MDS_CONN, 0, uuid, NULL);
         if (rc != 0)
                 GOTO(out, rc);
@@ -1076,9 +1068,9 @@ out:
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
-                if (!obd->obd_stopping && mds->mds_lov_obd &&
-                    !mds->mds_lov_obd->obd_stopping && !watched->obd_stopping)
-                        obd_notify(mds->mds_lov_obd, watched,
+                if (!obd->obd_stopping && mds->mds_osc_obd &&
+                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping)
+                        obd_notify(mds->mds_osc_obd, watched,
                                    OBD_NOTIFY_INACTIVE, NULL);
         } else {
                 /* We've successfully synced at least 1 OST and are ready
@@ -1295,11 +1287,11 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                inode->i_ino, inode->i_generation, le32_to_cpu(lmm->lmm_magic),
                LOV_MAGIC);
 
-        rc = obd_unpackmd(obd->u.mds.mds_lov_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 GOTO(conv_end, rc);
 
-        rc = obd_packmd(obd->u.mds.mds_lov_exp, &lmm, lsm);
+        rc = obd_packmd(obd->u.mds.mds_osc_exp, &lmm, lsm);
         if (rc < 0)
                 GOTO(conv_free, rc);
         lmm_size = rc;
@@ -1317,7 +1309,7 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                 rc = err ? err : lmm_size;
         GOTO(conv_free, rc);
 conv_free:
-        obd_free_memmd(obd->u.mds.mds_lov_exp, &lsm);
+        obd_free_memmd(obd->u.mds.mds_osc_exp, &lsm);
 conv_end:
         return rc;
 }

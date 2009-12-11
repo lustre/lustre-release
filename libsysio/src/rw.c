@@ -487,7 +487,7 @@ SYSIO_INTERFACE_NAME(ipreadv)(int fd,
 static ssize_t
 PREPEND(_, SYSIO_INTERFACE_NAME(preadv))(int fd, 
 					 const struct iovec *iov, 
-					 _SYSIO_PREADV_T count, 
+					 size_t count, 
 					 _SYSIO_OFF_T offset)
 {
 	struct file *fil;
@@ -524,7 +524,7 @@ sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(preadv)),
 ssize_t
 SYSIO_INTERFACE_NAME(preadv)(int fd, 
 			     const struct iovec *iov, 
-			     _SYSIO_PREADV_T count, 
+			     size_t count, 
 			     off_t offset)
 {
 
@@ -844,8 +844,7 @@ SYSIO_INTERFACE_NAME(iwritev)(int fd,
 }
 
 ssize_t
-SYSIO_INTERFACE_NAME(writev)(int fd, const struct iovec *iov,
-			     int count)
+SYSIO_INTERFACE_NAME(writev)(int fd, const struct iovec *iov, int count)
 {
 	struct file *fil;
 	struct intnl_xtvec xtvector;
@@ -1016,7 +1015,7 @@ SYSIO_INTERFACE_NAME(ipwritev)(int fd,
 static ssize_t
 PREPEND(_, SYSIO_INTERFACE_NAME(pwritev))(int fd, 
 					  const struct iovec *iov, 
-					  _SYSIO_PREADV_T count, 
+					  size_t count, 
 					  _SYSIO_OFF_T offset)
 {
 	struct file *fil;
@@ -1053,7 +1052,7 @@ sysio_sym_weak_alias(PREPEND(_, SYSIO_INTERFACE_NAME(pwritev)),
 ssize_t
 SYSIO_INTERFACE_NAME(pwritev)(int fd, 
 			      const struct iovec *iov, 
-			      _SYSIO_PREADV_T count, 
+			      size_t count, 
 			      off_t offset)
 {
 

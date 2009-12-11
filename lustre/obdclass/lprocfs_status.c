@@ -499,8 +499,7 @@ int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
                        int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs,
-                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ,
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 *eof = 1;
@@ -513,8 +512,7 @@ int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs,
-                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ,
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -533,8 +531,7 @@ int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs,
-                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ,
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -553,8 +550,7 @@ int lprocfs_rd_kbytesavail(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs,
-                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ,
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -573,8 +569,7 @@ int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs,
-                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ,
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 *eof = 1;
@@ -588,8 +583,7 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs,
-                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ,
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 *eof = 1;
@@ -1669,7 +1663,6 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
         struct nid_stat *new_stat, *old_stat;
         struct obd_device *obd;
         cfs_proc_dir_entry_t *entry;
-        char *buffer = NULL;
         ENTRY;
 
         *newnid = 0;
@@ -1717,14 +1710,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
         }
 
         /* not found - create */
-        OBD_ALLOC(buffer, LNET_NIDSTR_SIZE);
-        if (buffer == NULL)
-                GOTO(destroy_new_ns, rc = -ENOMEM);
-
-        memcpy(buffer, libcfs_nid2str(*nid), LNET_NIDSTR_SIZE);
-        new_stat->nid_proc = proc_mkdir(buffer, obd->obd_proc_exports_entry);
-        OBD_FREE(buffer, LNET_NIDSTR_SIZE);
-
+        new_stat->nid_proc = proc_mkdir(libcfs_nid2str(*nid),
+                                   obd->obd_proc_exports_entry);
         if (!new_stat->nid_proc) {
                 CERROR("Error making export directory for"
                        " nid %s\n", libcfs_nid2str(*nid));

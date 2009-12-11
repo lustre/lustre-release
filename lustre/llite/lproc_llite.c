@@ -951,7 +951,7 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
                                 seq_putc(seq, '|');                     \
                         seq_puts(seq, #flag);                           \
                 }                                                       \
-        } while(0)
+        } while(0);
 
 static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
 {
