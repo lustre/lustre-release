@@ -658,6 +658,7 @@ static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
 #ifdef HAVE_QUOTA_SUPPORT
 static int mdt_quota_off(struct mdt_device *mdt)
 {
+#ifdef HAVE_QUOTA_SUPPORT
         struct md_device *next = mdt->mdt_child;
         const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
         struct lu_env env;
@@ -667,6 +668,9 @@ static int mdt_quota_off(struct mdt_device *mdt)
         rc = mqo->mqo_off(&env, next, UGQUOTA | IMMQUOTA);
         lu_env_fini(&env);
         return rc;
+#else
+        return 0;
+#endif
 }
 #else
 static int mdt_quota_off(struct mdt_device *mdt)

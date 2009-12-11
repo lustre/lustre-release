@@ -82,14 +82,14 @@
 
 #define MAX_LOOP_DEVICES 16
 #define L_BLOCK_SIZE 4096
-#define INDEX_UNASSIGNED 0xFFFF
 #define MO_IS_LOOP     0x01
 #define MO_FORCEFORMAT 0x02
 
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
         struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
-        char  mo_device[128];           /* disk device name */
+        char  mo_device[256];           /* disk device name or ZFS objset name */
+        char  **mo_pool_vdevs;          /* list of pool vdevs */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         __u64 mo_device_sz;             /* in KB */
@@ -103,13 +103,25 @@ int verbose = 1;
 static int print_only = 0;
 static int failover = 0;
 static int upgrade_to_18 = 0;
+static int force_zpool = 0;
 
 void usage(FILE *out)
 {
         fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
-        fprintf(out, "usage: %s <target types> [options] <device>\n", progname);
+        fprintf(out, "usage: %s <target types> [--backfstype=zfs] [options] "
+                "<pool name>/<dataset name> [[<vdev type>] <device> "
+                "[<device> ...] [[vdev type>] ...]]\n", progname);
+        fprintf(out, "usage: %s <target types> --backfstype=ext3|ldiskfs "
+                "[options] <device>\n", progname);
         fprintf(out,
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
+                "\t<pool name>: name of the ZFS pool where to create the "
+                "target (e.g. tank)\n"
+                "\t<dataset name>: name of the new dataset (e.g. ost1). The "
+                "dataset name must be unique within the ZFS pool\n"
+                "\t<vdev type>: type of vdev (mirror, raidz, raidz2, spare, "
+                "cache, log)\n"
+                "\n"
                 "\ttarget types:\n"
                 "\t\t--ost: object storage, mutually exclusive with mdt,mgs\n"
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
@@ -130,10 +142,11 @@ void usage(FILE *out)
                 "\t\t--comment=<user comment>: arbitrary user string (%d bytes)\n"
                 "\t\t--mountfsoptions=<opts> : permanent mount options\n"
 #ifndef TUNEFS
-                "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
+                "\t\t--backfstype=<fstype> : backing fs type (zfs, ext3, ldiskfs)\n"
                 "\t\t--device-size=#N(KB) : device size for loop devices\n"
                 "\t\t--mkfsoptions=<opts> : format options\n"
                 "\t\t--reformat: overwrite an existing disk\n"
+                "\t\t--force-create : force the creation of a ZFS pool\n"
                 "\t\t--stripe-count-hint=#N : used for optimizing MDT inode size\n"
                 "\t\t--iam-dir: make use of IAM directory format on backfs, incompatible with ext3.\n"
 #else
@@ -411,6 +424,7 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 }
 
 /* Check whether the file exists in the device */
+#ifndef TUNEFS
 static int file_in_dev(char *file_name, char *dev_name)
 {
         FILE *fp;
@@ -454,6 +468,11 @@ static int is_lustre_target(struct mkfs_opts *mop)
 
         vprint("checking for existing Lustre data: ");
 
+        if (mop->mo_ldd.ldd_mount_type == LDD_MT_ZFS) {
+                vprint("WARNING: this functionality is currently disabled.\n");
+                return 0;
+        }
+
         if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))) {
                 vprint("found %s\n",
                        (rc == 1) ? MOUNT_DATA_FILE : "extents");
@@ -470,6 +489,7 @@ static int is_lustre_target(struct mkfs_opts *mop)
         vprint("not found\n");
         return 0; /* The device is not a lustre target. */
 }
+#endif
 
 /* Check if a certain feature is supported by e2fsprogs.
  * Firstly we try to use "debugfs supported_features" command to check if
@@ -683,6 +703,87 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 sizeof(mop->mo_mkfsopts));
                 }
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd), "mkreiserfs -ff ");
+        } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_ZFS) {
+                char pool_name[128];
+                char *sep;
+
+                /* For convenience */
+                strncpy(pool_name, mop->mo_device, sizeof(pool_name));
+                pool_name[sizeof(pool_name) - 1] = '\0';
+                sep = strchr(pool_name, '/');
+                if (sep == NULL) {
+                        fatal();
+                        fprintf(stderr, "Pool name too long: %s...\n",
+                                pool_name);
+                        return ENAMETOOLONG;
+                }
+                sep[0] = '\0';
+
+                if (mop->mo_pool_vdevs != NULL) {
+                        /* We are creating a new ZFS pool */
+                        snprintf(mkfs_cmd, sizeof(mkfs_cmd),
+                                 "zpool create %s%s", force_zpool ? "-f " : "",
+                                 pool_name);
+                        mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
+
+                        /* Add the vdevs to the cmd line */
+                        while (*mop->mo_pool_vdevs != NULL) {
+                                strscat(mkfs_cmd, " ", sizeof(mkfs_cmd));
+                                strscat(mkfs_cmd, *mop->mo_pool_vdevs,
+                                        sizeof(mkfs_cmd));
+                                mop->mo_pool_vdevs++; /* point to next vdev */
+                        }
+
+                        vprint("\ncreating ZFS pool '%s'...\n", pool_name);
+                        vprint("zpool_cmd = '%s'\n", mkfs_cmd);
+
+                        ret = run_command(mkfs_cmd, sizeof(mkfs_cmd));
+                        if (ret) {
+                                fatal();
+                                fprintf(stderr, "Unable to create pool '%s' "
+                                        "(%d)\n", pool_name, ret);
+                                return ret;
+                        }
+                }
+
+                /* Create the ZFS filesystem */
+                snprintf(mkfs_cmd, sizeof(mkfs_cmd), "zfs create%s%s %s",
+                         mop->mo_mkfsopts[0] ? " -o " : "", mop->mo_mkfsopts,
+                         mop->mo_device);
+                mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
+
+                vprint("\ncreating ZFS filesystem \"%s\"...\n", mop->mo_device);
+                vprint("zfs_cmd = \"%s\"\n", mkfs_cmd);
+
+                ret = run_command(mkfs_cmd, sizeof(mkfs_cmd));
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Unable to create filesystem %s (%d)\n",
+                                mop->mo_device, ret);
+                        return ret;
+                }
+
+                /* Set the label */
+                snprintf(mkfs_cmd, sizeof(mkfs_cmd), "zfs set "
+                         "com.sun.lustre:label=%s:%s%04x %s",
+                         mop->mo_ldd.ldd_fsname,
+                         mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT ? "MDT":"OST",
+                         mop->mo_ldd.ldd_svindex,
+                         mop->mo_device);
+                mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
+
+                vprint("\nsetting label to \"%s\"...\n", mop->mo_ldd.ldd_svname);
+                vprint("zfs_cmd = \"%s\"\n", mkfs_cmd);
+
+                ret = run_command(mkfs_cmd, sizeof(mkfs_cmd));
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Unable to set label to %s (%d)\n",
+                                mop->mo_ldd.ldd_svname, ret);
+                        return ret;
+                }
+
+                goto skip_format;
         } else {
                 fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
                         progname, mop->mo_ldd.ldd_mount_type,
@@ -716,6 +817,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 fatal();
                 fprintf(stderr, "Unable to build fs %s (%d)\n", dev, ret);
         }
+
+skip_format:
         return ret;
 }
 
@@ -725,7 +828,7 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
 {
         printf("\n   %s:\n", str);
         printf("Target:     %s\n", ldd->ldd_svname);
-        if (ldd->ldd_svindex == INDEX_UNASSIGNED)
+        if (ldd->ldd_flags & LDD_F_NEED_INDEX)
                 printf("Index:      unassigned\n");
         else
                 printf("Index:      %d\n", ldd->ldd_svindex);
@@ -1102,10 +1205,11 @@ void set_defaults(struct mkfs_opts *mop)
         if (get_os_version() == 24)
                 mop->mo_ldd.ldd_mount_type = LDD_MT_EXT3;
         else
-                mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
+                mop->mo_ldd.ldd_mount_type = LDD_MT_ZFS;
 
-        mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
+        mop->mo_ldd.ldd_svindex = 0;
         mop->mo_stripe_count = 1;
+        mop->mo_pool_vdevs = NULL;
 }
 
 static inline void badopt(const char *opt, char *type)
@@ -1193,6 +1297,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"erase-params", 0, 0, 'e'},
                 {"failnode", 1, 0, 'f'},
                 {"failover", 1, 0, 'f'},
+                {"force-create", 0, 0, 'F'},
                 {"mgs", 0, 0, 'G'},
                 {"help", 0, 0, 'h'},
                 {"index", 1, 0, 'i'},
@@ -1277,6 +1382,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         failover = 1;
                         break;
                 }
+                case 'F':
+                        force_zpool = 1;
+                        break;
                 case 'G':
                         mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGS;
                         break;
@@ -1389,8 +1497,30 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 }
         }//while
 
-        /* Last arg is device */
-        if (optind != argc - 1) {
+        /* optind points to device or pool name */
+        strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
+
+        if (mop->mo_ldd.ldd_mount_type == LDD_MT_ZFS) {
+                /* Common mistake: user gave device name instead of pool name */
+                if (mop->mo_device[0] == '/') {
+                        fatal();
+                        fprintf(stderr, "Pool name cannot start with '/': '%s'"
+                                "\nPlease run '%s --help' for syntax help.\n",
+                                mop->mo_device, progname);
+                        return EINVAL;
+                }
+                if (strchr(mop->mo_device, '/') == NULL) {
+                        fatal();
+                        fprintf(stderr, "Incomplete pool/dataset name: '%s'\n"
+                                "Please run '%s --help' for syntax help.\n",
+                                mop->mo_device, progname);
+                        return EINVAL;
+                }
+                /* next index (if existent) points to vdevs */
+                if (optind < argc - 1)
+                        mop->mo_pool_vdevs = (char **) &argv[optind + 1];
+        } else if (optind != argc - 1) {
+                /* For non-ZFS backfs, last arg must be the device */
                 fatal();
                 fprintf(stderr, "Bad argument: %s\n", argv[optind]);
                 return EINVAL;
@@ -1425,17 +1555,12 @@ int main(int argc, char *const argv[])
         memset(&mop, 0, sizeof(mop));
         set_defaults(&mop);
 
-        /* device is last arg */
-        strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
-
-        /* Are we using a loop device? */
-        ret = is_block(mop.mo_device);
-        if (ret < 0)
-                goto out;
-        if (ret == 0)
-                mop.mo_flags |= MO_IS_LOOP;
-
 #ifdef TUNEFS
+        fatal();
+        fprintf(stderr, "%s is non-functional in this release.\n", progname);
+        ret = EINVAL;
+        goto out;
+#if 0
         /* For tunefs, we must read in the old values before parsing any
            new ones. */
 
@@ -1461,6 +1586,7 @@ int main(int argc, char *const argv[])
 
         if (verbose > 0)
                 print_ldd("Read previous values", &(mop.mo_ldd));
+#endif
 #endif
 
         ret = parse_opts(argc, argv, &mop, &mountopts);
@@ -1517,6 +1643,13 @@ int main(int argc, char *const argv[])
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS:
         case LDD_MT_LDISKFS2: {
+                /* Are we using a loop device? */
+                ret = is_block(mop.mo_device);
+                if (ret < 0)
+                        goto out;
+                if (ret == 0)
+                        mop.mo_flags |= MO_IS_LOOP;
+
                 sprintf(always_mountopts, "errors=remount-ro");
                 if (IS_MDT(ldd) || IS_MGS(ldd))
                         strscat(always_mountopts, ",iopen_nopriv,user_xattr",
@@ -1541,6 +1674,8 @@ int main(int argc, char *const argv[])
                         mop.mo_device);
                 break;
         }
+        case LDD_MT_ZFS:
+                break;
         default: {
                 fatal();
                 fprintf(stderr, "unknown fs type %d '%s'\n",
@@ -1578,11 +1713,12 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-        if (check_mtab_entry(mop.mo_device))
+        if (ldd->ldd_mount_type != LDD_MT_ZFS &&
+            check_mtab_entry(mop.mo_device))
                 return(EEXIST);
 
         /* Create the loopback file */
-        if (mop.mo_flags & MO_IS_LOOP) {
+        if (ldd->ldd_mount_type != LDD_MT_ZFS && mop.mo_flags & MO_IS_LOOP) {
                 ret = access(mop.mo_device, F_OK);
                 if (ret)
                         ret = errno;
@@ -1624,12 +1760,14 @@ int main(int argc, char *const argv[])
         }
 #endif
 
-        /* Write our config files */
-        ret = write_local_files(&mop);
-        if (ret != 0) {
-                fatal();
-                fprintf(stderr, "failed to write local files\n");
-                goto out;
+        if (ldd->ldd_mount_type != LDD_MT_ZFS) {
+                /* Write our config files */
+                ret = write_local_files(&mop);
+                if (ret != 0) {
+                        fatal();
+                        fprintf(stderr, "failed to write local files\n");
+                        goto out;
+                }
         }
 
 out:

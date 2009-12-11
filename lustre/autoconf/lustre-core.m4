@@ -8,7 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 libcfs_is_module=yes
-ldiskfs_is_ext4=yes
+ldiskfs_is_ext4=no
 ])
 
 #
@@ -711,7 +711,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_UMOUNTBEGIN_HAS_VFSMOUNT],
 [AC_MSG_CHECKING([if umount_begin needs vfsmount parameter instead of super_block])
 tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
+#EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 
@@ -776,7 +776,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_VFS_READDIR_U64_INO],
 [AC_MSG_CHECKING([check vfs_readdir need 64bit inode number])
 tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
+#EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
 #include <linux/fs.h>
 	int fillonedir(void * __buf, const char * name, int namlen, loff_t offset,
@@ -1356,7 +1356,7 @@ AC_DEFUN([LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP],
 AC_DEFUN([LC_RW_TREE_LOCK],
 [AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
 tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
+#EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
@@ -2279,7 +2279,7 @@ AC_DEFUN([LC_CONFIGURE],
 [LC_CONFIG_OBD_BUFFER_SIZE
 
 if test $target_cpu == "i686" -o $target_cpu == "x86_64"; then
-        CFLAGS="$CFLAGS -Werror"
+        CFLAGS="$CFLAGS"
 fi
 
 # include/liblustre.h
@@ -2375,6 +2375,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
+AM_CONDITIONAL(DMU, test x$with_dmu = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
@@ -2441,14 +2442,16 @@ lustre/obdclass/autoMakefile
 lustre/obdclass/linux/Makefile
 lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
-lustre/obdfilter/Makefile
-lustre/obdfilter/autoMakefile
+lustre/ofd/Makefile
+lustre/ofd/autoMakefile
 lustre/osc/Makefile
 lustre/osc/autoMakefile
 lustre/ost/Makefile
 lustre/ost/autoMakefile
 lustre/osd/Makefile
 lustre/osd/autoMakefile
+lustre/dmu-osd/Makefile
+lustre/dmu-osd/autoMakefile
 lustre/mgc/Makefile
 lustre/mgc/autoMakefile
 lustre/mgs/Makefile

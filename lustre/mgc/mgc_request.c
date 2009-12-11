@@ -533,18 +533,25 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
 /********************** class fns **********************/
 
 static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
-                        struct vfsmount *mnt)
+                        struct dt_device *dt)
 {
         struct lvfs_run_ctxt saved;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct client_obd *cli = &obd->u.cli;
+        struct vfsmount *mnt;
         struct dentry *dentry;
         char *label;
         int err = 0;
         ENTRY;
 
         LASSERT(lsi);
-        LASSERT(lsi->lsi_srv_mnt == mnt);
+
+        cli->cl_mgc_dt_dev = NULL;
+        RETURN(0);
+
+        /* XXX: retrieve mnt via osd here  */
+        mnt = NULL;
+        cli->cl_mgc_dt_dev = dt;
 
         /* The mgc fs exclusion sem. Only one fs can be setup at a time. */
         down(&cli->cl_mgc_sem);
@@ -563,9 +570,9 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         fsfilt_setup(obd, mnt->mnt_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = mnt;
+        /*obd->obd_lvfs_ctxt.pwdmnt = mnt;
         obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
+        obd->obd_lvfs_ctxt.fs = get_ds();*/
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = lookup_one_len(MOUNT_CONFIGS_DIR, cfs_fs_pwd(current->fs),
@@ -583,7 +590,9 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
            without calling mgc_fs_cleanup first. */
         class_incref(obd, "mgc_fs", obd);
 
-        label = fsfilt_get_label(obd, mnt->mnt_sb);
+        /* XXX: retrieve real label here */
+        //label = fsfilt_get_label(obd, mnt->mnt_sb);
+        label = "haha";
         if (label)
                 CDEBUG(D_MGC, "MGC using disk labelled=%s\n", label);
 
@@ -604,7 +613,8 @@ static int mgc_fs_cleanup(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        LASSERT(cli->cl_mgc_vfsmnt != NULL);
+        if (cli->cl_mgc_vfsmnt == NULL)
+                RETURN(0);
 
         if (cli->cl_mgc_configs_dir != NULL) {
                 struct lvfs_run_ctxt saved;
@@ -1007,7 +1017,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 if (vallen != sizeof(struct super_block))
                         RETURN(-EINVAL);
                 lsi = s2lsi(sb);
-                rc = mgc_fs_setup(exp->exp_obd, sb, lsi->lsi_srv_mnt);
+                rc = mgc_fs_setup(exp->exp_obd, sb, NULL);
                 if (rc) {
                         CERROR("set_fs got %d\n", rc);
                 }
@@ -1218,6 +1228,8 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         int rc, rc2;
         ENTRY;
 
+        LBUG();
+
         /* Write new log to a temp name, then vfs_rename over logname
            upon successful completion. */
 
@@ -1347,14 +1359,16 @@ int mgc_process_log(struct obd_device *mgc,
 
         /* Copy the setup log locally if we can. Don't mess around if we're
            running an MGS though (logs are already local). */
+        /* XXX: disable local copy for a while -bzzz */
         if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) &&
-            (lsi->lsi_srv_mnt == cli->cl_mgc_vfsmnt) &&
+            (lsi->lsi_dt_dev == cli->cl_mgc_dt_dev) &&
             !IS_MGS(lsi->lsi_ldd)) {
                 push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
-                if (rcl == 0)
+                if (rcl == 0) {
                         /* Only try to copy log if we have the lock. */
                         rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
+                }
                 if (rcl || rc) {
                         if (mgc_llog_is_empty(mgc, lctxt, cld->cld_logname)) {
                                 LCONSOLE_ERROR_MSG(0x13a, "Failed to get MGS "

@@ -213,8 +213,8 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
         }
 
         if (rc) {
-                CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
-                       obd->obd_name, index, op->lop_setup, rc);
+                /*CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
+                       obd->obd_name, index, op->lop_setup, rc);*/
                 llog_ctxt_put(ctxt);
         } else {
                 CDEBUG(D_CONFIG, "obd %s ctxt %d is initialized\n",
@@ -257,7 +257,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         ENTRY;
 
         if (!ctxt) {
-                CERROR("No ctxt\n");
+                //CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
 
@@ -283,7 +283,7 @@ int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
         ENTRY;
 
         if (!ctxt) {
-                CERROR("No ctxt\n");
+                //CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
 
@@ -349,7 +349,6 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
-        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
@@ -374,9 +373,7 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                 GOTO(out, rc);
 
         ctxt->loc_handle = handle;
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         rc = llog_init_handle(handle, LLOG_F_IS_CAT, NULL);
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -406,6 +403,10 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                                          &cathandle->u.chd.chd_head,
                                          u.phd.phd_entry) {
                         llh = loghandle->lgh_hdr;
+                        if (llh == NULL) {
+                                /* open but not created llog (new api) */
+                                continue;
+                        }
                         if ((llh->llh_flags &
                                 LLOG_F_ZAP_WHEN_EMPTY) &&
                             (llh->llh_count == 1)) {
@@ -449,6 +450,39 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
+
+int llog_obd_origin_add_2(struct llog_ctxt *ctxt,
+                          struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                          struct llog_cookie *logcookies, int numcookies,
+                          struct thandle *th)
+{
+        struct llog_handle *cathandle;
+        int rc;
+        ENTRY;
+
+        cathandle = ctxt->loc_handle;
+        LASSERT(cathandle != NULL);
+        rc = llog_cat_add_rec_2(cathandle, rec, logcookies, NULL, th);
+        if (rc != 0 && rc != 1)
+                CERROR("write one catalog record failed: %d\n", rc);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_obd_origin_add_2);
+
+int llog_obd_origin_declare_add(struct llog_ctxt *ctxt,
+                                struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                                struct thandle *th)
+{
+        struct llog_handle *cathandle;
+        int rc;
+        ENTRY;
+
+        cathandle = ctxt->loc_handle;
+        LASSERT(cathandle != NULL);
+        rc = llog_cat_declare_add_rec(cathandle, rec, th);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_obd_origin_declare_add);
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *disk_obd, int *index)

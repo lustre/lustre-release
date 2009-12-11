@@ -126,13 +126,13 @@ static void mdd_device_shutdown(const struct lu_env *env,
         ENTRY;
         mdd_changelog_fini(env, m);
         dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
+        orph_index_fini(env, m);
         if (m->mdd_dot_lustre_objs.mdd_obf)
                 mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
         if (m->mdd_dot_lustre)
                 mdd_object_put(env, m->mdd_dot_lustre);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(env, m, cfg);
-        orph_index_fini(env, m);
         /* remove upcall device*/
         md_upcall_fini(&m->mdd_md_dev);
         EXIT;
@@ -190,7 +190,7 @@ static int mdd_changelog_llog_init(struct mdd_device *mdd)
         /* Find last changelog entry number */
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL) {
-                CERROR("no changelog context\n");
+                //CERROR("no changelog context\n");
                 return -EINVAL;
         }
         if (!ctxt->loc_handle) {
@@ -250,7 +250,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 
         rc = mdd_changelog_llog_init(mdd);
         if (rc) {
-                CERROR("Changelog setup during init failed %d\n", rc);
+                //CERROR("Changelog setup during init failed %d\n", rc);
                 mdd->mdd_cl.mc_flags |= CLM_ERR;
         }
 
@@ -330,7 +330,7 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
                 return -ENXIO;
 
         /* nested journal transaction */
-        rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
+        rc = llog_add_2(ctxt, &rec->cr_hdr, NULL, NULL, 0, handle);
         llog_ctxt_put(ctxt);
 
         cfs_waitq_signal(&mdd->mdd_cl.mc_waitq);
@@ -985,9 +985,6 @@ static int mdd_process_config(const struct lu_env *env,
                         CERROR("lov init error %d \n", rc);
                         GOTO(out, rc);
                 }
-                rc = mdd_txn_init_credits(env, m);
-                if (rc)
-                        break;
 
                 mdd_changelog_init(env, m);
                 break;
@@ -1068,6 +1065,8 @@ static int mdd_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
+int mds_lov_init(struct obd_device *obd);
+
 static int mdd_prepare(const struct lu_env *env,
                        struct lu_device *pdev,
                        struct lu_device *cdev)
@@ -1101,6 +1100,7 @@ static int mdd_prepare(const struct lu_env *env,
                 GOTO(out, rc);
         }
 
+        rc = mds_lov_init(mdd2obd_dev(mdd));
 out:
         RETURN(rc);
 }
@@ -1323,7 +1323,7 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
         rec->cur_endrec = mdd->mdd_cl.mc_index;
         spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-        rc = llog_add(ctxt, &rec->cur_hdr, NULL, NULL, 0);
+        rc = llog_add_2(ctxt, &rec->cur_hdr, NULL, NULL, 0, NULL);
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:

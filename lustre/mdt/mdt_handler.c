@@ -4217,11 +4217,10 @@ static int mdt_stack_init(struct lu_env *env,
         int rc;
         ENTRY;
 
-        /* init the stack */
-        tmp = mdt_layer_setup(env, LUSTRE_OSD_NAME, d, cfg);
-        if (IS_ERR(tmp)) {
-                RETURN(PTR_ERR(tmp));
-        }
+        LASSERT(lmi->lmi_dt);
+        tmp = &lmi->lmi_dt->dd_lu_dev;
+        tmp->ld_site = d->ld_site;
+
         m->mdt_bottom = lu2dt_dev(tmp);
         d = tmp;
         tmp = mdt_layer_setup(env, LUSTRE_MDD_NAME, d, cfg);
@@ -4257,6 +4256,9 @@ static int mdt_stack_init(struct lu_env *env,
         rc = child_lu_dev->ld_ops->ldo_prepare(env,
                                                &m->mdt_md_dev.md_lu_dev,
                                                child_lu_dev);
+
+        /* XXX: to simplify debugging */
+        LASSERT(rc == 0);
 out:
         /* fini from last known good lu_device */
         if (rc)
@@ -4270,33 +4272,39 @@ out:
  * this may need to be rewrite as part of llog rewrite for lu-api.
  */
 static int mdt_obd_llog_setup(struct obd_device *obd,
+                              struct lustre_mount_info *lmi,
                               struct lustre_sb_info *lsi)
 {
-        int     rc;
+        struct dt_device_param dt_param;
+        struct vfsmount *mnt;
+        int    rc;
+
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.dt = lmi->lmi_dt;
+
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
+                        0, NULL, &llog_osd_ops);
+        if (rc) {
+                CERROR("llog_setup() failed: %d\n", rc);
+                return rc;
+        }
 
         LASSERT(obd->obd_fsops == NULL);
+        lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
+        mnt = dt_param.ddp_mnt;
+        if (mnt == NULL) {
+                //CERROR("no llog support on this device\n");
+                return 0;
+        }
+        LASSERT(mnt);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops))
                 return PTR_ERR(obd->obd_fsops);
 
-        rc = fsfilt_setup(obd, lsi->lsi_srv_mnt->mnt_sb);
-        if (rc) {
+        rc = fsfilt_setup(obd, mnt->mnt_sb);
+        if (rc)
                 fsfilt_put_ops(obd->obd_fsops);
-                return rc;
-        }
-
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = lsi->lsi_srv_mnt;
-        obd->obd_lvfs_ctxt.pwd = lsi->lsi_srv_mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
-                        0, NULL, &llog_lvfs_ops);
-        if (rc) {
-                CERROR("llog_setup() failed: %d\n", rc);
-                fsfilt_put_ops(obd->obd_fsops);
-        }
 
         return rc;
 }
@@ -4385,6 +4393,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 OBD_FREE_PTR(mite);
                 d->ld_site = NULL;
         }
+        server_put_mount(obd->obd_name);
         LASSERT(atomic_read(&d->ld_ref) == 0);
 
         EXIT;
@@ -4508,13 +4517,15 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
-        lmi = server_get_mount_2(dev);
+        lmi = server_get_mount(dev);
         if (lmi == NULL) {
                 CERROR("Cannot get mount info for %s!\n", dev);
                 RETURN(-EFAULT);
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
+                if (lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
+                        m->mdt_opts.mo_abort_recov = 1;
                 /* CMD is supported only in IAM mode */
                 ldd = lsi->lsi_ldd;
                 LASSERT(num);
@@ -4653,25 +4664,24 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_capa, rc);
 
-        rc = mdt_obd_llog_setup(obd, lsi);
+        rc = mdt_obd_llog_setup(obd, lmi, lsi);
         if (rc)
                 GOTO(err_fs_cleanup, rc);
 
-        rc = mdt_llog_ctxt_clone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-        if (rc)
-                GOTO(err_llog_cleanup, rc);
+        if (obd->obd_fsops) {
+                rc = mdt_llog_ctxt_clone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
+                if (rc)
+                        GOTO(err_llog_cleanup, rc);
+        }
 
         mdt_adapt_sptlrpc_conf(obd, 1);
 
 #ifdef HAVE_QUOTA_SUPPORT
         next = m->mdt_child;
-        rc = next->md_ops->mdo_quota.mqo_setup(env, next, lmi->lmi_mnt);
+        rc = next->md_ops->mdo_quota.mqo_setup(env, next, NULL);
         if (rc)
                 GOTO(err_llog_cleanup, rc);
 #endif
-
-        server_put_mount_2(dev, lmi->lmi_mnt);
-        lmi = NULL;
 
         target_recovery_init(&m->mdt_lut, mdt_recovery_handle);
 
@@ -4740,8 +4750,8 @@ err_fini_site:
 err_free_site:
         OBD_FREE_PTR(mite);
 err_lmi:
-        if (lmi)
-                server_put_mount_2(dev, lmi->lmi_mnt);
+        if (lmi) 
+                server_put_mount(dev);
         return (rc);
 }
 

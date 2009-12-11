@@ -62,35 +62,19 @@ struct proc_dir_entry;
 struct lustre_cfg;
 
 struct thandle;
-struct txn_param;
 struct dt_device;
 struct dt_object;
 struct dt_index_features;
 struct dt_quota_ctxt;
+struct niobuf_local;
+struct niobuf_remote;
 
 struct dt_device_param {
         unsigned           ddp_max_name_len;
         unsigned           ddp_max_nlink;
         unsigned           ddp_block_shift;
-};
-
-/**
- * Basic transaction credit op
- */
-enum dt_txn_op {
-        DTO_INDEX_INSERT,
-        DTO_INDEX_DELETE,
-        DTO_IDNEX_UPDATE,
-        DTO_OBJECT_CREATE,
-        DTO_OBJECT_DELETE,
-        DTO_ATTR_SET_BASE,
-        DTO_XATTR_SET,
-        DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
-        DTO_WRITE_BASE,
-        DTO_WRITE_BLOCK,
-        DTO_ATTR_SET_CHOWN,
-
-        DTO_NR
+        void              *ddp_mnt; /* XXX: old code can retrieve mnt -bzzz */
+        int                ddp_mount_type;
 };
 
 /**
@@ -103,15 +87,19 @@ struct dt_device_operations {
         int   (*dt_statfs)(const struct lu_env *env,
                            struct dt_device *dev, struct kstatfs *sfs);
         /**
+         * Create transaction, described by \a param.
+         */
+        struct thandle *(*dt_trans_create)(const struct lu_env *env,
+                                           struct dt_device *dev);
+        /**
          * Start transaction, described by \a param.
          */
-        struct thandle *(*dt_trans_start)(const struct lu_env *env,
-                                          struct dt_device *dev,
-                                          struct txn_param *param);
+        int   (*dt_trans_start)(const struct lu_env *env,
+                                struct dt_device *dev, struct thandle *th);
         /**
          * Finish previously started transaction.
          */
-        void  (*dt_trans_stop)(const struct lu_env *env,
+        int   (*dt_trans_stop)(const struct lu_env *env,
                                struct thandle *th);
         /**
          * Return fid of root index object.
@@ -154,10 +142,16 @@ struct dt_device_operations {
                                    struct dt_quota_ctxt *ctxt, void *data);
 
         /**
-         *  get transaction credits for given \a op.
+         * Get disk label
          */
-        int (*dt_credit_get)(const struct lu_env *env, struct dt_device *dev,
-                             enum dt_txn_op);
+        char *(*dt_label_get)(const struct lu_env *env,
+                              const struct dt_device *dev);
+
+        /**
+         * Set disk label
+         */
+        int   (*dt_label_set)(const struct lu_env *,
+                              const struct dt_device *, char *);
 };
 
 struct dt_index_features {
@@ -282,11 +276,24 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_attr_set)(const struct lu_env *env,
+                                     struct dt_object *dt,
+                                     const struct lu_attr *attr,
+                                     struct thandle *handle);
         int   (*do_attr_set)(const struct lu_env *env,
                              struct dt_object *dt,
                              const struct lu_attr *attr,
                              struct thandle *handle,
                              struct lustre_capa *capa);
+        /**
+         * Punch object's content
+         * precondition: regular object, not index
+         */
+        int   (*do_declare_punch)(const struct lu_env *, struct dt_object *,
+                                  __u64, __u64, struct thandle *th);
+        int   (*do_punch)(const struct lu_env *env, struct dt_object *dt,
+                          __u64 start, __u64 end, struct thandle *th,
+                          struct lustre_capa *capa);
         /**
          * Return a value of an extended attribute.
          *
@@ -302,6 +309,10 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_xattr_set)(const struct lu_env *env,
+                                      struct dt_object *dt,
+                                      const int buflen, const char *name, int fl,
+                                      struct thandle *handle);
         int   (*do_xattr_set)(const struct lu_env *env,
                               struct dt_object *dt, const struct lu_buf *buf,
                               const char *name, int fl, struct thandle *handle,
@@ -311,6 +322,9 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_xattr_del)(const struct lu_env *env,
+                                      struct dt_object *dt,
+                                      const char *name, struct thandle *handle);
         int   (*do_xattr_del)(const struct lu_env *env,
                               struct dt_object *dt,
                               const char *name, struct thandle *handle,
@@ -341,6 +355,11 @@ struct dt_object_operations {
          * precondition: !dt_object_exists(dt);
          * postcondition: ergo(result == 0, dt_object_exists(dt));
          */
+        int   (*do_declare_create)(const struct lu_env *env, struct dt_object *dt,
+                                   struct lu_attr *attr,
+                                   struct dt_allocation_hint *hint,
+                                   struct dt_object_format *dof,
+                                   struct thandle *th);
         int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
                            struct lu_attr *attr,
                            struct dt_allocation_hint *hint,
@@ -362,12 +381,16 @@ struct dt_object_operations {
          * Add nlink of the object
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_ref_add)(const struct lu_env *env,
+                                    struct dt_object *dt, struct thandle *th);
         void  (*do_ref_add)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
         /**
          * Del nlink of the object
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_ref_del)(const struct lu_env *env,
+                                    struct dt_object *dt, struct thandle *th);
         void  (*do_ref_del)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
 
@@ -402,10 +425,56 @@ struct dt_body_operations {
         /**
          * precondition: dt_object_exists(dt);
          */
+        ssize_t (*dbo_declare_write)(const struct lu_env *env, struct dt_object *dt,
+                                     const loff_t size, loff_t pos,
+                                     struct thandle *handle);
         ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
                              const struct lu_buf *buf, loff_t *pos,
                              struct thandle *handle, struct lustre_capa *capa,
                              int ignore_quota);
+                /*
+         * methods for zero-copy IO
+         */
+
+        /*
+         * precondition: dt_object_exists(dt);
+         * returns:
+         * < 0 - error code
+         * = 0 - illegal
+         * > 0 - number of local buffers prepared
+         */
+        int (*dbo_get_bufs)(const struct lu_env *env, struct dt_object *dt,
+                            loff_t pos, ssize_t len, struct niobuf_local *lb,
+                            int rw, struct lustre_capa *capa);
+        /*
+         * precondition: dt_object_exists(dt);
+         */
+        int (*dbo_put_bufs)(const struct lu_env *env, struct dt_object *dt,
+                            struct niobuf_local *lb, int nr);
+        /*
+         * precondition: dt_object_exists(dt);
+         */
+        int (*dbo_write_prep)(const struct lu_env *env, struct dt_object *dt,
+                              struct niobuf_local *lb, int nr,
+                              unsigned long *used);
+        /*
+         * precondition: dt_object_exists(dt);
+         */
+        int (*dbo_declare_write_commit)(const struct lu_env *env,
+                                        struct dt_object *dt,
+                                        struct niobuf_local *,
+                                        int, struct thandle *);
+        /*
+         * precondition: dt_object_exists(dt);
+         */
+        int (*dbo_write_commit)(const struct lu_env *env, struct dt_object *dt,
+                                struct niobuf_local *, int, struct thandle *);
+        /*
+         * precondition: dt_object_exists(dt);
+         */
+        int (*dbo_read_prep)(const struct lu_env *env, struct dt_object *dt,
+                             struct niobuf_local *lb, int nr);
+
 };
 
 /**
@@ -436,6 +505,9 @@ struct dt_index_operations {
         /**
          * precondition: dt_object_exists(dt);
          */
+        int (*dio_declare_insert)(const struct lu_env *env, struct dt_object *dt,
+                                  const struct dt_rec *rec, const struct dt_key *key,
+                                  struct thandle *handle);
         int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
                           struct thandle *handle, struct lustre_capa *capa,
@@ -443,6 +515,8 @@ struct dt_index_operations {
         /**
          * precondition: dt_object_exists(dt);
          */
+        int (*dio_declare_delete)(const struct lu_env *env, struct dt_object *dt,
+                                 const struct dt_key *key, struct thandle *handle);
         int (*dio_delete)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_key *key, struct thandle *handle,
                           struct lustre_capa *capa);
@@ -525,30 +599,6 @@ static inline int dt_object_exists(const struct dt_object *dt)
         return lu_object_exists(&dt->do_lu);
 }
 
-struct txn_param {
-        /** number of blocks this transaction will modify */
-        unsigned int tp_credits;
-        /** sync transaction is needed */
-        __u32        tp_sync:1;
-};
-
-static inline void txn_param_init(struct txn_param *p, unsigned int credits)
-{
-        memset(p, 0, sizeof(*p));
-        p->tp_credits = credits;
-}
-
-static inline void txn_param_credit_add(struct txn_param *p,
-                                        unsigned int credits)
-{
-        p->tp_credits += credits;
-}
-
-static inline void txn_param_sync(struct txn_param *p)
-{
-        p->tp_sync = 1;
-}
-
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle
@@ -573,6 +623,9 @@ struct thandle {
         /** the last operation result in this transaction.
          * this value is used in recovery */
         __s32             th_result;
+
+        /** whether we need sync commit */
+        int               th_sync;
 };
 
 /**
@@ -588,7 +641,7 @@ struct thandle {
  */
 struct dt_txn_callback {
         int (*dtc_txn_start)(const struct lu_env *env,
-                             struct txn_param *param, void *cookie);
+                             struct thandle *txn, void *cookie);
         int (*dtc_txn_stop)(const struct lu_env *env,
                             struct thandle *txn, void *cookie);
         int (*dtc_txn_commit)(const struct lu_env *env,
@@ -602,7 +655,7 @@ void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb);
 void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
 
 int dt_txn_hook_start(const struct lu_env *env,
-                      struct dt_device *dev, struct txn_param *param);
+                      struct dt_device *dev, struct thandle *txn);
 int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn);
 
@@ -652,15 +705,22 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
                     const struct lu_buf *buf, loff_t *pos, struct thandle *th);
 
 
-static inline struct thandle *dt_trans_start(const struct lu_env *env,
-                                             struct dt_device *d,
-                                             struct txn_param *p)
+static inline struct thandle *dt_trans_create(const struct lu_env *env,
+                                              struct dt_device *d)
 {
-        LASSERT(d->dd_ops->dt_trans_start);
-        return d->dd_ops->dt_trans_start(env, d, p);
+        LASSERT(d->dd_ops->dt_trans_create);
+        return d->dd_ops->dt_trans_create(env, d);
 }
 
-static inline void dt_trans_stop(const struct lu_env *env,
+static inline int dt_trans_start(const struct lu_env *env,
+                                             struct dt_device *d,
+                                             struct thandle *th)
+{
+        LASSERT(d->dd_ops->dt_trans_start);
+        return d->dd_ops->dt_trans_start(env, d, th);
+}
+
+static inline int dt_trans_stop(const struct lu_env *env,
                                  struct dt_device *d,
                                  struct thandle *th)
 {
@@ -668,4 +728,245 @@ static inline void dt_trans_stop(const struct lu_env *env,
         return d->dd_ops->dt_trans_stop(env, th);
 }
 /** @} dt */
+
+
+static inline int dt_declare_record_write(const struct lu_env *env,
+                                          struct dt_object *dt,
+                                          int size, loff_t pos,
+                                          struct thandle *th)
+{
+        int rc;
+
+        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
+        LASSERT(th != NULL);
+        rc = dt->do_body_ops->dbo_declare_write(env, dt, size, pos, th);
+        return rc;
+}
+
+static inline int dt_declare_create(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    struct lu_attr *attr,
+                                    struct dt_allocation_hint *hint,
+                                    struct dt_object_format *dof,
+                                    struct thandle *th)
+{
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_declare_create);
+        return dt->do_ops->do_declare_create(env, dt, attr, hint, dof, th);
+}
+
+static inline int dt_create(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    struct lu_attr *attr,
+                                    struct dt_allocation_hint *hint,
+                                    struct dt_object_format *dof,
+                                    struct thandle *th)
+{
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_create);
+        return dt->do_ops->do_create(env, dt, attr, hint, dof, th);
+}
+
+static inline void dt_read_lock(const struct lu_env *env,
+                                struct dt_object *dt,
+                                unsigned role)
+{
+        dt->do_ops->do_read_lock(env, dt, role);
+}
+
+static inline void dt_write_lock(const struct lu_env *env,
+                                struct dt_object *dt,
+                                unsigned role)
+{
+        dt->do_ops->do_write_lock(env, dt, role);
+}
+
+static inline void dt_read_unlock(const struct lu_env *env,
+                                struct dt_object *dt)
+{
+        dt->do_ops->do_read_unlock(env, dt);
+}
+
+static inline void dt_write_unlock(const struct lu_env *env,
+                                struct dt_object *dt)
+{
+        dt->do_ops->do_write_unlock(env, dt);
+}
+
+static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
+                              struct lu_attr *la, void *arg)
+{
+        return dt->do_ops->do_attr_get(env, dt, la, arg);
+}
+
+static inline int dt_declare_attr_set(const struct lu_env *env,
+                                      struct dt_object *dt,
+                                      const struct lu_attr *la, 
+                                      struct thandle *th)
+{
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_declare_attr_set);
+        return dt->do_ops->do_declare_attr_set(env, dt, la, th);
+}
+
+static inline int dt_attr_set(const struct lu_env *env, struct dt_object *dt,
+                              const struct lu_attr *la, struct thandle *th,
+                              struct lustre_capa *capa)
+{
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_attr_set);
+        return dt->do_ops->do_attr_set(env, dt, la, th, capa);
+}
+
+static inline void dt_declare_ref_del(const struct lu_env *env,
+                                      struct dt_object *dt, struct thandle *th)
+{
+        dt->do_ops->do_declare_ref_del(env, dt, th);
+        return;
+}
+
+static inline void dt_ref_del(const struct lu_env *env,
+                              struct dt_object *dt, struct thandle *th)
+{
+        dt->do_ops->do_ref_del(env, dt, th);
+        return;
+}
+
+static inline int dt_declare_punch(const struct lu_env *env,
+                                   struct dt_object *dt, __u64 start,
+                                   __u64 end, struct thandle *th)
+{
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_declare_punch);
+        return dt->do_ops->do_declare_punch(env, dt, start, end, th);
+}
+
+static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
+                           __u64 start, __u64 end, struct thandle *th,
+                           struct lustre_capa *capa)
+{
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_punch);
+        return dt->do_ops->do_punch(env, dt, start, end, th, capa);
+}
+
+static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
+                              struct niobuf_remote *r, struct niobuf_local *l,
+                              int rw, struct lustre_capa *capa)
+{
+        return d->do_body_ops->dbo_get_bufs(env, d, r->offset, r->len,
+                                            l, rw, capa);
+}
+
+static inline int dt_bufs_put(const struct lu_env *env, struct dt_object *d,
+                              struct niobuf_local *l, int n)
+{
+        return d->do_body_ops->dbo_put_bufs(env, d, l, n);
+}
+
+static inline int dt_write_prep(const struct lu_env *env, struct dt_object *d,
+                                struct niobuf_local *l, int n,
+                                unsigned long *used)
+{
+        return d->do_body_ops->dbo_write_prep(env, d, l, n, used);
+}
+
+static inline int dt_declare_write_commit(const struct lu_env *env,
+                                          struct dt_object *d,
+                                          struct niobuf_local *l,
+                                          int n, struct thandle *th)
+{
+        LASSERTF(d != NULL, "dt is NULL when we want to declare write\n");
+        LASSERT(th != NULL);
+        return d->do_body_ops->dbo_declare_write_commit(env, d, l, n, th);
+}
+
+
+static inline int dt_write_commit(const struct lu_env *env,
+                                  struct dt_object *d, struct niobuf_local *l,
+                                  int n, struct thandle *th)
+{
+        return d->do_body_ops->dbo_write_commit(env, d, l, n, th);
+}
+
+static inline int dt_read_prep(const struct lu_env *env, struct dt_object *d,
+                               struct niobuf_local *l, int n)
+{
+        return d->do_body_ops->dbo_read_prep(env, d, l, n);
+}
+
+static inline int dt_statfs(const struct lu_env *env, struct dt_device *dev,
+                            struct kstatfs *sfs)
+{
+        return dev->dd_ops->dt_statfs(env, dev, sfs);
+}
+
+static inline int dt_root_get(const struct lu_env *env, struct dt_device *dev,
+                              struct lu_fid *f)
+{
+        return dev->dd_ops->dt_root_get(env, dev, f);
+}
+
+static inline void dt_conf_get(const struct lu_env *env,
+                               const struct dt_device *dev,
+                               struct dt_device_param *param)
+{
+        return dev->dd_ops->dt_conf_get(env, dev, param);
+}
+
+static inline int dt_sync(const struct lu_env *env, struct dt_device *dev)
+{
+        return dev->dd_ops->dt_sync(env, dev);
+}
+
+static inline void dt_ro(const struct lu_env *env, struct dt_device *dev)
+{
+        return dev->dd_ops->dt_ro(env, dev);
+}
+
+static inline int dt_declare_insert(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_rec *rec,
+                                    const struct dt_key *key,
+                                    struct thandle *th)
+{
+        return dt->do_index_ops->dio_declare_insert(env, dt, rec, key, th);
+}
+
+static inline int dt_insert(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_rec *rec,
+                                    const struct dt_key *key,
+                                    struct thandle *th,
+                                    struct lustre_capa *capa,
+                                    int noquota)
+{
+        return dt->do_index_ops->dio_insert(env, dt, rec, key, th, capa, noquota);
+}
+
+static inline int dt_declare_delete(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_key *key,
+                                    struct thandle *th)
+{
+        return dt->do_index_ops->dio_declare_delete(env, dt, key, th);
+}
+
+
+static inline int dt_delete(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_key *key,
+                                    struct thandle *th,
+                                    struct lustre_capa *capa)
+{
+        return dt->do_index_ops->dio_delete(env, dt, key, th, capa);
+}
+
+
 #endif /* __LUSTRE_DT_OBJECT_H */

@@ -1764,7 +1764,6 @@ test_22() {
 
         quota_init
 }
-run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
 
 test_23_sub() {
 	mkdir -p $DIR/$tdir
@@ -2078,7 +2077,6 @@ test_30()
         cancel_lru_locks osc
         sleep 5
         $LFS setquota -u $TSTUSR -B 0 $DIR
-        $SHOW_QUOTA_USER
         output=`$SHOW_QUOTA_USER | grep $MOUNT | awk '{ print $5 }' | tr -d s`
         [ "$output" -le "$((GRACE - 5))" ] || error "grace times were reset or unexpectedly high latency"
         rm -f $TESTFILE

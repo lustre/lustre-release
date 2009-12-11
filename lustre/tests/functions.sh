@@ -24,27 +24,3 @@ signaled() {
     kill -KILL -$PGID
 }
 
-mpi_run () {
-    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
-    local command="$mpirun $@"
-    local mpilog=$TMP/mpi.log
-    local rc
-
-    if [ "$MPI_USER" != root -a $mpirun ]; then
-        echo "+ chmod 0777 $MOUNT"
-        chmod 0777 $MOUNT
-        command="su $MPI_USER sh -c \"$command \""
-    fi
-
-    ls -ald $MOUNT
-    echo "+ $command"
-    eval $command 2>&1 > $mpilog || true
-
-    rc=${PIPESTATUS[0]}
-    if [ $rc -eq 0 ] && grep -q "p4_error: : [^0]" $mpilog ; then
-       rc=1
-    fi
-    cat $mpilog
-    return $rc
-}
-

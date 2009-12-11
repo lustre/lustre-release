@@ -305,14 +305,14 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                 if (*left == 0)
                         return -EINVAL;
 
-                res->offset = offset;
+                res->file_offset = offset;
                 res->len = plen;
-                LASSERT((res->offset & ~CFS_PAGE_MASK) + res->len <= CFS_PAGE_SIZE);
+                LASSERT((res->file_offset&~CFS_PAGE_MASK)+res->len <= CFS_PAGE_SIZE);
 
 
                 if (ispersistent &&
-                    (res->offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
-                        res->page = echo_persistent_pages[res->offset >>
+                    (res->file_offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
+                        res->page = echo_persistent_pages[res->file_offset >>
                                 CFS_PAGE_SHIFT];
                         /* Take extra ref so __free_pages() can be called OK */
                         cfs_get_page (res->page);
@@ -326,14 +326,14 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                 }
 
                 CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
-                       res->page, res->offset, res->len);
+                       res->page, res->file_offset, res->len);
 
                 if (cmd & OBD_BRW_READ)
                         res->rc = res->len;
 
                 if (debug_setup)
                         echo_page_debug_setup(res->page, cmd, obj->ioo_id,
-                                              res->offset, res->len);
+                                              res->file_offset, res->len);
 
                 offset += plen;
                 len -= plen;
@@ -369,12 +369,12 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 
                 addr = cfs_kmap(page);
 
-                CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
-                       res->page, addr, res->offset);
+                CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@%u\n",
+                       res->page, addr, res->page_offset);
 
                 if (verify) {
                         int vrc = echo_page_debug_check(page, obj->ioo_id,
-                                                        res->offset, res->len);
+                                                        res->page_offset, res->len);
                         /* check all the pages always */
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;

@@ -3503,7 +3503,7 @@ static int osc_statfs_interpret(const struct lu_env *env,
          * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
          * lose that amount of space so in those cases we report no space left
          * if their is less than 1 GB left.                             */
-        used = min_t(__u64,(msfs->os_blocks - msfs->os_bfree) >> 10, 1 << 30);
+        used = min((msfs->os_blocks - msfs->os_bfree) >> 10, 1ULL << 30);
         if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) == 0) &&
                      ((msfs->os_ffree < 32) || (msfs->os_bavail < used))))
                 cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC;
@@ -4188,6 +4188,7 @@ static int osc_disconnect(struct obd_export *exp)
                        obd);
         }
 
+        osc_del_shrink_grant(&obd->u.cli);
         rc = client_disconnect_export(exp);
         /**
          * Initially we put del_shrink_grant before disconnect_export, but it
@@ -4497,10 +4498,12 @@ int __init osc_init(void)
         spin_lock_init(&osc_ast_guard);
         lockdep_set_class(&osc_ast_guard, &osc_ast_guard_class);
 
-        osc_mds_ost_orig_logops = llog_lvfs_ops;
+        osc_mds_ost_orig_logops = llog_osd_ops;
         osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
         osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
         osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
+        osc_mds_ost_orig_logops.lop_add_2 = llog_obd_origin_add_2;
+        osc_mds_ost_orig_logops.lop_declare_add_2 = llog_obd_origin_declare_add;
         osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
 
         RETURN(rc);

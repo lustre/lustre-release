@@ -54,6 +54,7 @@
 #include "mdd_internal.h"
 
 const char orph_index_name[] = "PENDING";
+static const char dotdot[] = "..";
 
 enum {
         ORPH_OP_UNLINK,
@@ -131,6 +132,21 @@ static inline void mdd_orphan_write_unlock(const struct lu_env *env,
         dor->do_ops->do_write_unlock(env, dor);
 }
 
+static inline int mdd_declare_orphan_insert_obj(const struct lu_env *env,
+                                                struct mdd_device *mdd,
+                                                struct mdd_object *obj,
+                                                struct thandle *th)
+{
+        struct dt_object        *dor    = mdd->mdd_orphans;
+        const struct lu_fid     *lf     = mdo2fid(obj);
+        struct dt_key           *key    = orph_key_fill(env, lf, ORPH_OP_UNLINK);
+        ENTRY;
+
+        return  dor->do_index_ops->dio_declare_insert(env, dor,
+                                                      (struct dt_rec *)lf,
+                                                      key, th);
+}
+
 static inline int mdd_orphan_insert_obj(const struct lu_env *env,
                                         struct mdd_device *mdd,
                                         struct mdd_object *obj,
@@ -144,8 +160,19 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
 
         return  dor->do_index_ops->dio_insert(env, dor,
                                               (struct dt_rec *)lf,
-                                              key, th,
-                                              BYPASS_CAPA, 1);
+                                              key, th, BYPASS_CAPA, 1);
+}
+
+static inline int mdd_declare_orphan_delete_obj(const struct lu_env *env,
+                                                struct mdd_device  *mdd,
+                                                struct mdd_object *obj,
+                                                struct thandle *th)
+{
+        struct dt_object        *dor    = mdd->mdd_orphans;
+        const struct lu_fid     *lf     = mdo2fid(obj);
+        struct dt_key           *key    = orph_key_fill(env, lf, ORPH_OP_UNLINK);
+
+        return dor->do_index_ops->dio_declare_delete(env, dor, key, th);
 }
 
 static inline int mdd_orphan_delete_obj(const struct lu_env *env,
@@ -167,6 +194,15 @@ static inline void mdd_orphan_ref_add(const struct lu_env *env,
         struct dt_object        *dor    = mdd->mdd_orphans;
         dor->do_ops->do_ref_add(env, dor, th);
 }
+
+static inline int mdd_declare_orphan_ref_del(const struct lu_env *env,
+                                              struct mdd_device *mdd,
+                                              struct thandle *th)
+{
+        struct dt_object        *dor    = mdd->mdd_orphans;
+        return dor->do_ops->do_declare_ref_del(env, dor, th);
+}
+
 
 static inline void mdd_orphan_ref_del(const struct lu_env *env,
                                  struct mdd_device *mdd,
@@ -257,7 +293,7 @@ static int orphan_object_kill(const struct lu_env *env,
                 /* regular file , cleanup linked ost objects */
                 rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
                 if (rc == 0)
-                        rc = mdd_lov_destroy(env, mdd, obj, la);
+                        rc = mdd_lov_destroy(env, mdd, obj, la, th);
         }
         RETURN(rc);
 }
@@ -316,12 +352,17 @@ static int orphan_object_destroy(const struct lu_env *env,
         int rc = 0;
         ENTRY;
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_UNLINK_OP);
-        th = mdd_trans_start(env, mdd);
+        th = mdd_trans_create(env, mdd);
         if (IS_ERR(th)) {
                 CERROR("Cannot get thandle\n");
                 RETURN(-ENOMEM);
         }
+        rc = __mdd_declare_orphan_del(env, obj, th);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdd_trans_start(env, mdd, th);
+        if (rc)
+                GOTO(cleanup, rc);
 
         mdd_write_lock(env, obj, MOR_TGT_CHILD);
         if (likely(obj->mod_count == 0)) {
@@ -334,6 +375,7 @@ static int orphan_object_destroy(const struct lu_env *env,
                 mdd_orphan_write_unlock(env, mdd);
         }
         mdd_write_unlock(env, obj);
+cleanup:
         mdd_trans_stop(env, mdd, 0, th);
 
         RETURN(rc);
@@ -493,6 +535,36 @@ int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
         return orph_index_iterate(env, d);
 }
 
+int __mdd_declare_orphan_add(const struct lu_env *env, struct mdd_object *obj,
+                             struct thandle *th)
+{
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        struct dt_object  *next = mdd_object_child(obj);
+        int rc;
+
+        rc = mdd_declare_orphan_insert_obj(env, mdd, obj, th);
+        rc = mdo_declare_ref_add(env, obj, th);
+        if (!S_ISDIR(mdd_object_type(obj)))
+                return rc;
+        rc = mdo_declare_ref_add(env, obj, th);
+        if (rc)
+                return rc;
+        rc = mdd->mdd_orphans->do_ops->do_declare_ref_add(env,
+                                                          mdd->mdd_orphans,
+                                                          th);
+        if (rc)
+                return rc;
+        if (!dt_try_as_dir(env, next))
+                return 0;
+        rc = next->do_index_ops->dio_declare_delete(env, next,
+                                                    (struct dt_key *) dotdot, th);
+        if (rc)
+                return rc;
+        rc = next->do_index_ops->dio_declare_insert(env, next, NULL,
+                                                    (struct dt_key *) dotdot, th);
+        return rc;
+}
+
 /**
  *  delete an orphan \a obj from orphan index.
  *  \param obj file or directory.
@@ -508,6 +580,24 @@ int __mdd_orphan_add(const struct lu_env *env,
                      struct mdd_object *obj, struct thandle *th)
 {
         return orph_index_insert(env, obj, ORPH_OP_UNLINK, th);
+}
+
+int __mdd_declare_orphan_del(const struct lu_env *env,
+                             struct mdd_object *obj, struct thandle *th)
+{
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        int rc;
+
+        rc = mdd_declare_orphan_delete_obj(env, mdd, obj, th);
+        rc = mdo_declare_ref_del(env, obj, th);
+
+        if (rc == 0 && S_ISDIR(mdd_object_type(obj))) {
+                rc = mdo_declare_ref_del(env, obj, th);
+                if (rc == 0)
+                        rc = mdd_declare_orphan_ref_del(env, mdd, th);
+        }
+
+        return rc;
 }
 
 /**

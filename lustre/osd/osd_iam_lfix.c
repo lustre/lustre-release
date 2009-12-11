@@ -41,6 +41,9 @@
  */
 
 #include <linux/types.h>
+#include <linux/jbd.h>
+/* ldiskfs_error() */
+#include <linux/ldiskfs_fs.h>
 #include "osd_internal.h"
 
 /*
@@ -745,6 +748,10 @@ struct lfix_leaf {
         CLASSERT(sizeof(val) == sizeof(*(dst)));        \
         memcpy(dst, &__val, sizeof(*(dst)));            \
 })
+
+#include <linux/jbd.h>
+#include <linux/ldiskfs_fs.h>
+#include <linux/ldiskfs_jbd.h>
 
 static void lfix_root(void *buf,
                       int blocksize, int keysize, int ptrsize, int recsize)

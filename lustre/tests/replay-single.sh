@@ -1931,6 +1931,67 @@ test_74() {
 }
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
+test_73a() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_LDLM_ENQUEUE       0x302
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000302"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73a "open(O_CREAT), unlink, replay, reconnect before open replay , close"
+
+test_73b() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_LDLM_REPLY       0x30c
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000030c"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73b "open(O_CREAT), unlink, replay, reconnect at open_replay reply, close"
+
+test_73c() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_TGT_LAST_REPLAY       0x710
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000710"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
+
+# bug 18554
+test_74() {
+    stop ost1
+    zconf_umount $(hostname) $MOUNT
+    fail $SINGLEMDS
+    zconf_mount $(hostname) $MOUNT
+    mount_facet ost1
+    touch $DIR/$tfile || return 1
+    rm $DIR/$tfile || return 2
+    return 0
+}
+run_test 74 "Ensure applications don't fail waiting for OST reocvery"
+
 test_80a() {
     [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 

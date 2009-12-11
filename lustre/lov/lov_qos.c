@@ -769,6 +769,11 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         qos_statfs_update(exp->exp_obd,
                           cfs_time_shift_64(-2 * lov->desc.ld_qos_maxage), 1);
 
+        /* wait for fresh statfs info if needed, the rpcs are sent in
+         * lov_create() */
+        qos_statfs_update(exp->exp_obd,
+                          cfs_time_shift_64(-2 * lov->desc.ld_qos_maxage), 1);
+
         /* Detect -EAGAIN early, before expensive lock is taken. */
         if (!lov->lov_qos.lq_dirty && lov->lov_qos.lq_same_space)
                 GOTO(out_nolock, rc = -EAGAIN);

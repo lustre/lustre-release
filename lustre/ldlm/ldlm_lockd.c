@@ -211,14 +211,13 @@ static int expired_lock_main(void *arg)
                         export = class_export_lock_get(lock->l_export, lock);
                         spin_unlock_bh(&waiting_locks_spinlock);
 
-                        do_dump++;
-                        class_fail_export(export);
-                        class_export_lock_put(export, lock);
-
                         /* release extra ref grabbed by ldlm_add_waiting_lock()
                          * or ldlm_failed_ast() */
                         LDLM_LOCK_RELEASE(lock);
- 
+
+                        do_dump++;
+                        class_fail_export(export);
+                        class_export_lock_put(export, lock);
                         spin_lock_bh(&waiting_locks_spinlock);
                 }
                 spin_unlock_bh(&waiting_locks_spinlock);

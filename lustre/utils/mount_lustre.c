@@ -294,6 +294,9 @@ int parse_options(char *orig_options, int *flagp)
                 if (val != NULL) {
                         if (strncmp(arg, "md_stripe_cache_size", 20) == 0) {
                                 md_stripe_cache_size = atoi(val + 1);
+                        } else if (strncmp(opt, "mgs", 3) == 0) {
+                                strcat(options, "mgs");
+                                strcat(options, val);
                         } else if (strncmp(arg, "retry", 5) == 0) {
                                 retry = atoi(val + 1);
                                 if (retry > MAX_RETRIES)
@@ -493,9 +496,12 @@ set_params:
 int main(int argc, char *const argv[])
 {
         char default_options[] = "";
-        char *usource, *source, *target, *ptr;
+        char *usource = NULL; /* setting to NULL to avoid gcc warning */
+        char *source = NULL; /* idem */
+        char *target, *ptr;
         char *options, *optcopy, *orig_options = default_options;
         int i, nargs = 3, opt, rc, flags, optlen;
+        size_t usource_len;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
                 {"force", 0, 0, 1},
@@ -556,9 +562,15 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        source = convert_hostnames(usource);
-        if (!source) {
-                usage(stderr);
+        /* Only convert hostnames if usource contains a '@', otherwise it's
+           probably a ZFS dataset name */
+        if (strchr(usource, '@') != NULL) {
+                source = convert_hostnames(usource);
+                if (!source) {
+                        usage(stderr);
+                }
+        } else {
+                source = strdup(usource);
         }
 
         target = argv[optind + 1];

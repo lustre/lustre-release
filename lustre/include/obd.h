@@ -291,9 +291,9 @@ struct filter_obd {
         const char          *fo_fstype;
 
         int                  fo_group_count;
-        cfs_dentry_t        *fo_dentry_O;
-        cfs_dentry_t       **fo_dentry_O_groups;
-        struct filter_subdirs   *fo_dentry_O_sub;
+        //cfs_dentry_t        *fo_dentry_O;
+        //cfs_dentry_t       **fo_dentry_O_groups;
+        ///struct filter_subdirs   *fo_dentry_O_sub;
         struct semaphore     fo_init_lock;      /* group initialization lock */
         int                  fo_committed_group;
 
@@ -321,7 +321,7 @@ struct filter_obd {
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
         struct lustre_handle fo_mdc_conn;
-        struct file        **fo_last_objid_files;
+        //struct file        **fo_last_objid_files;
         __u64               *fo_last_objids; /* last created objid for groups,
                                               * protected by fo_objidlock */
 
@@ -474,6 +474,7 @@ struct client_obd {
         /* mgc datastruct */
         struct semaphore         cl_mgc_sem;
         struct vfsmount         *cl_mgc_vfsmnt;
+        struct dt_device        *cl_mgc_dt_dev;
         struct dentry           *cl_mgc_configs_dir;
         atomic_t                 cl_mgc_refcount;
         struct obd_export       *cl_mgc_mgsexp;
@@ -511,6 +512,9 @@ struct mgs_obd {
         struct semaphore                 mgs_sem;
         cfs_proc_dir_entry_t            *mgs_proc_live;
 };
+
+struct dt_object;
+struct dt_device;
 
 struct mds_obd {
         /* NB this field MUST be first */
@@ -565,6 +569,9 @@ struct mds_obd {
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
         struct rw_semaphore              mds_notify_lock;
+
+        struct dt_object                *mds_lov_objid_dt;
+        struct dt_device                *mds_next_dev;
 };
 
 #define mds_transno_lock         mds_obt.obt_translock
@@ -774,13 +781,15 @@ struct lmv_obd {
 };
 
 struct niobuf_local {
-        __u64 offset;
-        __u32 len;
-        __u32 flags;
-        cfs_page_t    *page;
-        cfs_dentry_t  *dentry;
-        int lnb_grant_used;
-        int rc;
+        __u64           file_offset;
+        __u32           page_offset;
+        __u32           len;
+        __u32           flags;
+        cfs_page_t     *page;
+        void           *obj;
+        int             lnb_grant_used;
+        unsigned long   bytes;
+        int             rc;
 };
 
 #define LUSTRE_FLD_NAME         "fld"
@@ -788,11 +797,12 @@ struct niobuf_local {
 
 #define LUSTRE_CMM_NAME         "cmm"
 #define LUSTRE_MDD_NAME         "mdd"
-#define LUSTRE_OSD_NAME         "osd"
+#define LUSTRE_OSD_NAME         "osd-ldiskfs"
 #define LUSTRE_VVP_NAME         "vvp"
 #define LUSTRE_LMV_NAME         "lmv"
 #define LUSTRE_CMM_MDC_NAME     "cmm-mdc"
 #define LUSTRE_SLP_NAME         "slp"
+#define LUSTRE_ZFS_NAME         "osd-zfs"
 
 /* obd device type names */
  /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
@@ -805,6 +815,7 @@ struct niobuf_local {
 #define LUSTRE_LOV_NAME         "lov"
 #define LUSTRE_MGS_NAME         "mgs"
 #define LUSTRE_MGC_NAME         "mgc"
+#define LUSTRE_MCF_NAME         "mountconf"
 
 #define LUSTRE_CACHEOBD_NAME    "cobd"
 #define LUSTRE_ECHO_NAME        "obdecho"
@@ -1129,7 +1140,6 @@ struct obd_device {
         struct lprocfs_stats  *obd_svc_stats;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
-        struct list_head       obd_evict_list; /* protected with pet_lock */
 
         /**
          * Ldlm pool part. Save last calculated SLV and Limit.

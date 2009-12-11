@@ -70,9 +70,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         struct llog_gen_rec    *lgr;
         struct ptlrpc_request  *req;
         struct llogd_conn_body *req_body;
-        struct inode* inode = ctxt->loc_handle->lgh_file->f_dentry->d_inode;
-        void *handle;
-        int rc, rc1;
+        int rc;
 
         ENTRY;
 
@@ -91,23 +89,11 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
 
-        handle = fsfilt_start_log(ctxt->loc_exp->exp_obd, inode, 
-                                  FSFILT_OP_CANCEL_UNLINK, NULL, 1);
-        if (IS_ERR(handle)) {
-               CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
-               OBD_FREE(lgr, sizeof(*lgr));
-               rc = PTR_ERR(handle);
-               RETURN(rc);
-        }
-        
         lgr->lgr_gen = ctxt->loc_gen;
         rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE_PTR(lgr);
-        rc1 = fsfilt_commit(ctxt->loc_exp->exp_obd, inode, handle, 0);
-        if (rc != 1 || rc1 != 0) {
-                rc = (rc != 1) ? rc : rc1;
+        if (rc != 1)
                 RETURN(rc);
-        }
 
         LASSERT(ctxt->loc_imp);
         req = ptlrpc_request_alloc_pack(ctxt->loc_imp, &RQF_LLOG_ORIGIN_CONNECT,

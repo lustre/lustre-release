@@ -177,9 +177,42 @@ static int mds_lov_clean(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mds_postsetup(struct obd_device *obd)
+int mds_lov_init(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        int rc;
+        ENTRY;
+
+        rc = mds_lov_init_objids(obd);
+        if (rc != 0) {
+               CERROR("cannot init lov objid rc = %d\n", rc);
+               GOTO(out, rc );
+        }
+
+        if (mds->mds_profile) {
+                struct lustre_profile *lprof;
+                /* The profile defines which osc and mdc to connect to, for a
+                   client.  We reuse that here to figure out the name of the
+                   lov to use (and ignore lprof->lp_md).
+                   The profile was set in the config log with
+                   LCFG_MOUNTOPT profilenm oscnm mdcnm */
+                lprof = class_get_profile(mds->mds_profile);
+                if (lprof == NULL) {
+                        CERROR("No profile found: %s\n", mds->mds_profile);
+                        GOTO(out, rc = -ENOENT);
+                }
+                rc = mds_lov_connect(obd, lprof->lp_dt);
+                if (rc)
+                        GOTO(out, rc);
+        }
+
+out:
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_lov_init);
+
+static int mds_postsetup(struct obd_device *obd)
+{
         struct llog_ctxt *ctxt;
         int rc = 0;
         ENTRY;
@@ -196,26 +229,8 @@ static int mds_postsetup(struct obd_device *obd)
 
         mds_changelog_llog_init(obd, obd);
 
-        if (mds->mds_profile) {
-                struct lustre_profile *lprof;
-                /* The profile defines which osc and mdc to connect to, for a
-                   client.  We reuse that here to figure out the name of the
-                   lov to use (and ignore lprof->lp_md).
-                   The profile was set in the config log with
-                   LCFG_MOUNTOPT profilenm oscnm mdcnm */
-                lprof = class_get_profile(mds->mds_profile);
-                if (lprof == NULL) {
-                        CERROR("No profile found: %s\n", mds->mds_profile);
-                        GOTO(err_cleanup, rc = -ENOENT);
-                }
-                rc = mds_lov_connect(obd, lprof->lp_dt);
-                if (rc)
-                        GOTO(err_cleanup, rc);
-        }
-
         RETURN(rc);
 
-err_cleanup:
         mds_lov_clean(obd);
         ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
         if (ctxt)
@@ -338,6 +353,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct vfsmount *mnt;
         struct lustre_sb_info *lsi;
         struct lustre_mount_info *lmi;
+        struct dt_device_param dt_param;
         struct dentry  *dentry;
         int rc = 0;
         ENTRY;
@@ -351,18 +367,22 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
         dev = lustre_cfg_string(lcfg, 4);
-        lmi = server_get_mount(dev);
+        /* MDT does all reference counting for us */
+        lmi = server_get_mount_2(dev);
         LASSERT(lmi != NULL);
 
-        lsi = s2lsi(lmi->lmi_sb);
-        mnt = lmi->lmi_mnt;
-        /* FIXME: MDD LOV initialize objects.
-         * we need only lmi here but not get mount
-         * OSD did mount already, so put mount back
-         */
-        atomic_dec(&lsi->lsi_mounts);
-        mntput(mnt);
         init_rwsem(&mds->mds_notify_lock);
+
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.dt = lmi->lmi_dt;
+
+        lsi = s2lsi(lmi->lmi_sb);
+        lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
+        mnt = dt_param.ddp_mnt;
+        if (mnt == NULL) {
+                //CERROR("non-ldiskfs underlying filesystem\n");
+                goto new_diskfs;
+        }
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         mds_init_ctxt(obd, mnt);
@@ -390,12 +410,8 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_fid, rc);
         }
-        rc = mds_lov_init_objids(obd);
-        if (rc != 0) {
-               CERROR("cannot init lov objid rc = %d\n", rc);
-               GOTO(err_fid, rc );
-        }
 
+new_diskfs:
         rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
                 GOTO(err_objects, rc);
@@ -412,7 +428,8 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_objects, rc);
 
 err_pop:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (mnt)
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 err_fid:
         dput(mds->mds_fid_de);
@@ -439,21 +456,25 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 RETURN(0);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
         mds_lov_destroy_objids(obd);
 
-        if (mds->mds_objects_dir != NULL) {
-                l_dput(mds->mds_objects_dir);
-                mds->mds_objects_dir = NULL;
+        if (obd->obd_fsops) {
+                /* only if underlying fs supports fsfilt */
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                if (mds->mds_objects_dir != NULL) {
+                        l_dput(mds->mds_objects_dir);
+                        mds->mds_objects_dir = NULL;
+                }
+
+                dput(mds->mds_fid_de);
+                LL_DQUOT_OFF(obd->u.obt.obt_sb);
+                shrink_dcache_sb(mds->mds_obt.obt_sb);
+                fsfilt_put_ops(obd->obd_fsops);
+
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
-
-        dput(mds->mds_fid_de);
-        LL_DQUOT_OFF(obd->u.obt.obt_sb);
-        shrink_dcache_sb(mds->mds_obt.obt_sb);
-        fsfilt_put_ops(obd->obd_fsops);
-
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        server_put_mount_2(obd->obd_name);
         RETURN(rc);
 }
 

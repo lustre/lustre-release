@@ -56,17 +56,17 @@ rmultiop_start() {
     local multiop_pid
     multiop_pid=$(do_node $client cat $pid_file)
     [ -n "$multiop_pid" ] || error "$client : Can not get multiop_pid from $pid_file "
-    eval export $(client_var_name $client)_multiop_pid=$multiop_pid
-    eval export $(client_var_name $client)_do_node_pid=$pid
-    local var=$(client_var_name $client)_multiop_pid
+    eval export $(client)_multiop_pid=$multiop_pid
+    eval export $(client)_do_node_pid=$pid
+    local var=$(client)_multiop_pid
     echo client $client multiop_bg started multiop_pid=${!var}
     return $?
 }
 
 rmultiop_stop() {
     local client=$1
-    local multiop_pid=$(client_var_name $client)_multiop_pid
-    local do_node_pid=$(client_var_name $client)_do_node_pid
+    local multiop_pid=$(client)_multiop_pid
+    local do_node_pid=$(client)_do_node_pid
 
     echo "Stopping multiop_pid=${!multiop_pid} (kill ${!multiop_pid} on $client)"
     do_node $client kill -USR1 ${!multiop_pid}
@@ -772,7 +772,7 @@ test_3b() {
     # recovery should fail due to missing client 2
     client_evicted $CLIENT1 || return 1
 
-    do_node $CLIENT1 $CHECKSTAT -p 0755 $DIR/$tfile && return 2
+    do_node $CLIENT1 $CHECKSTAT -p 755 $DIR/$tfile && return 2
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
 
     zconf_umount_clients $CLIENTS $DIR

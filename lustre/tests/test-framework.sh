@@ -15,7 +15,7 @@ export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
-export QUOTA_AUTO=1
+export QUOTA_AUTO=0
 
 #export PDSH="pdsh -S -Rssh -w"
 
@@ -103,6 +103,7 @@ init_test_env() {
     export DEBUGFS=${DEBUGFS:-debugfs}
     export TUNE2FS=${TUNE2FS:-tune2fs}
     export E2LABEL=${E2LABEL:-e2label}
+    export ZFSLABEL=${ZFSLABEL:-"zfs get -H -o value  com.sun.lustre:label"}
     export DUMPE2FS=${DUMPE2FS:-dumpe2fs}
     export E2FSCK=${E2FSCK:-e2fsck}
 
@@ -123,6 +124,9 @@ init_test_env() {
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     if ! echo $PATH | grep -q $LUSTRE/tests/racer; then
         export PATH=$PATH:$LUSTRE/tests/racer
+    fi
+    if ! echo $PATH | grep -q $LUSTRE/../zfs/cmd/zfs; then
+        export PATH=$PATH:$LUSTRE/../zfs/cmd/zfs:$LUSTRE/../zfs/cmd/zpool
     fi
     if ! echo $PATH | grep -q $LUSTRE/tests/mpi; then
         export PATH=$PATH:$LUSTRE/tests/mpi
@@ -217,14 +221,14 @@ esac
 
 
 module_loaded () {
-   /sbin/lsmod | grep -q $1
+   /sbin/lsmod | grep -q "^$1"
 }
 
 load_module() {
     EXT=".ko"
     module=$1
     shift
-    BASE=`basename $module $EXT`
+    BASE=`basename $module $EXT | tr '-' '_'`
 
     module_loaded ${BASE} && return
 
@@ -283,15 +287,19 @@ load_modules_local() {
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
         grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        [ "$OSTFSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        [ "$MDSFSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        [ "$OSTFSTYPE" = "zfs" ] && load_module "dmu-osd/osd-zfs"
+        [ "$MDSFSTYPE" = "zfs" ] && load_module "dmu-osd/osd-zfs"
         load_module mgs/mgs
         load_module mds/mds
         load_module mdd/mdd
         load_module mdt/mdt
         load_module lvfs/fsfilt_$FSTYPE
         load_module cmm/cmm
-        load_module osd/osd
+        load_module osd/osd-ldiskfs
         load_module ost/ost
-        load_module obdfilter/obdfilter
+        load_module ofd/ofd
     fi
 
     load_module llite/lustre
@@ -433,10 +441,33 @@ cleanup_gss() {
     fi
 }
 
+devicelabel() {
+    local facet=$1
+    local dev=$2
+    local label
+
+    set +e
+    label=$(do_facet ${facet} "$E2LABEL ${dev} 2>/dev/null")
+    if [ $? == 0 ]; then
+        set -e
+        echo $label
+        return 0
+    fi
+    set -e
+
+    label=$(do_facet ${facet} "$ZFSLABEL ${dev}")
+    if [ $? == 0 ]; then
+        echo $label
+        return 0
+    fi
+
+    echo ""
+}
+
 mdsdevlabel() {
     local num=$1
     local device=`mdsdevname $num`
-    local label=`do_facet mds$num "e2label ${device}" | grep -v "CMD: "`
+    local label=`devicelabel mds$num  ${device} | grep -v "CMD: "`
     echo -n $label
 }
 
@@ -453,6 +484,7 @@ mount_facet() {
     shift
     local dev=$(facet_active $facet)_dev
     local opt=${facet}_opt
+    local fstype
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}
     RC=${PIPESTATUS[0]}
@@ -465,9 +497,13 @@ mount_facet() {
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
 
-        label=$(do_facet ${facet} "$E2LABEL ${!dev}")
+        label=$(devicelabel ${facet} ${!dev})
         [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}
+        set +e
+        fstype=$(do_facet $facet lctl get_param -n osd\*.${label}.fstype)
+        set -e
+        eval export ${facet}_fstype=${fstype}
         echo Started ${label}
     fi
     return $RC
@@ -493,6 +529,25 @@ start() {
     mount_facet ${facet}
     RC=$?
     return $RC
+}
+
+refresh_disk() {
+    local facet=$1
+    local fstype=${facet}_fstype
+    local _dev=$(facet_active $facet)_dev
+    local dev=${!_dev}
+    local poolname="${dev%%/*}"
+    local fstype
+
+    if [ "${!fstype}" == "zfs" ]; then
+        if [ "$poolname" == "" ]; then
+            echo "invalid dataset name: $dev"
+            return
+        fi
+        do_facet $facet "cp /etc/zfs/zpool.cache /tmp/zpool.cache.back"
+        do_facet $facet "zpool export $poolname"
+        do_facet $facet "zpool import -c /tmp/zpool.cache.back ${poolname}"
+    fi
 }
 
 stop() {
@@ -812,6 +867,7 @@ reboot_facet() {
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_UP `facet_active_host $facet`
     else
+        refresh_disk ${facet}
         sleep 10
     fi
 }
@@ -1292,6 +1348,7 @@ fail_nodf() {
 fail_abort() {
     local facet=$1
     stop $facet
+    refresh_disk ${facet}
     change_active $facet
     mount_facet $facet -o abort_recovery
     clients_up || echo "first df failed: $?"
@@ -1532,6 +1589,13 @@ mdsdevname() {
     echo -n $DEVPTR
 }
 
+mgsdevname()
+{
+    DEVNAME=MGSDEV
+    eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}}
+    echo -n $DEVPTR
+}
+
 ########
 ## MountConf setup
 
@@ -1553,6 +1617,10 @@ stopall() {
     # The add fn does rm ${facet}active file, this would be enough
     # if we use do_facet <facet> only after the facet added, but
     # currently we use do_facet mds in local.sh
+    if [ ! -z $MGSDEV ]; then
+        stop mgs
+        rm -f ${TMP}/mgsactive
+    fi
     for num in `seq $MDSCOUNT`; do
         stop mds$num -f
         rm -f ${TMP}/mds${num}active
@@ -1586,8 +1654,6 @@ formatall() {
         MDSn_MKFS_OPTS="$MDSn_MKFS_OPTS --iam-dir"
     fi
 
-    [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
-
     if [ ! -z $SEC ]; then
         MDS_MKFS_OPTS="$MDS_MKFS_OPTS --param srpc.flavor.default=$SEC"
         MDSn_MKFS_OPTS="$MDSn_MKFS_OPTS --param srpc.flavor.default=$SEC"
@@ -1598,26 +1664,40 @@ formatall() {
     # We need ldiskfs here, may as well load them all
     load_modules
     [ "$CLIENTONLY" ] && return
+
     echo Formatting mgs, mds, osts
+
+    # Default fstype
+    if [ ! -z $FSTYPE ]; then
+        MGSFSTYPE_OPT="--backfstype $FSTYPE"
+        MDSFSTYPE_OPT="--backfstype $FSTYPE"
+        OSTFSTYPE_OPT="--backfstype $FSTYPE"
+    fi
+
+    # Target-specific fstype overrides
+    [ "$MGSFSTYPE" ] && MGSFSTYPE_OPT="--backfstype $MGSFSTYPE"
+    [ "$MDSFSTYPE" ] && MDSFSTYPE_OPT="--backfstype $MDSFSTYPE"
+    [ "$OSTFSTYPE" ] && OSTFSTYPE_OPT="--backfstype $OSTFSTYPE"
+
     if [[ $MDSDEV1 != $MGSDEV ]] || [[ $mds1_HOST != $mgs_HOST ]]; then
-        add mgs $mgs_MKFS_OPTS $FSTYPE_OPT --reformat $MGSDEV || exit 10
+        add mgs $mgs_MKFS_OPTS $MGSFSTYPE_OPT --reformat $MGSDEV || exit 10
     fi
 
     for num in `seq $MDSCOUNT`; do
         echo "Format mds$num: $(mdsdevname $num)"
         if $VERBOSE; then
-            add mds$num `mdsmkfsopts $num` $FSTYPE_OPT --reformat `mdsdevname $num` || exit 9
+            add mds$num `mdsmkfsopts $num` $MDSFSTYPE_OPT --reformat `mdsdevname $num` || exit 9
         else
-            add mds$num `mdsmkfsopts $num` $FSTYPE_OPT --reformat `mdsdevname $num` > /dev/null || exit 9
+            add mds$num `mdsmkfsopts $num` $MDSFSTYPE_OPT --reformat `mdsdevname $num` > /dev/null || exit 9
         fi
     done
 
     for num in `seq $OSTCOUNT`; do
         echo "Format ost$num: $(ostdevname $num)"
         if $VERBOSE; then
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
+            add ost$num $OST_MKFS_OPTS $OSTFSTYPE_OPT --reformat `ostdevname $num` || exit 10
         else
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+            add ost$num $OST_MKFS_OPTS $OSTFSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
         fi
     done
 }
@@ -1704,6 +1784,7 @@ setupall() {
 
         for num in `seq $MDSCOUNT`; do
             DEVNAME=$(mdsdevname $num)
+            echo "Setup mds$num: $MDS_MOUNT_OPTS"
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
 
             # We started mds, now we should set failover variables properly.
@@ -1713,9 +1794,9 @@ setupall() {
                 eval mds${num}failover_HOST=$(facet_host mds$num)
             fi
 
-	    if [ $IDENTITY_UPCALL != "default" ]; then
+            if [ $IDENTITY_UPCALL != "default" ]; then
                 switch_identity $num $IDENTITY_UPCALL
-	    fi
+            fi
         done
         for num in `seq $OSTCOUNT`; do
             DEVNAME=$(ostdevname $num)
@@ -1773,7 +1854,7 @@ init_facet_vars () {
     eval export ${facet}_opt=\"$@\"
 
     local dev=${facet}_dev
-    local label=$(do_facet ${facet} "$E2LABEL ${!dev}")
+    local label=$(devicelabel ${facet} ${!dev})
     [ -z "$label" ] && echo no label for ${!dev} && exit 1
 
     eval export ${facet}_svc=${label}

@@ -75,6 +75,8 @@ void lut_cb_last_committed(struct lu_target *, __u64, void *, int);
 void lut_cb_client(struct lu_target *, __u64, void *, int);
 int lut_init(const struct lu_env *, struct lu_target *,
              struct obd_device *, struct dt_device *);
+int lut_init2(const struct lu_env *, struct lu_target *,
+             struct obd_device *, struct dt_device *, struct lu_fid *);
 void lut_fini(const struct lu_env *, struct lu_target *);
 
 #endif /* __LUSTRE_LU_TARGET_H */

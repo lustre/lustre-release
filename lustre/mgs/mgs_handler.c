@@ -173,6 +173,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
+        struct dt_device_param dt_param;
         struct vfsmount *mnt;
         int rc = 0;
         ENTRY;
@@ -184,7 +185,10 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (!lmi)
                 RETURN(rc = -EINVAL);
 
-        mnt = lmi->lmi_mnt;
+        lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
+        mnt = dt_param.ddp_mnt;
+        LASSERT(mnt);
+
         lsi = s2lsi(lmi->lmi_sb);
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops))
@@ -268,7 +272,7 @@ err_ns:
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
 err_put:
-        server_put_mount(obd->obd_name, mnt);
+        server_put_mount(obd->obd_name);
         mgs->mgs_sb = 0;
         return rc;
 }
@@ -306,7 +310,7 @@ static int mgs_cleanup(struct obd_device *obd)
         lproc_mgs_cleanup(obd);
         mgs_fs_cleanup(obd);
 
-        server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
+        server_put_mount(obd->obd_name);
         mgs->mgs_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, NULL, 1);

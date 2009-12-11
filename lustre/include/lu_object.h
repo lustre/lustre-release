@@ -292,7 +292,9 @@ enum lu_device_tag {
         /** this is data device */
         LU_DEVICE_DT = (1 << 1),
         /** data device in the client stack */
-        LU_DEVICE_CL = (1 << 2)
+        LU_DEVICE_CL = (1 << 2),
+        /** mountconf device (used for bootstrapping only */
+        LU_DEVICE_MC = (1 << 3)
 };
 
 /**

@@ -1920,6 +1920,28 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
         lustre_cfg_free(lcfg);
         return rc;
 }
+/* write global obd timeout or ldlm timeout param into log */
+static int mgs_write_log_timeout(struct obd_device *obd, struct fs_db *fsdb,
+                                 struct mgs_target_info *mti, char *value,
+                                 int cmd, char *comment)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        int timeout;
+        int rc;
+
+        timeout = simple_strtoul(value, NULL, 0);
+        CDEBUG(D_MGS, "timeout: %d (%s)\n", timeout, comment);
+
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lcfg = lustre_cfg_new(cmd, &bufs);
+        lcfg->lcfg_num = timeout;
+        /* modify all servers and clients */
+        rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg, mti->mti_fsname,
+                                      comment); 
+        lustre_cfg_free(lcfg);
+        return rc;
+}
 
 /* write global variable settings into log */
 static int mgs_write_log_sys(struct obd_device *obd, struct fs_db *fsdb,

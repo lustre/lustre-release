@@ -111,19 +111,24 @@ static struct dt_rec *fld_rec(const struct lu_env *env,
         RETURN((void *)rec);
 }
 
-struct thandle* fld_trans_start(struct lu_server_fld *fld,
-                                const struct lu_env *env, int credit)
+struct thandle* fld_trans_create(struct lu_server_fld *fld,
+                                const struct lu_env *env)
 {
-        struct fld_thread_info *info;
         struct dt_device *dt_dev;
-        struct txn_param *p;
 
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        p = &info->fti_txn_param;
-        txn_param_init(p, credit);
 
-        return dt_dev->dd_ops->dt_trans_start(env, dt_dev, p);
+        return dt_dev->dd_ops->dt_trans_create(env, dt_dev);
+}
+
+int fld_trans_start(struct lu_server_fld *fld,
+                                const struct lu_env *env, struct thandle *th)
+{
+        struct dt_device *dt_dev;
+
+        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
+
+        return dt_dev->dd_ops->dt_trans_start(env, dt_dev, th);
 }
 
 void fld_trans_stop(struct lu_server_fld *fld,
@@ -133,6 +138,28 @@ void fld_trans_stop(struct lu_server_fld *fld,
 
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
         dt_dev->dd_ops->dt_trans_stop(env, th);
+}
+
+int fld_declare_index_create(struct lu_server_fld *fld,
+                             const struct lu_env *env,
+                             const struct lu_seq_range *range,
+                             struct thandle *th)
+{
+        struct dt_object *dt_obj = fld->lsf_obj;
+        struct dt_device *dt_dev;
+        seqno_t start;
+        int rc;
+
+        ENTRY;
+
+        start = range->lsr_start;
+        LASSERT(range_is_sane(range));
+        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
+
+        rc = dt_obj->do_index_ops->dio_declare_insert(env, dt_obj,
+                                                      fld_rec(env, range),
+                                                      fld_key(env, start), th);
+        RETURN(rc);
 }
 
 /**
@@ -162,11 +189,15 @@ int fld_index_create(struct lu_server_fld *fld,
         LASSERT(range_is_sane(range));
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
 
+#if 0
+        /* XXX: DMU/DMU OSD don't support binary keys yet */
         rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
                                               fld_rec(env, range),
                                               fld_key(env, start),
                                               th, BYPASS_CAPA, 1);
-
+#else
+        rc = 0;
+#endif
         CDEBUG(D_INFO, "%s: insert given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);
         RETURN(rc);
@@ -195,9 +226,8 @@ int fld_index_delete(struct lu_server_fld *fld,
         ENTRY;
 
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-        rc = dt_obj->do_index_ops->dio_delete(env, dt_obj,
-                                              fld_key(env, seq), th,
-                                              BYPASS_CAPA);
+        rc = dt_obj->do_index_ops->dio_delete(env, dt_obj, fld_key(env, seq),
+                                              th, BYPASS_CAPA);
 
         CDEBUG(D_INFO, "%s: delete given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);
@@ -244,6 +274,13 @@ int fld_index_lookup(struct lu_server_fld *fld,
                         rc = -ENOENT;
         }
 
+        /* XXX: ZAP doesn't support natural ordered keys yet
+         * XXX: no CMD support */
+        range->lsr_start = 0;
+        range->lsr_end = ~0ULL;
+        range->lsr_mdt = 0;
+        rc = 0;
+
         CDEBUG(D_INFO, "%s: lookup seq = %llx range : "DRANGE" rc = %d\n",
                fld->lsf_name, seq, PRANGE(range), rc);
 
@@ -255,11 +292,22 @@ static int fld_insert_igif_fld(struct lu_server_fld *fld,
 {
         struct thandle *th;
         int rc;
-
         ENTRY;
-        th = fld_trans_start(fld, env, FLD_TXN_INDEX_INSERT_CREDITS);
+
+        /* FLD_TXN_INDEX_INSERT_CREDITS */
+        th = fld_trans_create(fld, env);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+        rc = fld_declare_index_create(fld, env, &IGIF_FLD_RANGE, th);
+        if (rc) {
+                fld_trans_stop(fld, env, th);
+                RETURN(rc);
+        }
+        rc = fld_trans_start(fld, env, th);
+        if (rc) {
+                fld_trans_stop(fld, env, th);
+                RETURN(rc);
+        }
 
         rc = fld_index_create(fld, env, &IGIF_FLD_RANGE, th);
         fld_trans_stop(fld, env, th);

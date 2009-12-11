@@ -73,22 +73,28 @@ static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
         return buf;
 }
 
-struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
-                                       const struct lu_env *env, int credit)
+struct thandle * seq_store_trans_create(struct lu_server_seq *seq,
+                                       const struct lu_env *env)
 {
-        struct seq_thread_info *info;
         struct dt_device *dt_dev;
         struct thandle *th;
         ENTRY;
 
         dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
-        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
-        LASSERT(info != NULL);
-
-        txn_param_init(&info->sti_txn, credit);
-
-        th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &info->sti_txn);
+        th = dt_dev->dd_ops->dt_trans_create(env, dt_dev);
         return th;
+}
+
+int seq_store_trans_start(struct lu_server_seq *seq,
+                                       const struct lu_env *env,
+                                       struct thandle *th)
+{
+        struct dt_device *dt_dev;
+        ENTRY;
+
+        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+
+        return dt_dev->dd_ops->dt_trans_start(env, dt_dev, th);
 }
 
 void seq_store_trans_stop(struct lu_server_seq *seq,
@@ -101,6 +107,20 @@ void seq_store_trans_stop(struct lu_server_seq *seq,
         dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
 
         dt_dev->dd_ops->dt_trans_stop(env, th);
+}
+
+int seq_declare_store_write(struct lu_server_seq *seq,
+                            const struct lu_env *env,
+                            struct thandle *th)
+{
+        struct dt_object *dt_obj = seq->lss_obj;
+        int rc;
+        ENTRY;
+
+        rc = dt_obj->do_body_ops->dbo_declare_write(env, dt_obj,
+                                                    sizeof(struct lu_seq_range),
+                                                    0, th);
+        return rc;
 }
 
 /* This function implies that caller takes care about locking. */

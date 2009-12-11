@@ -3109,5 +3109,3 @@ int llapi_copytool_free(struct hsm_action_list **hal)
         return 0;
 }
 
-
-
