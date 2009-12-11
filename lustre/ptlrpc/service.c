@@ -881,7 +881,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
-                                list_del_init(&rq->rq_timed_list);
+                                list_del(&rq->rq_timed_list);
                                 /**
                                  * ptlrpc_server_drop_request() may drop
                                  * refcount to 0 already. Let's check this and
@@ -1650,7 +1650,7 @@ static int ptlrpc_main(void *arg)
 
                 lc_watchdog_disable(thread->t_watchdog);
 
-                cfs_cond_resched();
+                cond_resched();
 
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&

@@ -1520,7 +1520,7 @@ int ksocknal_scheduler (void *arg)
                                         !ksocknal_sched_cansleep(sched), rc);
                                 LASSERT (rc == 0);
                         } else {
-                                cfs_cond_resched();
+                                our_cond_resched();
                         }
 
                         cfs_spin_lock_bh (&sched->kss_lock);
@@ -1961,7 +1961,7 @@ ksocknal_connect (ksock_route_t *route)
                         /* We want to introduce a delay before next
                          * attempt to connect if we lost conn race,
                          * but the race is resolved quickly usually,
-                         * so min_reconnectms should be good heuristic */
+                         * so min_reconnectms should be good heruistic */
                         route->ksnr_retry_interval =
                                 cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000;
                         route->ksnr_timeout = cfs_time_add(cfs_time_current(),
@@ -2312,6 +2312,7 @@ void
 ksocknal_check_peer_timeouts (int idx)
 {
         struct list_head *peers = &ksocknal_data.ksnd_peers[idx];
+        struct list_head *ptmp;
         ksock_peer_t     *peer;
         ksock_conn_t     *conn;
 
@@ -2321,7 +2322,8 @@ ksocknal_check_peer_timeouts (int idx)
          * take a look... */
         cfs_read_lock (&ksocknal_data.ksnd_global_lock);
 
-        list_for_each_entry(peer, peers, ksnp_list) {
+        list_for_each (ptmp, peers) {
+                peer = list_entry (ptmp, ksock_peer_t, ksnp_list);
                 if (ksocknal_send_keepalive_locked(peer) != 0) {
                         read_unlock (&ksocknal_data.ksnd_global_lock);
                         goto again;
@@ -2352,7 +2354,7 @@ ksocknal_check_peer_timeouts (int idx)
 
                                 ksocknal_peer_addref(peer);
                                 cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
-
+                                
                                 ksocknal_flush_stale_txs(peer);
 
                                 ksocknal_peer_decref(peer);
@@ -2365,7 +2367,7 @@ ksocknal_check_peer_timeouts (int idx)
         list_for_each_entry(peer, peers, ksnp_list) {
                 ksock_tx_t *tx;
                 int         n = 0;
-
+                
                 list_for_each_entry(tx, &peer->ksnp_zc_req_list, tx_zc_list) {
                         if (!cfs_time_aftereq(cfs_time_current(),
                                               tx->tx_deadline))
@@ -2383,7 +2385,7 @@ ksocknal_check_peer_timeouts (int idx)
                                                tx->tx_deadline));
                 }
         }
-
+        
         cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
 }
 

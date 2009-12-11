@@ -656,8 +656,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        if (exp->exp_connection &&
-            exp->exp_connection->c_peer.nid == exp->exp_connection->c_self)
+        if (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self)
                 localreq = 1;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

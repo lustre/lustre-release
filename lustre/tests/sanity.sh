@@ -1152,7 +1152,7 @@ run_test 27v "skip object creation on slow OST ================="
 test_27w() { # bug 10997
         mkdir -p $DIR/$tdir || error "mkdir failed"
         $SETSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
-        size=`$GETSTRIPE $DIR/$tdir/f0 -s`
+        size=`$GETSTRIPE $DIR/$tdir/f0 -qs`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
@@ -1160,8 +1160,8 @@ test_27w() { # bug 10997
                 offset=$(($i-1))
                 log setstripe $DIR/$tdir/f$i -c $i -i $offset
                 $SETSTRIPE $DIR/$tdir/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$GETSTRIPE -c $DIR/$tdir/f$i`
-                index=`$GETSTRIPE -o $DIR/$tdir/f$i`
+                count=`$GETSTRIPE -qc $DIR/$tdir/f$i`
+                index=`$GETSTRIPE -qo $DIR/$tdir/f$i`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
@@ -2532,14 +2532,12 @@ test_56a() {	# was test_56
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 skip_env "skipping other lfs getstripe --obd test" && return
-        OSTIDX=1
-        OBDUUID=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}')
-        FILENUM=`$GETSTRIPE -ir $DIR/d56 | grep -x $OSTIDX | wc -l`
-        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | grep obdidx | wc -l`
+        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
+        OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
+        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs getstripe --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | \
-                sed '/^[	 ]*'${OSTIDX}'[	 ]/d' |\
+        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
@@ -2619,7 +2617,7 @@ run_test 56h "check lfs find ! -name ============================="
 test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
-       UUID=`$LFS osts $DIR/$tdir | awk '/0: / { print $2 }'`
+       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
        OUT="`$LFIND -ost $UUID $DIR/$tdir`"
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
@@ -3599,19 +3597,13 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
-	remote_ost || { skip_env "local OST" && return; }
-
-	cancel_lru_locks osc
-	NSEQ=5
+ 	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
-	# directio allocates the buffer twice, one for writes and another
-	# one for reads, so that it can check the data consistency
-	F78SIZE=$((F78SIZE / 2))
 	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemTotal: $MEMTOTAL"
-	# reserve 256MB of memory for the kernel and other running processes,
-	# and then take 1/2 of the remaining memory for the read/write buffers.
+# reserve 256MB of memory for the kernel and other running processes,
+# and then take 1/2 of the remaining memory for the read/write buffers.
 	MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
 	echo "Mem to use for directio: $MEMTOTAL"
 	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
@@ -6291,25 +6283,31 @@ check_file_in_pool()
 
 export mdtlov=
 
-trap "cleanup_pools $FSNAME" EXIT
+cleanup_200 () {
+        trap 0
+        test_pools || return 0
+        destroy_pool $POOL
+}
 
 test_200a() {
         test_pools || return 0
 
-        create_pool $FSNAME.$POOL || return $?
-        [ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] ||
-                error "$POOL not in lfs pool_list"
+        do_facet mgs $LCTL pool_new $FSNAME.$POOL
+
+        trap cleanup_200 EXIT
+        CLEANUP_200=yes
+
+        # get param should return err until pool is created
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
 }
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
         test_pools || return 0
-        TGT=$(for i in $TGTPOOL_LIST; do printf "$FSNAME-OST%04x_UUID " $i; done)
+        TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
         do_facet mgs $LCTL pool_add $FSNAME.$POOL \
                 $FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
-
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" ||
-		        error "Add to pool failed"
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
 }
 run_test 200b "Add targets to a pool ===================================="
 
@@ -6373,8 +6371,7 @@ test_201a() {
 
 	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" ||
-		error "$TGT not removed from $FSNAME.$POOL"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 201a "Remove a target from a pool ============================="
 
@@ -6385,8 +6382,8 @@ test_201b() {
 	do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
  	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" "" ||
-		error "Pool $FSNAME.$POOL cannot be drained"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
+	    || error "Pool $FSNAME.$POOL cannot be drained"
 	# striping on an empty/nonexistant pool should fall back to "pool of everything"
 	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
 	# setstripe on an empty pool should fail
@@ -6409,16 +6406,12 @@ test_201c() {
 		error "expected failure when creating file with missing pool"
 
 	# get param should return err once pool is gone
-	if wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
-		echo foo" "foo"; then
-		remove_pool_from_list $FSNAME.$POOL
-		return 0
-	fi
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
 	error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
 
-cleanup_pools $FSNAME
+[ "$CLEANUP_200" ] && cleanup_200
 
 test_202() {
         $LFS setstripe -c 2 -s 1048576 $DIR/$tfile

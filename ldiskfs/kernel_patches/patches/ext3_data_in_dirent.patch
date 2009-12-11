@@ -62,7 +62,7 @@ Index: b/fs/ext3/namei.c
  static inline unsigned dx_node_limit (struct inode *dir)
  {
 -	unsigned entry_space = dir->i_sb->s_blocksize - EXT3_DIR_REC_LEN(0);
-+	unsigned entry_space = dir->i_sb->s_blocksize - __EXT3_DIR_REC_LEN(0);
++	unsigned entry_space = dir->i_sb->s_blocksize - __EXT3_DIR_REC_LEN(1);
  	return 0? 22: entry_space / sizeof(struct dx_entry);
  }
  

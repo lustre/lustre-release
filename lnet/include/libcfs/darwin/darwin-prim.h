@@ -281,11 +281,6 @@ static inline int cfs_schedule_timeout(int state, int64_t timeout)
 #define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_TICK)
 #define cfs_pause(tick)	cfs_schedule_timeout(CFS_TASK_UNINT, tick)
 
-/* XXX cfs_cond_resched() is sometimes called at each loop iteration
- * (e.g. lustre_hash_for_each_empty()), so this definition is pretty
- * unefficient and can be harmful if we have many elements to process */
-#define cfs_cond_resched() cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, 1)
-
 #define __wait_event(wq, condition)				\
 do {								\
 	struct cfs_waitlink __wait;				\
