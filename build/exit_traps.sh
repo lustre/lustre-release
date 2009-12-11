@@ -26,15 +26,12 @@ push_exit_trap() {
 }
 
 delete_exit_trap() {
-    local trap_handles="$@"
+    local trap_handle="$1"
 
-    local handle
-    for handle in $trap_handles; do
-        local var="exit_trap_handle_$handle"
-        local trap_num=${!var}
-        exit_actions[$trap_num]=""
-        eval unset $var
-    done
+    local var="exit_trap_handle_$trap_handle"
+    local trap_num=${!var}
+    exit_actions[$trap_num]=""
+    eval unset $var
 }
 
 print_exit_traps() {
@@ -63,43 +60,19 @@ run_exit_traps() {
 
 trap run_exit_traps EXIT
 
-if [ "$1" = "unit_test" ]; then
-    if ! push_exit_trap "echo \"this is the first trap\"" "a"; then
-        echo "failed to install trap 1"
-        exit 1
-    fi
-    if ! push_exit_trap "echo \"this is the second trap\"" "b"; then
-        echo "failed to install trap 2"
-        exit 2
-    fi
-    delete_exit_trap "b"
-    if ! push_exit_trap "echo \"this is the third trap\"" "b"; then
-        echo "failed to install trap 3"
-        exit 3
-    fi
-    
-    # to see the traps
-    print_exit_traps
-    echo "------------"
+#if ! push_exit_trap "echo \"this is the first trap\"" "a"; then
+#    echo "failed to install trap 1"
+#    exit 1
+#fi
+#if ! push_exit_trap "echo \"this is the second trap\"" "b"; then
+#    echo "failed to install trap 2"
+#    exit 2
+#fi
+#delete_exit_trap "b"
+#if ! push_exit_trap "echo \"this is the third trap\"" "b"; then
+#    echo "failed to install trap 3"
+#    exit 3
+#fi
 
-    delete_exit_trap "a" "b"
-    print_exit_traps
-    echo "------------"
-   
-    if ! push_exit_trap "echo \"this is the first trap\"" "a"; then
-        echo "failed to install trap 1"
-        exit 1
-    fi
-    if ! push_exit_trap "echo \"this is the second trap\"" "b"; then
-        echo "failed to install trap 2"
-        exit 2
-    fi
-    if ! push_exit_trap "echo \"this is the third trap\"" "c"; then
-        echo "failed to install trap 3"
-        exit 3
-    fi
-    delete_exit_trap "a" "c"
-
-    print_exit_traps
-    echo "------------"
-fi
+# to see the traps
+#print_exit_traps

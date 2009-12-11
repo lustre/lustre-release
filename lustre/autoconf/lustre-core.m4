@@ -1353,6 +1353,21 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [])
 ])
 
+# is FS_HAS_FIEMAP defined?
+AC_DEFUN([LC_LINUX_FS_HAS_FIEMAP],
+[AC_MSG_CHECKING([if kernel has FS_HAS_FIEMAP])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        int flag = FS_HAS_FIEMAP;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FS_HAS_FIEMAP, 1, [kernel has FS_HAS_FIEMAP])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #2.6.27
 AC_DEFUN([LC_INODE_PERMISION_2ARGS],
 [AC_MSG_CHECKING([inode_operations->permission have two args])
@@ -1771,6 +1786,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_PG_FS_MISC
           LC_PAGE_CHECKED
           LC_LINUX_FIEMAP_H
+          LC_LINUX_FS_HAS_FIEMAP
 
           # 2.6.19
           LC_INODE_BLKSIZE

@@ -2614,7 +2614,7 @@ kibnal_scheduler(void *arg)
                                         !list_empty(&kibnal_data.kib_sched_rxq) || 
                                         kibnal_data.kib_shutdown);
                         } else {
-                                cfs_cond_resched();
+                                our_cond_resched();
                         }
 
                         spin_lock_irqsave(&kibnal_data.kib_sched_lock,

@@ -1650,7 +1650,7 @@ static int ptlrpc_main(void *arg)
 
                 lc_watchdog_disable(thread->t_watchdog);
 
-                cfs_cond_resched();
+                cond_resched();
 
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&

@@ -3599,19 +3599,13 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
-	remote_ost || { skip_env "local OST" && return; }
-
-	cancel_lru_locks osc
-	NSEQ=5
+ 	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
-	# directio allocates the buffer twice, one for writes and another
-	# one for reads, so that it can check the data consistency
-	F78SIZE=$((F78SIZE / 2))
 	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemTotal: $MEMTOTAL"
-	# reserve 256MB of memory for the kernel and other running processes,
-	# and then take 1/2 of the remaining memory for the read/write buffers.
+# reserve 256MB of memory for the kernel and other running processes,
+# and then take 1/2 of the remaining memory for the read/write buffers.
 	MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
 	echo "Mem to use for directio: $MEMTOTAL"
 	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL

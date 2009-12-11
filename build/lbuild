@@ -510,10 +510,10 @@ download_ofed() {
 download_rdac() {
     local force="${1:-false}"
 
-    local location="http://downloads.lustre.org/public/RDAC/"
+            local location="http://downloads.lustre.org/public/RDAC/"
 
     if [ -z "$RDAC_VERSION" -o "$RDAC_VERSION" = "inkernel" ]; then
-        return 0
+    return 0
     fi
 
     local file="rdac-LINUX-${RDAC_VERSION}-source.tar.gz"
@@ -524,10 +524,10 @@ download_rdac() {
 download_mptlinux() {
     local force="${1:-false}"
 
-    local location="http://downloads.lustre.org/public/MPTLINUX/"
+            local location="http://downloads.lustre.org/public/MPTLINUX/"
 
     if [ -z "$MPTLINUX_VERSION" -o "$MPTLINUX_VERSION" = "inkernel" ]; then
-        return 0
+    return 0
     fi
 
     file="MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip"
@@ -820,7 +820,7 @@ build_lustre() {
 
     # convert the $PATCHLESS boolean to an empty/no-empty boolean
     # as silly as this seems, it makes the syntax of the rpmbuild command
-    # simpler and not need an eval to deal with the quotes in the quotes
+    # simpler and not need an eval to deal with the quotes in the quotes 
     local is_patchless=""
     if $PATCHLESS; then
         is_patchless="yes"
@@ -1098,45 +1098,15 @@ build_kernel_ib() {
     #   OFED_ISCSI="$OFED_ISCSI --with-iser-mod"
     #fi
 
-    # assume we are just rebuilding the SRPM
-    local BUILD_TYPE=${BUILD_TYPE:-"--rebuild"}
-    local SOURCE="${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm"
-
-    # but switch to building from the SPEC if we need to apply patches
-    if ls ${TOPDIR}/lustre/build/patches/ofed/* >/dev/null; then
-        BUILD_TYPE="-bb"
-        rpm --define "_topdir ${TOPDIR}" -ivh $SOURCE
-        SOURCE="${TOPDIR}/SPECS/ofa_kernel.spec"
-        local file ed_fragment1 ed_fragment2 n=1
-        for file in ${TOPDIR}/lustre/build/patches/ofed/*; do
-            ed_fragment1="$ed_fragment1
-Patch$n: ${file%%*/}"
-            ed_fragment2="$ed_fragment2
-%patch$n -p0"
-            cp $file ${TOPDIR}/SOURCES
-            let n=$n+1
-        done
-
-        ed $SOURCE <<EOF
-/^Source: /a
-$ed_fragment1
-.
-/^%setup /a
-$ed_fragment2
-.
-wq
-EOF
-    fi
-
     local linuxrelease=$(find_linux_release "$linux")
-    $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
               --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
               --define "KVERSION ${linuxrelease}" \
               --define "$K_SRC ${linux}" \
               --define "LIB_MOD_DIR /lib/modules/${linuxrelease}/updates" \
               ${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
               --define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
-              ${SOURCE}
+              ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -1171,7 +1141,7 @@ store_for_reuse() {
                 error "Failed to copy \"$article\" to \"$location\" in store_for_reuse()"
                 # rename the cache location so that it's not cached
                 # product, but is around for analysis
-                mv "$location"{,-bad-$(date +%s)} ||
+                mv "$location"{,-bad-$(date +%s)} || 
                     error "failed to clean up a failed cache attempt" \
                           "in \"$location\" -- manual cleanup will be" \
                           "necessary"
@@ -1197,8 +1167,8 @@ reuse() {
         if [ ! -f "$REUSEBUILD/$signature/$module/.lastused" ]; then
             # the .lastused flag is populated at the end of the caching to
             # signal that the caching was completed.  if that flag is not
-            # there, then the cache is invalid (and should be removed in fact)
-            mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} ||
+            # there, then the cache is invalid (and should be removed in fact) 
+            mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} || 
                 fatal 1 "failed to clean up a bad cache in location" \
                       "\"$REUSEBUILD/$signature/$module\" -- manual cleanup" \
                       "will be necessary"
@@ -1238,7 +1208,7 @@ reuse() {
                 find $dir -type f |
                   xargs ln -t $dest/RPMS/${dir##*/} -s
             done
-
+                     
         fi
         return 0
     else
@@ -1383,7 +1353,7 @@ build_mptlinux() {
     if $NORPM; then
         rpmbuildopt='-bc'
         echo NORPM mode. Only compiling.
-    fi
+            fi
 
     # if only we could just rebuild the src.rpm.  but the included spec
     # is a real pig's breakfast.  just check out the patch we need to
@@ -1519,43 +1489,43 @@ build_ofed() {
                               cat "${linux}/include/linux/autoconf.h"; } |
                             md5sum | cut -d" " -f1)
     if ! $REUSERPM || ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
-                                   "$REUSE_SIGNATURE"; then
-        # stash away the existing built articles for a moment
-        mkdir bak
-        mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
-        function mv_back {
-            pushd bak
-            find . | cpio -pudlm ..
-            popd
-            rm -rf bak
-        }
-        create_rpmbuild_dirs
-        # build it
+                        "$REUSE_SIGNATURE"; then
+            # stash away the existing built articles for a moment
+            mkdir bak
+            mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
+            function mv_back {
+                pushd bak
+                find . | cpio -pudlm ..
+                popd
+                rm -rf bak
+            }
+            create_rpmbuild_dirs
+            # build it
         build_kernel_ib "${linux}"
-        if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
-                             "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
-                             "$CAN_LINK_FOR_REUSE"; then
-            error "Failed to store OFED RPMS for reuse"
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                                 "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                                 "$CAN_LINK_FOR_REUSE"; then
+                error "Failed to store OFED RPMS for reuse"
+                mv_back
+                return 1
+            fi
+            # put the stuff we stashed away back
             mv_back
-            return 1
         fi
-        # put the stuff we stashed away back
-        mv_back
-    fi
 
-    pushd "$TOPDIR" >/dev/null
-    rm -rf kernel-ib-devel
-    mkdir kernel-ib-devel
-    cd kernel-ib-devel
-    # the actual ofed RPMs don't have the -rc$n or -$date string appened that
-    # might be present on the file
-    local linuxrelease=$(find_linux_release "$linux")
-    ofed_version=$(echo $ofed_version |
-                   sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
-    local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
-    rpm2cpio -itv < $rpm | cpio -id
-    CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
-    popd >/dev/null
+        pushd "$TOPDIR" >/dev/null
+        rm -rf kernel-ib-devel
+        mkdir kernel-ib-devel
+        cd kernel-ib-devel
+        # the actual ofed RPMs don't have the -rc$n or -$date string appened that
+        # might be present on the file
+        local linuxrelease=$(find_linux_release "$linux")
+        ofed_version=$(echo $ofed_version |
+                       sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
+        local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
+        rpm2cpio -itv < $rpm | cpio -id
+        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+        popd >/dev/null
 
 }
 
@@ -1596,11 +1566,8 @@ build_with_srpm() {
     build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
         fatal 1 "error building OFED"
 
-    if ! $PATCHLESS; then
-        # only need RDAC for the server
-        build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
-            fatal 1 "error building RDAC"
-    fi
+    build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" || 
+        fatal 1 "error building RDAC"
 
     build_mptlinux "${LINUXOBJ:-$LINUX}" "$MPTLINUX_VERSION" ||
         fatal 1 "error building mptlinux"
@@ -1900,9 +1867,7 @@ if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
         fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
 fi
 
-push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache_summary"
-# should remove the ccache trap if lbuild is interrupted
-trap 'delete_exit_trap "ccache_summary"; exit 1' INT TERM HUP
+push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache"
 
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
@@ -1911,10 +1876,8 @@ if [ -n "$LINUX" ]; then
         fatal 1 "error building mptlinux"
     build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
         fatal 1 "error building OFED"
-    if ! $PATCHLESS; then
-        build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
-            fatal 1 "error building RDAC"
-    fi
+    build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
+        fatal 1 "error building RDAC"
     build_lustre "$LINUX" "$LINUXOBJ"
 else
     if [ -f "${0%/*}/lbuild-$DISTRO" ]; then

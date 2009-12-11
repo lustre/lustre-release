@@ -1222,9 +1222,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
          * later in alloc_qos(), we will wait for those rpcs to complete if
          * the osfs age is older than 2 * qos_maxage */
         qos_statfs_update(exp->exp_obd,
-                          cfs_time_shift_64(-lov->desc.ld_qos_maxage +
-                                            OBD_STATFS_CACHE_SECONDS),
-                          0);
+                          cfs_time_shift_64(-lov->desc.ld_qos_maxage) + HZ, 0);
 
         rc = lov_prep_create_set(exp, oinfo, ea, src_oa, oti, &set);
         if (rc)
@@ -2974,19 +2972,6 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         GOTO(out, rc = -ESRCH);
                 rc = obd_get_info(tgt->ltd_exp, keylen, key, vallen, val, NULL);
                 GOTO(out, rc);
-        } else if (KEY_IS(KEY_CONNECT_FLAG)) {
-                struct lov_tgt_desc *tgt;
-                __u64 ost_idx = *((__u64*)val);
-
-                LASSERT(*vallen == sizeof(__u64));
-                LASSERT(ost_idx < lov->desc.ld_tgt_count);
-                tgt = lov->lov_tgts[ost_idx];
-
-                if (!tgt || !tgt->ltd_exp)
-                        GOTO(out, rc = -ESRCH);
-
-                *((__u64*)val) = tgt->ltd_exp->exp_connect_flags;
-                GOTO(out, rc = 0);
         }
 
         rc = -EINVAL;

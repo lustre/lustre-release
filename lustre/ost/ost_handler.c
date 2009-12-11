@@ -178,8 +178,7 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
-                                    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
-                                    0);
+                                    cfs_time_current_64() - HZ, 0);
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
