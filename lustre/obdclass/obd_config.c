@@ -230,7 +230,6 @@ int class_attach(struct lustre_cfg *lcfg)
         init_rwsem(&obd->obd_observer_link_sem);
         CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
-        CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {

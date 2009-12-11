@@ -75,7 +75,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (lmm_size == 0)
                 RETURN(0);
 
-        rc = obd_unpackmd(mds->mds_lov_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
                 RETURN(rc);
@@ -84,7 +84,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
                 rc = 0;
         }
 
-        rc = obd_checkmd(mds->mds_lov_exp, obd->obd_self_export, lsm);
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
         if (rc)
                 GOTO(out_free_memmd, rc);
 
@@ -100,13 +100,13 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
-        rc = obd_destroy(mds->mds_lov_exp, oa, lsm, &oti, obd->obd_self_export);
+        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
         OBDO_FREE(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
-        obd_free_memmd(mds->mds_lov_exp, &lsm);
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
         RETURN(rc);
 }
 
@@ -122,7 +122,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         int rc, err;
         ENTRY;
 
-        LASSERT(mds->mds_lov_obd != NULL);
+        LASSERT(mds->mds_osc_obd != NULL);
 
         /* We don't need to do any of these other things for orhpan dirs,
          * especially not mds_get_md (may get a default LOV EA, bug 4554) */

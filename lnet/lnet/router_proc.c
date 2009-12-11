@@ -444,7 +444,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
                         int        txqnob    = peer->lp_txqnob;
 
                         if (lnet_isrouter(peer) ||
-                            lnet_peer_aliveness_enabled(peer))
+                            peer->lp_ni->ni_peertimeout > 0)
                                 aliveness = peer->lp_alive ? "up" : "down";
 
                         s += snprintf(s, tmpstr + tmpsiz - s,
