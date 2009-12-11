@@ -3208,17 +3208,6 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                                ((filter->fo_tot_dirty + filter->fo_tot_pending +
                                  osfs->os_bsize - 1) >> blockbits));
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC)) {
-                struct lr_server_data *lsd = filter->fo_fsd;
-                int index = le32_to_cpu(lsd->lsd_ost_index);
-
-                if (obd_fail_val == -1 ||
-                    index == obd_fail_val)
-                        osfs->os_bfree = osfs->os_bavail = 2;
-                else if (obd_fail_loc & OBD_FAIL_ONCE)
-                        obd_fail_loc &= ~OBD_FAILED; /* reset flag */
-        }
-
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to
          * stop creating files on MDS if OST is not good shape to create
          * objects.*/
@@ -3294,9 +3283,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 OBD_ALLOC(osfs, sizeof(*osfs));
                 if (osfs == NULL)
                         RETURN(-ENOMEM);
-                rc = filter_statfs(obd, osfs,
-                                   cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
-                                   0);
+                rc = filter_statfs(obd, osfs, cfs_time_current_64() - HZ, 0);
                 if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
                         CDEBUG(D_RPCTRACE,"%s: not enough space for create "
                                LPU64"\n", obd->obd_name, osfs->os_bavail <<

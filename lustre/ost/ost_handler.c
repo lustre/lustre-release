@@ -178,8 +178,9 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
-                                    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
-                                    0);
+                                    cfs_time_current_64() - HZ, 0);
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -1772,10 +1773,11 @@ static int ost_handle(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(current->journal_info == NULL);
+        /* XXX identical to MDS */
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
                 int recovering;
 
-                if (!class_connected_export(req->rq_export)) {
+                if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
                                lustre_msg_get_opc(req->rq_reqmsg),
                                libcfs_id2str(req->rq_peer));
@@ -1822,6 +1824,8 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "create\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
                 OBD_FAIL_TIMEOUT_MS(OBD_FAIL_OST_PAUSE_CREATE, obd_fail_val);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                        GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_create(req->rq_export, req, oti);
@@ -1854,7 +1858,7 @@ static int ost_handle(struct ptlrpc_request *req)
                         GOTO(out, rc = -EPROTO);
                 }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);

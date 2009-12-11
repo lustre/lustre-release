@@ -193,7 +193,7 @@ swi_scheduler_main (void *arg)
                                    swi_data.wi_waitq,
                                    !swi_sched_cansleep(&swi_data.wi_runq));
                 else
-                        cfs_cond_resched();
+                        our_cond_resched();
 
                 spin_lock(&swi_data.wi_lock);
         }
@@ -247,7 +247,7 @@ swi_serial_scheduler_main (void *arg)
                              swi_data.wi_serial_waitq,
                              !swi_sched_cansleep(&swi_data.wi_serial_runq));
                 else
-                        cfs_cond_resched();
+                        our_cond_resched();
 
                 spin_lock(&swi_data.wi_lock);
         }

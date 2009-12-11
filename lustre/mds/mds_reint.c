@@ -126,14 +126,14 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_lov_exp, &lsm, mlcd->mlcd_lmm,
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
                        (int)(mlcd->mlcd_cookielen/sizeof(*mlcd->mlcd_cookies)),
                        rc);
         } else {
-                rc = obd_checkmd(obd->u.mds.mds_lov_exp, obd->obd_self_export,
+                rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export,
                                  lsm);
                 if (rc)
                         CERROR("Can not revalidate lsm %p \n", lsm);
@@ -609,13 +609,13 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         LASSERT(lmm);
 
-        rc = obd_unpackmd(mds->mds_lov_exp, &oinfo.oi_md, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p for inode %lu\n", lmm, inode->i_ino);
                 GOTO(out, rc);
         }
 
-        rc = obd_checkmd(mds->mds_lov_exp, obd->obd_self_export, oinfo.oi_md);
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, oinfo.oi_md);
         if (rc) {
                 CERROR("Error revalidate lsm %p \n", oinfo.oi_md);
                 GOTO(out, rc);
@@ -637,13 +637,13 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
         /* do async setattr from mds to ost not waiting for responses. */
-        rc = obd_setattr_async(mds->mds_lov_exp, &oinfo, &oti, NULL);
+        rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
         if (rc)
                 CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
                        " on ost error %d\n", oinfo.oi_md->lsm_object_id, rc);
 out:
         if (oinfo.oi_md)
-                obd_free_memmd(mds->mds_lov_exp, &oinfo.oi_md);
+                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
         OBDO_FREE(oinfo.oi_oa);
         RETURN(rc);
 }
@@ -814,12 +814,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                 GOTO(cleanup, rc);
                 } else {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_lov_exp, 0,
+                                           mds->mds_osc_exp, 0,
                                            &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(cleanup, rc);
 
-                        obd_free_memmd(mds->mds_lov_exp, &lsm);
+                        obd_free_memmd(mds->mds_osc_exp, &lsm);
 
                         rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
                                            rec->ur_eadatalen, "lov");
@@ -839,7 +839,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
 
-        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_lov_obd)) {
+        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_osc_obd)) {
                 OBD_ALLOC(mlcd, sizeof(*mlcd) + rec->ur_cookielen +
                           rec->ur_eadatalen);
                 if (mlcd) {
@@ -2536,7 +2536,6 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_tgtdir = NULL;
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
-        struct dentry *trap;
         struct inode *old_inode = NULL, *new_inode = NULL;
         struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct mds_obd *mds = mds_req2mds(req);
@@ -2651,6 +2650,11 @@ no_unlink:
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
+        /* Check if we are moving old entry into its child. 2.6 does not
+           check for this in vfs_rename() anymore */
+        if (is_subdir(de_new, de_old))
+                GOTO(cleanup, rc = -EINVAL);
+
         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
         /* check that lmm size is not 0 */
         sz = lustre_msg_buflen(req->rq_repmsg, offset + 1) > 0 ?
@@ -2661,25 +2665,14 @@ no_unlink:
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
-        trap = lock_rename(de_tgtdir, de_srcdir);
-        /* source should not be ancestor of target */
-        if (de_old == trap) {
-                unlock_rename(de_tgtdir, de_srcdir);
-                GOTO(cleanup, rc = -EINVAL);
-        }
-        /* target should not be an ancestor of source */
-        if (de_new == trap) {
-                unlock_rename(de_tgtdir, de_srcdir);
-                GOTO(cleanup, rc = -ENOTEMPTY);
-        }
-
+        VFS_RENAME_LOCK(de_srcdir->d_inode);
         de_old->d_fsdata = req;
         de_new->d_fsdata = req;
 
-        rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt,
+        rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt, 
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
 
-        unlock_rename(de_tgtdir, de_srcdir);
+        VFS_RENAME_UNLOCK(de_srcdir->d_inode);
 
         if (rc == 0) {
                 struct iattr iattr;

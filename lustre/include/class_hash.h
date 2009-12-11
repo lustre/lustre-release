@@ -59,7 +59,7 @@ typedef struct lustre_hash {
         int                         lh_flags;       /* hash flags */
         atomic_t                    lh_count;       /* current entries */
         atomic_t                    lh_rehash_count;/* resize count */
-        struct lustre_hash_bucket **lh_buckets;     /* hash buckets */
+        struct lustre_hash_bucket  *lh_buckets;     /* hash buckets */
         struct lustre_hash_ops     *lh_ops;         /* hash operations */
         rwlock_t                    lh_rwlock;      /* lustre_hash */
         char                        lh_name[LUSTRE_MAX_HASH_NAME];
@@ -180,7 +180,7 @@ __lustre_hash_bucket_validate(lustre_hash_t *lh, lustre_hash_bucket_t *lhb,
 
         if (unlikely(lh->lh_flags & LH_DEBUG)) {
                 i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_mask);
-                LASSERT(lh->lh_buckets[i] == lhb);
+                LASSERT(&lh->lh_buckets[i] == lhb);
         }
 }
 
@@ -346,7 +346,7 @@ lh_u64_hash(__u64 key, unsigned mask)
 #define lh_for_each_bucket(lh, lhb, pos)         \
         for (pos = 0;                            \
              pos <= lh->lh_cur_mask &&           \
-             ({ lhb = lh->lh_buckets[i]; 1; });  \
+             ({ lhb = &lh->lh_buckets[i]; 1; }); \
              pos++)
 
 #endif /* __CLASS_HASH_H */

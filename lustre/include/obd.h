@@ -584,10 +584,10 @@ struct mds_obd {
         cfs_dentry_t                    *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
 //        struct llog_handle              *mds_catalog;
-        struct obd_device               *mds_lov_obd;
+        struct obd_device               *mds_osc_obd; /* XXX lov_obd */
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
-        struct obd_export               *mds_lov_exp;
+        struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         struct lov_desc                  mds_lov_desc;
 
         /* mark pages dirty for write. */
@@ -707,9 +707,6 @@ struct lov_qos_rr {
         struct ost_pool     lqr_pool;        /* round-robin optimized list */
         unsigned long       lqr_dirty:1;     /* recalc round-robin list */
 };
-
-/* allow statfs data caching for 1 second */
-#define OBD_STATFS_CACHE_SECONDS 1
 
 struct lov_statfs_data {
         struct obd_info   lsd_oi;
@@ -1016,7 +1013,6 @@ struct obd_device {
         cfs_waitq_t             obd_llog_waitq;
 
         struct obd_device       *obd_observer;
-        struct rw_semaphore     obd_observer_link_sem;
         struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;
         /* list of exports in LRU order, for ping evictor, with obd_dev_lock */
@@ -1066,7 +1062,6 @@ struct obd_device {
         unsigned int           obd_cntr_base;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
-        struct list_head       obd_evict_list; /* protected with pet_lock */
 
         /* Ldlm pool part. Save last calculated SLV and Limit. */
         rwlock_t               obd_pool_lock;
@@ -1110,7 +1105,6 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 #define KEY_MAX_EASIZE          "max_ea_size"
 #define KEY_FIEMAP              "fiemap"
-#define KEY_CONNECT_FLAG        "connect_flags"
 /* XXX unused */
 #define KEY_ASYNC               "async"
 #define KEY_CAPA_KEY            "capa_key"

@@ -86,12 +86,6 @@ struct xtvec64 {
 };
 #endif
 
-#ifdef HAVE_POSIX2008_PREADV
-#define _SYSIO_PREADV_T int
-#else
-#define _SYSIO_PREADV_T size_t
-#endif
-
 struct iovec;
 
 /*
@@ -145,7 +139,7 @@ extern ioid_t SYSIO_INTERFACE_NAME(ipread64)(int fd,
  */
 extern ssize_t SYSIO_INTERFACE_NAME(preadv)(int fd,
 					    const struct iovec *iov,
-					    _SYSIO_PREADV_T count,
+					    size_t count,
 					    off_t offset);
 
 #ifdef _LARGEFILE64_SOURCE
@@ -154,7 +148,7 @@ extern ssize_t SYSIO_INTERFACE_NAME(preadv)(int fd,
  */
 extern ssize_t SYSIO_INTERFACE_NAME(pread64v)(int fd,
 					      const struct iovec *iov, 
-					      _SYSIO_PREADV_T count,
+					      size_t count,
 					      off64_t offset);
 #endif
 
@@ -264,7 +258,7 @@ extern ioid_t SYSIO_INTERFACE_NAME(ipwrite64)(int fd,
  */
 extern ssize_t SYSIO_INTERFACE_NAME(pwritev)(int fd,
 					     const struct iovec *iov,
-					     _SYSIO_PREADV_T count,
+					     size_t count,
 					     off_t offset);
 
 #ifdef _LARGEFILE64_SOURCE
@@ -273,7 +267,7 @@ extern ssize_t SYSIO_INTERFACE_NAME(pwritev)(int fd,
  */
 extern ssize_t SYSIO_INTERFACE_NAME(pwrite64v)(int fd,
 					       const struct iovec *iov,
-					       _SYSIO_PREADV_T count,
+					       size_t count,
 					       off64_t offset);
 #endif
 

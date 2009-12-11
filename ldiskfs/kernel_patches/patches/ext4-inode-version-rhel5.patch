@@ -59,6 +59,38 @@ Index: linux-2.6.18-128.1.6/fs/ext4/ext4_i.h
  };
  
  #endif	/* _EXT4_I */
+Index: linux-2.6.18-128.1.6/fs/ext4/xattr.c
+===================================================================
+--- linux-2.6.18-128.1.6.orig/fs/ext4/xattr.c
++++ linux-2.6.18-128.1.6/fs/ext4/xattr.c
+@@ -959,13 +959,18 @@ ext4_xattr_set_handle(handle_t *handle, 
+ 	struct ext4_xattr_block_find bs = {
+ 		.s = { .not_found = -ENODATA, },
+ 	};
++	unsigned long no_expand;
+ 	int error;
+ 
+ 	if (!name)
+ 		return -EINVAL;
+ 	if (strlen(name) > 255)
+ 		return -ERANGE;
++
+ 	down_write(&EXT4_I(inode)->xattr_sem);
++	no_expand = EXT4_I(inode)->i_state & EXT4_STATE_NO_EXPAND;
++	EXT4_I(inode)->i_state |= EXT4_STATE_NO_EXPAND;
++
+ 	error = ext4_get_inode_loc(inode, &is.iloc);
+ 	if (error)
+ 		goto cleanup;
+@@ -1042,6 +1047,8 @@ ext4_xattr_set_handle(handle_t *handle, 
+ cleanup:
+ 	brelse(is.iloc.bh);
+ 	brelse(bs.bh);
++	if (no_expand == 0)
++		EXT4_I(inode)->i_state &= ~EXT4_STATE_NO_EXPAND;
+ 	up_write(&EXT4_I(inode)->xattr_sem);
+ 	return error;
+ }
 Index: linux-2.6.18-128.1.6/fs/ext4/ialloc.c
 ===================================================================
 --- linux-2.6.18-128.1.6.orig/fs/ext4/ialloc.c

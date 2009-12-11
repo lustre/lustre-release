@@ -222,7 +222,6 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
 int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
-int class_connected_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_set_export_delayed(struct obd_export *exp);
 void class_handle_stale_exports(struct obd_device *obddev);
@@ -1626,34 +1625,9 @@ static inline int obd_register_observer(struct obd_device *obd,
 {
         ENTRY;
         OBD_CHECK_DEV(obd);
-        down_write(&obd->obd_observer_link_sem);
-        if (obd->obd_observer && observer) {
-                up_write(&obd->obd_observer_link_sem);
+        if (obd->obd_observer && observer)
                 RETURN(-EALREADY);
-        }
         obd->obd_observer = observer;
-        up_write(&obd->obd_observer_link_sem);
-        RETURN(0);
-}
-
-static inline int obd_pin_observer(struct obd_device *obd,
-                                   struct obd_device **observer)
-{
-        ENTRY;
-        down_read(&obd->obd_observer_link_sem);
-        if (!obd->obd_observer) {
-                *observer = NULL;
-                up_read(&obd->obd_observer_link_sem);
-                RETURN(-ENOENT);
-        }
-        *observer = obd->obd_observer;
-        RETURN(0);
-}
-
-static inline int obd_unpin_observer(struct obd_device *obd)
-{
-        ENTRY;
-        up_read(&obd->obd_observer_link_sem);
         RETURN(0);
 }
 

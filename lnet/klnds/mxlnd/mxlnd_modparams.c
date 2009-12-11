@@ -47,10 +47,9 @@ static int n_waitd = MXLND_N_SCHED;
 CFS_MODULE_PARM(n_waitd, "i", int, 0444,
                 "# of completion daemons");
 
-/* this was used to allocate global rxs which are no londer used */
 static int max_peers = MXLND_MAX_PEERS;
 CFS_MODULE_PARM(max_peers, "i", int, 0444,
-                "Unused - was maximum number of peers that may connect");
+                "maximum number of peers that may connect");
 
 static int cksum = MXLND_CKSUM;
 CFS_MODULE_PARM(cksum, "i", int, 0644,
@@ -60,14 +59,9 @@ static int ntx = MXLND_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
                 "# of total tx message descriptors");
 
-/* this duplicates ntx */
-static int credits = MXLND_NTX;
+static int credits = MXLND_MSG_QUEUE_DEPTH;
 CFS_MODULE_PARM(credits, "i", int, 0444,
-                "Unused - was # concurrent sends to all peers");
-
-static int peercredits = MXLND_MSG_QUEUE_DEPTH;
-CFS_MODULE_PARM(peercredits, "i", int, 0444,
-                "# concurrent sends to one peer");
+                "# concurrent sends");
 
 static int board = MXLND_MX_BOARD;
 CFS_MODULE_PARM(board, "i", int, 0444,
@@ -94,7 +88,6 @@ kmx_tunables_t kmxlnd_tunables = {
         .kmx_cksum              = &cksum,
         .kmx_ntx                = &ntx,
         .kmx_credits            = &credits,
-        .kmx_peercredits        = &peercredits,
         .kmx_board              = &board,
         .kmx_ep_id              = &ep_id,
         .kmx_default_ipif       = &ipif_name,
@@ -175,14 +168,6 @@ static cfs_sysctl_table_t kmxlnd_ctl_table[] = {
         },
         {
                 .ctl_name = 6,
-                .procname = "peercredits",
-                .data     = &peercredits,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = 7,
                 .procname = "board",
                 .data     = &board,
                 .maxlen   = sizeof(int),
@@ -190,7 +175,7 @@ static cfs_sysctl_table_t kmxlnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 8,
+                .ctl_name = 7,
                 .procname = "ep_id",
                 .data     = &ep_id,
                 .maxlen   = sizeof(int),
@@ -198,7 +183,7 @@ static cfs_sysctl_table_t kmxlnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = 8,
                 .procname = "ipif_name",
                 .data     = ipif_basename_space,
                 .maxlen   = sizeof(ipif_basename_space),
@@ -206,7 +191,7 @@ static cfs_sysctl_table_t kmxlnd_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 10,
+                .ctl_name = 9,
                 .procname = "polling",
                 .data     = &polling,
                 .maxlen   = sizeof(int),

@@ -780,15 +780,14 @@ static int lfs_getstripe(int argc, char **argv)
                 {"offset", 0, 0, 'o'},
                 {"pool", 0, 0, 'p'},
                 {"verbose", 0, 0, 'v'},
-                {"directory", 0, 0, 'd'},
                 {0, 0, 0, 0}
         };
+        char short_opts[] = "hO:qrvcsiop";
         int c, rc;
         struct find_param param = { 0 };
 
-        param.maxdepth = 1;
         optind = 0;
-        while ((c = getopt_long(argc, argv, "cdhioO:pqrsv",
+        while ((c = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
@@ -803,33 +802,22 @@ static int lfs_getstripe(int argc, char **argv)
                 case 'q':
                         param.quiet++;
                         break;
-                case 'd':
-                        param.maxdepth = 0;
-                        break;
                 case 'r':
                         param.recursive = 1;
                         break;
                 case 'v':
                         param.verbose = VERBOSE_ALL | VERBOSE_DETAIL;
+                        param.quiet = 0;
                         break;
                 case 'c':
-                        if (!(param.verbose & VERBOSE_DETAIL)) {
-                                param.verbose |= VERBOSE_COUNT;
-                                param.maxdepth = 0;
-                        }
+                        param.verbose |= VERBOSE_COUNT;
                         break;
                 case 's':
-                        if (!(param.verbose & VERBOSE_DETAIL)) {
-                                param.verbose |= VERBOSE_SIZE;
-                                param.maxdepth = 0;
-                        }
+                        param.verbose |= VERBOSE_SIZE;
                         break;
                 case 'i':
                 case 'o':
-                        if (!(param.verbose & VERBOSE_DETAIL)) {
-                                param.verbose |= VERBOSE_OFFSET;
-                                param.maxdepth = 0;
-                        }
+                        param.verbose |= VERBOSE_OFFSET;
                         break;
                 case 'p':
                         param.verbose |= VERBOSE_POOL;
@@ -846,13 +834,7 @@ static int lfs_getstripe(int argc, char **argv)
         if (optind >= argc)
                 return CMD_HELP;
 
-        if (param.recursive)
-                param.maxdepth = -1;
-
-        if (!param.verbose)
-                param.verbose = VERBOSE_ALL;
-        if (param.quiet)
-                param.verbose = VERBOSE_OBJID;
+        param.maxdepth = param.recursive ? -1 : 1;
 
         do {
                 rc = llapi_getstripe(argv[optind], &param);
@@ -875,7 +857,7 @@ static int lfs_osts(int argc, char **argv)
 
         while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
                 memset(&param, 0, sizeof(param));
-                rc = llapi_ostlist(mntdir, &param);
+                rc = llapi_getstripe(mntdir, &param);
                 if (rc) {
                         fprintf(stderr, "error: %s: failed on %s\n",
                                 argv[0], mntdir);

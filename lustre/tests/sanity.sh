@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:autoindent:shiftwidth=4:tabstop=4:
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -951,19 +949,18 @@ sleep_maxage() {
 # OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
 # if the OST isn't full anymore.
 reset_enospc() {
-	local OSTIDX=${1:-""}
+	local FAIL_LOC=${1:-0}
+	local OSTIDX=${2:-""}
 
 	local list=$(comma_list $(osts_nodes))
 	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
-	do_nodes $list lctl set_param fail_loc=0
+	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
 	sleep_maxage
 }
 
 exhaust_precreations() {
 	local OSTIDX=$1
-	local FAILLOC=$2
-	local FAILIDX=${3:-$OSTIDX}
 
 	local OST=$(lfs osts | grep ${OSTIDX}": " | \
 		awk '{print $2}' | sed -e 's/_UUID$//')
@@ -973,23 +970,22 @@ exhaust_precreations() {
 	local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
 	local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
 
-	mkdir -p $DIR/$tdir/${OST}
-	$SETSTRIPE $DIR/$tdir/${OST} -i $OSTIDX -c 1
+	mkdir -p $DIR/d27/${OST}
+	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
 	#define OBD_FAIL_OST_ENOSPC 0x215
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=$FAILIDX
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
+	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
 	do_facet mds "lctl get_param -n osc.$mdtosc.prealloc*" | grep '[0-9]'
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=$FAILLOC
-	sleep_maxage
+	reset_enospc $2 $OSTIDX
 }
 
 exhaust_all_precreations() {
 	local i
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		exhaust_precreations $i $1 -1
+		exhaust_precreations $i 0x215
 	done
+	reset_enospc $1
 }
 
 test_27n() {
@@ -998,11 +994,11 @@ test_27n() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27n
 	exhaust_precreations 0 0x80000215
-	$SETSTRIPE -c -1 $DIR/$tdir
-	touch $DIR/$tdir/$tfile || error
-	$GETSTRIPE $DIR/$tdir/$tfile
+	$SETSTRIPE -c -1 $DIR/d27
+	touch $DIR/d27/f27n || error
+	$GETSTRIPE $DIR/d27/f27n
 	reset_enospc
 }
 run_test 27n "create file with some full OSTs =================="
@@ -1013,13 +1009,12 @@ test_27o() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27o
 	exhaust_all_precreations 0x215
 
-	touch $DIR/$tdir/$tfile && error "able to create $DIR/$tdir/$tfile"
+	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
 
 	reset_enospc
-	rm -rf $DIR/$tdir/*
 }
 run_test 27o "create file with all full OSTs (should error) ===="
 
@@ -1029,16 +1024,16 @@ test_27p() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
-	mkdir -p $DIR/$tdir
+	rm -f $DIR/d27/f27p
+	mkdir -p $DIR/d27
 
-	$MCREATE $DIR/$tdir/$tfile || error
-	$TRUNCATE $DIR/$tdir/$tfile 80000000 || error
-	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error
+	$MCREATE $DIR/d27/f27p || error
+	$TRUNCATE $DIR/d27/f27p 80000000 || error
+	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error
 
 	exhaust_precreations 0 0x80000215
-	echo foo >> $DIR/$tdir/$tfile || error
-	$CHECKSTAT -s 80000004 $DIR/$tdir/$tfile || error
+	echo foo >> $DIR/d27/f27p || error
+	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error
 
 	reset_enospc
 }
@@ -1050,16 +1045,16 @@ test_27q() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27q
 
-	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
-	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||error "truncate $DIR/$tdir/$tfile failed"
-	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
+	$MCREATE $DIR/d27/f27q || error "mcreate $DIR/d27/f27q failed"
+	$TRUNCATE $DIR/d27/f27q 80000000 ||error "truncate $DIR/d27/f27q failed"
+	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat failed"
 
 	exhaust_all_precreations 0x215
 
-	echo foo >> $DIR/$tdir/$tfile && error "append succeeded"
-	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat 2 failed"
+	echo foo >> $DIR/d27/f27q && error "append succeeded"
+	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat 2 failed"
 
 	reset_enospc
 }
@@ -1071,10 +1066,10 @@ test_27r() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27r
 	exhaust_precreations 0 0x80000215
 
-	$SETSTRIPE $DIR/$tdir/$tfile -i 0 -c 2 # && error
+	$SETSTRIPE $DIR/d27/f27r -i 0 -c 2 # && error
 
 	reset_enospc
 }
@@ -1107,14 +1102,14 @@ test_27u() { # bug 4900
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
 
         do_facet mds lctl set_param fail_loc=0x139
-        mkdir -p $DIR/$tdir
-        createmany -o $DIR/$tdir/t- 1000
+        mkdir -p $DIR/d27u
+        createmany -o $DIR/d27u/t- 1000
         do_facet mds lctl set_param fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
-        $GETSTRIPE $DIR/$tdir > $TLOG
+        $GETSTRIPE $DIR/d27u > $TLOG
         OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TLOG`
-        unlinkmany $DIR/$tdir/t- 1000
+        unlinkmany $DIR/d27u/t- 1000
         [ $OBJS -gt 0 ] && \
                 error "$OBJS objects created on OST-0.  See $TLOG" || pass
 }
@@ -1125,8 +1120,7 @@ test_27v() { # bug 4900
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        exhaust_all_precreations 0x215
-        reset_enospc
+        exhaust_all_precreations
 
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1         # 1 stripe / file
@@ -1150,18 +1144,18 @@ test_27v() { # bug 4900
 run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
-        mkdir -p $DIR/$tdir || error "mkdir failed"
-        $SETSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
-        size=`$GETSTRIPE $DIR/$tdir/f0 -s`
+        mkdir -p $DIR/d27w || error "mkdir failed"
+        $SETSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        size=`$GETSTRIPE $DIR/d27w/f0 -qs`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                log setstripe $DIR/$tdir/f$i -c $i -i $offset
-                $SETSTRIPE $DIR/$tdir/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$GETSTRIPE -c $DIR/$tdir/f$i`
-                index=`$GETSTRIPE -o $DIR/$tdir/f$i`
+                log setstripe $DIR/d27w/f$i -c $i -i $offset
+                $SETSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                count=`$GETSTRIPE -qc $DIR/d27w/f$i`
+                index=`$GETSTRIPE -qo $DIR/d27w/f$i`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
@@ -1170,20 +1164,20 @@ run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
-	OFFSET=$(($OSTCOUNT - 1))
+	OFFSET=$(($OSTCOUNTi - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
 
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
-	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 1
+	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
 	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
 		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
-	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
+	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
 }
 run_test 27x "create files while OST0 is degraded"
 
@@ -2532,14 +2526,12 @@ test_56a() {	# was test_56
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 skip_env "skipping other lfs getstripe --obd test" && return
-        OSTIDX=1
-        OBDUUID=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}')
-        FILENUM=`$GETSTRIPE -ir $DIR/d56 | grep -x $OSTIDX | wc -l`
-        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | grep obdidx | wc -l`
+        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
+        OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
+        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs getstripe --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | \
-                sed '/^[	 ]*'${OSTIDX}'[	 ]/d' |\
+        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
@@ -2619,7 +2611,7 @@ run_test 56h "check lfs find ! -name ============================="
 test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
-       UUID=`$LFS osts $DIR/$tdir | awk '/0: / { print $2 }'`
+       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
        OUT="`$LFIND -ost $UUID $DIR/$tdir`"
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
@@ -3599,19 +3591,13 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
-	remote_ost || { skip_env "local OST" && return; }
-
-	cancel_lru_locks osc
-	NSEQ=5
+ 	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
-	# directio allocates the buffer twice, one for writes and another
-	# one for reads, so that it can check the data consistency
-	F78SIZE=$((F78SIZE / 2))
 	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemTotal: $MEMTOTAL"
-	# reserve 256MB of memory for the kernel and other running processes,
-	# and then take 1/2 of the remaining memory for the read/write buffers.
+# reserve 256MB of memory for the kernel and other running processes,
+# and then take 1/2 of the remaining memory for the read/write buffers.
 	MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
 	echo "Mem to use for directio: $MEMTOTAL"
 	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
@@ -6291,25 +6277,31 @@ check_file_in_pool()
 
 export mdtlov=
 
-trap "cleanup_pools $FSNAME" EXIT
+cleanup_200 () {
+        trap 0
+        test_pools || return 0
+        destroy_pool $POOL
+}
 
 test_200a() {
         test_pools || return 0
 
-        create_pool $FSNAME.$POOL || return $?
-        [ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] ||
-                error "$POOL not in lfs pool_list"
+        do_facet mgs $LCTL pool_new $FSNAME.$POOL
+
+        trap cleanup_200 EXIT
+        CLEANUP_200=yes
+
+        # get param should return err until pool is created
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
 }
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
         test_pools || return 0
-        TGT=$(for i in $TGTPOOL_LIST; do printf "$FSNAME-OST%04x_UUID " $i; done)
+        TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
         do_facet mgs $LCTL pool_add $FSNAME.$POOL \
                 $FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
-
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" ||
-		        error "Add to pool failed"
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
 }
 run_test 200b "Add targets to a pool ===================================="
 
@@ -6360,65 +6352,47 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-	test_pools || return 0
+        test_pools || return 0
 
-	TGT=$($LCTL get_param -n lov.$FSNAME-clilov-*.pools.$POOL | tr '\n' ' ')
-	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST" | tr '\n' ' ')
-	[ "$res" = "$TGT" ] || error "Pools OSTs '$TGT' is not '$res' that lfs df reports"
+        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+        res=$(lfs df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST")
+        [ "$res" = "$TGT" ] || echo "Pools OSTS $TGT is not $res that lfs df reports"
 }
 run_test 200g "lfs df a pool ============================================"
 
-test_201a() {
-	test_pools || return 0
-
-	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" ||
-		error "$TGT not removed from $FSNAME.$POOL"
+test_201a() { # was 200g
+        test_pools || return 0
+        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+        do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 201a "Remove a target from a pool ============================="
 
-test_201b() {
-	test_pools || return 0
-
-	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
-	do
-		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
- 	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" "" ||
-		error "Pool $FSNAME.$POOL cannot be drained"
-	# striping on an empty/nonexistant pool should fall back to "pool of everything"
-	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
-	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
-		error "expected failure when creating file with empty pool"
-	return 0
+test_201b() {	# was 200h
+        test_pools || return 0
+        for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
+        do
+                do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+        done
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
+            || error "Pool $FSNAME.$POOL cannot be drained"
+        # striping on an empty pool should fall back to "pool of everything"
+        $SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || \
+	    error "failed to create file with empty pool"
 }
 run_test 201b "Remove all targets from a pool =========================="
 
-test_201c() {
-	test_pools || return 0
-
-	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-	
-	sleep 2                        
-    # striping on an empty/nonexistant pool should fall back to "pool of everything"
-	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
-	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
-		error "expected failure when creating file with missing pool"
-
-	# get param should return err once pool is gone
-	if wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
-		echo foo" "foo"; then
-		remove_pool_from_list $FSNAME.$POOL
-		return 0
-	fi
-	error "Pool $FSNAME.$POOL is not destroyed"
+test_201c() {	# was 200i
+        test_pools || return 0
+        do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
+        # get param should return err once pool is gone
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || 
+                echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
+        error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
 
-cleanup_pools $FSNAME
+[ "$CLEANUP_200" ] && cleanup_200
 
 test_202() {
         $LFS setstripe -c 2 -s 1048576 $DIR/$tfile

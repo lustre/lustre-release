@@ -1341,7 +1341,6 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
         AC_MSG_CHECKING([if fiemap.h can be compiled])
         LB_LINUX_TRY_COMPILE([
-                #include <linux/types.h>
                 #include <linux/fiemap.h>
         ],[],[
                 AC_MSG_RESULT([yes])
@@ -1636,7 +1635,6 @@ LB_LINUX_TRY_COMPILE([
 #ifdef HAVE_LINUX_MMTYPES_H
         #include <linux/mm_types.h>
 #endif
-        #include <linux/pagemap.h>
 ],[
         struct address_space_operations aops;
         struct page *page;
@@ -1685,6 +1683,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.17 super_block use s_vfs_rename_mutex instead of s_vfs_rename_sem
+AC_DEFUN([LC_VFS_RENAME_MUTEX],
+[AC_MSG_CHECKING([super_block has s_vfs_rename_mutex])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct super_block sb;
+        mutex_lock(&sb.s_vfs_rename_mutex);
+],[
+        AC_DEFINE(HAVE_VFS_RENAME_MUTEX, 1,
+                [super_block has s_vfs_rename_mutex])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1706,6 +1721,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CONFIG_DELAYED_RECOVERY
           LC_QUOTA_MODULE
 
+          LC_TASK_PPTR
           # RHEL4 patches
           LC_EXPORT_TRUNCATE_COMPLETE_PAGE
           LC_EXPORT_TRUNCATE_RANGE
@@ -1754,6 +1770,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.17
           LC_DQUOTOFF_MUTEX
+          LC_VFS_RENAME_MUTEX
 
           # 2.6.18
           LC_NR_PAGECACHE
@@ -1770,7 +1787,6 @@ AC_DEFUN([LC_PROG_LINUX],
           #2.6.18 + RHEL5 (fc6)
           LC_PG_FS_MISC
           LC_PAGE_CHECKED
-          LC_LINUX_FIEMAP_H
 
           # 2.6.19
           LC_INODE_BLKSIZE
@@ -1811,6 +1827,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.26
           LC_FS_STRUCT_USE_PATH
+          LC_RCU_LIST_SAFE
 
           # 2.6.27
           LC_INODE_PERMISION_2ARGS

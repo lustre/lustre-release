@@ -198,7 +198,7 @@ test_11() {
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
     do_facet mds lctl set_param fail_loc=0
-    clients_up
+    client_df
     while [ -z "$(ls $MOUNT1/$tfile-[1-5] 2>/dev/null)" ]; do
 	sleep 5
 	echo -n "."
@@ -220,7 +220,7 @@ test_12() {
     do_facet mds lctl set_param fail_loc=0x80000302
     facet_failover mds
     do_facet mds lctl set_param fail_loc=0
-    clients_up || { kill -USR1 $MULTIPID  && return 1; }
+    df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
 
     ls $DIR/$tfile
     kill -USR1 $MULTIPID || return 3
@@ -245,7 +245,7 @@ test_13() {
     do_facet mds lctl set_param fail_loc=0x80000115
     facet_failover mds
     do_facet mds lctl set_param fail_loc=0
-    clients_up || return 1
+    df $MOUNT || return 1
 
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -264,7 +264,7 @@ test_14a() {
 
     facet_failover mds
     # expect recovery to fail due to missing client 2
-    client_evicted || return 1
+    df $MOUNT1 && return 1
     sleep 1
 
     # first 25 files should have been replayed
@@ -286,7 +286,9 @@ test_14b() {
     createmany -o $MOUNT1/$tfile-3- 5
     umount $MOUNT2
 
-    fail mds
+    facet_failover mds
+    # expect recovery don't fail due to VBR
+    df $MOUNT1 || return 1
 
     # first 25 files should have been replayed
     unlinkmany $MOUNT1/$tfile- 5 || return 2
@@ -309,7 +311,8 @@ test_15a() {	# was test_15
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
 
-    fail mds
+    facet_failover mds
+    df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
     [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
@@ -326,7 +329,9 @@ test_15c() {
     done
 
     umount $MOUNT2
-    fail mds
+    facet_failover mds
+
+    df $MOUNT || return 1
 
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
@@ -341,7 +346,8 @@ test_16() {
 
     facet_failover mds
     sleep $TIMEOUT
-    fail mds
+    facet_failover mds
+    df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -363,7 +369,8 @@ test_17() {
 
     facet_failover ost1
     sleep $TIMEOUT
-    fail ost1
+    facet_failover ost1
+    df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -414,7 +421,8 @@ test_20() { #16389
     touch $MOUNT1/a
     touch $MOUNT2/b
     umount $MOUNT2
-    fail mds
+    facet_failover mds
+    df $MOUNT1 || return 1
     rm $MOUNT1/a
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     TIER1=$((`date +%s` - BEFORE))
@@ -423,7 +431,8 @@ test_20() { #16389
     touch $MOUNT1/a
     touch $MOUNT2/b
     umount $MOUNT2
-    fail mds
+    facet_failover mds
+    df $MOUNT1 || return 1
     rm $MOUNT1/a
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     TIER2=$((`date +%s` - BEFORE))
