@@ -15,11 +15,8 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
+TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-mds-scale}
 DEBUGLOG=$TESTSUITELOG.debug
-
-cleanup_logs
-
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
 env >&2
@@ -31,7 +28,7 @@ set -x
 
 [ -n "$CLIENTS" ] || { skip "$0 Need two or more remote clients" && exit 0; }
 [ $CLIENTCOUNT -ge 3 ] || \
-    { skip "$0 Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
+    { skip "$0 Need two or more clients, have $CLIENTCOUNT" && exit 0; }
 
 END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
 LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
@@ -109,7 +106,7 @@ summary_and_cleanup () {
     # actually failed though.  the first node in the END_RUN_NODE is
     # the one we are really interested in.
         if [ -n "$END_RUN_NODE" ]; then
-            var=$(client_var_name $END_RUN_NODE)_load
+            var=${END_RUN_NODE}_load
             echo "Client load failed on node $END_RUN_NODE" 
             echo
             echo "client $END_RUN_NODE load stdout and debug files :
@@ -148,15 +145,6 @@ Status: $result: rc=$rc"
         sleep 5
         kill -9 $CLIENT_LOAD_PIDS || true
     fi
-    if [ $rc -ne 0 ]; then
-        # we are interested in only on failed clients and servers
-        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
-        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
-        local product=$(gather_logs $(comma_list $(osts_nodes) \
-                               $(mdts_nodes) $mdsfailover_HOST $failedclients))
-        echo logs files $product
-    fi
-
     [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
 
     exit $rc
@@ -219,19 +207,6 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
         exit 4
     fi
 
-    log "Wait $SERVERFACET recovery complete before doing next failover ...."
-    if [[ $NUM_FAILOVERS != 0 ]]; then
-        if ! wait_recovery_complete $SERVERFACET ; then
-            echo "$SERVERFACET recovery is not completed!"
-            exit 7
-        fi
-    fi
-
-    log "Checking clients are in FULL state before doing next failover"
-    if ! wait_clients_import_state $NODES_TO_USE $SERVERFACET FULL; then
-        echo "Clients import not FULL, please consider to increase SERVER_FAILOVER_PERIOD=$SERVER_FAILOVER_PERIOD !"
-        
-    fi
     log "Starting failover on $SERVERFACET"
 
     facet_failover "$SERVERFACET" || exit 1

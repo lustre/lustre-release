@@ -99,20 +99,18 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                 return -ENOMEM;
 
         if (obd->u.mds.mds_evict_ost_nids) {
-                rc = obd_set_info_async(mds->mds_osc_exp,
-                                        sizeof(KEY_EVICT_BY_NID),
+                rc = obd_set_info_async(mds->mds_osc_exp,sizeof(KEY_EVICT_BY_NID),
                                         KEY_EVICT_BY_NID, strlen(tmpbuf + 4) + 1,
                                         tmpbuf + 4, set);
                 if (rc)
                         CERROR("Failed to evict nid %s from OSTs: rc %d\n",
                                tmpbuf + 4, rc);
-
-                ptlrpc_check_set(NULL, set);
+                ptlrpc_check_set(set);
         }
 
         /* See the comments in function lprocfs_wr_evict_client()
          * in ptlrpc/lproc_ptlrpc.c for details. - jay */
-        class_incref(obd, __FUNCTION__, cfs_current());
+        class_incref(obd);
         LPROCFS_EXIT();
 
         obd_export_evict_by_nid(obd, tmpbuf+4);
@@ -124,9 +122,163 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                        rc);
 
         LPROCFS_ENTRY();
-        class_decref(obd,  __FUNCTION__, cfs_current());
+        class_decref(obd);
 
         ptlrpc_set_destroy(set);
+        return count;
+}
+
+static int lprocfs_wr_group_info(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        struct mds_grp_downcall_data sparam, *param = &sparam;
+        int size = 0, rc = count;
+
+        if (count < sizeof(param)) {
+                CERROR("%s: invalid data size %lu\n", obd->obd_name, count);
+                return count;
+        }
+
+        if (copy_from_user(param, buffer, sizeof(*param)) ||
+            param->mgd_magic != MDS_GRP_DOWNCALL_MAGIC) {
+                CERROR("%s: MDS group downcall bad params\n", obd->obd_name);
+                return count;
+        }
+
+        if (param->mgd_ngroups > NGROUPS_MAX) {
+                CWARN("%s: uid %u groups %d more than maximum %d\n",
+                      obd->obd_name, param->mgd_uid, param->mgd_ngroups,
+                      NGROUPS_MAX);
+                param->mgd_ngroups = NGROUPS_MAX;
+        }
+
+        if (param->mgd_ngroups > 0) {
+                size = offsetof(struct mds_grp_downcall_data,
+                                mgd_groups[param->mgd_ngroups]);
+                OBD_ALLOC(param, size);
+                if (!param) {
+                        CERROR("%s: fail to alloc %d bytes for uid %u"
+                               " with %d groups\n", obd->obd_name, size,
+                               sparam.mgd_uid, sparam.mgd_ngroups);
+                        param = &sparam;
+                        param->mgd_ngroups = 0;
+                } else if (copy_from_user(param, buffer, size)) {
+                        CERROR("%s: uid %u bad supplementary group data\n",
+                               obd->obd_name, sparam.mgd_uid);
+                        OBD_FREE(param, size);
+                        param = &sparam;
+                        param->mgd_ngroups = 0;
+                }
+        }
+        rc = upcall_cache_downcall(mds->mds_group_hash, param->mgd_err,
+                                   param->mgd_uid, param->mgd_gid,
+                                   param->mgd_ngroups, param->mgd_groups);
+
+        if (param && param != &sparam)
+                OBD_FREE(param, size);
+
+        return rc;
+}
+
+static int lprocfs_rd_group_expire(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%lu\n",
+                        obd->u.mds.mds_group_hash->uc_entry_expire / HZ);
+}
+
+static int lprocfs_wr_group_expire(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 5)
+                obd->u.mds.mds_group_hash->uc_entry_expire = val * HZ;
+        else
+                CERROR("invalid expire time %u for group cache\n", val);
+
+        return count;
+}
+
+static int lprocfs_rd_group_acquire_expire(char *page, char **start, off_t off,
+                                           int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%lu\n",
+                        obd->u.mds.mds_group_hash->uc_acquire_expire / HZ);
+}
+
+static int lprocfs_wr_group_acquire_expire(struct file *file,const char *buffer,
+                                           unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc = 0;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 2)
+                obd->u.mds.mds_group_hash->uc_acquire_expire = val * HZ;
+
+        return count;
+}
+
+static int lprocfs_rd_group_upcall(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%s\n",
+                        obd->u.mds.mds_group_hash->uc_upcall);
+}
+
+static int lprocfs_wr_group_upcall(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct upcall_cache *hash = obd->u.mds.mds_group_hash;
+        char kernbuf[UC_CACHE_UPCALL_MAXPATH] = { '\0' };
+
+        if (count >= UC_CACHE_UPCALL_MAXPATH) {
+                CERROR("%s: group upcall too long\n", obd->obd_name);
+                return -EINVAL;
+        }
+
+        if (copy_from_user(kernbuf, buffer,
+                           min(count, UC_CACHE_UPCALL_MAXPATH - 1)))
+                return -EFAULT;
+
+        /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
+        sscanf(kernbuf, "%s", hash->uc_upcall);
+
+        if (strcmp(hash->uc_name, obd->obd_name) != 0)
+                CWARN("%s: write to upcall name %s for MDS %s\n",
+                      obd->obd_name, hash->uc_upcall, obd->obd_name);
+        CWARN("%s: group upcall set to %s\n", obd->obd_name, hash->uc_upcall);
+
+        return count;
+}
+
+static int lprocfs_wr_group_flush(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+
+        upcall_cache_flush_idle(obd->u.mds.mds_group_hash);
         return count;
 }
 
@@ -164,6 +316,93 @@ static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
         return snprintf(page, count, "%lu\n", mds->mds_atime_diff);
 }
 
+static int lprocfs_wr_rootsquash(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        char kernbuf[50], *tmp, *end;
+        unsigned long uid, gid;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        uid = simple_strtoul(kernbuf, &tmp, 0);
+        if (kernbuf == tmp) {
+                if (tmp[0] != ':')
+                        return -EINVAL;
+                uid = mds->mds_squash_uid;
+        }
+        /* skip ':' */
+        tmp++;
+        gid = simple_strtoul(tmp, &end, 0);
+        if (tmp == end)
+                gid = mds->mds_squash_gid;
+
+        mds->mds_squash_uid = uid;
+        mds->mds_squash_gid = gid;
+        return count;
+}
+
+static int lprocfs_rd_rootsquash(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+
+        *eof = 1;
+        return snprintf(page, count, "%lu:%lu\n",
+                        (unsigned long)mds->mds_squash_uid,
+                        (unsigned long)mds->mds_squash_gid);
+}
+
+static int lprocfs_wr_nosquash_nid(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        char kernbuf[30], *start, *end;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+        kernbuf[count] = '\0';
+
+        /* strip frontal whitespaces */
+        start = kernbuf;
+        while (*start && isspace(*start))
+                start++;
+        /* EOL - string doesn't contain NID */
+        if (*start == '\0')
+                return -EINVAL;
+        /* strip backward whitespaces */
+        end = kernbuf + count - 1;
+        while (*end && isspace(*end))
+                end--;
+        *(end + 1) = '\0';
+
+        mds->mds_nosquash_nid = libcfs_str2nid(start);
+        return count;
+}
+
+static int lprocfs_rd_nosquash_nid(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+
+        *eof = 1;
+        return snprintf(page, count, "%s\n",
+                        libcfs_nid2str(mds->mds_nosquash_nid));
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -180,7 +419,38 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "evict_ost_nids",  lprocfs_mds_rd_evictostnids,
                                                lprocfs_mds_wr_evictostnids, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
+#ifdef HAVE_QUOTA_SUPPORT
+        { "quota_bunit_sz",  lprocfs_quota_rd_bunit, lprocfs_quota_wr_bunit, 0 },
+        { "quota_btune_sz",  lprocfs_quota_rd_btune, lprocfs_quota_wr_btune, 0 },
+        { "quota_iunit_sz",  lprocfs_quota_rd_iunit, lprocfs_quota_wr_iunit, 0 },
+        { "quota_itune_sz",  lprocfs_quota_rd_itune, lprocfs_quota_wr_itune, 0 },
+        { "quota_type",      lprocfs_quota_rd_type,  lprocfs_quota_wr_type, 0 },
+        { "quota_switch_qs", lprocfs_quota_rd_switch_qs,
+                             lprocfs_quota_wr_switch_qs, 0 },
+        { "quota_boundary_factor", lprocfs_quota_rd_boundary_factor,
+                                   lprocfs_quota_wr_boundary_factor, 0 },
+        { "quota_least_bunit", lprocfs_quota_rd_least_bunit,
+                               lprocfs_quota_wr_least_bunit, 0 },
+        { "quota_least_iunit", lprocfs_quota_rd_least_iunit,
+                               lprocfs_quota_wr_least_iunit, 0 },
+        { "quota_qs_factor",   lprocfs_quota_rd_qs_factor,
+                               lprocfs_quota_wr_qs_factor, 0 },
+        { "quota_switch_seconds",  lprocfs_quota_rd_switch_seconds,
+                                   lprocfs_quota_wr_switch_seconds, 0 },
+#endif
+        { "group_expire_interval", lprocfs_rd_group_expire,
+                             lprocfs_wr_group_expire, 0},
+        { "group_acquire_expire", lprocfs_rd_group_acquire_expire,
+                             lprocfs_wr_group_acquire_expire, 0},
+        { "group_upcall",    lprocfs_rd_group_upcall,
+                             lprocfs_wr_group_upcall, 0},
+        { "group_flush",     0, lprocfs_wr_group_flush, 0},
+        { "group_info",      0, lprocfs_wr_group_info, 0 },
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
+        { "rootsquash",      lprocfs_rd_rootsquash,
+                             lprocfs_wr_rootsquash, 0 },
+        { "nosquash_nid",    lprocfs_rd_nosquash_nid,
+                             lprocfs_wr_nosquash_nid, 0 },
         { 0 }
 };
 

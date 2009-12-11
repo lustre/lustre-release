@@ -41,4 +41,3 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
-DIST_SOURCES = $(kciblnd-objs:%.o=%.c)

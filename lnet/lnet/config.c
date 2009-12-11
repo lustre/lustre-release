@@ -86,17 +86,31 @@ lnet_issep (char c)
 	}
 }
 
+int
+lnet_iswhite (char c)
+{
+	switch (c) {
+	case ' ':
+	case '\t':
+	case '\n':
+	case '\r':
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 char *
 lnet_trimwhite(char *str)
 {
 	char *end;
 	
-        while (cfs_iswhite(*str))
+	while (lnet_iswhite(*str))
 		str++;
 	
 	end = str + strlen(str);
 	while (end > str) {
-                if (!cfs_iswhite(end[-1]))
+		if (!lnet_iswhite(end[-1]))
 			break;
 		end--;
 	}
@@ -177,7 +191,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
         the_lnet.ln_network_tokens = tokens;
         the_lnet.ln_network_tokens_nob = tokensize;
         memcpy (tokens, networks, tokensize);
-        str = tokens;
+	str = tokens;
         
         /* Add in the loopback network */
         ni = lnet_new_ni(LNET_MKNET(LOLND, 0), nilist);
@@ -204,7 +218,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 			
 			if (net == LNET_NIDNET(LNET_NID_ANY)) {
                                 lnet_syntax("networks", networks, 
-                                            (int)(str - tokens), strlen(str));
+                                            str - tokens, strlen(str));
                                 LCONSOLE_ERROR_MSG(0x113, "Unrecognised network"
                                                    " type\n");
                                 goto failed;
@@ -222,9 +236,16 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		net = libcfs_str2net(lnet_trimwhite(str));
 		if (net == LNET_NIDNET(LNET_NID_ANY)) {
                         lnet_syntax("networks", networks,
-                                    (int)(str - tokens), strlen(str));
+                                    str - tokens, strlen(str));
                         goto failed;
                 } 
+
+                if (nnets > 0 &&
+                    the_lnet.ln_ptlcompat > 0) {
+                        LCONSOLE_ERROR_MSG(0x114, "Only 1 network supported when"
+                                           " 'portals_compatible' is set\n");
+                        goto failed;
+                }
 
                 nnets++;
                 ni = lnet_new_ni(net, nilist);
@@ -237,7 +258,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		bracket = strchr(iface, ')');
 		if (bracket == NULL) {
                         lnet_syntax("networks", networks,
-                                    (int)(iface - tokens), strlen(iface));
+                                    iface - tokens, strlen(iface));
                         goto failed;
 		}
 
@@ -250,7 +271,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 			iface = lnet_trimwhite(iface);
 			if (*iface == 0) {
                                 lnet_syntax("networks", networks, 
-                                            (int)(iface - tokens), strlen(iface));
+                                            iface - tokens, strlen(iface));
                                 goto failed;
                         }
 
@@ -272,7 +293,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 			str = lnet_trimwhite(str);
 			if (*str != 0) {
                                 lnet_syntax("networks", networks,
-                                            (int)(str - tokens), strlen(str));
+                                            str - tokens, strlen(str));
                                 goto failed;
                         }
 			str = comma + 1;
@@ -282,7 +303,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		str = lnet_trimwhite(str);
 		if (*str != 0) {
                         lnet_syntax("networks", networks,
-                                    (int)(str - tokens), strlen(str));
+                                    str - tokens, strlen(str));
                         goto failed;
                 }
 	}
@@ -381,7 +402,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
 	/* Split 'str' into separate commands */
 	for (;;) {
                 /* skip leading whitespace */
-                while (cfs_iswhite(*str))
+                while (lnet_iswhite(*str))
                         str++;
                 
 		/* scan for separator or comment */
@@ -389,7 +410,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
 			if (lnet_issep(*sep) || *sep == '#')
 				break;
 
-		nob = (int)(sep - str);
+		nob = sep - str;
 		if (nob > 0) {
 			ltb = lnet_new_text_buf(nob);
 			if (ltb == NULL) {
@@ -398,7 +419,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
 			}
 			
                         for (i = 0; i < nob; i++)
-                                if (cfs_iswhite(str[i]))
+                                if (lnet_iswhite(str[i]))
                                         ltb->ltb_text[i] = ' ';
                                 else
                                         ltb->ltb_text[i] = str[i];
@@ -430,7 +451,7 @@ lnet_expand1tb (struct list_head *list,
 	       char *str, char *sep1, char *sep2, 
 	       char *item, int itemlen)
 {
-	int              len1 = (int)(sep1 - str);
+	int              len1 = sep1 - str;
 	int              len2 = strlen(sep2 + 1);
 	lnet_text_buf_t *ltb;
 
@@ -491,7 +512,7 @@ lnet_str2tbs_expand (struct list_head *tbs, char *str)
 
 				/* simple string enumeration */
 				if (lnet_expand1tb(&pending, str, sep, sep2,
-                                                   parsed, (int)(enditem - parsed)) != 0)
+                                                   parsed, enditem - parsed) != 0)
 					goto failed;
 				
 				continue;
@@ -573,7 +594,7 @@ lnet_parse_route (char *str, int *im_a_router)
 	sep = str;
 	for (;;) {
 		/* scan for token start */
-                while (cfs_iswhite(*sep))
+		while (lnet_iswhite(*sep))
 			sep++;
 		if (*sep == 0) {
 			if (ntokens < (got_hops ? 3 : 2))
@@ -585,7 +606,7 @@ lnet_parse_route (char *str, int *im_a_router)
 		token = sep++;
 
 		/* scan for token end */
-                while (*sep != 0 && !cfs_iswhite(*sep))
+		while (*sep != 0 && !lnet_iswhite(*sep))
 			sep++;
 		if (*sep != 0)
 			*sep++ = 0;
@@ -673,7 +694,7 @@ lnet_parse_route (char *str, int *im_a_router)
         goto out;
         
  token_error:
-	lnet_syntax("routes", cmd, (int)(token - str), strlen(token));
+	lnet_syntax("routes", cmd, token - str, strlen(token));
  out:
 	lnet_free_text_bufs(&nets);
 	lnet_free_text_bufs(&gateways);
@@ -708,6 +729,14 @@ lnet_parse_routes (char *routes, int *im_a_router)
 
         *im_a_router = 0;
 
+        if (the_lnet.ln_ptlcompat > 0 && 
+            routes[0] != 0) {
+                /* Can't route when running in compatibility mode */
+                LCONSOLE_ERROR_MSG(0x116, "Route tables are not supported when "
+                                   "'portals_compatible' is set\n");
+                return -EINVAL;
+        }
+        
 	CFS_INIT_LIST_HEAD(&tbs);
 
 	if (lnet_str2tbs_sep(&tbs, routes) < 0) {
@@ -933,7 +962,7 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
         sep = tokens;
         for (;;) {
                 /* scan for token start */
-                while (cfs_iswhite(*sep))
+                while (lnet_iswhite(*sep))
                         sep++;
                 if (*sep == 0)
                         break;
@@ -941,7 +970,7 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
                 token = sep++;
                 
                 /* scan for token end */
-                while (*sep != 0 && !cfs_iswhite(*sep))
+                while (*sep != 0 && !lnet_iswhite(*sep))
                         sep++;
                 if (*sep != 0)
                         *sep++ = 0;
@@ -956,7 +985,7 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
                 rc = lnet_match_network_token(token, ipaddrs, nip);
                 if (rc < 0) {
                         lnet_syntax("ip2nets", net_entry,
-                                    (int)(token - tokens), len);
+                                    token - tokens, len);
                         return rc;
                 }
 
@@ -1014,7 +1043,7 @@ lnet_splitnets(char *source, struct list_head *nets)
                     bracket < sep) {
                         /* netspec lists interfaces... */
 
-                        offset2 = offset + (int)(bracket - tb->ltb_text);
+                        offset2 = offset + (bracket - tb->ltb_text);
                         len = strlen(bracket);
 
                         bracket = strchr(bracket + 1, ')');
@@ -1055,7 +1084,7 @@ lnet_splitnets(char *source, struct list_head *nets)
                 if (sep == NULL)
                         return 0;
 
-                offset += (int)(sep - tb->ltb_text);
+                offset += sep - tb->ltb_text;
                 tb2 = lnet_new_text_buf(strlen(sep));
                 if (tb2 == NULL)
                         return -ENOMEM;

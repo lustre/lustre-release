@@ -34,7 +34,8 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS = lnet klnds ulnds selftest doc utils include	\
+SUBDIRS = libcfs lnet klnds ulnds selftest doc utils include	\
 	autoconf
 
 sources:
+	$(MAKE) sources -C libcfs

@@ -1,0 +1,4 @@
+--- linux/include/linux/lustre_version.h	2005-06-28 12:24:04.000000000 -0400
++++ /dev/null	2004-06-24 13:56:02.000000000 -0400
+@@ -1 +0,0 @@
+-#define LUSTRE_KERNEL_VERSION 39

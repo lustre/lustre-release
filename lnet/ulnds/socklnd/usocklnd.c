@@ -75,7 +75,7 @@ usocklnd_validate_tunables()
                        usock_tuns.ut_timeout);
                 return -1;
         }
-
+                
         if (usock_tuns.ut_poll_timeout <= 0 ||
             usock_tuns.ut_poll_timeout > MAX_REASONABLE_TIMEOUT) {
                 CERROR("USOCK_POLL_TIMEOUT: %d is out of reasonable limits\n",
@@ -88,7 +88,7 @@ usocklnd_validate_tunables()
                        usock_tuns.ut_fair_limit);
                 return -1;
         }
-
+                
         if (usock_tuns.ut_npollthreads < 0 ||
             usock_tuns.ut_npollthreads > MAX_REASONABLE_NPT) {
                 CERROR("USOCK_NPOLLTHREADS: %d is out of reasonable limits\n",
@@ -101,7 +101,7 @@ usocklnd_validate_tunables()
                        usock_tuns.ut_txcredits);
                 return -1;
         }
-
+                
         if (usock_tuns.ut_peertxcredits <= 0) {
                 CERROR("USOCK_PEERTXCREDITS: %d should be positive\n",
                        usock_tuns.ut_peertxcredits);
@@ -121,7 +121,7 @@ usocklnd_validate_tunables()
                        usock_tuns.ut_socknagle);
                 return -1;
         }
-
+        
         if (usock_tuns.ut_sockbufsiz < 0) {
                 CERROR("USOCK_SOCKBUFSIZ: %d should be 0 or positive\n",
                        usock_tuns.ut_sockbufsiz);
@@ -135,22 +135,22 @@ void
 usocklnd_release_poll_states(int n)
 {
         int i;
-
+        
         for (i = 0; i < n; i++) {
                 usock_pollthread_t *pt = &usock_data.ud_pollthreads[i];
-
-                libcfs_sock_release(pt->upt_notifier[0]);
-                libcfs_sock_release(pt->upt_notifier[1]);
+                
+                close(pt->upt_notifier_fd);
+                close(pt->upt_pollfd[0].fd);
 
                 pthread_mutex_destroy(&pt->upt_pollrequests_lock);
                 cfs_fini_completion(&pt->upt_completion);
-
+                
                 LIBCFS_FREE (pt->upt_pollfd,
                              sizeof(struct pollfd) * pt->upt_npollfd);
                 LIBCFS_FREE (pt->upt_idx2conn,
                               sizeof(usock_conn_t *) * pt->upt_npollfd);
                 LIBCFS_FREE (pt->upt_fd2idx,
-                              sizeof(int) * pt->upt_nfd2idx);
+                              sizeof(int) * pt->upt_nfd2idx);                
         }
 }
 
@@ -158,55 +158,55 @@ int
 usocklnd_update_tunables()
 {
         int rc;
-
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_timeout,
+        
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_timeout,
                                       "USOCK_TIMEOUT");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_poll_timeout,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_poll_timeout,
                                       "USOCK_POLL_TIMEOUT");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_npollthreads,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_npollthreads,
                                       "USOCK_NPOLLTHREADS");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_fair_limit,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_fair_limit,
                                       "USOCK_FAIR_LIMIT");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_min_bulk,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_min_bulk,
                                       "USOCK_MIN_BULK");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_txcredits,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_txcredits,
                                       "USOCK_TXCREDITS");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_peertxcredits,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_peertxcredits,
                                       "USOCK_PEERTXCREDITS");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_socknagle,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_socknagle,
                                       "USOCK_SOCKNAGLE");
         if (rc)
                 return rc;
 
-        rc = lnet_parse_int_tunable(&usock_tuns.ut_sockbufsiz,
+        rc = cfs_parse_int_tunable(&usock_tuns.ut_sockbufsiz,
                                       "USOCK_SOCKBUFSIZ");
         if (rc)
                 return rc;
 
         if (usocklnd_validate_tunables())
                 return -EINVAL;
-
+        
         if (usock_tuns.ut_npollthreads == 0) {
                 usock_tuns.ut_npollthreads = cfs_online_cpus();
 
@@ -215,7 +215,7 @@ usocklnd_update_tunables()
                         return -EINVAL;
                 }
         }
-
+        
         return 0;
 }
 
@@ -226,11 +226,11 @@ usocklnd_base_startup()
         usock_pollthread_t *pt;
         int                 i;
         int                 rc;
-
+        
         rc = usocklnd_update_tunables();
         if (rc)
                 return rc;
-
+        
         usock_data.ud_npollthreads = usock_tuns.ut_npollthreads;
 
         LIBCFS_ALLOC (usock_data.ud_pollthreads,
@@ -241,16 +241,17 @@ usocklnd_base_startup()
 
         /* Initialize poll thread state structures */
         for (i = 0; i < usock_data.ud_npollthreads; i++) {
+                int notifier[2];
 
                 pt = &usock_data.ud_pollthreads[i];
 
                 rc = -ENOMEM;
-
+                
                 LIBCFS_ALLOC (pt->upt_pollfd,
                               sizeof(struct pollfd) * UPT_START_SIZ);
                 if (pt->upt_pollfd == NULL)
                         goto base_startup_failed_0;
-
+                
                 LIBCFS_ALLOC (pt->upt_idx2conn,
                               sizeof(usock_conn_t *) * UPT_START_SIZ);
                 if (pt->upt_idx2conn == NULL)
@@ -259,11 +260,11 @@ usocklnd_base_startup()
                 LIBCFS_ALLOC (pt->upt_fd2idx,
                               sizeof(int) * UPT_START_SIZ);
                 if (pt->upt_fd2idx == NULL)
-                        goto base_startup_failed_2;
-
+                        goto base_startup_failed_2;                
+                
                 memset(pt->upt_fd2idx, 0,
-                       sizeof(int) * UPT_START_SIZ);
-
+                       sizeof(int) * UPT_START_SIZ);                       
+                
                 LIBCFS_ALLOC (pt->upt_skip,
                               sizeof(int) * UPT_START_SIZ);
                 if (pt->upt_skip == NULL)
@@ -271,11 +272,13 @@ usocklnd_base_startup()
 
                 pt->upt_npollfd = pt->upt_nfd2idx = UPT_START_SIZ;
 
-                rc = libcfs_socketpair(pt->upt_notifier);
+                rc = libcfs_socketpair(notifier);
                 if (rc != 0)
                         goto base_startup_failed_4;
 
-                pt->upt_pollfd[0].fd = LIBCFS_SOCK2FD(pt->upt_notifier[1]);
+                pt->upt_notifier_fd = notifier[0];
+
+                pt->upt_pollfd[0].fd = notifier[1];
                 pt->upt_pollfd[0].events = POLLIN;
                 pt->upt_pollfd[0].revents = 0;
 
@@ -289,10 +292,10 @@ usocklnd_base_startup()
                 cfs_init_completion(&pt->upt_completion);
         }
 
-        /* Initialize peer hash list */
+        /* Initialize peer hash list */        
         for (i = 0; i < UD_PEER_HASH_SIZE; i++)
                 CFS_INIT_LIST_HEAD(&usock_data.ud_peers[i]);
-
+        
         pthread_rwlock_init(&usock_data.ud_peers_lock, NULL);
 
         /* Spawn poll threads */
@@ -304,9 +307,9 @@ usocklnd_base_startup()
                         return rc;
                 }
         }
-
+        
         usock_data.ud_state = UD_STATE_INITIALIZED;
-
+        
         return 0;
 
   base_startup_failed_4:
@@ -330,7 +333,7 @@ void
 usocklnd_base_shutdown(int n)
 {
         int i;
-
+        
         usock_data.ud_shutdown = 1;
         for (i = 0; i < n; i++) {
                 usock_pollthread_t *pt = &usock_data.ud_pollthreads[i];
@@ -345,7 +348,7 @@ usocklnd_base_shutdown(int n)
         LIBCFS_FREE (usock_data.ud_pollthreads,
                      usock_data.ud_npollthreads *
                      sizeof(usock_pollthread_t));
-
+        
         usock_data.ud_state = UD_STATE_INIT_NOTHING;
 }
 
@@ -364,18 +367,18 @@ usocklnd_assign_ni_nid(lnet_ni_t *ni)
         int   rc;
         int   up;
         __u32 ipaddr;
-
+        
         /* Find correct IP-address and update ni_nid with it.
          * Two cases are supported:
          * 1) no explicit interfaces are defined. NID will be assigned to
          * first non-lo interface that is up;
          * 2) exactly one explicit interface is defined. For example,
-         * LNET_NETWORKS='tcp(eth0)' */
+         * LNET_NETWORKS='tcp(eth0)' */     
 
         if (ni->ni_interfaces[0] == NULL) {
                 char **names;
                 int    i, n;
-
+            
                 n = libcfs_ipif_enumerate(&names);
                 if (n <= 0) {
                         CERROR("Can't enumerate interfaces: %d\n", n);
@@ -383,26 +386,26 @@ usocklnd_assign_ni_nid(lnet_ni_t *ni)
                 }
 
                 for (i = 0; i < n; i++) {
-
+   
                         if (!strcmp(names[i], "lo")) /* skip the loopback IF */
                                 continue;
-
+                    
                         rc = libcfs_ipif_query(names[i], &up, &ipaddr);
                         if (rc != 0) {
                                 CWARN("Can't get interface %s info: %d\n",
                                       names[i], rc);
                                 continue;
                         }
-
+                    
                         if (!up) {
                                 CWARN("Ignoring interface %s (down)\n",
                                       names[i]);
                             continue;
                         }
-
+                        
                         break;      /* one address is quite enough */
                 }
-
+            
                 libcfs_ipif_free_enumeration(names, n);
 
                 if (i >= n) {
@@ -430,13 +433,13 @@ usocklnd_assign_ni_nid(lnet_ni_t *ni)
                                ni->ni_interfaces[0]);
                         return -1;
                 }
-
+                
                 CDEBUG(D_NET, "Explicit interface defined: %s. "
                        "%u.%u.%u.%u used\n",
                        ni->ni_interfaces[0], HIPQUAD(ipaddr));
-
+                
         }
-
+        
         ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ipaddr);
 
         return 0;
@@ -473,7 +476,7 @@ usocklnd_startup(lnet_ni_t *ni)
 
         ni->ni_maxtxcredits = usock_tuns.ut_txcredits;
         ni->ni_peertxcredits = usock_tuns.ut_peertxcredits;
-
+    
         usock_data.ud_nets_count++;
         return 0;
 
@@ -495,14 +498,14 @@ usocklnd_shutdown(lnet_ni_t *ni)
 
         net->un_shutdown = 1;
 
-        usocklnd_del_all_peers(ni);
+        usocklnd_del_all_peers(ni);        
 
         /* Wait for all peer state to clean up */
         pthread_mutex_lock(&net->un_lock);
-        while (net->un_peercount != 0)
+        while (net->un_peercount != 0) 
                 pthread_cond_wait(&net->un_cond, &net->un_lock);
         pthread_mutex_unlock(&net->un_lock);
-
+        
         /* Release usock_net_t structure */
         pthread_mutex_destroy(&net->un_lock);
         pthread_cond_destroy(&net->un_cond);
@@ -526,7 +529,7 @@ usocklnd_del_all_peers(lnet_ni_t *ni)
         for (i = 0; i < UD_PEER_HASH_SIZE; i++) {
                 list_for_each_safe (ptmp, pnxt, &usock_data.ud_peers[i]) {
                         peer = list_entry (ptmp, usock_peer_t, up_list);
-
+                        
                         if (peer->up_ni != ni)
                                 continue;
 
@@ -535,7 +538,7 @@ usocklnd_del_all_peers(lnet_ni_t *ni)
         }
 
         pthread_rwlock_unlock(&usock_data.ud_peers_lock);
-
+        
         /* wakeup all threads */
         for (i = 0; i < usock_data.ud_npollthreads; i++)
                 usocklnd_wakeup_pollthread(i);
@@ -561,10 +564,10 @@ void
 usocklnd_del_conns_locked(usock_peer_t *peer)
 {
         int i;
-
+        
         for (i=0; i < N_CONN_TYPES; i++) {
                 usock_conn_t *conn = peer->up_conns[i];
                 if (conn != NULL)
-                        usocklnd_conn_kill(conn);
-        }
+                        usocklnd_conn_kill(conn);                 
+        }       
 }

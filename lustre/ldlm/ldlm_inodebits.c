@@ -87,21 +87,6 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         continue;
                 }
 
-                if (lock->l_req_mode == LCK_COS) {
-                        if (lock->l_client_cookie == req->l_client_cookie) {
-                                tmp = mode_tail;
-                        } else {
-                                tmp = mode_tail;
-                                if (!work_list)
-                                        RETURN(0);
-                                compat = 0;
-                                if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(lock, req,
-                                                               work_list);
-                        }
-                        continue;
-                }
-
                 for (;;) {
                         struct list_head *head;
 
@@ -115,7 +100,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 /* conflicting policy */
                                 if (!work_list)
                                         RETURN(0);
-
+                               
                                 compat = 0;
 
                                 /* add locks of the policy group to
@@ -153,7 +138,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        CFS_LIST_HEAD(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc;
         ENTRY;
 
@@ -188,7 +173,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
+                rc = ldlm_run_bl_ast_work(&rpc_list);
                 lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);

@@ -53,6 +53,9 @@
 #include <linux/smp_lock.h>
 #include <linux/unistd.h>
 #include <linux/uio.h>
+#ifdef HAVE_SCATTERLIST_SETPAGE
+# include <linux/scatterlist.h>
+#endif
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -73,7 +76,7 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet-sysctl.h>
@@ -133,7 +136,7 @@ extern kib_tunables_t  kiblnd_tunables;
 #define IBLND_CREDIT_HIGHWATER_V1    7          /* V1 only : when eagerly to return credits */
 
 #define IBLND_CREDITS_DEFAULT        8          /* default # of peer credits */
-#define IBLND_CREDITS_MAX          ((typeof(((kib_msg_t*) 0)->ibm_credits)) - 1)  /* Max # of peer credits */
+#define IBLND_CREDITS_MAX          ((typeof(((kib_msg_t*) 0)->ibm_credits))-1)  /* Max # of peer credits */
 
 #define IBLND_MSG_QUEUE_SIZE(v)    ((v) == IBLND_MSG_VERSION_1 ? \
                                      IBLND_MSG_QUEUE_SIZE_V1 :   \
@@ -1000,3 +1003,13 @@ int  kiblnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                  unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                  unsigned int offset, unsigned int mlen, unsigned int rlen);
 
+/* compat macroses */
+#ifndef HAVE_SCATTERLIST_SETPAGE
+static inline void sg_set_page(struct scatterlist *sg, struct page *page,
+                               unsigned int len, unsigned int offset)
+{
+        sg->page = page;
+        sg->offset = offset;
+        sg->length = len;
+}
+#endif

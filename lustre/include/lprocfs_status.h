@@ -150,7 +150,6 @@ struct lprocfs_counter {
         unsigned int           lc_config;
         __s64                  lc_count;
         __s64                  lc_sum;
-        __s64                  lc_sum_irq;
         __s64                  lc_min;
         __s64                  lc_max;
         __s64                  lc_sumsquare;
@@ -166,21 +165,19 @@ struct lprocfs_percpu {
 #define LPROCFS_GET_SMP_ID  0x0002
 
 enum lprocfs_stats_flags {
-        LPROCFS_STATS_FLAG_NONE     = 0x0000, /* per cpu counter */
+        LPROCFS_STATS_FLAG_PERCPU   = 0x0000, /* per cpu counter */
         LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
                                                * area and need locking */
-        LPROCFS_STATS_GET_SMP_ID    = 0x0002, /* just record locking with
-                                               * LPROCFS_GET_SMP_ID flag */
 };
 
 enum lprocfs_fields_flags {
-        LPROCFS_FIELDS_FLAGS_CONFIG     = 0x0001,
-        LPROCFS_FIELDS_FLAGS_SUM        = 0x0002,
-        LPROCFS_FIELDS_FLAGS_MIN        = 0x0003,
-        LPROCFS_FIELDS_FLAGS_MAX        = 0x0004,
-        LPROCFS_FIELDS_FLAGS_AVG        = 0x0005,
-        LPROCFS_FIELDS_FLAGS_SUMSQUARE  = 0x0006,
-        LPROCFS_FIELDS_FLAGS_COUNT      = 0x0007,
+        LPROCFS_FIELDS_FLAGS_CONFIG = 0x0001,
+        LPROCFS_FIELDS_FLAGS_SUM    = 0x0002,
+        LPROCFS_FIELDS_FLAGS_MIN    = 0x0003,
+        LPROCFS_FIELDS_FLAGS_MAX    = 0x0004,
+        LPROCFS_FIELDS_FLAGS_AVG    = 0x0005,
+        LPROCFS_FIELDS_FLAGS_SUMSQUARE = 0x0006,
+        LPROCFS_FIELDS_FLAGS_COUNT  = 0x0007,
 };
 
 struct lprocfs_stats {
@@ -191,9 +188,6 @@ struct lprocfs_stats {
         struct lprocfs_percpu *ls_percpu[0];
 };
 
-#define OPC_RANGE(seg) (seg ## _LAST_OPC - seg ## _FIRST_OPC)
-
-/* Pack all opcodes down into a single monotonically increasing index */
 static inline int opcode_offset(__u32 opc) {
         if (opc < OST_LAST_OPC) {
                  /* OST opcode */
@@ -201,95 +195,58 @@ static inline int opcode_offset(__u32 opc) {
         } else if (opc < MDS_LAST_OPC) {
                 /* MDS opcode */
                 return (opc - MDS_FIRST_OPC +
-                        OPC_RANGE(OST));
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < LDLM_LAST_OPC) {
                 /* LDLM Opcode */
                 return (opc - LDLM_FIRST_OPC +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < MGS_LAST_OPC) {
                 /* MGS Opcode */
                 return (opc - MGS_FIRST_OPC +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
                 return (opc - OBD_FIRST_OPC +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < LLOG_LAST_OPC) {
                 /* LLOG Opcode */
                 return (opc - LLOG_FIRST_OPC +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < QUOTA_LAST_OPC) {
                 /* LQUOTA Opcode */
                 return (opc - QUOTA_FIRST_OPC +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < SEQ_LAST_OPC) {
-                /* SEQ opcode */
-                return (opc - SEQ_FIRST_OPC +
-                        OPC_RANGE(QUOTA) +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < SEC_LAST_OPC) {
-                /* SEC opcode */
-                return (opc - SEC_FIRST_OPC +
-                        OPC_RANGE(SEQ) +
-                        OPC_RANGE(QUOTA) +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
-        } else if (opc < FLD_LAST_OPC) {
-                /* FLD opcode */
-                 return (opc - FLD_FIRST_OPC +
-                        OPC_RANGE(SEC) +
-                        OPC_RANGE(SEQ) +
-                        OPC_RANGE(QUOTA) +
-                        OPC_RANGE(LLOG) +
-                        OPC_RANGE(OBD) +
-                        OPC_RANGE(MGS) +
-                        OPC_RANGE(LDLM) +
-                        OPC_RANGE(MDS) +
-                        OPC_RANGE(OST));
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
         }
 }
 
-
-#define LUSTRE_MAX_OPCODES (OPC_RANGE(OST)  + \
-                            OPC_RANGE(MDS)  + \
-                            OPC_RANGE(LDLM) + \
-                            OPC_RANGE(MGS)  + \
-                            OPC_RANGE(OBD)  + \
-                            OPC_RANGE(LLOG) + \
-                            OPC_RANGE(SEC)  + \
-                            OPC_RANGE(SEQ)  + \
-                            OPC_RANGE(SEC)  + \
-                            OPC_RANGE(FLD)  )
+#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
+                            (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
+                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
+                            (QUOTA_LAST_OPC - QUOTA_FIRST_OPC))
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
-                            OPC_RANGE(EXTRA))
+                           (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
@@ -314,7 +271,6 @@ enum {
         MDS_REINT_UNLINK,
         MDS_REINT_RENAME,
         MDS_REINT_OPEN,
-        MDS_REINT_SETXATTR,
         BRW_READ_BYTES,
         BRW_WRITE_BYTES,
         EXTRA_LAST_OPC
@@ -360,10 +316,8 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
         } else {
                 if (type & LPROCFS_GET_NUM_CPU)
                         rc = num_possible_cpus();
-                if (type & LPROCFS_GET_SMP_ID) {
-                        stats->ls_flags |= LPROCFS_STATS_GET_SMP_ID;
-                        rc = cfs_get_cpu();
-                }
+                if (type & LPROCFS_GET_SMP_ID)
+                        rc = smp_processor_id();
         }
         return rc;
 }
@@ -372,8 +326,6 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats)
 {
         if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
                 spin_unlock(&stats->ls_lock);
-        else if (stats->ls_flags & LPROCFS_STATS_GET_SMP_ID)
-                cfs_put_cpu();
 }
 
 /* Two optimized LPROCFS counter increment functions are provided:
@@ -395,6 +347,7 @@ extern void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
 
 extern __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
                                  enum lprocfs_fields_flags field);
+
 static inline __u64 lprocfs_stats_collector(struct lprocfs_stats *stats,
                                             int idx,
                                             enum lprocfs_fields_flags field)
@@ -418,33 +371,19 @@ extern void lprocfs_init_ops_stats(int num_private_stats,
 extern void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats);
 extern int lprocfs_alloc_obd_stats(struct obd_device *obddev,
                                    unsigned int num_private_stats);
-extern int lprocfs_alloc_md_stats(struct obd_device *obddev,
-                                  unsigned int num_private_stats);
 extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
                                  unsigned conf, const char *name,
                                  const char *units);
 extern void lprocfs_free_obd_stats(struct obd_device *obddev);
 struct obd_export;
-struct nid_stat;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
                                    cfs_proc_dir_entry_t *entry);
 extern int lprocfs_exp_setup(struct obd_export *exp,
                              lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
-extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
-                                                char *name,
-                                                cfs_read_proc_t *read_proc,
-                                                cfs_write_proc_t *write_proc,
-                                                void *data,
-                                                struct file_operations *fops);
-extern struct proc_dir_entry *lprocfs_add_symlink(const char *name,
-                        struct proc_dir_entry *parent, const char *dest);
-extern void lprocfs_free_per_client_stats(struct obd_device *obd);
-extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
-                                         unsigned long count, void *data);
-extern int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
-                                        int count, int *eof,  void *data);
-
+extern int lprocfs_add_simple(struct proc_dir_entry *root,
+                              char *name, read_proc_t *read_proc,
+                              write_proc_t *write_proc, void *data);
 extern int lprocfs_register_stats(cfs_proc_dir_entry_t *root, const char *name,
                                   struct lprocfs_stats *stats);
 
@@ -459,15 +398,23 @@ extern cfs_proc_dir_entry_t *lprocfs_register(const char *name,
                                                void *data);
 
 extern void lprocfs_remove(cfs_proc_dir_entry_t **root);
-extern void lprocfs_remove_proc_entry(const char *name,
-                                      struct proc_dir_entry *parent);
 
 extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
                                            const char *name);
 
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
+extern int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
+                              read_proc_t *read_proc, write_proc_t *write_proc,
+                              void *data);
+struct nid_stat;
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
+extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
+                                         unsigned long count, void *data);
+extern int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
+                                        int count, int *eof,  void *data);
+
+
 extern struct file_operations lprocfs_evict_client_fops;
 
 extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name,
@@ -501,8 +448,6 @@ extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                              int *eof, void *data);
-extern int lprocfs_rd_state(char *page, char **start, off_t off, int count,
-                            int *eof, void *data);
 extern int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
                                     int count, int *eof, void *data);
 extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
@@ -520,11 +465,6 @@ extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
-
-extern int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data);
-extern int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
-                                         unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
@@ -557,9 +497,11 @@ void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_clear(struct obd_histogram *oh);
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh);
 
-void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
-                           struct lprocfs_counter *cnt);
-
+/* lprocfs_status.c: counter read/write functions */
+extern int lprocfs_counter_read(char *page, char **start, off_t off,
+                                int count, int *eof, void *data);
+extern int lprocfs_counter_write(struct file *file, const char *buffer,
+                                 unsigned long count, void *data);
 
 /* lprocfs_status.c: recovery status */
 int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
@@ -581,23 +523,20 @@ extern struct rw_semaphore _lprocfs_lock;
 } while(0)
 
 #ifdef HAVE_PROCFS_DELETED
-static inline
-int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
-{
-        LPROCFS_ENTRY();
-        if ((dp)->deleted) {
-                LPROCFS_EXIT();
-                return -ENODEV;
-        }
-        return 0;
-}
+#define LPROCFS_ENTRY_AND_CHECK(dp) do {        \
+        typecheck(struct proc_dir_entry *, dp); \
+        LPROCFS_ENTRY();                        \
+        if ((dp)->deleted) {                    \
+                LPROCFS_EXIT();                 \
+                return -ENODEV;                 \
+        }                                       \
+} while(0)
+#define LPROCFS_CHECK_DELETED(dp) ((dp)->deleted)
 #else
-static inline
-int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
-{
+
+#define LPROCFS_ENTRY_AND_CHECK(dp) \
         LPROCFS_ENTRY();
-        return 0;
-}
+#define LPROCFS_CHECK_DELETED(dp) (0)
 #endif
 
 #define LPROCFS_WRITE_ENTRY()     do {  \
@@ -654,6 +593,7 @@ struct file_operations name##_fops = {                                     \
 struct ptlrpc_request;
 extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
 
+#ifdef CRAY_XT3
 /* lprocfs_status.c: read recovery max time bz13079 */
 int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
                                     int count, int *eof, void *data);
@@ -661,6 +601,7 @@ int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
 /* lprocfs_status.c: write recovery max time bz13079 */
 int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
                                     unsigned long count, void *data);
+#endif
 
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
@@ -712,13 +653,8 @@ extern int lprocfs_quota_rd_qs_factor(char *page, char **start, off_t off,
 extern int lprocfs_quota_wr_qs_factor(struct file *file, const char *buffer,
                                       unsigned long count, void *data);
 
-
-
 #else
 /* LPROCFS is not defined */
-
-
-
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
                                        int index, long amount) { return; }
 static inline void lprocfs_counter_incr(struct lprocfs_stats *stats,
@@ -753,9 +689,6 @@ static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
                                           unsigned int num_private_stats)
 { return 0; }
-static inline int lprocfs_alloc_md_stats(struct obd_device *obddev,
-                                         unsigned int num_private_stats)
-{ return 0; }
 static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 { return; }
 
@@ -767,16 +700,13 @@ static inline int lprocfs_exp_setup(struct obd_export *exp,
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
-static inline cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
+static inline int lprocfs_add_simple(struct proc_dir_entry *root,
                                      char *name,
-                                     cfs_read_proc_t *read_proc,
-                                     cfs_write_proc_t *write_proc,
-                                     void *data,
-                                     struct file_operations *fops)
+                                     read_proc_t *read_proc,
+                                     write_proc_t *write_proc,
+                                     void *data)
 {return 0; }
-static inline struct proc_dir_entry *lprocfs_add_symlink(const char *name,
-                        struct proc_dir_entry *parent, const char *dest)
-{return NULL; }
+struct nid_stat;
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 {}
 static inline
@@ -788,6 +718,7 @@ int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
                                  int count, int *eof,  void *data)
 {return count;}
 
+
 static inline cfs_proc_dir_entry_t *
 lprocfs_register(const char *name, cfs_proc_dir_entry_t *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
@@ -795,8 +726,6 @@ static inline int lprocfs_add_vars(cfs_proc_dir_entry_t *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }
 static inline void lprocfs_remove(cfs_proc_dir_entry_t **root) {};
-static inline void lprocfs_remove_proc_entry(const char *name,
-                                             struct proc_dir_entry *parent) {};
 static inline cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *head,
                                     const char *name) {return 0;}
 static inline int lprocfs_obd_setup(struct obd_device *dev,
@@ -814,12 +743,8 @@ static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
 static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 { return 0; }
-static inline int lprocfs_rd_import(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_state(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data)
-{ return 0; }
+static inline int lprocfs_rd_import(char *page, char **start, off_t off, int count,
+                                    int *eof, void *data) { return 0; }
 static inline int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
                                            int count, int *eof, void *data)
 { return 0; }
@@ -878,8 +803,11 @@ void lprocfs_oh_clear(struct obd_histogram *oh) {}
 static inline
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh) { return 0; }
 static inline
-void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
-                           struct lprocfs_counter *cnt) {}
+int lprocfs_counter_read(char *page, char **start, off_t off,
+                         int count, int *eof, void *data) { return 0; }
+static inline
+int lprocfs_counter_write(struct file *file, const char *buffer,
+                          unsigned long count, void *data) { return 0; }
 
 static inline
 __u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,

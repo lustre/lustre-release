@@ -41,99 +41,35 @@
 #error Do not #include this file directly. #include <obd.h> instead
 #endif
 
-#include <obd_support.h>
-
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/list.h>
-# include <linux/sched.h>  /* for struct task_struct, for current.h */
-# include <asm/current.h>  /* for smp_lock.h */
+# include <linux/sched.h> /* for struct task_struct, for current.h */
+# include <asm/current.h> /* for smp_lock.h */
 # include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 # include <linux/mount.h>
-# ifndef HAVE_VFS_INTENT_PATCHES
-#  include <linux/lustre_intent.h>
-# endif
 #endif
 
-typedef struct {
-        spinlock_t          lock;
-
-#ifdef CLIENT_OBD_LIST_LOCK_DEBUG
-        unsigned long       time;
-        struct task_struct *task;
-        const char         *func;
-        int                 line;
-#endif
-
-} client_obd_lock_t;
-
-#ifdef CLIENT_OBD_LIST_LOCK_DEBUG
-static inline void __client_obd_list_lock(client_obd_lock_t *lock,
-                                          const char *func,
-                                          int line)
-{
-        unsigned long cur = jiffies;
-        while (1) {
-                if (spin_trylock(&lock->lock)) {
-                        LASSERT(lock->task == NULL);
-                        lock->task = current;
-                        lock->func = func;
-                        lock->line = line;
-                        lock->time = jiffies;
-                        break;
-                }
-
-                if ((jiffies - cur > 5 * HZ) &&
-                    (jiffies - lock->time > 5 * HZ)) {
-                        LCONSOLE_WARN("LOCK UP! the lock %p was acquired"
-                                      " by <%s:%d:%s:%d> %lu time, I'm %s:%d\n",
-                                      lock, lock->task->comm, lock->task->pid,
-                                      lock->func, lock->line,
-                                      (jiffies - lock->time),
-                                      current->comm, current->pid);
-                        LCONSOLE_WARN("====== for process holding the "
-                                      "lock =====\n");
-                        libcfs_debug_dumpstack(lock->task);
-                        LCONSOLE_WARN("====== for current process =====\n");
-                        libcfs_debug_dumpstack(NULL);
-                        LCONSOLE_WARN("====== end =======\n");
-                        cfs_pause(1000* HZ);
-                }
-        }
-}
-
-#define client_obd_list_lock(lock) \
-        __client_obd_list_lock(lock, __FUNCTION__, __LINE__)
-
-static inline void client_obd_list_unlock(client_obd_lock_t *lock)
-{
-        LASSERT(lock->task != NULL);
-        lock->task = NULL;
-        lock->time = jiffies;
-        spin_unlock(&lock->lock);
-}
-
-#else /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
-static inline void client_obd_list_lock(client_obd_lock_t *lock)
-{
-	spin_lock(&lock->lock);
-}
-
-static inline void client_obd_list_unlock(client_obd_lock_t *lock)
-{
-        spin_unlock(&lock->lock);
-}
-
-#endif /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
+typedef spinlock_t client_obd_lock_t;
 
 static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 {
-        spin_lock_init(&lock->lock);
+        spin_lock_init(lock);
 }
 
 static inline void client_obd_list_lock_done(client_obd_lock_t *lock)
 {}
+
+static inline void client_obd_list_lock(client_obd_lock_t *lock)
+{
+        spin_lock(lock);
+}
+
+static inline void client_obd_list_unlock(client_obd_lock_t *lock)
+{
+        spin_unlock(lock);
+}
 
 #if defined(__KERNEL__) && !defined(HAVE_ADLER)
 /* zlib_adler() is an inline function defined in zutil.h */

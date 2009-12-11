@@ -60,7 +60,7 @@
 
 #define PROC_DIRS {                     \
         "/proc/fs/lustre/mgs",          \
-        "/proc/fs/lustre/mdt",          \
+        "/proc/fs/lustre/mds",          \
         "/proc/fs/lustre/obdfilter",    \
         NULL,                           \
 }

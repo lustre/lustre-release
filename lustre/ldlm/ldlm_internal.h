@@ -89,6 +89,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                                struct obd_import *imp, int force);
 void ldlm_namespace_free_post(struct ldlm_namespace *ns);
+
 /* ldlm_lock.c */
 
 /* Number of blocking/completion callbacks that will be sent in
@@ -101,18 +102,12 @@ struct ldlm_cb_set_arg {
         __u32 type; /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
 };
 
-typedef enum {
-        LDLM_WORK_BL_AST,
-        LDLM_WORK_CP_AST,
-        LDLM_WORK_REVOKE_AST
-} ldlm_desc_ast_t;
-
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 struct ldlm_lock *
-ldlm_lock_create(struct ldlm_namespace *ns, const struct ldlm_res_id *,
-                 ldlm_type_t type, ldlm_mode_t,
-                 const struct ldlm_callback_suite *cbs,
-                 void *data, __u32 lvb_len);
+ldlm_lock_create(struct ldlm_namespace *ns, struct ldlm_res_id,
+                 ldlm_type_t type, ldlm_mode_t, ldlm_blocking_callback,
+                 ldlm_completion_callback, ldlm_glimpse_callback, void *data,
+                 __u32 lvb_len);
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock **,
                                void *cookie, int *flags);
 void ldlm_lock_addref_internal(struct ldlm_lock *, __u32 mode);
@@ -123,15 +118,14 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
                                 struct list_head *work_list);
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
                          struct list_head *work_list);
-int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type);
+int ldlm_run_bl_ast_work(struct list_head *rpc_list);
+int ldlm_run_cp_ast_work(struct list_head *rpc_list);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru(struct ldlm_lock *lock);
 void ldlm_lock_touch_in_lru(struct ldlm_lock *lock);
 void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
-
-void ldlm_cancel_locks_for_export(struct obd_export *export);
 
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,

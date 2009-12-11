@@ -48,6 +48,10 @@ struct llog_process_info {
         struct completion   lpi_completion;
 };
 
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int idx, int count,
+                      struct llog_catid *idarray);
+
 int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                        struct llog_logid *logid);
 int class_config_dump_handler(struct llog_handle * handle,

@@ -58,6 +58,8 @@ struct fsfilt_objinfo {
         int fso_bufcnt;
 };
 
+#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+
 struct lustre_dquot;
 struct fsfilt_operations {
         struct list_head fs_list;
@@ -121,9 +123,9 @@ struct fsfilt_operations {
                                  int cmd);
         int     (* fs_qids)(struct file *file, struct inode *inode, int type,
                             struct list_head *list);
+        int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
         int     (* fs_get_mblk)(struct super_block *sb, int *count,
                                 struct inode *inode, int frags);
-        int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
         lvfs_sbdev_type (* fs_journal_sbdev)(struct super_block *sb);
 };
 
@@ -167,20 +169,18 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
         return (lvfs_sbdev_type)0;
 }
 
-#define FSFILT_OP_UNLINK                1
-#define FSFILT_OP_RMDIR                 2
-#define FSFILT_OP_RENAME                3
-#define FSFILT_OP_CREATE                4
-#define FSFILT_OP_MKDIR                 5
-#define FSFILT_OP_SYMLINK               6
-#define FSFILT_OP_MKNOD                 7
-#define FSFILT_OP_SETATTR               8
-#define FSFILT_OP_LINK                  9
-#define FSFILT_OP_CANCEL_UNLINK         10
-#define FSFILT_OP_NOOP                  15
-#define FSFILT_OP_UNLINK_PARTIAL_CHILD  21
-#define FSFILT_OP_UNLINK_PARTIAL_PARENT 22
-#define FSFILT_OP_CREATE_PARTIAL_CHILD  23
+#define FSFILT_OP_UNLINK         1
+#define FSFILT_OP_RMDIR          2
+#define FSFILT_OP_RENAME         3
+#define FSFILT_OP_CREATE         4
+#define FSFILT_OP_MKDIR          5
+#define FSFILT_OP_SYMLINK        6
+#define FSFILT_OP_MKNOD          7
+#define FSFILT_OP_SETATTR        8
+#define FSFILT_OP_LINK           9
+#define FSFILT_OP_CANCEL_UNLINK 10
+#define FSFILT_OP_JOIN          11
+#define FSFILT_OP_NOOP          15
 
 #define __fsfilt_check_slow(obd, start, msg)                            \
 do {                                                                    \
@@ -197,10 +197,10 @@ do {                                                                    \
                        (jiffies - start) / HZ);                         \
 } while (0)
 
-#define fsfilt_check_slow(obd, start, msg)              \
-do {                                                    \
-        __fsfilt_check_slow(obd, start, msg);           \
-        start = jiffies;                                \
+#define fsfilt_check_slow(obd, start, msg)    \
+do {                                          \
+        __fsfilt_check_slow(obd, start, msg); \
+        start = jiffies;                      \
 } while (0)
 
 static inline void *fsfilt_start_log(struct obd_device *obd,
@@ -210,6 +210,9 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle;
+
+        if (obd->obd_fail)
+                return ERR_PTR(-EROFS);
 
         handle = obd->obd_fsops->fs_start(inode, op, parent_handle, logs);
         CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
@@ -241,6 +244,9 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle;
+
+        if (obd->obd_fail)
+                return ERR_PTR(-EROFS);
 
         handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
                                               parent_handle, logs);
@@ -325,24 +331,11 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         return rc;
 }
 
-static inline int fsfilt_iocontrol(struct obd_device *obd, struct dentry *dentry,
-                                   unsigned int cmd, unsigned long arg)
+static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
+                                   struct file *file, unsigned int cmd,
+                                   unsigned long arg)
 {
-        struct file *dummy_file = NULL;
-        int ret;
-
-        OBD_ALLOC_PTR(dummy_file);
-        if (!dummy_file)
-                return(-ENOMEM);
-
-        dummy_file->f_dentry = dentry;
-        dummy_file->f_vfsmnt = obd->u.obt.obt_vfsmnt;
-
-        ret = obd->obd_fsops->fs_iocontrol(dentry->d_inode, dummy_file, cmd,
-                                           arg);
-
-        OBD_FREE_PTR(dummy_file);
-        return ret;
+        return obd->obd_fsops->fs_iocontrol(inode, file, cmd, arg);
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
@@ -501,7 +494,7 @@ static inline __u64 fsfilt_set_version(struct obd_device *obd,
 static inline __u64 fsfilt_get_version(struct obd_device *obd,
                                        struct inode *inode)
 {
-        if (obd->obd_fsops->fs_get_version)
+        if (obd->obd_fsops->fs_set_version)
                 return obd->obd_fsops->fs_get_version(inode);
         return -EOPNOTSUPP;
 }

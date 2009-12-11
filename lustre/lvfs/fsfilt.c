@@ -44,10 +44,10 @@
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/slab.h>
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 
-CFS_LIST_HEAD(fsfilt_types);
+LIST_HEAD(fsfilt_types);
 
 static struct fsfilt_operations *fsfilt_search_type(const char *type)
 {
@@ -114,7 +114,7 @@ struct fsfilt_operations *fsfilt_get_ops(const char *type)
                 snprintf(name, sizeof(name) - 1, "fsfilt_%s", type);
                 name[sizeof(name) - 1] = '\0';
 
-                if (!(rc = request_module("%s", name))) {
+                if (!(rc = request_module(name))) {
                         fs_ops = fsfilt_search_type(type);
                         CDEBUG(D_INFO, "Loaded module '%s'\n", name);
                         if (!fs_ops)

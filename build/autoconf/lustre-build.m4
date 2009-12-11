@@ -45,6 +45,19 @@ AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])# LB_CHECK_FILE
 
+#
+# LB_CHECK_FILES
+#
+# LB_CHECK_FILE over multiple files
+#
+AC_DEFUN([LB_CHECK_FILES],
+[AC_FOREACH([AC_FILE_NAME], [$1],
+  [LB_CHECK_FILE(AC_FILE_NAME,
+                 [AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_[]AC_FILE_NAME), 1,
+                                    [Define to 1 if you have the
+                                     file `]AC_File['.])
+$2],
+                 [$3])])])
 
 #
 # LB_ARG_LIBS_INCLUDES
@@ -152,7 +165,7 @@ AC_CONFIG_SUBDIRS(libsysio)
 # Handle internal/external lustre-iokit
 #
 AC_DEFUN([LB_PATH_LUSTREIOKIT],
-[AC_ARG_WITH([lustre-iokit],
+[AC_ARG_WITH([],
 	AC_HELP_STRING([--with-lustre-iokit=path],
 			[set path to lustre-iokit source (default is included lustre-iokit)]),
 	[],[
@@ -202,10 +215,6 @@ AC_DEFUN([LB_PATH_LDISKFS],
 			with_ldiskfs=no
 		fi
 	])
-AC_ARG_WITH([ldiskfs-inkernel],
-	AC_HELP_STRING([--with-ldiskfs-inkernel],
-			[use ldiskfs built in to the kernel]),
-	[with_ldiskfs=inkernel], [])
 AC_MSG_CHECKING([location of ldiskfs])
 case x$with_ldiskfs in
 	xyes)
@@ -219,12 +228,6 @@ case x$with_ldiskfs in
 	xno)
 		AC_MSG_RESULT([disabled])
 		;;
-	xinkernel)
-		AC_MSG_RESULT([inkernel])
-		LB_CHECK_FILE([$LINUX/include/linux/ldiskfs_fs.h],[],[
-			AC_MSG_ERROR([ldiskfs was not found in $LINUX/include/linux/ldiskfs_fs.h])
-		])
-		;;
 	*)
 		AC_MSG_RESULT([$with_ldiskfs])
 		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/linux/ldiskfs_fs.h],[],[
@@ -236,54 +239,9 @@ esac
 AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
 AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
-AM_CONDITIONAL(LDISKFS_IN_KERNEL, test x$with_ldiskfs = xinkernel)
-
-if test x$enable_ext4 = xyes ; then
-	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
-fi
 
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
-])
-
-AC_DEFUN([LC_KERNEL_WITH_EXT4],
-[if test -f $LINUX/fs/ext4/ext4.h ; then
-$1
-else
-$2
-fi
-])
-
-#
-# LB_HAVE_EXT4_ENABLED
-#
-AC_DEFUN([LB_HAVE_EXT4_ENABLED],
-[
-if test x$RHEL_KERNEL = xyes; then
-	AC_ARG_ENABLE([ext4],
-		 AC_HELP_STRING([--enable-ext4],
-				[enable building of ldiskfs based on ext4]),
-		[],
-		[
-			if test x$ldiskfs_is_ext4 = xyes; then
-				enable_ext4=yes
-			else
-				enable_ext4=no
-			fi
-		])
-else
-	case $LINUXRELEASE in
-	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
-	2.6.2[0-6]*) enable_ext4='no' ;;
-	*)  LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
-				[enable_ext4='no']) ;;
-	esac
-fi
-if test x$enable_ext4 = xyes; then
-	 ac_configure_args="$ac_configure_args --enable-ext4"
-fi
-AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
-AC_MSG_RESULT([$enable_ext4])
 ])
 
 # Define no libcfs by default.
@@ -728,7 +686,7 @@ AC_SUBST(ENABLE_INIT_SCRIPTS)
 #
 AC_DEFUN([LB_CONFIG_HEADERS],
 [AC_CONFIG_HEADERS([config.h])
-CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
+CPPFLAGS="-include \$(top_builddir)/config.h $CPPFLAGS"
 EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
@@ -816,7 +774,7 @@ if test $target_cpu == "powerpc64"; then
 	CC="$CC -m64"
 fi
 
-CPPFLAGS="-I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
@@ -913,8 +871,6 @@ LN_CONFIG_CDEBUG
 LC_QUOTA
 
 LB_CONFIG_MODULES
-LN_CONFIG_USERSPACE
-LB_HAVE_EXT4_ENABLED
 
 LB_PATH_DMU
 LB_PATH_LIBSYSIO

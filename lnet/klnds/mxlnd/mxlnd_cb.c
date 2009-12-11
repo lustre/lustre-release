@@ -1098,7 +1098,7 @@ mxlnd_pack_msg_locked(kmx_ctx_t *tx)
         }
         /*   mxm_nob */
         msg->mxm_cksum    = 0;
-        msg->mxm_srcnid   = kmxlnd_data.kmx_ni->ni_nid;
+        msg->mxm_srcnid   = lnet_ptlcompat_srcnid(kmxlnd_data.kmx_ni->ni_nid, tx->mxc_nid);
         msg->mxm_srcstamp = kmxlnd_data.kmx_incarnation;
         msg->mxm_dstnid   = tx->mxc_nid;
         /* if it is a new peer, the dststamp will be 0 */
@@ -3241,8 +3241,8 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
         rx->mxc_nob = nob;
         type = msg->mxm_type;
 
-        if (rx->mxc_nid != msg->mxm_srcnid ||
-            kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
+        if (!lnet_ptlcompat_matchnid(rx->mxc_nid, msg->mxm_srcnid) ||
+            !lnet_ptlcompat_matchnid(kmxlnd_data.kmx_ni->ni_nid, msg->mxm_dstnid)) {
                 CDEBUG(D_NETERROR, "rx with mismatched NID (type %s) (my nid is "
                        "0x%llx and rx msg dst is 0x%llx)\n",
                        mxlnd_msgtype_to_str(type), kmxlnd_data.kmx_ni->ni_nid,
@@ -3669,7 +3669,7 @@ mxlnd_passive_connect(kmx_connparams_t *cp)
                 }
                 goto cleanup;
         }
-        if (kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
+        if (!lnet_ptlcompat_matchnid(kmxlnd_data.kmx_ni->ni_nid, msg->mxm_dstnid)) {
                 CDEBUG(D_NETERROR, "Can't accept %s: bad dst nid %s\n",
                                 libcfs_nid2str(msg->mxm_srcnid),
                                 libcfs_nid2str(msg->mxm_dstnid));
@@ -3808,7 +3808,7 @@ mxlnd_check_conn_ack(kmx_connparams_t *cp)
                 incompatible = 1;
                 goto failed;
         }
-        if (kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
+        if (!lnet_ptlcompat_matchnid(kmxlnd_data.kmx_ni->ni_nid, msg->mxm_dstnid)) {
                 CDEBUG(D_NETERROR, "Can't accept CONN_ACK from %s: "
                        "bad dst nid %s\n", libcfs_nid2str(msg->mxm_srcnid),
                         libcfs_nid2str(msg->mxm_dstnid));

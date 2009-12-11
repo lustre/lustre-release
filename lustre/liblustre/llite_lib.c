@@ -67,8 +67,6 @@
 #include "lutil.h"
 #include "llite_lib.h"
 
-int slp_global_init(void);
-
 static int lllib_init(void)
 {
         if (liblustre_init_current("liblustre") ||
@@ -76,11 +74,9 @@ static int lllib_init(void)
             init_obdclass() ||
             ptlrpc_init() ||
             mgc_init() ||
-            lmv_init() ||
             mdc_init() ||
             lov_init() ||
-            osc_init() ||
-            slp_global_init())
+            osc_init())
                 return -1;
 
         return _sysio_fssw_register("lustre", &llu_fssw_ops);
@@ -94,6 +90,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         struct lustre_cfg *lcfg;
         char  *peer = "MGS_UUID";
         struct obd_device *obd;
+        struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp;
         char  *name = "mgc_dev";
         class_uuid_t uuid;
@@ -176,14 +173,13 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (ocd == NULL)
                 GOTO(out_cleanup, rc = -ENOMEM);
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID |
-                                 OBD_CONNECT_AT | OBD_CONNECT_VBR;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(NULL, &exp, obd, &mgc_uuid, ocd, NULL);
+        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd, &exp);
         if (rc) {
                 CERROR("cannot connect to %s at %s: rc = %d\n",
                        LUSTRE_MGS_OBDNAME, mgsnid, rc);
@@ -213,7 +209,7 @@ out_cleanup:
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err)
-                CERROR("md_cleanup failed: rc = %d\n", err);
+                CERROR("mdc_cleanup failed: rc = %d\n", err);
 
 out_detach:
         lustre_cfg_bufs_reset(&bufs, name);
@@ -221,7 +217,7 @@ out_detach:
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err)
-                CERROR("md_detach failed: rc = %d\n", err);
+                CERROR("mdc_detach failed: rc = %d\n", err);
 
 out_del_uuid:
         lustre_cfg_bufs_reset(&bufs, name);
@@ -409,7 +405,7 @@ void __liblustre_cleanup_(void)
          * but it can't fix the situation that liblustre is mounted
          * at "/".
          */
-        if (!chdir("/")) {}
+        chdir("/");
 #if 0
         umount(lustre_path);
 #endif

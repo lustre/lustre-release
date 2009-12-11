@@ -69,7 +69,7 @@ struct log_entry {
 	int	args[3];
 };
 
-#define	LOGSIZE	100000
+#define	LOGSIZE	1000
 
 struct log_entry	oplog[LOGSIZE];	/* the log */
 int			logptr = 0;	/* current position in log */
@@ -299,7 +299,7 @@ save_buffer(char *buffer, off_t bufferlength, int fd)
 			prterr("save_buffer: lseek eof");
 		else if (bufferlength > size_by_seek) {
 			warn("save_buffer: .fsxgood file too short... will"
-				"save 0x%llx bytes instead of 0x%llx\n",
+				"save 0x%llx bytes instead of 0x%llx\n", 
 				(unsigned long long)size_by_seek,
 				(unsigned long long)bufferlength);
 			bufferlength = size_by_seek;
@@ -402,7 +402,7 @@ enum fd_iteration_policy {
 int fd_policy = FD_RANDOM;
 int fd_last = 0;
 
-struct test_file *
+struct test_file * 
 get_tf(void)
 {
 	unsigned index = 0;
@@ -471,7 +471,7 @@ open_test_files(char **argv, int argc)
 	for (i = 0, tf = test_files; i < num_test_files; i++, tf++) {
 
 		tf->path = argv[i];
-		tf->fd = open(tf->path, O_RDWR|(lite ? 0 : O_CREAT|O_TRUNC),
+		tf->fd = open(tf->path, O_RDWR|(lite ? 0 : O_CREAT|O_TRUNC), 
 				0666);
 		if (tf->fd < 0) {
 			prterr(tf->path);
@@ -529,15 +529,8 @@ check_trunc_hack(void)
 	struct stat statbuf;
 	int fd = get_fd();
 
-        /* should not ignore ftruncate(2)'s return value */
-        if (ftruncate(fd, (off_t)0) < 0) {
-                prterr("trunc_hack: ftruncate(0)");
-                exit(1);
-        }
-        if (ftruncate(fd, (off_t)100000) < 0) {
-                prterr("trunc_hack: ftruncate(100000)");
-                exit(1);
-        }
+	ftruncate(fd, (off_t)0);
+	ftruncate(fd, (off_t)100000);
 	if (fstat(fd, &statbuf)) {
 		prterr("trunc_hack: fstat");
 		statbuf.st_size = -1;
@@ -546,10 +539,7 @@ check_trunc_hack(void)
 		prt("no extend on truncate! not posix!\n");
 		exit(130);
 	}
-        if (ftruncate(fd, 0) < 0) {
-                prterr("trunc_hack: ftruncate(0) (2nd call)");
-                exit(1);
-        }
+	ftruncate(fd, 0);
 }
 
 static char *tf_buf = NULL;
@@ -585,7 +575,7 @@ alloc_tf_buf(void)
 	}
 }
 
-char *
+char * 
 fill_tf_buf(struct test_file *tf)
 {
 	if (tf_buf == NULL)
@@ -596,7 +586,7 @@ fill_tf_buf(struct test_file *tf)
 }
 
 void
-output_line(struct test_file *tf, int op, unsigned offset,
+output_line(struct test_file *tf, int op, unsigned offset, 
 		unsigned size, struct timeval *tv)
 {
 	char *tf_num = "";
@@ -623,7 +613,7 @@ output_line(struct test_file *tf, int op, unsigned offset,
 
 	prt("%06lu %lu.%06lu %.*s%-10s %#08x %s %#08x\t(0x%x bytes)\n",
 		testcalls, tv->tv_sec, tv->tv_usec, max_tf_len,
-		tf_num, ops[op],
+		tf_num, ops[op], 
 		offset, op == OP_TRUNCATE ? " to " : "thru",
 		offset + size - 1, size);
 }
@@ -982,7 +972,7 @@ writefileimage()
 			prterr("writefileimage: write");
 		else
 			prt("short write: 0x%lx bytes instead of 0x%llx\n",
-			    (unsigned long)iret,
+			    (unsigned long)iret, 
 			    (unsigned long long)file_size);
 		report_failure(172);
 	}
@@ -1195,7 +1185,7 @@ main(int argc, char **argv)
 
 	setvbuf(stdout, (char *)0, _IOLBF, 0); /* line buffered stdout */
 
-	while ((ch = getopt(argc, argv,
+	while ((ch = getopt(argc, argv, 
 				"b:c:dl:m:no:p:qr:s:t:w:D:I:LN:OP:RS:W"))
 	       != EOF)
 		switch (ch) {

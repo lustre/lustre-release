@@ -74,22 +74,22 @@ struct lvfs_dentry_params
         __u32            ldp_magic;
 };
 #define LVFS_DENTRY_PARAMS_INIT         { .ldp_magic = LVFS_DENTRY_PARAM_MAGIC }
+/* Only use the least 3 bits of ldp_flags for goal policy */
+typedef enum {
+        DP_GOAL_POLICY       = 0,
+        DP_LASTGROUP_REVERSE = 1,
+} dp_policy_t;
 
-#define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
 #define lvfs_sbdev(SB)       ((SB)->s_bdev)
 #define lvfs_sbdev_type      struct block_device *
+   int fsync_bdev(struct block_device *);
 #define lvfs_sbdev_sync      fsync_bdev
-
-int fsync_bdev(struct block_device *);
 
 /* Instead of calling within lvfs (a layering violation) */
 #define lvfs_set_rdonly(obd, sb) \
         __lvfs_set_rdonly(lvfs_sbdev(sb), fsfilt_journal_sbdev(obd, sb))
 
 void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
-
 int lvfs_check_rdonly(lvfs_sbdev_type dev);
-void lvfs_clear_rdonly(lvfs_sbdev_type dev);
 
 #endif /*  __LVFS_LINUX_H__ */

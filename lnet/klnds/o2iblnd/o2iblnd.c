@@ -200,7 +200,7 @@ kiblnd_pack_msg (lnet_ni_t *ni, kib_msg_t *msg, int version,
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = ni->ni_nid;
+        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(ni->ni_nid, dstnid);
         msg->ibm_srcstamp = net->ibn_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;

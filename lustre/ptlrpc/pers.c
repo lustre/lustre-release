@@ -57,11 +57,8 @@ void ptlrpc_fill_bulk_md (lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
         LASSERT (!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
 
         md->options |= LNET_MD_KIOV;
+        md->start = &desc->bd_iov[0];
         md->length = desc->bd_iov_count;
-        if (desc->bd_enc_iov)
-                md->start = desc->bd_enc_iov;
-        else
-                md->start = desc->bd_iov;
 }
 
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
@@ -76,6 +73,18 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
         desc->bd_iov_count++;
 }
 
+void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
+{
+        int i;
+        
+        for (i = 0; i < desc->bd_iov_count ; i++) {
+                lnet_kiov_t *kiov = &desc->bd_iov[i];
+                memset(cfs_kmap(kiov->kiov_page)+kiov->kiov_offset, 0xab,
+                       kiov->kiov_len);
+                cfs_kunmap(kiov->kiov_page);
+        }
+}
+
 #else /* !__KERNEL__ */
 
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
@@ -86,7 +95,7 @@ void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
                 md->length = desc->bd_iov[0].iov_len;
                 return;
         }
-
+        
         md->options |= LNET_MD_IOVEC;
         md->start = &desc->bd_iov[0];
         md->length = desc->bd_iov_count;
@@ -94,7 +103,7 @@ void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
 
 static int can_merge_iovs(lnet_md_iovec_t *existing, lnet_md_iovec_t *candidate)
 {
-        if (existing->iov_base + existing->iov_len == candidate->iov_base)
+        if (existing->iov_base + existing->iov_len == candidate->iov_base) 
                 return 1;
 #if 0
         /* Enable this section to provide earlier evidence of fragmented bulk */
@@ -105,7 +114,7 @@ static int can_merge_iovs(lnet_md_iovec_t *existing, lnet_md_iovec_t *candidate)
         return 0;
 }
 
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page, 
                           int pageoffset, int len)
 {
         lnet_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
@@ -120,4 +129,14 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
         }
 }
 
+void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
+{
+        int i;
+
+        for(i = 0; i < desc->bd_iov_count; i++) {
+                lnet_md_iovec_t *iov = &desc->bd_iov[i];
+
+                memset(iov->iov_base, 0xab, iov->iov_len);
+        }
+}
 #endif /* !__KERNEL__ */

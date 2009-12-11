@@ -49,7 +49,6 @@
 #include <lustre_import.h>
 #include <lustre_export.h>
 #include <obd.h>
-#include <obd_cksum.h>
 #include <obd_class.h>
 
 #include "ptlrpc_internal.h"
@@ -59,17 +58,6 @@ struct ptlrpc_connect_async_args {
         int pcaa_initial_connect;
 };
 
-static void __import_set_state(struct obd_import *imp,
-                               enum lustre_imp_state state)
-{
-        imp->imp_state = state;
-        imp->imp_state_hist[imp->imp_state_hist_idx].ish_state = state;
-        imp->imp_state_hist[imp->imp_state_hist_idx].ish_time =
-                cfs_time_current_sec();
-        imp->imp_state_hist_idx = (imp->imp_state_hist_idx + 1) %
-                IMP_STATE_HIST_LEN;
-}
-
 /* A CLOSED import should remain so. */
 #define IMPORT_SET_STATE_NOLOCK(imp, state)                                    \
 do {                                                                           \
@@ -78,7 +66,7 @@ do {                                                                           \
                       imp, obd2cli_tgt(imp->imp_obd),                          \
                       ptlrpc_import_state_name(imp->imp_state),                \
                       ptlrpc_import_state_name(state));                        \
-               __import_set_state(imp, state);                                 \
+               imp->imp_state = state;                                         \
         }                                                                      \
 } while(0)
 
@@ -90,8 +78,7 @@ do {                                            \
 } while(0)
 
 
-static int ptlrpc_connect_interpret(const struct lu_env *env,
-                                    struct ptlrpc_request *request,
+static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                     void * data, int rc);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
@@ -153,7 +140,6 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
 
                 deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
                           &target_start, &target_len);
-
                 if (imp->imp_replayable) {
                         LCONSOLE_WARN("%s: Connection to service %.*s via nid "
                                "%s was lost; in progress operations using this "
@@ -164,11 +150,9 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                         LCONSOLE_ERROR_MSG(0x166, "%s: Connection to service "
                                "%.*s via nid %s was lost; in progress "
                                "operations using this service will fail.\n",
-                               imp->imp_obd->obd_name,
-                               target_len, target_start,
+                               imp->imp_obd->obd_name, target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 }
-                ptlrpc_deactivate_timeouts(imp);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock(&imp->imp_lock);
 
@@ -203,8 +187,6 @@ static void ptlrpc_deactivate_and_unlock_import(struct obd_import *imp)
 
         ptlrpc_abort_inflight(imp);
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
-
-        EXIT;
 }
 
 /*
@@ -277,7 +259,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
          * If this is an invalid MGC connection, then don't bother
          * waiting for imp_inflight to drop to 0.
          */
-        if (imp->imp_invalid && imp->imp_recon_bk &&!imp->imp_obd->obd_no_recov)
+        if (imp->imp_invalid && imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
                 goto out;
 
         if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
@@ -293,18 +275,13 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                 /* Calculate max timeout for waiting on rpcs to error
                  * out. Use obd_timeout if calculated value is smaller
                  * than it. */
-                if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
-                        timeout = ptlrpc_inflight_timeout(imp);
-                        timeout += timeout / 3;
+                timeout = ptlrpc_inflight_timeout(imp);
+                timeout += timeout / 3;
 
-                        if (timeout == 0)
-                                timeout = obd_timeout;
-                } else {
-                        /* decrease the interval to increase race condition */
-                        timeout = 1;
-                }
+                if (timeout == 0)
+                        timeout = obd_timeout;
 
-                CDEBUG(D_RPCTRACE,"Sleeping %d sec for inflight to error out\n",
+                CDEBUG(D_RPCTRACE, "Sleeping %d sec for inflight to error out\n",
                        timeout);
 
                 /* Wait for all requests to error out and call completion
@@ -312,8 +289,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                  * have been locally cancelled by ptlrpc_abort_inflight. */
                 lwi = LWI_TIMEOUT_INTERVAL(
                         cfs_timeout_cap(cfs_time_seconds(timeout)),
-                        (timeout > 1)?cfs_time_seconds(1):cfs_time_seconds(1)/2,
-                        NULL, NULL);
+                        cfs_time_seconds(1), NULL, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                 (atomic_read(&imp->imp_inflight) == 0), &lwi);
                 if (rc) {
@@ -323,40 +299,31 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                cli_tgt, rc, atomic_read(&imp->imp_inflight));
 
                         spin_lock(&imp->imp_lock);
-                        if (atomic_read(&imp->imp_inflight) == 0) {
-                                int count = atomic_read(&imp->imp_unregistering);
+                        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                                req = list_entry(tmp, struct ptlrpc_request,
+                                        rq_list);
+                                DEBUG_REQ(D_ERROR, req, "still on sending list");
+                        }
+                        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                                req = list_entry(tmp, struct ptlrpc_request,
+                                        rq_list);
+                                DEBUG_REQ(D_ERROR, req, "still on delayed list");
+                        }
 
-                                /* We know that "unregistering" rpcs only can
-                                 * survive in sending or delaying lists (they
-                                 * maybe waiting for long reply unlink in
+                        if (atomic_read(&imp->imp_unregistering) == 0) {
+                                /* We know that only "unregistering" rpcs may
+                                 * still survive in sending or delaying lists
+                                 * (They are waiting for long reply unlink in
                                  * sluggish nets). Let's check this. If there
-                                 * is no inflight and unregistering != 0, this
+                                 * is no unregistering and inflight != 0 this
                                  * is bug. */
-                                LASSERTF(count == 0, "Some RPCs are still "
-                                         "unregistering: %d\n", count);
+                                LASSERT(atomic_read(&imp->imp_inflight) == 0);
 
                                 /* Let's save one loop as soon as inflight have
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
                                 rc = 0;
                         } else {
-                                list_for_each_safe(tmp, n,
-                                                   &imp->imp_sending_list) {
-                                        req = list_entry(tmp,
-                                                         struct ptlrpc_request,
-                                                         rq_list);
-                                        DEBUG_REQ(D_ERROR, req,
-                                                  "still on sending list");
-                                }
-                                list_for_each_safe(tmp, n,
-                                                   &imp->imp_delayed_list) {
-                                        req = list_entry(tmp,
-                                                         struct ptlrpc_request,
-                                                         rq_list);
-                                        DEBUG_REQ(D_ERROR, req,
-                                                  "still on delayed list");
-                                }
-
                                 CERROR("%s: RPCs in \"%s\" phase found (%d). "
                                        "Network is sluggish? Waiting them "
                                        "to error out.\n", cli_tgt,
@@ -364,17 +331,15 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                        atomic_read(&imp->imp_unregistering));
                         }
                         spin_unlock(&imp->imp_lock);
-                  }
+                }
         } while (rc != 0);
 
-        /*
-         * Let's additionally check that no new rpcs added to import in
-         * "invalidate" state.
-         */
+        /* Let's additionally check that no new rpcs added to import in
+         * "invalidate" state. */
         LASSERT(atomic_read(&imp->imp_inflight) == 0);
-out:
+
+  out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
-        sptlrpc_import_flush_all_ctx(imp);
 
         atomic_dec(&imp->imp_inval_count);
         cfs_waitq_broadcast(&imp->imp_recovery_waitq);
@@ -387,8 +352,8 @@ void ptlrpc_activate_import(struct obd_import *imp)
 
         spin_lock(&imp->imp_lock);
         imp->imp_invalid = 0;
-        ptlrpc_activate_timeouts(imp);
         spin_unlock(&imp->imp_lock);
+
         obd_import_event(obd, imp, IMP_EVENT_ACTIVE);
 }
 
@@ -439,7 +404,12 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
                                atomic_read(&imp->imp_inval_count));
         }
 
-        /* Allow reconnect attempts */
+        /*
+         * Allow reconnect attempts. Note: Currently, the function is
+         * only called by MGC. So assume this is a recoverable import,
+         * and force import to be recoverable. fix this if you need to
+         */
+
         imp->imp_obd->obd_no_recov = 0;
         /* Remove 'invalid' flag */
         ptlrpc_activate_import(imp);
@@ -471,6 +441,7 @@ static int import_select_connection(struct obd_import *imp)
                        imp->imp_obd->obd_name,
                        libcfs_nid2str(conn->oic_conn->c_peer.nid),
                        conn->oic_last_attempt);
+
                 /* Don't thrash connections */
                 if (cfs_time_before_64(cfs_time_current_64(),
                                      conn->oic_last_attempt +
@@ -478,7 +449,7 @@ static int import_select_connection(struct obd_import *imp)
                         continue;
                 }
 
-                /* If we have not tried this connection since
+                /* If we have not tried this connection since the
                    the last successful attempt, go with this one */
                 if ((conn->oic_last_attempt == 0) ||
                     cfs_time_beforeq_64(conn->oic_last_attempt,
@@ -499,7 +470,7 @@ static int import_select_connection(struct obd_import *imp)
         }
 
         /* if not found, simply choose the current one */
-        if (!imp_conn || imp->imp_force_reconnect) {
+        if (!imp_conn) {
                 LASSERT(imp->imp_conn_current);
                 imp_conn = imp->imp_conn_current;
                 tried_all = 0;
@@ -541,9 +512,10 @@ static int import_select_connection(struct obd_import *imp)
 
         if (imp->imp_conn_current != imp_conn) {
                 if (imp->imp_conn_current)
-                        CDEBUG(D_HA, "Changing connection for %s to %s/%s\n",
-                               imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid,
-                               libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+                        LCONSOLE_INFO("Changing connection for %s to %s/%s\n",
+                                      imp->imp_obd->obd_name,
+                                      imp_conn->oic_uuid.uuid,
+                                      libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
                 imp->imp_conn_current = imp_conn;
         }
 
@@ -556,43 +528,26 @@ static int import_select_connection(struct obd_import *imp)
         RETURN(0);
 }
 
-/*
- * must be called under imp_lock
- */
-static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
-{
-        struct ptlrpc_request *req;
-        struct list_head *tmp;
-
-        if (list_empty(&imp->imp_replay_list))
-                return 0;
-        tmp = imp->imp_replay_list.next;
-        req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-        *transno = req->rq_transno;
-        if (req->rq_transno == 0) {
-                DEBUG_REQ(D_ERROR, req, "zero transno in replay");
-                LBUG();
-        }
-
-        return 1;
-}
-
 int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
         int initial_connect = 0;
-        int set_transno = 0;
+        int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
-        char *bufs[] = { NULL,
-                         obd2cli_tgt(imp->imp_obd),
-                         obd->obd_uuid.uuid,
-                         (char *)&imp->imp_dlm_handle,
-                         (char *)&imp->imp_connect_data };
+        __u32 size[] = { sizeof(struct ptlrpc_body),
+                       sizeof(imp->imp_obd->u.cli.cl_target_uuid),
+                       sizeof(obd->obd_uuid),
+                       sizeof(imp->imp_dlm_handle),
+                       sizeof(imp->imp_connect_data) };
+        char *tmp[] = { NULL,
+                        obd2cli_tgt(imp->imp_obd),
+                        obd->obd_uuid.uuid,
+                        (char *)&imp->imp_dlm_handle,
+                        (char *)&imp->imp_connect_data };
         struct ptlrpc_connect_async_args *aa;
-        int rc;
-        ENTRY;
 
+        ENTRY;
         spin_lock(&imp->imp_lock);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 spin_unlock(&imp->imp_lock);
@@ -618,8 +573,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         else
                 committed_before_reconnect = imp->imp_peer_committed_transno;
 
-        set_transno = ptlrpc_first_transno(imp,
-                                           &imp->imp_connect_data.ocd_transno);
         spin_unlock(&imp->imp_lock);
 
         if (new_uuid) {
@@ -656,30 +609,20 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 }
         }
 
-        rc = sptlrpc_import_sec_adapt(imp, NULL, 0);
-        if (rc)
-                GOTO(out, rc);
-
         /* Reset connect flags to the originally requested flags, in case
          * the server is updated on-the-fly we will get the new features. */
         imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
         imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
-        rc = obd_reconnect(NULL, imp->imp_obd->obd_self_export, obd,
+        rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
                            &obd->obd_uuid, &imp->imp_connect_data, NULL);
         if (rc)
                 GOTO(out, rc);
 
-        request = ptlrpc_request_alloc(imp, &RQF_MDS_CONNECT);
-        if (request == NULL)
+        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, imp->imp_connect_op,
+                                  5, size, tmp);
+        if (!request)
                 GOTO(out, rc = -ENOMEM);
-
-        rc = ptlrpc_request_bufs_pack(request, LUSTRE_OBD_VERSION,
-                                      imp->imp_connect_op, bufs, NULL);
-        if (rc) {
-                ptlrpc_request_free(request);
-                GOTO(out, rc);
-        }
 
         /* Report the rpc service time to the server so that it knows how long
          * to wait for clients to join recovery */
@@ -697,14 +640,16 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
-        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_NEXT_VER);
+        if (imp->imp_msg_magic == LUSTRE_MSG_MAGIC_V1)
+                lustre_msg_add_op_flags(request->rq_reqmsg,
+                                        MSG_CONNECT_NEXT_VER);
 
         request->rq_no_resend = request->rq_no_delay = 1;
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         /* Allow a slightly larger reply for future growth compatibility */
-        req_capsule_set_size(&request->rq_pill, &RMF_CONNECT_DATA, RCL_SERVER,
-                             sizeof(struct obd_connect_data)+16*sizeof(__u64));
-        ptlrpc_request_set_replen(request);
+        size[REPLY_REC_OFF] = sizeof(struct obd_connect_data) +
+                              16 * sizeof(__u64);
+        ptlrpc_req_set_repsize(request, 2, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
         CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
@@ -713,7 +658,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 
         aa->pcaa_peer_committed = committed_before_reconnect;
         aa->pcaa_initial_connect = initial_connect;
-
         if (aa->pcaa_initial_connect) {
                 spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
@@ -722,12 +666,10 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                                         MSG_CONNECT_INITIAL);
         }
 
-        if (set_transno)
-                lustre_msg_add_op_flags(request->rq_reqmsg,
-                                        MSG_CONNECT_TRANSNO);
-
-        DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
-        ptlrpcd_add_req(request, PSCOPE_OTHER);
+        DEBUG_REQ(D_RPCTRACE, request, "%sconnect request %d",
+                  aa->pcaa_initial_connect ? "initial " : "re",
+                  imp->imp_conn_cnt);
+        ptlrpcd_add_req(request);
         rc = 0;
 out:
         if (rc != 0) {
@@ -765,11 +707,11 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
                 ptlrpc_ping_import_soon(imp);
                 wake_pinger = 1;
         }
+
 #else
-        /* liblustre has no pinger thread, so we wakeup pinger anyway */
+        /* liblustre has no pinger thead, so we wakup pinger anyway */
         wake_pinger = 1;
 #endif
-
  unlock:
         spin_unlock(&imp->imp_lock);
 
@@ -779,15 +721,8 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
         EXIT;
 }
 
-static int ptlrpc_busy_reconnect(int rc)
-{
-        return (rc == -EBUSY) || (rc == -EAGAIN);
-}
-
-
-static int ptlrpc_connect_interpret(const struct lu_env *env,
-                                    struct ptlrpc_request *request,
-                                    void *data, int rc)
+static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
+                                    void * data, int rc)
 {
         struct ptlrpc_connect_async_args *aa = data;
         struct obd_import *imp = request->rq_import;
@@ -802,22 +737,18 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
+        spin_unlock(&imp->imp_lock);
 
-        if (rc) {
-                /* if this reconnect to busy export - not need select new target
-                 * for connecting*/
-                imp->imp_force_reconnect = ptlrpc_busy_reconnect(rc);
-                spin_unlock(&imp->imp_lock);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         LASSERT(imp->imp_conn_current);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
         /* All imports are pingable */
+        spin_lock(&imp->imp_lock);
         imp->imp_pingable = 1;
-        imp->imp_force_reconnect = 0;
 
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
@@ -830,8 +761,16 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                         spin_unlock(&imp->imp_lock);
                 }
 
-                /* if applies, adjust the imp->imp_msg_magic here
-                 * according to reply flags */
+                if ((request->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V1 &&
+                     msg_flags & MSG_CONNECT_NEXT_VER) ||
+                    request->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2) {
+                        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
+                        CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v2\n",
+                               obd2cli_tgt(imp->imp_obd));
+                } else {
+                        CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v1\n",
+                               obd2cli_tgt(imp->imp_obd));
+                }
 
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
@@ -868,8 +807,8 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 if (memcmp(&imp->imp_remote_handle,
                            lustre_msg_get_handle(request->rq_repmsg),
                            sizeof(imp->imp_remote_handle))) {
-                        int level = msg_flags & MSG_CONNECT_RECOVERING ?
-                                D_HA : D_WARNING;
+                        int level = msg_flags & MSG_CONNECT_RECOVERING ? D_HA :
+                                                                         D_WARNING;
 
                         /* Bug 16611/14775: if server handle have changed,
                          * that means some sort of disconnection happened.
@@ -879,14 +818,14 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                          * participate since we can reestablish all of our state
                          * with server again */
                         CDEBUG(level,"%s@%s changed server handle from "
-                                     LPX64" to "LPX64"%s\n",
+                                     LPX64" to "LPX64"%s \n" "but is still in recovery \n",
                                      obd2cli_tgt(imp->imp_obd),
                                      imp->imp_connection->c_remote_uuid.uuid,
                                      imp->imp_remote_handle.cookie,
                                      lustre_msg_get_handle(request->rq_repmsg)->
                                                                         cookie,
                                      (MSG_CONNECT_RECOVERING & msg_flags) ?
-                                         " but is still in recovery" : "");
+                                         "but is still in recovery" : "");
 
                         imp->imp_remote_handle =
                                      *lustre_msg_get_handle(request->rq_repmsg);
@@ -926,8 +865,8 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
-                DEBUG_REQ(D_HA, request, "%s: evicting (reconnect/recover flags"
-                          " not set: %x)", imp->imp_obd->obd_name, msg_flags);
+                DEBUG_REQ(D_HA, request, "evicting (not initial connect and "
+                          "flags reconnect/recovering not set: %x)",msg_flags);
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
@@ -963,13 +902,9 @@ finish:
         } else {
                 struct obd_connect_data *ocd;
                 struct obd_export *exp;
-                int ret;
-                ret = req_capsule_get_size(&request->rq_pill, &RMF_CONNECT_DATA,
-                                           RCL_SERVER);
-                /* server replied obd_connect_data is always bigger */
-                ocd = req_capsule_server_sized_get(&request->rq_pill,
-                                                   &RMF_CONNECT_DATA, ret);
 
+                ocd = lustre_swab_repbuf(request, REPLY_REC_OFF, sizeof(*ocd),
+                                         lustre_swab_connect);
                 spin_lock(&imp->imp_lock);
                 list_del(&imp->imp_conn_current->oic_item);
                 list_add(&imp->imp_conn_current->oic_item, &imp->imp_conn_list);
@@ -1003,8 +938,7 @@ finish:
                 }
                 old_connect_flags = exp->exp_connect_flags;
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
-                imp->imp_obd->obd_self_export->exp_connect_flags =
-                                                        ocd->ocd_connect_flags;
+                imp->imp_obd->obd_self_export->exp_connect_flags = ocd->ocd_connect_flags;
                 class_export_put(exp);
 
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
@@ -1023,10 +957,10 @@ finish:
                            of macro arguments */
 #ifdef __KERNEL__
                         const char *older =
-                                "older. Consider upgrading this client";
+                                "older.  Consider upgrading this client";
 #else
                         const char *older =
-                                "older. Consider recompiling this application";
+                                "older.  Consider recompiling this application";
 #endif
                         const char *newer = "newer than client version";
 
@@ -1080,13 +1014,12 @@ finish:
 
                 /* Reset ns_connect_flags only for initial connect. It might be
                  * changed in while using FS and if we reset it in reconnect
-                 * this leads to losing user settings done before such as
+                 * this leads to lossing user settings done before such as
                  * disable lru_resize, etc. */
                 if (old_connect_flags != exp->exp_connect_flags ||
                     aa->pcaa_initial_connect) {
-                        CDEBUG(D_HA, "%s: Resetting ns_connect_flags to server "
-                               "flags: "LPX64"\n", imp->imp_obd->obd_name,
-                              ocd->ocd_connect_flags);
+                        CDEBUG(D_HA, "Reseting ns_connect_flags to server flags: "
+                               LPU64"\n", ocd->ocd_connect_flags);
                         imp->imp_obd->obd_namespace->ns_connect_flags =
                                 ocd->ocd_connect_flags;
                         imp->imp_obd->obd_namespace->ns_orig_connect_flags =
@@ -1111,7 +1044,7 @@ finish:
                         (cli->cl_max_pages_per_rpc > 0));
         }
 
-out:
+ out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
                 spin_lock(&imp->imp_lock);
@@ -1121,25 +1054,17 @@ out:
                 else
                         spin_unlock(&imp->imp_lock);
 
-                if ((imp->imp_recon_bk && imp->imp_last_recon) ||
-                    (rc == -EACCES)) {
-                        /*
-                         * Give up trying to reconnect
-                         * EACCES means client has no permission for connection
-                         */
+                if (imp->imp_recon_bk && imp->imp_last_recon) {
+                        /* Give up trying to reconnect */
                         imp->imp_obd->obd_no_recov = 1;
                         ptlrpc_deactivate_import(imp);
                 }
 
                 if (rc == -EPROTO) {
                         struct obd_connect_data *ocd;
-
-                        /* reply message might not be ready */
-                        if (request->rq_repmsg == NULL)
-                                RETURN(-EPROTO);
-
-                        ocd = req_capsule_server_get(&request->rq_pill,
-                                                     &RMF_CONNECT_DATA);
+                        ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,
+                                                 sizeof *ocd,
+                                                 lustre_swab_connect);
                         if (ocd &&
                             (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
                             (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
@@ -1178,29 +1103,17 @@ out:
         RETURN(rc);
 }
 
-static int completed_replay_interpret(const struct lu_env *env,
-                                      struct ptlrpc_request *req,
-                                      void * data, int rc)
+static int completed_replay_interpret(struct ptlrpc_request *req,
+                                    void * data, int rc)
 {
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
-        if (req->rq_status == 0 &&
-            !req->rq_import->imp_vbr_failed) {
+        if (req->rq_status == 0) {
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
-                if (req->rq_import->imp_vbr_failed) {
-                        CDEBUG(D_WARNING,
-                               "%s: version recovery fails, reconnecting\n",
-                               req->rq_import->imp_obd->obd_name);
-                        spin_lock(&req->rq_import->imp_lock);
-                        req->rq_import->imp_vbr_failed = 0;
-                        spin_unlock(&req->rq_import->imp_lock);
-                } else {
-                        CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                                     "reconnecting\n",
-                               req->rq_import->imp_obd->obd_name,
-                               req->rq_status);
-                }
+                CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
+                       "reconnecting\n",
+                       req->rq_import->imp_obd->obd_name, req->rq_status);
                 ptlrpc_connect_import(req->rq_import, NULL);
         }
 
@@ -1215,22 +1128,19 @@ static int signal_completed_replay(struct obd_import *imp)
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
         atomic_inc(&imp->imp_replay_inflight);
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
-                                        OBD_PING);
-        if (req == NULL) {
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
+        if (!req) {
                 atomic_dec(&imp->imp_replay_inflight);
                 RETURN(-ENOMEM);
         }
 
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
-        lustre_msg_add_flags(req->rq_reqmsg,
-                             MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE);
-        if (AT_OFF)
-                req->rq_timeout *= 3;
+        lustre_msg_add_flags(req->rq_reqmsg, MSG_LAST_REPLAY);
+        req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
-        ptlrpcd_add_req(req, PSCOPE_OTHER);
+        ptlrpcd_add_req(req);
         RETURN(0);
 }
 
@@ -1241,7 +1151,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ENTRY;
 
-        cfs_daemonize_ctxt("ll_imp_inval");
+        ptlrpc_daemonize("ll_imp_inval");
 
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
@@ -1287,12 +1197,12 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
 #ifdef __KERNEL__
                 /* bug 17802:  XXX client_disconnect_export vs connect request
-                 * race. if client will evicted at this time, we start
-                 * invalidate thread without reference to import and import can
-                 * be freed at same time. */
+                 * race. if client will evicted at this time, we start invalidate
+                 * thread without referece to import and import can be freed
+                 * at same time. */
                 class_import_get(imp);
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
-                                       CLONE_VM | CLONE_FILES);
+                                   CLONE_VM | CLONE_FILES);
                 if (rc < 0) {
                         class_import_put(imp);
                         CERROR("error starting invalidate thread: %d\n", rc);
@@ -1361,7 +1271,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 ptlrpc_wake_delayed(imp);
         }
 
-out:
+ out:
         RETURN(rc);
 }
 
@@ -1394,24 +1304,18 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                 struct l_wait_info lwi;
                 cfs_duration_t timeout;
 
-
                 if (AT_OFF) {
-                        if (imp->imp_server_timeout)
-                                timeout = cfs_time_seconds(obd_timeout / 2);
-                        else
-                                timeout = cfs_time_seconds(obd_timeout);
+                        timeout = cfs_time_seconds(obd_timeout);
                 } else {
                         int idx = import_at_get_index(imp,
                                 imp->imp_client->cli_request_portal);
                         timeout = cfs_time_seconds(
                                 at_get(&imp->imp_at.iat_service_estimate[idx]));
                 }
-
                 lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout),
                                        back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);
-
         }
 
         spin_lock(&imp->imp_lock);
@@ -1420,8 +1324,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
         spin_unlock(&imp->imp_lock);
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_DISCONNECT,
-                                        LUSTRE_OBD_VERSION, rq_opc);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, rq_opc, 1, NULL, NULL);
         if (req) {
                 /* We are disconnecting, do not retry a failed DISCONNECT rpc if
                  * it fails.  We can get through the above with a down server
@@ -1442,7 +1345,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 req->rq_send_state =  LUSTRE_IMP_CONNECTING;
-                ptlrpc_request_set_replen(req);
+                ptlrpc_req_set_repsize(req, 1, NULL);
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
         }
@@ -1460,6 +1363,14 @@ out:
         spin_unlock(&imp->imp_lock);
 
         RETURN(rc);
+}
+
+/* Sets maximal number of RPCs possible originating from other side of this
+   import (server) to us and number of async RPC replies that we are not waiting
+   for arriving */
+void ptlrpc_import_setasync(struct obd_import *imp, int count)
+{
+        LNetSetAsync(imp->imp_connection->c_peer, count);
 }
 
 void ptlrpc_cleanup_imp(struct obd_import *imp)

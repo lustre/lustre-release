@@ -58,7 +58,7 @@
 #include <sys/time.h>
 
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
 #include "obdctl.h"
 
 static char cmdname[512];
@@ -78,7 +78,7 @@ static int jt_quit(int argc, char **argv) {
 static int loadgen_usage(int argc, char **argv)
 {
         if (argc == 1) {
-                fprintf(stderr,
+                fprintf(stderr, 
         "This is a test program used to simulate large numbers of\n"
         "clients.  The echo obds are used, so the obdecho module must\n"
         "be loaded.\n"
@@ -264,7 +264,7 @@ static int write_proc(char *proc_path, char *value)
         return rc;
 }
 
-static int read_proc(char *proc_path,  unsigned long long *value)
+static int read_proc(char *proc_path, unsigned long long *value)
 {
         int fd, rc;
         char buf[50];
@@ -477,7 +477,6 @@ static int obj_create(struct kid_t *kid)
         data.ioc_dev = kid->k_dev;
         data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_id = 0;
-        data.ioc_obdo1.o_gr = 2;
         data.ioc_obdo1.o_uid = 0;
         data.ioc_obdo1.o_gid = 0;
         data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
@@ -667,7 +666,7 @@ static void *run_one_child(void *threadvp)
 {
         struct kid_t *kid;
         char oname[10], ename[10];
-        int thread = (long)threadvp, dev = 0;
+        int thread = (long)threadvp, dev;
         int rc = 0, err;
 
         if (o_verbose > 2)
@@ -868,7 +867,7 @@ static int loadgen_write(int argc, char **argv)
                         threads, live_threads);
                 return -EOVERFLOW;
         }
-        trigger(C_WRITE, threads, atoi(argv[2]),
+        trigger(C_WRITE, threads, atoi(argv[2]), 
                 (argc == 4) ? atoi(argv[3]) : 0);
         return 0;
 }
@@ -917,7 +916,7 @@ static int loadgen_start_echosrv(int argc, char **argv)
                         cmdname, rc);
                 goto clean;
         }
-
+  
         /* Create an OSS to handle the communications */
         /* attach ost OSS OSS_UUID */
         args[1] = "ost";
@@ -956,7 +955,7 @@ clean:
 
 static int loadgen_wait(int argc, char **argv)
 {
-        /* Give scripts a chance to start some threads */
+        /* Give scripts a chance to start some threads */   
         sleep(1);
         while (!all_done) {
                 sleep(1);
@@ -996,7 +995,7 @@ static int loadgen_init(int argc, char **argv)
 static int loadgen_exit()
 {
         int rc;
-
+        
         printf("stopping %d children\n", live_threads);
         kill_kids();
         rc = wait_for_threads();
@@ -1038,7 +1037,7 @@ static int loadgen_main(int argc, char **argv)
 
 out:
         obd_finalize(argc, argv);
-        return rc < 0 ? -rc : rc;
+        return rc;
 }
 
 #ifndef LIBLUSTRE_TEST

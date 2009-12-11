@@ -167,7 +167,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
                 recs_pr[i] = cur_rec;
 
                 if (ext2_test_bit(idx, (*llog)->llh_bitmap)) {
-                        if (le32_to_cpu(cur_rec->lrh_type) != OBD_CFG_REC)
+                        if (le32_to_cpu(cur_rec->lrh_type) != OBD_CFG_REC) 
                                 printf("rec #%d type=%x len=%u\n", idx,
                                        cur_rec->lrh_type, cur_rec->lrh_len);
                 } else {
@@ -176,7 +176,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
                         /* The header counts only set records */
                         i--;
                 }
-
+                
                 ptr += le32_to_cpu(cur_rec->lrh_len);
                 if ((ptr - file_buf) > file_size) {
                         printf("The log is corrupt (too big at %d)\n", i);
@@ -215,7 +215,7 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
         time_t t;
 
         printf("Header size : %u\n",
-               le32_to_cpu(llog_buf->llh_hdr.lrh_len));
+                le32_to_cpu(llog_buf->llh_hdr.lrh_len));
 
         t = le64_to_cpu(llog_buf->llh_timestamp);
         printf("Time : %s", ctime(&t));
@@ -238,7 +238,7 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
 
         if (lcfg->lcfg_nid)
                 printf("nid=%s("LPX64")  ", libcfs_nid2str(lcfg->lcfg_nid),
-                       lcfg->lcfg_nid);
+                       (__u64)lcfg->lcfg_nid);
         if (lcfg->lcfg_nal)
                 printf("nal=%d ", lcfg->lcfg_nal);
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
@@ -267,7 +267,6 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
                 printf("setup     ");
                 print_1_cfg(lcfg);
         }
-        
         return;
 }
 
@@ -328,16 +327,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 print_1_cfg(lcfg);
                 break;
         }
-        case(LCFG_ADD_MDC):{
-                printf("modify_mdc_tgts add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_MDC):{
-                printf("modify_mdc_tgts del ");
-                print_1_cfg(lcfg);
-                break;
-        }
         case(LCFG_MOUNTOPT):{
                 printf("mount_option ");
                 print_1_cfg(lcfg);
@@ -350,10 +339,7 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         }
         case(LCFG_SET_TIMEOUT):{
                 printf("set_timeout=%d ", lcfg->lcfg_num);
-                break;
-        }
-        case(LCFG_SET_LDLM_TIMEOUT):{
-                printf("set_ldlm_timeout=%d ", lcfg->lcfg_num);
+                print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_SET_UPCALL):{
@@ -363,11 +349,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         }
         case(LCFG_PARAM):{
                 printf("param ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_SPTLRPC_CONF):{
-                printf("sptlrpc_conf ");
                 print_1_cfg(lcfg);
                 break;
         }
@@ -387,7 +368,7 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 }
 
                 if (marker->cm_flags & CM_EXCLUDE) {
-                        if (marker->cm_flags & CM_START)
+                        if (marker->cm_flags & CM_START) 
                                 printf("EXCLUDE START ");
                         else
                                 printf("EXCLUDE END   ");
@@ -428,26 +409,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                        createtime, canceltime);
                 break;
         }
-        case(LCFG_POOL_NEW):{
-                printf("pool new ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_ADD):{
-                printf("pool add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_REM):{
-                printf("pool remove ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_DEL):{
-                printf("pool destroy ");
-                print_1_cfg(lcfg);
-                break;
-        }
         default:
                 printf("unsupported cmd_code = %x\n",cmd);
         }
@@ -459,16 +420,16 @@ void print_records(struct llog_rec_hdr **recs, int rec_number)
 {
         __u32 lopt;
         int i, skip = 0;
-
+        
         for(i = 0; i < rec_number; i++) {
                 printf("#%.2d (%.3d)", le32_to_cpu(recs[i]->lrh_index),
                        le32_to_cpu(recs[i]->lrh_len));
 
                 lopt = le32_to_cpu(recs[i]->lrh_type);
 
-                if (recs[i]->padding == CANCELLED)
+                if (recs[i]->padding == CANCELLED) 
                         printf("NOT SET ");
-
+            
                 if (lopt == OBD_CFG_REC) {
                         struct lustre_cfg *lcfg;
                         lcfg = (struct lustre_cfg *)((char*)(recs[i]) +
@@ -478,5 +439,6 @@ void print_records(struct llog_rec_hdr **recs, int rec_number)
                         printf("padding\n");
                 } else
                         printf("unknown type %x\n", lopt);
+
         }
 }

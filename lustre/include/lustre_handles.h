@@ -82,7 +82,6 @@ struct portals_handle {
 /* Add a handle to the hash table */
 void class_handle_hash(struct portals_handle *, portals_handle_addref_cb);
 void class_handle_unhash(struct portals_handle *);
-void class_handle_hash_back(struct portals_handle *);
 void *class_handle2object(__u64 cookie);
 void class_handle_free_cb(struct rcu_head *);
 int class_handle_init(void);

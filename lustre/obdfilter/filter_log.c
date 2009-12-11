@@ -56,7 +56,7 @@
 
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
-                         __u32 ioepoch,
+                         __u32 io_epoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode)
 {
@@ -68,23 +68,23 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         LOCK_INODE_MUTEX(inode);
         ofd = INODE_PRIVATE_DATA(inode);
 
-        if (ofd && ofd->ofd_epoch >= ioepoch) {
-                if (ofd->ofd_epoch > ioepoch)
+        if (ofd && ofd->ofd_epoch >= io_epoch) {
+                if (ofd->ofd_epoch > io_epoch)
                         CERROR("client sent old epoch %d for obj ino %ld\n",
-                               ioepoch, inode->i_ino);
+                               io_epoch, inode->i_ino);
                 UNLOCK_INODE_MUTEX(inode);
                 RETURN(0);
         }
 
-        if (ofd && ofd->ofd_epoch < ioepoch) {
-                ofd->ofd_epoch = ioepoch;
+        if (ofd && ofd->ofd_epoch < io_epoch) {
+                ofd->ofd_epoch = io_epoch;
         } else if (!ofd) {
                 OBD_ALLOC(ofd, sizeof(*ofd));
                 if (!ofd)
                         GOTO(out, rc = -ENOMEM);
                 igrab(inode);
                 INODE_PRIVATE_DATA(inode) = ofd;
-                ofd->ofd_epoch = ioepoch;
+                ofd->ofd_epoch = io_epoch;
         }
         /* the decision to write a record is now made, unlock */
         UNLOCK_INODE_MUTEX(inode);
@@ -95,7 +95,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_hdr.lrh_len = lsc->lsc_tail.lrt_len = sizeof(*lsc);
         lsc->lsc_hdr.lrh_type =  OST_SZ_REC;
         lsc->lsc_fid = *mds_fid;
-        lsc->lsc_ioepoch = ioepoch;
+        lsc->lsc_io_epoch = io_epoch;
 
         rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie, NULL);
         OBD_FREE(lsc, sizeof(*lsc));
@@ -114,37 +114,27 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        struct obd_llog_group *olg;
         struct llog_ctxt *ctxt;
         int rc;
 
-        /* we have to find context for right group */
         if (error != 0 || obd->obd_stopping) {
                 CDEBUG(D_INODE, "not cancel logcookie err %d stopping %d \n",
                        error, obd->obd_stopping);
-                GOTO (out, rc = 0);
+                OBD_FREE(cookie, sizeof(*cookie));
+                return;
         }
 
-        olg = filter_find_olg(obd, cookie->lgc_lgl.lgl_ogr);
-        if (!olg) {
-                CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
+        ctxt = llog_get_context(obd, cookie->lgc_subsys + 1);
+        if (!ctxt)
                 GOTO(out, rc = 0);
-        }
-
-        ctxt = llog_group_get_ctxt(olg, cookie->lgc_subsys + 1);
-        if (!ctxt) {
-                CERROR("no valid context for group "LPU64"\n",
-                        cookie->lgc_lgl.lgl_ogr);
-                GOTO(out, rc = 0);
-        }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT, 30);
 
         rc = llog_cancel(ctxt, NULL, 1, cookie, 0);
         if (rc)
                 CERROR("error cancelling log cookies: rc = %d\n", rc);
-        llog_ctxt_put(ctxt);
 out:
+        llog_ctxt_put(ctxt);
         OBD_FREE(cookie, sizeof(*cookie));
 }
 
@@ -154,11 +144,11 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                                       struct llog_rec_hdr *rec,
                                       struct llog_cookie *cookie)
 {
-        struct obd_export *exp = ctxt->loc_obd->obd_self_export;
+        struct obd_device *obd = ctxt->loc_obd;
+        struct obd_export *exp = obd->obd_self_export;
         struct llog_unlink_rec *lur;
         struct obdo *oa;
         obd_id oid;
-        obd_count count;
         int rc = 0;
         ENTRY;
 
@@ -168,27 +158,20 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
-        oa->o_gr = lur->lur_ogr;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        oa->o_gr = lur->lur_ogen;
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
-        /* objid gap may require to destroy several objects in row */
-        count = lur->lur_count + 1;
 
-        while (count > 0) {
-                rc = filter_destroy(exp, oa, NULL, NULL, NULL, NULL);
-                if (rc == 0)
-                        CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n",
-                               oid);
-                else if (rc != -ENOENT)
-                        CEMERG("error destroying object "LPU64": %d\n",
-                               oid, rc);
-                else
-                        rc = 0;
-                count--;
-                oid++;
-        }
+        rc = filter_destroy(exp, oa, NULL, NULL, NULL);
         OBDO_FREE(oa);
+        if (rc == -ENOENT) {
+                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
+                llog_cancel(ctxt, NULL, 1, cookie, 0);
+                RETURN(0);
+        }
+
+        if (rc == 0)
+                CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n", oid);
 
         RETURN(rc);
 }
@@ -201,34 +184,21 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_export *exp = obd->obd_self_export;
+        struct llog_setattr_rec *lsr;
         struct obd_info oinfo = { { { 0 } } };
         obd_id oid;
         int rc = 0;
         ENTRY;
 
+        lsr = (struct llog_setattr_rec *)rec;
         OBDO_ALLOC(oinfo.oi_oa);
-        if (oinfo.oi_oa == NULL)
-                RETURN(-ENOMEM);
-
-        if (rec->lrh_type == MDS_SETATTR_REC) {
-                struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
-
-                oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
-                oinfo.oi_oa->o_uid = lsr->lsr_uid;
-                oinfo.oi_oa->o_gid = lsr->lsr_gid;
-        } else {
-                struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
-
-                oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
-                oinfo.oi_oa->o_uid = lsr->lsr_uid;
-                oinfo.oi_oa->o_gid = lsr->lsr_gid;
-        }
 
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
-        oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        oinfo.oi_oa->o_id = lsr->lsr_oid;
+        oinfo.oi_oa->o_gr = lsr->lsr_ogen;
+        oinfo.oi_oa->o_uid = lsr->lsr_uid;
+        oinfo.oi_oa->o_gid = lsr->lsr_gid;
         oinfo.oi_oa->o_lcookie = *cookie;
         oid = oinfo.oi_oa->o_id;
 
@@ -258,13 +228,6 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
         if (ctxt->loc_obd->obd_stopping)
                 RETURN(LLOG_PROC_BREAK);
 
-        if (rec == NULL) {
-                spin_lock_bh(&ctxt->loc_obd->obd_processing_task_lock);
-                ctxt->loc_obd->u.filter.fo_mds_ost_sync = 0;
-                spin_unlock_bh(&ctxt->loc_obd->obd_processing_task_lock);
-                RETURN(0);
-        }
-
         if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
@@ -280,7 +243,6 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 rc = filter_recov_log_unlink_cb(ctxt, rec, &cookie);
                 break;
         case MDS_SETATTR_REC:
-        case MDS_SETATTR64_REC:
                 rc = filter_recov_log_setattr_cb(ctxt, rec, &cookie);
                 break;
         case LLOG_GEN_REC: {

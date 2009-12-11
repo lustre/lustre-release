@@ -69,10 +69,7 @@ build_obj_list . libllite.a
 build_obj_list ../lov liblov.a
 build_obj_list ../obdecho libobdecho.a
 build_obj_list ../osc libosc.a
-build_obj_list ../lmv liblmv.a
 build_obj_list ../mdc libmdc.a
-build_obj_list ../fid libfid.a
-build_obj_list ../fld libfld.a
 build_obj_list ../mgc libmgc.a
 build_obj_list ../ptlrpc libptlrpc.a
 build_obj_list ../obdclass liblustreclass.a
@@ -80,8 +77,7 @@ build_obj_list ../lvfs liblvfs.a
 
 # lnet components libs
 build_obj_list ../../lnet/utils libuptlctl.a
-build_obj_list ../../libcfs/libcfs libcfs.a
-build_obj_list ../../libcfs/libcfs libcfsutil.a
+build_obj_list ../../lnet/libcfs libcfs.a
 if $(echo "$LND_LIBS" | grep "socklnd" >/dev/null) ; then
 	build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
 fi

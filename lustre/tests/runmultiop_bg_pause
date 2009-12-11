@@ -7,11 +7,5 @@ PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
-TMP=${TMP:-/tmp}
-MULTIOP_PID_FILE=${MULTIOP_PID_FILE:-$TMP/multiop_bg.pid}
-rm -f $MULTIOP_PID_FILE
-
 multiop_bg_pause $*
-rc=$?
-[ "$rc" = 0 ] && echo $! > $MULTIOP_PID_FILE
-exit $rc
+exit $?

@@ -43,8 +43,6 @@
 
 #include "selftest.h"
 
-lst_sid_t LST_INVALID_SID = {LNET_NID_ANY, -1};
-
 int brw_inject_errors = 0;
 CFS_MODULE_PARM(brw_inject_errors, "i", int, 0644,
                 "# data errors to inject randomly, zero by default");
@@ -135,8 +133,7 @@ sfw_find_test_case(int id)
         LASSERT (id <= SRPC_SERVICE_MAX_ID);
         LASSERT (id > SRPC_FRAMEWORK_SERVICE_MAX_ID);
 
-        cfs_list_for_each_entry_typed (tsc, &sfw_data.fw_tests,
-                                       sfw_test_case_t, tsc_list) {
+        list_for_each_entry (tsc, &sfw_data.fw_tests, tsc_list) {
                 if (tsc->tsc_srv_service->sv_id == id)
                         return tsc;
         }
@@ -228,15 +225,13 @@ sfw_deactivate_session (void)
 
         spin_unlock(&sfw_data.fw_lock);
 
-        cfs_list_for_each_entry_typed (tsc, &sfw_data.fw_tests,
-                                       sfw_test_case_t, tsc_list) {
+        list_for_each_entry (tsc, &sfw_data.fw_tests, tsc_list) {
                 srpc_abort_service(tsc->tsc_srv_service);
         }
 
         spin_lock(&sfw_data.fw_lock);
 
-        cfs_list_for_each_entry_typed (tsb, &sn->sn_batches,
-                                       sfw_batch_t, bat_list) {
+        list_for_each_entry (tsb, &sn->sn_batches, bat_list) {
                 if (sfw_batch_active(tsb)) {
                         nactive++;
                         sfw_stop_batch(tsb, 1);
@@ -362,8 +357,7 @@ sfw_find_batch (lst_bid_t bid)
 
         LASSERT (sn != NULL);
 
-        cfs_list_for_each_entry_typed (bat, &sn->sn_batches,
-                                       sfw_batch_t, bat_list) {
+        list_for_each_entry (bat, &sn->sn_batches, bat_list) {
                 if (bat->bat_id.bat_id == bid.bat_id)
                         return bat;
         }
@@ -427,8 +421,7 @@ sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
         cnt->zombie_sessions = atomic_read(&sfw_data.fw_nzombies);
 
         cnt->active_tests = cnt->active_batches = 0;
-        cfs_list_for_each_entry_typed (bat, &sn->sn_batches,
-                                       sfw_batch_t, bat_list) {
+        list_for_each_entry (bat, &sn->sn_batches, bat_list) {
                 int n = atomic_read(&bat->bat_nactive);
 
                 if (n > 0) {
@@ -754,8 +747,8 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
 #ifndef __KERNEL__
         LASSERT (bk->bk_pages != NULL);
 #endif
-        LASSERT (bk->bk_niov * SFW_ID_PER_PAGE >= (unsigned int)ndest);
-        LASSERT ((unsigned int)bk->bk_len >= sizeof(lnet_process_id_t) * ndest);
+        LASSERT (bk->bk_niov * SFW_ID_PER_PAGE >= ndest);
+        LASSERT (bk->bk_len >= sizeof(lnet_process_id_t) * ndest);
 
         sfw_unpack_test_req(msg);
         memcpy(&tsi->tsi_u, &req->tsr_u, sizeof(tsi->tsi_u));
@@ -832,8 +825,7 @@ sfw_test_unit_done (sfw_test_unit_t *tsu)
         
         LASSERT (!list_empty(&sn->sn_list)); /* I'm a zombie! */
 
-        cfs_list_for_each_entry_typed (tsb, &sn->sn_batches,
-                                       sfw_batch_t, bat_list) {
+        list_for_each_entry (tsb, &sn->sn_batches, bat_list) {
                 if (sfw_batch_active(tsb)) {
                         spin_unlock(&sfw_data.fw_lock);
                         return;
@@ -984,8 +976,7 @@ sfw_run_batch (sfw_batch_t *tsb)
                 return 0;
         }
 
-        cfs_list_for_each_entry_typed (tsi, &tsb->bat_tests,
-                                       sfw_test_instance_t, tsi_list) {
+        list_for_each_entry (tsi, &tsb->bat_tests, tsi_list) {
                 if (!tsi->tsi_is_client) /* skip server instances */
                         continue;
 
@@ -994,8 +985,7 @@ sfw_run_batch (sfw_batch_t *tsb)
 
                 atomic_inc(&tsb->bat_nactive);
 
-                cfs_list_for_each_entry_typed (tsu, &tsi->tsi_units,
-                                               sfw_test_unit_t, tsu_list) {
+                list_for_each_entry (tsu, &tsi->tsi_units, tsu_list) {
                         atomic_inc(&tsi->tsi_nactive);
                         tsu->tsu_loop = tsi->tsi_loop;
                         wi = &tsu->tsu_worker;
@@ -1018,8 +1008,7 @@ sfw_stop_batch (sfw_batch_t *tsb, int force)
                 return 0;
         }
 
-        cfs_list_for_each_entry_typed (tsi, &tsb->bat_tests,
-                                       sfw_test_instance_t, tsi_list) {
+        list_for_each_entry (tsi, &tsb->bat_tests, tsi_list) {
                 spin_lock(&tsi->tsi_lock);
 
                 if (!tsi->tsi_is_client ||
@@ -1036,8 +1025,7 @@ sfw_stop_batch (sfw_batch_t *tsb, int force)
                 }
 
                 /* abort launched rpcs in the test */
-                cfs_list_for_each_entry_typed (rpc, &tsi->tsi_active_rpcs,
-                                               srpc_client_rpc_t, crpc_list) {
+                list_for_each_entry (rpc, &tsi->tsi_active_rpcs, crpc_list) {
                         spin_lock(&rpc->crpc_lock);
 
                         srpc_abort_rpc(rpc, -EINTR);
@@ -1064,8 +1052,7 @@ sfw_query_batch (sfw_batch_t *tsb, int testidx, srpc_batch_reply_t *reply)
                 return 0;
         }
 
-        cfs_list_for_each_entry_typed (tsi, &tsb->bat_tests,
-                                       sfw_test_instance_t, tsi_list) {
+        list_for_each_entry (tsi, &tsb->bat_tests, tsi_list) {
                 if (testidx-- > 1)
                         continue;
 
@@ -1538,52 +1525,37 @@ sfw_post_rpc (srpc_client_rpc_t *rpc)
 static srpc_service_t sfw_services[] = 
 {
         {
-                /* sv_id */    SRPC_SERVICE_DEBUG,
-                /* sv_name */  "debug",
-                0
+                .sv_name = "debug",
+                .sv_id   = SRPC_SERVICE_DEBUG,
         },
         {
-                /* sv_id */    SRPC_SERVICE_QUERY_STAT,
-                /* sv_name */  "query stats",
-                0
+                .sv_name = "query stats",
+                .sv_id   = SRPC_SERVICE_QUERY_STAT,
         },
         {
-                /* sv_id */    SRPC_SERVICE_MAKE_SESSION,
-                /* sv_name */  "make session",
-                0
+                .sv_name = "make sessin",
+                .sv_id   = SRPC_SERVICE_MAKE_SESSION,
         },
         {
-                /* sv_id */    SRPC_SERVICE_REMOVE_SESSION,
-                /* sv_name */  "remove session",
-                0
+                .sv_name = "remove session",
+                .sv_id   = SRPC_SERVICE_REMOVE_SESSION,
         },
         {
-                /* sv_id */    SRPC_SERVICE_BATCH,
-                /* sv_name */  "batch service",
-                0
+                .sv_name = "batch service",
+                .sv_id   = SRPC_SERVICE_BATCH,
         },
         {
-                /* sv_id */    SRPC_SERVICE_TEST,
-                /* sv_name */  "test service",
-                0
+                .sv_name = "test service",
+                .sv_id   = SRPC_SERVICE_TEST,
         },
-        {
-                /* sv_id */    0,
-                /* sv_name */  NULL,
-                0
-        }
+        {       .sv_name = NULL, }
 };
 
 extern sfw_test_client_ops_t ping_test_client;
 extern srpc_service_t        ping_test_service;
-extern void ping_init_test_client(void);
-extern void ping_init_test_service(void);
 
 extern sfw_test_client_ops_t brw_test_client;
 extern srpc_service_t        brw_test_service;
-extern void brw_init_test_client(void);
-extern void brw_init_test_service(void);
-
 
 int
 sfw_startup (void)
@@ -1637,19 +1609,13 @@ sfw_startup (void)
         CFS_INIT_LIST_HEAD(&sfw_data.fw_zombie_rpcs);
         CFS_INIT_LIST_HEAD(&sfw_data.fw_zombie_sessions);
 
-        brw_init_test_client();
-        brw_init_test_service();
         rc = sfw_register_test(&brw_test_service, &brw_test_client);
         LASSERT (rc == 0);
-
-        ping_init_test_client();
-        ping_init_test_service();
         rc = sfw_register_test(&ping_test_service, &ping_test_client);
         LASSERT (rc == 0);
 
         error = 0;
-        cfs_list_for_each_entry_typed (tsc, &sfw_data.fw_tests,
-                                       sfw_test_case_t, tsc_list) {
+        list_for_each_entry (tsc, &sfw_data.fw_tests, tsc_list) {
                 sv = tsc->tsc_srv_service;
                 sv->sv_concur = SFW_TEST_CONCURRENCY;
 
@@ -1735,8 +1701,7 @@ sfw_shutdown (void)
                 srpc_remove_service(sv);
         }
 
-        cfs_list_for_each_entry_typed (tsc, &sfw_data.fw_tests,
-                                       sfw_test_case_t, tsc_list) {
+        list_for_each_entry (tsc, &sfw_data.fw_tests, tsc_list) {
                 sv = tsc->tsc_srv_service;
                 srpc_shutdown_service(sv);
                 srpc_remove_service(sv);

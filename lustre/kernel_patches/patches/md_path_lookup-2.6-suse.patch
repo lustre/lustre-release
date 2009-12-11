@@ -1,0 +1,25 @@
+Index: linux-2.6.4-51.0/drivers/md/dm-path-selector.c
+===================================================================
+--- linux-2.6.4-51.0.orig/drivers/md/dm-path-selector.c	2004-04-18 20:10:21.000000000 -0400
++++ linux-2.6.4-51.0/drivers/md/dm-path-selector.c	2004-04-18 20:10:59.000000000 -0400
+@@ -129,7 +129,7 @@
+ 	struct path *path;
+ };
+ 
+-static struct path_info *path_lookup(struct list_head *head, struct path *p)
++static struct path_info *md_path_lookup(struct list_head *head, struct path *p)
+ {
+ 	struct path_info *pi;
+ 
+@@ -235,9 +235,9 @@
+ 	 * mind the expense of these searches.
+ 	 */
+ 	spin_lock_irqsave(&s->lock, flags);
+-	pi = path_lookup(&s->valid_paths, p);
++	pi = md_path_lookup(&s->valid_paths, p);
+ 	if (!pi)
+-		pi = path_lookup(&s->invalid_paths, p);
++		pi = md_path_lookup(&s->invalid_paths, p);
+ 
+ 	if (!pi)
+ 		DMWARN("asked to change the state of an unknown path");

@@ -5,14 +5,11 @@ lnettag="b1_x"
 libsysiotag="HEAD"
 snmptag="HEAD"
 ldiskfstag="HEAD"
-ldiskfstag_head="HEAD"
+ldiskfstag_head="b1_8_iam"
 lustreiokittag="HEAD"
 libcfstag="b1_x"
-dmutag="" # uDMU
-spltag=""
-zfstag=""
+dmutag=""
 hg_base_url="http://www.wizy.org/mercurial"
-git_base_url="git@git.lustre.org:%s.git"
 
 export LC_COLLATE=C
 
@@ -62,6 +59,7 @@ case "$lustretag" in
 
     b_cmd_cray)
         lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
         ;;
 
@@ -171,20 +169,28 @@ case "$lustretag" in
         lustretag="HEAD"
         ;;
 
-    b_hd_smp)
+    b_hd_lnet_smp)
         # LNet grained locking and SMP improvement branch
-        libcfstag="b_hd_libcfs_smp"
         lnettag="b_hd_lnet_smp"
-        ldiskfstag="$ldiskfstag_head"
-        lustretag="b_hd_lustre_smp"
+        ldiskfstag="lnet_smp_ldiskfs"
+        lustretag="lnet_smp_lustre"
+        libcfstag="lnet_smp_libcfs"
         ;;
 
-    b_hd_md_perf)
+    b_hd_lnet_perf)
+        # Tag for lnet performance tests
+        lnettag="lnet_smp_lnet"
+        ldiskfstag="lnet_smp_ldiskfs"
+        lustretag="lnet_smp_lustre"
+        libcfstag="lnet_smp_libcfs"
+        ;;
+
+    b_hd_o2ib_new_proto)
         # LNet branch for new o2iblnd protocol (15983, 13621, 14425, 14358)
-        lnettag="HD_LNET_SMP_BASE"
+        lnettag="b_hd_o2ib_new_proto"
         ldiskfstag="$ldiskfstag_head"
-        lustretag="HD_LUSTRE_SMP_BASE"
-        libcfstag="HD_LIBCFS_SMP_BASE"
+        lustretag="HEAD"
+        libcfstag="HEAD"
         ;;
 
     b_ula)
@@ -308,38 +314,12 @@ case "$lustretag" in
         libcfstag="HEAD"
         ;;
 
-    # libcfs name normalization changes
-    b_hd_nn)
-        libcfstag="b_hd_libcfs_nn"
-        lnettag="b_hd_lnet_nn"
-        ldiskfstag="$ldiskfstag_head"
-        lustretag="b_hd_lustre_nn"
-        ;; 
-
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_capa|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_recov|b_hd_transapi)
+    HEAD|b_head_capa|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_kdmu|b_hd_recov|b_hd_transapi)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
-        ;;
-
-    b_hd_kdmu)
-        # Identical to HEAD + spl and zfs
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
-        spltag="pre-alpha"
-        zfstag="patched"
-        ;;
-    b_kdmu_params)
-        # Identical to HEAD + spl and zfs
-        lnettag="b_hd_params_tree"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="b_hd_params_tree"
-        lustretag="b_kdmu_params"
-        spltag="pre-alpha"
-        zfstag="patched"
         ;;
 
     b_head_libcfs)
@@ -385,7 +365,5 @@ cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
 cvs_cmd lustre-iokit lustre-iokit "$lustreiokittag"
 hg_cmd lustre/zfs-lustre "$hg_base_url" "$dmutag"
 cvs_cmd libcfs libcfs "$libcfstag"
-git_cmd spl spl "$spltag" "$git_base_url"
-git_cmd zfs zfs-tmp "$zfstag" "$git_base_url"
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build

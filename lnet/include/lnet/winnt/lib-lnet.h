@@ -43,6 +43,7 @@
 
 #ifdef __KERNEL__
 # include <libcfs/libcfs.h>
+# include <libcfs/kp30.h>
 
 static inline __u64
 lnet_page2phys (struct page *p)

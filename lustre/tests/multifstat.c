@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 
         if ( st1.st_size != st2.st_size ) {
                 printf("Sizes don't match %lu, %lu\n",
-                       (unsigned long)st1.st_size,
+                       (unsigned long)st1.st_size, 
 		       (unsigned long)st2.st_size);
                 return 1;
         }
@@ -92,12 +92,6 @@ int main(int argc, char **argv)
         if ( st1.st_mtime != st2.st_mtime ) {
                 printf("Mtimes don't match %ld, %ld\n",
                        st1.st_mtime, st2.st_mtime);
-                return 1;
-        }
-
-        if ( st1.st_blocks != st2.st_blocks ) {
-                printf("Blocks don't match %ld, %ld\n",
-                       (long)st1.st_blocks, (long)st2.st_blocks);
                 return 1;
         }
 

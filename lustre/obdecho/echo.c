@@ -47,11 +47,10 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
+#include <obd_echo.h>
 #include <lustre_debug.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
-
-#include "echo_internal.h"
 
 #define ECHO_INIT_OBJID      0x1000000000000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
@@ -65,30 +64,36 @@ enum {
         LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
 
-static int echo_connect(const struct lu_env *env,
-                        struct obd_export **exp, struct obd_device *obd,
+static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data,
                         void *localdata)
 {
-        struct lustre_handle conn = { 0 };
-        int rc;
-
         data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
-        rc = class_connect(&conn, obd, cluuid);
-        if (rc) {
-                CERROR("can't connect %d\n", rc);
-                return rc;
-        }
-        *exp = class_conn2export(&conn);
-
-        return 0;
+        return class_connect(conn, obd, cluuid);
 }
 
 static int echo_disconnect(struct obd_export *exp)
 {
         LASSERT (exp != NULL);
 
-        return server_disconnect_export(exp);
+        ldlm_cancel_locks_for_export(exp);
+
+        /* complete all outstanding replies */
+        spin_lock(&exp->exp_lock);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_service;
+
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&svc->srv_lock);
+        }
+        spin_unlock(&exp->exp_lock);
+
+        return class_disconnect(exp);
 }
 
 static int echo_init_export(struct obd_export *exp)
@@ -145,8 +150,8 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 }
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                 struct obd_export *md_exp, void *capa)
+                 struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                 struct obd_export *md_exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -183,7 +188,7 @@ static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -207,7 +212,7 @@ static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -283,120 +288,16 @@ echo_page_debug_check(cfs_page_t *page, obd_id id,
 /* This allows us to verify that desc_private is passed unmolested */
 #define DESC_PRIV 0x10293847
 
-static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
-                             struct niobuf_remote *nb, int *pages,
-                             struct niobuf_local *lb, int cmd, int *left)
-{
-        int gfp_mask = (obj->ioo_id & 1) ? CFS_ALLOC_HIGHUSER : CFS_ALLOC_STD;
-        int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
-        int debug_setup = (!ispersistent &&
-                           (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
-                           (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
-        struct niobuf_local *res = lb;
-        obd_off offset = nb->offset;
-        int len = nb->len;
-
-        while (len > 0) {
-                int plen = CFS_PAGE_SIZE - (offset & (CFS_PAGE_SIZE-1));
-                if (len < plen)
-                        plen = len;
-
-                /* check for local buf overflow */
-                if (*left == 0)
-                        return -EINVAL;
-
-                res->offset = offset;
-                res->len = plen;
-                LASSERT((res->offset & ~CFS_PAGE_MASK) + res->len <= CFS_PAGE_SIZE);
-
-
-                if (ispersistent &&
-                    (res->offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
-                        res->page = echo_persistent_pages[res->offset >>
-                                CFS_PAGE_SHIFT];
-                        /* Take extra ref so __free_pages() can be called OK */
-                        cfs_get_page (res->page);
-                } else {
-                        OBD_PAGE_ALLOC(res->page, gfp_mask);
-                        if (res->page == NULL) {
-                                CERROR("can't get page for id " LPU64"\n",
-                                       obj->ioo_id);
-                                return -ENOMEM;
-                        }
-                }
-
-                CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
-                       res->page, res->offset, res->len);
-
-                if (cmd & OBD_BRW_READ)
-                        res->rc = res->len;
-
-                if (debug_setup)
-                        echo_page_debug_setup(res->page, cmd, obj->ioo_id,
-                                              res->offset, res->len);
-
-                offset += plen;
-                len -= plen;
-                res++;
-
-                (*left)--;
-                (*pages)++;
-        }
-
-        return 0;
-}
-
-static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
-                            struct niobuf_remote *rb, int *pgs,
-                            struct niobuf_local *lb, int verify)
-{
-        struct niobuf_local *res = lb;
-        obd_off start  = rb->offset >> CFS_PAGE_SHIFT;
-        obd_off end    = (rb->offset + rb->len + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        int     count  = (int)(end - start);
-        int     rc     = 0;
-        int     i;
-
-        for (i = 0; i < count; i++, (*pgs) ++, res++) {
-                cfs_page_t *page = res->page;
-                void       *addr;
-
-                if (page == NULL) {
-                        CERROR("null page objid "LPU64":%p, buf %d/%d\n",
-                               obj->ioo_id, page, i, obj->ioo_bufcnt);
-                        return -EFAULT;
-                }
-
-                addr = cfs_kmap(page);
-
-                CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
-                       res->page, addr, res->offset);
-
-                if (verify) {
-                        int vrc = echo_page_debug_check(page, obj->ioo_id,
-                                                        res->offset, res->len);
-                        /* check all the pages always */
-                        if (vrc != 0 && rc == 0)
-                                rc = vrc;
-                }
-
-                cfs_kunmap(page);
-                /* NB see comment above regarding persistent pages */
-                OBD_PAGE_FREE(page);
-        }
-
-        return rc;
-}
-
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
-                int objcount, struct obd_ioobj *obj, struct niobuf_remote *nb,
-                int *pages, struct niobuf_local *res,
-                struct obd_trans_info *oti, struct lustre_capa *unused)
+                int objcount, struct obd_ioobj *obj, int niocount,
+                struct niobuf_remote *nb, struct niobuf_local *res,
+                struct obd_trans_info *oti)
 {
         struct obd_device *obd;
+        struct niobuf_local *r = res;
         int tot_bytes = 0;
         int rc = 0;
-        int i, left;
+        int i;
         ENTRY;
 
         obd = export->exp_obd;
@@ -406,33 +307,59 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
         /* Temp fix to stop falling foul of osc_announce_cached() */
         oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLGRANT);
 
-        memset(res, 0, sizeof(*res) * *pages);
+        memset(res, 0, sizeof(*res) * niocount);
 
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
-               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, *pages);
+               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
 
         if (oti)
                 oti->oti_handle = (void *)DESC_PRIV;
 
-        left = *pages;
-        *pages = 0;
-
         for (i = 0; i < objcount; i++, obj++) {
+                int gfp_mask = (obj->ioo_id & 1) ? CFS_ALLOC_HIGHUSER : CFS_ALLOC_STD;
+                int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
+                int debug_setup = (!ispersistent &&
+                                   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                                   (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++) {
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
 
-                        rc = echo_map_nb_to_lb(oa, obj, nb, pages,
-                                               res + *pages, cmd, &left);
-                        if (rc)
-                                GOTO(preprw_cleanup, rc);
+                        if (ispersistent &&
+                            (nb->offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
+                                r->page = echo_persistent_pages[nb->offset >>
+                                                                CFS_PAGE_SHIFT];
+                                /* Take extra ref so __free_pages() can be called OK */
+                                cfs_get_page (r->page);
+                        } else {
+                                OBD_PAGE_ALLOC(r->page, gfp_mask);
+                                if (r->page == NULL) {
+                                        CERROR("can't get page %u/%u for id "
+                                               LPU64"\n",
+                                               j, obj->ioo_bufcnt, obj->ioo_id);
+                                        GOTO(preprw_cleanup, rc = -ENOMEM);
+                                }
+                        }
 
                         tot_bytes += nb->len;
+
+                        atomic_inc(&obd->u.echo.eo_prep);
+
+                        r->offset = nb->offset;
+                        r->len = nb->len;
+                        LASSERT((r->offset & ~CFS_PAGE_MASK) + r->len <= CFS_PAGE_SIZE);
+
+                        CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
+                               r->page, r->offset, r->len);
+
+                        if (cmd & OBD_BRW_READ)
+                                r->rc = r->len;
+
+                        if (debug_setup)
+                                echo_page_debug_setup(r->page, cmd, obj->ioo_id,
+                                                      r->offset, r->len);
                 }
         }
-
-        atomic_add(*pages, &obd->u.echo.eo_prep);
-
         if (cmd & OBD_BRW_READ)
                 lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
                                     tot_bytes);
@@ -451,27 +378,26 @@ preprw_cleanup:
          * all down again.  I believe that this is what the in-kernel
          * prep/commit operations do.
          */
-        CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
-        for (i = 0; i < *pages; i++) {
-                cfs_kunmap(res[i].page);
+        CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
+        while (r-- > res) {
+                cfs_kunmap(r->page);
                 /* NB if this is a persistent page, __free_pages will just
                  * lose the extra ref gained above */
-                OBD_PAGE_FREE(res[i].page);
-                res[i].page = NULL;
+                OBD_PAGE_FREE(r->page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
+        memset(res, 0, sizeof(*res) * niocount);
 
         return rc;
 }
 
 int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
-                  int objcount, struct obd_ioobj *obj,
-                  struct niobuf_remote *rb, int niocount,
+                  int objcount, struct obd_ioobj *obj, int niocount,
                   struct niobuf_local *res, struct obd_trans_info *oti, int rc)
 {
         struct obd_device *obd;
-        int pgs = 0;
-        int i;
+        struct niobuf_local *r = res;
+        int i, vrc = 0;
         ENTRY;
 
         obd = export->exp_obd;
@@ -489,7 +415,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                        objcount, niocount);
         }
 
-        if (niocount && res == NULL) {
+        if (niocount && !r) {
                 CERROR("NULL res niobuf with niocount %d\n", niocount);
                 RETURN(-EINVAL);
         }
@@ -503,38 +429,44 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                               (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, rb++) {
-                        int vrc = echo_finalize_lb(oa, obj, rb, &pgs, &res[pgs], verify);
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
+                        cfs_page_t *page = r->page;
+                        void *addr;
 
-                        if (vrc == 0)
-                                continue;
+                        if (page == NULL) {
+                                CERROR("null page objid "LPU64":%p, buf %d/%d\n",
+                                       obj->ioo_id, page, j, obj->ioo_bufcnt);
+                                GOTO(commitrw_cleanup, rc = -EFAULT);
+                        }
 
-                        if (vrc == -EFAULT)
-                                GOTO(commitrw_cleanup, rc = vrc);
+                        addr = cfs_kmap(page);
 
-                        if (rc == 0)
-                                rc = vrc;
+                        CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
+                               r->page, addr, r->offset);
+
+                        if (verify) {
+                                vrc = echo_page_debug_check(page, obj->ioo_id,
+                                                            r->offset, r->len);
+                                /* check all the pages always */
+                                if (vrc != 0 && rc == 0)
+                                        rc = vrc;
+                        }
+
+                        cfs_kunmap(page);
+                        /* NB see comment above regarding persistent pages */
+                        OBD_PAGE_FREE(page);
+                        atomic_dec(&obd->u.echo.eo_prep);
                 }
-
         }
-
-        atomic_sub(pgs, &obd->u.echo.eo_prep);
-
         CDEBUG(D_PAGE, "%d pages remain after commit\n",
                atomic_read(&obd->u.echo.eo_prep));
         RETURN(rc);
 
 commitrw_cleanup:
-        atomic_sub(pgs, &obd->u.echo.eo_prep);
-
-        CERROR("cleaning up %d pages (%d obdos)\n",
-               niocount - pgs - 1, objcount);
-
-        while (pgs ++ < niocount) {
-                cfs_page_t *page = res[pgs].page;
-
-                if (page == NULL)
-                        continue;
+        CERROR("cleaning up %ld pages (%d obdos)\n",
+               niocount - (long)(r - res) - 1, objcount);
+        while (++r < res + niocount) {
+                cfs_page_t *page = r->page;
 
                 /* NB see comment above regarding persistent pages */
                 OBD_PAGE_FREE(page);
@@ -543,31 +475,29 @@ commitrw_cleanup:
         return rc;
 }
 
-static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
         int                        rc;
         int                        lock_flags = 0;
         struct ldlm_res_id         res_id = {.name = {1}};
-        char                       ns_name[48];
         ENTRY;
 
         spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
+        obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
                                                 LDLM_NAMESPACE_SERVER,
-                                                LDLM_NAMESPACE_MODEST);
+                                                LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
-                                    NULL, LCK_NL, &lock_flags, NULL,
-                                    ldlm_completion_ast, NULL, NULL, 0, NULL,
-                                    &obd->u.echo.eo_nl_lock);
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN, 
+                                    NULL, LCK_NL, &lock_flags, NULL, 
+                                    ldlm_completion_ast, NULL, NULL, 
+                                    0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
         lprocfs_echo_init_vars(&lvars);
@@ -598,6 +528,7 @@ static int echo_cleanup(struct obd_device *obd)
 
         /* XXX Bug 3413; wait for a bit to ensure the BL callback has
          * happened before calling ldlm_namespace_free() */
+        set_current_state (TASK_UNINTERRUPTIBLE);
         cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
@@ -672,7 +603,7 @@ static int __init obdecho_init(void)
         int rc;
 
         ENTRY;
-        LCONSOLE_INFO("Echo OBD driver; http://www.lustre.org/\n");
+        printk(KERN_INFO "Lustre: Echo OBD driver; http://www.lustre.org/\n");
 
         LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
@@ -682,8 +613,8 @@ static int __init obdecho_init(void)
         if (rc != 0)
                 goto failed_0;
 
-        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_ECHO_NAME, NULL);
+        rc = class_register_type(&echo_obd_ops, lvars.module_vars,
+                                 LUSTRE_ECHO_NAME);
         if (rc != 0)
                 goto failed_1;
 

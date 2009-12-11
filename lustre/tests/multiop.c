@@ -49,7 +49,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <semaphore.h>
-#include <libcfs/libcfs.h>
 #include <lustre/liblustreapi.h>
 
 #define T1 "write data before unlink\n"
@@ -60,7 +59,7 @@ int bufsize = 0;
 sem_t sem;
 #define ALIGN 65535
 
-char usage[] =
+char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
 "        c  close\n"
@@ -83,7 +82,6 @@ char usage[] =
 "        T[num] ftruncate [optional position, default 0]\n"
 "        u  unlink\n"
 "        U  munmap\n"
-"        v  verbose\n"
 "        w[num] write optional length\n"
 "        W  write entire mmap-ed region\n"
 "        y  fsync\n"
@@ -181,6 +179,7 @@ int get_flags(char *data, int *rflags)
 }
 
 #define POP_ARG() (pop_arg(argc, argv))
+#define min(a,b) ((a)>(b)?(b):(a))
 
 int main(int argc, char **argv)
 {
@@ -320,10 +319,7 @@ int main(int argc, char **argv)
                 case 'o':
                         len = get_flags(commands+1, &flags);
                         commands += len;
-                        if (flags & O_CREAT)
-                                fd = open(fname, flags, 0666);
-                        else
-                                fd = open(fname, flags);
+                        fd = open(fname, flags);
                         if (fd == -1) {
                                 save_errno = errno;
                                 perror("open");
@@ -356,8 +352,6 @@ int main(int argc, char **argv)
                                         fprintf(stderr, "short read: %u/%u\n",
                                                 rc, len);
                                 len -= rc;
-                                if (verbose >= 2)
-                                        printf("%.*s\n", rc, buf_align);
                         }
                         break;
                 case 'R':
@@ -409,7 +403,7 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'v':
-                        verbose++;
+                        verbose = 1;
                         break;
                 case 'w':
                         len = atoi(commands+1);

@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:autoindent:shiftwidth=4:tabstop=4:
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -9,23 +7,19 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 16260 19742 
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b  119d  130 $SANITY_EXCEPT"
-# bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
-#ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
+# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u   42a  42b  42c  42d  45   51d   62         68   75 $SANITY_EXCEPT" }
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# Tests that fail on uml
+# Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 #                                    buffer i/o errs             sock spc runas
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f 101"
 
-# test76 is not valid with FIDs because inode numbers are not reused
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76"
-
 case `uname -r` in
-2.4*) FSTYPE=${FSTYPE:-ext3} ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs} ;;
+2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76"
+	[ "$CPU" = "UML" ] && ALWAYS_EXCEPT="$ALWAYS_EXCEPT 105a";;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT " ;;
 *) error "unsupported kernel" ;;
 esac
 
@@ -42,6 +36,7 @@ GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
 LFIND=${LFIND:-"$LFS find"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
+LSTRIPEINFO=${LSTRIPEINFO:-ll_getstripe_info}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -57,7 +52,6 @@ MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 UMOUNT=${UMOUNT:-"umount -d"}
-STRIPES_PER_OBJ=-1
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
@@ -71,9 +65,9 @@ TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -90,11 +84,13 @@ setup() {
 	echo "done"
 }
 
+
 check_kernel_version() {
+	VERSION_FILE=version
 	WANT_VER=$1
-	GOT_VER=$(lctl get_param -n version | awk '/kernel:/ {print $2}')
+	GOT_VER=$(lctl get_param -n $VERSION_FILE | awk '/kernel:/ {print $2}')
 	case $GOT_VER in
-	patchless|patchless_client) return 0;;
+	patchless|patchless_client) return 0 ;;
 	*) [ $GOT_VER -ge $WANT_VER ] && return 0 ;;
 	esac
 	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
@@ -102,8 +98,8 @@ check_kernel_version() {
 }
 
 if [ "$ONLY" == "cleanup" ]; then
-       sh llmountcleanup.sh
-       exit 0
+ 	sh llmountcleanup.sh
+ 	exit 0
 fi
 
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
@@ -113,13 +109,11 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
-MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid | \
-    awk '{gsub(/_UUID/,""); print $1}' | head -1)
-LOVNAME=$($LCTL get_param -n llite.*.lov.common_name | tail -n 1)
-OSTCOUNT=$($LCTL get_param -n lov.$LOVNAME.numobd)
-STRIPECOUNT=$($LCTL get_param -n lov.$LOVNAME.stripecount)
-STRIPESIZE=$($LCTL get_param -n lov.$LOVNAME.stripesize)
-ORIGFREE=$($LCTL get_param -n lov.$LOVNAME.kbytesavail)
+LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
+OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
+STRIPECOUNT=`lctl get_param -n lov.$LOVNAME.stripecount`
+STRIPESIZE=`lctl get_param -n lov.$LOVNAME.stripesize`
+ORIGFREE=`lctl get_param -n lov.$LOVNAME.kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
@@ -132,11 +126,6 @@ rm -rf $DIR/[Rdfs][0-9]*
 check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
-
-if [ "${ONLY}" = "MOUNT" ] ; then
-	echo "Lustre is up, please go on"
-	exit
-fi
 
 echo "preparing for tests involving mounts"
 EXT2_DEV=${EXT2_DEV:-$TMP/SANITY.LOOP}
@@ -171,7 +160,6 @@ run_test 0c "check import proc ============================="
 test_1a() {
 	mkdir $DIR/d1
 	mkdir $DIR/d1/d2
-	mkdir $DIR/d1/d2 && error "we expect EEXIST, but not returned"
 	$CHECKSTAT -t dir $DIR/d1/d2 || error
 }
 run_test 1a "mkdir .../d1; mkdir .../d1/d2 ====================="
@@ -248,7 +236,7 @@ test_6a() {
 run_test 6a "touch .../f6a; chmod .../f6a ======================"
 
 test_6b() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6a ]; then
 		touch $DIR/f6a
 		chmod 0666 $DIR/f6a
@@ -259,7 +247,7 @@ test_6b() {
 run_test 6b "$RUNAS chmod .../f6a (should return error) =="
 
 test_6c() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6c
 	chown $RUNAS_ID $DIR/f6c || error
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
@@ -267,7 +255,7 @@ test_6c() {
 run_test 6c "touch .../f6c; chown .../f6c ======================"
 
 test_6d() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6c ]; then
 		touch $DIR/f6c
 		chown $RUNAS_ID $DIR/f6c
@@ -278,7 +266,7 @@ test_6d() {
 run_test 6d "$RUNAS chown .../f6c (should return error) =="
 
 test_6e() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6e
 	chgrp $RUNAS_ID $DIR/f6e || error
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
@@ -286,7 +274,7 @@ test_6e() {
 run_test 6e "touch .../f6e; chgrp .../f6e ======================"
 
 test_6f() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6e ]; then
 		touch $DIR/f6e
 		chgrp $RUNAS_ID $DIR/f6e
@@ -297,7 +285,7 @@ test_6f() {
 run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
 
 test_6g() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
         mkdir $DIR/d6g || error
         chmod 777 $DIR/d6g || error
         $RUNAS mkdir $DIR/d6g/d || error
@@ -308,7 +296,7 @@ test_6g() {
 run_test 6g "Is new dir in sgid dir inheriting group?"
 
 test_6h() { # bug 7331
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6h || error "touch failed"
 	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
 	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
@@ -455,18 +443,6 @@ test_17e() {
 }
 run_test 17e "symlinks: create recursive symlink (should return error) ===="
 
-test_17f() {
-	mkdir -p $DIR/d17f
-	ln -s 1234567890/2234567890/3234567890/4234567890 $DIR/d17f/111
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890 $DIR/d17f/222
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890 $DIR/d17f/333
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890 $DIR/d17f/444
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890/c234567890/d234567890/f234567890 $DIR/d17f/555
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890/c234567890/d234567890/f234567890/aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/eeeeeeeeee/ffffffffff/ $DIR/d17f/666
-	ls -l  $DIR/d17f
-}
-run_test 17f "symlinks: long and very long symlink name ========================"
-
 test_17g() {
         mkdir -p $DIR/$tdir
         LONGSYMLINK="$(dd if=/dev/zero bs=4095 count=1 | tr '\0' 'x')"
@@ -479,21 +455,10 @@ test_17h() { #bug 17378
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c -1
 #define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
-        do_facet mds lctl set_param fail_loc=0x80000141
+	do_facet mds lctl set_param fail_loc=0x80000141
         touch $DIR/$tdir/$tfile || true
 }
 run_test 17h "create objects: lov_free_memmd() doesn't lbug"
-
-test_17i() { #bug 20018
-        mkdir -p $DIR/$tdir
-	local foo=$DIR/$tdir/$tfile
-	ln -s $foo $foo || error "create symlink failed"
-#define OBD_FAIL_MDS_READLINK_EPROTO     0x143
-	do_facet mds lctl set_param fail_loc=0x80000144
-	ls -l $foo && error "error not detected"
-	return 0
-}
-run_test 17i "don't panic on short symlink"
 
 test_18() {
 	touch $DIR/f
@@ -515,7 +480,7 @@ test_19b() {
 run_test 19b "ls -l .../f19 (should return error) =============="
 
 test_19c() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	$RUNAS touch $DIR/f19 && error || true
 }
 run_test 19c "$RUNAS touch .../f19 (should return error) =="
@@ -649,7 +614,7 @@ test_24g() {
 	$CHECKSTAT -a $DIR/R7a/d || error
 	$CHECKSTAT -t dir $DIR/R7b/e || error
 }
-run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R7b/e ======"
+run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R5b/e ======"
 
 test_24h() {
 	mkdir $DIR/R8{a,b}
@@ -685,8 +650,8 @@ test_24k() {
 	mkdir $DIR/R11a $DIR/R11a/d
 	touch $DIR/R11a/f
 	mv $DIR/R11a/f $DIR/R11a/d
-        $CHECKSTAT -a $DIR/R11a/f || error
-        $CHECKSTAT -t file $DIR/R11a/d/f || error
+	$CHECKSTAT -a $DIR/R11a/f || error
+	$CHECKSTAT -t file $DIR/R11a/d/f || error
 }
 run_test 24k "touch .../R11a/f; mv .../R11a/f .../R11a/d ======="
 
@@ -781,21 +746,6 @@ test_24u() { # bug12192
 }
 run_test 24u "create stripe file"
 
-test_24v() {
-	local NRFILES=100000
-	local FREE_INODES=`lfs df -i|grep "filesystem summary" | awk '{print $5}'`
-	[ $FREE_INODES -lt $NRFILES ] && \
-		skip "not enough free inodes $FREE_INODES required $NRFILES" && \
-		return
-
-	mkdir -p $DIR/d24v
-	createmany -m $DIR/d24v/$tfile $NRFILES
-	ls $DIR/d24v >/dev/null || error "error in listing large dir"
-
-	rm $DIR/d24v -rf
-}
-run_test 24v "list directory with large files (handle hash collision, bug: 17560)"
-
 test_25a() {
 	echo '== symlink sanity ============================================='
 
@@ -873,26 +823,26 @@ test_27a() {
 	$SETSTRIPE $DIR/d27/f0 -c 1 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
-	log "== test_27a: write to one stripe file ========================="
+	log "== test 27b: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0 || error
 }
 run_test 27a "one stripe file =================================="
 
 test_27c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f01 -c 2 || error "lstripe failed"
 	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
-	log "== test_27c: write to two stripe file file f01 ================"
+	log "== test 27d: write to two stripe file file f01 ================"
 	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
 }
 run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE -c0 -i-1 -s0 $DIR/d27/fdef || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
@@ -956,7 +906,7 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
 	if [ $ORIGFREE -gt $MAXFREE ]; then
 		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
 		return
@@ -979,150 +929,133 @@ test_27m() {
 	[ `$GETSTRIPE $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
 		error "OST0 was full but new created file still use it"
 	rm -r $DIR/d27
-	sleep 15
 }
 run_test 27m "create file while OST0 was full =================="
 
-sleep_maxage() {
-        local DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | head -n 1 | awk '{print $1 + 5}')
-        sleep $DELAY
-}
-
-# OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
-# if the OST isn't full anymore.
+# osc's keep a NOSPC stick flag that gets unset with rmdir
 reset_enospc() {
-	local OSTIDX=${1:-""}
+	local FAIL_LOC=${1:-0}
+	local OSTIDX=${2:-""}
 
+	mkdir -p $DIR/d27/nospc
+	rmdir $DIR/d27/nospc
 	local list=$(comma_list $(osts_nodes))
 	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
-	do_nodes $list lctl set_param fail_loc=0
-	sleep_maxage
+	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
 }
 
 exhaust_precreations() {
 	local OSTIDX=$1
-	local FAILLOC=$2
-	local FAILIDX=${3:-$OSTIDX}
-
-	mkdir -p $DIR/$tdir
-	local MDSIDX=$(get_mds_dir "$DIR/$tdir")
-	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
 
 	local OST=$(lfs osts | grep ${OSTIDX}": " | \
 		awk '{print $2}' | sed -e 's/_UUID$//')
-	local MDT_INDEX=$(lfs df | grep "\[MDT:$((MDSIDX - 1))\]" | awk '{print $1}' | \
-			  sed -e 's/_UUID$//;s/^.*-//')
 
 	# on the mdt's osc
-	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_last_id)
-	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_next_id)
-
-	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
+	local last_id=$(do_facet mds lctl get_param -n osc.${OST}-osc.prealloc_last_id)
+	local next_id=$(do_facet mds lctl get_param -n osc.${OST}-osc.prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
-	$SETSTRIPE $DIR/$tdir/${OST} -i $OSTIDX -c 1
-#define OBD_FAIL_OST_ENOSPC              0x215
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=$FAILIDX
+	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
+	#define OBD_FAIL_OST_ENOSPC 0x215
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=$FAILLOC
-	sleep_maxage
+	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
+	do_facet mds "lctl get_param -n osc.${OST}-osc.prealloc*" | grep '[0-9]'
+	reset_enospc $2 $OSTIDX
 }
 
 exhaust_all_precreations() {
 	local i
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		exhaust_precreations $i $1 -1
+		exhaust_precreations $i 0x215
 	done
+	reset_enospc $1
 }
 
 test_27n() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27n
+	$SETSTRIPE $DIR/d27 -c 1 -i -1
 	exhaust_precreations 0 0x80000215
-	$SETSTRIPE -c -1 $DIR/$tdir
-	touch $DIR/$tdir/$tfile || error
-	$GETSTRIPE $DIR/$tdir/$tfile
+
+	touch $DIR/d27/f27n || error
+
 	reset_enospc
 }
 run_test 27n "create file with some full OSTs =================="
 
 test_27o() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27o
 	exhaust_all_precreations 0x215
+	sleep 5
 
-	touch $DIR/$tdir/$tfile && error "able to create $DIR/$tdir/$tfile"
+	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
 
 	reset_enospc
-	rm -rf $DIR/$tdir/*
 }
 run_test 27o "create file with all full OSTs (should error) ===="
 
 test_27p() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
-	mkdir -p $DIR/$tdir
+	rm -f $DIR/d27/f27p
 
-	$MCREATE $DIR/$tdir/$tfile || error "mcreate failed"
-	$TRUNCATE $DIR/$tdir/$tfile 80000000 || error "truncate failed"
-	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
+	$MCREATE $DIR/d27/f27p || error
+	$TRUNCATE $DIR/d27/f27p 80000000 || error
+	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error
 
 	exhaust_precreations 0 0x80000215
-	echo foo >> $DIR/$tdir/$tfile || error "append failed"
-	$CHECKSTAT -s 80000004 $DIR/$tdir/$tfile || error "checkstat failed"
-	$LFS getstripe $DIR/$tdir/$tfile
+	echo foo >> $DIR/d27/f27p || error
+	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error
 
 	reset_enospc
 }
 run_test 27p "append to a truncated file with some full OSTs ==="
 
 test_27q() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27q
 
-	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
-	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||error "truncate $DIR/$tdir/$tfile failed"
-	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
+	$MCREATE $DIR/d27/f27q || error "mcreate $DIR/d27/f27q failed"
+	$TRUNCATE $DIR/d27/f27q 80000000 ||error "truncate $DIR/d27/f27q failed"
+	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat failed"
 
 	exhaust_all_precreations 0x215
 
-	echo foo >> $DIR/$tdir/$tfile && error "append succeeded"
-	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat 2 failed"
+	echo foo >> $DIR/d27/f27q && error "append succeeded"
+	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat 2 failed"
 
 	reset_enospc
 }
 run_test 27q "append to truncated file with all OSTs full (should error) ==="
 
 test_27r() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/$tdir/$tfile
+	rm -f $DIR/d27/f27r
 	exhaust_precreations 0 0x80000215
 
-	$SETSTRIPE $DIR/$tdir/$tfile -i 0 -c 2 # && error
+	$SETSTRIPE $DIR/d27/f27r -i 0 -c 2 # && error
 
 	reset_enospc
 }
@@ -1135,7 +1068,6 @@ test_27s() { # bug 10725
 	[ $OSTCOUNT -eq 1 ] || stripe_count=2
 	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
 		error "stripe width >= 2^32 succeeded" || true
-
 }
 run_test 27s "lsm_xfersize overflow (should error) (bug 10725)"
 
@@ -1150,31 +1082,31 @@ test_27t() { # bug 10864
 run_test 27t "check that utils parse path correctly"
 
 test_27u() { # bug 4900
-        [ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-#define OBD_FAIL_MDS_OSC_PRECREATE      0x139
-        do_facet $SINGLEMDS lctl set_param fail_loc=0x139
-        mkdir -p $DIR/$tdir
-        createmany -o $DIR/$tdir/t- 1000
-        do_facet $SINGLEMDS lctl set_param fail_loc=0
+        #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
+
+        do_facet mds lctl set_param fail_loc=0x139
+        mkdir -p $DIR/d27u
+        createmany -o $DIR/d27u/t- 1000
+        do_facet mds lctl set_param fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
-        $GETSTRIPE $DIR/$tdir > $TLOG
+        $GETSTRIPE $DIR/d27u > $TLOG
         OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TLOG`
-        unlinkmany $DIR/$tdir/t- 1000
+        unlinkmany $DIR/d27u/t- 1000
         [ $OBJS -gt 0 ] && \
                 error "$OBJS objects created on OST-0.  See $TLOG" || pass
 }
 run_test 27u "skip object creation on OSC w/o objects =========="
 
 test_27v() { # bug 4900
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        exhaust_all_precreations 0x215
-        reset_enospc
+        exhaust_all_precreations
 
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1         # 1 stripe / file
@@ -1188,6 +1120,8 @@ test_27v() { # bug 4900
         local START=`date +%s`
         createmany -o $DIR/$tdir/$tfile 32
 
+        reset_enospc
+
         local FINISH=`date +%s`
         local TIMEOUT=`lctl get_param -n timeout`
         [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
@@ -1198,79 +1132,22 @@ test_27v() { # bug 4900
 run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
-        mkdir -p $DIR/$tdir || error "mkdir failed"
-        $LSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
-        size=`$GETSTRIPE $DIR/$tdir/f0 -s`
+        mkdir -p $DIR/d27w || error "mkdir failed"
+        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
-        [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                $LSTRIPE $DIR/$tdir/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$GETSTRIPE -c $DIR/$tdir/f$i`
-                index=`$GETSTRIPE -o $DIR/$tdir/f$i`
+                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
+                index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
-
-test_27x() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
-	OFFSET=$(($OSTCOUNT - 1))
-	OSTIDX=0
-	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
-
-	mkdir -p $DIR/$tdir
-	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
-	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 1
-	sleep_maxage
-	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-	for i in `seq 0 $OFFSET`; do
-		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
-		error "OST0 was degraded but new created file still use it"
-	done
-	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
-}
-run_test 27x "create files while OST0 is degraded"
-
-test_27y() {
-        [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
-        remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
-        MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
-        OFFSET=$(($OSTCOUNT-1))
-        OST=-1
-        for OSC in $MDS_OSCS; do
-                if [ $OST == -1 ]; then {
-                        OST=`osc_to_ost $OSC`
-                } else {
-                        echo $OSC "is Deactivate:"
-                        do_facet mds lctl --device  %$OSC deactivate
-                } fi
-        done
-
-        OSTIDX=$(lfs osts | grep ${OST} | awk '{print $1}' | sed -e 's/://')
-        mkdir -p $DIR/$tdir
-        $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
-
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
-        sleep_maxage
-        createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
-
-        for i in `seq 0 $OFFSET`; do
-                [ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "$OSTIDX"` ] || \
-                      error "files created on deactivated OSTs instead of degraded OST"
-        done
-        for OSC in $MDS_OSCS; do
-                [ `osc_to_ost $OSC` != $OST  ] && {
-                        echo $OSC "is activate"
-                        do_facet mds lctl --device %$OSC activate
-                }
-        done
-}
-run_test 27y "create files while OST0 is degraded and the rest inactive"
 
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
@@ -1286,32 +1163,14 @@ test_29() {
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-
-	declare -i LOCKCOUNTORIG=0
-	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
-		let LOCKCOUNTORIG=$LOCKCOUNTORIG+$lock_count
-	done
-	[ $LOCKCOUNTORIG -eq 0 ] && echo "No mdc lock count" && return 1
-
-	declare -i LOCKUNUSEDCOUNTORIG=0
-	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
-		let LOCKUNUSEDCOUNTORIG=$LOCKUNUSEDCOUNTORIG+$unused_count
-	done
-
+	LOCKCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
+	LOCKUNUSEDCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
+	[ -z $"LOCKCOUNTORIG" ] && echo "No mdc lock count" && return 1
 	log 'second d29'
 	ls -l $DIR/d29
 	log 'done'
-
-	declare -i LOCKCOUNTCURRENT=0
-	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
-		let LOCKCOUNTCURRENT=$LOCKCOUNTCURRENT+$lock_count
-	done
-
-	declare -i LOCKUNUSEDCOUNTCURRENT=0
-	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
-		let LOCKUNUSEDCOUNTCURRENT=$LOCKUNUSEDCOUNTCURRENT+$unused_count
-	done
-
+	LOCKCOUNTCURRENT=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
+	LOCKUNUSEDCOUNTCURRENT=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
 	if [ "$LOCKCOUNTCURRENT" -gt "$LOCKCOUNTORIG" ]; then
 		lctl set_param -n ldlm.dump_namespaces ""
 		error "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"
@@ -1329,7 +1188,7 @@ test_29() {
 run_test 29 "IT_GETATTR regression  ============================"
 
 test_30() {
-	cp `which ls` $DIR || cp /bin/ls $DIR
+	cp `which ls` $DIR
 	$DIR/ls /
 	rm $DIR/ls
 }
@@ -1401,87 +1260,6 @@ test_31f() { # bug 4554
 	set +vx
 }
 run_test 31f "remove of open directory with open-unlink file ==="
-
-test_31g() {
-        echo "-- cross directory link --"
-        mkdir $DIR/d31g{a,b}
-        touch $DIR/d31ga/f
-        ln $DIR/d31ga/f $DIR/d31gb/g
-        $CHECKSTAT -t file $DIR/d31ga/f || error "source"
-        [ `stat -c%h $DIR/d31ga/f` == '2' ] || error "source nlink"
-        $CHECKSTAT -t file $DIR/d31gb/g || error "target"
-        [ `stat -c%h $DIR/d31gb/g` == '2' ] || error "target nlink"
-}
-run_test 31g "cross directory link==============="
-
-test_31h() {
-        echo "-- cross directory link --"
-        mkdir $DIR/d31h
-        mkdir $DIR/d31h/dir
-        touch $DIR/d31h/f
-        ln $DIR/d31h/f $DIR/d31h/dir/g
-        $CHECKSTAT -t file $DIR/d31h/f || error "source"
-        [ `stat -c%h $DIR/d31h/f` == '2' ] || error "source nlink"
-        $CHECKSTAT -t file $DIR/d31h/dir/g || error "target"
-        [ `stat -c%h $DIR/d31h/dir/g` == '2' ] || error "target nlink"
-}
-run_test 31h "cross directory link under child==============="
-
-test_31i() {
-        echo "-- cross directory link --"
-        mkdir $DIR/d31i
-        mkdir $DIR/d31i/dir
-        touch $DIR/d31i/dir/f
-        ln $DIR/d31i/dir/f $DIR/d31i/g
-        $CHECKSTAT -t file $DIR/d31i/dir/f || error "source"
-        [ `stat -c%h $DIR/d31i/dir/f` == '2' ] || error "source nlink"
-        $CHECKSTAT -t file $DIR/d31i/g || error "target"
-        [ `stat -c%h $DIR/d31i/g` == '2' ] || error "target nlink"
-}
-run_test 31i "cross directory link under parent==============="
-
-
-test_31j() {
-        mkdir $DIR/d31j
-        mkdir $DIR/d31j/dir1
-        ln $DIR/d31j/dir1 $DIR/d31j/dir2 && error "ln for dir"
-        link $DIR/d31j/dir1 $DIR/d31j/dir3 && error "link for dir"
-        mlink $DIR/d31j/dir1 $DIR/d31j/dir4 && error "mlink for dir"
-        mlink $DIR/d31j/dir1 $DIR/d31j/dir1 && error "mlink to the same dir"
-	return 0
-}
-run_test 31j "link for directory==============="
-
-
-test_31k() {
-        mkdir $DIR/d31k
-        touch $DIR/d31k/s
-        touch $DIR/d31k/exist
-        mlink $DIR/d31k/s $DIR/d31k/t || error "mlink"
-        mlink $DIR/d31k/s $DIR/d31k/exist && error "mlink to exist file"
-        mlink $DIR/d31k/s $DIR/d31k/s && error "mlink to the same file"
-        mlink $DIR/d31k/s $DIR/d31k && error "mlink to parent dir"
-        mlink $DIR/d31k $DIR/d31k/s && error "mlink parent dir to target"
-        mlink $DIR/d31k/not-exist $DIR/d31k/foo && error "mlink non-existing to new"
-        mlink $DIR/d31k/not-exist $DIR/d31k/s && error "mlink non-existing to exist"
-	return 0
-}
-run_test 31k "link to file: the same, non-existing, dir==============="
-
-test_31m() {
-        mkdir $DIR/d31m
-        touch $DIR/d31m/s
-        mkdir $DIR/d31m2
-        touch $DIR/d31m2/exist
-        mlink $DIR/d31m/s $DIR/d31m2/t || error "mlink"
-        mlink $DIR/d31m/s $DIR/d31m2/exist && error "mlink to exist file"
-        mlink $DIR/d31m/s $DIR/d31m2 && error "mlink to parent dir"
-        mlink $DIR/d31m2 $DIR/d31m/s && error "mlink parent dir to target"
-        mlink $DIR/d31m/not-exist $DIR/d31m2/foo && error "mlink non-existing to new"
-        mlink $DIR/d31m/not-exist $DIR/d31m2/s && error "mlink non-existing to exist"
-	return 0
-}
-run_test 31m "link to file: the same, non-existing, dir==============="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
@@ -1815,7 +1593,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 	$RUNAS utime $DIR/$tdir/$tfile && \
@@ -1824,8 +1602,6 @@ test_36e() {
 run_test 36e "utime on non-owned file (should return error) ===="
 
 test_36f() {
-	local LANG_SAVE=$LANG
-	local LC_LANG_SAVE=$LC_LANG
 	export LANG=C LC_LANG=C # for date language
 
 	DATESTR="Dec 20  2000"
@@ -1846,8 +1622,6 @@ test_36f() {
 		echo "AFTER : $LS_AFTER" && \
 		echo "WANT  : $DATESTR" && \
 		error "$DIR/$tdir/$tfile timestamps changed" || true
-
-	export LANG=$LANG_SAVE LC_LANG=$LC_LANG_SAVE
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
@@ -1907,6 +1681,70 @@ test_39() {
 }
 run_test 39 "mtime changed on create ==========================="
 
+function get_times() {
+        FILE=$1
+        TIME=$2
+
+        i=0
+        for time in `stat -c "%X %Y %Z" $FILE`; do
+                eval "$TIME[$i]=$time"
+                i=$(($i + 1))
+        done
+}
+
+test_39b() {
+        ATIME=0
+        MTIME=1
+        CTIME=2
+        mkdir -p $DIR/$tdir
+        cp -p /etc/passwd $DIR/$tdir/fopen
+        cp -p /etc/passwd $DIR/$tdir/flink
+        cp -p /etc/passwd $DIR/$tdir/funlink
+        cp -p /etc/passwd $DIR/$tdir/frename
+        ln $DIR/$tdir/funlink $DIR/$tdir/funlink2
+
+        get_times $DIR/$tdir/fopen OPEN_OLD
+        get_times $DIR/$tdir/flink LINK_OLD
+        get_times $DIR/$tdir/funlink UNLINK_OLD
+        get_times $DIR/$tdir/frename RENAME_OLD
+
+        sleep 1
+        echo "aaaaaa" >> $DIR/$tdir/fopen
+        echo "aaaaaa" >> $DIR/$tdir/flink
+        echo "aaaaaa" >> $DIR/$tdir/funlink
+        echo "aaaaaa" >> $DIR/$tdir/frename
+
+        get_times $DIR/$tdir/fopen OPEN_NEW
+        get_times $DIR/$tdir/flink LINK_NEW
+        get_times $DIR/$tdir/funlink UNLINK_NEW
+        get_times $DIR/$tdir/frename RENAME_NEW
+
+        cat $DIR/$tdir/fopen > /dev/null
+        ln $DIR/$tdir/flink $DIR/$tdir/flink2
+        rm -f $DIR/$tdir/funlink2
+        mv -f $DIR/$tdir/frename $DIR/$tdir/frename2
+
+        get_times $DIR/$tdir/fopen OPEN_NEW2
+        get_times $DIR/$tdir/flink LINK_NEW2
+        get_times $DIR/$tdir/funlink UNLINK_NEW2
+        get_times $DIR/$tdir/frename2 RENAME_NEW2
+        echo ${OPEN_OLD[1]},${OPEN_NEW[$MTIME]},${OPEN_NEW2[$MTIME]}
+        echo ${LINK_OLD[1]},${LINK_NEW[$MTIME]},${LINK_NEW2[$MTIME]}
+        echo ${UNLINK_OLD[1]},${UNLINK_NEW[$MTIME]},${UNLINK_NEW2[$MTIME]}
+        echo ${RENAME_OLD[1]},${RENAME_NEW[$MTIME]},${RENAME_NEW2[$MTIME]}
+
+
+        [ ${OPEN_NEW2[$MTIME]} -eq ${OPEN_NEW[$MTIME]} ] || \
+                error "open file reverses mtime"
+        [ ${LINK_NEW2[$MTIME]} -eq ${LINK_NEW[$MTIME]} ] || \
+                error "link file reverses mtime"
+        [ ${UNLINK_NEW2[$MTIME]} -eq ${UNLINK_NEW[$MTIME]} ] || \
+                error "unlink file reverses mtime"
+        [ ${RENAME_NEW2[$MTIME]} -eq ${RENAME_NEW[$MTIME]} ] || \
+                error "rename file reverses mtime"
+}
+run_test 39b "mtime change on close ============================"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error
@@ -1954,7 +1792,6 @@ stop_writeback() {
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
 		WRITEBACK_SAVE=`sysctl -n vm.dirty_writeback_centisecs`
 		sysctl -w vm.dirty_writeback_centisecs=0
-		sysctl -w vm.dirty_writeback_centisecs=0
 		# save and increase /proc/sys/vm/dirty_ratio
 		DIRTY_RATIO_SAVE=`sysctl -n vm.dirty_ratio`
 		sysctl -w vm.dirty_ratio=$MAX_DIRTY_RATIO
@@ -1985,8 +1822,8 @@ test_42a() {
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-        lctl get_param -n osc.*[oO][sS][cC][_-]*.cur_grant_bytes | grep "[0-9]"
-        dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
+	lctl get_param -n osc.*[oO][sS][cC][_-]*.cur_grant_bytes | grep "[0-9]"
+	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
 		error "$BEFOREWRITES < $AFTERWRITES"
@@ -2081,7 +1918,7 @@ run_test 43 "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
         mkdir -p $DIR/d43
-	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
+	cp -p `which multiop` $DIR/d43/multiop
         MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
         MULTIOP_PID=$!
         multiop $DIR/d43/multiop Oc && error "expected error, got success"
@@ -2093,7 +1930,7 @@ run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
 test_43b() {
         mkdir -p $DIR/d43
-	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
+	cp -p `which multiop` $DIR/d43/multiop
         MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
         MULTIOP_PID=$!
         truncate $DIR/d43/multiop 0 && error "expected error, got success"
@@ -2113,9 +1950,9 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
-	[  "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+	[  "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
-	dd if=$DIR/f1 bs=4k count=1 > /dev/null
+	dd if=$DIR/f1 of=/dev/null bs=4k count=1
 }
 run_test 44 "zero length read from a sparse stripe ============="
 
@@ -2133,23 +1970,21 @@ test_44a() {
     OFFSETS="0 $((stride/2)) $((stride-1))"
     for offset in $OFFSETS ; do
       for i in `seq 0 $((nstripe-1))`; do
+        rm -f $DIR/d44a
         local GLOBALOFFSETS=""
         local size=$((((i + 2 * $nstripe )*$stride + $offset)))  # Bytes
-	local myfn=$DIR/d44a-$size
-	echo "--------writing $myfn at $size"
-        ll_sparseness_write $myfn $size  || error "ll_sparseness_write"
+        ll_sparseness_write $DIR/d44a $size  || error "ll_sparseness_write"
         GLOBALOFFSETS="$GLOBALOFFSETS $size"
-        ll_sparseness_verify $myfn $GLOBALOFFSETS \
+        ll_sparseness_verify $DIR/d44a $GLOBALOFFSETS \
                             || error "ll_sparseness_verify $GLOBALOFFSETS"
 
         for j in `seq 0 $((nstripe-1))`; do
             size=$((((j + $nstripe )*$stride + $offset)))  # Bytes
-            ll_sparseness_write $myfn $size || error "ll_sparseness_write"
+            ll_sparseness_write $DIR/d44a $size || error "ll_sparseness_write"
             GLOBALOFFSETS="$GLOBALOFFSETS $size"
         done
-        ll_sparseness_verify $myfn $GLOBALOFFSETS \
+        ll_sparseness_verify $DIR/d44a $GLOBALOFFSETS \
                             || error "ll_sparseness_verify $GLOBALOFFSETS"
-	rm -f $myfn
       done
     done
 }
@@ -2158,7 +1993,7 @@ run_test 44a "test sparse pwrite ==============================="
 dirty_osc_total() {
 	tot=0
 	for d in `lctl get_param -n osc.*.cur_dirty_bytes`; do
-		tot=$(($tot + $d))
+		tot=$(($tot + d))
 	done
 	echo $tot
 }
@@ -2348,10 +2183,7 @@ test_51a() {	# was test_51
 }
 run_test 51a "special situations: split htree with empty entry =="
 
-#export NUMTEST=70000
-# FIXME: I select a relatively small number to do basic test.
-# large number may give panic(). debugging on this is going on.
-export NUMTEST=70
+export NUMTEST=70000
 test_51b() {
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
 	[ $NUMFREE -lt 21000 ] && \
@@ -2366,57 +2198,6 @@ test_51b() {
 }
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
-test_51bb() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-
-	local ndirs=${TEST51BB_NDIRS:-10}
-	local nfiles=${TEST51BB_NFILES:-100}
-
-	local numfree=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-
-	[ $numfree -lt $(( ndirs * nfiles)) ] && \
-		nfiles=$(( numfree / ndirs - 10 ))
-
-	local dir=$DIR/d51bb
-	mkdir -p $dir
-	local savePOLICY=$(lctl get_param -n lmv.*.placement)
-	lctl set_param -n lmv.*.placement=CHAR
-
-	lfs df -i $dir
-	local IUSED=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-	OLDUSED=($IUSED)
-
-	declare -a dirs
-	for ((i=0; i < $ndirs; i++)); do
-		dirs[i]=$dir/$RANDOM
-		echo Creating directory ${dirs[i]}
-		mkdir -p ${dirs[i]}
-		ls $dir
-		echo Creating $nfiles in dir ${dirs[i]} ...
-		echo "createmany -o ${dirs[i]}/$tfile- $nfiles"
-		createmany -o ${dirs[i]}/$tfile- $nfiles
-	done
-	ls $dir
-
-	sleep 1
-
-	IUSED=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-	NEWUSED=($IUSED)
-
-	local rc=0
-	for ((i=0; i<${#NEWUSED[@]}; i++)); do
-		echo "mds $i: inodes count OLD ${OLDUSED[$i]} NEW ${NEWUSED[$i]}"
-		[ ${OLDUSED[$i]} -lt ${NEWUSED[$i]} ] || rc=$((rc + 1))
-	done
-
-	lctl set_param -n lmv.*.placement=$savePOLICY
-
-	[ $rc -ne $MDSCOUNT ] || \
-		error "Objects/inodes are not distributed over all mds servers"
-}
-run_test 51bb "mkdir createmany CMD $MDSCOUNT  ===================="
-
-
 test_51c() {
 	[ ! -d $DIR/d51b ] && skip "$DIR/51b missing" && \
 		return
@@ -2426,7 +2207,7 @@ test_51c() {
 run_test 51c "rmdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51d() {
-        [  "$OSTCOUNT" -lt "3" ] && skip_env "skipping test with few OSTs" && return
+        [  "$OSTCOUNT" -lt "3" ] && skip "skipping test with few OSTs" && return
         mkdir -p $DIR/d51d
         createmany -o $DIR/d51d/t- 1000
         $LFS getstripe $DIR/d51d > $TMP/files
@@ -2457,16 +2238,16 @@ test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 	mkdir -p $DIR/d52a
 	touch $DIR/d52a/foo
-	chattr +a $DIR/d52a/foo || error "chattr +a failed"
+	chattr =a $DIR/d52a/foo || error "chattr =a failed"
 	echo bar >> $DIR/d52a/foo || error "append bar failed"
 	cp /etc/hosts $DIR/d52a/foo && error "cp worked"
 	rm -f $DIR/d52a/foo 2>/dev/null && error "rm worked"
 	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error "link worked"
 	echo foo >> $DIR/d52a/foo || error "append foo failed"
 	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error "rename worked"
-	lsattr $DIR/d52a/foo | egrep -q "^-+[ae]-+ $DIR/d52a/foo" || error "lsattr"
+	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error "lsattr"
 	chattr -a $DIR/d52a/foo || error "chattr -a failed"
-        cp -r $DIR/d52a /tmp/
+
 	rm -fr $DIR/d52a || error "cleanup rm failed"
 }
 run_test 52a "append-only flag test (should return errors) ====="
@@ -2475,21 +2256,37 @@ test_52b() {
 	[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 	mkdir -p $DIR/d52b
 	touch $DIR/d52b/foo
-	chattr +i $DIR/d52b/foo || error "chattr +i failed"
-	cat test > $DIR/d52b/foo && error "cat test worked"
-	cp /etc/hosts $DIR/d52b/foo && error "cp worked"
-	rm -f $DIR/d52b/foo 2>/dev/null && error "rm worked"
-	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error  "link worked"
-	echo foo >> $DIR/d52b/foo && error "echo worked"
-	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error "rename worked"
+	chattr =i $DIR/d52b/foo || error
+	cat test > $DIR/d52b/foo && error
+	cp /etc/hosts $DIR/d52b/foo && error
+	rm -f $DIR/d52b/foo 2>/dev/null && error
+	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error
+	echo foo >> $DIR/d52b/foo && error
+	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error
 	[ -f $DIR/d52b/foo ] || error
 	[ -f $DIR/d52b/foo_ren ] && error
-	lsattr $DIR/d52b/foo | egrep -q "^-+[ie]-+ $DIR/d52b/foo" || error "lsattr"
-	chattr -i $DIR/d52b/foo || error "chattr failed"
+	lsattr $DIR/d52b/foo | egrep -q "^-+i-+ $DIR/d52b/foo" || error
+	chattr -i $DIR/d52b/foo || error
 
 	rm -fr $DIR/d52b || error
 }
 run_test 52b "immutable flag test (should return errors) ======="
+
+test_52c() { # 12848 simulating client < 1.4.7
+        [ -f $DIR/d52c/foo ] && chattr -i $DIR/d52b/foo
+        mkdir -p $DIR/d52c
+        touch $DIR/d52c/foo
+        # skip MDS_BFLAG_EXT_FLAGS in mdc_getattr_pack
+#define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
+        lctl set_param fail_loc=0x802
+        chattr =i $DIR/d52c/foo || error
+        lsattr $DIR/d52c/foo | egrep -q "^-+i-+ $DIR/d52c/foo" || error
+        chattr -i $DIR/d52c/foo || error
+        lctl set_param -n fail_loc=0
+
+        rm -fr $DIR/d52c || error
+}
+run_test 52c "immutable flag test for client < 1.4.7 ======="
 
 test_53() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
@@ -2501,24 +2298,23 @@ test_53() {
 	local ost_last
 	local ostnum
 
-	# only test MDT0000
-        for value in $(do_facet $SINGLEMDS lctl get_param osc.*-osc-MDT0000.prealloc_last_id) ; do
-                param=`echo ${value[0]} | cut -d "=" -f1`
-                ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
-                mds_last=$(do_facet $SINGLEMDS lctl get_param -n $param)
-                ostnum=$(echo $ostname | sed "s/${FSNAME}-OST//g" | awk '{print ($1+1)}' )
-                ost_last=$(do_facet ost$ostnum lctl get_param -n obdfilter.$ostname.last_id | head -n 1)
-                echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
-                if [ $ost_last != $mds_last ]; then
-                    error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
-                fi
-        done
+	for VALUE in $(do_facet mds lctl get_param osc.*-osc.prealloc_last_id); do
+		param=`echo ${VALUE[0]} | cut -d "=" -f1`;
+		ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
+		mds_last=$(do_facet mds lctl get_param -n $param)
+		ostnum=$(echo $ostname | sed "s/${FSNAME}-OST//g" | awk '{print ($1+1)}' )
+		ost_last=$(do_facet ost$ostnum lctl get_param -n obdfilter.$ostname.last_id)
+		echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
+		if [ $ost_last != $mds_last ]; then
+			error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
+		fi
+	done
 }
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-        [ ! -f "$SOCKETSERVER" ] && skip_env "no socketserver, skipping" && return
-        [ ! -f "$SOCKETCLIENT" ] && skip_env "no socketclient, skipping" && return
+        [ ! -f "$SOCKETSERVER" ] && skip "no socketserver, skipping" && return
+        [ ! -f "$SOCKETCLIENT" ] && skip "no socketclient, skipping" && return
      	$SOCKETSERVER $DIR/socket
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
@@ -2600,7 +2396,7 @@ check_fstype() {
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        client_only && skip "Not a server" && return
+        check_fstype && skip "can't find fs $FSTYPE" && return
         mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
@@ -2650,15 +2446,13 @@ test_56a() {	# was test_56
                 error "lfs getstripe --obd wrong_uuid should return error message"
 
         [  "$OSTCOUNT" -lt 2 ] && \
-                skip_env "skipping other lfs getstripe --obd test" && return
-        OSTIDX=1
-        OBDUUID=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}')
-        FILENUM=`$GETSTRIPE -ir $DIR/d56 | grep -x $OSTIDX | wc -l`
-        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | grep obdidx | wc -l`
+                skip "skipping other lfs getstripe --obd test" && return
+        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
+        OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
+        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs getstripe --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | \
-                sed '/^[	 ]*'${OSTIDX}'[	 ]/d' |\
+        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
@@ -2738,7 +2532,7 @@ run_test 56h "check lfs find ! -name ============================="
 test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
-       UUID=`$LFS osts | awk '/0: / { print $2 }'`
+       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
        OUT="`$LFIND -ost $UUID $DIR/$tdir`"
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
@@ -2798,11 +2592,11 @@ test_56o() {
 	setup_56 $NUMFILES $NUMDIRS
 	TDIR=$DIR/${tdir}g
 
-	utime $TDIR/file1 > /dev/null || error "utime (1)"
-	utime $TDIR/file2 > /dev/null || error "utime (2)"
-	utime $TDIR/dir1 > /dev/null || error "utime (3)"
-	utime $TDIR/dir2 > /dev/null || error "utime (4)"
-	utime $TDIR/dir1/file1 > /dev/null || error "utime (5)"
+	utime $TDIR/file1 > /dev/null || error
+	utime $TDIR/file2 > /dev/null || error
+	utime $TDIR/dir1 > /dev/null || error
+	utime $TDIR/dir2 > /dev/null || error
+	utime $TDIR/dir1/file1 > /dev/null || error
 
 	EXPECTED=5
 	NUMS=`$LFIND -mtime +1 $TDIR | wc -l`
@@ -2812,7 +2606,7 @@ test_56o() {
 run_test 56o "check lfs find -mtime for old files =========================="
 
 test_56p() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 
 	TDIR=$DIR/${tdir}g
 	rm -rf $TDIR
@@ -2835,7 +2629,7 @@ test_56p() {
 run_test 56p "check lfs find -uid and ! -uid ==============================="
 
 test_56q() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 
 	TDIR=$DIR/${tdir}g
         rm -rf $TDIR
@@ -2858,14 +2652,13 @@ test_56q() {
 run_test 56q "check lfs find -gid and ! -gid ==============================="
 
 test_57a() {
-	# note test will not do anything if MDS is not local
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	local MNTDEV="osd.*MDT*.mntdev"
-	DEV=$(do_facet $SINGLEMDS lctl get_param -n $MNTDEV)
+	local MNTDEV="mds.*.mntdev"
+	DEV=$(do_facet mds lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
-	for DEV in $(do_facet $SINGLEMDS lctl get_param -n $MNTDEV); do
-		do_facet $SINGLEMDS $DUMPE2FS -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
+	for DEV in $(do_facet mds lctl get_param -n $MNTDEV); do
+		do_facet mds $DUMPE2FS -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
 		rm $TMP/t57a.dump
@@ -2882,9 +2675,7 @@ test_57b() {
 
 	rm -rf $dir || error "removing $dir"
 	mkdir -p $dir || error "creating $dir"
-	local num=$(get_mds_dir $dir)
-	local mymds=mds$num
-
+	
 	echo "mcreating $FILECOUNT files"
 	createmany -m $dir/f 1 $FILECOUNT || \
 		error "creating files in $dir"
@@ -2893,25 +2684,21 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	sync
-	sleep 1
-	df $dir  #make sure we get new statfs data
-	local MDSFREE=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
-	local MDCFREE=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
+	local MDSFREE=$(do_facet mds lctl get_param -n mds.*.kbytesfree)
+	local MDCFREE=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
 	echo "opening files to create objects/EAs"
 	local FILE
 	for FILE in `seq -f $dir/f%g 1 $FILECOUNT`; do
-		$OPENFILE -f O_RDWR $FILE > /dev/null 2>&1 || error "opening $FILE"
+		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
 	done
 
 	# verify that files have EAs now
 	$GETSTRIPE $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
 	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
-	sleep 1  #make sure we get new statfs data
-	df $dir
-	local MDSFREE2=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
-	local MDCFREE2=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
+	sleep 1 # make sure we get new statfs data
+	local MDSFREE2=$(do_facet mds lctl get_param -n mds.*.kbytesfree)
+	local MDCFREE2=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
 	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
@@ -2925,7 +2712,7 @@ test_57b() {
 run_test 57b "default LOV EAs are stored inside large inodes ==="
 
 test_58() {
-    [ -z "$(which wiretest 2>/dev/null)" ] && skip_env "could not find wiretest" && return
+    [ -z "$(which wiretest 2>/dev/null)" ] && skip "could not find wiretest" && return
     wiretest
 }
 run_test 58 "verify cross-platform wire constants =============="
@@ -2942,8 +2729,8 @@ test_59() {
 run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
-test_60a() {
-        [ ! -f run-llog.sh ] && skip_env "missing subtest run-llog.sh" && return
+test_60a() {	# was test_60
+        [ ! -f run-llog.sh ] && skip "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
 	sh run-llog.sh
 }
@@ -2970,10 +2757,9 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_60c() {
 	echo "create 5000 files"
 	createmany -o $DIR/f60c- 5000
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+	#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
 	lctl set_param fail_loc=0x80000137
 	unlinkmany $DIR/f60c- 5000
-	lctl set_param fail_loc=0
 }
 run_test 60c "unlink file when mds full"
 
@@ -3010,13 +2796,14 @@ test_62() {
         f="$DIR/f62"
         echo foo > $f
         cancel_lru_locks osc
+        #define OBD_FAIL_OSC_MATCH 0x405
         lctl set_param fail_loc=0x405
         cat $f && error "cat succeeded, expect -EIO"
         lctl set_param fail_loc=0
 }
 # This test is now irrelevant (as of bug 10718 inclusion), we no longer
 # match every page all of the time.
-#run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
+run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63a() {	# was test_63
@@ -3044,7 +2831,7 @@ test_63b() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1
 	rm $DIR/$tfile
 
-	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
+	#define OBD_FAIL_OSC_BRW_PREP_REQ 0x406
 	lctl set_param fail_loc=0x80000406
 	multiop $DIR/$tfile Owy && \
 		error "sync didn't return ENOMEM"
@@ -3062,7 +2849,7 @@ test_64a () {
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
 test_64b () {
-        [ ! -f oos.sh ] && skip_env "missing subtest oos.sh" && return
+        [ ! -f oos.sh ] && skip "missing subtest oos.sh" && return
 	sh oos.sh $MOUNT
 }
 run_test 64b "check out-of-space detection on client ==========="
@@ -3096,14 +2883,7 @@ run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
 test_65d() {
 	mkdir -p $DIR/d65
-	if [ $STRIPECOUNT -le 0 ]; then
-        	sc=1
-	elif [ $STRIPECOUNT -gt 160 ]; then
-#LOV_MAX_STRIPE_COUNT is 160
-        	[ $OSTCOUNT -gt 160 ] && sc=160 || sc=$(($OSTCOUNT - 1))
-	else
-        	sc=$(($STRIPECOUNT - 1))
-	fi
+	[ $STRIPECOUNT -le 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
 	$SETSTRIPE $DIR/d65 -s $STRIPESIZE -c $sc || error "setstripe"
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
@@ -3118,7 +2898,7 @@ test_65e() {
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe defaults ======================="
+run_test 65e "directory setstripe 0 -1 0 ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
@@ -3149,21 +2929,6 @@ test_65i() { # bug6367
 }
 run_test 65i "set non-default striping on root directory (bug 6367)="
 
-test_65ia() { # bug12836
-	$LFS getstripe $MOUNT || error "getstripe $MOUNT failed"
-}
-run_test 65ia "getstripe on -1 default directory striping"
-
-test_65ib() { # bug12836
-	$LFS getstripe -v $MOUNT || error "getstripe -v $MOUNT failed"
-}
-run_test 65ib "getstripe -v on -1 default directory striping"
-
-test_65ic() { # bug12836
-	$LFS find -mtime -1 $MOUNT || error "find $MOUNT failed"
-}
-run_test 65ic "new find on -1 default directory striping"
-
 test_65j() { # bug6367
 	sync; sleep 1
 	# if we aren't already remounting for each test, do so for this test
@@ -3176,25 +2941,23 @@ test_65j() { # bug6367
 run_test 65j "set default striping on root directory (bug 6367)="
 
 test_65k() { # bug11679
-        [ "$OSTCOUNT" -lt 2 ] && skip_env "too few OSTs" && return
+        [ "$OSTCOUNT" -lt 2 ] && skip "too few OSTs" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         echo "Check OST status: "
-        MDS_OSCS=`do_facet $SINGLEMDS lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
+        MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
         for OSC in $MDS_OSCS; do
                 echo $OSC "is activate"
-                do_facet $SINGLEMDS lctl --device %$OSC activate
+                do_facet mds lctl --device %$OSC activate
         done
         do_facet client mkdir -p $DIR/$tdir
         for INACTIVE_OSC in $MDS_OSCS; do
                 echo $INACTIVE_OSC "is Deactivate:"
-                do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC deactivate
+                do_facet mds lctl --device  %$INACTIVE_OSC deactivate
                 for STRIPE_OSC in $MDS_OSCS; do
                         STRIPE_OST=`osc_to_ost $STRIPE_OSC`
-                        STRIPE_INDEX=`do_facet $SINGLEMDS lctl get_param -n lov.*md*.target_obd |
-                                      grep $STRIPE_OST | awk -F: '{print $1}' | head -n 1`
-
-			[ -f $DIR/$tdir/${STRIPE_INDEX} ] && continue
+                        STRIPE_INDEX=`do_facet mds lctl get_param -n lov.*md*.target_obd |
+                                      grep $STRIPE_OST | awk -F: '{print $1}'`
                         echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1"
                         do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1
                         RC=$?
@@ -3202,15 +2965,15 @@ test_65k() { # bug11679
                 done
                 do_facet client rm -f $DIR/$tdir/*
                 echo $INACTIVE_OSC "is Activate."
-                do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
+                do_facet mds lctl --device  %$INACTIVE_OSC activate
         done
 }
 run_test 65k "validate manual striping works properly with deactivated OSCs"
 
 test_65l() { # bug 12836
-	mkdir -p $DIR/$tdir/test_dir
-	$SETSTRIPE $DIR/$tdir/test_dir -c -1
-	$LFS find -mtime -1 $DIR/$tdir >/dev/null
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE $DIR/$tdir -c -1
+	$LFS find -mtime -1 $DIR >/dev/null
 }
 run_test 65l "lfs find on -1 stripe dir ========================"
 
@@ -3224,24 +2987,70 @@ test_66() {
 }
 run_test 66 "update inode blocks count on client ==============="
 
+test_67a() { # was test_67 bug 3285 - supplementary group fails on MDS, passes on client
+	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	check_kernel_version 35 || return 0
+	mkdir -p $DIR/$tdir
+	chmod 771 $DIR/$tdir
+	chgrp $RUNAS_ID $DIR/$tdir
+	$RUNAS -u $RUNAS_ID -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/$tdir
+	RC=$?
+	GROUP_UPCALL=$(do_facet mds lctl get_param -n mds.*.group_upcall)
+	[ -z "$GROUP_UPCALL" ] && \
+		skip "lctl get_param failed! Useless to continue the test!" && return
+	[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && \
+		error "no-upcall passed" || true
+	[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
+		error "upcall failed" || true
+}
+run_test 67a "supplementary group failure (should return error) ="
+
+cleanup_67b() {
+	set +vx
+	trap 0
+	do_facet mds lctl set_param -n mds.*.group_upcall NONE
+}
+
+test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
+	# needs to be in /etc/groups on MDS, gid == uid
+	# Let's use RUNAS_ID
+	T67_UID=${T67_UID:-$RUNAS_ID}
+	
+	[ "$UID" = "$T67_UID" ] && skip "UID = T67_UID = $UID -- skipping" && return
+	check_kernel_version 35 || return 0
+	do_facet mds grep -q ":$T67_UID:$T67_UID" /etc/passwd || \
+		{ skip "Need gid=$T67_UID group and gid == uid on mds !" && return; }
+
+	GROUP_UPCALL=$(do_facet mds lctl get_param -n mds.*.group_upcall)
+	[ -z "$GROUP_UPCALL" ] && \
+		skip "lctl get_param failed! Useless to continue the test!" && return
+	[ "$GROUP_UPCALL" != "NONE" ] && \
+		skip "skip test - upcall=$GROUP_UPCALL" && return
+	set -vx
+	trap cleanup_67b EXIT
+	mkdir -p $DIR/$tdir
+	chmod 771 $DIR/$tdir
+	chgrp $T67_UID $DIR/$tdir
+	local l_getgroups=$(do_facet mds which l_getgroups)
+	do_facet mds lctl set_param -n mds.*.group_upcall $l_getgroups
+	do_facet mds $l_getgroups -d $T67_UID
+	$RUNAS -u $T67_UID -g 999 -G8,9,$T67_UID touch $DIR/$tdir/$tfile || \
+		error "'touch $DIR/$tdir/$tfile' failed"
+	[ -f $DIR/$tdir/$tfile ] || error "$DIR/$tdir/$tfile create error"
+	cleanup_67b
+}
+run_test 67b "supplementary group test ========================="
+
 LLOOP=
-LLITELOOPLOAD=
 cleanup_68() {
 	trap 0
 	if [ ! -z "$LLOOP" ]; then
-		if swapon -s | grep -q $LLOOP; then
-			swapoff $LLOOP || error "swapoff failed"
-		fi
-
+		swapoff $LLOOP || error "swapoff failed"
 		$LCTL blockdev_detach $LLOOP || error "detach failed"
 		rm -f $LLOOP
 		unset LLOOP
 	fi
-	if [ ! -z "$LLITELOOPLOAD" ]; then
-		rmmod llite_lloop
-		unset LLITELOOPLOAD
-	fi 
-	rm -f $DIR/f68*
+	rm -f $DIR/f68
 }
 
 meminfo() {
@@ -3252,36 +3061,11 @@ swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
 
-# test case for lloop driver, basic function
-test_68a() {
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
-
-	trap cleanup_68 EXIT
-
-	if ! module_loaded llite_lloop; then
-		if load_module llite/llite_lloop; then
-			LLITELOOPLOAD=yes
-		else
-			skip_env "can't find module llite_lloop"
-			return
-		fi
-	fi
-
-	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
-	$LCTL blockdev_attach $DIR/f68a $LLOOP || error "attach failed"
-
-	directio rdwr $LLOOP 0 1024 4096 || error "direct write failed"
-	directio rdwr $LLOOP 0 1025 4096 && error "direct write should fail"
-
-	cleanup_68
-}
-run_test 68a "lloop driver - basic test ========================"
 
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
-test_68b() {  # was test_68
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
+test_68() {
+	[ "$UID" != 0 ] && skip "must run as root" && return
 	lctl get_param -n devices | grep -q obdfilter && \
 		skip "local OST" && return
 
@@ -3296,10 +3080,10 @@ test_68b() {  # was test_68
 	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68b bs=64k seek=$NR_BLOCKS count=1
-	mkswap $DIR/f68b
+	dd if=/dev/zero of=$DIR/f68 bs=64k seek=$NR_BLOCKS count=1
+	mkswap $DIR/f68
 
-	$LCTL blockdev_attach $DIR/f68b $LLOOP || error "attach failed"
+	$LCTL blockdev_attach $DIR/f68 $LLOOP || error "attach failed"
 
 	trap cleanup_68 EXIT
 
@@ -3314,7 +3098,7 @@ test_68b() {  # was test_68
 
 	[ $SWAPUSED -eq 0 ] && echo "no swap used???" || true
 }
-run_test 68b "support swapping to Lustre ========================"
+run_test 68 "support swapping to Lustre ========================"
 
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_OST_ENOENT 0x217
@@ -3326,6 +3110,7 @@ test_69() {
 
 	$DIRECTIO write ${f}.2 0 1 || error "directio write error"
 
+	#define OBD_FAIL_OST_ENOENT 0x217
 	do_facet ost1 lctl set_param fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
 	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
@@ -3336,6 +3121,7 @@ test_69() {
 	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
+	#define OBD_FAIL_OST_ENOENT 0x217
 	do_facet ost1 lctl set_param fail_loc=0x217
 	$DIRECTIO read $f 1 1 && error "read succeeded, expect -ENOENT"
 
@@ -3352,15 +3138,13 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
-	[ "$RUNAS_ID" = "$UID" ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 
         # Check that testing environment is properly set up. Skip if not
         FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
-                skip_env "User $RUNAS_ID does not exist - skipping"
+                skip "User $RUNAS_ID does not exist - skipping"
                 return 0
         }
-	# We had better clear the $DIR to get enough space for dd
-	rm -rf $DIR/*
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
@@ -3371,7 +3155,6 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	cancel_lru_locks mdc
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
 	true
-	rm -f $DIR/f72
 }
 run_test 72 "Test that remove suid works properly (bug5695) ===="
 
@@ -3382,6 +3165,7 @@ test_73() {
 	multiop_bg_pause $DIR/d73-1/f73-1 O_c || return 1
 	pid1=$!
 
+	#define OBD_FAIL_MDS_PAUSE_OPEN 0x129
 	lctl set_param fail_loc=0x80000129
 	multiop $DIR/d73-1/f73-2 Oc &
 	sleep 1
@@ -3414,7 +3198,6 @@ test_74a() { # bug 6149, 6184
 	ls $DIR/f74a
 	lctl set_param fail_loc=0
 	true
-	rm -f $DIR/f74a
 }
 run_test 74a "ldlm_enqueue freed-export error path, ls (shouldn't LBUG)"
 
@@ -3428,9 +3211,115 @@ test_74b() { # bug 13310
 	touch $DIR/f74b
 	lctl set_param fail_loc=0
 	true
-	rm -f $DIR/f74b
 }
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
+
+JOIN=${JOIN:-"lfs join"}
+F75=$DIR/f75
+F128k=${F75}_128k
+FHEAD=${F75}_head
+FTAIL=${F75}_tail
+export T75_PREP=no
+test75_prep() {
+        [ $T75_PREP = "yes" ] && return
+        echo "using F75=$F75, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
+
+        dd if=/dev/urandom of=${F75}_128k bs=128k count=1 || error "dd failed"
+        log "finished dd"
+        chmod 777 ${F128k}
+        T75_PREP=yes
+}
+
+test_75a() {
+        test75_prep
+
+        cp -p ${F128k} ${FHEAD}
+        log "finished cp to $FHEAD"
+        cp -p ${F128k} ${FTAIL}
+        log "finished cp to $FTAIL"
+        cat ${F128k} ${F128k} > ${F75}_sim_sim
+
+        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+        log "finished join $FHEAD to ${F75}_sim_sim"
+        cmp ${FHEAD} ${F75}_sim_sim || error "${FHEAD} ${F75}_sim_sim differ"
+        log "finished cmp $FHEAD to ${F75}_sim_sim"
+        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
+}
+run_test 75a "TEST join file ===================================="
+
+test_75b() {
+        test75_prep
+
+        cp -p ${F128k} ${FTAIL}
+        cat ${F75}_sim_sim >> ${F75}_join_sim
+        cat ${F128k} >> ${F75}_join_sim
+        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+        cmp ${FHEAD} ${F75}_join_sim || \
+                error "${FHEAD} ${F75}_join_sim are different"
+        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
+}
+run_test 75b "TEST join file 2 =================================="
+
+test_75c() {
+        test75_prep
+
+        cp -p ${F128k} ${FTAIL}
+        cat ${F128k} >> ${F75}_sim_join
+        cat ${F75}_join_sim >> ${F75}_sim_join
+        $JOIN ${FTAIL} ${FHEAD} || error "join error"
+        cmp ${FTAIL} ${F75}_sim_join || \
+                error "${FTAIL} ${F75}_sim_join are different"
+        $CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
+}
+run_test 75c "TEST join file 3 =================================="
+
+test_75d() {
+        test75_prep
+
+        cp -p ${F128k} ${FHEAD}
+        cp -p ${F128k} ${FHEAD}_tmp
+        cat ${F75}_sim_sim >> ${F75}_join_join
+        cat ${F75}_sim_join >> ${F75}_join_join
+        $JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
+        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+        cmp ${FHEAD} ${F75}_join_join ||error "${FHEAD} ${F75}_join_join differ"        $CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
+        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
+}
+run_test 75d "TEST join file 4 =================================="
+
+test_75e() {
+        test75_prep
+
+        rm -rf ${FHEAD} || "delete join file error"
+}
+run_test 75e "TEST join file 5 (remove joined file) ============="
+
+test_75f() {
+        test75_prep
+
+        cp -p ${F128k} ${F75}_join_10_compare
+        cp -p ${F128k} ${F75}_join_10
+        for ((i = 0; i < 10; i++)); do
+                cat ${F128k} >> ${F75}_join_10_compare
+                cp -p ${F128k} ${FTAIL}
+                $JOIN ${F75}_join_10 ${FTAIL} || \
+                        error "join ${F75}_join_10 ${FTAIL} error"
+                $CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
+        done
+        cmp ${F75}_join_10 ${F75}_join_10_compare || \
+                error "files ${F75}_join_10 ${F75}_join_10_compare differ"
+}
+run_test 75f "TEST join file 6 (join 10 files) =================="
+
+test_75g() {
+        [ ! -f ${F75}_join_10 ] && echo "${F75}_join_10 missing" && return
+        $LFS getstripe ${F75}_join_10
+
+        $OPENUNLINK ${F75}_join_10 ${F75}_join_10 || error "files unlink open"
+
+        ls -l $F75*
+}
+run_test 75g "TEST join file 7 (open unlink) ===================="
 
 num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
@@ -3439,7 +3328,7 @@ num_inodes() {
 test_76() { # bug 1443
 	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
 	[ $DETH -eq 0 ] && skip "No _iget." && return 0
-        BEFORE_INODES=`num_inodes`
+	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
 	local COUNT=1000
 	[ "$SLOW" = "no" ] && COUNT=100
@@ -3458,15 +3347,10 @@ run_test 76 "destroy duplicate inodes in client inode cache ===="
 export ORIG_CSUM=""
 set_checksums()
 {
-	# Note: in sptlrpc modes which enable its own bulk checksum, the
-	# original crc32_le bulk checksum will be automatically disabled,
-	# and the OBD_FAIL_OSC_CHECKSUM_SEND/OBD_FAIL_OSC_CHECKSUM_RECEIVE
-	# will be checked by sptlrpc code against sptlrpc bulk checksum.
-	# In this case set_checksums() will not be no-op, because sptlrpc
-	# bulk checksum will be enabled all through the test.
+	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums |
+				       head -n1`
 
-	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums | head -n1`
-        lctl set_param -n osc.*.checksums $1
+	lctl set_param -n osc.*.checksums=$1
 	return 0
 }
 
@@ -3475,8 +3359,8 @@ CKSUM_TYPES=${CKSUM_TYPES:-"crc32 adler"}
 set_checksum_type()
 {
 	[ "$ORIG_CSUM_TYPE" ] || \
-		ORIG_CSUM_TYPE=`lctl get_param -n osc/*osc-[^mM]*/checksum_type |
-                                sed 's/.*\[\(.*\)\].*/\1/g' | head -n1`
+		ORIG_CSUM_TYPE=`lctl get_param -n osc.*osc-[^mM]*.checksum_type | sed 's/.*\[\(.*\)\].*/\1/g' \
+	                        | head -n1`
 	lctl set_param -n osc.*osc-[^mM]*.checksum_type $1
 	log "set checksum type to $1"
 	return 0
@@ -3489,17 +3373,14 @@ setup_f77() {
 }
 
 test_77a() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ || error "dd error"
 	set_checksums 0
-	rm -f $DIR/$tfile
 }
 run_test 77a "normal checksum read/write operation ============="
 
 test_77b() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	lctl set_param fail_loc=0x80000409
@@ -3512,7 +3393,6 @@ test_77b() { # bug 10889
 run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
@@ -3525,12 +3405,10 @@ test_77c() { # bug 10889
 	done
 	set_checksums 0
 	set_checksum_type $ORIG_CSUM_TYPE
-	rm -f $DIR/f77b
 }
 run_test 77c "checksum error on client read ==================="
 
 test_77d() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	lctl set_param fail_loc=0x80000409
 	set_checksums 1
@@ -3542,7 +3420,6 @@ test_77d() { # bug 10889
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	lctl set_param fail_loc=0x80000408
@@ -3556,7 +3433,6 @@ test_77e() { # bug 10889
 run_test 77e "checksum error on OST direct read ================"
 
 test_77f() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
@@ -3573,7 +3449,6 @@ test_77f() { # bug 10889
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	[ ! -f $F77_TMP ] && setup_f77
@@ -3590,7 +3465,6 @@ test_77g() { # bug 10889
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
-	$GSS && skip "could not run with gss" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return
@@ -3605,14 +3479,13 @@ test_77h() { # bug 10889
 run_test 77h "checksum error on OST read ======================="
 
 test_77i() { # bug 13805
-	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 	lctl set_param fail_loc=0x40b
 	remount_client $MOUNT
 	lctl set_param fail_loc=0
 	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
-		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
-		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
+		param=`echo ${VALUE[0]} | cut -d "=" -f1`
+		algo=`lctl get_param -n $param | sed 's/.*\[\(.*\)\].*/\1/g'`
 		[ "$algo" = "crc32" ] || error "algo set to $algo instead of crc32"
 	done
 	remount_client $MOUNT
@@ -3620,15 +3493,13 @@ test_77i() { # bug 13805
 run_test 77i "client not supporting OSD_CONNECT_CKSUM =========="
 
 test_77j() { # bug 13805
-	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 	lctl set_param fail_loc=0x40c
 	remount_client $MOUNT
 	lctl set_param fail_loc=0
-	sleep 2 # wait async osc connect to finish
 	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
-                PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
-		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
+		param=`echo ${VALUE[0]} | cut -d "=" -f1`
+		algo=`lctl get_param -n $param | sed 's/.*\[\(.*\)\].*/\1/g'`
 		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
 	done
 	remount_client $MOUNT
@@ -3640,21 +3511,14 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
-	remote_ost || { skip_env "local OST" && return; }
-
-	NSEQ=5
+ 	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
 	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemTotal: $MEMTOTAL"
 # reserve 256MB of memory for the kernel and other running processes,
 # and then take 1/2 of the remaining memory for the read/write buffers.
-    if [ $MEMTOTAL -gt 512 ] ;then
-        MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
-    else
-        # for those poor memory-starved high-end clusters...
-        MEMTOTAL=$((MEMTOTAL / 2))
-    fi
+	MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
 	echo "Mem to use for directio: $MEMTOTAL"
 	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
@@ -3664,12 +3528,11 @@ test_78() { # bug 10901
 	[ $SMALLESTOST -lt 10240 ] && \
 		skip "too small OSTSIZE, useless to run large O_DIRECT test" && return 0
 
-	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 80)) ] && \
-		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 80))
-
+	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 5)) ] && \
+		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 5))
 	[ "$SLOW" = "no" ] && NSEQ=1 && [ $F78SIZE -gt 32 ] && F78SIZE=32
 	echo "File size: $F78SIZE"
-	$SETSTRIPE $DIR/$tfile -c $OSTCOUNT || error "setstripe failed"
+	$SETSTRIPE $DIR/$tfile -c -1 || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
  	do
  		FSIZE=$(($F78SIZE / ($NSEQ - $i + 1)))
@@ -3687,7 +3550,6 @@ test_79() { # bug 12743
         BKTOTAL=$(calc_osc_kbytes kbytestotal)
         BKFREE=$(calc_osc_kbytes kbytesfree)
         BKAVAIL=$(calc_osc_kbytes kbytesavail)
-
         STRING=`df -P $MOUNT | tail -n 1 | awk '{print $2","$3","$4}'`
         DFTOTAL=`echo $STRING | cut -d, -f1`
         DFUSED=`echo $STRING  | cut -d, -f2`
@@ -3715,55 +3577,52 @@ test_80() { # bug 10718
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
         local BEFORE=`date +%s`
-        cancel_lru_locks osc
+        cancel_lru_locks OSC
         local AFTER=`date +%s`
         local DIFF=$((AFTER-BEFORE))
         if [ $DIFF -gt 1 ] ; then
                 error "elapsed for 1M@1T = $DIFF"
         fi
         true
-    	rm -f $DIR/$tfile
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
 test_99a() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && \
-	    return
-	mkdir -p $DIR/d99cvsroot
-	chown $RUNAS_ID $DIR/d99cvsroot
+	mkdir -p $DIR/d99cvsroot || error "mkdir $DIR/d99cvsroot failed"
+	chown $RUNAS_ID $DIR/d99cvsroot || error "chown $DIR/d99cvsroot failed"
 	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
 	cd $TMP
-
-	$RUNAS cvs -d $DIR/d99cvsroot init || error
+	
+	$RUNAS cvs -d $DIR/d99cvsroot init || error "cvs init failed"
 	cd $oldPWD
 }
 run_test 99a "cvs init ========================================="
 
 test_99b() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99a
-	cd /etc/init.d
+	$RUNAS [ ! -w /tmp ] && skip "/tmp has wrong w permission -- skipping" && return
+	cd /etc/init.d || error "cd /etc/init.d failed"
 	# some versions of cvs import exit(1) when asked to import links or
 	# files they can't read.  ignore those files.
 	TOIGNORE=$(find . -type l -printf '-I %f\n' -o \
 			! -perm +4 -printf '-I %f\n')
 	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" $TOIGNORE \
-		d99reposname vtag rtag
+		d99reposname vtag rtag > /dev/null || error "cvs import failed"
 }
 run_test 99b "cvs import ======================================="
 
 test_99c() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99b
-	cd $DIR
-	mkdir -p $DIR/d99reposname
-	chown $RUNAS_ID $DIR/d99reposname
-	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname
+	cd $DIR || error "cd $DIR failed"
+	mkdir -p $DIR/d99reposname || error "mkdir $DIR/d99reposname failed"
+	chown $RUNAS_ID $DIR/d99reposname || \
+		error "chown $DIR/d99reposname failed"
+	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname > /dev/null || \
+		error "cvs co d99reposname failed"
 }
 run_test 99c "cvs checkout ====================================="
 
 test_99d() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS touch foo99
@@ -3772,7 +3631,6 @@ test_99d() {
 run_test 99d "cvs add =========================================="
 
 test_99e() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS cvs update
@@ -3780,11 +3638,9 @@ test_99e() {
 run_test 99e "cvs update ======================================="
 
 test_99f() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99d
 	cd $DIR/d99reposname
 	$RUNAS cvs commit -m 'nomsg' foo99
-    rm -fr $DIR/d99cvsroot
 }
 run_test 99f "cvs commit ======================================="
 
@@ -3831,7 +3687,7 @@ function get_named_value()
     done
 }
 
-export CACHE_MAX=`lctl get_param -n llite.*.max_cached_mb | head -n 1`
+export CACHE_MAX=`lctl get_param -n llite/*/max_cached_mb | head -n 1`
 cleanup_101() {
 	lctl set_param -n llite.*.max_cached_mb $CACHE_MAX
 	trap 0
@@ -3844,8 +3700,9 @@ test_101() {
 	[ "$CPU" = "UML" ] && nreads=1000
 	local cache_limit=32
 
-	lctl set_param -n osc.*-osc*.rpc_stats 0
+	lctl set_param -n osc.*.rpc_stats 0
 	trap cleanup_101 EXIT
+
 	lctl set_param -n llite.*.read_ahead_stats 0
 	lctl set_param -n llite.*.max_cached_mb $cache_limit
 
@@ -3863,7 +3720,7 @@ test_101() {
 	cleanup_101
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
-		lctl get_param osc.*-osc*.rpc_stats
+		lctl get_param osc.*.rpc_stats
 		lctl get_param llite.*.read_ahead_stats
 		error "too many ($discard) discarded pages"
 	fi
@@ -3891,7 +3748,6 @@ cleanup_test101() {
 	[ "$SETUP_TEST101" = "yes" ] || return
 	trap 0
 	rm -rf $DIR/$tdir
-        rm -f $DIR/$tfile
 	SETUP_TEST101=no
 }
 
@@ -3920,7 +3776,7 @@ ra_check_101() {
 }
 
 test_101b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping stride IO stride-ahead test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping stride IO stride-ahead test" && return
 	local STRIPE_SIZE=1048576
 	local STRIDE_SIZE=$((STRIPE_SIZE*OSTCOUNT))
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
@@ -3940,55 +3796,58 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101 $BSIZE
 	done
-	cleanup_test101
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
 
-set_read_ahead() {
-   lctl get_param -n llite.*.max_read_ahead_mb | head -n 1
-   lctl set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
+test_101c() {
+        local STRIPE_SIZE=1048576
+        local FILE_LENGTH=$((STRIPE_SIZE*100))
+        local nreads=10000
+
+        setup_101b
+
+        cancel_lru_locks osc
+        $LCTL set_param osc.*.rpc_stats 0
+        $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
+        for OSC in `$LCTL  get_param -N osc.*`
+        do
+                if [ "$OSC" == "osc.num_refs" ]; then
+                        continue
+                fi
+                lines=`$LCTL get_param -n ${OSC}.rpc_stats | wc | awk '{print $1}'`
+                if [ $lines -le 20 ]; then
+                        continue
+                fi
+
+		rpc4k=$($LCTL get_param -n $OSC | awk '$1 == "1:" { print $2; exit; }')
+                rpc8k=$($LCTL get_param -n $OSC | awk '$1 == "2:" { print $2; exit; }')
+                rpc16k=$($LCTL get_param -n $OSC | awk '$1 == "4:" { print $2; exit; }')
+                rpc32k=$($LCTL get_param -n $OSC | awk '$1 == "8:" { print $2; exit; }')
+
+                [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
+                [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
+                [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
+                [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
+
+                echo "Small rpc check passed!"
+       	        rpc64k=$($LCTL get_param -n $OSC | awk '$1 == "16:" { print $2; exit; }')
+                rpc128k=$($LCTL get_param -n $OSC | awk '$1 == "32:" { print $2; exit; }')
+                rpc256k=$($LCTL get_param -n $OSC | awk '$1 == "64:" { print $2; exit; }')
+                rpc512k=$($LCTL get_param -n $OSC | awk '$1 == "128:" { print $2; exit; }')
+                rpc1024k=$($LCTL get_param -n $OSC | awk '$1 == "256:" { print $2; exit; }')
+
+                [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}"
+                [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}"
+                [ $rpc256k == 0 ]  && error "No 256k readahead IO ${rpc256k}"
+                [ $rpc512k == 0 ]  && error "No 512k readahead IO ${rpc256k}"
+                [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}"
+                echo "Big rpc check passed!"
+        done
+        cleanup_test101
+        true
 }
-
-test_101d() {
-    local file=$DIR/$tfile
-    local size=${FILESIZE_101c:-500}
-    local ra_MB=${READAHEAD_MB:-40}
-
-    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-    [ $space -gt $((size / 1024)) ] ||
-        { skip "Need free space ${size}M, have $space" && return; }
-
-    echo Creating ${size}M test file $file
-    dd if=/dev/zero of=$file bs=1M count=$size
-    echo Cancel LRU locks on lustre client to flush the client cache
-    cancel_lru_locks osc
-
-    echo Disable read-ahead
-    local old_READAHEAD=$(set_read_ahead 0)
-
-    echo Reading the test file $file with read-ahead disabled
-    time_ra_OFF=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$size")
-
-    echo Cancel LRU locks on lustre client to flush the client cache
-    cancel_lru_locks osc
-    echo Enable read-ahead with ${ra_MB}MB
-    set_read_ahead $ra_MB
-
-    echo Reading the test file $file with read-ahead enabled
-    time_ra_ON=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$size")
-
-    echo read-ahead disabled time read $time_ra_OFF
-    echo read-ahead enabled  time read $time_ra_ON
-
-    set_read_ahead $old_READAHEAD
-    rm -f $file
-
-    [ $time_ra_ON -lt $time_ra_OFF ] ||
-        error "read-ahead enabled  time read (${time_ra_ON}s) is more than
-               read-ahead disabled time read (${time_ra_OFF}s) filesize ${size}M"
-}
-run_test 101d "file read with and without read-ahead enabled  ================="
+run_test 101c "check stripe_size aligned read-ahead ================="
 
 export SETUP_TEST102=no
 setup_test102() {
@@ -4035,10 +3894,10 @@ test_102a() {
 	rm -f $testfile
         touch $testfile
 
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
-	[ -z "`lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr`" ] && skip_env "must have user_xattr" && return
-
-	[ -z "$(which setfattr 2>/dev/null)" ] && skip_env "could not find setfattr" && return
+	[ "$UID" != 0 ] && skip "must run as root" && return
+	[ -z "`lctl get_param -n mdc.*[mM][dD][cC]*.connect_flags | grep xattr`" ] &&
+	skip "must have user_xattr" && return
+	[ -z "$(which setfattr 2>/dev/null)" ] && skip "could not find setfattr" && return
 
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
@@ -4081,7 +3940,7 @@ run_test 102a "user xattr test =================================="
 test_102b() {
 	# b10930: get/set/list trusted.lov xattr
 	echo "get/set/list trusted.lov xattr ..."
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
 	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
@@ -4090,23 +3949,22 @@ test_102b() {
 	local testfile2=${testfile}2
 	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
 		     grep "trusted.lov" |sed -e 's/[^=]\+=//'`
-
+	
 	$MCREATE $testfile2
-	setfattr -n trusted.lov -v $value $testfile2
+	setfattr -n trusted.lov -v $value $testfile2 	
 	local tmp_file=${testfile}3
 	$GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
-	[ "$stripe_size" -eq 65536 ] || error "stripe size $stripe_size != 65536"
-	[ "$stripe_count" -eq 2 ] || error "stripe count $stripe_count != 2"
-	rm -f $DIR/$tfile
+	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
+	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
 }
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
 test_102c() {
 	# b10930: get/set/list lustre.lov xattr
 	echo "get/set/list lustre.lov xattr ..."
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
@@ -4117,15 +3975,15 @@ test_102c() {
 	local testfile2=${testfile}2
 	local value=`getfattr -n lustre.lov $testfile 2> /dev/null | \
 		     grep "lustre.lov" |sed -e 's/[^=]\+=//'  `
-
+	
 	$RUNAS $MCREATE $testfile2
-	$RUNAS setfattr -n lustre.lov -v $value $testfile2
+	$RUNAS setfattr -n lustre.lov -v $value $testfile2 	
 	local tmp_file=${testfile}3
 	$RUNAS $GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
-	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
-	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
+	[ "$stripe_size" -eq 65536 ] || error "stripe size $stripe_size != 65536"
+	[ "$stripe_count" -eq 2 ] || error "stripe count $stripe_count != 2"
 }
 run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
@@ -4157,30 +4015,6 @@ compare_stripe_info1() {
 	return 0
 }
 
-compare_stripe_info2() {
-	for num in 1 2 3 4
-	do
-		for count in `seq 1 $STRIPE_COUNT`
-		do
-			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
-			do
-				local size=`expr $STRIPE_SIZE \* $num`
-				local file=file"$num-$offset-$count"
-				get_stripe_info client $PWD/$file
-				if [ $stripe_size -ne $size ]; then
-					error "$file: different stripe size $stripe_size, expected $size" && return
-				fi
-				if [ $stripe_count -ne $count ]; then
-					error "$file: different stripe count $stripe_count, expected $count" && return
-				fi
-				if [ $stripe_index -ne $offset ]; then
-					error "$file: different stripe offset $stripe_index, expected $offset" && return
-				fi
-			done
-		done
-	done
-}
-
 find_lustre_tar() {
 	[ -n "$(which tar 2>/dev/null)" ] && strings $(which tar) | grep -q lustre && echo tar
 }
@@ -4188,8 +4022,8 @@ find_lustre_tar() {
 test_102d() {
 	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping N-stripe test" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
 	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
@@ -4201,8 +4035,8 @@ run_test 102d "tar restore stripe info from tarfile,not keep osts ==========="
 test_102f() {
 	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping N-stripe test" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
@@ -4216,7 +4050,7 @@ test_102h() { # bug 15777
 	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
 		skip "must have user_xattr" && return
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip_env "could not find setfattr" && return
+		skip "could not find setfattr" && return
 
 	XBIG=trusted.big
 	XSIZE=1024
@@ -4226,17 +4060,17 @@ test_102h() { # bug 15777
 		VALUE="$VALUE$VALUE"
 	done
 	log "save $XBIG on $DIR/$tfile"
-        setfattr -n $XBIG -v "$VALUE" $DIR/$tfile ||
+	setfattr -n $XBIG -v "$VALUE" $DIR/$tfile ||
 		error "saving $XBIG on $DIR/$tfile failed"
-        ORIG=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
+	ORIG=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
 	OSIZE=$(echo $ORIG | wc -c)
 	[ $OSIZE -lt $XSIZE ] && error "set $XBIG too small ($OSIZE < $XSIZE)"
 
 	XSML=trusted.sml
 	log "save $XSML on $DIR/$tfile"
-        setfattr -n $XSML -v val $DIR/$tfile ||
+	setfattr -n $XSML -v val $DIR/$tfile ||
 		error "saving $XSML on $DIR/$tfile failed"
-        NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
+	NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
 	if [ "$NEW" != "$ORIG" ]; then
 		log "orig: $ORIG"
 		log "new: $NEW"
@@ -4244,16 +4078,15 @@ test_102h() { # bug 15777
 	fi
 
 	log "grow $XSML on $DIR/$tfile"
-        setfattr -n $XSML -v "$VALUE" $DIR/$tfile ||
+	setfattr -n $XSML -v "$VALUE" $DIR/$tfile ||
 		error "growing $XSML on $DIR/$tfile failed"
-        NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
+	NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
 	if [ "$NEW" != "$ORIG" ]; then
 		log "orig: $ORIG"
 		log "new: $NEW"
 		error "$XBIG different after growing $XSML"
 	fi
 	log "$XBIG still valid after growing $XSML"
-	rm -f $file
 }
 run_test 102h "grow xattr from inside inode to external block"
 
@@ -4268,8 +4101,8 @@ run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping N-stripe test" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102 "$RUNAS"
 	mkdir -p $DIR/d102j
 	chown $RUNAS_ID $DIR/d102j
@@ -4288,16 +4121,9 @@ run_acl_subtest()
 }
 
 test_103 () {
-    [ "$UID" != 0 ] && skip_env "must run as root" && return
-    [ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
-    [ -z "$(which setfacl 2>/dev/null)" ] && skip_env "could not find setfacl" && return
-    $GSS && skip "could not run under gss" && return
-
-    declare -a identity_old
-
-    for num in `seq $MDSCOUNT`; do
-        switch_identity $num true || identity_old[$num]=$?
-    done
+    [ "$UID" != 0 ] && skip "must run as root" && return
+    [ -z "$(lctl get_param mdc.*[mM][dD][cC]*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
+    [ -z "$(which setfacl 2>/dev/null)" ] && skip "could not find setfacl" && return
 
     SAVE_UMASK=`umask`
     umask 0022
@@ -4306,29 +4132,24 @@ test_103 () {
     echo "performing cp ..."
     run_acl_subtest cp || error
     echo "performing getfacl-noacl..."
-    run_acl_subtest getfacl-noacl || error "getfacl-noacl test failed"
+    run_acl_subtest getfacl-noacl > /dev/null || error
     echo "performing misc..."
-    run_acl_subtest misc || error  "misc test failed"
-    echo "performing permissions..."
-    run_acl_subtest permissions || error "permissions failed"
+    run_acl_subtest misc > /dev/null || error
+#    XXX add back permission test when we support supplementary groups.
+#    echo "performing permissions..."
+#    run_acl_subtest permissions || error
     echo "performing setfacl..."
-    run_acl_subtest setfacl || error  "setfacl test failed"
+    run_acl_subtest setfacl > /dev/null || error
 
     # inheritance test got from HP
     echo "performing inheritance..."
-    cp $LUSTRE/tests/acl/make-tree . || error "cannot copy make-tree"
-    chmod +x make-tree || error "chmod +x failed"
-    run_acl_subtest inheritance || error "inheritance test failed"
+    cp $LUSTRE/tests/acl/make-tree . || error
+    chmod +x make-tree || error
+    run_acl_subtest inheritance > /dev/null || error
     rm -f make-tree
 
     cd $SAVE_PWD
     umask $SAVE_UMASK
-
-    for num in `seq $MDSCOUNT`; do
-	if [ "${identity_old[$num]}" = 1 ]; then
-            switch_identity $num false || identity_old[$num]=$?
-	fi
-    done
 }
 run_test 103 "acl test ========================================="
 
@@ -4340,13 +4161,12 @@ test_104() {
 	lfs df -i $DIR || error "lfs df -i $DIR failed"
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
-
-	OSC=`lctl get_param -n devices | awk '/-osc-/ {print $4}' | head -n 1`
+	
+	OSC=`lctl get_param -n devices | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC recover
 	lfs df || error "lfs df with reactivated OSC failed"
-	rm -f $DIR/$tfile
 }
 run_test 104 "lfs df [-ih] [path] test ========================="
 
@@ -4359,7 +4179,6 @@ test_105a() {
         else
                 flocks_test 1 off -f $DIR/$tfile || error "fail flock off"
         fi
-	rm -f $DIR/$tfile
 }
 run_test 105a "flock when mounted without -o flock test ========"
 
@@ -4371,7 +4190,6 @@ test_105b() {
         else
                 flocks_test 1 off -c $DIR/$tfile || error "fail flock off"
         fi
-	rm -f $DIR/$tfile
 }
 run_test 105b "fcntl when mounted without -o flock test ========"
 
@@ -4383,7 +4201,6 @@ test_105c() {
         else
                 flocks_test 1 off -l $DIR/$tfile || error "fail flock off"
         fi
-	rm -f $DIR/$tfile
 }
 run_test 105c "lockf when mounted without -o flock test ========"
 
@@ -4426,7 +4243,7 @@ test_107() {
         wait $SLEEPPID
         if [ -e $file ]; then
                 size=`stat -c%s $file`
-                [ $size -eq 0 ] && error "Fail to create core file $file"
+                [ $size -eq 0 ] && error "Zero length core file $file"
         else
                 error "Fail to create core file $file"
         fi
@@ -4436,18 +4253,6 @@ test_107() {
         cd $CDIR
 }
 run_test 107 "Coredump on SIG"
-
-test_110() {
-	mkdir -p $DIR/d110
-	mkdir $DIR/d110/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa || error "mkdir with 255 char fail"
-	mkdir $DIR/d110/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb && error "mkdir with 256 char should fail, but not"
-	touch $DIR/d110/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx || error "create with 255 char fail"
-	touch $DIR/d110/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy && error ""create with 256 char should fail, but not
-
-	ls -l $DIR/d110
-    rm -fr $DIR/d110
-}
-run_test 110 "filename length checking"
 
 test_115() {
 	OSTIO_pre=$(ps -e|grep ll_ost_io|awk '{print $4}'|sort -n|tail -1|\
@@ -4479,7 +4284,7 @@ run_test 115 "verify dynamic thread creation===================="
 
 free_min_max () {
 	wait_delete_completed
-	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail))
+	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC][-_]*.kbytesavail))
 	echo OST kbytes available: ${AVAIL[@]}
 	MAXI=0; MAXV=${AVAIL[0]}
 	MINI=0; MINV=${AVAIL[0]}
@@ -4497,13 +4302,14 @@ free_min_max () {
 }
 
 test_116() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 
 	echo -n "Free space priority "
-	lctl get_param -n lov.*-clilov-*.qos_prio_free
+	lctl get_param -n lov.*.qos_prio_free
+	DELAY=$(lctl get_param -n lov.*.qos_maxage | head -1 | awk '{print $1}')
 	declare -a AVAIL
 	free_min_max
-	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI, skip" &&\
+	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI" &&\
 		return
 
 	# generate uneven OSTs
@@ -4512,16 +4318,16 @@ test_116() {
 	FILL=$(($MINV / 4))
 	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
 	$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI}||error "setstripe failed"
-	i=0
+	i=1
 	while [ $FILL -gt 0 ]; do
-	    i=$(($i + 1))
 	    dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i bs=2M count=1 2>/dev/null
 	    FILL=$(($FILL - 2048))
 	    echo -n .
+	    i=$(($i + 1))
 	done
 	FILL=$(($MINV / 4))
 	sync
-	sleep_maxage
+	sleep $DELAY
 
 	free_min_max
 	DIFF=$(($MAXV - $MINV))
@@ -4541,16 +4347,16 @@ test_116() {
 	# now fill using QOS
 	echo writing a bunch of files to QOS-assigned OSTs
 	$SETSTRIPE $DIR/$tdir -c 1
-	i=0
+	i=1
 	while [ $FILL -gt 0 ]; do
-	    i=$(($i + 1))
 	    dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1024 count=200 2>/dev/null
 	    FILL=$(($FILL - 200))
 	    echo -n .
+	    i=$(($i + 1))
 	done
 	echo "wrote $i 200k files"
 	sync
-	sleep_maxage
+	sleep $DELAY
 
 	echo "Note: free space may not be updated, so measurements might be off"
 	free_min_max
@@ -4564,14 +4370,11 @@ test_116() {
 	[ $DIFF -gt 0 ] && echo "Wrote $(($DIFF2 * 100 / $DIFF - 100))% more data to larger OST $MAXI1"
 
 	# Figure out which files were written where
-	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
-               awk '/'$MINI1': / {print $2; exit}')
+	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd | awk '/'$MINI1': / {print $2; exit}')
 	echo $UUID
         MINC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MINC files created on smaller OST $MINI1"
-	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
-               awk '/'$MAXI1': / {print $2; exit}')
-	echo $UUID
+	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd | (awk '/'$MAXI1': / {print $2; exit}'))
         MAXC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
 	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
@@ -4589,9 +4392,8 @@ test_117() # bug 10891
         > $DIR/$tfile || error "truncate failed"
         lctl set_param fail_loc=0
         echo "Truncate succeeded."
-	rm -f $DIR/$tfile
 }
-run_test 117 "verify fsfilt_extend =========="
+run_test 117 "verify fsfilt_extend ============================="
 
 export OLD_RESENDCOUNT=""
 set_resend_count () {
@@ -4617,16 +4419,15 @@ reset_async() {
 test_118a() #bug 11710
 {
 	reset_async
-
+	
  	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
-	DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
+	DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
+        WRITEBACK=$(lctl get_param "llite.*.dump_page_cache" | grep -c writeback)
 
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 		return 1;
         fi
-	rm -f $DIR/$tfile
 }
 run_test 118a "verify O_SYNC works =========="
 
@@ -4641,9 +4442,8 @@ test_118b()
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	RC=$?
 	set_nodes_failloc "$(osts_nodes)" 0
-        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+        DIRTY=$(lctl get_param llite.*.dump_page_cache | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4661,7 +4461,7 @@ test_118b()
 	# until a subsequent RPC completes successfully without error.
 	multiop $DIR/$tfile Ow4096yc
 	rm -f $DIR/$tfile
-
+	
 	return 0
 }
 run_test 118b "Reclaim dirty pages on fatal error =========="
@@ -4684,8 +4484,7 @@ test_118c()
 		error "Multiop failed to block on fsync, pid=$MULTIPID"
 	fi
 
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+        WRITEBACK=$(lctl get_param -n llite/*/dump_page_cache | grep -c writeback)
 	if [[ $WRITEBACK -eq 0 ]]; then
 		error "No page in writeback, writeback=$WRITEBACK"
 	fi
@@ -4698,12 +4497,11 @@ test_118c()
 	fi
 
         DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
-
+	
 	rm -f $DIR/$tfile
 	echo "Dirty pages flushed via fsync on EROFS"
 	return 0
@@ -4719,7 +4517,7 @@ test_118d()
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK
 	set_nodes_failloc "$(osts_nodes)" 0x214
 	# multiop should block due to fsync until pages are written
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &	
 	MULTIPID=$!
 	sleep 1
 
@@ -4727,8 +4525,7 @@ test_118d()
 		error "Multiop failed to block on fsync, pid=$MULTIPID"
 	fi
 
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+	WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 	if [[ $WRITEBACK -eq 0 ]]; then
 		error "No page in writeback, writeback=$WRITEBACK"
 	fi
@@ -4737,8 +4534,7 @@ test_118d()
 	set_nodes_failloc "$(osts_nodes)" 0
 
         DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4761,13 +4557,12 @@ test_118f() {
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
-
+	
         lctl set_param fail_loc=0x0
 
-        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
-        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+        LOCKED=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c locked)
+        DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
@@ -4785,28 +4580,27 @@ test_118f() {
 run_test 118f "Simulate unrecoverable OSC side error =========="
 
 test_118g() {
-	reset_async
+        reset_async
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
-	lctl set_param fail_loc=0x406
+        lctl set_param fail_loc=0x406
 
 	# simulate local -ENOMEM
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
-	RC=$?
-
-	lctl set_param fail_loc=0
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+	
+        lctl set_param fail_loc=0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
 
-	LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
-	DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-	WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-			grep -c writeback)
+        LOCKED=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c locked)
+        DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
+        WRITEBACK=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-
+	
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4829,7 +4623,7 @@ test_118h() {
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
-
+	
         set_nodes_failloc "$(osts_nodes)" 0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4837,12 +4631,11 @@ test_118h() {
 
         LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
         DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache |
-                    grep -c writeback)
+        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writebac)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-
+	
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4861,26 +4654,26 @@ test_118i() {
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
         set_nodes_failloc "$(osts_nodes)" 0x20e
-
+	
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	PID=$!
 	sleep 5
 	set_nodes_failloc "$(osts_nodes)" 0
-
+	
 	wait $PID
         RC=$?
 	if [[ $RC -ne 0 ]]; then
 		error "got error, but should be not, rc=$RC"
 	fi
 
-        LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
-        DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
-        WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
+	LOCKED=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c locked)
+	DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
+	WRITEBACK=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c writeback)
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-
+	
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4914,7 +4707,7 @@ test_118j() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-
+	
 	# in recoverable error on OST we want resend and stay until it finished
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
@@ -4968,7 +4761,7 @@ run_test 119a "Short directIO read must return actual read amount"
 
 test_119b() # bug 11737
 {
-        [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
         $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
@@ -5007,7 +4800,7 @@ test_119d() # bug 15950
         log "the DIO writes have completed, now wait for the reads (should not block very long)"
         sleep 2
         [ -n "`ps h -p $pid_reads -o comm`" ] && \
-        error "the read rpcs have not completed in 2s"
+                error "the read rpcs have not completed in 2s"
         rm -f $DIR/$tfile
         $LCTL set_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight $MAX_RPCS_IN_FLIGHT
 }
@@ -5031,7 +4824,7 @@ test_120a() {
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120a "Early Lock Cancel: mkdir test"
+run_test 120a "Early Lock Cancel: mkdir test ==================="
 
 test_120b() {
         mkdir -p $DIR/$tdir
@@ -5044,14 +4837,14 @@ test_120b() {
         can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         touch $DIR/$tdir/f1
-        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120b "Early Lock Cancel: create test"
+run_test 120b "Early Lock Cancel: create test =================="
 
 test_120c() {
         mkdir -p $DIR/$tdir
@@ -5073,7 +4866,7 @@ test_120c() {
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120c "Early Lock Cancel: link test"
+run_test 120c "Early Lock Cancel: link test ===================="
 
 test_120d() {
         mkdir -p $DIR/$tdir
@@ -5094,7 +4887,7 @@ test_120d() {
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120d "Early Lock Cancel: setattr test"
+run_test 120d "Early Lock Cancel: setattr test ================="
 
 test_120e() {
         mkdir -p $DIR/$tdir
@@ -5107,21 +4900,17 @@ test_120e() {
         cancel_lru_locks osc
         dd if=$DIR/$tdir/f1 of=/dev/null
         stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
-        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         unlink $DIR/$tdir/f1
-        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120e "Early Lock Cancel: unlink test"
+run_test 120e "Early Lock Cancel: unlink test =================="
 
 test_120f() {
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
@@ -5137,21 +4926,17 @@ test_120f() {
         dd if=$DIR/$tdir/d1/f1 of=/dev/null
         dd if=$DIR/$tdir/d2/f2 of=/dev/null
         stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2 > /dev/null
-        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm/services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         mv $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
-        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120f "Early Lock Cancel: rename test"
+run_test 120f "Early Lock Cancel: rename test =================="
 
 test_120g() {
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
@@ -5165,25 +4950,19 @@ test_120g() {
         cancel_lru_locks osc
         t0=`date +%s`
 
-        can0=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk0=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can0=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk0=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         createmany -o $DIR/$tdir/f $count
         sync
-        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         t1=`date +%s`
         echo total: $((can1-can0)) cancels, $((blk1-blk0)) blockings
         echo rm $count files
         rm -r $DIR/$tdir
         sync
-        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
-              awk '/ldlm_cancel/ {print $2}'`
-        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
-              awk '/ldlm_bl_callback/ {print $2}'`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         t2=`date +%s`
         echo total: $count removes in $((t2-t1))
         echo total: $((can2-can1)) cancels, $((blk2-blk1)) blockings
@@ -5192,25 +4971,32 @@ test_120g() {
         lru_resize_enable mdc
         lru_resize_enable osc
 }
-run_test 120g "Early Lock Cancel: performance test"
+run_test 120g "Early Lock Cancel: performance test ============="
 
-test_121() { #bug #10589
-	rm -rf $DIR/$tfile
-	writes=$(LANG=C dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk -F '+' '/out$/ {print $1}')
-#define OBD_FAIL_LDLM_CANCEL_RACE        0x310
+test_121() { #bug 10589
+	writes=$(LANG=C dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk -F '+' '/out/ {print $1}')
 	lctl set_param fail_loc=0x310
 	cancel_lru_locks osc > /dev/null
-	reads=$(LANG=C dd if=$DIR/$tfile of=/dev/null 2>&1 | awk -F '+' '/in$/ {print $1}')
+	reads=$(LANG=C dd if=$DIR/$tfile of=/dev/null 2>&1 | awk -F '+' '/in/ {print $1}')
 	lctl set_param fail_loc=0
 	[ "$reads" -eq "$writes" ] || error "read" $reads "blocks, must be" $writes
 }
-run_test 121 "read cancel race ========="
+run_test 121 "read cancel race ================================="
+
+test_122() { #bug 11544
+        #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
+        lctl set_param fail_loc=0x508
+        dd if=/dev/zero of=$DIR/$tfile count=1
+        sync
+        lctl set_param fail_loc=0
+}
+run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
 test_123a() { # was test 123, statahead(bug 11401)
         SLOWOK=0
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
-            log "testing on UP system. Performance may be not as good as expected."
-			SLOWOK=1
+                log "testing on UP system. Performance may be not as good as expected."
+		SLOWOK=1
         fi
 
         rm -rf $DIR/$tdir
@@ -5242,32 +5028,49 @@ test_123a() { # was test 123, statahead(bug 11401)
                 etime=`date +%s`
                 delta_sa=$((etime - stime))
                 log "ls $i files with statahead: $delta_sa sec"
-                lctl get_param -n llite.*.statahead_stats
+		lctl get_param -n llite.*.statahead_stats
                 ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
 
-                [ $swrong -lt $ewrong ] && log "statahead was stopped, maybe too many locks held!"
+                if [ $swrong -lt $ewrong ]; then
+                        log "statahead was stopped, maybe too many locks held!"
+                fi
+
                 [ $delta -eq 0 -o $delta_sa -eq 0 ] && continue
 
                 if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
-                    max=`lctl get_param -n llite.*.statahead_max | head -n 1`
-                    lctl set_param -n llite.*.statahead_max 0
-                    lctl get_param llite.*.statahead_max
-                    cancel_lru_locks mdc
-                    cancel_lru_locks osc
-                    stime=`date +%s`
-                    time ls -l $DIR/$tdir | wc -l
-                    etime=`date +%s`
-                    delta=$((etime - stime))
-                    log "ls $i files again without statahead: $delta sec"
-                    lctl set_param llite.*.statahead_max=$max
-                    if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
                         if [  $SLOWOK -eq 0 ]; then
                                 error "ls $i files is slower with statahead!"
+                                debugsave
+
+                                lctl set_param debug=-1
+                                max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                                lctl set_param -n llite.*.statahead_max 0
+                                lctl get_param llite.*.statahead_max
+                                cancel_lru_locks mdc
+                                cancel_lru_locks osc
+                                $LCTL clear
+                                stime=`date +%s`
+                                time ls -l $DIR/$tdir | wc -l
+                                etime=`date +%s`
+                                error "ls $i files (again) without statahead: $((etime - stime)) sec"
+
+                                lctl set_param debug=-1
+                                lctl set_param llite.*.statahead_max=$max
+                                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+                                cancel_lru_locks mdc
+                                cancel_lru_locks osc
+                                $LCTL clear
+                                stime=`date +%s`
+                                time ls -l $DIR/$tdir | wc -l
+                                etime=`date +%s`
+                                error "ls $i files (again) with statahead: $((etime - stime)) sec"
+		                lctl get_param -n llite.*.statahead_stats
+
+                                debugrestore
                         else
                                 log "ls $i files is slower with statahead!"
                         fi
                         break
-                    fi
                 fi
 
                 [ $delta -gt 20 ] && break
@@ -5290,7 +5093,7 @@ run_test 123a "verify statahead work"
 test_123b () { # statahead(bug 15027)
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 1000
-
+	
         cancel_lru_locks mdc
         cancel_lru_locks osc
 
@@ -5387,27 +5190,16 @@ test_124a() {
 }
 run_test 124a "lru resize ======================================="
 
-get_max_pool_limit()
-{
-        local limit=`lctl get_param -n ldlm.namespaces.*-MDT0000-mdc-*.pool.limit`
-        local max=0
-        for l in $limit; do
-                if test $l -gt $max; then
-                        max=$l
-                fi
-        done
-        echo $max
-}
-
 test_124b() {
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
                skip "no lru resize on server" && return 0
 
-        LIMIT=`get_max_pool_limit`
+        # even for cmd no matter what metadata namespace to use for getting
+        # the limit, we use appropriate.
+        LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
 
         NR=$(($(default_lru_size)*20))
         if [ $NR -gt $LIMIT ]; then
-                log "Limit lock number by $LIMIT locks"
                 NR=$LIMIT
         fi
         lru_resize_disable mdc
@@ -5469,20 +5261,16 @@ test_124b() {
 run_test 124b "lru resize (performance test) ======================="
 
 test_125() { # 13358
-	[ -z "$(lctl get_param -n llite.*.client_type | grep local)" ] && skip "must run as local client" && return
 	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
 	mkdir -p $DIR/d125 || error "mkdir failed"
 	$SETSTRIPE $DIR/d125 -s 65536 -c -1 || error "setstripe failed"
-	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failed"
+	setfacl -R -m u:bin:rwx $DIR/d125 || error "setfacl $DIR/d125 failes"
 	ls -ld $DIR/d125 || error "cannot access $DIR/d125"
 }
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
 test_126() { # bug 12829/13455
-	[ -z "$(lctl get_param -n llite.*.client_type | grep local)" ] && skip "must run as local client" && return
-	[ "$UID" != 0 ] && skip_env "skipping $TESTNAME (must run as root)" && return
-	$GSS && skip "must run as gss disabled" && return
-
+	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
 	$RUNAS -u 0 -g 1 touch $DIR/$tfile || error "touch failed"
 	gid=`ls -n $DIR/$tfile | awk '{print $4}'`
 	rm -f $DIR/$tfile
@@ -5503,7 +5291,7 @@ test_127() { # bug 15521
                 echo "got $COUNT $NAME"
                 [ ! $MIN ] && error "Missing min value for $NAME proc entry"
                 eval $NAME=$COUNT || error "Wrong proc format"
-
+		
                 case $NAME in
                         read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
@@ -5541,50 +5329,39 @@ test_128() { # bug 15212
 }
 run_test 128 "interactive lfs for 2 consecutive find's"
 
-set_dir_limits () {
-        local mntdev
-        local node
-
-	local LDPROC=/proc/fs/ldiskfs
-
-        for node in $(mdts_nodes); do
-                devs=$(do_node $node "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
-	        for dev in $devs; do
-		        mntdev=$(do_node $node "lctl get_param -n osd.$dev.mntdev")
-		        do_node $node "echo $1 >$LDPROC/\\\$(basename $mntdev)/max_dir_size"
-		done
-	done
-}
 test_129() {
         [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
+        DEV=$(basename $(do_facet mds lctl get_param -n mds.*.mntdev))
+        [ -z "$DEV" ] && error "can't access mds mntdev"
         EFBIG=27
+        LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size
         MAX=16384
 
-        set_dir_limits $MAX
+        do_facet mds "echo $MAX > $LDPROC"
 
         mkdir -p $DIR/$tdir
 
         I=0
         J=0
-        while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
+        while [ ! $I -gt $MAX ]; do
                 multiop $DIR/$tdir/$J Oc
                 rc=$?
                 if [ $rc -eq $EFBIG ]; then
-                        set_dir_limits 0
+                        do_facet mds "echo 0 >$LDPROC"
                         echo "return code $rc received as expected"
                         return 0
                 elif [ $rc -ne 0 ]; then
-                        set_dir_limits 0
+                        do_facet mds "echo 0 >$LDPROC"
                         error_exit "return code $rc received instead of expected $EFBIG"
                 fi
                 J=$((J+1))
                 I=$(stat -c%s "$DIR/$tdir")
         done
 
-        error "exceeded dir size limit $MAX x $MDSCOUNT $((MAX * MDSCOUNT)) : $I bytes"
-        do_facet $SINGLEMDS "echo 0 >$LDPROC"
+        error "exceeded dir size limit: $I bytes"
+        do_facet mds "echo 0 >$LDPROC"
 }
 run_test 129 "test directory size limit ========================"
 
@@ -5637,7 +5414,7 @@ test_130a() {
 run_test 130a "FIEMAP (1-stripe file)"
 
 test_130b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping FIEMAP on 2-stripe file test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping FIEMAP on 2-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
@@ -5686,7 +5463,7 @@ test_130b() {
 run_test 130b "FIEMAP (2-stripe file)"
 
 test_130c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping FIEMAP on 2-stripe file with hole test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping FIEMAP on 2-stripe file with hole test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
@@ -5741,7 +5518,7 @@ test_130c() {
 run_test 130c "FIEMAP (2-stripe file with hole)"
 
 test_130d() {
-	[ "$OSTCOUNT" -lt "3" ] && skip_env "skipping FIEMAP on N-stripe file test" && return
+	[ "$OSTCOUNT" -lt "3" ] && skip "skipping FIEMAP on N-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
@@ -5790,7 +5567,7 @@ test_130d() {
 run_test 130d "FIEMAP (N-stripe file)"
 
 test_130e() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping continuation FIEMAP test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping continuation FIEMAP test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
@@ -5798,16 +5575,16 @@ test_130e() {
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 131072 -c 2 $fm_file || error "setstripe failed on $fm_file"
+	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
 	NUM_BLKS=512
-	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 64 ))
+	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 4 ))
 	for ((i = 0; i < $NUM_BLKS; i++))
 	do
-		dd if=/dev/zero of=$fm_file count=1 bs=64k seek=$((2*$i)) conv=notrunc > /dev/null 2>&1
+		dd if=/dev/zero of=$fm_file count=1 bs=4096 seek=$((2*$i)) conv=notrunc > /dev/null 2>&1
 	done
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=`filefrag -ve $fm_file | grep -A 12000 "ext:" | grep -v "ext:" | grep -v "found"`
+	filefrag_op=`filefrag -ve $fm_file | grep -A 750 "ext:" | grep -v "ext:" | grep -v "found"`
 
 	last_lun=`echo $filefrag_op | cut -d: -f5`
 
@@ -5843,120 +5620,12 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
-# Test for writev/readv
-test_131a() {
-	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 || \
-	error "writev test failed"
-	rwv -f $DIR/$tfile -r -v -n 2 1572864 1048576 || \
-	error "readv failed"
-	rm -f $DIR/$tfile
-}
-run_test 131a "test iov's crossing stripe boundary for writev/readv"
-
-test_131b() {
-	rwv -f $DIR/$tfile -w -a -n 3 524288 1048576 1572864 || \
-	error "append writev test failed"
-	rwv -f $DIR/$tfile -w -a -n 2 1572864 1048576 || \
-	error "append writev test failed"
-	rm -f $DIR/$tfile
-}
-run_test 131b "test append writev"
-
-test_131c() {
-	rwv -f $DIR/$tfile -w -d -n 1 1048576 || return 0
-	error "NOT PASS"
-}
-run_test 131c "test read/write on file w/o objects"
-
-test_131d() {
-	rwv -f $DIR/$tfile -w -n 1 1572864
-	NOB=`rwv -f $DIR/$tfile -r -n 3 524288 524288 1048576 | awk '/error/ {print $6}'`
-	if [ "$NOB" != 1572864 ]; then
-		error "Short read filed: read $NOB bytes instead of 1572864"
-	fi
-	rm -f $DIR/$tfile
-}
-run_test 131d "test short read"
-
-test_131e() {
-	rwv -f $DIR/$tfile -w -s 1048576 -n 1 1048576
-	rwv -f $DIR/$tfile -r -z -s 0 -n 1 524288 || \
-	error "read hitting hole failed"
-	rm -f $DIR/$tfile
-}
-run_test 131e "test read hitting hole"
-
-get_ost_param() {
-        local token=$1
-        local gl_sum=0
-        for node in $(osts_nodes); do
-                gl=$(do_node $node "$LCTL get_param -n ost.OSS.ost.stats" | awk '/'$token'/ {print $2}' | head -n 1)
-                [ x$gl = x"" ] && gl=0
-                gl_sum=$((gl_sum + gl))
-        done
-        echo $gl
-}
-
-som_mode_switch() {
-        local som=$1
-        local gl1=$2
-        local gl2=$3
-
-        if [ x$som = x"enabled" ]; then
-                [ $((gl2 - gl1)) -gt 0 ] && error "no glimpse RPC is expected"
-                do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=disabled"
-        else
-                [ $((gl2 - gl1)) -gt 0 ] || error "some glimpse RPC is expected"
-                do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=enabled"
-        fi
-
-        # do remount to make new mount-conf parameters actual
-        echo remounting...
-        sync
-        stopall
-        setupall
-}
-
-test_132() { #1028, SOM
-	local num=$(get_mds_dir $DIR)
-	local mymds=mds${num}
-
-        dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
-        cancel_lru_locks osc
-
-        som1=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
-
-        gl1=$(get_ost_param "ldlm_glimpse_enqueue")
-        stat $DIR/$tfile >/dev/null
-        gl2=$(get_ost_param "ldlm_glimpse_enqueue")
-        echo "====> SOM is "$som1", "$((gl2 - gl1))" glimpse RPC occured"
-        cancel_lru_locks osc
-        som_mode_switch $som1 $gl1 $gl2
-
-        som2=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
-        if [ $som1 == $som2 ]; then
-            error "som is still "$som2
-            if [ x$som2 = x"enabled" ]; then
-                som2="disabled"
-            else
-                som2="enabled"
-            fi
-        fi
-
-        gl1=$(get_ost_param "ldlm_glimpse_enqueue")
-        stat $DIR/$tfile >/dev/null
-        gl2=$(get_ost_param "ldlm_glimpse_enqueue")
-        echo "SOM is "$som2", "$((gl2 - gl1))" glimpse RPC occured"
-        som_mode_switch $som2 $gl1 $gl2
-}
-run_test 132 "som avoids glimpse rpc"
-
 test_140() { #bug-17379
         mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"
         cp /usr/bin/stat . || error "Copying stat to $DIR/$tdir"
 
-        # VFS limits max symlink depth to 5(4KSTACK) or 7(8KSTACK) or 8
+        # VFS limits max symlink depth to 5(4KSTACK) or 8
         local i=0
         while i=`expr $i + 1`; do
                 mkdir -p $i || error "Creating dir $i"
@@ -5977,132 +5646,9 @@ test_140() { #bug-17379
         done
         i=`expr $i - 1`
         echo "The symlink depth = $i"
-        [ $i -eq 5 -o $i -eq 7 -o $i -eq 8 ] || error "Invalid symlink depth"
+        [ $i -eq 4 -o $i -eq 8 ] || error "Invalid symlink depth"
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
-
-test_150() {
-	local TF="$TMP/$tfile"
-
-        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
-        cp $TF $DIR/$tfile
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
-        remount_client $MOUNT
-        df -P $MOUNT
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
-
-        $TRUNCATE $TF 6000
-        $TRUNCATE $DIR/$tfile 6000
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (truncate1)"
-
-        echo "12345" >>$TF
-        echo "12345" >>$DIR/$tfile
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append1)"
-
-        echo "12345" >>$TF
-        echo "12345" >>$DIR/$tfile
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append2)"
-
-        rm -f $TF
-        true
-}
-run_test 150 "truncate/append tests"
-
-function roc_hit() {
-    local list=$(comma_list $(osts_nodes))
-
-    ACCNUM=$(do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
-        awk '/'cache_hit'/ {sum+=$2} END {print sum}')
-    echo $ACCNUM
-}
-
-function set_cache() {
-    local on=1
-
-    if [ "$2" == "off" ]; then
-        on=0;
-    fi
-    local list=$(comma_list $(osts_nodes))
-    do_nodes $list lctl set_param obdfilter.*.${1}_cache_enable $on
-
-    cancel_lru_locks osc
-}
-
-test_151() {
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-
-        local CPAGES=3
-        local list=$(comma_list $(osts_nodes))
-
-        # check whether obdfilter is cache capable at all
-        if ! do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable > /dev/null; then
-                echo "not cache-capable obdfilter"
-                return 0
-        fi
-
-        # check cache is enabled on all obdfilters
-        if do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable | grep 0 >&/dev/null; then
-                echo "oss cache is disabled"
-                return 0
-        fi
-
-        do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
-
-        # pages should be in the case right after write
-        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
-        local BEFORE=`roc_hit`
-        cancel_lru_locks osc
-        cat $DIR/$tfile >/dev/null
-        local AFTER=`roc_hit`
-        if ! let "AFTER - BEFORE == CPAGES"; then
-                error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-        fi
-
-        # the following read invalidates the cache
-        cancel_lru_locks osc
-        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 0
-        cat $DIR/$tfile >/dev/null
-
-        # now data shouldn't be found in the cache
-        BEFORE=`roc_hit`
-        cancel_lru_locks osc
-        cat $DIR/$tfile >/dev/null
-        AFTER=`roc_hit`
-        if let "AFTER - BEFORE != 0"; then
-                error "IN CACHE: before: $BEFORE, after: $AFTER"
-        fi
-
-        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 1
-        rm -f $DIR/$tfile
-}
-run_test 151 "test cache on oss and controls ==============================="
-
-test_152() {
-        local TF="$TMP/$tfile"
-
-        # simulate ENOMEM during write
-#define OBD_FAIL_OST_NOMEM      0x226
-        lctl set_param fail_loc=0x80000226
-        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
-        cp $TF $DIR/$tfile
-        sync || error "sync failed"
-        lctl set_param fail_loc=0
-
-        # discard client's cache
-        cancel_lru_locks osc
-
-        # simulate ENOMEM during read
-        lctl set_param fail_loc=0x80000226
-        cmp $TF $DIR/$tfile || error "cmp failed"
-        lctl set_param fail_loc=0
-
-        rm -f $TF
-}
-run_test 152 "test read/write with enomem ============================"
 
 test_153() {
         multiop $DIR/$tfile Ow4096Ycu || error "multiop failed"
@@ -6110,417 +5656,6 @@ test_153() {
 run_test 153 "test if fdatasync does not crash ======================="
 
 test_154() {
-	cp /etc/hosts $DIR/$tfile
-
-	fid=$($LFS path2fid $DIR/$tfile)
-	rc=$?
-	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
-
-	echo "open fid $fid"
-	diff /etc/hosts $DIR/.lustre/fid/$fid || error "open by fid failed: did not find expected data in file."
-
-	echo "Opening a file by FID succeeded"
-}
-run_test 154 "Opening a file by FID"
-
-test_155_load() {
-    local temp=$TMP/$tfile
-    local file=$DIR/$tfile
-    local list=$(comma_list $(osts_nodes))
-    local big=$(do_nodes $list grep "cache" /proc/cpuinfo | \
-        awk '{sum+=$4} END{print sum}')
-
-    log big is $big K
-
-    dd if=/dev/urandom of=$temp bs=6096 count=1 || \
-        error "dd of=$temp bs=6096 count=1 failed"
-    cp $temp $file
-    cancel_lru_locks osc
-    cmp $temp $file || error "$temp $file differ"
-
-    $TRUNCATE $temp 6000
-    $TRUNCATE $file 6000
-    cmp $temp $file || error "$temp $file differ (truncate1)"
-
-    echo "12345" >>$temp
-    echo "12345" >>$file
-    cmp $temp $file || error "$temp $file differ (append1)"
-
-    echo "12345" >>$temp
-    echo "12345" >>$file
-    cmp $temp $file || error "$temp $file differ (append2)"
-
-    dd if=/dev/urandom of=$temp bs=$((big*2)) count=1k || \
-        error "dd of=$temp bs=$((big*2)) count=1k failed"
-    cp $temp $file
-    ls -lh $temp $file
-    cancel_lru_locks osc
-    cmp $temp $file || error "$temp $file differ"
-
-    rm -f $temp
-    true
-}
-
-test_155a() {
-    set_cache read on
-    set_cache writethrough on
-    test_155_load
-}
-run_test 155a "Verification of correctness: read cache:on write_cache:on"
-
-test_155b() {
-    set_cache read on
-    set_cache writethrough off
-    test_155_load
-}
-run_test 155b "Verification of correctness: read cache:on write_cache:off"
-
-test_155c() {
-    set_cache read off
-    set_cache writethrough on
-    test_155_load
-}
-run_test 155c "Verification of correctness: read cache:off write_cache:on"
-
-test_155d() {
-    set_cache read off
-    set_cache writethrough off
-    test_155_load
-}
-run_test 155d "Verification of correctness: read cache:off write_cache:off "
-
-test_156() {
-    local CPAGES=3
-    local BEFORE
-    local AFTER
-    local file="$DIR/$tfile"
-
-    log "Turn on read and write cache"
-    set_cache read on
-    set_cache writethrough on
-
-    log "Write data and read it back."
-    log "Read should be satisfied from the cache."
-    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-    BEFORE=`roc_hit`
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == CPAGES"; then
-        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-    log "Read again; it should be satisfied from the cache."
-    BEFORE=$AFTER
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == CPAGES"; then
-        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-
-    log "Turn off the read cache and turn on the write cache"
-    set_cache read off
-    set_cache writethrough on
-
-    log "Read again; it should be satisfied from the cache."
-    BEFORE=`roc_hit`
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == CPAGES"; then
-        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-    log "Read again; it should not be satisfied from the cache."
-    BEFORE=$AFTER
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == 0"; then
-        error "IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-    log "Write data and read it back."
-    log "Read should be satisfied from the cache."
-    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-    BEFORE=`roc_hit`
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == CPAGES"; then
-        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-    log "Read again; it should not be satisfied from the cache."
-    BEFORE=$AFTER
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == 0"; then
-        error "IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-
-    log "Turn off read and write cache"
-    set_cache read off
-    set_cache writethrough off
-
-    log "Write data and read it back"
-    log "It should not be satisfied from the cache."
-    rm -f $file
-    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-    cancel_lru_locks osc
-    BEFORE=`roc_hit`
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == 0"; then
-        error_ignore 20762 "IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-
-    log "Turn on the read cache and turn off the write cache"
-    set_cache read on
-    set_cache writethrough off
-
-    log "Write data and read it back"
-    log "It should not be satisfied from the cache."
-    rm -f $file
-    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-    BEFORE=`roc_hit`
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == 0"; then
-        error_ignore 20762 "IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-    log "Read again; it should be satisfied from the cache."
-    BEFORE=`roc_hit`
-    cancel_lru_locks osc
-    cat $file >/dev/null
-    AFTER=`roc_hit`
-    if ! let "AFTER - BEFORE == CPAGES"; then
-        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-    else
-        log "cache hits:: before: $BEFORE, after: $AFTER"
-    fi
-
-    rm -f $file
-}
-run_test 156 "Verification of tunables ============================"
-
-#Changelogs
-err17935 () {
-    if [ $MDSCOUNT -gt 1 ]; then
-	error_ignore 17935 $*
-    else
-	error $*
-    fi
-}
-test_160() {
-    USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
-    echo "Registered as changelog user $USER"
-    do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
-	grep -q $USER || error "User $USER not found in changelog_users"
-
-    # change something
-    mkdir -p $DIR/$tdir/pics/2008/zachy
-    touch $DIR/$tdir/pics/2008/zachy/timestamp
-    cp /etc/hosts $DIR/$tdir/pics/2008/zachy/pic1.jpg
-    mv $DIR/$tdir/pics/2008/zachy $DIR/$tdir/pics/zach
-    ln $DIR/$tdir/pics/zach/pic1.jpg $DIR/$tdir/pics/2008/portland.jpg
-    ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
-    rm $DIR/$tdir/pics/desktop.jpg
-
-    $LFS changelog $MDT0 | tail -5
-
-    echo "verifying changelog mask"
-    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog_mask="-mkdir"
-    mkdir -p $DIR/$tdir/pics/2009/sofia
-    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog_mask="+mkdir"
-    mkdir $DIR/$tdir/pics/2009/zachary
-    DIRS=$($LFS changelog $MDT0 | tail -5 | grep -c MKDIR)
-    [ $DIRS -eq 1 ] || err17935 "changelog mask count $DIRS != 1"
-
-    # verify contents
-    echo "verifying target fid"
-    fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
-	tail -1 | awk '{print $6}')
-    fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
-    [ "$fidc" == "t=$fidf" ] || \
-	err17935 "fid in changelog $fidc != file fid $fidf"
-    echo "verifying parent fid"
-    fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
-	tail -1 | awk '{print $7}')
-    fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
-    [ "$fidc" == "p=$fidf" ] || \
-	err17935 "pfid in changelog $fidc != dir fid $fidf"
-
-    USER_REC1=$(do_facet $SINGLEMDS lctl get_param -n \
-	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
-    $LFS changelog_clear $MDT0 $USER $(($USER_REC1 + 5))
-    USER_REC2=$(do_facet $SINGLEMDS lctl get_param -n \
-	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
-    echo "verifying user clear: $(( $USER_REC1 + 5 )) == $USER_REC2"
-    [ $USER_REC2 == $(($USER_REC1 + 5)) ] || \
-	err17935 "user index should be $(($USER_REC1 + 5)); is $USER_REC2"
-
-    MIN_REC=$(do_facet $SINGLEMDS lctl get_param mdd.$MDT0.changelog_users | \
-	awk 'min == "" || $2 < min {min = $2}; END {print min}')
-    FIRST_REC=$($LFS changelog $MDT0 | head -1 | awk '{print $1}')
-    echo "verifying min purge: $(( $MIN_REC + 1 )) == $FIRST_REC"
-    [ $FIRST_REC == $(($MIN_REC + 1)) ] || \
-	err17935 "first index should be $(($MIN_REC + 1)); is $FIRST_REC"
-
-    echo "verifying user deregister"
-    do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $USER
-    do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
-	grep -q $USER && error "User $USER still found in changelog_users"
-
-    USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
-	mdd.$MDT0.changelog_users | wc -l) - 2 ))
-    if [ $USERS -eq 0 ]; then
-	LAST_REC1=$(do_facet $SINGLEMDS lctl get_param -n \
-	    mdd.$MDT0.changelog_users | head -1 | awk '{print $3}')
-	touch $DIR/$tdir/chloe
-	LAST_REC2=$(do_facet $SINGLEMDS lctl get_param -n \
-	    mdd.$MDT0.changelog_users | head -1 | awk '{print $3}')
-	echo "verify changelogs are off if we were the only user: $LAST_REC1 == $LAST_REC2"
-	[ $LAST_REC1 == $LAST_REC2 ] || error "changelogs not off"
-    else
-	echo "$USERS other changelog users; can't verify off"
-    fi
-}
-run_test 160 "changelog sanity"
-
-test_161() {
-    mkdir -p $DIR/$tdir
-    cp /etc/hosts $DIR/$tdir/$tfile
-    mkdir $DIR/$tdir/foo1
-    mkdir $DIR/$tdir/foo2
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/sofia
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/zachary
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
-    local FID=$($LFS path2fid $DIR/$tdir/$tfile | tr -d '[')
-    if [ "$($LFS fid2path $DIR $FID | wc -l)" != "5" ]; then
-	$LFS fid2path $DIR $FID
-	err17935 "bad link ea"
-    fi
-    # middle
-    rm $DIR/$tdir/foo2/zachary
-    # last
-    rm $DIR/$tdir/foo2/thor
-    # first
-    rm $DIR/$tdir/$tfile
-    # rename
-    mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
-    if [ "$($LFS fid2path $DIR --link 1 $FID)" != "/$tdir/foo2/maggie" ]
-	then
-	$LFS fid2path $DIR $FID
-	err17935 "bad link rename"
-    fi
-    rm $DIR/$tdir/foo2/maggie
-
-    # overflow the EA
-    local longname=filename_avg_len_is_thirty_two_
-    createmany -l$DIR/$tdir/foo1/luna $DIR/$tdir/foo2/$longname 1000 || \
-	error "failed to hardlink many files"
-    links=$($LFS fid2path $DIR $FID | wc -l)
-    echo -n "${links}/1000 links in link EA"
-    [ ${links} -gt 60 ] || err17935 "expected at least 60 links in link EA"
-    unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
-	error "failed to unlink many hardlinks"
-}
-run_test 161 "link ea sanity"
-
-check_path() {
-    local expected=$1
-    shift
-    local fid=$2
-
-    local path=$(${LFS} fid2path $*)
-    RC=$?
-
-    if [ $RC -ne 0 ]; then
-      	err17935 "path looked up of $expected failed. Error $RC"
- 	return $RC
-    elif [ "${path}" != "${expected}" ]; then
-      	err17935 "path looked up \"${path}\" instead of \"${expected}\""
- 	return 2
-    fi
-    echo "fid $fid resolves to path $path"
-}
-
-test_162() {
-    # Make changes to filesystem
-    mkdir -p $DIR/$tdir/d2
-    touch $DIR/$tdir/d2/$tfile
-    touch $DIR/$tdir/d2/x1
-    touch $DIR/$tdir/d2/x2
-    mkdir -p $DIR/$tdir/d2/a/b/c
-    mkdir -p $DIR/$tdir/d2/p/q/r
-	# regular file
-    FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[')
-    check_path "/$tdir/d2/$tfile" $DIR $FID --link 0
-
-	# softlink
-    ln -s $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/slink
-    FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[')
-    check_path "/$tdir/d2/p/q/r/slink" $DIR $FID --link 0
-
-	# hardlink
-    ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
-    mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
-    FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[')
-    # fid2path dir/fsname should both work
-    check_path "/$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
-    check_path "/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
-
-    # hardlink count: check that there are 2 links
-    # Doesnt work with CMD yet: 17935
-	${LFS} fid2path $DIR $FID | wc -l | grep -q 2 || \
-		err17935 "expected 2 links"
-
-	# hardlink indexing: remove the first link
-    rm $DIR/$tdir/d2/p/q/r/hlink
-    check_path "/$tdir/d2/a/b/c/new_file" $DIR $FID --link 0
-
-	return 0
-}
-run_test 162 "path lookup sanity"
-
-test_163() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	copytool --test || { skip "copytool not runnable: $?" && return; }
-	copytool &
-	sleep 1
-	local uuid=$($LCTL get_param -n mdc.${FSNAME}-MDT0000-mdc-*.uuid)
-	# this proc file is temporary and linux-only
-	do_facet mds lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid || error "lnl send failed"
-	kill $!
-}
-run_test 163 "LustreNetLink kernelcomms"
-
-test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"
 	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
@@ -6530,12 +5665,12 @@ test_169() {
 	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
 	log "killing dd"
 	kill %+ || true # reads might have finished
-	echo "wait until dd is finished"
+	log "wait until dd is finished"
 	wait
 	log "removing the temporary file"
 	rm -rf $DIR/$tfile || error "tmp file removal failed"
 }
-run_test 169 "parallel read and truncate should not deadlock"
+run_test 154 "parallel read and truncate should not deadlock ======================="
 
 test_170() {
         $LCTL clear	# bug 18514
@@ -6587,444 +5722,6 @@ test_170() {
         true
 }
 run_test 170 "test lctl df to handle corrupted log ====================="
-
-test_171() { # bug20592
-#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
-        $LCTL set_param fail_loc=0x50e
-        $LCTL set_param fail_val=3000
-        multiop_bg_pause $DIR/$tfile Os || true
-        # cause log dump
-        sleep 3
-        if dmesg | grep "recursive fault"; then
-                error "caught a recursive fault"
-        fi
-        $LCTL set_param fail_loc=0
-        true
-}
-run_test 171 "test libcfs_debug_dumplog_thread stuck in do_exit() ======"
-
-# it would be good to share it with obdfilter-survey/libecho code
-setup_obdecho_osc () {
-        local rc=0
-        local ost_nid=$1
-        local obdfilter_name=$2
-        [ $rc -eq 0 ] && { $LCTL attach osc ${obdfilter_name}_osc     \
-                           ${obdfilter_name}_osc_UUID || rc=2; }
-        [ $rc -eq 0 ] && { $LCTL --device ${obdfilter_name}_osc setup \
-                           ${obdfilter_name}_UUID  $ost_nid || rc=3; }
-        return $rc
-}
-
-cleaup_obdecho_osc () {
-        local obdfilter_name=$1
-        $LCTL --device ${obdfilter_name}_osc cleanup >/dev/null
-        $LCTL --device ${obdfilter_name}_osc detach  >/dev/null
-        return 0
-}
-
-obdecho_create_test() {
-        local OBD=$1
-        local node=$2
-        local rc=0
-        do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||    \
-                           rc=2; }
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec create 1" ||      \
-                           rc=3; }
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 0 w 1" ||\
-                           rc=4; }
-        [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
-                                        "cleanup" || rc=5; }
-        [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec "    \
-                                        "detach" || rc=6; }
-        return $rc
-}
-
-test_180() {
-        local rc=0
-        local rmmod_local=0
-        local rmmod_remote=0
-
-        lsmod | grep -q obdecho || \
-                { load_module obdecho/obdecho && rmmod_local=1; }
-        OBD=$($LCTL dl | grep -v mdt | grep osc | awk '{print $4;exit}')
-        HOST=$($LCTL dl -t | grep -v mdt | grep osc | awk '{print $7;exit}')
-        OBD=`echo $OBD | sed 's/-osc-.*$//'`
-        [ "x$OBD" != "x" ] && { setup_obdecho_osc $HOST $OBD || rc=1; } || rc=1
-        [ $rc -eq 0 ] && { obdecho_create_test ${OBD}_osc client || rc=2; }
-        [ "x$OBD" != "x" ] && cleaup_obdecho_osc $OBD
-        [ $rmmod_local -eq 1 ] && rmmod obdecho
-        [ $rc -eq 0 ] || return $rc
-
-        do_facet ost "lsmod | grep -q obdecho || "                      \
-                     "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
-                     "modprobe obdecho; }" && rmmod_remote=1
-        OBD=$(do_facet ost $LCTL dl | awk '/obdfilter/ {print $4;exit}')
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
-        [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
-        [ $rc -eq 0 ] || return $rc
-
-        true
-}
-run_test 180 "test obdecho ============================================"
-
-# OST pools tests
-POOL=${POOL:-cea1}
-TGT_COUNT=$OSTCOUNT
-TGTPOOL_FIRST=1
-TGTPOOL_MAX=$(($TGT_COUNT - 1))
-TGTPOOL_STEP=2
-TGTPOOL_LIST=`seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`
-POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
-POOL_DIR=$POOL_ROOT/dir_tst
-POOL_FILE=$POOL_ROOT/file_tst
-
-check_file_in_pool()
-{
-	file=$1
-	res=$($GETSTRIPE $file | grep 0x | cut -f2)
-	for i in $res
-	do
-		found=$(echo :$TGTPOOL_LIST: | tr " " ":"  | grep :$i:)
-		if [[ "$found" == "" ]]
-		then
-			echo "pool list: $TGTPOOL_LIST"
-			echo "striping: $res"
-			error "$file not allocated in $POOL"
-			return 1
-		fi
-	done
-	return 0
-}
-
-trap "cleanup_pools $FSNAME" EXIT
-
-test_200a() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-    create_pool $FSNAME.$POOL || return $?
-	[ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] ||
-		error "$POOL not in lfs pool_list"
-}
-run_test 200a "Create new pool =========================================="
-
-test_200b() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	TGT=$(for i in $TGTPOOL_LIST; do printf "$FSNAME-OST%04x_UUID " $i; done)
-	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
-		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" ||
-		error "Add to pool failed"
-	local lfscount=$($LFS pool_list $FSNAME.$POOL | grep -c "\-OST")
-	local addcount=$((($TGTPOOL_MAX - $TGTPOOL_FIRST) / $TGTPOOL_STEP + 1))
-	[ $lfscount -eq $addcount ] ||
-		error "lfs pool_list bad ost count $lfscount != $addcount"
-}
-run_test 200b "Add targets to a pool ===================================="
-
-test_200c() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	mkdir -p $POOL_DIR
-	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
-	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
-}
-run_test 200c "Set pool on a directory ================================="
-
-test_200d() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	res=$($GETSTRIPE --pool $POOL_DIR | awk '/^pool:/ {print $2}')
-	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is $res, not $POOL"
-}
-run_test 200d "Check pool on a directory ==============================="
-
-test_200e() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	failed=0
-	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
-	do
-		file=$POOL_DIR/file-$i
-		touch $file
-		check_file_in_pool $file
-		if [[ $? != 0 ]]
-		then
-			failed=$(($failed + 1))
-		fi
-	done
-	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
-}
-run_test 200e "Check files allocation from directory pool =============="
-
-test_200f() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	mkdir -p $POOL_FILE
-	failed=0
-	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
-	do
-		file=$POOL_FILE/spoo-$i
-		$SETSTRIPE -p $POOL $file
-		check_file_in_pool $file
-		if [[ $? != 0 ]]
-		then
-			failed=$(($failed + 1))
-		fi
-	done
-	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
-}
-run_test 200f "Create files in a pool ==================================="
-
-test_200g() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	TGT=$($LCTL get_param -n lov.$FSNAME-clilov-*.pools.$POOL | tr '\n' ' ')
-	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST" | tr '\n' ' ')
-	[ "$res" = "$TGT" ] || error "Pools OSTs '$TGT' is not '$res' that lfs df reports"
-}
-run_test 200g "lfs df a pool ============================================"
-
-test_201a() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" ||
-		error "$TGT not removed from $FSNAME.$POOL"
-}
-run_test 201a "Remove a target from a pool ============================="
-
-test_201b() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
-	do
-		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
- 	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" "" ||
-		error "Pool $FSNAME.$POOL cannot be drained"
-	# striping on an empty/nonexistant pool should fall back to "pool of everything"
-	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
-	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
-		error "expected failure when creating file with empty pool"
-	return 0
-}
-run_test 201b "Remove all targets from a pool =========================="
-
-test_201c() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-	
-	sleep 2                        
-    # striping on an empty/nonexistant pool should fall back to "pool of everything"
-	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
-	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
-		error "expected failure when creating file with missing pool"
-
-	# get param should return err once pool is gone
-	if wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
-			echo foo" "foo"; then
-		remove_pool_from_list $FSNAME.$POOL
-		return 0
-	fi
-	error "Pool $FSNAME.$POOL is not destroyed"
-}
-run_test 201c "Remove a pool ============================================"
-
-cleanup_pools $FSNAME
-
-test_212() {
-	size=`date +%s`
-	size=$((size % 8192 + 1))
-	dd if=/dev/urandom of=$DIR/f212 bs=1k count=$size
-	sendfile $DIR/f212 $DIR/f212.xyz || error "sendfile wrong"
-	rm -f $DIR/f212 $DIR/f212.xyz
-}
-run_test 212 "Sendfile test ============================================"
-
-test_213() {
-	dd if=/dev/zero of=$DIR/$tfile bs=4k count=4
-	cancel_lru_locks osc
-	lctl set_param fail_loc=0x8000040f
-	# generate a read lock
-	cat $DIR/$tfile > /dev/null
-	# write to the file, it will try to cancel the above read lock.
-	cat /etc/hosts >> $DIR/$tfile
-}
-run_test 213 "OSC lock completion and cancel race don't crash - bug 18829"
-
-test_214() { # for bug 20133
-	mkdir -p $DIR/d214p/d214c
-	for (( i=0; i < 340; i++ )) ; do
-		touch $DIR/d214p/d214c/a$i
-	done
-
-	ls -l $DIR/d214p || error "ls -l $DIR/d214p failed"
-	mv $DIR/d214p/d214c $DIR/ || error "mv $DIR/d214p/d214c $DIR/ failed"
-	ls $DIR/d214c || error "ls $DIR/d214c failed"
-	rm -rf $DIR/d214* || error "rm -rf $DIR/d214* failed"
-}
-run_test 214 "hash-indexed directory test - bug 20133"
-
-# having "abc" as 1st arg, creates $TMP/lnet_abc.out and $TMP/lnet_abc.sys
-create_lnet_proc_files() {
-	cat /proc/sys/lnet/$1 >$TMP/lnet_$1.out || error "cannot read /proc/sys/lnet/$1"
-	sysctl lnet.$1 >$TMP/lnet_$1.sys_tmp || error "cannot read lnet.$1"
-
-	sed "s/^lnet.$1\ =\ //g" "$TMP/lnet_$1.sys_tmp" >$TMP/lnet_$1.sys
-	rm -f "$TMP/lnet_$1.sys_tmp"
-}
-
-# counterpart of create_lnet_proc_files
-remove_lnet_proc_files() {
-	rm -f $TMP/lnet_$1.out $TMP/lnet_$1.sys
-}
-
-# uses 1st arg as trailing part of filename, 2nd arg as description for reports,
-# 3rd arg as regexp for body
-check_lnet_proc_stats() {
-	local l=$(cat "$TMP/lnet_$1" |wc -l)
-	[ $l = 1 ] || (cat "$TMP/lnet_$1" && error "$2 is not of 1 line: $l")
-
-	grep -E "$3" "$TMP/lnet_$1" || (cat "$TMP/lnet_$1" && error "$2 misformatted")
-}
-
-# uses 1st arg as trailing part of filename, 2nd arg as description for reports,
-# 3rd arg as regexp for body, 4th arg as regexp for 1st line, 5th arg is
-# optional and can be regexp for 2nd line (lnet.routes case)
-check_lnet_proc_entry() {
-	local blp=2            # blp stands for 'position of 1st line of body'
-	[ "$5" = "" ] || blp=3 # lnet.routes case
-
-	local l=$(cat "$TMP/lnet_$1" |wc -l)
-	# subtracting one from $blp because the body can be empty
-	[ "$l" -ge "$(($blp - 1))" ] || (cat "$TMP/lnet_$1" && error "$2 is too short: $l")
-
-	sed -n '1 p' "$TMP/lnet_$1" |grep -E "$4" >/dev/null ||
-		(cat "$TMP/lnet_$1" && error "1st line of $2 misformatted")
-
-	[ "$5" = "" ] || sed -n '2 p' "$TMP/lnet_$1" |grep -E "$5" >/dev/null ||
-		(cat "$TMP/lnet_$1" && error "2nd line of $2 misformatted")
-
-	# bail out if any unexpected line happened
-	sed -n "$blp~1 p" "$TMP/lnet_$1" |grep -Ev "$3"
-	[ "$?" != 0 ] || error "$2 misformatted"
-}
-
-test_215() { # for bugs 18102, 21079, 21517
-	local N='(0|[1-9][0-9]*)'   # non-negative numeric
-	local P='[1-9][0-9]*'       # positive numeric
-	local I='(0|-?[1-9][0-9]*)' # any numeric (0 | >0 | <0)
-	local NET='[a-z][a-z0-9]*'  # LNET net like o2ib2
-	local ADDR='[0-9.]+'        # LNET addr like 10.0.0.1
-	local NID="$ADDR@$NET"      # LNET nid like 10.0.0.1@o2ib2
-
-	local L1 # regexp for 1st line
-	local L2 # regexp for 2nd line (optional)
-	local BR # regexp for the rest (body)
-
-	# /proc/sys/lnet/stats should look as 11 space-separated non-negative numerics
-	BR="^$N $N $N $N $N $N $N $N $N $N $N$"
-	create_lnet_proc_files "stats"
-	check_lnet_proc_stats "stats.out" "/proc/sys/lnet/stats" "$BR"
-	check_lnet_proc_stats "stats.sys" "lnet.stats" "$BR"
-	remove_lnet_proc_files "stats"
-
-	# /proc/sys/lnet/routes should look like this:
-	# Routing disabled/enabled
-	# net hops state router
-	# where net is a string like tcp0, hops >= 0, state is up/down,
-	# router is a string like 192.168.1.1@tcp2
-	L1="^Routing (disabled|enabled)$"
-	L2="^net +hops +state +router$"
-	BR="^$NET +$N +(up|down) +$NID$"
-	create_lnet_proc_files "routes"
-	check_lnet_proc_entry "routes.out" "/proc/sys/lnet/routes" "$BR" "$L1" "$L2"
-	check_lnet_proc_entry "routes.sys" "lnet.routes" "$BR" "$L1" "$L2"
-	remove_lnet_proc_files "routes"
-
-	# /proc/sys/lnet/routers should look like this:
-	# ref rtr_ref alive_cnt state last_ping ping_sent deadline down_ni router
-	# where ref > 0, rtr_ref > 0, alive_cnt >= 0, state is up/down,
-	# last_ping >= 0, ping_sent is boolean (0/1), deadline and down_ni are
-	# numeric (0 or >0 or <0), router is a string like 192.168.1.1@tcp2
-	L1="^ref +rtr_ref +alive_cnt +state +last_ping +ping_sent +deadline +down_ni +router$"
-	BR="^$P +$P +$N +(up|down) +$N +(0|1) +$I +$I +$NID$"
-	create_lnet_proc_files "routers"
-	check_lnet_proc_entry "routers.out" "/proc/sys/lnet/routers" "$BR" "$L1"
-	check_lnet_proc_entry "routers.sys" "lnet.routers" "$BR" "$L1"
-	remove_lnet_proc_files "routers"
-
-	# /proc/sys/lnet/peers should look like this:
-	# nid refs state max rtr min tx min queue
-	# where nid is a string like 192.168.1.1@tcp2, refs > 0,
-	# state is up/down/NA, max >= 0. rtr, min, tx, min are 
-	# numeric (0 or >0 or <0), queue >= 0.
-	L1="^nid +refs +state +max +rtr +min +tx +min +queue$"
-	BR="^$NID +$P +(up|down|NA) +$N +$I +$I +$I +$I +$N$"
-	create_lnet_proc_files "peers"
-	check_lnet_proc_entry "peers.out" "/proc/sys/lnet/peers" "$BR" "$L1"
-	check_lnet_proc_entry "peers.sys" "lnet.peers" "$BR" "$L1"
-	remove_lnet_proc_files "peers"
-
-	# /proc/sys/lnet/buffers  should look like this:
-	# pages count credits min
-	# where pages >=0, count >=0, credits and min are numeric (0 or >0 or <0)
-	L1="^pages +count +credits +min$"
-	BR="^ +$N +$N +$I +$I$"
-	create_lnet_proc_files "buffers"
-	check_lnet_proc_entry "buffers.out" "/proc/sys/lnet/buffers" "$BR" "$L1"
-	check_lnet_proc_entry "buffers.sys" "lnet.buffers" "$BR" "$L1"
-	remove_lnet_proc_files "buffers"
-
-	# /proc/sys/lnet/nis should look like this:
-	# nid status alive refs peer rtr max tx min
-	# where nid is a string like 192.168.1.1@tcp2, status is up/down,
-	# alive is numeric (0 or >0 or <0), refs > 0, peer >= 0,
-	# rtr >= 0, max >=0, tx and min are numeric (0 or >0 or <0).
-	L1="^nid +status +alive +refs +peer +rtr +max +tx +min$"
-	BR="^$NID +(up|down) +$I +$P +$N +$N +$N +$I +$I$"
-	create_lnet_proc_files "nis"
-	check_lnet_proc_entry "nis.out" "/proc/sys/lnet/nis" "$BR" "$L1"
-	check_lnet_proc_entry "nis.sys" "lnet.nis" "$BR" "$L1"
-	remove_lnet_proc_files "nis"
-
-	# can we successfully write to /proc/sys/lnet/stats?
-	echo "0" >/proc/sys/lnet/stats || error "cannot write to /proc/sys/lnet/stats"
-	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
-}
-run_test 215 "/proc/sys/lnet exists and has proper content - bugs 18102, 21079, 21517"
-
-test_216() { # bug 20317
-        local node
-        local p="$TMP/sanityN-$TESTNAME.parameters"
-        save_lustre_params $HOSTNAME "osc.*.contention_seconds" > $p
-        for node in $(osts_nodes); do
-                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
-                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
-                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
-        done
-        clear_osc_stats
-
-        # agressive lockless i/o settings
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
-        done
-        lctl set_param -n osc.*.contention_seconds 60
-
-        $DIRECTIO write $DIR/$tfile 0 10 4096
-        $CHECKSTAT -s 40960 $DIR/$tfile
-
-        # disable lockless i/o
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
-        done
-        lctl set_param -n osc.*.contention_seconds 0
-        clear_osc_stats
-
-        dd if=/dev/zero of=$DIR/$tfile count=0
-        $CHECKSTAT -s 0 $DIR/$tfile
-
-        restore_lustre_params <$p
-        rm -f $p
-        rm $DIR/$tfile
-}
-run_test 216 "check lockless direct write works and updates file size and kms correctly"
 
 #
 # tests that do cleanup/setup should be run at the end

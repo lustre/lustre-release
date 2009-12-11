@@ -47,6 +47,9 @@
 #include <limits.h>
 #include <sys/ioctl.h>
 
+#if 0
+#include <linux/ldiskfs_fs.h>
+#endif
 #include <liblustre.h>
 #include <lustre_lib.h>
 #include <obd.h>
@@ -77,16 +80,16 @@ static int usage(char *prog, FILE *out)
 
 int main(int argc, char ** argv)
 {
-        long i, count, iter = LONG_MAX, mode = 0, offset;
-        long int start, length = LONG_MAX, last;
+        long i, c, count, iter = LONG_MAX, mode = 0, offset;
+        long int start, length = LONG_MAX, last, rc = 0;
         char parent[4096], *t;
 	char *prog = argv[0], *base;
-	int seed = 0, rc;
+	int seed = 0;
 	int fd = -1;
 
-	while ((rc = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
 		char *e;
-		switch (rc) {
+		switch (c) {
 		case 'r':
 			seed = strtoul(optarg, &e, 0);
 			if (*e) {
@@ -97,7 +100,7 @@ int main(int argc, char ** argv)
 		case 'e':
 		case 'l':
 		case 's':
-			mode = rc;
+			mode = c;
 			break;
 		case '0':
 		case '1':
@@ -110,9 +113,9 @@ int main(int argc, char ** argv)
 		case '8':
 		case '9':
 			if (length == LONG_MAX)
-				length = rc - '0';
+				length = c - '0';
 			else
-				length = length * 10 + (rc - '0');
+				length = length * 10 + (c - '0');
 			break;
 		case 'h':
 			usage(prog, stdout);

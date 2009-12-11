@@ -1,4 +1,3 @@
-.tmp_versions
 .Xrefs
 config.log
 config.status
@@ -78,8 +77,3 @@ llverdev
 llverfs
 ll_getstripe_info
 it_test
-write_time_limit
-sendfile
-rwv
-copytool
-

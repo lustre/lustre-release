@@ -116,12 +116,17 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
                    req and send it again. If, however, the last sent
                    transno has been committed then we continue replay
                    from the next request. */
-                if (req->rq_transno > last_transno) {
-                        if (imp->imp_resend_replay)
-                                lustre_msg_add_flags(req->rq_reqmsg,
-                                                     MSG_RESENT);
+                if (imp->imp_resend_replay && 
+                    req->rq_transno == last_transno) {
+                        lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
                         break;
                 }
+
+                if (req->rq_transno > last_transno) {
+                        imp->imp_last_replay_transno = req->rq_transno;
+                        break;
+                }
+
                 req = NULL;
         }
 

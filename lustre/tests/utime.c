@@ -66,6 +66,9 @@ int main(int argc, char *argv[])
 	int rc;
         int c;
 
+	utb.actime = 200000;
+	utb.modtime = 100000;
+
         while ((c = getopt(argc, argv, "s:")) != -1) {
                 switch(c) {
                 case 's':
@@ -101,9 +104,9 @@ int main(int argc, char *argv[])
 		}
 
 		if (st.st_mtime < before_mknod || st.st_mtime > after_mknod) {
-			fprintf(stderr, "%s: bad mknod(%s) times %lu <= %lu <= "
-                                "%lu false\n", prog, filename, before_mknod,
-                                st.st_mtime, after_mknod);
+			fprintf(stderr,
+				"%s: bad mknod times %lu <= %lu <= %lu false\n",
+				prog, before_mknod, st.st_mtime, after_mknod);
 			return 4;
 		}
 
@@ -123,10 +126,9 @@ int main(int argc, char *argv[])
 
                         if (st2.st_mtime < before_mknod || 
                             st2.st_mtime > after_mknod) {
-                                fprintf(stderr, "%s: bad mknod(%s) times %lu "
-                                        " <= %lu <= %lu false\n", prog,
-                                        filename, before_mknod, st2.st_mtime,
-                                        after_mknod);
+                                fprintf(stderr, "%s: bad mknod times %lu <= %lu"
+                                        " <= %lu false\n", prog, before_mknod,
+                                        st2.st_mtime, after_mknod);
                                 return 6;
                         }
 
@@ -137,8 +139,7 @@ int main(int argc, char *argv[])
                 }
 	}
 
-	utb.actime = 200000;
-	utb.modtime = 100000;
+	/* See above */
 	rc = utime(filename, &utb);
 	if (rc) {
 		fprintf(stderr, "%s: utime(%s) failed: rc %d: %s\n",
@@ -154,14 +155,14 @@ int main(int argc, char *argv[])
 	}
 
 	if (st.st_mtime != utb.modtime ) {
-		fprintf(stderr, "%s: bad utime mtime(%s) %lu should be %lu\n",
-			prog, filename, st.st_mtime, utb.modtime);
+		fprintf(stderr, "%s: bad utime mtime %lu should be  %lu\n",
+			prog, st.st_mtime, utb.modtime);
 		return 9;
 	}
 
 	if (st.st_atime != utb.actime ) {
-		fprintf(stderr, "%s: bad utime atime(%s) %lu should be %lu\n",
-			prog, filename, st.st_atime, utb.actime);
+		fprintf(stderr, "%s: bad utime atime %lu should be  %lu\n",
+			prog, st.st_atime, utb.actime);
 		return 10;
 	}
 
@@ -180,16 +181,14 @@ int main(int argc, char *argv[])
 	}
 
 	if (st2.st_mtime != st.st_mtime) {
-		fprintf(stderr, "%s: not synced mtime(%s) between clients: "
-                        "%lu should be %lu\n", prog, secname,
-                        st2.st_mtime, st.st_mtime);
+		fprintf(stderr, "%s: not synced mtime between clients: %lu "
+                        "should be  %lu\n", prog, st2.st_mtime, st.st_mtime);
 		return 13;
 	}
 
 	if (st2.st_ctime != st.st_ctime) {
-		fprintf(stderr, "%s: not synced ctime(%s) between clients: "
-                        "%lu should be %lu\n", prog, secname,
-                        st2.st_ctime, st.st_ctime);
+		fprintf(stderr, "%s: not synced ctime between clients: %lu "
+                        " should be  %lu\n", prog, st2.st_ctime, st.st_ctime);
 		return 14;
 	}
 	

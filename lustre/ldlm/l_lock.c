@@ -60,7 +60,7 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
         if (ns_is_server(res->lr_namespace))
                 /* on server-side resource of lock doesn't change */
                 spin_unlock(&lock->l_lock);
-
+        
         lock_res(res);
         return res;
 }

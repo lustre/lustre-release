@@ -60,7 +60,7 @@ typedef struct {
 struct usock_peer_s;
 
 typedef struct {
-        cfs_socket_t        *uc_sock;        /* socket */
+        int                  uc_fd;          /* socket */
         int                  uc_type;        /* conn type */
         int                  uc_activeflag;  /* active side of connection? */
         int                  uc_flip;        /* is peer other endian? */
@@ -74,7 +74,7 @@ typedef struct {
         __u32                 uc_peer_ip;    /* IP address of the peer */
         __u16                 uc_peer_port;  /* port of the peer */
         struct list_head      uc_stale_list; /* orphaned connections */
-
+        
         /* Receive state */
         int                uc_rx_state;      /* message or hello state */
         ksock_hello_msg_t *uc_rx_hello;      /* hello buffer */
@@ -95,10 +95,10 @@ typedef struct {
         int                uc_tx_flag;       /* deadline valid? */
         int                uc_sending;       /* send op is in progress */
         usock_tx_t        *uc_tx_hello;      /* fake tx with hello */
-
+        
         cfs_atomic_t       uc_refcount;      /* # of users */
         pthread_mutex_t    uc_lock;          /* serialize */
-        int                uc_errored;       /* a flag for lnet_notify() */
+        int                uc_errored;       /* a flag for lnet_notify() */ 
 } usock_conn_t;
 
 /* Allowable conn states are: */
@@ -133,13 +133,12 @@ typedef struct usock_peer_s {
                                             * hasn't been set so far */
         cfs_atomic_t      up_refcount;     /* # of users */
         pthread_mutex_t   up_lock;         /* serialize */
-        int               up_errored;      /* a flag for lnet_notify() */
+        int               up_errored;      /* a flag for lnet_notify() */ 
         cfs_time_t        up_last_alive;   /* when the peer was last alive */
 } usock_peer_t;
 
 typedef struct {
-        cfs_socket_t     *upt_notifier[2];       /* notifier sockets: 1st for
-                                                  writing, 2nd for reading */
+        int               upt_notifier_fd;       /* notifier fd for writing */
         struct pollfd    *upt_pollfd;            /* poll fds */
         int               upt_nfds;              /* active poll fds */
         int               upt_npollfd;           /* allocated poll fds */
@@ -188,7 +187,7 @@ typedef struct {
         pthread_cond_t  un_cond;        /* condvar to wait for notifications */
         pthread_mutex_t un_lock;        /* a lock to protect un_cond */
 } usock_net_t;
-
+        
 typedef struct {
         int ut_poll_timeout;  /* the third arg for poll(2) (seconds) */
         int ut_timeout;       /* "stuck" socket timeout (seconds) */
@@ -277,7 +276,7 @@ int usocklnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
 int usocklnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
                   unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
-int usocklnd_accept(lnet_ni_t *ni, cfs_socket_t *sock);
+int usocklnd_accept(lnet_ni_t *ni, int sock_fd);
 
 int usocklnd_poll_thread(void *arg);
 int usocklnd_add_pollrequest(usock_conn_t *conn, int type, short value);
@@ -319,15 +318,12 @@ usock_conn_t *usocklnd_conn_allocate();
 void usocklnd_conn_free(usock_conn_t *conn);
 void usocklnd_tear_peer_conn(usock_conn_t *conn);
 void usocklnd_check_peer_stale(lnet_ni_t *ni, lnet_process_id_t id);
-int usocklnd_create_passive_conn(lnet_ni_t *ni,
-                                 cfs_socket_t *sock, usock_conn_t **connp);
+int usocklnd_create_passive_conn(lnet_ni_t *ni, int fd, usock_conn_t **connp);
 int usocklnd_create_active_conn(usock_peer_t *peer, int type,
                                 usock_conn_t **connp);
-int usocklnd_connect_srv_mode(cfs_socket_t **sockp,
-                              __u32 dst_ip, __u16 dst_port);
-int usocklnd_connect_cli_mode(cfs_socket_t **sockp,
-                              __u32 dst_ip, __u16 dst_port);
-int usocklnd_set_sock_options(cfs_socket_t *sock);
+int usocklnd_connect_srv_mode(int *fdp, __u32 dst_ip, __u16 dst_port);
+int usocklnd_connect_cli_mode(int *fdp, __u32 dst_ip, __u16 dst_port);
+int usocklnd_set_sock_options(int fd);
 usock_tx_t *usocklnd_create_noop_tx(__u64 cookie);
 usock_tx_t *usocklnd_create_tx(lnet_msg_t *lntmsg);
 void usocklnd_init_hello_msg(ksock_hello_msg_t *hello,
@@ -350,7 +346,7 @@ int usocklnd_find_or_create_peer(lnet_ni_t *ni, lnet_process_id_t id,
 int usocklnd_find_or_create_conn(usock_peer_t *peer, int type,
                                  usock_conn_t **connp,
                                  usock_tx_t *tx, usock_zc_ack_t *zc_ack,
-                                 int *send_immediately_flag);
+                                 int *send_immediately_flag);                                 
 void usocklnd_link_conn_to_peer(usock_conn_t *conn, usock_peer_t *peer, int idx);
 int usocklnd_invert_type(int type);
 void usocklnd_conn_new_state(usock_conn_t *conn, int new_state);

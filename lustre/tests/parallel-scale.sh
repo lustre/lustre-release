@@ -2,20 +2,20 @@
 #
 #set -vx
 
+set -e
+
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-#              bug 20670           21255 
-ALWAYS_EXCEPT="parallel_grouplock  statahead $PARALLEL_SCALE_EXCEPT"
-
 #
 # compilbench
 #
-cbench_DIR=${cbench_DIR:-""}
-cbench_IDIRS=${cbench_IDIRS:-4}
-cbench_RUNS=${cbench_RUNS:-4}	# FIXME: wiki page requirements is 30, do we really need 30 ?
+# Boulder cluster compilebench default location
+cbench_DIR=${cbench_DIR:-/testsuite/tests/$(arch)/compilebench}
+cbench_IDIRS=${cbench_IDIRS:-10}
+cbench_RUNS=${cbench_RUNS:-10}	# FIXME: wiki page requirements is 30, do we really need 30 ?
 
 if [ "$SLOW" = "no" ]; then
     cbench_IDIRS=2
@@ -25,7 +25,8 @@ fi
 #
 # metabench
 #
-METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
+# Boulder cluster metabench default location
+METABENCH=${METABENCH:-/testsuite/tests/$(arch)/METABENCH/src/metabench}
 mbench_NFILES=${mbench_NFILES:-30400}
 [ "$SLOW" = "no" ] && mbench_NFILES=10000
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
@@ -35,7 +36,8 @@ mbench_THREADS=${mbench_THREADS:-4}
 #
 # simul
 #
-SIMUL=${SIMUL:=$(which simul 2> /dev/null || true)}
+# Boulder cluster default location
+SIMUL=${SIMUL:-/testsuite/tests/$(arch)/simul/simul}
 # threads per client
 simul_THREADS=${simul_THREADS:-2}
 simul_REP=${simul_REP:-20}
@@ -44,14 +46,16 @@ simul_REP=${simul_REP:-20}
 #
 # connectathon
 #
-cnt_DIR=${cnt_DIR:-""}
+# Boulder cluster default location
+cnt_DIR=${cnt_DIR:-/testsuite/tests/$(arch)/connectathon}
 cnt_NRUN=${cnt_NRUN:-10}
 [ "$SLOW" = "no" ] && cnt_NRUN=2
 
 #
 # cascading rw
 #
-CASC_RW=${CASC_RW:-$(which cascading_rw 2> /dev/null || true)}
+# Boulder cluster default location
+CASC_RW=${CASC_RW:-/testsuite/tests/$(arch)/parallel/cascading_rw}
 # threads per client
 casc_THREADS=${casc_THREADS:-2}
 casc_REP=${casc_REP:-300}
@@ -60,7 +64,8 @@ casc_REP=${casc_REP:-300}
 #
 # IOR
 #
-IOR=${IOR:-$(which IOR 2> /dev/null || true)}
+# Boulder cluster default location
+IOR=${IOR:-/testsuite/tests/$(arch)/IOR/src/C/IOR}
 # threads per client
 ior_THREADS=${ior_THREADS:-2}
 ior_blockSize=${ior_blockSize:-6}	# Gb
@@ -78,25 +83,15 @@ write_REP=${write_REP:-10000}
 #
 # write_disjoint
 #
-WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null || true)}
+# Boulder cluster default location
+WRITE_DISJOINT=${WRITE_DISJOINT:-/testsuite/tests/x86_64/lustre/lustre/tests/write_disjoint}
 # threads per client
 wdisjoint_THREADS=${wdisjoint_THREADS:-4}
 wdisjoint_REP=${wdisjoint_REP:-10000}
 [ "$SLOW" = "no" ] && wdisjoint_REP=100
 
-#
-# parallel_grouplock
-#
-#
-PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock 2> /dev/null || true)}
-parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
-
 build_test_filter
 check_and_setup_lustre
-
-get_mpiuser_id $MPI_USER
-MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
-$GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
 print_opts () {
     local var
@@ -121,17 +116,17 @@ print_opts () {
 test_compilebench() {
     print_opts cbench_DIR cbench_IDIRS cbench_RUNS
 
-    [ x$cbench_DIR = x ] &&
-        { skip_env "compilebench not found" && return; }
+    [ -d $cbench_DIR ] || \
+        { skip "No compilebench found" && return; }
 
     [ -e $cbench_DIR/compilebench ] || \
-        { skip_env "No compilebench build" && return; }
+        { skip "No compilebench build" && return; }
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
     if [ $space -le $((680 * 1024 * cbench_IDIRS)) ]; then
         cbench_IDIRS=$(( space / 680 / 1024))
         [ $cbench_IDIRS = 0 ] && \
-            skip_env "Need free space atleast 680 Mb, have $space" && return
+            skip "Need free space atleast 680 Mb, have $space" && return
 
         log free space=$space, reducing initial dirs to $cbench_IDIRS
     fi
@@ -159,8 +154,8 @@ test_compilebench() {
 run_test compilebench "compilebench"
 
 test_metabench() {
-    [ x$METABENCH = x ] &&
-        { skip_env "metabench not found" && return; }
+    [ -e $METABENCH ] || \
+        { skip "metabench not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -196,8 +191,8 @@ test_metabench() {
 run_test metabench "metabench"
 
 test_simul() {
-    [ x$SIMUL = x ] &&
-        { skip_env "simul not found" && return; }
+    [ -e $SIMUL ] || \
+        { skip "simul not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -236,11 +231,11 @@ run_test simul "simul"
 test_connectathon() {
     print_opts cnt_DIR cnt_NRUN
 
-    [ x$cnt_DIR = x ] &&
-        { skip_env "connectathon dir not found" && return; }
+    [ -d $cnt_DIR ] || \
+        { skip "No connectathon dir found" && return; }
 
     [ -e $cnt_DIR/runtests ] || \
-        { skip_env "No connectathon runtests found" && return; }
+        { skip "No connectathon runtests found" && return; }
 
     local testdir=$DIR/d0.connectathon
     mkdir -p $testdir
@@ -269,8 +264,8 @@ test_connectathon() {
 run_test connectathon "connectathon"
 
 test_ior() {
-    [ x$IOR = x ] &&
-        { skip_env "IOR not found" && return; }
+    [ -e $IOR ] || \
+        { skip "IOR not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -283,7 +278,7 @@ test_ior() {
         echo "+ $space * 9/10 / 1024 / 1024 / $num_clients / $ior_THREADS"
         ior_blockSize=$(( space /2 /1024 /1024 / num_clients / ior_THREADS ))
         [ $ior_blockSize = 0 ] && \
-            skip_env "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
+            skip "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
 
         echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
     fi
@@ -321,13 +316,8 @@ test_ior() {
 run_test ior "ior"
  
 test_cascading_rw() {
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
-
-    [ x$CASC_RW = x ] &&
-        { skip_env "cascading_rw not found" && return; }
+    [ -e $CASC_RW ] || \
+        { skip "cascading_rw not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -366,7 +356,7 @@ run_test cascading_rw "cascading_rw"
 test_write_append_truncate() {
     # location is lustre/tests dir 
     if ! which write_append_truncate > /dev/null 2>&1 ; then
-        skip_env "write_append_truncate not found"
+        skip "write_append_truncate not found"
         return
     fi
 
@@ -405,8 +395,8 @@ test_write_append_truncate() {
 run_test write_append_truncate "write_append_truncate"
 
 test_write_disjoint() {
-    [ x$WRITE_DISJOINT = x ] &&
-        { skip_env "write_disjoint not found" && return; }
+    [ -e $WRITE_DISJOINT ] || \
+        { skip "write_disjoint not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -437,52 +427,6 @@ test_write_disjoint() {
     rm -rf $testdir
 }
 run_test write_disjoint "write_disjoint"
-
-test_parallel_grouplock() {
-    [ x$PARALLEL_GROUPLOCK = x ] &&
-        { skip "PARALLEL_GROUPLOCK not found" && return; }
-
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
-
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
-
-    print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
-
-    local testdir=$DIR/d0.parallel_grouplock
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-
-    do_nodes $clients "lctl set_param llite.*.max_rw_chunk=0" ||
-        error "set_param max_rw_chunk=0 failed "
-
-    local cmd
-    local status=0
-    local subtest
-    for i in $(seq 12); do
-        subtest="-t $i"
-        local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
-        echo "+ $cmd"
-
-        mpi_run -np $parallel_grouplock_MINTASKS -machinefile ${MACHINEFILE} $cmd
-        local rc=$?
-        if [ $rc != 0 ] ; then
-            error_noexit "parallel_grouplock subtests $subtest failed! $rc"
-        else
-            echo "parallel_grouplock subtests $subtest PASS"
-        fi
-        let status=$((status + rc))
-        # clear debug to collect one log per one test
-        do_nodes $(comma_list $(nodes_list)) lctl clear
-     done
-    [ $status -eq 0 ] || error "parallel_grouplock status: $status"
-    rm -rf $testdir
-}
-run_test parallel_grouplock "parallel_grouplock"
 
 statahead_NUMMNTPTS=${statahead_NUMMNTPTS:-5}
 statahead_NUMFILES=${statahead_NUMFILES:-500000}
@@ -542,13 +486,28 @@ test_statahead () {
             error_exit "Failed to mount lustre on ${mntpt_root}$i on $clients"
     done
 
-    do_rpc_nodes $clients cancel_lru_locks mdc
+    # cancel_lru_locks mdc
+    do_nodes $clients "lctl mark \\\"cancel_lru_locks mdc start\\\";
+for d in \\\$(lctl get_param -N ldlm.namespaces.\\\*.lru_size | egrep -i mdc); do
+lctl set_param -n \\\$d=clear;
+done;
+lctl get_param ldlm.namespaces.\\\*.lock_unused_count | egrep -i mdc | grep -v '=0';
+lctl mark \\\"cancel_lru_locks mdc stop\\\"; "
 
-    do_rpc_nodes $clients do_ls $mntpt_root $num_mntpts $dir
+    do_nodes $clients " for i in \\\$(seq 0 $num_mntpts); do
+cmd=\\\"ls -laf ${mntpt_root}\\\$i/$dir\\\";
+echo + \\\$cmd;
+\\\$cmd > /dev/null &
+pids=\\\"\\\$pids \\\$!\\\";
+done;
+echo pids=\\\$pids;
+for pid in \\\$pids; do
+    echo wait \\\$pid;
+    wait \\\$pid || exit \\\$?;
+done"
 
     cleanup_statahead $clients $mntpt_root $num_mntpts
 }
-
 run_test statahead "statahead test, multiple clients"
 
 equals_msg `basename $0`: test complete, cleaning up

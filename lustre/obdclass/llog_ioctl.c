@@ -147,7 +147,6 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 case OST_RAID1_REC:
                 case MDS_UNLINK_REC:
                 case MDS_SETATTR_REC:
-                case MDS_SETATTR64_REC:
                 case OBD_CFG_REC:
                 case LLOG_HDR_MAGIC: {
                          l = snprintf(out, remains, "[index]: %05d  [type]: "
@@ -437,8 +436,8 @@ int llog_catalog_list(struct obd_device *obd, int count,
         if (!idarray)
                 RETURN(-ENOMEM);
 
-        mutex_down(&obd->obd_olg.olg_cat_processing);
-        rc = llog_get_cat_list(obd, name, 0, count, idarray);
+        mutex_down(&obd->obd_llog_cat_process);
+        rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out, rc);
 
@@ -458,7 +457,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         }
 out:
         /* release semaphore */
-        mutex_up(&obd->obd_olg.olg_cat_processing);
+        mutex_up(&obd->obd_llog_cat_process);
 
         OBD_VFREE(idarray, size);
         RETURN(rc);

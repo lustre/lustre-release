@@ -59,6 +59,10 @@ static char *routes = "";
 CFS_MODULE_PARM(routes, "s", charp, 0444,
                 "routes to non-local networks");
 
+static char *portals_compatibility = "none";
+CFS_MODULE_PARM(portals_compatibility, "s", charp, 0444,
+                "wire protocol compatibility: 'strong'|'weak'|'none'");
+
 char *
 lnet_get_routes(void)
 {
@@ -86,6 +90,28 @@ lnet_get_networks(void)
                 return networks;
 
         return "tcp";
+}
+
+int
+lnet_get_portals_compatibility(void)
+{
+        if (!strcmp(portals_compatibility, "none")) {
+                return 0;
+        }
+
+        if (!strcmp(portals_compatibility, "weak")) {
+                LCONSOLE_WARN("Starting in weak portals-compatible mode\n");
+                return 1;
+        }
+
+        if (!strcmp(portals_compatibility, "strong")) {
+                LCONSOLE_WARN("Starting in strong portals-compatible mode\n");
+                return 2;
+        }
+
+        LCONSOLE_ERROR_MSG(0x102, "portals_compatibility=\"%s\" not supported\n",
+                           portals_compatibility);
+        return -EINVAL;
 }
 
 void
@@ -167,6 +193,12 @@ lnet_get_networks (void)
         }
 
         return default_networks;
+}
+
+int
+lnet_get_portals_compatibility(void)
+{
+        return 0;
 }
 
 # ifndef HAVE_LIBPTHREAD
@@ -309,7 +341,7 @@ lnet_find_lnd_by_type (int type)
         list_for_each (tmp, &the_lnet.ln_lnds) {
                 lnd = list_entry(tmp, lnd_t, lnd_list);
 
-                if ((int)lnd->lnd_type == type)
+                if (lnd->lnd_type == type)
                         return lnd;
         }
 
@@ -560,7 +592,7 @@ lnet_init_finalizers(void)
 #ifdef __KERNEL__
         int    i;
 
-        the_lnet.ln_nfinalizers = (int) num_online_cpus();
+        the_lnet.ln_nfinalizers = num_online_cpus();
 
         LIBCFS_ALLOC(the_lnet.ln_finalizers,
                      the_lnet.ln_nfinalizers *
@@ -779,7 +811,7 @@ lnet_net2ni_locked (__u32 net)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (LNET_NIDNET(ni->ni_nid) == net) {
+                if (lnet_ptlcompat_matchnet(LNET_NIDNET(ni->ni_nid), net)) {
                         lnet_ni_addref_locked(ni);
                         return ni;
                 }
@@ -811,7 +843,7 @@ lnet_nid2ni_locked (lnet_nid_t nid)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (ni->ni_nid == nid) {
+                if (lnet_ptlcompat_matchnid(ni->ni_nid, nid)) {
                         lnet_ni_addref_locked(ni);
                         return ni;
                 }
@@ -835,9 +867,11 @@ lnet_islocalnid (lnet_nid_t nid)
 }
 
 int
-lnet_count_acceptor_nis (void)
+lnet_count_acceptor_nis (lnet_ni_t **first_ni)
 {
-        /* Return the # of NIs that need the acceptor. */
+        /* Return the # of NIs that need the acceptor.  Return the first one in
+         * *first_ni so the acceptor can pass it connections "blind" to retain
+         * binary compatibility. */
         int                count = 0;
 #if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
         struct list_head  *tmp;
@@ -847,8 +881,14 @@ lnet_count_acceptor_nis (void)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (ni->ni_lnd->lnd_accept != NULL)
+                if (ni->ni_lnd->lnd_accept != NULL) {
+                        /* This LND uses the acceptor */
+                        if (count == 0 && first_ni != NULL) {
+                                lnet_ni_addref_locked(ni);
+                                *first_ni = ni;
+                        }
                         count++;
+                }
         }
 
         LNET_UNLOCK();
@@ -1086,6 +1126,17 @@ lnet_startup_lndnis (void)
                        ni->ni_peertxcredits, ni->ni_txcredits,
                        ni->ni_peerrtrcredits, ni->ni_peertimeout);
 
+                /* Handle nidstrings for network 0 just like this one */
+                if (the_lnet.ln_ptlcompat > 0) {
+                        if (nicount > 0) {
+                                LCONSOLE_ERROR_MSG(0x108, "Can't run > 1 "
+                                       "network when portals_compatibility is "
+                                       "set\n");
+                                goto failed;
+                        }
+                        libcfs_setnet0alias(lnd->lnd_type);
+                }
+
                 nicount++;
         }
 
@@ -1114,15 +1165,22 @@ lnet_startup_lndnis (void)
 int
 LNetInit(void)
 {
+        int    rc;
+
         lnet_assert_wire_constants ();
         LASSERT (!the_lnet.ln_init);
 
         memset(&the_lnet, 0, sizeof(the_lnet));
 
+        rc = lnet_get_portals_compatibility();
+        if (rc < 0)
+                return rc;
+
         lnet_init_locks();
+        the_lnet.ln_ptlcompat = rc;
         the_lnet.ln_refcount = 0;
         the_lnet.ln_init = 1;
-        LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
+        the_lnet.ln_rc_eqh = LNET_EQ_NONE;
         CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
         CFS_INIT_LIST_HEAD(&the_lnet.ln_zombie_rcd);
 
@@ -1273,7 +1331,7 @@ int
 LNetCtl(unsigned int cmd, void *arg)
 {
         struct libcfs_ioctl_data *data = arg;
-        lnet_process_id_t         id = {0};
+        lnet_process_id_t         id;
         lnet_ni_t                *ni;
         int                       rc;
 
@@ -1308,8 +1366,7 @@ LNetCtl(unsigned int cmd, void *arg)
                                                     (time_t)data->ioc_u64[0]));
 
         case IOC_LIBCFS_PORTALS_COMPATIBILITY:
-                /* This can be removed once lustre stops calling it */
-                return 0;
+                return the_lnet.ln_ptlcompat;
 
         case IOC_LIBCFS_LNET_DIST:
                 rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);
@@ -1326,9 +1383,9 @@ LNetCtl(unsigned int cmd, void *arg)
                 return 0;
 
         case IOC_LIBCFS_PING:
-                id.nid = data->ioc_nid;
-                id.pid = data->ioc_u32[0];
-                rc = lnet_ping(id, data->ioc_u32[1], /* timeout */
+                rc = lnet_ping((lnet_process_id_t) {.nid = data->ioc_nid,
+                                                    .pid = data->ioc_u32[0]},
+                               data->ioc_u32[1], /* timeout */
                                (lnet_process_id_t *)data->ioc_pbuf1,
                                data->ioc_plen1/sizeof(lnet_process_id_t));
                 if (rc < 0)
@@ -1339,17 +1396,17 @@ LNetCtl(unsigned int cmd, void *arg)
         case IOC_LIBCFS_DEBUG_PEER: {
                 /* CAVEAT EMPTOR: this one designed for calling directly; not
                  * via an ioctl */
-                id = *((lnet_process_id_t *) arg);
+                lnet_process_id_t *id = arg;
 
-                lnet_debug_peer(id.nid);
+                lnet_debug_peer(id->nid);
 
-                ni = lnet_net2ni(LNET_NIDNET(id.nid));
+                ni = lnet_net2ni(LNET_NIDNET(id->nid));
                 if (ni == NULL) {
-                        CDEBUG(D_WARNING, "No NI for %s\n", libcfs_id2str(id));
+                        CDEBUG(D_WARNING, "No NI for %s\n", libcfs_id2str(*id));
                 } else {
                         if (ni->ni_lnd->lnd_ctl == NULL) {
                                 CDEBUG(D_WARNING, "No ctl for %s\n",
-                                       libcfs_id2str(id));
+                                       libcfs_id2str(*id));
                         } else {
                                 (void)ni->ni_lnd->lnd_ctl(ni, cmd, arg);
                         }
@@ -1416,7 +1473,7 @@ lnet_create_ping_info(void)
         int               i;
         int               n;
         int               rc;
-        unsigned int      infosz;
+        int               infosz;
         lnet_ni_t        *ni;
         lnet_process_id_t id;
         lnet_ping_info_t *pinfo;
@@ -1488,9 +1545,7 @@ lnet_destroy_ping_info(void)
 int
 lnet_ping_target_init(void)
 {
-        lnet_md_t         md = {0};
         lnet_handle_me_t  meh;
-        lnet_process_id_t id;
         int               rc;
         int               rc2;
         int               infosz;
@@ -1507,12 +1562,10 @@ lnet_ping_target_init(void)
                 goto failed_0;
         }
 
-        memset(&id, 0, sizeof(lnet_process_id_t));
-        id.nid = LNET_NID_ANY;
-        id.pid = LNET_PID_ANY;
-
-        rc = LNetMEAttach(LNET_RESERVED_PORTAL, id,
-                          LNET_PROTO_PING_MATCHBITS, 0,
+        rc = LNetMEAttach(LNET_RESERVED_PORTAL,
+                          (lnet_process_id_t){.nid = LNET_NID_ANY,
+                                              .pid = LNET_PID_ANY},
+                          LNET_PROTO_PING_MATCHBITS, 0LL,
                           LNET_UNLINK, LNET_INS_AFTER,
                           &meh);
         if (rc != 0) {
@@ -1520,19 +1573,16 @@ lnet_ping_target_init(void)
                 goto failed_1;
         }
 
-        /* initialize md content */
         infosz = offsetof(lnet_ping_info_t,
                           pi_ni[the_lnet.ln_ping_info->pi_nnis]);
-        md.start     = the_lnet.ln_ping_info;
-        md.length    = infosz;
-        md.threshold = LNET_MD_THRESH_INF;
-        md.max_size  = 0;
-        md.options   = LNET_MD_OP_GET | LNET_MD_TRUNCATE |
-                       LNET_MD_MANAGE_REMOTE;
-        md.user_ptr  = NULL;
-        md.eq_handle = the_lnet.ln_ping_target_eq;
-
-        rc = LNetMDAttach(meh, md,
+        rc = LNetMDAttach(meh,
+                          (lnet_md_t){.start = the_lnet.ln_ping_info,
+                                      .length = infosz,
+                                      .threshold = LNET_MD_THRESH_INF,
+                                      .options = (LNET_MD_OP_GET |
+                                                  LNET_MD_TRUNCATE |
+                                                  LNET_MD_MANAGE_REMOTE),
+                                      .eq_handle = the_lnet.ln_ping_target_eq},
                           LNET_RETAIN,
                           &the_lnet.ln_ping_target_md);
         if (rc != 0) {
@@ -1596,7 +1646,6 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         lnet_handle_eq_t     eqh;
         lnet_handle_md_t     mdh;
         lnet_event_t         event;
-        lnet_md_t            md = {0};
         int                  which;
         int                  unlinked = 0;
         int                  replied = 0;
@@ -1630,16 +1679,13 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 goto out_0;
         }
 
-        /* initialize md content */
-        md.start     = info;
-        md.length    = infosz;
-        md.threshold = 2; /*GET/REPLY*/
-        md.max_size  = 0;
-        md.options   = LNET_MD_TRUNCATE;
-        md.user_ptr  = NULL;
-        md.eq_handle = eqh;
-
-        rc = LNetMDBind(md, LNET_UNLINK, &mdh);
+        rc = LNetMDBind((lnet_md_t){.start = info,
+                                    .length = infosz,
+                                    .threshold = 2, /* GET/REPLY */
+                                    .options = LNET_MD_TRUNCATE,
+                                    .eq_handle = eqh},
+                        LNET_UNLINK,
+                        &mdh);
         if (rc != 0) {
                 CERROR("Can't bind MD: %d\n", rc);
                 goto out_1;

@@ -40,30 +40,22 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 #endif
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
 
+
 /* mgs_llog.c */
 int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                          struct vfsmount *inmnt,
                          struct list_head *dentry_list);
 
-#define MGSSELF_NAME    "_mgs"
-
-struct mgs_tgt_srpc_conf {
-        struct mgs_tgt_srpc_conf  *mtsc_next;
-        char                      *mtsc_tgt;
-        struct sptlrpc_rule_set    mtsc_rset;
-};
-
-#define INDEX_MAP_SIZE  8192     /* covers indicies to FFFF */
+#define INDEX_MAP_SIZE 8192     /* covers indicies to FFFF */
 #define FSDB_LOG_EMPTY  0x0001  /* missing client log */
 #define FSDB_OLDLOG14   0x0002  /* log starts in old (1.4) style */
-
 
 struct fs_db {
         char              fsdb_name[9];
@@ -73,27 +65,15 @@ struct fs_db {
         void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
         /* COMPAT_146 these items must be recorded out of the old client log */
         char             *fsdb_clilov;         /* COMPAT_146 client lov name */
-        char             *fsdb_clilmv;
         char             *fsdb_mdtlov;         /* COMPAT_146 mds lov name */
-        char             *fsdb_mdtlmv;
         char             *fsdb_mdc;            /* COMPAT_146 mdc name */
         /* end COMPAT_146 */
         __u32             fsdb_flags;
         __u32             fsdb_gen;
-
-        /* in-memory copy of the srpc rules, guarded by fsdb_sem */
-        struct sptlrpc_rule_set   fsdb_srpc_gen;
-        struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
-        unsigned int              fsdb_fl_udesc:1,
-                                  fsdb_fl_mgsself:1,
-                                  fsdb_fl_oscname_18:1;
 };
 
 int mgs_init_fsdb_list(struct obd_device *obd);
 int mgs_cleanup_fsdb_list(struct obd_device *obd);
-int mgs_find_or_make_fsdb(struct obd_device *obd, char *name, 
-                          struct fs_db **dbh);
-int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd, struct fs_db *fsdb);
 int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);
@@ -102,17 +82,16 @@ int mgs_erase_log(struct obd_device *obd, char *name);
 int mgs_erase_logs(struct obd_device *obd, char *fsname);
 int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
 
-int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
-                 char *poolname, char *fsname, char *ostname);
-
 /* mgs_fs.c */
-int mgs_client_add(struct obd_device *obd, struct obd_export *exp,
+int mgs_client_add(struct obd_device *obd,
+                   struct obd_export *exp,
                    void *localdata);
 int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
 
 #define strsuf(buf, suffix) (strcmp((buf)+strlen(buf)-strlen(suffix), (suffix)))
+
 #ifdef LPROCFS
 int lproc_mgs_setup(struct obd_device *dev);
 int lproc_mgs_cleanup(struct obd_device *obd);

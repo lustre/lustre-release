@@ -12,13 +12,25 @@ mkdir -p ${LOG%/*}
 rm -f $LOG $DEBUGLOG
 exec 2>$DEBUGLOG
 
-. $(dirname $0)/functions.sh
+if [ -z "$MOUNT" -o -z "$END_RUN_FILE" -o -z "$LOAD_PID_FILE" ]; then
+    echo "The following must be set: MOUNT END_RUN_FILE LOAD_PID_FILE"
+    exit 1
+fi
 
-assert_env MOUNT END_RUN_FILE LOAD_PID_FILE
+echoerr () { echo "$@" 1>&2 ; }
+
+signaled() {
+    trap 0
+    echoerr "$(date +'%F %H:%M:%S'): client load was signaled to terminate"
+    kill  $load_pid 
+    kill -TERM -$PPID
+    sleep 5
+    kill -KILL -$PPID
+}
 
 trap signaled TERM
 
-# recovery-*-scale scripts use this to signal the client loads to die
+# recovery-mds-scale uses this to signal the client loads to die
 echo $$ >$LOAD_PID_FILE
 
 TESTDIR=$MOUNT/d0.dbench-$(hostname)

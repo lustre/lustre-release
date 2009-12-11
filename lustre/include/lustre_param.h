@@ -45,7 +45,6 @@
 
 /* obd_config.c */
 int class_find_param(char *buf, char *key, char **valp);
-int class_get_next_param(char **params, char *copy);
 int class_match_param(char *buf, char *key, char **valp);
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
 /* obd_mount.c */
@@ -55,40 +54,30 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 
 /****************** User-settable parameter keys *********************/
-/* e.g.
+/* e.g. 
         tunefs.lustre --param="failover.node=192.168.0.13@tcp0" /dev/sda
         lctl conf_param testfs-OST0000 failover.node=3@elan,192.168.0.3@tcp0
                     ... testfs-MDT0000.lov.stripesize=4M
                     ... testfs-OST0000.ost.client_cache_seconds=15
-                    ... testfs.sys.timeout=<secs>
+                    ... testfs.sys.timeout=<secs> 
                     ... testfs.llite.max_read_ahead_mb=16
 */
 
 /* System global or special params not handled in obd's proc */
-#define PARAM_TIMEOUT              "timeout="          /* global */
-#define PARAM_LDLM_TIMEOUT         "ldlm_timeout="     /* global */
-#define PARAM_AT_MIN               "at_min="           /* global */
-#define PARAM_AT_MAX               "at_max="           /* global */
-#define PARAM_AT_EXTRA             "at_extra="         /* global */
-#define PARAM_AT_EARLY_MARGIN      "at_early_margin="  /* global */
-#define PARAM_AT_HISTORY           "at_history="       /* global */
+#define PARAM_SYS_TIMEOUT          "sys.timeout="      /* global */
+#define PARAM_SYS_LDLM_TIMEOUT     "sys.ldlm_timeout=" /* global */
 #define PARAM_MGSNODE              "mgsnode="          /* during mount */
 #define PARAM_FAILNODE             "failover.node="    /* llog generation */
 #define PARAM_FAILMODE             "failover.mode="    /* llog generation */
 #define PARAM_ACTIVE               "active="           /* llog generation */
+#define PARAM_MDT_UPCALL           "mdt.group_upcall=" /* mds group upcall */
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
 #define PARAM_OST                  "ost."
 #define PARAM_OSC                  "osc."
 #define PARAM_MDT                  "mdt."
-#define PARAM_MDD                  "mdd."
 #define PARAM_MDC                  "mdc."
 #define PARAM_LLITE                "llite."
 #define PARAM_LOV                  "lov."
-#define PARAM_SYS                  "sys."              /* global */
-#define PARAM_SRPC                 "srpc."
-#define PARAM_SRPC_FLVR            "srpc.flavor."
-#define PARAM_SRPC_UDESC           "srpc.udesc.cli2mdt"
-#define PARAM_SEC                  "security."
 
 #endif /* _LUSTRE_PARAM_H */

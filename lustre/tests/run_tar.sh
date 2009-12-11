@@ -12,30 +12,37 @@ mkdir -p ${LOG%/*}
 rm -f $LOG $DEBUGLOG
 exec 2>$DEBUGLOG
 
-. $(dirname $0)/functions.sh
+if [ -z "$MOUNT" -o -z "$END_RUN_FILE" -o -z "$LOAD_PID_FILE" ]; then
+    echo "The following must be set: MOUNT END_RUN_FILE LOAD_PID_FILE"
+    exit 1
+fi
 
-assert_env MOUNT END_RUN_FILE LOAD_PID_FILE
+echoerr () { echo "$@" 1>&2 ; }
+
+signaled() {
+    echoerr "$(date +'%F %H:%M:%S'): client load was signaled to terminate"
+    kill -TERM -$PPID
+    sleep 5
+    kill -KILL -$PPID
+}
 
 trap signaled TERM
 
-# recovery-*-scale scripts use this to signal the client loads to die
+# recovery-mds-scale uses this to signal the client loads to die
 echo $$ >$LOAD_PID_FILE
 
 TESTDIR=$MOUNT/d0.tar-$(hostname)
-
-do_tar() {
-    tar cf - /etc | tar xf - 2>&1 | tee $LOG
-    return ${PIPESTATUS[1]}
-}
 
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
     echoerr "$(date +'%F %H:%M:%S'): tar run starting"
     mkdir -p $TESTDIR
     cd $TESTDIR
-    do_tar &
-    wait $!
-    RC=$?
+    tar cf - /etc | tar xf - 2>&1 | tee $LOG &
+    load_pid=$!
+ps -e f -o "pid ppid pgrp comm" >$TMP/client-load.ps-list
+    wait $load_pid
+    RC=${PIPESTATUS[0]}
     PREV_ERRORS=$(grep "exit delayed from previous errors" $LOG) || true
     if [ $RC -ne 0 -a "$ERRORS_OK" -a "$PREV_ERRORS" ]; then
         echoerr "$(date +'%F %H:%M:%S'): tar errors earlier, ignoring"

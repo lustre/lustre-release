@@ -485,8 +485,10 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
 
         rx->rx_nob = nob;                       /* Can trust 'nob' now */
 
-        if (conn->ibc_peer->ibp_nid != msg->ibm_srcnid ||
-            kibnal_data.kib_ni->ni_nid != msg->ibm_dstnid ||
+        if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                     msg->ibm_srcnid) ||
+            !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 CERROR ("Stale rx from %s\n",
@@ -2426,7 +2428,8 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 goto reject;
         }
 
-        if (kibnal_data.kib_ni->ni_nid != rxmsg.ibm_dstnid) {
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     rxmsg.ibm_dstnid)) {
                 CERROR("Can't accept %s: bad dst nid %s\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid),
                        libcfs_nid2str(rxmsg.ibm_dstnid));
@@ -2885,7 +2888,8 @@ kibnal_check_connreply (kib_conn_t *conn)
                 }
 
                 read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                if (kibnal_data.kib_ni->ni_nid == msg.ibm_dstnid &&
+                if (lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                            msg.ibm_dstnid) &&
                     msg.ibm_dststamp == kibnal_data.kib_incarnation)
                         rc = 0;
                 else
@@ -3579,7 +3583,7 @@ kibnal_scheduler(void *arg)
                         spin_unlock_irqrestore(&kibnal_data.kib_sched_lock,
                                                flags);
 
-                        our_cond_resched();
+                        cfs_cond_resched();
                         busy_loops = 0;
 
                         spin_lock_irqsave(&kibnal_data.kib_sched_lock, flags);

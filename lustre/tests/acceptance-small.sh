@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE LUSTRE_RSYNC_TEST METADATA_UPDATES OST_POOLS SANITY_BENCHMARK"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA PERFORMANCE_SANITY RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE PARALLEL_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -35,7 +35,6 @@ if [ "$ACC_SM_ONLY" ]; then
 	export ${O}="yes"
     done
 fi
-LFSCK="no" # bug 13698
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
@@ -46,23 +45,14 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 
-if $GSS; then
-    # liblustre doesn't support GSS
-    export LIBLUSTRE=no
-else
-    export SANITY_GSS="no"
-fi
-
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
 setup_if_needed() {
-    nfs_client_mode && return
-
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
-        check_config_clients $MOUNT
+        check_config $MOUNT
         init_facets_vars
         init_param_vars
         return
@@ -110,7 +100,12 @@ for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	. $LUSTRE/tests/cfg/$NAME.sh
 
-	assert_env mds_HOST MDS_MKFS_OPTS 
+	if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
+	    ! -f `dirname $0`/../mds/mds.ko ]; then
+	    export CLIENTMODSONLY=true
+	fi
+	
+	assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 	assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 	assert_env FSNAME MOUNT MOUNT2
 
@@ -274,11 +269,10 @@ for NAME in $CONFIGS; do
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
-		FSX_SEED=${FSX_SEED:-$RANDOM}
 		rm -f $MOUNT/fsxfile
 		$LFS setstripe -c -1 $MOUNT/fsxfile
-		echo Using FSX_SEED=$FSX_SEED FSX_SIZE=$FSX_SIZE COUNT=$COUNT
-		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
+		echo Using FSX_SIZE=$FSX_SIZE COUNT=$COUNT
+		./fsx -c 50 -p 1000 -P $TMP -l $FSX_SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		$CLEANUP
@@ -288,7 +282,15 @@ for NAME in $CONFIGS; do
 
 	if [ "$SANITYN" != "no" ]; then
 	        title sanityN
-		bash sanityN.sh
+		$DEBUG_OFF
+
+		mkdir -p $MOUNT2
+		mount_client $MOUNT2
+		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
+		START=: CLEAN=: bash sanityN.sh
+		[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
+
+		$DEBUG_ON
 		$CLEANUP
 		$SETUP
 		SANITYN="done"
@@ -350,12 +352,6 @@ for NAME in $CONFIGS; do
 	fi
 done
 
-if [ "$SANITY_BENCHMARK" != "no" ]; then
-        title sanity-benchmark
-	bash sanity-benchmark.sh
-	SANITY_BENCHMARK="done"
-fi
-
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
@@ -392,13 +388,6 @@ if [ "$REPLAY_DUAL" != "no" ]; then
         REPLAY_DUAL="done"
 fi
 
-[ "$REPLAY_VBR" != "no" ] && skip_remmds replay-vbr && REPLAY_VBR=no && MSKIPPED=1
-if [ "$REPLAY_VBR" != "no" ]; then
-        title replay-vbr
-        bash replay-vbr.sh
-        REPLAY_VBR="done"
-fi
-
 [ "$INSANITY" != "no" ] && skip_remmds insanity && INSANITY=no && MSKIPPED=1
 [ "$INSANITY" != "no" ] && skip_remost insanity && INSANITY=no && OSKIPPED=1
 if [ "$INSANITY" != "no" ]; then
@@ -415,38 +404,6 @@ if [ "$SANITY_QUOTA" != "no" ]; then
         SANITY_QUOTA="done"
 fi
 
-[ "$SANITY_SEC" != "no" ] && skip_remmds sanity-sec && SANITY_SEC=no && MSKIPPED=1
-[ "$SANITY_SEC" != "no" ] && skip_remost sanity-sec && SANITY_SEC=no && OSKIPPED=1
-if [ "$SANITY_SEC" != "no" ]; then
-        title sanity-sec
-        bash sanity-sec.sh
-        SANITY_SEC="done"
-fi
-
-[ "$SANITY_GSS" != "no" ] && skip_remmds sanity-gss && SANITY_GSS=no && MSKIPPED=1
-if [ "$SANITY_GSS" != "no" ]; then
-        title sanity-gss
-        bash sanity-gss.sh
-        SANITY_GSS="done"
-fi
-
-
-[ "$LUSTRE_RSYNC_TEST" != "no" ] && skip_remmds lustre_rsync-test && LUSTRE_RSYNC_TEST=no && MSKIPPED=1
-[ "$LUSTRE_RSYNC_TEST" != "no" ] && skip_remost lustre_rsync-test && LUSTRE_RSYNC_TEST=no && OSKIPPED=1
-if [ "$LUSTRE_RSYNC_TEST" != "no" ]; then
-        title lustre_rsync-test
-        bash lustre_rsync-test.sh
-        LUSTRE_RSYNC_TEST="done"
-fi
-
-[ "$OST_POOLS" != "no" ] && skip_remmds ost-pools && OST_POOLS=no && MSKIPPED=1
-[ "$OST_POOLS" != "no" ] && skip_remost ost-pools && OST_POOLS=no && OSKIPPED=1
-if [ "$OST_POOLS" != "no" ]; then
-        title ost-pools
-        bash ost-pools.sh
-        OST_POOLS="done"
-fi
-
 
 [ "$SLOW" = no ] && PERFORMANCE_SANITY="no"
 [ -x "$MDSRATE" ] || PERFORMANCE_SANITY="no"
@@ -455,13 +412,6 @@ if [ "$PERFORMANCE_SANITY" != "no" ]; then
         title performance-sanity
         bash performance-sanity.sh
         PERFORMANCE_SANITY="done"
-fi
-
-[ "$LARGE_SCALE" != "no" ] && skip_remmds large-scale && LARGE_SCALE=no && MSKIPPED=1
-if [ "$LARGE_SCALE" != "no" ]; then
-        title large-scale
-        bash large-scale.sh
-        LARGE_SCALE="done"
 fi
 
 [ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remmds recovery-mds-scale && RECOVERY_MDS_SCALE=no && MSKIPPED=1
@@ -480,24 +430,11 @@ if [ "$RECOVERY_DOUBLE_SCALE" != "no" ]; then
         RECOVERY_DOUBLE_SCALE="done"
 fi
 
-[ "$RECOVERY_RANDOM_SCALE" != "no" ] && skip_remmds recovery-random-scale && RECOVERY_RANDOM_SCALE=no && MSKIPPED=1
-if [ "$RECOVERY_RANDOM_SCALE" != "no" ]; then
-        title recovery-random-scale
-        bash recovery-random-scale.sh
-        RECOVERY_RANDOM_SCALE="done"
-fi
-
 which mpirun > /dev/null 2>&1 || PARALLEL_SCALE="no"
 if [ "$PARALLEL_SCALE" != "no" ]; then
         title parallel-scale
         bash parallel-scale.sh
         PARALLEL_SCALE="done"
-fi
-
-if [ "$METADATA_UPDATES" != "no" ]; then
-        title metadata-updates
-        bash metadata-updates.sh
-        METADATA_UPDATES="done"
 fi
 
 RC=$?

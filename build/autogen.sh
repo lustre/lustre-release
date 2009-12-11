@@ -105,11 +105,11 @@ for dir in $OPTIONAL_DIRS; do
     fi
 done
 
-for AMVER in 1.7 1.8 1.9 1.10 1.11; do
+for AMVER in 1.7 1.8 1.9 1.10; do
      [ "$(which automake-$AMVER 2> /dev/null)" ] && break
 done
 
-[ "${AMVER#1.}" -ge "10" ] && AMOPT="-W no-portability"
+[ "$AMVER" = "1.10" ] && AMOPT="-W no-portability"
 
 check_version automake automake-$AMVER "1.7.8"
 check_version autoconf autoconf "2.57"

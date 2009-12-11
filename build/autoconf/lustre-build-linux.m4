@@ -104,18 +104,29 @@ AC_MSG_CHECKING([that RedHat kernel])
 LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 	],[
-		#ifndef RHEL_RELEASE_CODE
+		#ifndef RHEL_MAJOR
 		#error "not redhat kernel"
 		#endif
 	],[
 		RHEL_KENEL="yes"
-		RHEL_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
 	        AC_MSG_RESULT([no])
 ])
 
-LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
+AC_MSG_CHECKING([that SuSe kernel])
+LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		#ifndef SLE_VERSION_CODE
+		#error "not sles kernel"
+		#endif
+	],[
+		SUSE_KERNEL="yes"
+		AC_MSG_RESULT([yes])
+	],[
+	        AC_MSG_RESULT([no])
+])
 
 ])
 
@@ -181,9 +192,9 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 # at 2.6.19 # $LINUX/include/linux/config.h is removed
 # and at more old has only one line
 # include <autoconf.h>
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[],
-	[AC_MSG_ERROR([Run make config in $LINUX.])])
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
+LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
+		$LINUX_OBJ/include/linux/version.h
+		],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
 
 # ------------ rhconfig.h includes runtime-generated bits --
@@ -340,7 +351,7 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LB_LINUX_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`uname -m|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
@@ -356,7 +367,7 @@ AC_DEFUN([LB_LINUX_ARCH],
          [AC_MSG_CHECKING([Linux kernel architecture])
           AS_IF([rm -f $PWD/build/arch
                  make -s --no-print-directory echoarch -f $PWD/build/Makefile \
-                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $ARCH_UM \
+                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX_OBJ $ARCH_UM \
                      ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
                 [AC_MSG_RESULT([$LINUX_ARCH])],
                 [AC_MSG_ERROR([Could not determine the kernel architecture.])])
@@ -448,72 +459,6 @@ fi
 ])
 
 #
-# LB_CONFIG_OFED_BACKPORTS
-#
-# include any OFED backport headers in all compile commands
-# NOTE: this does only include the backport paths, not the OFED headers
-#       adding the OFED headers is done in the lnet portion
-AC_DEFUN([LB_CONFIG_OFED_BACKPORTS],
-[AC_MSG_CHECKING([whether to use any OFED backport headers])
-# set default
-AC_ARG_WITH([o2ib],
-	AC_HELP_STRING([--with-o2ib=path],
-	               [build o2iblnd against path]),
-	[
-		case $with_o2ib in
-		yes)    O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
-			ENABLEO2IB=2
-			;;
-		no)     ENABLEO2IB=0
-			;;
-		*)      O2IBPATHS=$with_o2ib
-			ENABLEO2IB=3
-			;;
-		esac
-	],[
-		O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
-		ENABLEO2IB=1
-	])
-if test $ENABLEO2IB -eq 0; then
-	AC_MSG_RESULT([no])
-else
-	o2ib_found=false
-	for O2IBPATH in $O2IBPATHS; do
-		if test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
-			o2ib_found=true
-			break
-		fi
-	done
-	if ! $o2ib_found; then
-		AC_MSG_RESULT([no])
-		case $ENABLEO2IB in
-			1) ;;
-			2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
-			3) AC_MSG_ERROR([bad --with-o2ib path]);;
-			*) AC_MSG_ERROR([internal error]);;
-		esac
-	else
-                if test -f $O2IBPATH/config.mk; then
-			. $O2IBPATH/config.mk
-                elif test -f $O2IBPATH/ofed_patch.mk; then
-			. $O2IBPATH/ofed_patch.mk
-		fi
-		if test -n "$BACKPORT_INCLUDES"; then
-			OFED_BACKPORT_PATH=`echo $BACKPORT_INCLUDES | sed "s#.*/src/ofa_kernel/#$O2IBPATH/#"`
-			EXTRA_LNET_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_LNET_INCLUDE"
-			AC_MSG_RESULT([yes])
-		else
-			AC_MSG_RESULT([no])
-                fi
-	fi
-fi
-])
-
-
-#
 # LB_PROG_LINUX
 #
 # linux tests
@@ -544,10 +489,6 @@ LB_LINUX_CONFIG([KMOD],[],[
 
 #LB_LINUX_CONFIG_BIG_STACK
 
-# it's ugly to be doing anything with OFED outside of the lnet module, but
-# this has to be done here so that the backports path is set before all of
-# the LN_PROG_LINUX checks are done
-LB_CONFIG_OFED_BACKPORTS
 ])
 
 #
@@ -562,14 +503,14 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 
 #
 # LB_CHECK_SYMBOL_EXPORT
-# check symbol exported or not
+# check symbol exported or not 
 # $1 - symbol
 # $2 - file(s) for find.
 # $3 - do 'yes'
 # $4 - do 'no'
 #
 # 2.6 based kernels - put modversion info into $LINUX/Module.modvers
-# or check
+# or check 
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
@@ -595,19 +536,4 @@ else
     AC_MSG_RESULT([yes])
     $3
 fi
-])
-
-#
-# Like AC_CHECK_HEADER but checks for a kernel-space header
-#
-m4_define([LB_CHECK_LINUX_HEADER],
-[AS_VAR_PUSHDEF([ac_Header], [ac_cv_header_$1])dnl
-AC_CACHE_CHECK([for $1], ac_Header,
-	       [LB_LINUX_COMPILE_IFELSE([LB_LANG_PROGRAM([@%:@include <$1>])],
-				  [modules],
-				  [test -s build/conftest.o],
-				  [AS_VAR_SET(ac_Header, [yes])],
-				  [AS_VAR_SET(ac_Header, [no])])])
-AS_IF([test AS_VAR_GET(ac_Header) = yes], [$2], [$3])[]dnl
-AS_VAR_POPDEF([ac_Header])dnl
 ])

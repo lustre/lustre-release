@@ -37,7 +37,7 @@ static int peer_buffer_credits = 0;
 CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
                 "# per-peer router buffer credits");
 
-static int peer_timeout = 0;
+static int peer_timeout = 180;
 CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
                 "Seconds without aliveness news to declare peer dead (<=0 to disable)");
 
@@ -157,62 +157,40 @@ CFS_MODULE_PARM(protocol, "i", int, 0644,
                 "protocol version");
 #endif
 
-ksock_tunables_t ksocknal_tunables;
-
-int ksocknal_tunables_init(void)
-{
-
-        /* initialize ksocknal_tunables structure */
-        ksocknal_tunables.ksnd_timeout            = &sock_timeout;
-        ksocknal_tunables.ksnd_nconnds            = &nconnds;
-        ksocknal_tunables.ksnd_min_reconnectms    = &min_reconnectms;
-        ksocknal_tunables.ksnd_max_reconnectms    = &max_reconnectms;
-        ksocknal_tunables.ksnd_eager_ack          = &eager_ack;
-        ksocknal_tunables.ksnd_typed_conns        = &typed_conns;
-        ksocknal_tunables.ksnd_min_bulk           = &min_bulk;
-        ksocknal_tunables.ksnd_tx_buffer_size     = &tx_buffer_size;
-        ksocknal_tunables.ksnd_rx_buffer_size     = &rx_buffer_size;
-        ksocknal_tunables.ksnd_nagle              = &nagle;
-        ksocknal_tunables.ksnd_round_robin        = &round_robin;
-        ksocknal_tunables.ksnd_keepalive          = &keepalive;
-        ksocknal_tunables.ksnd_keepalive_idle     = &keepalive_idle;
-        ksocknal_tunables.ksnd_keepalive_count    = &keepalive_count;
-        ksocknal_tunables.ksnd_keepalive_intvl    = &keepalive_intvl;
-        ksocknal_tunables.ksnd_credits            = &credits;
-        ksocknal_tunables.ksnd_peertxcredits      = &peer_credits;
-        ksocknal_tunables.ksnd_peerrtrcredits     = &peer_buffer_credits;
-        ksocknal_tunables.ksnd_peertimeout        = &peer_timeout;
-        ksocknal_tunables.ksnd_enable_csum        = &enable_csum;
-        ksocknal_tunables.ksnd_inject_csum_error  = &inject_csum_error;
-        ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;
-        ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
-        ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;
-
+ksock_tunables_t ksocknal_tunables = {
+        .ksnd_timeout         = &sock_timeout,
+        .ksnd_credits         = &credits,
+        .ksnd_peertxcredits   = &peer_credits,
+        .ksnd_peerrtrcredits  = &peer_buffer_credits,
+        .ksnd_peertimeout     = &peer_timeout,
+        .ksnd_nconnds         = &nconnds,
+        .ksnd_min_reconnectms = &min_reconnectms,
+        .ksnd_max_reconnectms = &max_reconnectms,
+        .ksnd_eager_ack       = &eager_ack,
+        .ksnd_typed_conns     = &typed_conns,
+        .ksnd_min_bulk        = &min_bulk,
+        .ksnd_tx_buffer_size  = &tx_buffer_size,
+        .ksnd_rx_buffer_size  = &rx_buffer_size,
+        .ksnd_nagle           = &nagle,
+        .ksnd_round_robin     = &round_robin,
+        .ksnd_keepalive       = &keepalive,
+        .ksnd_keepalive_idle  = &keepalive_idle,
+        .ksnd_keepalive_count = &keepalive_count,
+        .ksnd_keepalive_intvl = &keepalive_intvl,
+        .ksnd_enable_csum     = &enable_csum,
+        .ksnd_inject_csum_error = &inject_csum_error,
+        .ksnd_zc_min_payload  = &zc_min_payload,
+        .ksnd_zc_recv         = &zc_recv,
+        .ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags,
 #ifdef CPU_AFFINITY
-        ksocknal_tunables.ksnd_irq_affinity       = &enable_irq_affinity;
+        .ksnd_irq_affinity    = &enable_irq_affinity,
 #endif
-
 #ifdef SOCKNAL_BACKOFF
-        ksocknal_tunables.ksnd_backoff_init       = &backoff_init;
-        ksocknal_tunables.ksnd_backoff_max        = &backoff_max;
+        .ksnd_backoff_init    = &backoff_init,
+        .ksnd_backoff_max     = &backoff_max,
 #endif
-
 #if SOCKNAL_VERSION_DEBUG
-        ksocknal_tunables.ksnd_protocol           = &protocol;
+        .ksnd_protocol        = &protocol,
 #endif
-
-#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-        ksocknal_tunables.ksnd_sysctl             =  NULL;
-#endif
-
-        if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
-                *ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
-
-        /* initialize platform-sepcific tunables */
-        return ksocknal_lib_tunables_init();
 };
 
-void ksocknal_tunables_fini(void)
-{
-        ksocknal_lib_tunables_fini();
-}
