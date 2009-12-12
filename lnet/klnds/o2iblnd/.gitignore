@@ -1,0 +1,13 @@
+/.deps
+/.depend
+/.tmp_versions
+/.*.flags
+/.*.o.cmd
+/.*.d
+/autoMakefile.in
+/autoMakefile
+/Makefile
+/*.ko
+/*.mod.c
+/wirecheck
+/.*.cmd
