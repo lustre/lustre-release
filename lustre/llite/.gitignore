@@ -1,0 +1,17 @@
+/.Xrefs
+/config.log
+/config.status
+/configure
+/Makefile
+/.deps
+/TAGS
+/autoMakefile.in
+/autoMakefile
+/modules.order
+/*.ko
+/*.mod.c
+/.*.cmd
+/.*.flags
+/.*.o.d
+/.tmp_versions
+/.depend

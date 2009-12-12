@@ -1,0 +1,11 @@
+/.deps
+/Makefile
+/.*.cmd
+/autoMakefile.in
+/autoMakefile
+/modules.order
+/*.ko
+/*.mod.c
+/.*.flags
+/.tmp_versions
+/.depend
