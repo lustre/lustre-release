@@ -1,0 +1,15 @@
+/.*.cmd
+/.*.flags
+/.*.d
+/*.ko
+/*.c
+/.*.o.d
+/.tmp_versions
+/Rules
+/autoMakefile.in
+/autoMakefile
+/modules.order
+/Module.markers
+/lustre.spec
+/Module.symvers
+/Modules.symvers

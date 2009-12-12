@@ -1,0 +1,4 @@
+/Makefile
+/Makefile.in
+/*.o.cmd
+/.tmp_linux-prim.ver
