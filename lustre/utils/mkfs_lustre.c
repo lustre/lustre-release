@@ -1408,7 +1408,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
  */
 static int in_mntlist(char *opt, char *mntlist)
 {
-        char *ml, *mlp, *item, *ctx;
+        char *ml, *mlp, *item, *ctx = NULL;
 
         if (!(ml = strdup(mntlist))) {
                 fprintf(stderr, "%s: out of memory\n", progname);
