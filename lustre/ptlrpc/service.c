@@ -1332,16 +1332,6 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
 
         ptlrpc_rqphase_move(request, RQ_PHASE_COMPLETE);
 
-        CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
-               (request->rq_export ?
-                (char *)request->rq_export->exp_client_uuid.uuid : "0"),
-               (request->rq_export ?
-                atomic_read(&request->rq_export->exp_refcount) : -99),
-               lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
-               libcfs_id2str(request->rq_peer),
-               lustre_msg_get_opc(request->rq_reqmsg));
-
 put_rpc_export:
         if (export != NULL && !request->rq_copy_queued)
                 class_export_rpc_put(export);
@@ -1357,15 +1347,28 @@ put_conn:
 
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
-        CDEBUG(D_RPCTRACE, "request x"LPU64" opc %u from %s processed in "
-               "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
-               request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
-               libcfs_id2str(request->rq_peer), timediff,
+
+        CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
+               "%s:%s+%d:%d:x"LPU64":%s:%d Request procesed in "
+               "%lds (%lds total) trans "LPU64" rc %d/%d\n",
+               cfs_curproc_comm(),
+               (request->rq_export ?
+                (char *)request->rq_export->exp_client_uuid.uuid : "0"),
+               (request->rq_export ?
+                atomic_read(&request->rq_export->exp_refcount) : -99),
+               lustre_msg_get_status(request->rq_reqmsg),
+               request->rq_xid,
+               libcfs_id2str(request->rq_peer),
+               lustre_msg_get_opc(request->rq_reqmsg),
+               timediff,
                cfs_timeval_sub(&work_end, &request->rq_arrival_time, NULL),
-               request->rq_repmsg ? lustre_msg_get_transno(request->rq_repmsg) :
-               request->rq_transno, request->rq_status,
-               request->rq_repmsg ? lustre_msg_get_status(request->rq_repmsg):
-               -999);
+               (request->rq_repmsg ?
+                lustre_msg_get_transno(request->rq_repmsg) :
+                request->rq_transno),
+               request->rq_status,
+               (request->rq_repmsg ? 
+                lustre_msg_get_status(request->rq_repmsg) : -999));
+
         if (svc->srv_stats != NULL) {
                 __u32 op = lustre_msg_get_opc(request->rq_reqmsg);
                 int opc = opcode_offset(op);

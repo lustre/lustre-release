@@ -304,7 +304,6 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                                 completion, glimpse, data, lvb_len);
         if (!lock)
                 GOTO(out_nolock, err = -ENOMEM);
-        LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
 
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
@@ -328,13 +327,10 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         if ((*flags) & LDLM_FL_LOCK_CHANGED)
                 *res_id = lock->l_resource->lr_name;
 
-        LDLM_DEBUG_NOLOCK("client-side local enqueue handler END (lock %p)",
-                          lock);
-
         if (lock->l_completion_ast)
                 lock->l_completion_ast(lock, *flags, NULL);
 
-        LDLM_DEBUG(lock, "client-side local enqueue END");
+        LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);
@@ -918,7 +914,6 @@ static int ldlm_cli_cancel_local(struct ldlm_lock *lock)
                 LDLM_DEBUG(lock, "server-side local cancel");
                 ldlm_lock_cancel(lock);
                 ldlm_reprocess_all(lock->l_resource);
-                LDLM_DEBUG(lock, "server-side local cancel handler END");
         }
 
         RETURN(rc);
