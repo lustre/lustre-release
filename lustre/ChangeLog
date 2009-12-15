@@ -13,7 +13,7 @@ tbd Sun Microsystems, Inc.
 Severity   : normal
 Bugzilla   : 21147
 Description: quota type and version is not tolerant to resetting
-             to the same value
+	     to the same value
 
 Severity   : enhancement
 Bugzilla   : 21511
@@ -253,6 +253,10 @@ Description: BUG: soft lockup - CPU#1 stuck for 10s! [ll_mdt_07:4523]
 Details    : add cond_resched() calls to avoid hogging the cpu for too long
 	     in the hash code.
 
+Severity   : enhancement
+Bugzilla   : 17682
+Description: Performance improvements for debug messages with D_RPCTRACE,
+	     D_LDLM, D_QUOTA options.
 
 -------------------------------------------------------------------------------
 2009-10-16 Sun Microsystems, Inc.
