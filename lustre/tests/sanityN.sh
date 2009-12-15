@@ -701,7 +701,11 @@ print_jbd_stat () {
     for mds in ${mdts//,/ }; do
         varsvc=${mds}_svc
         dev=$(basename $(do_facet $mds lctl get_param -n osd.${!varsvc}.mntdev))
-        val=$(do_facet $mds cat /proc/fs/jbd/$dev/info | head -1 | cut -d" " -f1)
+        val=$(do_facet $mds "procfile=/proc/fs/jbd/$dev/info;
+[ -f \\\$procfile ] || procfile=/proc/fs/jbd2/$dev/info;
+[ -f \\\$procfile ] || procfile=/proc/fs/jbd2/${dev}\:\\\*/info;
+cat \\\$procfile | head -1;")
+        val=${val%% *};
         stat=$(( stat + val))
     done
     echo $stat
