@@ -2062,31 +2062,6 @@ test_28() {
 }
 run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ==========="
 
-test_30()
-{
-        local output
-        local LIMIT=1024
-        local TESTFILE="$DIR/$tdir/$tfile"
-        local GRACE=10
-
-        mkdir -p $DIR/$tdir
-        chmod 0777 $DIR/$tdir
-
-        $LFS setquota -t -u --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
-        $LFS setquota -u $TSTUSR -b $LIMIT -B 0 -i 0 -I 0 $DIR
-        $RUNAS dd if=/dev/zero of=$TESTFILE bs=1024 count=$((LIMIT * 2)) || true
-        cancel_lru_locks osc
-        sleep 5
-        $LFS setquota -u $TSTUSR -B 0 $DIR
-        $SHOW_QUOTA_USER
-        output=`$SHOW_QUOTA_USER | grep $MOUNT | awk '{ print $5 }' | tr -d s`
-        [ "$output" -le "$((GRACE - 5))" ] || error "grace times were reset or unexpectedly high latency"
-        rm -f $TESTFILE
-        resetquota -u $TSTUSR
-        $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
-}
-run_test_with_stat 30 "hard limit updates should not reset grace times ================"
-
 test_29()
 {
         local BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
@@ -2127,6 +2102,31 @@ test_29()
         resetquota -u $TSTUSR
 }
 run_test_with_stat 29 "unhandled quotactls must not hang lustre client (19778) ========"
+
+test_30()
+{
+        local output
+        local LIMIT=1024
+        local TESTFILE="$DIR/$tdir/$tfile"
+        local GRACE=10
+
+        mkdir -p $DIR/$tdir
+        chmod 0777 $DIR/$tdir
+
+        $LFS setquota -t -u --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
+        $LFS setquota -u $TSTUSR -b $LIMIT -B 0 -i 0 -I 0 $DIR
+        $RUNAS dd if=/dev/zero of=$TESTFILE bs=1024 count=$((LIMIT * 2)) || true
+        cancel_lru_locks osc
+        sleep 5
+        $LFS setquota -u $TSTUSR -B 0 $DIR
+        $SHOW_QUOTA_USER
+        output=`$SHOW_QUOTA_USER | grep $MOUNT | awk '{ print $5 }' | tr -d s`
+        [ "$output" -le "$((GRACE - 5))" ] || error "grace times were reset or unexpectedly high latency"
+        rm -f $TESTFILE
+        resetquota -u $TSTUSR
+        $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
+}
+run_test_with_stat 30 "hard limit updates should not reset grace times ================"
 
 # turn off quota
 quota_fini()
