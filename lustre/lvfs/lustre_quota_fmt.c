@@ -79,49 +79,39 @@ static const union
 {
         struct lustre_disk_dqblk_v2 r1;
 } fakedquot[] = {
-        [LUSTRE_QUOTA_V2] = {.r1 = {.dqb_itime = __constant_cpu_to_le64(1LLU)} }
+        [LUSTRE_QUOTA_V2] = {.r1 = {.dqb_itime = __constant_cpu_to_le64(1LLU)}}
 };
 
 static const union
 {
         struct lustre_disk_dqblk_v2 r1;
 } emptydquot[] = {
-        [LUSTRE_QUOTA_V2] = {.r1 = { 0 } }
+        [LUSTRE_QUOTA_V2] = {.r1 = { 0 }}
 };
 
-int check_quota_file(struct file *f, struct inode *inode, int type, 
+extern void *lustre_quota_journal_start(struct inode *inode, int delete);
+extern void lustre_quota_journal_stop(void *handle);
+extern ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
+                                 char *buf, int count, loff_t pos);
+extern ssize_t lustre_write_quota(struct file *f, char *buf, int count, loff_t pos);
+
+int check_quota_file(struct file *f, struct inode *inode, int type,
                      lustre_quota_version_t version)
 {
         struct lustre_disk_dqheader dqhead;
-        mm_segment_t fs;
         ssize_t size;
-        loff_t offset = 0;
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
         const uint *quota_versions = lustre_initqversions[version];
 
-        if (!inode && !f) {
+        if (!f && !inode) {
                 CERROR("check_quota_file failed!\n");
                 libcfs_debug_dumpstack(NULL);
                 return -EINVAL;
         }
 
-        if (f) {
-                fs = get_fs();
-                set_fs(KERNEL_DS);
-                size = f->f_op->read(f, (char *)&dqhead,
-                                     sizeof(struct lustre_disk_dqheader), 
-                                     &offset);
-                set_fs(fs);
-        } else { 
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-                size = 0;
-#else
-                struct super_block *sb = inode->i_sb;
-                size = sb->s_op->quota_read(sb, type, (char *)&dqhead, 
-                                            sizeof(struct lustre_disk_dqheader),
-                                            0);
-#endif
-        }
+        size = lustre_read_quota(f, inode, type, (char *)&dqhead,
+                                 sizeof(struct lustre_disk_dqheader), 0);
+
         if (size != sizeof(struct lustre_disk_dqheader))
                 return -EINVAL;
         if (le32_to_cpu(dqhead.dqh_magic) != quota_magics[type] ||
@@ -141,16 +131,13 @@ int lustre_check_quota_file(struct lustre_quota_info *lqi, int type)
 
 int lustre_read_quota_file_info(struct file* f, struct lustre_mem_dqinfo* info)
 {
-        mm_segment_t fs;
         struct lustre_disk_dqinfo dinfo;
         ssize_t size;
-        loff_t offset = LUSTRE_DQINFOOFF;
 
-        fs = get_fs();
-        set_fs(KERNEL_DS);
-        size = f->f_op->read(f, (char *)&dinfo, 
-                             sizeof(struct lustre_disk_dqinfo), &offset);
-        set_fs(fs);
+        size = lustre_read_quota(f, NULL, 0, (char *)&dinfo,
+                                 sizeof(struct lustre_disk_dqinfo),
+                                 LUSTRE_DQINFOOFF);
+
         if (size != sizeof(struct lustre_disk_dqinfo)) {
                 CDEBUG(D_ERROR, "Can't read info structure on device %s.\n",
                        f->f_vfsmnt->mnt_sb->s_id);
@@ -179,12 +166,10 @@ int lustre_read_quota_info(struct lustre_quota_info *lqi, int type)
  */
 int lustre_write_quota_info(struct lustre_quota_info *lqi, int type)
 {
-        mm_segment_t fs;
         struct lustre_disk_dqinfo dinfo;
         struct lustre_mem_dqinfo *info = &lqi->qi_info[type];
         struct file *f = lqi->qi_files[type];
         ssize_t size;
-        loff_t offset = LUSTRE_DQINFOOFF;
 
         info->dqi_flags &= ~DQF_INFO_DIRTY;
         dinfo.dqi_bgrace = cpu_to_le32(info->dqi_bgrace);
@@ -193,11 +178,11 @@ int lustre_write_quota_info(struct lustre_quota_info *lqi, int type)
         dinfo.dqi_blocks = cpu_to_le32(info->dqi_blocks);
         dinfo.dqi_free_blk = cpu_to_le32(info->dqi_free_blk);
         dinfo.dqi_free_entry = cpu_to_le32(info->dqi_free_entry);
-        fs = get_fs();
-        set_fs(KERNEL_DS);
-        size = f->f_op->write(f, (char *)&dinfo, 
-                              sizeof(struct lustre_disk_dqinfo), &offset);
-        set_fs(fs);
+
+        size = lustre_write_quota(f, (char *)&dinfo,
+                                  sizeof(struct lustre_disk_dqinfo),
+                                  LUSTRE_DQINFOOFF);
+
         if (size != sizeof(struct lustre_disk_dqinfo)) {
                 CDEBUG(D_WARNING, 
                        "Can't write info structure on device %s.\n",
@@ -258,30 +243,29 @@ void freedqbuf(dqbuf_t buf)
         kfree(buf);
 }
 
-ssize_t read_blk(struct file *filp, uint blk, dqbuf_t buf)
+ssize_t read_blk(struct file *filp, struct inode *inode, int type,
+                 uint blk, dqbuf_t buf)
 {
-        mm_segment_t fs;
         ssize_t ret;
-        loff_t offset = blk << LUSTRE_DQBLKSIZE_BITS;
 
         memset(buf, 0, LUSTRE_DQBLKSIZE);
-        fs = get_fs();
-        set_fs(KERNEL_DS);
-        ret = filp->f_op->read(filp, (char *)buf, LUSTRE_DQBLKSIZE, &offset);
-        set_fs(fs);
+        ret = lustre_read_quota(filp, inode, type, (char *)buf, LUSTRE_DQBLKSIZE,
+                                blk << LUSTRE_DQBLKSIZE_BITS);
+
+        /* Reading past EOF just returns a block of zeros */
+        if (ret == -EBADR)
+                ret = 0;
+
         return ret;
 }
 
 ssize_t write_blk(struct file *filp, uint blk, dqbuf_t buf)
 {
-        mm_segment_t fs;
         ssize_t ret;
-        loff_t offset = blk << LUSTRE_DQBLKSIZE_BITS;
 
-        fs = get_fs();
-        set_fs(KERNEL_DS);
-        ret = filp->f_op->write(filp, (char *)buf, LUSTRE_DQBLKSIZE, &offset);
-        set_fs(fs);
+        ret = lustre_write_quota(filp, (char *)buf, LUSTRE_DQBLKSIZE,
+                                 blk << LUSTRE_DQBLKSIZE_BITS);
+
         return ret;
 }
 
@@ -304,7 +288,7 @@ int get_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info)
                 return -ENOMEM;
         if (info->dqi_free_blk) {
                 blk = info->dqi_free_blk;
-                if ((ret = read_blk(filp, blk, buf)) < 0)
+                if ((ret = read_blk(filp, NULL, 0, blk, buf)) < 0)
                         goto out_buf;
                 info->dqi_free_blk = le32_to_cpu(dh->dqdh_next_free);
         } else {
@@ -359,7 +343,7 @@ int remove_free_dqentry(struct file *filp,
         if (!tmpbuf)
                 return -ENOMEM;
         if (nextblk) {
-                if ((err = read_blk(filp, nextblk, tmpbuf)) < 0)
+                if ((err = read_blk(filp, NULL, 0, nextblk, tmpbuf)) < 0)
                         goto out_buf;
                 ((struct lustre_disk_dqdbheader *)tmpbuf)->dqdh_prev_free =
                     dh->dqdh_prev_free;
@@ -367,7 +351,7 @@ int remove_free_dqentry(struct file *filp,
                         goto out_buf;
         }
         if (prevblk) {
-                if ((err = read_blk(filp, prevblk, tmpbuf)) < 0)
+                if ((err = read_blk(filp, NULL, 0, prevblk, tmpbuf)) < 0)
                         goto out_buf;
                 ((struct lustre_disk_dqdbheader *)tmpbuf)->dqdh_next_free =
                     dh->dqdh_next_free;
@@ -408,7 +392,7 @@ int insert_free_dqentry(struct file *filp,
         if ((err = write_blk(filp, blk, buf)) < 0)
                 goto out_buf;
         if (info->dqi_free_entry) {
-                if ((err = read_blk(filp, info->dqi_free_entry, tmpbuf)) < 0)
+                if ((err = read_blk(filp, NULL, 0, info->dqi_free_entry, tmpbuf)) < 0)
                         goto out_buf;
                 ((struct lustre_disk_dqdbheader *)tmpbuf)->dqdh_prev_free =
                     cpu_to_le32(blk);
@@ -451,7 +435,7 @@ static uint find_free_dqentry(struct lustre_dquot *dquot, int *err,
         ddquot = GETENTRIES(buf, version);
         if (info->dqi_free_entry) {
                 blk = info->dqi_free_entry;
-                if ((*err = read_blk(filp, blk, buf)) < 0)
+                if ((*err = read_blk(filp, NULL, 0, blk, buf)) < 0)
                         goto out_buf;
         } else {
                 blk = get_free_dqblk(filp, info);
@@ -531,9 +515,8 @@ static int do_insert_tree(struct lustre_dquot *dquot, uint * treeblk, int depth,
                 memset(buf, 0, LUSTRE_DQBLKSIZE);
                 newact = 1;
         } else {
-                if ((ret = read_blk(filp, *treeblk, buf)) < 0) {
-                        CDEBUG(D_ERROR,
-                               "VFS: Can't read tree quota block %u.\n",
+                if ((ret = read_blk(filp, NULL, 0, *treeblk, buf)) < 0) {
+                        CERROR("VFS: Can't read tree quota block %u.\n",
                                *treeblk);
                         goto out_buf;
                 }
@@ -585,7 +568,6 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
 {
         int type = dquot->dq_type;
         struct file *filp;
-        mm_segment_t fs;
         loff_t offset;
         ssize_t ret;
         int dqblk_sz = lustre_disk_dqblk_sz[version];
@@ -610,11 +592,8 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
          * it */
         if (!memcmp((char *)&emptydquot[version], (char *)&ddquot, dqblk_sz))
                 ddquot.dqb_itime = cpu_to_le64(1);
-        fs = get_fs();
-        set_fs(KERNEL_DS);
-        ret = filp->f_op->write(filp, (char *)&ddquot,
-                                dqblk_sz, &offset);
-        set_fs(fs);
+
+        ret = lustre_write_quota(filp, (char *)&ddquot, dqblk_sz, offset);
         if (ret != dqblk_sz) {
                 CDEBUG(D_WARNING, "VFS: dquota write failed on dev %s\n",
                        filp->f_dentry->d_sb->s_id);
@@ -649,7 +628,7 @@ static int free_dqentry(struct lustre_dquot *dquot, uint blk,
                        blk, (uint) (dquot->dq_off >> LUSTRE_DQBLKSIZE_BITS));
                 goto out_buf;
         }
-        if ((ret = read_blk(filp, blk, buf)) < 0) {
+        if ((ret = read_blk(filp, NULL, 0, blk, buf)) < 0) {
                 CDEBUG(D_ERROR, "VFS: Can't read quota data block %u\n", blk);
                 goto out_buf;
         }
@@ -703,8 +682,8 @@ static int remove_tree(struct lustre_dquot *dquot, uint * blk, int depth,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = read_blk(filp, *blk, buf)) < 0) {
-                CDEBUG(D_ERROR, "VFS: Can't read quota data block %u\n", *blk);
+        if ((ret = read_blk(filp, NULL, 0, *blk, buf)) < 0) {
+                CERROR("VFS: Can't read quota data block %u\n", *blk);
                 goto out_buf;
         }
         newblk = le32_to_cpu(ref[GETIDINDEX(dquot->dq_id, depth)]);
@@ -763,8 +742,8 @@ static loff_t find_block_dqentry(struct lustre_dquot *dquot, uint blk,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = read_blk(filp, blk, buf)) < 0) {
-                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
+        if ((ret = read_blk(filp, NULL, 0, blk, buf)) < 0) {
+                CERROR("VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         if (dquot->dq_id)
@@ -807,8 +786,8 @@ static loff_t find_tree_dqentry(struct lustre_dquot *dquot, uint blk, int depth,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = read_blk(filp, blk, buf)) < 0) {
-                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
+        if ((ret = read_blk(filp, NULL, 0, blk, buf)) < 0) {
+                CERROR("VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         ret = 0;
@@ -837,7 +816,6 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 {
         int type = dquot->dq_type;
         struct file *filp;
-        mm_segment_t fs;
         loff_t offset;
         int ret = 0, dqblk_sz;
         lustre_quota_version_t version;
@@ -866,10 +844,8 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                 struct lustre_disk_dqblk_v2 ddquot;
 
                 dquot->dq_off = offset;
-                fs = get_fs();
-                set_fs(KERNEL_DS);
-                if ((ret = filp->f_op->read(filp, (char *)&ddquot,
-                                            dqblk_sz, &offset)) != dqblk_sz) {
+                if ((ret = lustre_read_quota(filp, NULL, type, (char *)&ddquot,
+                                             dqblk_sz, offset)) != dqblk_sz) {
                         if (ret >= 0)
                                 ret = -EIO;
                         CDEBUG(D_ERROR,
@@ -883,7 +859,6 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                                     (char *)&ddquot, dqblk_sz))
                                 ddquot.dqb_itime = cpu_to_le64(0);
                 }
-                set_fs(fs);
                 disk2memdqb(&dquot->dq_dqb, &ddquot, version);
         }
 
@@ -898,6 +873,8 @@ int lustre_commit_dquot(struct lustre_dquot *dquot)
 {
         int rc = 0;
         lustre_quota_version_t version = dquot->dq_info->qi_version;
+        void *handle;
+        struct inode *inode = dquot->dq_info->qi_files[dquot->dq_type]->f_dentry->d_inode;
 
         /* always clear the flag so we don't loop on an IO error... */
         clear_bit(DQ_MOD_B, &dquot->dq_flags);
@@ -905,10 +882,15 @@ int lustre_commit_dquot(struct lustre_dquot *dquot)
         /* The block/inode usage in admin quotafile isn't the real usage
          * over all cluster, so keep the fake dquot entry on disk is
          * meaningless, just remove it */
-        if (test_bit(DQ_FAKE_B, &dquot->dq_flags))
+        if (test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
+                handle = lustre_quota_journal_start(inode, 1);
                 rc = lustre_delete_dquot(dquot, version);
-        else
+                lustre_quota_journal_stop(handle);
+        } else {
+                handle = lustre_quota_journal_start(inode, 0);
                 rc = lustre_write_dquot(dquot, version);
+                lustre_quota_journal_stop(handle);
+        }
 
         if (rc < 0)
                 return rc;
@@ -927,7 +909,6 @@ int lustre_init_quota_header(struct lustre_quota_info *lqi, int type,
         const uint* quota_versions = lustre_initqversions[lqi->qi_version];
         struct lustre_disk_dqheader dqhead;
         ssize_t size;
-        loff_t offset = 0;
         struct file *fp = lqi->qi_files[type];
         int rc = 0;
 
@@ -935,8 +916,8 @@ int lustre_init_quota_header(struct lustre_quota_info *lqi, int type,
         dqhead.dqh_magic = cpu_to_le32(fakemagics ? 
                                        fake_magics[type] : quota_magics[type]);
         dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
-        size = fp->f_op->write(fp, (char *)&dqhead,
-                               sizeof(struct lustre_disk_dqheader), &offset);
+        size = lustre_write_quota(fp, (char *)&dqhead,
+                                  sizeof(struct lustre_disk_dqheader), 0);
 
         if (size != sizeof(struct lustre_disk_dqheader)) {
                 CDEBUG(D_ERROR, "error writing quoafile header (rc:%d)\n", rc);
@@ -974,24 +955,6 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type)
         return lustre_init_quota_info_generic(lqi, type, 0);
 }
 
-ssize_t quota_read(struct file *file, struct inode *inode, int type,
-                   uint blk, dqbuf_t buf)
-{
-        if (file) {
-                return read_blk(file, blk, buf);
-        } else {
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-                return -ENOTSUPP;
-#else
-                struct super_block *sb = inode->i_sb;
-                memset(buf, 0, LUSTRE_DQBLKSIZE);
-                return sb->s_op->quota_read(sb, type, (char *)buf,
-                                            LUSTRE_DQBLKSIZE, 
-                                            blk << LUSTRE_DQBLKSIZE_BITS);
-#endif
-        }
-}
-
 static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
                               uint blk, struct list_head *list)
 {
@@ -1005,8 +968,8 @@ static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = quota_read(filp, inode, type, blk, buf)) < 0) {
-                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
+        if ((ret = read_blk(filp, inode, type, blk, buf)) < 0) {
+                CERROR("VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         ret = 0;
@@ -1053,8 +1016,8 @@ int walk_tree_dqentry(struct file *filp, struct inode *inode, int type,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = quota_read(filp, inode, type, blk, buf)) < 0) {
-                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
+        if ((ret = read_blk(filp, inode, type, blk, buf)) < 0) {
+                CERROR("VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         ret = 0;
@@ -1123,9 +1086,8 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                 int i, dqblk_sz = lustre_disk_dqblk_sz[version];
 
                 memset(buf, 0, LUSTRE_DQBLKSIZE);
-                if ((ret = quota_read(fp, inode, type, blk_item->blk, buf))<0) {
-                        CDEBUG(D_ERROR,
-                               "VFS: Can't read quota tree block %u.\n",
+                if ((ret = read_blk(fp, inode, type, blk_item->blk, buf)) < 0) {
+                        CERROR("VFS: Can't read quota tree block %u.\n",
                                blk_item->blk);
                         GOTO(out_free, rc = ret);
                 }
