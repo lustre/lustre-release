@@ -126,7 +126,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         case -EROFS:
                 oscc->oscc_flags |= OSCC_FLAG_RDONLY;
         case -ENOSPC:
-        case -EFBIG: 
+        case -EFBIG:
                 if (rc != -EROFS) {
                         oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                         if (body && rc == -ENOSPC) {
@@ -145,9 +145,13 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 spin_unlock(&oscc->oscc_lock);
                 break;
         }
+        case -EINTR:
         case -EWOULDBLOCK: {
                 /* aka EAGAIN we should not delay create if import failed -
                  * this avoid client stick in create and avoid race with delorphan */
+                /* EINTR means old create request was killed due to mds<>ost
+                 * eviction. OSCC_FLAG_RECOVERING can already be set due
+                 * IMP_DISCONN event */
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 /* oscc->oscc_grow_count = OST_MIN_PRECREATE; */
                 spin_unlock(&oscc->oscc_lock);
