@@ -195,6 +195,10 @@ typedef enum {
  * emulation + race with upcoming bl_ast.  */
 #define LDLM_FL_FAIL_LOC       0x100000000ULL
 
+/* Used while processing the unused list to know that we have already
+ * handled this lock and decided to skip it */
+#define LDLM_FL_SKIPPED        0x200000000ULL
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1

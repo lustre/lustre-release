@@ -1197,6 +1197,7 @@ static ldlm_policy_res_t ldlm_cancel_no_wait_policy(struct ldlm_namespace *ns,
                                 break;
                 default:
                         result = LDLM_POLICY_SKIP_LOCK;
+                        lock->l_flags |= LDLM_FL_SKIPPED;
                         break;
         }
 
@@ -1367,6 +1368,11 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru){
                         /* No locks which got blocking requests. */
                         LASSERT(!(lock->l_flags & LDLM_FL_BL_AST));
+
+                        if (flags & LDLM_CANCEL_NO_WAIT &&
+                            lock->l_flags & LDLM_FL_SKIPPED)
+                                /* already processed */
+                                continue;
 
                         /* Somebody is already doing CANCEL. No need in this
                          * lock in lru, do not traverse it again. */

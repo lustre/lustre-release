@@ -184,6 +184,8 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
                 struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
                 LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
                 list_del_init(&lock->l_lru);
+                if (lock->l_flags & LDLM_FL_SKIPPED)
+                        lock->l_flags &= ~LDLM_FL_SKIPPED;
                 LASSERT(ns->ns_nr_unused > 0);
                 ns->ns_nr_unused--;
                 rc = 1;
