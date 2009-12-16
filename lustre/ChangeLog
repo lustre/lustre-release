@@ -11,6 +11,10 @@ tbd Sun Microsystems, Inc.
 	* Recommended e2fsprogs version: 1.41.6.sun1
 
 Severity   : normal
+Bugzilla   : 20722
+Description: Make watchdog timer messages to be more clear and descriptive.
+
+Severity   : normal
 Bugzilla   : 21147
 Description: quota type and version is not tolerant to resetting
 	     to the same value
