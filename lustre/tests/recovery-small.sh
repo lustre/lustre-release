@@ -706,6 +706,7 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4))
 	rc=$?
 	do_facet client lctl set_param fail_loc=0x0
+	client_reconnect
         [ $rc -eq 0 ] || error "client not evicted from OST"
 }
 run_test 26a "evict dead exports"
