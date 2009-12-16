@@ -1804,7 +1804,7 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
         rwlock_t          *glock = &ksocknal_data.ksnd_global_lock;
         lnet_process_id_t  id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
 
-        read_lock(glock);
+        cfs_read_lock(glock);
 
         peer = ksocknal_find_peer_locked(ni, id);
         if (peer != NULL) {
@@ -1830,7 +1830,7 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
                         connect = 0;
         }
 
-        read_unlock(glock);
+        cfs_read_unlock(glock);
 
         if (last_alive != 0)
                 *when = last_alive;
@@ -1840,13 +1840,13 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 
         ksocknal_add_peer(ni, id, LNET_NIDADDR(nid), lnet_acceptor_port());
 
-        write_lock_bh(glock);
+        cfs_write_lock_bh(glock);
 
         peer = ksocknal_find_peer_locked(ni, id);
         if (peer != NULL)
                 ksocknal_launch_all_connections_locked(peer);
 
-        write_unlock_bh(glock);
+        cfs_write_unlock_bh(glock);
         return;
 }
 
