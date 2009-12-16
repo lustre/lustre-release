@@ -214,4 +214,6 @@ static inline int client_quota_should_resend(int resend, struct client_obd *cli)
                 atomic_read(&cli->cl_quota_resends) > resend : 1;
 }
 
+int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl,
+                     int global);
 #endif

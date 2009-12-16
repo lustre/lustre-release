@@ -633,9 +633,8 @@ int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
             oqctl->qc_type != UGQUOTA)
                 return -EINVAL;
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
         down(&mds->mds_qonoff_sem);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct file *fp;
@@ -665,9 +664,8 @@ int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
         }
 
 out:
-        up(&mds->mds_qonoff_sem);
-
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        up(&mds->mds_qonoff_sem);
 
         return rc;
 }
@@ -683,16 +681,16 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
             oqctl->qc_type != UGQUOTA)
                 RETURN(-EINVAL);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         down(&mds->mds_qonoff_sem);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         oqctl->qc_cmd = Q_FINVALIDATE;
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc)
                 rc = obd_quotactl(mds->mds_lov_exp, oqctl);
 
-        up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        up(&mds->mds_qonoff_sem);
 
         return rc;
 }
@@ -708,9 +706,8 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
         int i, rc = 0;
         ENTRY;
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
         down(&mds->mds_qonoff_sem);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         for (i = 0; i < MAXQUOTAS && !rc; i++) {
                 struct file *fp;
@@ -795,9 +792,10 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
                 filp_close(fp, 0);
                 qinfo->qi_files[i] = NULL;
         }
-        up(&mds->mds_qonoff_sem);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        up(&mds->mds_qonoff_sem);
+
         RETURN(rc);
 }
 
@@ -836,17 +834,12 @@ int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 const char* quotafile = qinfo->qi_version == LUSTRE_QUOTA_V1?
                                         quotafiles_v1[i] : quotafiles_v2[i];
 
-                if (!Q_TYPESET(oqctl, i))
+                if (!Q_TYPESET(oqctl, i) || qinfo->qi_files[i] != NULL)
                         continue;
 
                 LASSERT(strlen(quotafile)
                         + sizeof(prefix) <= sizeof(name));
                 sprintf(name, "%s%s", prefix, quotafile);
-
-                if (qinfo->qi_files[i] != NULL) {
-                        rc = -EBUSY;
-                        break;
-                }
 
                 fp = filp_open(name, O_RDWR, 0);
                 /* handle transparent migration to 64 bit quota file */
@@ -910,9 +903,6 @@ int mds_admin_quota_off(struct obd_device *obd,
 
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
-        struct mds_obd *mds = &obd->u.mds;
-        struct obd_device_target *obt = &obd->u.obt;
-        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
@@ -921,30 +911,8 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
             oqctl->qc_type != UGQUOTA)
                 RETURN(-EINVAL);
 
-        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
-                CDEBUG(D_INFO, "other people are doing quotacheck\n");
-                atomic_inc(&obt->obt_quotachecking);
-                RETURN(-EBUSY);
-        }
+        rc = generic_quota_on(obd, oqctl, 1);
 
-        down(&mds->mds_qonoff_sem);
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = mds_admin_quota_on(obd, oqctl);
-        if (rc)
-                GOTO(out, rc);
-
-        rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
-        if (!rc)
-                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
-        else
-                GOTO(out, rc);
-
-        rc = obd_quotactl(mds->mds_lov_exp, oqctl);
-
-out:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        up(&mds->mds_qonoff_sem);
-        atomic_inc(&obt->obt_quotachecking);
         RETURN(rc);
 }
 

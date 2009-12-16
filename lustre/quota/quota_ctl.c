@@ -128,7 +128,6 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
-                oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
                 rc = mds_quota_on(obd, oqctl);
                 /* when quotaon, create lqs for every quota uid/gid b=18574 */
                 build_lqs(obd);
@@ -193,8 +192,13 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 
         do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
-        case Q_FINVALIDATE:
         case Q_QUOTAON:
+                oqctl->qc_id = obt->obt_qfmt;
+                rc = generic_quota_on(obd, oqctl, 0);
+                /* when quotaon, create lqs for every quota uid/gid b=18574 */
+                build_lqs(obd);
+                break;
+        case Q_FINVALIDATE:
         case Q_QUOTAOFF:
                 if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
                         CDEBUG(D_INFO, "other people are doing quotacheck\n");
@@ -226,18 +230,12 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 if (oqctl->qc_stat == QUOTA_RECOVERING)
                         quota_unbarrier(handle);
 
-                if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
+                if (oqctl->qc_cmd == Q_QUOTAOFF ||
                     oqctl->qc_cmd == Q_FINVALIDATE) {
-                        if (!rc && oqctl->qc_cmd == Q_QUOTAON)
-                                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
                         if (!rc && oqctl->qc_cmd == Q_QUOTAOFF)
                                 obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
                         atomic_inc(&obt->obt_quotachecking);
                 }
-
-                /* when quotaon, create lqs for every quota uid/gid b=18574 */
-                if (oqctl->qc_cmd == Q_QUOTAON)
-                        build_lqs(obd);
                 break;
         case Q_SETQUOTA:
                 /* currently, it is only used for nullifying the quota */

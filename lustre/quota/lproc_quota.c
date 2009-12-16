@@ -235,22 +235,17 @@ int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
 }
 EXPORT_SYMBOL(lprocfs_quota_rd_type);
 
-static int auto_quota_on(struct obd_device *obd, int type,
-                         struct super_block *sb, int is_master)
+/*
+ * generic_quota_on is very lazy and tolerant about current quota settings
+ * @global means to turn on quotas on each OST additionally to local quotas;
+ * should not be called from filter_quota_ctl on MDS nodes (as it starts
+ * admin quotas on MDS nodes).
+ */
+int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int global)
 {
-        struct obd_quotactl *oqctl;
+        struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
-        int rc = 0, id;
-        struct obd_device_target *obt;
-        ENTRY;
-
-        LASSERT(type == USRQUOTA || type == GRPQUOTA || type == UGQUOTA);
-
-        obt = &obd->u.obt;
-
-        OBD_ALLOC_PTR(oqctl);
-        if (!oqctl)
-                RETURN(-ENOMEM);
+        int id, is_master, rc = 0, local; /* means we need a local quotaon */
 
         if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
                 CDEBUG(D_INFO, "other people are doing quotacheck\n");
@@ -258,46 +253,67 @@ static int auto_quota_on(struct obd_device *obd, int type,
                 RETURN(-EBUSY);
         }
 
-        id = UGQUOTA2LQC(type);
-        /* quota already turned on */
-        if ((obt->obt_qctxt.lqc_flags & id) == id) {
-                rc = 0;
-                goto out;
-        }
+        id = UGQUOTA2LQC(oqctl->qc_type);
+        local = (obt->obt_qctxt.lqc_flags & id) != id;
 
-        oqctl->qc_type = type;
         oqctl->qc_cmd = Q_QUOTAON;
         oqctl->qc_id = obt->obt_qfmt;
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (is_master) {
-                struct mds_obd *mds = &obd->u.mds;
-
-                down(&mds->mds_qonoff_sem);
+        is_master= !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
+        if (is_master && local) {
+                down(&obd->u.mds.mds_qonoff_sem);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 /* turn on cluster wide quota */
                 rc = mds_admin_quota_on(obd, oqctl);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 if (rc && rc != -ENOENT)
-                        CERROR("%s: auto-enable admin quota failed. rc=%d\n",
-                               obd->obd_name, rc);
-                up(&mds->mds_qonoff_sem);
-
+                        CERROR("%s: %s admin quotaon failed. rc=%d\n",
+                               obd->obd_name, global ? "global" : "local", rc);
         }
-        if (!rc) {
-                /* turn on local quota */
-                rc = fsfilt_quotactl(obd, sb, oqctl);
-                if (rc) {
-                        if (rc != -ENOENT)
-                                CERROR("%s: auto-enable local quota failed with"
-                                       " rc=%d\n", obd->obd_name, rc);
-                } else {
-                        obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
+
+        if (rc == 0) {
+                if (local) {
+                        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        /* turn on local quota */
+                        rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
+                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        if (rc) {
+                                if (rc != -ENOENT)
+                                        CERROR("%s: %s quotaon failed with"
+                                               " rc=%d\n", obd->obd_name,
+                                               global ? "global" : "local", rc);
+                        } else {
+                                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                        }
                 }
+
+                if (rc == 0 && global && is_master)
+                        rc = obd_quotactl(obd->u.mds.mds_osc_exp, oqctl);
         }
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (is_master)
+                up(&obd->u.mds.mds_qonoff_sem);
 
-out:
         atomic_inc(&obt->obt_quotachecking);
+
+        return rc;
+}
+
+static int auto_quota_on(struct obd_device *obd, int type)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
+
+        LASSERT(type == USRQUOTA || type == GRPQUOTA || type == UGQUOTA);
+
+        OBD_ALLOC_PTR(oqctl);
+        if (!oqctl)
+                RETURN(-ENOMEM);
+
+        oqctl->qc_type = type;
+
+        rc = generic_quota_on(obd, oqctl, 0);
 
         OBD_FREE_PTR(oqctl);
         RETURN(rc);
@@ -418,7 +434,7 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         }
 
         if (type != 0) {
-                int rc = auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
+                int rc = auto_quota_on(obd, type - 1);
 
                 if (rc == 0)
                         build_lqs(obd);
