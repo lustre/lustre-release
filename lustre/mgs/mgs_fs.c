@@ -73,13 +73,10 @@ static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
                 return rc;
         }
 
-        if ((obd->md_stats == NULL) &&
-            (rc = lprocfs_alloc_md_stats(obd, LPROC_MGS_LAST)))
-                return rc;
         if (newnid) {
                 /* Always add in ldlm_stats */
                 exp->exp_nid_stats->nid_ldlm_stats =
-                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC, 
+                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
                                             LPROCFS_STATS_FLAG_NOPERCPU);
                 if (exp->exp_nid_stats->nid_ldlm_stats == NULL)
                         return -ENOMEM;

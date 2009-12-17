@@ -1860,7 +1860,6 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
 
         nidstat_putref(exp->exp_nid_stats);
         exp->exp_nid_stats = NULL;
-        lprocfs_free_md_stats(exp->exp_obd);
 
         return 0;
 }
@@ -2276,6 +2275,7 @@ EXPORT_SYMBOL(lprocfs_init_ldlm_stats);
 EXPORT_SYMBOL(lprocfs_alloc_obd_stats);
 EXPORT_SYMBOL(lprocfs_alloc_md_stats);
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
+EXPORT_SYMBOL(lprocfs_free_md_stats);
 EXPORT_SYMBOL(lprocfs_exp_setup);
 EXPORT_SYMBOL(lprocfs_exp_cleanup);
 

@@ -60,9 +60,6 @@ int mdt_export_stats_init(struct obd_device *obd,
                 return rc;
         }
 
-        if ((obd->md_stats == NULL) &&
-            (rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_NR)))
-                return rc;
         if (newnid) {
                 /* Always add in ldlm_stats */
                 exp->exp_nid_stats->nid_ldlm_stats =

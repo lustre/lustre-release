@@ -182,6 +182,7 @@ int lproc_mgs_cleanup(struct obd_device *obd)
         }
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
+        lprocfs_free_md_stats(obd);
 
         return lprocfs_obd_cleanup(obd);
 }

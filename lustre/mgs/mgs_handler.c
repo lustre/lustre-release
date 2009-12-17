@@ -226,8 +226,12 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* Setup proc */
         lprocfs_mgs_init_vars(&lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
                 lproc_mgs_setup(obd);
+                rc = lprocfs_alloc_md_stats(obd, LPROC_MGS_LAST);
+                if (rc)
+                        GOTO(err_llog, rc);
+        }
 
         /* Start the service threads */
         mgs->mgs_service =
