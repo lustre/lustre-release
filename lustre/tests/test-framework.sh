@@ -1126,7 +1126,7 @@ ost_evict_client() {
 
 fail() {
     facet_failover $* || error "failover: $?"
-    df $MOUNT || error "post-failover df: $?"
+    clients_up || error "post-failover df: $?"
 }
 
 fail_nodf() {
@@ -1139,9 +1139,8 @@ fail_abort() {
     stop $facet
     change_active $facet
     mount_facet $facet -o abort_recovery
-    df $MOUNT || echo "first df failed: $?"
-    sleep 1
-    df $MOUNT || error "post-failover df: $?"
+    clients_up || echo "first df failed: $?"
+    clients_up || error "post-failover df: $?"
 }
 
 do_lmc() {
