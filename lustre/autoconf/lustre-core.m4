@@ -1685,6 +1685,38 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_ATOMIC_CMPXCHG],
+[AC_MSG_CHECKING([if kernel has atomic_cmpxchg])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/atomic.h>
+],[
+        #ifndef atomic_cmpxchg
+        #error missing atomic_cmpxchg
+        #endif
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_ATOMIC_CMPXCHG, 1, [kernel has atomic_cmpxchg])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_ATOMIC_INC_NOT_ZERO],
+[AC_MSG_CHECKING([if kernel has atomic_inc_not_zero])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/atomic.h>
+],[
+        #ifndef atomic_inc_not_zero
+        #error missing atomic_inc_not_zero
+        #endif
+],[
+        AC_MSG_RESULT([yes])
+      	AC_DEFINE(HAVE_ATOMIC_INC_NOT_ZERO, 1, [kernel has atomic_inc_not_zero])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1748,6 +1780,8 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.15
           LC_INODE_I_MUTEX
+          LC_ATOMIC_CMPXCHG
+          LC_ATOMIC_INC_NOT_ZERO
 
           # 2.6.16
           LC_SECURITY_PLUG  # for SLES10 SP2

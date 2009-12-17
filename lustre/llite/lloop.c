@@ -104,7 +104,6 @@
 #include <linux/highmem.h>
 #include <linux/gfp.h>
 #include <linux/swap.h>
-#include <linux/pagevec.h>
 
 #include <asm/uaccess.h>
 

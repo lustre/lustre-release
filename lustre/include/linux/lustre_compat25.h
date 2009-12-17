@@ -626,5 +626,33 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #else
 #define ll_update_time(file) inode_update_time(file->f_mapping->host, 1)
 #endif
+
+/* Needed for sles9 */
+#ifndef HAVE_ATOMIC_CMPXCHG
+#define atomic_cmpxchg(v, old, new) ((int)cmpxchg(&((v)->counter), old, new))
+#endif
+
+/* Needed for rhel4 and sles9 */
+#ifndef HAVE_ATOMIC_INC_NOT_ZERO
+/**
+ * atomic_add_unless - add unless the number is a given value
+ * @v: pointer of type atomic_t
+ * @a: the amount to add to v...
+ * @u: ...unless v is equal to u.
+ *
+ * Atomically adds @a to @v, so long as it was not @u.
+ * Returns non-zero if @v was not @u, and zero otherwise.
+ */
+#define atomic_add_unless(v, a, u)				\
+({								\
+	int c, old;						\
+	c = atomic_read(v);					\
+	while (c != (u) && (old = atomic_cmpxchg((v), c, c + (a))) != c) \
+		c = old;					\
+	c != (u);						\
+})
+#define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
+#endif /* !atomic_inc_not_zero */
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

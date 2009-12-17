@@ -44,7 +44,7 @@ kqswnal_unmap_tx (kqswnal_tx_t *ktx)
 
         if (ktx->ktx_nmappedpages == 0)
                 return;
-        
+
         CDEBUG(D_NET, "%p unloading %d frags starting at %d\n",
                ktx, ktx->ktx_nfrag, ktx->ktx_firsttmpfrag);
 
@@ -57,7 +57,7 @@ kqswnal_unmap_tx (kqswnal_tx_t *ktx)
 }
 
 int
-kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob, 
+kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob,
                      unsigned int niov, lnet_kiov_t *kiov)
 {
         int       nfrags    = ktx->ktx_nfrag;

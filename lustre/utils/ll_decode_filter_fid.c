@@ -49,6 +49,7 @@
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <lustre/lustre_user.h>
+#include <liblustre.h>
 
 int main(int argc, char *argv[])
 {
@@ -74,7 +75,7 @@ int main(int argc, char *argv[])
 					"(%d bytes), recompile?\n",
 					argv[i], size);
 		} else {
-			printf("%s: objid=%llu group=%llu inode=%llu generation=%u stripe=%u\n",
+			printf("%s: objid="LPU64" group="LPU64" inode="LPU64" generation=%u stripe=%u\n",
 				argv[i], ff->ff_objid, ff->ff_group,
 				ff->ff_fid.id, ff->ff_fid.generation,
 				ff->ff_fid.f_type);
