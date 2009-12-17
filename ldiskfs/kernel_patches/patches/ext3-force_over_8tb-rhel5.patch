@@ -15,22 +15,21 @@ Index: linux-2.6.18-128.1.6/fs/ext3/super.c
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  	Opt_grpquota,
  	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
--	Opt_mballoc, Opt_nomballoc, Opt_stripe,
-+	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_force_over_8tb,
+-	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_maxdirsize
++	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_maxdirsize, Opt_force_over_8tb,
  };
  
  static match_table_t tokens = {
-@@ -779,6 +781,7 @@ static match_table_t tokens = {
+@@ -779,5 +781,6 @@ static match_table_t tokens = {
  	{Opt_mballoc, "mballoc"},
  	{Opt_nomballoc, "nomballoc"},
  	{Opt_stripe, "stripe=%u"},
 +	{Opt_force_over_8tb, "force_over_8tb"},
- 	{Opt_err, NULL},
  	{Opt_resize, "resize"},
  };
 @@ -1157,6 +1160,9 @@ clear_qf_name:
  				return 0;
- 			sbi->s_stripe = option;
+ 			sbi->s_max_dir_size = option;
  			break;
 +		case Opt_force_over_8tb:
 +			force_over_8tb = 1;

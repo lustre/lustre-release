@@ -60,25 +60,25 @@ Index: linux-2.6.16.46-0.14/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.16.46-0.14.orig/fs/ext3/super.c
 +++ linux-2.6.16.46-0.14/fs/ext3/super.c
-@@ -685,6 +685,7 @@ enum {
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
+@@ -681,6 +681,7 @@ enum {
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ 	Opt_grpquota,
  	Opt_extents, Opt_noextents, Opt_extdebug,
 +	Opt_mballoc, Opt_nomballoc, Opt_stripe,
- 	Opt_grpquota
  };
- 
+
+ static match_table_t tokens = {
 @@ -740,6 +741,9 @@ static match_table_t tokens = {
+ 	{Opt_extents, "extents"},
  	{Opt_noextents, "noextents"},
  	{Opt_extdebug, "extdebug"},
- 	{Opt_barrier, "barrier=%u"},
 +	{Opt_mballoc, "mballoc"},
 +	{Opt_nomballoc, "nomballoc"},
 +	{Opt_stripe, "stripe=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
  };
-@@ -1089,6 +1093,19 @@ clear_qf_name:
+@@ -1077,6 +1081,19 @@ clear_qf_name:
  		case Opt_extdebug:
  			set_opt (sbi->s_mount_opt, EXTDEBUG);
  			break;
@@ -98,10 +98,11 @@ Index: linux-2.6.16.46-0.14/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1820,6 +1837,7 @@ static int ext3_fill_super (struct super
+@@ -1858,7 +1858,7 @@ static int ext3_fill_super (struct super
  		ext3_count_dirs(sb));
  
  	ext3_ext_init(sb);
+-
 +	ext3_mb_init(sb, needs_recovery);
  	lock_kernel();
  	return 0;

@@ -2433,18 +2433,19 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+-	Opt_grpquota
++	Opt_grpquota,
 +	Opt_extents, Opt_noextents, Opt_extdebug,
- 	Opt_grpquota
  };
  
 @@ -729,6 +733,9 @@ static match_table_t tokens = {
  	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
+ 	{Opt_barrier, "barrier=%u"},
 +	{Opt_extents, "extents"},
 +	{Opt_noextents, "noextents"},
 +	{Opt_extdebug, "extdebug"},
- 	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
 @@ -1070,6 +1077,15 @@ clear_qf_name:
@@ -2463,11 +2464,12 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1800,6 +1816,7 @@ static int ext3_fill_super (struct super
+@@ -1800,6 +1816,8 @@ static int ext3_fill_super (struct super
  	percpu_counter_mod(&sbi->s_dirs_counter,
  		ext3_count_dirs(sb));
  
 +	ext3_ext_init(sb);
++
  	lock_kernel();
  	return 0;
  
