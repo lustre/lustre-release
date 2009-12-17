@@ -106,6 +106,9 @@ rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
+# override %optflags so that the vendor's overzealous flags don't create
+# build failures
+%define optflags -g -O2 -Werror
 %configure @ac_configure_args@ %{?configure_flags:configure_flags}
 make -j $RPM_BUILD_NCPUS -s
 
