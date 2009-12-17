@@ -337,6 +337,7 @@ extern unsigned int obd_alloc_fail_rate;
 
 #define OBD_FAIL_QUOTA_RET_QDATA         0xA02
 #define OBD_FAIL_QUOTA_DELAY_REL         0xA03
+#define OBD_FAIL_QUOTA_DELAY_SD          0xA04
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 

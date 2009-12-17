@@ -2193,6 +2193,54 @@ test_30()
 }
 run_test_with_stat 30 "hard limit updates should not reset grace times ================"
 
+# test duplicate quota releases b=18630
+test_31() {
+        mkdir -p $DIR/$tdir
+        chmod 0777 $DIR/$tdir
+
+        LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
+        TESTFILE="$DIR/$tdir/$tfile-0"
+        TESTFILE2="$DIR/$tdir/$tfile-1"
+
+        wait_delete_completed
+
+        log "   User quota (limit: $LIMIT kbytes)"
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+
+        $LFS setstripe $TESTFILE -i 0 -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE
+        $LFS setstripe $TESTFILE2 -i 0 -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE2
+
+        log "   step1: write out of block quota ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=5120
+        $RUNAS dd if=/dev/zero of=$TESTFILE2 bs=$BLK_SZ count=5120
+
+        #define OBD_FAIL_QUOTA_DELAY_SD      0xA04
+        #define OBD_FAIL_SOME        0x10000000 /* fail N times */
+        lustre_fail ost $((0x00000A04 | 0x10000000)) 1
+
+        log "   step2: delete two files so that triggering duplicate quota release ..."
+        rm -f $TESTFILE $TESTFILE2
+        sync; sleep 5; sync      #  OBD_FAIL_QUOTA_DELAY_SD will delay for 5 seconds
+        wait_delete_completed
+
+        log "   step3: verify if the ost failed"
+        do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
+        watchdog=`awk '/test 31/ {start = 1;}
+                       /release quota error/ {
+                               if (start) {
+                                       print;
+                               }
+                       }' $TMP/lustre-log-${TESTNAME}.log`
+        [ "$watchdog" ] && error "$watchdog"
+        rm -f $TMP/lustre-log-${TESTNAME}.log
+
+        lustre_fail ost 0
+        resetquota -u $TSTUSR
+}
+run_test_with_stat 31 "test duplicate quota releases ==="
+
 #
 # run 98 at the end because of reformatall
 #
