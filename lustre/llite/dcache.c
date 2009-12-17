@@ -406,6 +406,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
+        if (it->it_op == IT_LOOKUP && !(de->d_flags & DCACHE_LUSTRE_INVALID))
+                GOTO(out_sa, rc = 1);
+
         op_data = ll_prep_md_op_data(NULL, parent, de->d_inode,
                                      de->d_name.name, de->d_name.len,
                                      0, LUSTRE_OPC_ANY, NULL);

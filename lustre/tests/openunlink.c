@@ -91,18 +91,20 @@ int main(int argc, char **argv)
                 getc(stdin);
         }
 
+        fprintf(stderr, "accessing (1)\n");
         if (access(fname, F_OK) == 0) {
                 fprintf(stderr, "%s still exists\n", fname2);
                 exit(1);
         }
 
-        fprintf(stderr, "resetting fd offset\n");
+        fprintf(stderr, "seeking (1)\n");
         rc = lseek(fd, 0, SEEK_SET);
         if (rc) {
                 fprintf(stderr, "seek %s\n", strerror(errno));
                 exit(1);
         }
 
+        fprintf(stderr, "accessing (2)\n");
         if (access(fname, F_OK) == 0) {
                 fprintf(stderr, "%s still exists\n", fname);
                 exit(1);
@@ -138,7 +140,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        fprintf(stderr, "seeking\n");
+        fprintf(stderr, "seeking (2)\n");
         rc = lseek(fd, 0, SEEK_SET);
         if (rc) {
                 fprintf(stderr, "seek (after unlink trunc) %s\n",
@@ -154,7 +156,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        fprintf(stderr, "seeking\n");
+        fprintf(stderr, "seeking (3)\n");
         rc = lseek(fd, 0, SEEK_SET);
         if (rc) {
                 fprintf(stderr, "seek (before unlink read) %s\n",

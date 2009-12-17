@@ -1023,8 +1023,7 @@ int mdc_revalidate_lock(struct obd_export *exp,
            owner/group/acls are under lookup lock, we need both
            ibits for GETATTR. */
         policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
-                MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP :
-                MDS_INODELOCK_LOOKUP;
+                MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
 
         mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
