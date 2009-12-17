@@ -3,6 +3,10 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 #set -x
+xtrace="+x"
+if [[ $SHELLOPTS = *xtrace* ]]; then
+    xtrace="-x"
+fi
 shopt -s extdebug
 
 # include the exit_traps library
@@ -341,10 +345,18 @@ check_options() {
             export CCACHE && export CC="ccache $CC"
             # zero the cache so we can see how effective we are being with it
             ccache -z
+
+            # get some ccache stats when we are done
+            push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache_summary"
+            # should remove the ccache trap if lbuild is interrupted
+            trap 'echo "Received an INT TERM or HUP signal, terminating."; delete_exit_trap "ccache_summary"; exit 1' INT TERM HUP
         fi
     fi
 
     [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
+
+    return 0
+
 }
 
 # autodetect used Distro
@@ -438,21 +450,21 @@ download_file() {
             return 1
         fi
 
-        if ! $(is_downloading) && [ -r "$to" ] && [ -s "$to" ]; then
+        if ! is_downloading && [ -r "$to" ] && [ -s "$to" ]; then
             return 0
         fi
 
         return 1
     }
 
-    if $force || ! $(is_downloaded); then
-        if $(is_downloading); then
+    if $force || ! is_downloaded; then
+        if is_downloading; then
             echo "Somebody else is downloading $from..."
-            while $(is_downloading); do
+            while is_downloading; do
                 echo "Waiting for $to to finish downloading"
                 sleep 60
             done
-            if $(is_downloaded); then
+            if is_downloaded; then
                 return 0
             else
                 echo "The download we were waiting for seems to have been aborted"
@@ -1686,6 +1698,9 @@ backtrace() {
         funcname=${FUNCNAME[$n - 1]}
         sourcefile=$(basename ${BASH_SOURCE[$n]})
         lineno=${BASH_LINENO[$n - 1]}
+        if [ $n = 1 ]; then
+            let lineno-=11
+        fi
         # Display function arguments
         if [[ ! -z "${BASH_ARGV[@]}" ]]; then
             local args newarg j p=0
@@ -1706,7 +1721,11 @@ backtrace() {
     #echo ${FUNCNAME[*]}
     local i=$((${#FUNCNAME[@]} - 1))
     while [ $i -ge 0 ]; do
-        local SOURCELINE="${BASH_SOURCE[$i + 1]}:${BASH_LINENO[$i]}"
+        local lineno=${BASH_LINENO[$i]}
+        if [ $i = 0 ]; then
+            let lineno-=11
+        fi
+        local SOURCELINE="${BASH_SOURCE[$i + 1]}:${lineno}"
         # Can't figure out how to get function args from other frames...
         local FUNCTION="${FUNCNAME[$i]}()"
         echo "$SOURCELINE:$FUNCTION"
@@ -1718,6 +1737,27 @@ backtrace() {
     echo $BACKTRACE
 
 }
+
+seen_list=$(new_list)
+trap 'set +x;
+echo "An unexpected error has occurred at ${BASH_SOURCE[0]##*/}:$((LINENO-1)).
+Unfortunately the above line number in the fail may or may not be correct,
+but details have been send to the lbuild maintainer.  Attempting to continue."; (echo "Untrapped error"
+echo
+# have we seen this one
+echo "checking seen list for ${BASH_SOURCE[0]}:${BASH_LINENO[0]}"
+
+if is_list_member "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}"; then
+  echo "seen this one already"
+else
+  seen_list=$(add_list "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}")
+fi
+backtrace
+echo
+echo "Environment:"
+set
+) | mail -s "Untrapped error at ${BASH_SOURCE[0]##*/}:$((LINENO-15)) on $HOSTNAME" brian@sun.com >&2; set $xtrace' ERR
+set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
@@ -1900,10 +1940,6 @@ if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
         fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
 fi
 
-push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache_summary"
-# should remove the ccache trap if lbuild is interrupted
-trap 'delete_exit_trap "ccache_summary"; exit 1' INT TERM HUP
-
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
 if [ -n "$LINUX" ]; then
@@ -1918,24 +1954,6 @@ if [ -n "$LINUX" ]; then
     build_lustre "$LINUX" "$LINUXOBJ"
 else
     if [ -f "${0%/*}/lbuild-$DISTRO" ]; then
-        seen_list=$(new_list)
-        trap '(echo "Untrapped error"
-echo
-# have we seen this one
-echo "checking seen list for ${BASH_SOURCE[0]}:${BASH_LINENO[0]}"
-
-if is_list_member "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}"; then
-  echo "seen this one already"
-else
-  seen_list=$(add_list "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}")
-fi
-backtrace
-echo
-echo "Environment:"
-set
-) | tee >(mail -s "Untrapped error at ${BASH_SOURCE[0]##*/}:${BASH_LINENO[0]} on $HOSTNAME" brian@sun.com) >&2' ERR
-        set -E
-
         source ${0%/*}/lbuild-$DISTRO
 
         build_with_srpm || fatal 1 "Failed to build_with_srpm"
