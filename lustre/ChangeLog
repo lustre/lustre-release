@@ -266,6 +266,15 @@ Bugzilla   : 17682
 Description: Performance improvements for debug messages with D_RPCTRACE,
 	     D_LDLM, D_QUOTA options.
 
+Severity   : normal
+Frequency  : only with NFS export
+Bugzilla   : 20989
+Description: (lov_merge.c:74:lov_merge_lvb())
+	     ASSERTION(spin_is_locked(&lsm->lsm_lock)) failed (SR 71691004)
+Details    : Fix a race in the nfs export code by populating inode
+	     info while the new inode is still locked
+
+
 -------------------------------------------------------------------------------
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
