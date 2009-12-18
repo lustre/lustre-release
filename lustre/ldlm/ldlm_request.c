@@ -51,7 +51,7 @@ CFS_MODULE_PARM(ldlm_enqueue_min, "i", int, 0644,
                 "lock enqueue timeout minimum");
 
 /* in client side, whether the cached locks will be canceled before replay */
-unsigned int ldlm_cancel_unused_locks_before_replay = 0;
+unsigned int ldlm_cancel_unused_locks_before_replay = 1;
 
 static void interrupted_completion_wait(void *data)
 {
