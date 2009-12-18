@@ -113,9 +113,9 @@ lcw_dump(struct lc_watchdog *lcw)
         RETURN_EXIT;
 #endif
        if (lcw->lcw_task == NULL) { 
-                CWARN("Process " LPPID " was not found in the task list; "
-                      "watchdog callback may be incomplete\n", 
-                      (int)lcw->lcw_pid);
+                LCONSOLE_WARN("Process " LPPID " was not found in the task "
+                              "list; watchdog callback may be incomplete\n",
+                              (int)lcw->lcw_pid);
         } else {
                 libcfs_debug_dumpstack(lcw->lcw_task);
         }
@@ -159,10 +159,13 @@ static void lcw_cb(ulong_ptr_t data)
 
         if (delta_time < libcfs_watchdog_ratelimit &&
             lcw_recent_watchdog_count > 3) {
-                CWARN("Refusing to fire watchdog for pid %d: it was inactive "
-                      "for %lu.%.02lus. Rate limiting 3 per %d seconds.\n",
-                      (int)lcw->lcw_pid, timediff.tv_sec,
-                      timediff.tv_usec / 10000, libcfs_watchdog_ratelimit);
+                LCONSOLE_WARN("Service thread pid %u was inactive for "
+                              "%lu.%.02lus. Watchdog stack traces are limited "
+                              "to 3 per %d seconds, skipping this one.\n",
+                              (int)lcw->lcw_pid,
+                              timediff.tv_sec,
+                              timediff.tv_usec / 10000,
+                              libcfs_watchdog_ratelimit);
         } else {
                 if (delta_time < libcfs_watchdog_ratelimit) {
                         lcw_recent_watchdog_count++;
@@ -174,9 +177,14 @@ static void lcw_cb(ulong_ptr_t data)
 
 		/* This warning should appear on the console, but may not get
 		 * into the logs since we're running in a softirq handler */
-                CWARN("Watchdog triggered for pid %d: it was inactive for "
-                      "%lu.%.02lus\n", (int)lcw->lcw_pid, timediff.tv_sec,
-                      timediff.tv_usec / 10000);
+                LCONSOLE_WARN("Service thread pid %u was inactive for "
+                              "%lu.%.02lus. The thread might be hung, or it "
+                              "might only be slow and will resume later. "
+                              "Dumping the stack trace for debugging purposes:"
+                              "\n",
+                              (int)lcw->lcw_pid,
+                              timediff.tv_sec,
+                              timediff.tv_usec / 10000);
                 lcw_dump(lcw);
 	}
 
@@ -352,9 +360,14 @@ static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
                                                      lcw->lcw_last_touched);
                 cfs_duration_usec(delta_time, &timediff);
 
-                CWARN("Expired watchdog for pid " LPPID " %s after %lu.%.02lus\n",
-                      lcw->lcw_pid, message, timediff.tv_sec,
-                      timediff.tv_usec / 10000);
+                LCONSOLE_WARN("Service thread pid %u %s after %lu.%.02lus. "
+                              "This indicates the system was overloaded (too "
+                              "many service threads, or there were not enough "
+                              "hardware resources).\n",
+                              lcw->lcw_pid,
+                              message,
+                              timediff.tv_sec,
+                              timediff.tv_usec / 10000);
         }
         lcw->lcw_last_touched = newtime;
 }
@@ -368,7 +381,7 @@ void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
         list_del_init(&lcw->lcw_list);
         spin_unlock_bh(&lcw_pending_timers_lock);
 
-        lcw_update_time(lcw, "touched");
+        lcw_update_time(lcw, "resumed");
         lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
         cfs_timer_arm(&lcw->lcw_timer, cfs_time_current() +
@@ -388,7 +401,7 @@ void lc_watchdog_disable(struct lc_watchdog *lcw)
                 list_del_init(&lcw->lcw_list);
         spin_unlock_bh(&lcw_pending_timers_lock);
 
-        lcw_update_time(lcw, "disabled");
+        lcw_update_time(lcw, "completed");
         lcw->lcw_state = LC_WATCHDOG_DISABLED;
 
         EXIT;
@@ -402,7 +415,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 
         cfs_timer_disarm(&lcw->lcw_timer);
 
-        lcw_update_time(lcw, "deleted");
+        lcw_update_time(lcw, "stopped");
 
         spin_lock_bh(&lcw_pending_timers_lock);
         if (!list_empty(&lcw->lcw_list))
