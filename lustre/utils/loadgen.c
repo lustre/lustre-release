@@ -64,7 +64,6 @@
 static char cmdname[512];
 static char target[64] = "";
 char nid[64] = "";
-static int live_threads = 0;
 static int sig_received = 0;
 static int o_verbose = 4; /* 0-5 */
 static int my_oss = 0;
@@ -145,7 +144,9 @@ struct kid_t {
         int              k_dev;
 };
 
+static int live_threads = 0;
 static struct kid_t *kid_list = NULL;
+pthread_mutex_t m_list = PTHREAD_MUTEX_INITIALIZER;
 
 static struct kid_t *push_kid(int tnum)
 {
@@ -156,10 +157,12 @@ static struct kid_t *push_kid(int tnum)
                 return NULL;
         }
         kid->k_pthread = pthread_self();
+        pthread_mutex_lock(&m_list);
         kid->k_next = kid_list;
         kid->k_id = tnum;
         kid_list = kid;
         live_threads++;
+        pthread_mutex_unlock(&m_list);
         return kid;
 }
 
@@ -691,12 +694,14 @@ static void *run_one_child(void *threadvp)
 
         while(!(rc || sig_received)) {
                 pthread_mutex_lock(&m_trigger);
+    		pthread_mutex_lock(&m_list);
                 waiting_count++;
                 if ((waiting_count == live_threads) && timer_on) {
                         report_perf();
                         timer_on = 0;
                         all_done = 1;
                 }
+    		pthread_mutex_unlock(&m_list);
                 pthread_cond_wait(&cv_trigger, &m_trigger);
                 waiting_count--;
                 all_done = 0;
@@ -732,6 +737,19 @@ out:
         pthread_exit((void *)(long)rc);
 }
 
+/* 
+ * PTHREAD_STACK_MIN is 16K minimal stack for threads. This
+ * is stack consumed by one thread, which executes NULL procedure.
+ * We need some more here and 20k stack for one client thread
+ * is enough to not overflow. In same time it does not consume
+ * a lot of memory for large number of threads.
+ *
+ * 20K virtual clients will only consume 320M + 400M. Still to
+ * create this number of virtual clients we need to fix 8192
+ * OBDs limit.
+ */
+#define CLIENT_THREAD_STACK_SIZE (PTHREAD_STACK_MIN + (20 * 1024))
+
 static int loadgen_start_clients(int argc, char **argv)
 {
         int rc = 0, i, numt;
@@ -757,7 +775,7 @@ static int loadgen_start_clients(int argc, char **argv)
                         cmdname, rc, strerror(errno));
                 return -errno;
         }
-        pthread_attr_setstacksize (&attr, PTHREAD_STACK_MIN);
+        pthread_attr_setstacksize (&attr, CLIENT_THREAD_STACK_SIZE);
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
         numt += live_threads;
@@ -862,11 +880,15 @@ static int loadgen_write(int argc, char **argv)
         if (argc < 3 || argc > 4)
                 return CMD_HELP;
         threads = atoi(argv[1]);
+        pthread_mutex_lock(&m_list);
         if (threads > live_threads) {
+    		pthread_mutex_unlock(&m_list);
                 fprintf(stderr, "requested %d threads but only %d are running. "
                         "Use 'start' to start some more.\n",
                         threads, live_threads);
                 return -EOVERFLOW;
+        } else {
+    		pthread_mutex_unlock(&m_list);
         }
         trigger(C_WRITE, threads, atoi(argv[2]),
                 (argc == 4) ? atoi(argv[3]) : 0);
