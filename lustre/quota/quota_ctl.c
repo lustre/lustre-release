@@ -214,7 +214,9 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 0);
                 if (lqs == NULL || IS_ERR(lqs)){
-                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
+                        CERROR("fail to create lqs during setquota operation "
+                               "for %sid %u\n", oqctl->qc_type ? "g" : "u",
+                               oqctl->qc_id);
                 } else {
                         lqs->lqs_flags &= ~QB_SET;
                         lqs_putref(lqs);
@@ -256,7 +258,9 @@ adjust:
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 1);
                 if (lqs == NULL || IS_ERR(lqs)){
-                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
+                        CERROR("fail to create lqs during setquota operation "
+                               "for %sid %u\n", oqctl->qc_type ? "g" : "u",
+                               oqctl->qc_id);
                         break;
                 } else {
                         lqs->lqs_flags |= QB_SET;

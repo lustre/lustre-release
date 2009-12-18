@@ -289,8 +289,8 @@ check_cur_qunit(struct obd_device *obd,
         lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
                                qctxt, 0);
         if (IS_ERR(lqs) || lqs == NULL) {
-                CDEBUG(D_ERROR, "fail to find a lqs(%s id: %u)!\n",
-                       QDATA_IS_GRP(qdata) ? "group" : "user", qdata->qd_id);
+                CERROR("fail to find a lqs for %sid: %u)!\n",
+                       QDATA_IS_GRP(qdata) ? "g" : "u", qdata->qd_id);
                 GOTO (out, ret = 0);
         }
         spin_lock(&lqs->lqs_lock);
@@ -519,8 +519,9 @@ void* quota_barrier(struct lustre_quota_ctxt *qctxt,
 
         OBD_SLAB_ALLOC(qunit, qunit_cachep, CFS_ALLOC_IO, sizeof(*qunit));
         if (qunit == NULL) {
-                CERROR("locating qunit failed.(id=%u isblk=%d %s)\n",
-                       oqctl->qc_id, isblk, oqctl->qc_type ? "grp" : "usr");
+                CERROR("locating %sunit failed for %sid %u\n",
+                       isblk ? "b" : "i", oqctl->qc_type ? "g" : "u",
+                       oqctl->qc_id);
                 qctxt_wait_pending_dqacq(qctxt, oqctl->qc_id,
                                          oqctl->qc_type, isblk);
                 return NULL;
@@ -807,14 +808,14 @@ static int dqacq_interpret(const struct lu_env *env,
 
         if (qdata->qd_id != qunit->lq_data.qd_id ||
             OBD_FAIL_CHECK(OBD_FAIL_QUOTA_RET_QDATA)) {
-                CDEBUG(D_ERROR, "the returned qd_id isn't expected!"
+                CERROR("the returned qd_id isn't expected!"
                        "(qdata: %u, lq_data: %u)\n", qdata->qd_id,
                        qunit->lq_data.qd_id);
                 qdata->qd_id = qunit->lq_data.qd_id;
                 rc = -EPROTO;
         }
         if (QDATA_IS_GRP(qdata) != QDATA_IS_GRP(&qunit->lq_data)) {
-                CDEBUG(D_ERROR, "the returned grp/usr isn't expected!"
+                CERROR("the returned grp/usr isn't expected!"
                        "(qdata: %u, lq_data: %u)\n", qdata->qd_flags,
                        qunit->lq_data.qd_flags);
                 if (QDATA_IS_GRP(&qunit->lq_data))
@@ -824,7 +825,7 @@ static int dqacq_interpret(const struct lu_env *env,
                 rc = -EPROTO;
         }
         if (qdata->qd_count > qunit->lq_data.qd_count) {
-                CDEBUG(D_ERROR, "the returned qd_count isn't expected!"
+                CERROR("the returned qd_count isn't expected!"
                        "(qdata: "LPU64", lq_data: "LPU64")\n", qdata->qd_count,
                        qunit->lq_data.qd_count);
                 rc = -EPROTO;
@@ -958,7 +959,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 /* this is for quota_search_lqs */
                 lqs_putref(lqs);
         } else {
-                CDEBUG(D_ERROR, "Can't find the lustre qunit size!\n");
+                CERROR("Can't find the lustre qunit size!\n");
         }
 
         QDATA_DEBUG(qdata, "obd(%s): send %s quota req\n",
@@ -1035,7 +1036,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                                         LUSTRE_MDS_VERSION, opc);
         class_import_put(imp);
         if (req == NULL) {
-                CDEBUG(D_ERROR, "Can't alloc request\n");
+                CERROR("Can't alloc request\n");
                 dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
                 /* this is for qunit_get() */
                 qunit_put(qunit);
@@ -1046,7 +1047,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         req->rq_no_resend = req->rq_no_delay = 1;
         rc = quota_copy_qdata(req, qdata, QUOTA_REQUEST, QUOTA_IMPORT);
         if (rc < 0) {
-                CDEBUG(D_ERROR, "Can't pack qunit_data(rc: %d)\n", rc);
+                CERROR("Can't pack qunit_data(rc: %d)\n", rc);
                 ptlrpc_req_finished(req);
                 dqacq_completion(obd, qctxt, qdata, -EPROTO, opc);
                 /* this is for qunit_get() */
@@ -1415,9 +1416,8 @@ static int qslave_recovery_main(void *arg)
                                 rc = 0;
                         }
 
-                        if (rc)
-                                CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR,
-                                       "qslave recovery failed! (id:%d type:%d "
+                        if (rc && rc != -EBUSY)
+                                CERROR("qslave recovery failed! (id:%d type:%d "
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:
                         OBD_FREE_PTR(dqid);
@@ -1511,7 +1511,7 @@ void build_lqs(struct obd_device *obd)
                                  i, &id_list);
 #endif
                 if (rc) {
-                        CDEBUG(D_ERROR, "fail to get %s qids!\n",
+                        CERROR("%s: failed to get %s qids!\n", obd->obd_name,
                                i ? "group" : "user");
                         continue;
                 }
@@ -1527,8 +1527,8 @@ void build_lqs(struct obd_device *obd)
                                 lqs->lqs_flags |= dqid->di_flag;
                                 lqs_putref(lqs);
                         } else {
-                                CDEBUG(D_ERROR, "fail to create a lqs"
-                                       "(%s id: %u)!\n", i ? "group" : "user",
+                                CERROR("%s: failed to create a lqs for %sid %u"
+                                       "\n", obd->obd_name, i ? "g" : "u",
                                        dqid->di_id);
                         }
 

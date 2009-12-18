@@ -243,8 +243,9 @@ static int auto_quota_on(struct obd_device *obd, int type,
                 /* turn on cluster wide quota */
                 rc1 = mds_admin_quota_on(obd, oqctl);
                 if (rc1 && rc1 != -EALREADY) {
-                        CDEBUG(rc1 == -ENOENT ? D_QUOTA : D_ERROR,
-                               "auto-enable admin quota failed. rc=%d\n", rc1);
+                        CDEBUG_LIMIT(rc1 == -ENOENT ? D_QUOTA : D_ERROR,
+                                     "%s: auto-enable admin quota failed with "
+                                     "rc=%d\n", obd->obd_name, rc1);
                         GOTO(out_ctxt, rc1);
                 }
         }
@@ -259,8 +260,9 @@ static int auto_quota_on(struct obd_device *obd, int type,
                       obd->obd_name, oqctl->qc_type);
                 rc = -EALREADY;
         } else {
-                CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
-                       "auto-enable local quota failed. rc=%d\n", rc);
+                CDEBUG_LIMIT(rc == -ENOENT ? D_QUOTA : D_ERROR,
+                             "%s: auto-enable local quota failed with rc=%d\n",
+                             obd->obd_name, rc);
                 if (rc1 == -EALREADY) {
                         oqctl->qc_cmd = Q_QUOTAOFF;
                         mds_admin_quota_off(obd, oqctl);
@@ -598,8 +600,8 @@ int lquota_proc_setup(struct obd_device *obd, int is_master)
                                                lprocfs_quota_common_vars, obd);
         if (IS_ERR(qctxt->lqc_proc_dir)) {
                 rc = PTR_ERR(qctxt->lqc_proc_dir);
-                CERROR("error %d setting up lprocfs for %s\n", rc,
-                       obd->obd_name);
+                CERROR("%s: error %d setting up lprocfs\n",
+                       obd->obd_name, rc);
                 qctxt->lqc_proc_dir = NULL;
                 GOTO(out, rc);
         }
@@ -608,8 +610,8 @@ int lquota_proc_setup(struct obd_device *obd, int is_master)
                 rc = lprocfs_add_vars(qctxt->lqc_proc_dir,
                                       lprocfs_quota_master_vars, obd);
                 if (rc) {
-                        CERROR("error %d setting up lprocfs for %s"
-                               "(quota master)\n", rc, obd->obd_name);
+                        CERROR("%s: error %d setting up lprocfs for "
+                               "quota master\n", obd->obd_name, rc);
                         GOTO(out_free_proc, rc);
                 }
         }

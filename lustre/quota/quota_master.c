@@ -281,7 +281,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
                                LQUOTA_FLAGS_ADJINO, oqaq);
 
         if (rc < 0) {
-                CDEBUG(D_ERROR, "create oqaq failed! (rc:%d)\n", rc);
+                CERROR("create oqaq failed! (rc:%d)\n", rc);
                 GOTO(out_sem, rc);
         }
         QAQ_DEBUG(oqaq, "show oqaq.\n")
@@ -294,8 +294,8 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
         if (adjust_res <= 0) {
                 if (adjust_res < 0) {
                         rc = adjust_res;
-                        CDEBUG(D_ERROR, "adjust mds slave's qunit size failed! \
-                               (rc:%d)\n", rc);
+                        CERROR("adjust mds slave's qunit size failed! "
+                               "(rc:%d)\n", rc);
                 } else {
                         CDEBUG(D_QUOTA, "qunit doesn't need to be adjusted.\n");
                 }
@@ -315,8 +315,8 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
                 rc = 0;
         }
         if (rc) {
-                CDEBUG(D_ERROR, "mds fail to adjust file quota! \
-                               (rc:%d)\n", rc);
+                CERROR("%s: mds fail to adjust file quota! (rc:%d)\n",
+                       obd->obd_name, rc);
                 GOTO(out, rc);
         }
 
@@ -618,8 +618,8 @@ int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
                 fp = filp_open(name, O_CREAT | O_TRUNC | O_RDWR, 0644);
                 if (IS_ERR(fp)) {
                         rc = PTR_ERR(fp);
-                        CERROR("error invalidating admin quotafile %s (rc:%d)\n",
-                               name, rc);
+                        CERROR("%s: error invalidating admin quotafile %s (rc:%d)\n",
+                               obd->obd_name, name, rc);
                 }
                 else
                         filp_close(fp, 0);
@@ -715,8 +715,8 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
 
                 /* -EINVAL may be returned by quotainfo for bad quota file */
                 if (rc != -ENOENT && rc != -EINVAL) {
-                        CERROR("error opening old quota file %s (%d)\n",
-                               name, rc);
+                        CERROR("%s: error opening old quota file %s (%d)\n",
+                               obd->obd_name, name, rc);
                         break;
                 }
 
@@ -727,8 +727,8 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
                 fp = filp_open(name, O_CREAT | O_TRUNC | O_RDWR, 0644);
                 if (IS_ERR(fp)) {
                         rc = PTR_ERR(fp);
-                        CERROR("error creating admin quotafile %s (rc:%d)\n",
-                               name, rc);
+                        CERROR("%s: error creating admin quotafile %s (rc:%d)\n",
+                               obd->obd_name, name, rc);
                         break;
                 }
 
@@ -1723,8 +1723,9 @@ static int qmaster_recovery_main(void *arg)
 
                         rc = dquot_recovery(obd, dqid->di_id, type);
                         if (rc)
-                                CERROR("qmaster recovery failed! (id:%d type:%d"
-                                       " rc:%d)\n", dqid->di_id, type, rc);
+                                CERROR("%s: qmaster recovery failed for %sid %d"
+                                       " rc:%d)\n", obd->obd_name,
+                                       type ? "g" : "u", dqid->di_id, rc);
 free:
                         OBD_FREE_PTR(dqid);
                 }
@@ -1759,7 +1760,8 @@ int mds_quota_recovery(struct obd_device *obd)
 
         rc = kernel_thread(qmaster_recovery_main, &data, CLONE_VM|CLONE_FILES);
         if (rc < 0)
-                CERROR("Cannot start quota recovery thread: rc %d\n", rc);
+                CERROR("%s: cannot start quota recovery thread: rc %d\n",
+                       obd->obd_name, rc);
 
         wait_for_completion(&data.comp);
         RETURN(rc);

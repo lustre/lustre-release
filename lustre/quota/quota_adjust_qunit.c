@@ -176,7 +176,7 @@ struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
         if (rc == 0) {
                 return lqs;
         } else {
-                CDEBUG(D_ERROR, "get lqs error(rc: %d)\n", rc);
+                CERROR("get lqs error(rc: %d)\n", rc);
                 return ERR_PTR(rc);
         }
 }
@@ -195,8 +195,8 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
         lqs = quota_search_lqs(LQS_KEY(QAQ_IS_GRP(oqaq), oqaq->qaq_id),
                                qctxt, QAQ_IS_CREATE_LQS(oqaq) ? 1 : 0);
         if (lqs == NULL || IS_ERR(lqs)){
-                CDEBUG(D_ERROR, "fail to find a lqs(%s id: %u)!\n",
-                       QAQ_IS_GRP(oqaq) ? "group" : "user", oqaq->qaq_id);
+                CERROR("fail to find a lqs for %sid %u!\n",
+                       QAQ_IS_GRP(oqaq) ? "g" : "u", oqaq->qaq_id);
                 RETURN(PTR_ERR(lqs));
         }
 
