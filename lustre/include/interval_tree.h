@@ -92,7 +92,7 @@ static inline void interval_set(struct interval_node *node,
  *  - the callback returns INTERVAL_ITER_STOP when it thinks the iteration
  *    should be stopped. It will then cause the iteration function to return
  *    immediately with return value INTERVAL_ITER_STOP.
- *  - callbacks for interval_iterate and interval_iterate_reverse: Every
+ *  - callbacks for interval_iterate and interval_iterate_reverse: Every 
  *    nodes in the tree will be set to @node before the callback being called
  *  - callback for interval_search: Only overlapped node will be set to @node
  *    before the callback being called.
@@ -109,21 +109,17 @@ void interval_erase(struct interval_node *node, struct interval_node **root);
 enum interval_iter interval_search(struct interval_node *root,
                                    struct interval_node_extent *ex,
                                    interval_callback_t func, void *data);
-enum interval_iter interval_search_expand_extent(struct interval_node *root,
-                                   struct interval_node_extent *ex,
-                                   struct interval_node_extent *result_ext,
-                                   interval_callback_t func, void *data);
 
 /* Iterate every node in the tree - by reverse order or regular order. */
-enum interval_iter interval_iterate(struct interval_node *root,
+enum interval_iter interval_iterate(struct interval_node *root, 
                                     interval_callback_t func, void *data);
 enum interval_iter interval_iterate_reverse(struct interval_node *root,
                                     interval_callback_t func,void *data);
 
-void interval_expand(struct interval_node *root,
+void interval_expand(struct interval_node *root, 
                      struct interval_node_extent *ext,
                      struct interval_node_extent *limiter);
-int interval_is_overlapped(struct interval_node *root,
+int interval_is_overlapped(struct interval_node *root, 
                            struct interval_node_extent *ex);
 struct interval_node *interval_find(struct interval_node *root,
                                     struct interval_node_extent *ex);

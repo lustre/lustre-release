@@ -188,7 +188,7 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
-/*
+/* 
  * --------------------------------------------------------------------------
  * NOTE! Starting from this point, that is, LDLM_FL_* flags with values above
  * 0x80000000 will not be sent over the wire.
@@ -618,10 +618,6 @@ struct ldlm_lock {
         struct lustre_handle     l_remote_handle;
 
         ldlm_policy_data_t       l_policy_data;
-        /* traffic index indicating how busy the resource will be, if it is
-         * high, the lock's granted region will not be so big lest it conflicts
-         * other locks, causing frequent lock cancellation and re-enqueue */
-        int                   l_traffic;
 
         /*
          * Protected by lr_lock. Various counters: readers, writers, etc.
@@ -645,8 +641,8 @@ struct ldlm_lock {
          */
         cfs_waitq_t           l_waitq;
 
-        /**
-         * Seconds. it will be updated if there is any activity related to
+        /** 
+         * Seconds. it will be updated if there is any activity related to 
          * the lock, e.g. enqueue the lock or send block AST.
          */
         cfs_time_t            l_last_activity;
