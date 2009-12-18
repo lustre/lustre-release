@@ -9,23 +9,44 @@ tbd Sun Microsystems, Inc.
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.30 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.6.sun1
+	* The async journal commit feature (bug 19128) and the cancel
+	  lock before replay feature (bug 16774) are enabled by default
+	  for testing purpose, but will be disabled in the final 1.8.2
+	  release.
 
-Severity   : normal
-Bugzilla   : 21489
-Description: mtime could be spoiled by a write callback
+Severity   : enhancement
+Bugzilla   : 21511/19848
+Description: Update kernel to SLES11 2.6.27.39-0.3.1.
 
-Severity   : normal
+Severity   : enhancement
+Bugzilla   : 20773
+Description: Update kernel to RHEL5.4 2.6.18-164.6.1.el5 and
+	     OEL5 2.6.18-164.6.1.0.1.el5(Both in-kernel OFED enabled).
+
+Severity   : enhancement
+Bugzilla   : 16312
+Description: Build kernels (RHEL5, OEL5 and SLES10/11) using the vendor's own
+	     kernel spec file.
+
+Severity   : enhancement
+Bugzilla   : 19808
+Description: Vanilla kernel 2.6.30 patchless client support.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 20892
+Description: bad entry in directory xxx: inode out of bounds
+Details    : fix locking issue in the rename path which could race with any
+	     other operations updating the same directory.
+
+Severity   : enhancement
 Bugzilla   : 20722
 Description: Make watchdog timer messages to be more clear and descriptive.
 
 Severity   : normal
-Bugzilla   : 21147
-Description: quota type and version are not tolerant to resetting
-	     to the same value
-
-Severity   : enhancement
-Bugzilla   : 21511
-Description: Update kernel to SLES11 2.6.27.39-0.3.1.
+Bugzilla   : 21489
+Description: cp -p command does not preserve the dates and timestamp
+Details    : mtime could be spoiled by a write callback
 
 Severity   : normal
 Bugzilla   : 21513
@@ -37,15 +58,14 @@ Description: Allow non-root access for "lfs check".
 Details    : Added a check in obd_class_ioctl() for OBD_IOC_PING_TARGET.
 
 Severity   : enhancement
-Bugzilla   : 20773
-Description: Update kernel to RHEL5.4 2.6.18-164.6.1.el5 and
-	     OEL5 2.6.18-164.6.1.0.1.el5(Both in-kernel OFED enabled).
+Bugzilla   : 19763
+Description: quotacheck performance/scaling issues
+Details    : reduce quotacheck time on empty filesystem by skipping uninit
+	     group.
 
-Severity   : normal
-Bugzilla   : 21049
-Description: Sanity test_27p fails.
-Details    : OBD_FAIL_OST_ENOSPC has been moved to filter_statfs().
-	     Sanity tests 27 were cleaned up and improved.
+Severity   : enhancement
+Bugzilla   : 20200
+Description: Enhancement for lfs(1) command to use numeric uid/gid.
 
 Severity   : enhancement
 Bugzilla   : 19325
@@ -77,22 +97,13 @@ Severity   : enhancement
 Bugzilla   : 19662
 Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
 
-Severity   : normal
-Bugzilla   : 19917
-Description: Drop unnecessary __GFP_NOMEMALLOC flag from filter_get_page()
-
-Severity   : normal
-Bugzilla   : 18674
-Description: Conf-sanity.sh test to check client reconnection to a busy server.
-
 Severity   : enhancement
-Bugzilla   : 16312
-Description: Build kernels (RHEL5, OEL5 and SLES10/11) using the vendor's own
-	     kernel spec file.
-
-Severity   : normal
 Bugzilla   : 16774
-Description: optimize the extent lock finding during read/write at client side
+Description: Clients can replay thousands of unused locks during recovery
+Details    : Don't replay unused locks (only read locks for now) during
+	     recovery. This feature is disabled by default and can be
+	     enabled by running the following command on the clients:
+	     lctl get_param ldlm.cancel_unused_locks_before_replay
 
 Severity   : normal
 Bugzilla   : 19526
@@ -101,14 +112,6 @@ Details    : improve initialize osc date when target is added to mds and
 	     ability to resend too big getattr request is client isn't have info
 	     about ost.
 
-Severity   : enhancement
-Bugzilla   : 19848
-Description: Update kernel to SLES11 2.6.27.29-0.1.1.
-
-Severity   : normal
-Bugzilla   : 14951
-Description: Improved cleanup procedure for conf-sanity test_46a.
-
 Severity   : normal
 Bugzilla   : 19566
 Description: Prevent inconsistences between linux and lustre mount structures.
@@ -116,19 +119,11 @@ Details    : Wait indefinitely in server_wait_finished() until mnt_count drops.
 	     Make the sleep interruptible.
 
 Severity   : enhancement
-Bugzilla   : 20200
-Description: Enhancement for lfs(1) command to use numeric uid/gid.
-
-Severity   : enhancement
 Bugzilla   : 18539
 Description: Communicate OST degraded/readonly state via statfs to MDS
 Details    : Flags in the statfs returned from OSTs indicate whether the
 	     OST is in a degraded RAID state, or if the filesystem has
 	     turned read-only after a filesystem error is detected.
-
-Severity   : enhancement
-Bugzilla   : 19808
-Description: Vanilla kernel 2.6.30 patchless client support.
 
 Severity   : normal
 Bugzilla   : 20122
@@ -197,14 +192,6 @@ Bugzilla   : 18357
 Description: implement async create (obd_async_create) method for osc, to avoid
 	     too long waiting new ost objects with holding ldlm lock.
 
-Severity   : enhancement
-Bugzilla   : 12069
-Descriptoin: OST grant too much space to client even there are not enough space.
-Details    : Client will shrink its grant cache to OST if there are no write
-	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
-	     this grant cache if there are already not enough avaible space
-	     (left_space < total_clients * 32M).
-
 Severity   : normal
 Bugzilla   : 18674
 Frequency  : occasionally during network problems
@@ -215,26 +202,12 @@ Details    : abort bulk requests received by the OST once the client has timed
 	     request failed with EBUSY or -EAGAIN.
 
 Severity   : normal
-Bugzilla   : 18674
-Frequency  : occasionally during network problems
-Description: client not allowed to reconnect to OST because of active request
-Details    : The client also now retries to reconnect to the same server if a
-	     connect request failed with EBUSY or -EAGAIN. The patch has not
-	     been landed in the previous commits.
-
-Severity   : normal
 Frequency  : rare, if used wide striped file and one ost in down.
 Bugzilla   : 18382
 Descriptoin: don't return error if we created a subset of objects for file.
 Details    : lov_update_create_set() uses set->set_success as index for created
 	     objects, so if some requests failed, they will have hole at end of
 	     array and we can use qos_shrink_lsm for allocate correct lsm.
-
-Severity   : normal
-Bugzilla   : 19763
-Description: quotacheck performance/scaling issues
-Details    : reduce quotacheck time on empty filesystem by skipping uninit
-	     group.
 
 Severity   : normal
 Bugzilla   : 20978
@@ -248,12 +221,6 @@ Description: Out or order replies might be lost on replay
 Details    : In ptlrpc_retain_replayable_request if we cannot find retained
 	     request with tid smaller then one currently being added, add it
 	     to the start, not end of the list.
-
-Severity   : major
-Bugzilla   : 20892
-Description: bad entry in directory xxx: inode out of bounds
-Details    : fix locking issue in the rename path which could race with any
-	     other operations updating the same directory.
 
 Severity   : normal
 Bugzilla   : 19557
