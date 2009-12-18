@@ -1942,7 +1942,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         lap->lap_sub_cookie = (void *)lap + size_round(sizeof(*lap));
 
-        if (lockh && !(flags & OBD_FAST_LOCK)) {
+        if (lockh && lustre_handle_is_used(lockh) && !(flags & OBD_FAST_LOCK)) {
                 lov_lockh = lov_handle2llh(lockh);
                 if (lov_lockh) {
                         lockh = lov_lockh->llh_handles + lap->lap_stripe;
@@ -3256,7 +3256,7 @@ static int lov_get_lock(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* ensure we don't cross stripe boundaries */
         lov_extent_calc(exp, lsm, OBD_CALC_STRIPE_END, &stripe_end);
-        if (stripe_end <= end)
+        if (stripe_end < end)
                 GOTO(out, rc = 0);
 
         /* map the region limits to the object limits */

@@ -141,6 +141,16 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
                                "under us\n");
                         RETURN(-ENOLCK);
                 }
+               
+                /* XXX Note! if the caller passed a unused lock handle,
+                 * it expects us to return the lockh of the lock we matched,
+                 * reference(LCK_PR) of the lock is increased here to assure
+                 * its validity, and the caller should decrease the reference
+                 * when it isn't used any more. */ 
+                if (lockh && !lustre_handle_is_used(lockh)) {
+                        ldlm_lock_addref(&tmplockh, LCK_PR);
+                        lustre_handle_copy(lockh, &tmplockh);
+                }
         }
 
         spin_lock(&lock->l_extents_list_lock);

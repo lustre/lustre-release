@@ -615,6 +615,7 @@ struct ll_async_page {
         struct list_head llap_pglist_item;
         /* checksum for paranoid I/O debugging */
         __u32 llap_checksum;
+        struct lustre_handle llap_lockh_granted;
 };
 
 /*

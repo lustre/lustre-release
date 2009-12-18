@@ -787,6 +787,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
 
         llap = llap_cast_private(page);
         if (llap != NULL) {
+#if 0 /* disabled since we take lock ref in readahead, see bug 16774/21252 */
                 if (origin == LLAP_ORIGIN_READAHEAD && lockh) {
                         /* the page could belong to another lock for which
                          * we don't hold a reference. We need to check that
@@ -803,6 +804,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                                           lockh, flags))
                                 RETURN(ERR_PTR(-ENOLCK));
                 }
+#endif
                 /* move to end of LRU list, except when page is just about to
                  * die */
                 if (origin != LLAP_ORIGIN_REMOVEPAGE) {
@@ -1139,6 +1141,8 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct ll_async_page *llap;
         struct page *page;
+        struct obd_export *exp;
+        obd_off end;
         int ret = 0;
         ENTRY;
 
@@ -1149,8 +1153,16 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         LL_CDEBUG_PAGE(D_PAGE, page, "completing cmd %d with %d\n", cmd, rc);
 
-        if (cmd & OBD_BRW_READ && llap->llap_defer_uptodate)
+        if (cmd & OBD_BRW_READ && llap->llap_defer_uptodate) {
                 ll_ra_count_put(ll_i2sbi(page->mapping->host), 1);
+ 
+                LASSERT(lustre_handle_is_used(&llap->llap_lockh_granted));
+                exp = ll_i2obdexp(page->mapping->host);
+                end = ((loff_t)page->index) << CFS_PAGE_SHIFT;
+                end += CFS_PAGE_SIZE - 1;
+                obd_cancel(exp, ll_i2info(page->mapping->host)->lli_smd, LCK_PR,
+                           &llap->llap_lockh_granted, OBD_FAST_LOCK, end);
+        }
 
         if (rc == 0)  {
                 if (cmd & OBD_BRW_READ) {
@@ -1421,8 +1433,8 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
         struct page *page;
         unsigned int gfp_mask = 0;
         int rc = 0, flags = 0;
-        struct ll_thread_data *ltd;
-        struct lustre_handle *lockh = NULL;
+        struct lustre_handle lockh = { 0 };
+        obd_off start, end;
 
         gfp_mask = GFP_HIGHUSER & ~__GFP_WAIT;
 #ifdef __GFP_NOWARN
@@ -1442,6 +1454,11 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
                 GOTO(unlock_page, rc = 0);
         }
 
+#if 0 /* the fast lock stored in ltd can't be guaranteed to be the lock used
+       * by the llap returned by "llap_from_page_with_lockh" if there is a
+       * ready llap, for lock check against readahead is disabled. 
+       * see bug 16774/21252 */
+
         ltd = ll_td_get();
         if (ltd && ltd->lock_style > 0) {
                 __u64 offset = ((loff_t)page->index) << CFS_PAGE_SHIFT;
@@ -1450,12 +1467,14 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
                 if (ltd->lock_style == LL_LOCK_STYLE_FASTLOCK)
                         flags = OBD_FAST_LOCK;
         }
+#endif
 
         /* we do this first so that we can see the page in the /proc
          * accounting */
-        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_READAHEAD, lockh,
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_READAHEAD, &lockh,
                                          flags);
         if (IS_ERR(llap) || llap->llap_defer_uptodate) {
+                /* bail out when we hit the end of the lock. */
                 if (PTR_ERR(llap) == -ENOLCK) {
                         ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
                         CDEBUG(D_READA | D_PAGE,
@@ -1472,13 +1491,27 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
         if (Page_Uptodate(page))
                 GOTO(unlock_page, rc = 0);
 
-        /* bail out when we hit the end of the lock. */
         rc = ll_issue_page_read(exp, llap, oig, 1);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_READA | D_PAGE, page, "started read-ahead\n");
                 rc = 1;
+
+                if (!lustre_handle_is_used(&lockh)) {
+                        start = ((loff_t)index) << CFS_PAGE_SHIFT;
+                        end = start + CFS_PAGE_SIZE - 1;
+                        rc = obd_get_lock(exp,
+                                          ll_i2info(mapping->host)->lli_smd,
+                                          &llap->llap_cookie, OBD_BRW_READ, 
+                                          start, end, &lockh, OBD_FAST_LOCK);
+                        LASSERT(rc);
+                }
+
+                llap->llap_lockh_granted = lockh;
         } else {
 unlock_page:
+                if (lustre_handle_is_used(&lockh))
+                        ldlm_lock_decref(&lockh, LCK_PR);
+
                 unlock_page(page);
                 LL_CDEBUG_PAGE(D_READA | D_PAGE, page, "skipping read-ahead\n");
         }
