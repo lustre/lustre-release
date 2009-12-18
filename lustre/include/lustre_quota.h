@@ -401,7 +401,7 @@ static inline void __lqs_getref(struct lustre_qunit_size *lqs)
 
         if (count == 2) /* quota_create_lqs */
                 atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n", lqs, count);
+        CDEBUG(D_INFO, "lqs=%p refcount %d\n", lqs, count);
 }
 
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
@@ -416,7 +416,7 @@ static inline void __lqs_putref(struct lustre_qunit_size *lqs)
         if (atomic_dec_return(&lqs->lqs_refcount) == 1)
                 if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
                         cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+        CDEBUG(D_INFO, "lqs=%p refcount %d\n",
                lqs, atomic_read(&lqs->lqs_refcount));
 }
 

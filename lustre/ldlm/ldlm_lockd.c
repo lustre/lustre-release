@@ -485,7 +485,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
         if (lock->l_export == NULL) {
                 /* We don't have a "waiting locks list" on clients. */
-                LDLM_DEBUG(lock, "client lock: no-op");
+                CDEBUG(D_DLMTRACE, "Client lock %p : no-op\n", lock);
                 return 0;
         }
 
@@ -1443,7 +1443,7 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         int do_ast;
         ENTRY;
 
-        LDLM_DEBUG(lock, "client blocking AST callback handler START");
+        LDLM_DEBUG(lock, "client blocking AST callback handler");
 
         lock_res_and_lock(lock);
         lock->l_flags |= LDLM_FL_CBPENDING;
@@ -1455,14 +1455,14 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         unlock_res_and_lock(lock);
 
         if (do_ast) {
-                LDLM_DEBUG(lock, "already unused, calling "
-                           "callback (%p)", lock->l_blocking_ast);
+                CDEBUG(D_DLMTRACE, "Lock %p already unused, calling callback (%p)\n",
+                       lock, lock->l_blocking_ast);
                 if (lock->l_blocking_ast != NULL)
                         lock->l_blocking_ast(lock, ld, lock->l_ast_data,
                                              LDLM_CB_BLOCKING);
         } else {
-                LDLM_DEBUG(lock, "Lock still has references, will be"
-                           " cancelled later");
+                CDEBUG(D_DLMTRACE, "Lock %p is referenced, will be cancelled later\n",
+                       lock);
         }
 
         LDLM_DEBUG(lock, "client blocking callback handler END");
