@@ -756,12 +756,14 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
                 at_add(&svc->srv_at_estimate,
                        min(at_extra,
                            req->rq_export->exp_obd->obd_recovery_timeout / 4));
+                newdl = cfs_time_current_sec();
         } else {
                 /* Fake our processing time into the future to ask the
                  * clients for some extra amount of time */
                 at_add(&svc->srv_at_estimate, at_extra);
+                newdl = req->rq_arrival_time.tv_sec;
         }
-        newdl = cfs_time_current_sec() + at_get(&svc->srv_at_estimate);
+        newdl += at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */

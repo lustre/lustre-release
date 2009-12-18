@@ -228,7 +228,7 @@ test_17() {
 
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
-    do_facet ost1 lctl set_param fail_loc=0x80000503
+    do_facet client lctl set_param fail_loc=0x80000503
     # need to ensure we send an RPC
     do_facet client cp $SAMPLE_FILE $DIR/$tfile
     sync
