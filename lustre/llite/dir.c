@@ -301,20 +301,20 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                 if (request)
                         ptlrpc_req_finished(request);
                 if (rc < 0) {
-                        CERROR("lock enqueue: rc: %d\n", rc);
+                        CERROR("lock enqueue: "DFID" at "LPU64": rc %d\n",
+                               PFID(ll_inode2fid(dir)), hash, rc);
                         return ERR_PTR(rc);
                 }
-        } else {
-                /* for cross-ref object, l_ast_data of the lock may not be set,
-                 * we reset it here */
-                md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, &lockh.cookie,
-                                 dir, NULL);
         }
+        md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, &lockh.cookie, dir, NULL);
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
         page = ll_dir_page_locate(dir, hash, &start, &end);
-        if (IS_ERR(page))
+        if (IS_ERR(page)) {
+                CERROR("dir page locate: "DFID" at "LPU64": rc %ld\n",
+                       PFID(ll_inode2fid(dir)), hash, PTR_ERR(page));
                 GOTO(out_unlock, page);
+        }
 
         if (page != NULL) {
                 /*
@@ -348,17 +348,26 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
 
         page = read_cache_page(mapping, hash_x_index((unsigned long)hash),
                                (filler_t*)mapping->a_ops->readpage, NULL);
-        if (IS_ERR(page))
+        if (IS_ERR(page)) {
+                CERROR("read cache page: "DFID" at "LPU64": rc %ld\n",
+                       PFID(ll_inode2fid(dir)), hash, PTR_ERR(page));
                 GOTO(out_unlock, page);
+        }
 
         wait_on_page(page);
         (void)kmap(page);
-        if (!PageUptodate(page))
+        if (!PageUptodate(page)) {
+                CERROR("page not updated: "DFID" at "LPU64": rc %d\n",
+                       PFID(ll_inode2fid(dir)), hash, -5);
                 goto fail;
+        }
         if (!PageChecked(page))
                 ll_check_page(dir, page);
-        if (PageError(page))
+        if (PageError(page)) {
+                CERROR("page error: "DFID" at "LPU64": rc %d\n",
+                       PFID(ll_inode2fid(dir)), hash, -5);
                 goto fail;
+        }
 hash_collision:
         dp = page_address(page);
 
