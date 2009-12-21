@@ -110,6 +110,21 @@ static inline struct lov_lock_handles *lov_llh_new(struct lov_stripe_md *lsm)
         return llh;
 }
 
+void lov_finish_set(struct lov_request_set *set);
+
+static inline void lov_get_reqset(struct lov_request_set *set)
+{
+        LASSERT(set != NULL);
+        LASSERT(atomic_read(&set->set_refcount) > 0);
+        atomic_inc(&set->set_refcount);
+}
+
+static inline void lov_put_reqset(struct lov_request_set *set)
+{
+        if (atomic_dec_and_test(&set->set_refcount))
+                lov_finish_set(set);
+}
+
 static inline struct lov_lock_handles *
 lov_handle2llh(struct lustre_handle *handle)
 {
