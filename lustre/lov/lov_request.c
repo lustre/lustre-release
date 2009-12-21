@@ -63,7 +63,7 @@ static void lov_init_set(struct lov_request_set *set)
         spin_lock_init(&set->set_lock);
 }
 
-static void lov_finish_set(struct lov_request_set *set)
+void lov_finish_set(struct lov_request_set *set)
 {
         struct list_head *pos, *n;
         ENTRY;
@@ -281,8 +281,7 @@ int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc,
         } else if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc ? rc : ret);
 }
@@ -405,8 +404,7 @@ int lov_fini_match_set(struct lov_request_set *set, __u32 mode, int flags)
             (flags & LDLM_FL_TEST_LOCK))
                 lov_llh_put(set->set_lockh);
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc);
 }
@@ -497,8 +495,7 @@ int lov_fini_cancel_set(struct lov_request_set *set)
         if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc);
 }
@@ -672,9 +669,7 @@ int lov_fini_create_set(struct lov_request_set *set,struct lov_stripe_md **lsmp)
         if (set->set_completes)
                 rc = create_done(set->set_exp, set, lsmp);
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
-
+        lov_put_reqset(set);
         RETURN(rc);
 }
 
@@ -731,7 +726,10 @@ int cb_create_update(struct obd_info *oinfo, int rc)
         struct lov_request *lovreq;
 
         lovreq = container_of(oinfo, struct lov_request, rq_oi);
-        return lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
+        rc= lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
+        if (lov_finished_set(lovreq->rq_rqset))
+                lov_put_reqset(lovreq->rq_rqset);
+        return rc;
 }
 
 
@@ -754,14 +752,17 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oi->oi_md = *lsmp;
         set->set_oi->oi_oa = src_oa;
         set->set_oti = oti;
+        lov_get_reqset(set);
 
         rc = qos_prep_create(exp, set);
         /* qos_shrink_lsm() may have allocated a new lsm */
         *lsmp = oinfo->oi_md;
-        if (rc)
+        if (rc) {
                 lov_fini_create_set(set, lsmp);
-        else
+                lov_put_reqset(set);
+        } else {
                 *reqset = set;
+        }
         RETURN(rc);
 }
 
@@ -844,8 +845,7 @@ int lov_fini_brw_set(struct lov_request_set *set)
                 rc = brw_done(set);
                 /* FIXME update qos data here */
         }
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc);
 }
@@ -981,8 +981,7 @@ int lov_fini_getattr_set(struct lov_request_set *set)
         if (set->set_completes)
                 rc = common_attr_done(set);
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc);
 }
@@ -1062,8 +1061,7 @@ int lov_fini_destroy_set(struct lov_request_set *set)
                 /* FIXME update qos data here */
         }
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(0);
 }
@@ -1140,8 +1138,7 @@ int lov_fini_setattr_set(struct lov_request_set *set)
                 /* FIXME update qos data here */
         }
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
         RETURN(rc);
 }
 
@@ -1269,8 +1266,7 @@ int lov_fini_punch_set(struct lov_request_set *set)
                         rc = common_attr_done(set);
         }
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc);
 }
@@ -1393,8 +1389,7 @@ int lov_fini_sync_set(struct lov_request_set *set)
                 /* FIXME update qos data here */
         }
 
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+        lov_put_reqset(set);
 
         RETURN(rc);
 }
@@ -1518,10 +1513,7 @@ int lov_fini_statfs_set(struct lov_request_set *set)
                 rc = lov_fini_statfs(set->set_obd, set->set_oi->oi_osfs,
                                      set->set_success);
         }
-
-        if (atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
-
+        lov_put_reqset(set);
         RETURN(rc);
 }
 
