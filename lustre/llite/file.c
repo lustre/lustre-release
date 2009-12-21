@@ -124,14 +124,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 GOTO(out, rc = 0);
         }
 
-        /*
-         * here we check if this is forced umount. If so this is called on
-         * canceling "open lock" and we do not call md_close() in this case, as
-         * it will not be successful, as import is already deactivated.
-         */
-        if (obd->obd_force)
-                GOTO(out, rc = 0);
-
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
                 GOTO(out, rc = -ENOMEM); // XXX We leak openhandle and request here.

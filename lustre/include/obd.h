@@ -1467,6 +1467,7 @@ struct md_open_data {
         struct obd_client_handle *mod_och;
         struct ptlrpc_request    *mod_open_req;
         struct ptlrpc_request    *mod_close_req;
+        atomic_t                  mod_refcount;
 };
 
 struct lookup_intent;
@@ -1646,5 +1647,25 @@ static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)
 {
         return oinfo->oi_capa;
 }
+
+static inline struct md_open_data *obd_mod_alloc(void)
+{
+        struct md_open_data *mod;
+        OBD_ALLOC_PTR(mod);
+        if (mod == NULL)
+                return NULL;
+        atomic_set(&mod->mod_refcount, 1);
+        return mod;
+}
+
+#define obd_mod_get(mod) atomic_inc(&(mod)->mod_refcount)
+#define obd_mod_put(mod)                                        \
+({                                                              \
+        if (atomic_dec_and_test(&(mod)->mod_refcount)) {          \
+                if ((mod)->mod_open_req)                          \
+                        ptlrpc_req_finished((mod)->mod_open_req);   \
+                OBD_FREE_PTR(mod);                              \
+        }                                                       \
+})
 
 #endif /* __OBD_H */
