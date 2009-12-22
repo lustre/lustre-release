@@ -343,7 +343,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
                        ". Count %d\n", mo->mot_ioepoch,
                        PFID(mdt_object_fid(mo)), ma->ma_attr.la_size,
                        mo->mot_ioepoch_count);
-                mdt_sizeonmds_enable(info, mo);
+                mdt_object_som_enable(info, mo);
         }
 
         EXIT;
@@ -400,7 +400,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 repbody->ioepoch = mo->mot_ioepoch;
 
                 mdt_object_get(info->mti_env, mo);
-                mdt_mfd_set_mode(mfd, FMODE_EPOCHLCK);
+                mdt_mfd_set_mode(mfd, FMODE_TRUNC);
                 mfd->mfd_object = mo;
                 mfd->mfd_xid = req->rq_xid;
 

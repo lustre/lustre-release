@@ -122,6 +122,7 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
         EXIT;
 }
 
+/** Pack SOM attributes info @opdata for CLOSE, DONE_WRITING rpc. */
 void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -142,10 +143,9 @@ void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data)
         EXIT;
 }
 
-/** Closes epoch and sends Size-on-MDS attribute update if possible.  Call
- * this under ll_inode_info::lli_lock spinlock. */
+/** Closes ioepoch and packs Size-on-MDS attribute if needed into @op_data. */
 void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
-                    struct obd_client_handle **och, unsigned long flags)
+                      struct obd_client_handle **och, unsigned long flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ccc_object *club = cl2ccc(ll_i2info(inode)->lli_clob);
@@ -214,11 +214,14 @@ out:
         return;
 }
 
-int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
-                        __u64 ioepoch)
+/**
+ * Cliens updates SOM attributes on MDS (including llog cookies):
+ * obd_getattr with no lock and md_setattr.
+ */
+int ll_som_update(struct inode *inode, struct md_op_data *op_data)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct md_op_data *op_data;
+        struct ptlrpc_request *request = NULL;
         struct obdo *oa;
         int rc;
         ENTRY;
@@ -229,46 +232,61 @@ int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
                        lli->lli_flags);
 
         OBDO_ALLOC(oa);
-        OBD_ALLOC_PTR(op_data);
-        if (!oa || !op_data) {
+        if (!oa) {
                 CERROR("can't allocate memory for Size-on-MDS update.\n");
                 RETURN(-ENOMEM);
         }
+
+        op_data->op_flags = MF_SOM_CHANGE;
+
         /* If inode is already in another epoch, skip getattr from OSTs. */
-        if (lli->lli_ioepoch == ioepoch) {
-                rc = ll_inode_getattr(inode, oa);
-                if (rc == -ENOENT) {
+        if (lli->lli_ioepoch == op_data->op_ioepoch) {
+                rc = ll_inode_getattr(inode, oa, op_data->op_ioepoch);
+                if (rc) {
                         oa->o_valid = 0;
-                        CDEBUG(D_INODE, "objid "LPX64" is already destroyed\n",
-                               lli->lli_smd->lsm_object_id);
-                } else if (rc) {
-                        CERROR("inode_getattr failed (%d): unable to send a "
-                               "Size-on-MDS attribute update for inode "
-                               "%lu/%u\n", rc, inode->i_ino,
-                               inode->i_generation);
-                        GOTO(out, rc);
+                        if (rc == -ENOENT)
+                                CDEBUG(D_INODE, "objid "LPX64" is destroyed\n",
+                                       lli->lli_smd->lsm_object_id);
+                        else
+                                CERROR("inode_getattr failed (%d): unable to "
+                                       "send a Size-on-MDS attribute update "
+                                       "for inode %lu/%u\n", rc, inode->i_ino,
+                                       inode->i_generation);
+                } else {
+                        CDEBUG(D_INODE, "Size-on-MDS update on "DFID"\n",
+                               PFID(&lli->lli_fid));
                 }
-                CDEBUG(D_INODE, "Size-on-MDS update on "DFID"\n",
-                       PFID(&lli->lli_fid));
+                /* Install attributes into op_data. */
                 md_from_obdo(op_data, oa, oa->o_valid);
         }
-        memcpy(&op_data->op_handle, fh, sizeof(*fh));
 
-        op_data->op_ioepoch = ioepoch;
-        op_data->op_flags |= MF_SOM_CHANGE;
+        rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data,
+                        NULL, 0, NULL, 0, &request, NULL);
+        ptlrpc_req_finished(request);
 
-        rc = ll_md_setattr(inode, op_data, NULL);
-        EXIT;
-out:
-        if (oa)
-                OBDO_FREE(oa);
-        if (op_data)
-                ll_finish_md_op_data(op_data);
-        return rc;
+        OBDO_FREE(oa);
+        RETURN(rc);
 }
 
-/** Sends a DONE_WRITING rpc, packs Size-on-MDS attributes into it, if
- * possible */
+/**
+ * Closes the ioepoch and packs all the attributes into @op_data for
+ * DONE_WRITING rpc.
+ */
+static void ll_prepare_done_writing(struct inode *inode,
+                                    struct md_op_data *op_data,
+                                    struct obd_client_handle **och)
+{
+        ll_ioepoch_close(inode, op_data, och, LLIF_DONE_WRITING);
+        /* If there is no @och, we do not do D_W yet. */
+        if (*och == NULL)
+                return;
+
+        ll_pack_inode2opdata(inode, op_data, &(*och)->och_fh);
+        ll_prep_md_op_data(op_data, inode, NULL, NULL,
+                           0, 0, LUSTRE_OPC_ANY, NULL);
+}
+
+/** Send a DONE_WRITING rpc. */
 static void ll_done_writing(struct inode *inode)
 {
         struct obd_client_handle *och = NULL;
@@ -285,19 +303,16 @@ static void ll_done_writing(struct inode *inode)
                 return;
         }
 
-        ll_ioepoch_close(inode, op_data, &och, LLIF_DONE_WRITING);
+        ll_prepare_done_writing(inode, op_data, &och);
         /* If there is no @och, we do not do D_W yet. */
         if (och == NULL)
                 GOTO(out, 0);
-
-        ll_pack_inode2opdata(inode, op_data, &och->och_fh);
 
         rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &op_data->op_handle,
-                                         op_data->op_ioepoch);
+                rc = ll_som_update(inode, op_data);
         } else if (rc) {
                 CERROR("inode %lu mdc done_writing failed: rc = %d\n",
                        inode->i_ino, rc);

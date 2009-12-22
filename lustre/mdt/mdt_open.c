@@ -128,14 +128,14 @@ static int mdt_ioepoch_opened(struct mdt_object *mo)
         return mo->mot_ioepoch_count;
 }
 
-int mdt_sizeonmds_enabled(struct mdt_object *mo)
+int mdt_object_is_som_enabled(struct mdt_object *mo)
 {
         return !mo->mot_ioepoch;
 }
 
 /* Re-enable Size-on-MDS. */
-void mdt_sizeonmds_enable(struct mdt_thread_info *info,
-                          struct mdt_object *mo)
+void mdt_object_som_enable(struct mdt_thread_info *info,
+                           struct mdt_object *mo)
 {
        spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
        if (info->mti_ioepoch->ioepoch == mo->mot_ioepoch) {
@@ -213,7 +213,7 @@ static int mdt_sizeonmds_update(struct mdt_thread_info *info,
                                                 LA_ATIME | LA_MTIME | LA_CTIME;
                 RETURN(mdt_attr_set(info, o, 0));
         } else
-                mdt_sizeonmds_enable(info, o);
+                mdt_object_som_enable(info, o);
         RETURN(0);
 }
 
@@ -1220,7 +1220,7 @@ out:
 }
 
 #define MFD_CLOSED(mode) (((mode) & ~(FMODE_EPOCH | FMODE_SOM | \
-                                      FMODE_EPOCHLCK)) == FMODE_CLOSED)
+                                      FMODE_TRUNC)) == FMODE_CLOSED)
 
 static int mdt_mfd_closed(struct mdt_file_data *mfd)
 {
@@ -1238,7 +1238,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
         mode = mfd->mfd_mode;
 
-        if ((mode & FMODE_WRITE) || (mode & FMODE_EPOCHLCK)) {
+        if ((mode & FMODE_WRITE) || (mode & FMODE_TRUNC)) {
                 mdt_write_put(info->mti_mdt, o);
                 ret = mdt_ioepoch_close(info, o);
         } else if (mode & MDS_FMODE_EXEC) {
@@ -1423,7 +1423,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
         }
 
         LASSERT(mfd->mfd_mode == FMODE_EPOCH ||
-                mfd->mfd_mode == FMODE_EPOCHLCK);
+                mfd->mfd_mode == FMODE_TRUNC);
         class_handle_unhash(&mfd->mfd_handle);
         list_del_init(&mfd->mfd_list);
         spin_unlock(&med->med_open_lock);

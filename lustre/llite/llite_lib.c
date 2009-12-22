@@ -1215,8 +1215,7 @@ static int ll_setattr_done_writing(struct inode *inode,
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &op_data->op_handle,
-                                         op_data->op_ioepoch);
+                rc = ll_som_update(inode, op_data);
         } else if (rc) {
                 CERROR("inode %lu mdc truncate failed: rc = %d\n",
                        inode->i_ino, rc);

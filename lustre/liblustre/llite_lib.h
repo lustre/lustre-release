@@ -230,7 +230,7 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
-int llu_inode_getattr(struct inode *inode, struct obdo *obdo);
+int llu_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch);
 int llu_md_setattr(struct inode *inode, struct md_op_data *op_data,
                    struct md_open_data **mod);
 int llu_setattr_raw(struct inode *inode, struct iattr *attr);
@@ -251,8 +251,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode);
 void llu_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                            struct lustre_handle *fh);
 int llu_file_release(struct inode *inode);
-int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
-                         __u64 ioepoch);
+int llu_som_update(struct inode *inode, struct md_op_data *op_data);
 int llu_iop_close(struct inode *inode);
 _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);

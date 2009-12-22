@@ -210,6 +210,6 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                 tgt->o_id = lsm->lsm_object_id;
                 if (valid & OBD_MD_FLSIZE)
                         tgt->o_size = lov_stripe_size(lsm,src->o_size,stripeno);
-                *set = 1;
         }
+        *set += 1;
 }

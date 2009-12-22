@@ -377,7 +377,7 @@ void mdt_pack_size2body(struct mdt_thread_info *info, struct mdt_object *o)
 
         /* Check if Size-on-MDS is enabled. */
         if ((mdt_conn_flags(info) & OBD_CONNECT_SOM) &&
-            S_ISREG(attr->la_mode) && mdt_sizeonmds_enabled(o)) {
+            S_ISREG(attr->la_mode) && mdt_object_is_som_enabled(o)) {
                 b->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
                 b->size = attr->la_size;
                 b->blocks = attr->la_blocks;

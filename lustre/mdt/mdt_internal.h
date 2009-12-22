@@ -575,8 +575,8 @@ int mdt_reint_open(struct mdt_thread_info *info,
 struct mdt_file_data *mdt_handle2mfd(struct mdt_thread_info *,
                                      const struct lustre_handle *);
 int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o);
-void mdt_sizeonmds_enable(struct mdt_thread_info *info, struct mdt_object *mo);
-int mdt_sizeonmds_enabled(struct mdt_object *mo);
+void mdt_object_som_enable(struct mdt_thread_info *info, struct mdt_object *mo);
+int mdt_object_is_som_enabled(struct mdt_object *mo);
 int mdt_write_get(struct mdt_device *mdt, struct mdt_object *o);
 int mdt_write_read(struct mdt_device *mdt, struct mdt_object *o);
 struct mdt_file_data *mdt_mfd_new(void);

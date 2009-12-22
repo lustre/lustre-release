@@ -343,7 +343,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 /*
  * really does the getattr on the inode and updates its fields
  */
-int llu_inode_getattr(struct inode *inode, struct obdo *obdo)
+int llu_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ptlrpc_request_set *set;
@@ -359,10 +359,12 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo)
         oinfo.oi_oa->o_id = lsm->lsm_object_id;
         oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
         oinfo.oi_oa->o_mode = S_IFREG;
+        oinfo.oi_oa->o_ioepoch = ioepoch;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
-                               OBD_MD_FLCTIME | OBD_MD_FLGROUP;
+                               OBD_MD_FLCTIME | OBD_MD_FLGROUP |
+                               OBD_MD_FLATIME | OBD_MD_FLEPOCH;
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
@@ -712,8 +714,7 @@ static int llu_setattr_done_writing(struct inode *inode,
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = llu_sizeonmds_update(inode, &op_data->op_handle,
-                                          op_data->op_ioepoch);
+                rc = llu_som_update(inode, op_data);
         } else if (rc) {
                 CERROR("inode %llu mdc truncate failed: rc = %d\n",
                        (unsigned long long)st->st_ino, rc);

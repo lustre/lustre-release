@@ -1027,7 +1027,7 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLCOOKIE    (0x00800000ULL) /* log cancellation cookie */
 #define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
 #define OBD_MD_FLFID       (0x02000000ULL) /* ->ost write inline fid */
-#define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write easize is epoch */
+#define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write with ioepoch */
                                            /* ->mds if epoch opens or closes */
 #define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
 #define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
@@ -1530,8 +1530,11 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define FMODE_WRITE              00000002
 #endif
 
+/* IO Epoch is opened on a closed file. */
 #define FMODE_EPOCH              01000000
-#define FMODE_EPOCHLCK           02000000
+/* IO Epoch is opened on a file truncate. */
+#define FMODE_TRUNC              02000000
+/* Size-on-MDS Attribute Update is pending. */
 #define FMODE_SOM                04000000
 #define FMODE_CLOSED             0
 

@@ -2029,10 +2029,8 @@ void dump_obdo(struct obdo *oa)
         if (valid & OBD_MD_FLGENER)
                 CDEBUG(D_RPCTRACE, "obdo: o_generation = %u\n",
                        oa->o_generation);
-        if (valid & OBD_MD_FLEASIZE)
-                CDEBUG(D_RPCTRACE, "obdo: o_easize = %u\n", oa->o_easize);
         else if (valid & OBD_MD_FLEPOCH)
-                CDEBUG(D_RPCTRACE, "obdo: o_epoc (o_easize) = %u\n", oa->o_easize);
+                CDEBUG(D_RPCTRACE, "obdo: o_ioepoch = "LPD64"\n", oa->o_ioepoch);
         if (valid & OBD_MD_FLID)
                 CDEBUG(D_RPCTRACE, "obdo: o_stripe_idx = %u\n", oa->o_stripe_idx);
         if (valid & OBD_MD_FLHANDLE)

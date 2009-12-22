@@ -82,6 +82,10 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
         op_data->op_capa1 = ll_mdscapa_get(inode);
 }
 
+/**
+ * Closes the IO epoch and packs all the attributes into @op_data for
+ * the CLOSE rpc.
+ */
 static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
                              struct obd_client_handle *och)
 {
@@ -100,6 +104,8 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 
 out:
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
+        ll_prep_md_op_data(op_data, inode, NULL, NULL,
+                           0, 0, LUSTRE_OPC_ANY, NULL);
         EXIT;
 }
 
@@ -137,8 +143,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &op_data->op_handle,
-                                         op_data->op_ioepoch);
+                rc = ll_som_update(inode, op_data);
                 if (rc) {
                         CERROR("inode %lu mdc Size-on-MDS update failed: "
                                "rc = %d\n", inode->i_ino, rc);
@@ -398,6 +403,11 @@ out:
         RETURN(rc);
 }
 
+/**
+ * Assign an obtained @ioepoch to client's inode. No lock is needed, MDS does
+ * not believe attributes if a few ioepoch holders exist. Attributes for
+ * previous ioepoch if new one is opened are also skipped by MDS.
+ */
 void ll_ioepoch_open(struct ll_inode_info *lli, __u64 ioepoch)
 {
         if (ioepoch && lli->lli_ioepoch != ioepoch) {
@@ -677,7 +687,8 @@ out_openerr:
 
 /* Fills the obdo with the attributes for the lsm */
 static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
-                          struct obd_capa *capa, struct obdo *obdo)
+                          struct obd_capa *capa, struct obdo *obdo,
+                          __u64 ioepoch)
 {
         struct ptlrpc_request_set *set;
         struct obd_info            oinfo = { { { 0 } } };
@@ -692,11 +703,12 @@ static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
         oinfo.oi_oa->o_id = lsm->lsm_object_id;
         oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
         oinfo.oi_oa->o_mode = S_IFREG;
+        oinfo.oi_oa->o_ioepoch = ioepoch;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                OBD_MD_FLBLKSZ | OBD_MD_FLATIME |
                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                               OBD_MD_FLGROUP;
+                               OBD_MD_FLGROUP | OBD_MD_FLEPOCH;
         oinfo.oi_capa = capa;
 
         set = ptlrpc_prep_set();
@@ -716,15 +728,16 @@ static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
         RETURN(rc);
 }
 
-/* Fills the obdo with the attributes for the inode defined by lsm */
-int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
+/** Performs the getattr for @ioepoch on the inode and updates its fields. */
+int ll_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch)
 {
         struct ll_inode_info *lli  = ll_i2info(inode);
         struct obd_capa      *capa = ll_mdscapa_get(inode);
         int rc;
         ENTRY;
 
-        rc = ll_lsm_getattr(lli->lli_smd, ll_i2dtexp(inode), capa, obdo);
+        rc = ll_lsm_getattr(lli->lli_smd, ll_i2dtexp(inode),
+                            capa, obdo, ioepoch);
         capa_put(capa);
         if (rc == 0) {
                 obdo_refresh_inode(inode, obdo, obdo->o_valid);
@@ -766,7 +779,7 @@ int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
         struct obdo obdo = { 0 };
         int rc;
 
-        rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, &obdo);
+        rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, &obdo, 0);
         if (rc == 0) {
                 st->st_size   = obdo.o_size;
                 st->st_blocks = obdo.o_blocks;
