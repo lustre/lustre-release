@@ -286,12 +286,12 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         /* attr shouldn't be set on remote object */
         LASSERT(mdt_object_exists(mo) >= 0);
 
-        if (exp_connect_som(info->mti_exp) && info->mti_epoch)
-                som_update = (info->mti_epoch->flags & MF_SOM_CHANGE);
+        if (exp_connect_som(info->mti_exp) && info->mti_ioepoch)
+                som_update = (info->mti_ioepoch->flags & MF_SOM_CHANGE);
 
         /* Try to avoid object_lock if another epoch has been started
          * already. */
-        if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
+        if (som_update && (info->mti_ioepoch->ioepoch != mo->mot_ioepoch))
                 RETURN(0);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
@@ -310,7 +310,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         /* Setattrs are syncronized through dlm lock taken above. If another
          * epoch started, its attributes may be already flushed on disk,
          * skip setattr. */
-        if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
+        if (som_update && (info->mti_ioepoch->ioepoch != mo->mot_ioepoch))
                 GOTO(out_unlock, rc = 0);
 
         if (mdt_object_exists(mo) == 0)
@@ -339,9 +339,10 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
 
         /* Re-enable SIZEONMDS. */
         if (som_update) {
-                CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
-                       mo->mot_ioepoch, PFID(mdt_object_fid(mo)),
-                       mo->mot_epochcount);
+                CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID" size "LPU64
+                       ". Count %d\n", mo->mot_ioepoch,
+                       PFID(mdt_object_fid(mo)), ma->ma_attr.la_size,
+                       mo->mot_ioepoch_count);
                 mdt_sizeonmds_enable(info, mo);
         }
 
@@ -384,8 +385,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                         if (mdt_write_read(info->mti_mdt, mo) < 0)
                                 GOTO(out_put, rc = -ETXTBSY);
                 }
-        } else if (info->mti_epoch &&
-                    (info->mti_epoch->flags & MF_EPOCH_OPEN)) {
+        } else if (info->mti_ioepoch &&
+                   (info->mti_ioepoch->flags & MF_EPOCH_OPEN)) {
                 /* Truncate case. */
                 rc = mdt_write_get(info->mti_mdt, mo);
                 if (rc)
@@ -395,7 +396,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 if (mfd == NULL)
                         GOTO(out_put, rc = -ENOMEM);
 
-                mdt_epoch_open(info, mo);
+                mdt_ioepoch_open(info, mo);
                 repbody->ioepoch = mo->mot_ioepoch;
 
                 mdt_object_get(info->mti_env, mo);
@@ -409,30 +410,30 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
         }
 
-        if (info->mti_epoch && (info->mti_epoch->flags & MF_SOM_CHANGE))
+        if (info->mti_ioepoch && (info->mti_ioepoch->flags & MF_SOM_CHANGE))
                 ma->ma_attr_flags |= MDS_PERM_BYPASS | MDS_SOM;
 
         rc = mdt_attr_set(info, mo, rr->rr_flags);
         if (rc)
                 GOTO(out_put, rc);
 
-        if (info->mti_epoch && (info->mti_epoch->flags & MF_SOM_CHANGE)) {
+        if (info->mti_ioepoch && (info->mti_ioepoch->flags & MF_SOM_CHANGE)) {
                 LASSERT(mdt_conn_flags(info) & OBD_CONNECT_SOM);
-                LASSERT(info->mti_epoch);
+                LASSERT(info->mti_ioepoch);
 
                 spin_lock(&med->med_open_lock);
                 /* Size-on-MDS Update. Find and free mfd. */
-                mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
+                mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
                 if (mfd == NULL) {
                         spin_unlock(&med->med_open_lock);
                         CDEBUG(D_INODE | D_ERROR, "no handle for file close: "
                                         "fid = "DFID": cookie = "LPX64"\n",
                                         PFID(info->mti_rr.rr_fid1),
-                                        info->mti_epoch->handle.cookie);
+                                        info->mti_ioepoch->handle.cookie);
                         GOTO(out_put, rc = -ESTALE);
                 }
                 LASSERT(mfd->mfd_mode == FMODE_SOM);
-                LASSERT(!(info->mti_epoch->flags & MF_EPOCH_CLOSE));
+                LASSERT(!(info->mti_ioepoch->flags & MF_EPOCH_CLOSE));
 
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);

@@ -801,16 +801,17 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         RETURN(0);
 }
 
-static int mdt_epoch_unpack(struct mdt_thread_info *info)
+static int mdt_ioepoch_unpack(struct mdt_thread_info *info)
 {
         struct req_capsule *pill = info->mti_pill;
         ENTRY;
 
         if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
-                info->mti_epoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
+                info->mti_ioepoch =
+                        req_capsule_client_get(pill, &RMF_MDT_EPOCH);
         else
-                info->mti_epoch = NULL;
-        RETURN(info->mti_epoch == NULL ? -EFAULT : 0);
+                info->mti_ioepoch = NULL;
+        RETURN(info->mti_ioepoch == NULL ? -EFAULT : 0);
 }
 
 static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
@@ -837,7 +838,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 RETURN(rc);
 
         /* Epoch may be absent */
-        mdt_epoch_unpack(info);
+        mdt_ioepoch_unpack(info);
 
         ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
         if (ma->ma_lmm_size) {
@@ -861,7 +862,7 @@ int mdt_close_unpack(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        rc = mdt_epoch_unpack(info);
+        rc = mdt_ioepoch_unpack(info);
         if (rc)
                 RETURN(rc);
 

@@ -307,7 +307,8 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
                 rec->sa_suppgid = op_data->op_suppgids[0];
 }
 
-static void mdc_epoch_pack(struct mdt_epoch *epoch, struct md_op_data *op_data)
+static void mdc_ioepoch_pack(struct mdt_ioepoch *epoch,
+                             struct md_op_data *op_data)
 {
         memcpy(&epoch->handle, &op_data->op_handle, sizeof(epoch->handle));
         epoch->ioepoch = op_data->op_ioepoch;
@@ -318,7 +319,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                       void *ea, int ealen, void *ea2, int ea2len)
 {
         struct mdt_rec_setattr *rec;
-        struct mdt_epoch *epoch;
+        struct mdt_ioepoch *epoch;
         
         CLASSERT(sizeof(struct mdt_rec_reint) ==sizeof(struct mdt_rec_setattr));
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -328,7 +329,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 
         if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
                 epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
-                mdc_epoch_pack(epoch, op_data);
+                mdc_ioepoch_pack(epoch, op_data);
         }
 
         if (ealen == 0)
@@ -464,7 +465,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
 
 void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
-        struct mdt_epoch *epoch;
+        struct mdt_ioepoch *epoch;
         struct mdt_rec_setattr *rec;
 
         epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
@@ -472,7 +473,7 @@ void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 
         mdc_setattr_pack_rec(rec, op_data);
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-        mdc_epoch_pack(epoch, op_data);
+        mdc_ioepoch_pack(epoch, op_data);
 }
 
 static int mdc_req_avail(struct client_obd *cli, struct mdc_cache_waiter *mcw)

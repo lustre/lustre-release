@@ -704,7 +704,10 @@ static int llu_setattr_done_writing(struct inode *inode,
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
                op_data->op_ioepoch, PFID(&lli->lli_fid));
 
-        op_data->op_flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
+        op_data->op_flags = MF_EPOCH_CLOSE;
+        llu_done_writing_attr(inode, op_data);
+        llu_pack_inode2opdata(inode, op_data, NULL);
+
         rc = md_done_writing(llu_i2sbi(inode)->ll_md_exp, op_data, mod);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
@@ -796,7 +799,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 memcpy(&op_data.op_attr, attr, sizeof(*attr));
 
                 /* Open epoch for truncate. */
-                if ((llu_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) &&
+                if (exp_connect_som(llu_i2mdexp(inode)) &&
                     (ia_valid & ATTR_SIZE))
                         op_data.op_flags = MF_EPOCH_OPEN;
                 rc = llu_md_setattr(inode, &op_data, &mod);

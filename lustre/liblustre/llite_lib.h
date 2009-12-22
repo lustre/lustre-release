@@ -246,7 +246,10 @@ void llu_finish_md_op_data(struct md_op_data *op_data);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
+void llu_done_writing_attr(struct inode *inode, struct md_op_data *op_data);
 int llu_md_close(struct obd_export *md_exp, struct inode *inode);
+void llu_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
+                           struct lustre_handle *fh);
 int llu_file_release(struct inode *inode);
 int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
                          __u64 ioepoch);

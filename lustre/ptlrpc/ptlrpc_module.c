@@ -248,7 +248,7 @@ EXPORT_SYMBOL(lustre_swab_ost_lvb);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
 EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_mdt_body);
-EXPORT_SYMBOL(lustre_swab_mdt_epoch);
+EXPORT_SYMBOL(lustre_swab_mdt_ioepoch);
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);
 EXPORT_SYMBOL(lustre_swab_mds_remote_perm);
 EXPORT_SYMBOL(lustre_swab_mdt_remote_perm);

@@ -187,7 +187,7 @@ struct mdt_object {
         struct md_object        mot_obj;
         __u64                   mot_ioepoch;
         __u64                   mot_flags;
-        int                     mot_epochcount;
+        int                     mot_ioepoch_count;
         int                     mot_writecount;
 };
 
@@ -358,7 +358,7 @@ struct mdt_thread_info {
         } mti_u;
 
         /* IO epoch related stuff. */
-        struct mdt_epoch          *mti_epoch;
+        struct mdt_ioepoch        *mti_ioepoch;
         __u64                      mti_replayepoch;
 
         /* server and client data buffers */
@@ -574,7 +574,7 @@ int mdt_reint_open(struct mdt_thread_info *info,
 
 struct mdt_file_data *mdt_handle2mfd(struct mdt_thread_info *,
                                      const struct lustre_handle *);
-int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o);
+int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o);
 void mdt_sizeonmds_enable(struct mdt_thread_info *info, struct mdt_object *mo);
 int mdt_sizeonmds_enabled(struct mdt_object *mo);
 int mdt_write_get(struct mdt_device *mdt, struct mdt_object *o);

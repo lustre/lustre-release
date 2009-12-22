@@ -123,9 +123,9 @@ static int mdt_create_data(struct mdt_thread_info *info,
         RETURN(rc);
 }
 
-static int mdt_epoch_opened(struct mdt_object *mo)
+static int mdt_ioepoch_opened(struct mdt_object *mo)
 {
-        return mo->mot_epochcount;
+        return mo->mot_ioepoch_count;
 }
 
 int mdt_sizeonmds_enabled(struct mdt_object *mo)
@@ -138,8 +138,8 @@ void mdt_sizeonmds_enable(struct mdt_thread_info *info,
                           struct mdt_object *mo)
 {
        spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
-       if (info->mti_epoch->ioepoch == mo->mot_ioepoch) {
-                LASSERT(!mdt_epoch_opened(mo));
+       if (info->mti_ioepoch->ioepoch == mo->mot_ioepoch) {
+                LASSERT(!mdt_ioepoch_opened(mo));
                 mo->mot_ioepoch = 0;
                 mo->mot_flags = 0;
        }
@@ -148,7 +148,7 @@ void mdt_sizeonmds_enable(struct mdt_thread_info *info,
 
 /* Open the epoch. Epoch open is allowed if @writecount is not negative.
  * The epoch and writecount handling is performed under the mdt_ioepoch_lock. */
-int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
+int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o)
 {
         struct mdt_device *mdt = info->mti_mdt;
         int cancel = 0;
@@ -160,7 +160,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
                 RETURN(0);
 
         spin_lock(&mdt->mdt_ioepoch_lock);
-        if (mdt_epoch_opened(o)) {
+        if (mdt_ioepoch_opened(o)) {
                 /* Epoch continues even if there is no writers yet. */
                 CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID"\n",
                        o->mot_ioepoch, PFID(mdt_object_fid(o)));
@@ -175,7 +175,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
                        mdt->mdt_ioepoch, PFID(mdt_object_fid(o)));
                 cancel = 1;
         }
-        o->mot_epochcount++;
+        o->mot_ioepoch_count++;
         spin_unlock(&mdt->mdt_ioepoch_lock);
 
         /* Cancel Size-on-MDS attributes on clients if not truncate.
@@ -198,7 +198,7 @@ static int mdt_sizeonmds_update(struct mdt_thread_info *info,
         ENTRY;
 
         CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
-               o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_epochcount);
+               o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_ioepoch_count);
 
         if (info->mti_attr.ma_attr.la_valid & LA_SIZE) {
                 /* Do Size-on-MDS attribute update.
@@ -222,7 +222,7 @@ static int mdt_sizeonmds_update(struct mdt_thread_info *info,
  * Returns 0 if epoch closes.
  * Returns -EAGAIN if epoch closes but an Size-on-MDS Update is still needed
  * from the client. */
-static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
+static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
 {
         int eviction = (mdt_info_req(info) == NULL ? 1 : 0);
         struct lu_attr *la = &info->mti_attr.ma_attr;
@@ -238,19 +238,19 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
         spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
 
         /* Epoch closes only if client tells about it or eviction occures. */
-        if (eviction || (info->mti_epoch->flags & MF_EPOCH_CLOSE)) {
-                LASSERT(o->mot_epochcount);
-                o->mot_epochcount--;
+        if (eviction || (info->mti_ioepoch->flags & MF_EPOCH_CLOSE)) {
+                LASSERT(o->mot_ioepoch_count);
+                o->mot_ioepoch_count--;
 
                 CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
                        o->mot_ioepoch, PFID(mdt_object_fid(o)),
-                       o->mot_epochcount);
+                       o->mot_ioepoch_count);
 
                 if (!eviction)
-                        achange = (info->mti_epoch->flags & MF_SOM_CHANGE);
+                        achange = (info->mti_ioepoch->flags & MF_SOM_CHANGE);
 
                 rc = 0;
-                if (!eviction && !mdt_epoch_opened(o)) {
+                if (!eviction && !mdt_ioepoch_opened(o)) {
                         /* Epoch ends. Is an Size-on-MDS update needed? */
                         if (o->mot_flags & MF_SOM_CHANGE) {
                                 /* Some previous writer changed the attribute.
@@ -268,7 +268,7 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                         o->mot_flags |= MF_SOM_CHANGE;
         }
 
-        opened = mdt_epoch_opened(o);
+        opened = mdt_ioepoch_opened(o);
         spin_unlock(&info->mti_mdt->mdt_ioepoch_lock);
 
         /* If eviction occurred, do nothing. */
@@ -424,7 +424,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         if (flags & FMODE_WRITE) {
                 rc = mdt_write_get(info->mti_mdt, o);
                 if (rc == 0) {
-                        mdt_epoch_open(info, o);
+                        mdt_ioepoch_open(info, o);
                         repbody->ioepoch = o->mot_ioepoch;
                 }
         } else if (flags & MDS_FMODE_EXEC) {
@@ -1240,11 +1240,11 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
         if ((mode & FMODE_WRITE) || (mode & FMODE_EPOCHLCK)) {
                 mdt_write_put(info->mti_mdt, o);
-                ret = mdt_epoch_close(info, o);
+                ret = mdt_ioepoch_close(info, o);
         } else if (mode & MDS_FMODE_EXEC) {
                 mdt_write_allow(info->mti_mdt, o);
         } else if (mode & FMODE_EPOCH) {
-                ret = mdt_epoch_close(info, o);
+                ret = mdt_ioepoch_close(info, o);
         }
 
         /* Update atime on close only. */
@@ -1314,7 +1314,7 @@ int mdt_close(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
-        LASSERT(info->mti_epoch);
+        LASSERT(info->mti_ioepoch);
 
         req_capsule_set_size(info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
                              info->mti_mdt->mdt_max_mdsize);
@@ -1350,12 +1350,12 @@ int mdt_close(struct mdt_thread_info *info)
 
         med = &req->rq_export->exp_mdt_data;
         spin_lock(&med->med_open_lock);
-        mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
+        mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
         if (mdt_mfd_closed(mfd)) {
                 spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for file close: fid = "DFID
                        ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
-                       info->mti_epoch->handle.cookie);
+                       info->mti_ioepoch->handle.cookie);
                 /** not serious error since bug 3633 */
                 rc = -ESTALE;
         } else {
@@ -1411,14 +1411,14 @@ int mdt_done_writing(struct mdt_thread_info *info)
 
         med = &info->mti_exp->exp_mdt_data;
         spin_lock(&med->med_open_lock);
-        mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
+        mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
         if (mfd == NULL) {
                 spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for done write: fid = "DFID
                        ": cookie = "LPX64" ioepoch = "LPU64"\n",
                        PFID(info->mti_rr.rr_fid1),
-                       info->mti_epoch->handle.cookie,
-                       info->mti_epoch->ioepoch);
+                       info->mti_ioepoch->handle.cookie,
+                       info->mti_ioepoch->ioepoch);
                 RETURN(-ESTALE);
         }
 
@@ -1429,7 +1429,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
         spin_unlock(&med->med_open_lock);
 
         /* Set EPOCH CLOSE flag if not set by client. */
-        info->mti_epoch->flags |= MF_EPOCH_CLOSE;
+        info->mti_ioepoch->flags |= MF_EPOCH_CLOSE;
         info->mti_attr.ma_valid = 0;
         rc = mdt_mfd_close(info, mfd);
         mdt_empty_transno(info);

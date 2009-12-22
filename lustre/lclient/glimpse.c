@@ -223,10 +223,7 @@ int cl_local_size(struct inode *inode)
 
         ENTRY;
 
-        /*
-         * XXX layering violation.
-         */
-        if (cl_i2info(inode)->lli_smd->lsm_stripe_count == 0)
+        if (!cl_i2info(inode)->lli_smd)
                 RETURN(0);
 
         result = cl_io_get(inode, &env, &io, &refcheck);

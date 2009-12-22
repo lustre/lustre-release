@@ -348,26 +348,67 @@ int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
         LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
         LASSERT(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM);
 
-        rc = llu_inode_getattr(inode, &oa);
-        if (rc == -ENOENT) {
-                oa.o_valid = 0;
-                CDEBUG(D_INODE, "objid "LPX64" is already destroyed\n",
-                       lli->lli_smd->lsm_object_id);
-        } else if (rc) {
-                CERROR("inode_getattr failed (%d): unable to send a "
-                       "Size-on-MDS attribute update for inode %llu/%lu\n",
-                       rc, (long long)llu_i2stat(inode)->st_ino,
-                       lli->lli_st_generation);
-                RETURN(rc);
-        }
+        /* If inode is already in another epoch, skip getattr from OSTs. */
+        if (lli->lli_ioepoch == ioepoch) {
+                rc = llu_inode_getattr(inode, &oa);
+                if (rc == -ENOENT) {
+                        oa.o_valid = 0;
+                        CDEBUG(D_INODE, "objid "LPX64" is already destroyed\n",
+                               lli->lli_smd->lsm_object_id);
+                } else if (rc) {
+                        CERROR("inode_getattr failed (%d): unable to send a "
+                               "Size-on-MDS attribute update for inode "
+                               "%llu/%lu\n", rc,
+                               (long long)llu_i2stat(inode)->st_ino,
+                               lli->lli_st_generation);
+                        RETURN(rc);
+                }
 
-        md_from_obdo(&op_data, &oa, oa.o_valid);
+                md_from_obdo(&op_data, &oa, oa.o_valid);
+        }
         memcpy(&op_data.op_handle, fh, sizeof(*fh));
         op_data.op_ioepoch = ioepoch;
         op_data.op_flags |= MF_SOM_CHANGE;
 
         rc = llu_md_setattr(inode, &op_data, NULL);
         RETURN(rc);
+}
+
+void llu_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
+                           struct lustre_handle *fh)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
+        ENTRY;
+
+        op_data->op_fid1 = lli->lli_fid;
+        op_data->op_attr.ia_atime = st->st_atime;
+        op_data->op_attr.ia_mtime = st->st_mtime;
+        op_data->op_attr.ia_ctime = st->st_ctime;
+        op_data->op_attr.ia_size = st->st_size;
+        op_data->op_attr_blocks = st->st_blocks;
+        op_data->op_attr.ia_attr_flags = lli->lli_st_flags;
+        op_data->op_ioepoch = lli->lli_ioepoch;
+        if (fh)
+                op_data->op_handle = *fh;
+        EXIT;
+}
+
+void llu_done_writing_attr(struct inode *inode, struct md_op_data *op_data)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        ENTRY;
+
+        op_data->op_flags |= MF_SOM_CHANGE;
+
+        /* Pack Size-on-MDS attributes if we are in IO
+         * epoch and attributes are valid. */
+        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
+        if (!cl_local_size(inode))
+                op_data->op_attr.ia_valid |= ATTR_MTIME_SET | ATTR_CTIME_SET |
+                        ATTR_ATIME_SET | ATTR_SIZE | ATTR_BLOCKS;
+
+        EXIT;
 }
 
 int llu_md_close(struct obd_export *md_exp, struct inode *inode)
@@ -396,27 +437,12 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                 } else {
                         /* Inode cannot be dirty. Close the epoch. */
                         op_data.op_flags |= MF_EPOCH_CLOSE;
-                        /* XXX: Send CHANGE flag only if Size-on-MDS inode attributes
-                         * are really changed.  */
-                        op_data.op_flags |= MF_SOM_CHANGE;
-
-                        /* Pack Size-on-MDS attributes if we are in IO epoch and
-                         * attributes are valid. */
-                        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
-                        if (!cl_local_size(inode))
-                                op_data.op_attr.ia_valid |=
-                                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+                        /* XXX: Send SOM attributes only if they are really
+                         * changed.  */
+                        llu_done_writing_attr(inode, &op_data);
                 }
         }
-        op_data.op_fid1 = lli->lli_fid;
-        op_data.op_attr.ia_atime = st->st_atime;
-        op_data.op_attr.ia_mtime = st->st_mtime;
-        op_data.op_attr.ia_ctime = st->st_ctime;
-        op_data.op_attr.ia_size = st->st_size;
-        op_data.op_attr_blocks = st->st_blocks;
-        op_data.op_attr.ia_attr_flags = lli->lli_st_flags;
-        op_data.op_ioepoch = lli->lli_ioepoch;
-        memcpy(&op_data.op_handle, &och->och_fh, sizeof(op_data.op_handle));
+        llu_pack_inode2opdata(inode, &op_data, &och->och_fh);
 
         rc = md_close(md_exp, &op_data, och->och_mod, &req);
         if (rc == -EAGAIN) {

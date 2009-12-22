@@ -568,14 +568,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_misc));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_misc) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_misc));
-        LASSERTF((int)offsetof(struct obdo, o_easize) == 112, " found %lld\n",
-                 (long long)(int)offsetof(struct obdo, o_easize));
-        LASSERTF((int)sizeof(((struct obdo *)0)->o_easize) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct obdo *)0)->o_easize));
-        LASSERTF((int)offsetof(struct obdo, o_mds) == 116, " found %lld\n",
-                 (long long)(int)offsetof(struct obdo, o_mds));
-        LASSERTF((int)sizeof(((struct obdo *)0)->o_mds) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct obdo *)0)->o_mds));
+        LASSERTF((int)offsetof(struct obdo, o_ioepoch) == 112, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_ioepoch));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_ioepoch) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_ioepoch));
         LASSERTF((int)offsetof(struct obdo, o_stripe_idx) == 120, " found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_stripe_idx));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_stripe_idx) == 4, " found %lld\n",

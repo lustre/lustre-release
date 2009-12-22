@@ -743,8 +743,8 @@ const struct req_msg_field RMF_QUNIT_DATA =
 EXPORT_SYMBOL(RMF_QUNIT_DATA);
 
 const struct req_msg_field RMF_MDT_EPOCH =
-        DEFINE_MSGF("mdt_epoch", 0,
-                    sizeof(struct mdt_epoch), lustre_swab_mdt_epoch, NULL);
+        DEFINE_MSGF("mdt_ioepoch", 0,
+                    sizeof(struct mdt_ioepoch), lustre_swab_mdt_ioepoch, NULL);
 EXPORT_SYMBOL(RMF_MDT_EPOCH);
 
 const struct req_msg_field RMF_PTLRPC_BODY =

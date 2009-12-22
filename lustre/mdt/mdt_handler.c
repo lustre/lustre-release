@@ -4840,7 +4840,7 @@ static int mdt_object_print(const struct lu_env *env, void *cookie,
         return (*p)(env, cookie, LUSTRE_MDT_NAME"-object@%p(ioepoch=%llu "
                     "flags=%llx, epochcount=%d, writecount=%d)",
                     mdto, mdto->mot_ioepoch, mdto->mot_flags,
-                    mdto->mot_epochcount, mdto->mot_writecount);
+                    mdto->mot_ioepoch_count, mdto->mot_writecount);
 }
 
 static const struct lu_device_operations mdt_lu_ops = {
@@ -4920,9 +4920,8 @@ static int mdt_connect_internal(struct obd_export *exp,
                 return -EBADE;
         }
 
-        if (mdt->mdt_som_conf &&
-            !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS) &&
-            !(exp->exp_connect_flags & OBD_CONNECT_SOM)) {
+        if (mdt->mdt_som_conf && !exp_connect_som(exp) &&
+            !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS)) {
                 CWARN("%s: MDS has SOM enabled, but client does not support "
                       "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
                 return -EBADE;

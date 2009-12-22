@@ -246,8 +246,7 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_nlink);
         CHECK_MEMBER(obdo, o_generation);
         CHECK_MEMBER(obdo, o_misc);
-        CHECK_MEMBER(obdo, o_easize);
-        CHECK_MEMBER(obdo, o_mds);
+        CHECK_MEMBER(obdo, o_ioepoch);
         CHECK_MEMBER(obdo, o_stripe_idx);
         CHECK_MEMBER(obdo, o_padding_1);
         CHECK_MEMBER(obdo, o_handle);

@@ -1364,14 +1364,14 @@ struct mdt_body {
 
 extern void lustre_swab_mdt_body (struct mdt_body *b);
 
-struct mdt_epoch {
+struct mdt_ioepoch {
         struct lustre_handle handle;
         __u64  ioepoch;
         __u32  flags;
         __u32  padding;
 };
 
-extern void lustre_swab_mdt_epoch (struct mdt_epoch *b);
+extern void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b);
 
 #define Q_QUOTACHECK    0x800100
 #define Q_INITQUOTA     0x800101        /* init slave limits */
@@ -2338,8 +2338,7 @@ struct obdo {
         obd_count               o_nlink;        /* brw: checksum */
         obd_count               o_generation;
         obd_count               o_misc;         /* brw: o_dropped */
-        __u32                   o_easize;       /* epoch in ost writes */
-        __u32                   o_mds;
+        __u64                   o_ioepoch;      /* epoch in ost writes */
         __u32                   o_stripe_idx;   /* holds stripe idx */
         __u32                   o_padding_1;
         struct lustre_handle    o_handle;       /* brw: lock handle to prolong locks */

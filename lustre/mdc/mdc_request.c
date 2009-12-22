@@ -656,7 +656,7 @@ void mdc_replay_open(struct ptlrpc_request *req)
         close_req = mod->mod_close_req;
         if (close_req != NULL) {
                 __u32 opc = lustre_msg_get_opc(close_req->rq_reqmsg);
-                struct mdt_epoch *epoch;
+                struct mdt_ioepoch *epoch;
 
                 LASSERT(opc == MDS_CLOSE || opc == MDS_DONE_WRITING);
                 epoch = req_capsule_client_get(&close_req->rq_pill,

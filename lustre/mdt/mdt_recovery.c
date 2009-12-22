@@ -1136,7 +1136,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         mo_attr_get(mti->mti_env, mdt_object_child(obj), &mti->mti_attr);
         mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
                            mdt_object_fid(obj));
-        if (mti->mti_epoch && (mti->mti_epoch->flags & MF_EPOCH_OPEN)) {
+        if (mti->mti_ioepoch && (mti->mti_ioepoch->flags & MF_EPOCH_OPEN)) {
                 struct mdt_file_data *mfd;
                 struct mdt_body *repbody;
 

@@ -971,7 +971,7 @@ void ccc_req_completion(const struct lu_env *env,
  *
  *    - o_generation
  *
- *    - and IO epoch (stored in o_easize),
+ *    - o_ioepoch,
  *
  *  and capability.
  */
@@ -999,7 +999,7 @@ void ccc_req_attr_set(const struct lu_env *env,
         if (slice->crs_req->crq_type == CRT_WRITE) {
                 if (flags & OBD_MD_FLEPOCH) {
                         oa->o_valid |= OBD_MD_FLEPOCH;
-                        oa->o_easize = cl_i2info(inode)->lli_ioepoch;
+                        oa->o_ioepoch = cl_i2info(inode)->lli_ioepoch;
                         valid_flags |= OBD_MD_FLMTIME|OBD_MD_FLCTIME|
                                 OBD_MD_FLUID|OBD_MD_FLGID|
                                 OBD_MD_FLFID|OBD_MD_FLGENER;

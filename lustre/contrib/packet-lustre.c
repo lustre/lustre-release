@@ -667,7 +667,6 @@ static int hf_lustre_mds_rec_unlink_ul_padding_2 = -1;
 static int hf_lustre_obdo_o_gid = -1;
 static int hf_lustre_llog_catid_lci_logid = -1;
 static int hf_lustre_llog_rec_tail_lrt_index = -1;
-static int hf_lustre_obdo_o_mds = -1;
 static int hf_lustre_lov_desc_ld_default_stripe_count = -1;
 static int hf_lustre_ldlm_resource_desc_lr_padding = -1;
 static int hf_lustre_cfg_marker_cm_vers = -1;
@@ -680,7 +679,7 @@ static int hf_lustre_mds_rec_unlink_ul_cap = -1;
 static int hf_lustre_llog_setattr_rec_lsr_ogen = -1;
 static int hf_lustre_mds_rec_create_cr_padding_3 = -1;
 static int hf_lustre_llog_logid_rec_lid_hdr = -1;
-static int hf_lustre_obdo_o_easize = -1;
+static int hf_lustre_obdo_o_ioepoch = -1;
 static int hf_lustre_ost_body_oa = -1;
 static int hf_lustre_llog_logid_rec_padding3 = -1;
 static int hf_lustre_llog_log_hdr_llh_flags = -1;
@@ -6488,8 +6487,7 @@ lustre_dissect_struct_llogd_conn_body(tvbuff_t *tvb _U_, int offset _U_, packet_
 /* IDL: 	uint32 o_nlink; */
 /* IDL: 	uint32 o_generation; */
 /* IDL: 	uint32 o_misc; */
-/* IDL: 	uint32 o_easize; */
-/* IDL: 	uint32 o_mds; */
+/* IDL: 	uint64 o_ioepoch; */
 /* IDL: 	uint32 o_stripe_idx; */
 /* IDL: 	uint32 o_padding_1; */
 /* IDL: 	struct lustre_handle { */
@@ -6674,17 +6672,9 @@ lustre_dissect_element_obdo_o_misc(tvbuff_t *tvb _U_, int offset _U_, packet_inf
 }
 
 static int
-lustre_dissect_element_obdo_o_easize(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
+lustre_dissect_element_obdo_o_ioepoch(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_obdo_o_easize);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_obdo_o_mds(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_obdo_o_mds);
+  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_obdo_o_ioepoch);
 
   return offset;
 }
@@ -6811,9 +6801,7 @@ lustre_dissect_struct_obdo(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo
 
   offset=lustre_dissect_element_obdo_o_misc(tvb, offset, pinfo, tree);
 
-  offset=lustre_dissect_element_obdo_o_easize(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_obdo_o_mds(tvb, offset, pinfo, tree);
+  offset=lustre_dissect_element_obdo_o_ioepoch(tvb, offset, pinfo, tree);
 
   offset=lustre_dissect_element_obdo_o_stripe_idx(tvb, offset, pinfo, tree);
 
@@ -9042,8 +9030,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lci Logid", "lustre.llog_catid.lci_logid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_rec_tail_lrt_index, 
       { "Lrt Index", "lustre.llog_rec_tail.lrt_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_obdo_o_mds, 
-      { "O Mds", "lustre.obdo.o_mds", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_default_stripe_count, 
       { "Ld Default Stripe Count", "lustre.lov_desc.ld_default_stripe_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_resource_desc_lr_padding, 
@@ -9068,8 +9054,8 @@ void proto_register_dcerpc_lustre(void)
       { "Cr Padding 3", "lustre.mds_rec_create.cr_padding_3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_lid_hdr, 
       { "Lid Hdr", "lustre.llog_logid_rec.lid_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
-    { &hf_lustre_obdo_o_easize, 
-      { "O Easize", "lustre.obdo.o_easize", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_obdo_o_ioepoch, 
+      { "O IOEpoch", "lustre.obdo.o_ioepoch", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ost_body_oa, 
       { "Oa", "lustre.ost_body.oa", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_padding3, 

@@ -1519,8 +1519,7 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_nlink);
         __swab32s (&o->o_generation);
         __swab32s (&o->o_misc);
-        __swab32s (&o->o_easize);
-        __swab32s (&o->o_mds);
+        __swab64s (&o->o_ioepoch);
         __swab32s (&o->o_stripe_idx);
         __swab32s (&o->o_padding_1);
         /* o_inline is opaque */
@@ -1649,7 +1648,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->padding_4);
 }
 
-void lustre_swab_mdt_epoch (struct mdt_epoch *b)
+void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b)
 {
         /* handle is opaque */
          __swab64s (&b->ioepoch);

@@ -199,7 +199,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         /* Save the obtained info in the original RPC for the replay case. */
         if (rc == 0 && (op_data->op_flags & MF_EPOCH_OPEN)) {
-                struct mdt_epoch *epoch;
+                struct mdt_ioepoch *epoch;
                 struct mdt_body  *body;
 
                 epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);

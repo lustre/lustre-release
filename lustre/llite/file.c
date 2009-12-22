@@ -77,7 +77,8 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
         op_data->op_attr_blocks = inode->i_blocks;
         ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags = inode->i_flags;
         op_data->op_ioepoch = ll_i2info(inode)->lli_ioepoch;
-        memcpy(&op_data->op_handle, fh, sizeof(op_data->op_handle));
+        if (fh)
+                op_data->op_handle = *fh;
         op_data->op_capa1 = ll_mdscapa_get(inode);
 }
 
@@ -92,10 +93,10 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
         if (!(och->och_flags & FMODE_WRITE))
                 goto out;
 
-        if (!(exp_connect_som(ll_i2mdexp(inode))) || !S_ISREG(inode->i_mode))
+        if (!exp_connect_som(ll_i2mdexp(inode)) || !S_ISREG(inode->i_mode))
                 op_data->op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
         else
-                ll_epoch_close(inode, op_data, &och, 0);
+                ll_ioepoch_close(inode, op_data, &och, 0);
 
 out:
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
@@ -136,7 +137,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &och->och_fh,
+                rc = ll_sizeonmds_update(inode, &op_data->op_handle,
                                          op_data->op_ioepoch);
                 if (rc) {
                         CERROR("inode %lu mdc Size-on-MDS update failed: "
@@ -159,7 +160,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         EXIT;
 out:
 
-        if ((exp->exp_connect_flags & OBD_CONNECT_SOM) && !epoch_close &&
+        if (exp_connect_som(exp) && !epoch_close &&
             S_ISREG(inode->i_mode) && (och->och_flags & FMODE_WRITE)) {
                 ll_queue_done_writing(inode, LLIF_DONE_WRITING);
         } else {

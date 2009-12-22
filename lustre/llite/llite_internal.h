@@ -620,8 +620,9 @@ int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_real_close(struct inode *inode, int flags);
-void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
-                    struct obd_client_handle **och, unsigned long flags);
+void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
+                      struct obd_client_handle **och, unsigned long flags);
+void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data);
 int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
                         __u64 ioepoch);
 int ll_inode_getattr(struct inode *inode, struct obdo *obdo);

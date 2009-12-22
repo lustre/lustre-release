@@ -53,7 +53,7 @@
 #define lustre_swab_lu_seq_range NULL
 #define lustre_swab_md_fld NULL
 #define lustre_swab_mdt_body NULL
-#define lustre_swab_mdt_epoch NULL
+#define lustre_swab_mdt_ioepoch NULL
 #define lustre_swab_ptlrpc_body NULL
 #define lustre_swab_obd_statfs NULL
 #define lustre_swab_connect NULL
