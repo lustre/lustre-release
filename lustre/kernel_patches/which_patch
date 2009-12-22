@@ -1,17 +1,11 @@
 SERIES                VERSION                  COMMENT
 
 SUPPORTED KERNELS:
-2.6-sles10            SLES10: 2.6.16.60-0.39.3
 2.6-rhel5             RHEL5: 2.6.18-164.6.1.el5
 2.6-rhel5             OEL5: 2.6.18-164.6.1.0.1.el5
-2.6.22-vanilla        kernel.org: 2.6.22.14
-2.6-sles11            SLES11: 2.6.27.23-0.1
 
 CLIENT SUPPORT FOR UNPATCHED KERNELS:
-                   kernel.org 2.6.16-2.6.27
-                   RHEL4: 2.6.9-42.0.8EL
-
-NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
-     kernel.  The patches in the 2.6-suse-newer series are patches that
-     have been created since the SP1 kernel was released and should be
-     applied to the already-patched SP1 kernel.
+         2.6.18-164.6.1.el5 (RHEL 5),
+         2.6.18-164.6.1.0.1.el5 (OEL 5)
+         2.6.16.60-0.39.3 (SLES 10),
+         2.6.27.19-5 (SLES11)
