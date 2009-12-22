@@ -289,10 +289,16 @@ struct lustre_mdt_attrs {
         __u32   lma_incompat;
         /** FID of this inode */
         struct lu_fid  lma_self_fid;
-        /** SOM state, mdt/ost type, others */
+        /** mdt/ost type, others */
         __u64   lma_flags;
-        /** total sectors in objects */
-        __u64   lma_som_sectors;
+        /* IO Epoch SOM attributes belongs to */
+        __u64   lma_ioepoch;
+        /** total file size in objects */
+        __u64   lma_som_size;
+        /** total fs blocks in objects */
+        __u64   lma_som_blocks;
+        /** mds mount id the size is valid for */
+        __u64   lma_som_mountid;
 };
 
 /**
@@ -306,13 +312,16 @@ static inline void lustre_lma_init(struct lustre_mdt_attrs *lma,
         lma->lma_incompat    = 0;
         memcpy(&lma->lma_self_fid, fid, sizeof(*fid));
         lma->lma_flags       = 0;
-        lma->lma_som_sectors = 0;
+        lma->lma_ioepoch     = 0;
+        lma->lma_som_size    = 0;
+        lma->lma_som_blocks  = 0;
+        lma->lma_som_mountid = 0;
 
         /* If a field is added in struct lustre_mdt_attrs, zero it explicitly
          * and change the test below. */
         LASSERT(sizeof(*lma) ==
-                (offsetof(struct lustre_mdt_attrs, lma_som_sectors) +
-                 sizeof(lma->lma_som_sectors)));
+                (offsetof(struct lustre_mdt_attrs, lma_som_mountid) +
+                 sizeof(lma->lma_som_mountid)));
 };
 
 extern void lustre_swab_lu_fid(struct lu_fid *fid);
@@ -329,7 +338,10 @@ static inline void lustre_lma_swab(struct lustre_mdt_attrs *lma)
                 __swab32s(&lma->lma_incompat);
                 lustre_swab_lu_fid(&lma->lma_self_fid);
                 __swab64s(&lma->lma_flags);
-                __swab64s(&lma->lma_som_sectors);
+                __swab64s(&lma->lma_ioepoch);
+                __swab64s(&lma->lma_som_size);
+                __swab64s(&lma->lma_som_blocks);
+                __swab64s(&lma->lma_som_mountid);
         }
 };
 
@@ -1237,8 +1249,7 @@ enum md_op_flags {
         MF_MDC_CANCEL_FID4      = (1 << 6),
 };
 
-#define MF_SOM_LOCAL_FLAGS (MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID2 | \
-                            MF_MDC_CANCEL_FID3 | MF_MDC_CANCEL_FID4)
+#define MF_SOM_LOCAL_FLAGS (MF_SOM_CHANGE | MF_EPOCH_OPEN | MF_EPOCH_CLOSE)
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 #define MDS_BFLAG_EXT_FLAGS     0x80000000 /* == EXT3_RESERVED_FL */

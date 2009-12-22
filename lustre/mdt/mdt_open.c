@@ -133,22 +133,25 @@ int mdt_object_is_som_enabled(struct mdt_object *mo)
         return !mo->mot_ioepoch;
 }
 
-/* Re-enable Size-on-MDS. */
-void mdt_object_som_enable(struct mdt_thread_info *info,
-                           struct mdt_object *mo)
+/**
+ * Re-enable Size-on-MDS.
+ * Call under ->mot_ioepoch_sem.
+ */
+static void mdt_object_som_enable(struct mdt_object *mo, __u64 ioepoch)
 {
-       spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
-       if (info->mti_ioepoch->ioepoch == mo->mot_ioepoch) {
+        if (ioepoch == mo->mot_ioepoch) {
                 LASSERT(!mdt_ioepoch_opened(mo));
                 mo->mot_ioepoch = 0;
                 mo->mot_flags = 0;
-       }
-       spin_unlock(&info->mti_mdt->mdt_ioepoch_lock);
+        }
 }
 
-/* Open the epoch. Epoch open is allowed if @writecount is not negative.
- * The epoch and writecount handling is performed under the mdt_ioepoch_lock. */
-int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o)
+/**
+ * Open the IOEpoch. It is allowed if @writecount is not negative.
+ * The epoch and writecount handling is performed under the mot_ioepoch_sem.
+ */
+int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
+                     int created)
 {
         struct mdt_device *mdt = info->mti_mdt;
         int cancel = 0;
@@ -159,27 +162,37 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o)
             !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
                 RETURN(0);
 
-        spin_lock(&mdt->mdt_ioepoch_lock);
+        down(&o->mot_ioepoch_sem);
         if (mdt_ioepoch_opened(o)) {
                 /* Epoch continues even if there is no writers yet. */
                 CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID"\n",
                        o->mot_ioepoch, PFID(mdt_object_fid(o)));
         } else {
-                if (info->mti_replayepoch > mdt->mdt_ioepoch)
+                /* XXX: ->mdt_ioepoch is not initialized at the mount */
+                spin_lock(&mdt->mdt_ioepoch_lock);
+                if (mdt->mdt_ioepoch < info->mti_replayepoch)
                         mdt->mdt_ioepoch = info->mti_replayepoch;
+
+                if (info->mti_replayepoch)
+                        o->mot_ioepoch = info->mti_replayepoch;
+                else if (++mdt->mdt_ioepoch == IOEPOCH_INVAL)
+                        o->mot_ioepoch = ++mdt->mdt_ioepoch;
                 else
-                        mdt->mdt_ioepoch++;
-                o->mot_ioepoch = info->mti_replayepoch ?
-                        info->mti_replayepoch : mdt->mdt_ioepoch;
+                        o->mot_ioepoch = mdt->mdt_ioepoch;
+
+                spin_unlock(&mdt->mdt_ioepoch_lock);
+
                 CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID"\n",
-                       mdt->mdt_ioepoch, PFID(mdt_object_fid(o)));
+                       o->mot_ioepoch, PFID(mdt_object_fid(o)));
+                if (created)
+                        o->mot_flags |= MOF_SOM_CREATED;
                 cancel = 1;
         }
         o->mot_ioepoch_count++;
-        spin_unlock(&mdt->mdt_ioepoch_lock);
+        up(&o->mot_ioepoch_sem);
 
-        /* Cancel Size-on-MDS attributes on clients if not truncate.
-         * In the later case, mdt_reint_setattr will do it. */
+        /* Cancel Size-on-MDS attributes cached on clients for the open case.
+         * In the truncate case, see mdt_reint_setattr(). */
         if (cancel && (info->mti_rr.rr_fid1 != NULL)) {
                 struct mdt_lock_handle  *lh = &info->mti_lh[MDT_LH_CHILD];
                 mdt_lock_reg_init(lh, LCK_EX);
@@ -191,148 +204,325 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o)
         RETURN(rc);
 }
 
-/* Update the on-disk attributes if needed and re-enable Size-on-MDS caching. */
-static int mdt_sizeonmds_update(struct mdt_thread_info *info,
-                                struct mdt_object *o)
+/**
+ * Update SOM on-disk attributes.
+ * If enabling, write update inodes and lustre-ea with the proper IOEpoch,
+ * mountid and attributes. If disabling, zero IOEpoch id in lustre-ea.
+ * Call under ->mot_ioepoch_sem.
+ */
+static int mdt_som_attr_set(struct mdt_thread_info *info,
+                            struct mdt_object *obj, __u64 ioepoch, int enable)
+{
+        struct md_attr *ma = &info->mti_attr;
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_INODE, "Size-on-MDS attribute %s for epoch "LPU64
+               " on "DFID".\n", enable ? "update" : "disabling",
+               ioepoch, PFID(mdt_object_fid(obj)));
+
+        ma->ma_valid |= MA_SOM;
+        ma->ma_som = &info->mti_u.som.data;
+        if (enable) {
+                struct mdt_device *mdt = info->mti_mdt;
+                struct lu_attr *la = &ma->ma_attr;
+
+                ma->ma_som->msd_ioepoch = ioepoch;
+                ma->ma_som->msd_size = la->la_valid & LA_SIZE ? la->la_size : 0;
+                ma->ma_som->msd_blocks = la->la_valid & LA_BLOCKS ?
+                                         la->la_blocks : 0;
+                ma->ma_som->msd_mountid = mdt->mdt_mount_count;
+                ma->ma_attr.la_valid &= LA_ATIME | LA_MTIME | LA_CTIME;
+        } else {
+                ma->ma_som->msd_ioepoch = IOEPOCH_INVAL;
+                ma->ma_attr.la_valid &= LA_ATIME;
+        }
+
+        /* Since we have opened the file, it is unnecessary
+         * to check permission when close it. Between the "open"
+         * and "close", maybe someone has changed the file mode
+         * or flags, or the file created mode do not permit wirte,
+         * and so on. Just set MDS_PERM_BYPASS for all the cases. */
+        ma->ma_attr_flags |= MDS_PERM_BYPASS | MDS_SOM;
+
+        rc = mdt_attr_set(info, obj, ma, 0);
+        RETURN(rc);
+}
+
+/** Perform the eviction specific actions on ioepoch close. */
+static inline int mdt_ioepoch_close_on_eviction(struct mdt_thread_info *info,
+                                                struct mdt_object *o)
+{
+        int rc = 0;
+
+        down(&o->mot_ioepoch_sem);
+        CDEBUG(D_INODE, "Eviction. Closing IOepoch "LPU64" on "DFID". "
+               "Count %d\n", o->mot_ioepoch, PFID(mdt_object_fid(o)),
+               o->mot_ioepoch_count);
+        o->mot_ioepoch_count--;
+
+        /* If eviction occured set MOF_SOM_RECOV,
+         * if no other epoch holders, disable SOM on disk. */
+        o->mot_flags |= MOF_SOM_CHANGE | MOF_SOM_RECOV;
+        if (!mdt_ioepoch_opened(o)) {
+                rc = mdt_som_attr_set(info, o, o->mot_ioepoch, MDT_SOM_DISABLE);
+                mdt_object_som_enable(o, o->mot_ioepoch);
+        }
+        up(&o->mot_ioepoch_sem);
+        RETURN(rc);
+}
+
+/**
+ * Perform the replay specific actions on ioepoch close.
+ * Skip SOM attribute update if obtained and just forget about the inode state
+ * for the last ioepoch holder. The SOM cache is invalidated on MDS failure.
+ */
+static inline int mdt_ioepoch_close_on_replay(struct mdt_thread_info *info,
+                                              struct mdt_object *o)
 {
         ENTRY;
+
+        down(&o->mot_ioepoch_sem);
+        CDEBUG(D_INODE, "Replay. Closing epoch "LPU64" on "DFID". Count %d\n",
+               o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_ioepoch_count);
+        o->mot_ioepoch_count--;
+
+        if (!mdt_ioepoch_opened(o))
+                mdt_object_som_enable(o, info->mti_ioepoch->ioepoch);
+        up(&o->mot_ioepoch_sem);
+
+        RETURN(0);
+}
+
+/**
+ * Regular file IOepoch close.
+ * Closes the ioepoch, checks the object state, apply obtained attributes and
+ * re-enable SOM on the object, if possible.
+ *
+ * Return value:
+ * MDT_IOEPOCH_CLOSED if ioepoch is closed.
+ * MDT_IOEPOCH_GETATTR if ioepoch is closed but another SOM update is needed.
+ */
+static inline int mdt_ioepoch_close_reg(struct mdt_thread_info *info,
+                                        struct mdt_object *o)
+{
+        struct md_attr *tmp_ma;
+        struct lu_attr *la;
+        int achange, opened;
+        int recovery = 0;
+        int rc = 0, ret = MDT_IOEPOCH_CLOSED;
+        ENTRY;
+
+        la = &info->mti_attr.ma_attr;
+        achange = (info->mti_ioepoch->flags & MF_SOM_CHANGE);
+
+        down(&o->mot_ioepoch_sem);
+        o->mot_ioepoch_count--;
+
+        tmp_ma = &info->mti_u.som.attr;
+        tmp_ma->ma_lmm = info->mti_attr.ma_lmm;
+        tmp_ma->ma_lmm_size = info->mti_attr.ma_lmm_size;
+        tmp_ma->ma_som = &info->mti_u.som.data;
+        tmp_ma->ma_need = MA_INODE | MA_LOV | MA_SOM;
+        tmp_ma->ma_valid = 0;
+        rc = mo_attr_get(info->mti_env, mdt_object_child(o), tmp_ma);
+        if (rc)
+                GOTO(error_up, rc);
+
+        /* Check the on-disk SOM state. */
+        if (o->mot_flags & MOF_SOM_RECOV)
+                recovery = 1;
+        else if (!(o->mot_flags & MOF_SOM_CREATED) &&
+                 !(tmp_ma->ma_valid & MA_SOM))
+                recovery = 1;
 
         CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
                o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_ioepoch_count);
 
-        if (info->mti_attr.ma_attr.la_valid & LA_SIZE) {
-                /* Do Size-on-MDS attribute update.
-                 * Size-on-MDS is re-enabled inside. */
-                /* XXX: since we have opened the file, it is unnecessary
-                 * to check permission when close it. Between the "open"
-                 * and "close", maybe someone has changed the file mode
-                 * or flags, or the file created mode do not permit wirte,
-                 * and so on. Just set MDS_PERM_BYPASS for all the cases. */
-                info->mti_attr.ma_attr_flags |= MDS_PERM_BYPASS | MDS_SOM;
-                info->mti_attr.ma_attr.la_valid &= LA_SIZE | LA_BLOCKS |
-                                                LA_ATIME | LA_MTIME | LA_CTIME;
-                RETURN(mdt_attr_set(info, o, 0));
-        } else
-                mdt_object_som_enable(info, o);
-        RETURN(0);
+        opened = mdt_ioepoch_opened(o);
+        /**
+         * If IOEpoch is not opened, check if a Size-on-MDS update is needed.
+         * Skip the check for file with no LOV  or for unlink files.
+         */
+        if (!opened && tmp_ma->ma_valid & MA_LOV &&
+            !(tmp_ma->ma_valid & MA_INODE && tmp_ma->ma_attr.la_nlink == 0)) {
+                if (recovery)
+                        /* If some previous writer was evicted, re-ask the
+                         * client for attributes. Even if attributes are
+                         * provided, we cannot believe in them.
+                         * Another use case is that there is no SOM cache on
+                         * disk -- first access with SOM or there was an MDS
+                         * failure. */
+                        ret = MDT_IOEPOCH_GETATTR;
+                else if (o->mot_flags & MOF_SOM_CHANGE)
+                        /* Some previous writer changed the attribute.
+                         * Do not believe to the current Size-on-MDS
+                         * update, re-ask client. */
+                        ret = MDT_IOEPOCH_GETATTR;
+                else if (!(la->la_valid & LA_SIZE) && achange)
+                        /* Attributes were changed by the last writer
+                         * only but no Size-on-MDS update is received.*/
+                        ret = MDT_IOEPOCH_GETATTR;
+        }
+
+        if (achange || ret == MDT_IOEPOCH_GETATTR)
+                o->mot_flags |= MOF_SOM_CHANGE;
+
+        /* If epoch ends and relable SOM attributes are obtained, update them.
+         * Create SOM ea for new files even if there is no attributes obtained
+         * (0-length file). */
+        if (ret == MDT_IOEPOCH_CLOSED && !opened) {
+                if (achange || o->mot_flags & MOF_SOM_CREATED) {
+                        LASSERT(achange || !(la->la_valid & LA_SIZE));
+                        rc = mdt_som_attr_set(info, o, o->mot_ioepoch,
+                                              MDT_SOM_ENABLE);
+                        /* Avoid the following setattrs of these attributes,
+                         * e.g. for atime update. */
+                        info->mti_attr.ma_valid = 0;
+                }
+                mdt_object_som_enable(o, o->mot_ioepoch);
+        }
+
+        EXIT;
+error_up:
+        up(&o->mot_ioepoch_sem);
+        return rc ? : ret;
 }
 
-/* Epoch closes.
- * Returns 1 if epoch does not close.
- * Returns 0 if epoch closes.
- * Returns -EAGAIN if epoch closes but an Size-on-MDS Update is still needed
- * from the client. */
+/**
+ * Close IOEpoch (opened file or FMODE_EPOCH state). It happens if:
+ * - a client closes the IOEpoch;
+ * - a client eviction occured.
+ * Return values:
+ * MDT_IOEPOCH_OPENED if the client does not close IOEpoch.
+ * MDT_IOEPOCH_CLOSED if the client closes IOEpoch.
+ * MDT_IOEPOCH_GETATTR if the client closes IOEpoch but another SOM attribute
+ * update is needed.
+ */
 static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
 {
-        int eviction = (mdt_info_req(info) == NULL ? 1 : 0);
-        struct lu_attr *la = &info->mti_attr.ma_attr;
-        int achange = 0;
-        int opened;
-        int rc = 1;
+        struct ptlrpc_request *req = mdt_info_req(info);
         ENTRY;
 
         if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
             !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
                 RETURN(0);
 
-        spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
+        LASSERT(o->mot_ioepoch_count);
+        LASSERT(info->mti_ioepoch == NULL ||
+                info->mti_ioepoch->ioepoch == o->mot_ioepoch);
 
-        /* Epoch closes only if client tells about it or eviction occures. */
-        if (eviction || (info->mti_ioepoch->flags & MF_EPOCH_CLOSE)) {
-                LASSERT(o->mot_ioepoch_count);
-                o->mot_ioepoch_count--;
+        /* IOEpoch is closed only if client tells about it or eviction occures.
+         * In the replay case, always close the epoch. */
+        if (req == NULL)
+                RETURN(mdt_ioepoch_close_on_eviction(info, o));
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                RETURN(mdt_ioepoch_close_on_replay(info, o));
+        if (info->mti_ioepoch->flags & MF_EPOCH_CLOSE)
+                RETURN(mdt_ioepoch_close_reg(info, o));
+        /* IO epoch is not closed. */
+        RETURN(MDT_IOEPOCH_OPENED);
+}
 
-                CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
-                       o->mot_ioepoch, PFID(mdt_object_fid(o)),
-                       o->mot_ioepoch_count);
+/**
+ * Close FMODE_SOM state, when IOEpoch is already closed and we are waiting for
+ * attribute update. It happens if:
+ * - SOM Attribute Update is obtained;
+ * - the client failed to obtain it and informs MDS about it;
+ * - a client eviction occured.
+ * Apply obtained attributes for the 1st case, wipe out the on-disk SOM
+ * cache otherwise.
+ */
+int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
+{
+        struct ptlrpc_request *req = mdt_info_req(info);
+        __u64 ioepoch = 0;
+        int act = MDT_SOM_ENABLE;
+        int rc = 0;
+        ENTRY;
 
-                if (!eviction)
-                        achange = (info->mti_ioepoch->flags & MF_SOM_CHANGE);
+        LASSERT(!req || info->mti_ioepoch);
+        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
+            !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
+                RETURN(0);
 
-                rc = 0;
-                if (!eviction && !mdt_ioepoch_opened(o)) {
-                        /* Epoch ends. Is an Size-on-MDS update needed? */
-                        if (o->mot_flags & MF_SOM_CHANGE) {
-                                /* Some previous writer changed the attribute.
-                                 * Do not believe to the current Size-on-MDS
-                                 * update, re-ask client. */
-                                rc = -EAGAIN;
-                        } else if (!(la->la_valid & LA_SIZE) && achange) {
-                                /* Attributes were changed by the last writer
-                                 * only but no Size-on-MDS update is received.*/
-                                rc = -EAGAIN;
-                        }
-                }
+        /* No size whereas MF_SOM_CHANGE is set means client failed to
+         * obtain ost attributes, drop the SOM cache on disk if so. */
+        if (!req ||
+            (info->mti_ioepoch &&
+             info->mti_ioepoch->flags & MF_SOM_CHANGE &&
+             !(info->mti_attr.ma_attr.la_valid & LA_SIZE)))
+                act = MDT_SOM_DISABLE;
 
-                if (achange || eviction)
-                        o->mot_flags |= MF_SOM_CHANGE;
+        down(&o->mot_ioepoch_sem);
+        /* Mark the object it is the recovery state if we failed to obtain
+         * SOM attributes. */
+        if (act == MDT_SOM_DISABLE)
+                o->mot_flags |= MOF_SOM_RECOV;
+
+        if (!mdt_ioepoch_opened(o)) {
+                ioepoch =  info->mti_ioepoch ?
+                        info->mti_ioepoch->ioepoch : o->mot_ioepoch;
+
+                if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))
+                        rc = mdt_som_attr_set(info, o, ioepoch, act);
+                mdt_object_som_enable(o, ioepoch);
         }
-
-        opened = mdt_ioepoch_opened(o);
-        spin_unlock(&info->mti_mdt->mdt_ioepoch_lock);
-
-        /* If eviction occurred, do nothing. */
-        if ((rc == 0) && !opened && !eviction) {
-                /* Epoch ends and wanted Size-on-MDS update is obtained. */
-                rc = mdt_sizeonmds_update(info, o);
-                /* Avoid the following setattrs of these attributes, e.g.
-                 * for atime update. */
-                info->mti_attr.ma_valid = 0;
-        }
+        up(&o->mot_ioepoch_sem);
         RETURN(rc);
 }
 
-int mdt_write_read(struct mdt_device *mdt, struct mdt_object *o)
+int mdt_write_read(struct mdt_object *o)
 {
         int rc = 0;
         ENTRY;
-        spin_lock(&mdt->mdt_ioepoch_lock);
+        down(&o->mot_ioepoch_sem);
         rc = o->mot_writecount;
-        spin_unlock(&mdt->mdt_ioepoch_lock);
+        up(&o->mot_ioepoch_sem);
         RETURN(rc);
 }
 
-int mdt_write_get(struct mdt_device *mdt, struct mdt_object *o)
+int mdt_write_get(struct mdt_object *o)
 {
         int rc = 0;
         ENTRY;
-        spin_lock(&mdt->mdt_ioepoch_lock);
+        down(&o->mot_ioepoch_sem);
         if (o->mot_writecount < 0)
                 rc = -ETXTBSY;
         else
                 o->mot_writecount++;
-        spin_unlock(&mdt->mdt_ioepoch_lock);
+        up(&o->mot_ioepoch_sem);
         RETURN(rc);
 }
 
-static void mdt_write_put(struct mdt_device *mdt, struct mdt_object *o)
+void mdt_write_put(struct mdt_object *o)
 {
         ENTRY;
-        spin_lock(&mdt->mdt_ioepoch_lock);
+        down(&o->mot_ioepoch_sem);
         o->mot_writecount--;
-        spin_unlock(&mdt->mdt_ioepoch_lock);
+        up(&o->mot_ioepoch_sem);
         EXIT;
 }
 
-static int mdt_write_deny(struct mdt_device *mdt, struct mdt_object *o)
+static int mdt_write_deny(struct mdt_object *o)
 {
         int rc = 0;
         ENTRY;
-        spin_lock(&mdt->mdt_ioepoch_lock);
+        down(&o->mot_ioepoch_sem);
         if (o->mot_writecount > 0)
                 rc = -ETXTBSY;
         else
                 o->mot_writecount--;
-        spin_unlock(&mdt->mdt_ioepoch_lock);
+        up(&o->mot_ioepoch_sem);
         RETURN(rc);
 }
 
-static void mdt_write_allow(struct mdt_device *mdt, struct mdt_object *o)
+static void mdt_write_allow(struct mdt_object *o)
 {
         ENTRY;
-        spin_lock(&mdt->mdt_ioepoch_lock);
+        down(&o->mot_ioepoch_sem);
         o->mot_writecount++;
-        spin_unlock(&mdt->mdt_ioepoch_lock);
+        up(&o->mot_ioepoch_sem);
         EXIT;
 }
 
@@ -422,13 +612,13 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         }
 
         if (flags & FMODE_WRITE) {
-                rc = mdt_write_get(info->mti_mdt, o);
+                rc = mdt_write_get(o);
                 if (rc == 0) {
-                        mdt_ioepoch_open(info, o);
+                        mdt_ioepoch_open(info, o, created);
                         repbody->ioepoch = o->mot_ioepoch;
                 }
         } else if (flags & MDS_FMODE_EXEC) {
-                rc = mdt_write_deny(info->mti_mdt, o);
+                rc = mdt_write_deny(o);
         }
         if (rc)
                 RETURN(rc);
@@ -1232,19 +1422,22 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         struct mdt_object *o = mfd->mfd_object;
         struct md_object *next = mdt_object_child(o);
         struct md_attr *ma = &info->mti_attr;
-        int rc = 0, ret = 0;
+        int ret = MDT_IOEPOCH_CLOSED;
+        int rc = 0;
         int mode;
         ENTRY;
 
         mode = mfd->mfd_mode;
 
         if ((mode & FMODE_WRITE) || (mode & FMODE_TRUNC)) {
-                mdt_write_put(info->mti_mdt, o);
+                mdt_write_put(o);
                 ret = mdt_ioepoch_close(info, o);
         } else if (mode & MDS_FMODE_EXEC) {
-                mdt_write_allow(info->mti_mdt, o);
+                mdt_write_allow(o);
         } else if (mode & FMODE_EPOCH) {
                 ret = mdt_ioepoch_close(info, o);
+        } else if (mode & FMODE_SOM) {
+                ret = mdt_som_au_close(info, o);
         }
 
         /* Update atime on close only. */
@@ -1260,22 +1453,15 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
         if (!MFD_CLOSED(mode))
                 rc = mo_close(info->mti_env, next, ma);
-        else if (ret == -EAGAIN)
-                rc = mo_attr_get(info->mti_env, next, ma);
 
-        /* If the object is unlinked, do not try to re-enable SIZEONMDS */
-        if ((ret == -EAGAIN) && (ma->ma_valid & MA_INODE) &&
-            (ma->ma_attr.la_nlink == 0)) {
-                ret = 0;
-        }
-
-        if ((ret == -EAGAIN) || (ret == 1)) {
+        if (ret == MDT_IOEPOCH_GETATTR || ret == MDT_IOEPOCH_OPENED) {
                 struct mdt_export_data *med;
 
-                /* The epoch has not closed or Size-on-MDS update is needed.
+                /* The IOepoch is still opened or SOM update is needed.
                  * Put mfd back into the list. */
                 LASSERT(mdt_conn_flags(info) & OBD_CONNECT_SOM);
-                mdt_mfd_set_mode(mfd, (ret == 1 ? FMODE_EPOCH : FMODE_SOM));
+                mdt_mfd_set_mode(mfd, ret == MDT_IOEPOCH_OPENED ?
+                                      FMODE_EPOCH : FMODE_SOM);
 
                 LASSERT(mdt_info_req(info));
                 med = &mdt_info_req(info)->rq_export->exp_mdt_data;
@@ -1284,9 +1470,10 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
                 class_handle_hash_back(&mfd->mfd_handle);
                 spin_unlock(&med->med_open_lock);
 
-                if (ret == 1) {
+                if (ret == MDT_IOEPOCH_OPENED) {
                         ret = 0;
                 } else {
+                        ret = -EAGAIN;
                         CDEBUG(D_INODE, "Size-on-MDS attribute update is "
                                "needed on "DFID"\n", PFID(mdt_object_fid(o)));
                 }
@@ -1384,8 +1571,17 @@ int mdt_close(struct mdt_thread_info *info)
         RETURN(rc ? rc : ret);
 }
 
+/**
+ * DONE_WRITING rpc handler.
+ *
+ * As mfd is not kept after replayed CLOSE (see mdt_ioepoch_close_on_replay()),
+ * only those DONE_WRITING rpc will be replayed which really wrote smth on disk,
+ * and got a trasid. Waiting for such DONE_WRITING is not reliable, so just
+ * skip attributes and reconstruct the reply here.
+ */
 int mdt_done_writing(struct mdt_thread_info *info)
 {
+        struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_body         *repbody = NULL;
         struct mdt_export_data  *med;
         struct mdt_file_data    *mfd;
@@ -1407,7 +1603,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 RETURN(err_serious(rc));
 
         if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
-                RETURN(lustre_msg_get_status(mdt_info_req(info)->rq_repmsg));
+                RETURN(lustre_msg_get_status(req->rq_repmsg));
 
         med = &info->mti_exp->exp_mdt_data;
         spin_lock(&med->med_open_lock);
@@ -1419,6 +1615,11 @@ int mdt_done_writing(struct mdt_thread_info *info)
                        PFID(info->mti_rr.rr_fid1),
                        info->mti_ioepoch->handle.cookie,
                        info->mti_ioepoch->ioepoch);
+                /* If this is a replay, reconstruct the transno. */
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                        mdt_empty_transno(info);
+                        RETURN(0);
+                }
                 RETURN(-ESTALE);
         }
 
@@ -1431,7 +1632,15 @@ int mdt_done_writing(struct mdt_thread_info *info)
         /* Set EPOCH CLOSE flag if not set by client. */
         info->mti_ioepoch->flags |= MF_EPOCH_CLOSE;
         info->mti_attr.ma_valid = 0;
+
+        info->mti_attr.ma_lmm_size = info->mti_mdt->mdt_max_mdsize;
+        OBD_ALLOC(info->mti_attr.ma_lmm, info->mti_attr.ma_lmm_size);
+        if (info->mti_attr.ma_lmm == NULL)
+                RETURN(-ENOMEM);
+
         rc = mdt_mfd_close(info, mfd);
+
+        OBD_FREE(info->mti_attr.ma_lmm, info->mti_attr.ma_lmm_size);
         mdt_empty_transno(info);
         RETURN(rc);
 }

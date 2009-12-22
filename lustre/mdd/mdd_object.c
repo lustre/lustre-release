@@ -722,12 +722,14 @@ static int __mdd_lma_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                         ma->ma_hsm_flags = 0;
                 ma->ma_valid |= MA_HSM;
         }
-        if (ma->ma_need & MA_SOM) {
 
-                /* XXX: Here, copy and swab SoM data, and then remove this
-                 * assert. */
-                LASSERT(!(ma->ma_need & MA_SOM));
-
+        /* Copy SOM */
+        if (ma->ma_need & MA_SOM && lma->lma_compat & LMAC_SOM) {
+                LASSERT(ma->ma_som != NULL);
+                ma->ma_som->msd_ioepoch = lma->lma_ioepoch;
+                ma->ma_som->msd_size    = lma->lma_som_size;
+                ma->ma_som->msd_blocks  = lma->lma_som_blocks;
+                ma->ma_som->msd_mountid = lma->lma_som_mountid;
                 ma->ma_valid |= MA_SOM;
         }
 
@@ -1019,7 +1021,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         struct lu_attr *la, const struct md_attr *ma)
 {
         struct lu_attr   *tmp_la     = &mdd_env_info(env)->mti_la;
-        struct md_ucred  *uc         = md_ucred(env);
+        struct md_ucred  *uc;
         int               rc;
         ENTRY;
 
@@ -1033,6 +1035,13 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         /* They should not be processed by setattr */
         if (la->la_valid & (LA_NLINK | LA_RDEV | LA_BLKSIZE))
                 RETURN(-EPERM);
+
+        /* export destroy does not have ->le_ses, but we may want
+         * to drop LUSTRE_SOM_FL. */
+        if (!env->le_ses)
+                RETURN(0);
+
+        uc = md_ucred(env);
 
         rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
         if (rc)
@@ -1287,15 +1296,15 @@ static int __mdd_lma_set(const struct lu_env *env, struct mdd_object *mdd_obj,
 
         ENTRY;
 
-        memset(lma, 0, lmasize);
-
         /* Either HSM or SOM part is not valid, we need to read it before */
         if ((!ma->ma_valid) & (MA_HSM | MA_SOM)) {
                 rc = mdd_get_md(env, mdd_obj, lma, &lmasize, XATTR_NAME_LMA);
-                if (rc)
+                if (rc <= 0)
                         RETURN(rc);
 
                 lustre_lma_swab(lma);
+        } else {
+                memset(lma, 0, lmasize);
         }
 
         /* Copy HSM data */
@@ -1303,12 +1312,19 @@ static int __mdd_lma_set(const struct lu_env *env, struct mdd_object *mdd_obj,
                 lma->lma_flags  |= ma->ma_hsm_flags & HSM_FLAGS_MASK;
                 lma->lma_compat |= LMAC_HSM;
         }
-        /* XXX: Copy SOM data */
+
+        /* Copy SOM data */
         if (ma->ma_valid & MA_SOM) {
-                /*
-                lma->lma_compat |= LMAC_SOM;
-                */
-                LASSERT(!(ma->ma_valid & MA_SOM));
+                LASSERT(ma->ma_som != NULL);
+                if (ma->ma_som->msd_ioepoch == IOEPOCH_INVAL) {
+                        lma->lma_compat     &= ~LMAC_SOM;
+                } else {
+                        lma->lma_compat     |= LMAC_SOM;
+                        lma->lma_ioepoch     = ma->ma_som->msd_ioepoch;
+                        lma->lma_som_size    = ma->ma_som->msd_size;
+                        lma->lma_som_blocks  = ma->ma_som->msd_blocks;
+                        lma->lma_som_mountid = ma->ma_som->msd_mountid;
+                }
         }
 
         /* Copy FID */

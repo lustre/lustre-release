@@ -5930,8 +5930,11 @@ test_132() { #1028, SOM
         stat $DIR/$tfile >/dev/null
         gl2=$(get_ost_param "ldlm_glimpse_enqueue")
         echo "====> SOM is "$som1", "$((gl2 - gl1))" glimpse RPC occured"
-        cancel_lru_locks osc
+        rm $DIR/$tfile
         som_mode_switch $som1 $gl1 $gl2
+
+        dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
+        cancel_lru_locks osc
 
         som2=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
         if [ $som1 == $som2 ]; then

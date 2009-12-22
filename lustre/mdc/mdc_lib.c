@@ -150,7 +150,7 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->cr_time     = op_data->op_mod_time;
         rec->cr_suppgid1 = op_data->op_suppgids[0];
         rec->cr_suppgid2 = op_data->op_suppgids[1];
-        rec->cr_flags    = op_data->op_flags & ~MF_SOM_LOCAL_FLAGS;
+        rec->cr_flags    = op_data->op_flags & MF_SOM_LOCAL_FLAGS;
         rec->cr_bias     = op_data->op_bias;
 
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
@@ -312,7 +312,7 @@ static void mdc_ioepoch_pack(struct mdt_ioepoch *epoch,
 {
         memcpy(&epoch->handle, &op_data->op_handle, sizeof(epoch->handle));
         epoch->ioepoch = op_data->op_ioepoch;
-        epoch->flags = op_data->op_flags & ~MF_SOM_LOCAL_FLAGS;
+        epoch->flags = op_data->op_flags & MF_SOM_LOCAL_FLAGS;
 }
 
 void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,

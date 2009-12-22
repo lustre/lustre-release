@@ -226,6 +226,7 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
         int rc;
         ENTRY;
 
+        LASSERT(op_data != NULL);
         if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
                 CERROR("ino %lu/%u(flags %lu) som valid it just after "
                        "recovery\n", inode->i_ino, inode->i_generation,

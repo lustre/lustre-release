@@ -151,6 +151,16 @@ struct md_hsm {
         __u32  mh_flags;
 };
 #define ma_hsm_flags ma_hsm.mh_flags
+#define HSM_FLAGS_MASK 0
+
+#define IOEPOCH_INVAL 0
+
+struct md_som_data {
+        __u64 msd_ioepoch;
+        __u64 msd_size;
+        __u64 msd_blocks;
+        __u64 msd_mountid;
+};
 
 struct md_attr {
         __u64                   ma_valid;
@@ -167,7 +177,7 @@ struct md_attr {
         int                     ma_cookie_size;
         struct lustre_capa     *ma_capa;
         struct md_hsm           ma_hsm;
-/* XXX:  struct md_som_data   *ma_som; */
+        struct md_som_data     *ma_som;
 };
 
 /** Additional parameters for create */
