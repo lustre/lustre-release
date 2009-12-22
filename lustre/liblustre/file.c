@@ -346,17 +346,20 @@ int llu_som_update(struct inode *inode, struct md_op_data *op_data)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct obdo oa = { 0 };
+        __u32 old_flags;
         int rc;
         ENTRY;
 
         LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
         LASSERT(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM);
 
+        old_flags = op_data->op_flags;
         op_data->op_flags = MF_SOM_CHANGE;
 
         /* If inode is already in another epoch, skip getattr from OSTs. */
         if (lli->lli_ioepoch == op_data->op_ioepoch) {
-                rc = llu_inode_getattr(inode, &oa, op_data->op_ioepoch);
+                rc = llu_inode_getattr(inode, &oa, op_data->op_ioepoch,
+                                       old_flags & MF_GETATTR_LOCK);
                 if (rc) {
                         oa.o_valid = 0;
                         if (rc == -ENOENT)

@@ -6642,7 +6642,7 @@ lustre_dissect_element_obdo_o_flags(tvbuff_t *tvb _U_, int offset _U_, packet_in
   /*0x00000100 : "OBD_FL_NO_USRQUOTA",*/
   /*0x00000200 : "OBD_FL_NO_GRPQUOTA",*/
   /*0x00000400 : "OBD_FL_CREATE_CROW",*/
-  /*0x00000800 : "OBD_FL_TRUNCLOCK",*/
+  /*0x00000800 : "OBD_FL_SRVLOCK",*/
   //}
   return offset;
 }

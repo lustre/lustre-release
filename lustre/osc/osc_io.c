@@ -480,7 +480,7 @@ static int osc_io_trunc_start(const struct lu_env *env,
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLATIME |
                         OBD_MD_FLCTIME | OBD_MD_FLMTIME;
                 if (oio->oi_lockless) {
-                        oa->o_flags = OBD_FL_TRUNCLOCK;
+                        oa->o_flags = OBD_FL_SRVLOCK;
                         oa->o_valid |= OBD_MD_FLFLAGS;
                 }
                 oa->o_size = size;

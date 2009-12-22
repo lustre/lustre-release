@@ -340,10 +340,12 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
         dst->o_valid |= newvalid;
 }
 
-/*
- * really does the getattr on the inode and updates its fields
+/**
+ * Performs the getattr on the inode and updates its fields.
+ * If @sync != 0, perform the getattr under the server-side lock.
  */
-int llu_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch)
+int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
+                      __u64 ioepoch, int sync)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ptlrpc_request_set *set;
@@ -365,6 +367,10 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch)
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                                OBD_MD_FLCTIME | OBD_MD_FLGROUP |
                                OBD_MD_FLATIME | OBD_MD_FLEPOCH;
+        if (sync) {
+                oinfo.oi_oa->o_valid |= OBD_MD_FLFLAGS;
+                oinfo.oi_oa->o_flags |= OBD_FL_SRVLOCK;
+        }
 
         set = ptlrpc_prep_set();
         if (set == NULL) {

@@ -230,7 +230,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
-int llu_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch);
+int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
+                      __u64 ioepoch, int sync);
 int llu_md_setattr(struct inode *inode, struct md_op_data *op_data,
                    struct md_open_data **mod);
 int llu_setattr_raw(struct inode *inode, struct iattr *attr);

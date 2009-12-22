@@ -775,6 +775,22 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
         RETURN(0);
 }
 
+/* Prepares the request for the replay by the given reply */
+static void mdc_close_handle_reply(struct ptlrpc_request *req,
+                                   struct md_op_data *op_data, int rc) {
+        struct mdt_body  *repbody;
+        struct mdt_ioepoch *epoch;
+
+        if (req && rc == -EAGAIN) {
+                repbody = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+                epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
+
+                epoch->flags |= MF_SOM_AU;
+                if (repbody->valid & OBD_MD_FLGETATTRLOCK)
+                        op_data->op_flags |= MF_GETATTR_LOCK;
+        }
+}
+
 int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
               struct md_open_data *mod, struct ptlrpc_request **request)
 {
@@ -872,6 +888,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 obd_mod_put(mod);
         }
         *request = req;
+        mdc_close_handle_reply(req, op_data, rc);
         RETURN(rc);
 }
 
@@ -936,6 +953,8 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                  * thus DW req does not keep a reference on mod anymore. */
                 obd_mod_put(mod);
         }
+
+        mdc_close_handle_reply(req, op_data, rc);
         ptlrpc_req_finished(req);
         RETURN(rc);
 }

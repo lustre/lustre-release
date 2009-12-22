@@ -936,7 +936,7 @@ enum obdo_flags {
         OBD_FL_NO_USRQUOTA  = 0x00000100, /* the object's owner is over quota */
         OBD_FL_NO_GRPQUOTA  = 0x00000200, /* the object's group is over quota */
         OBD_FL_CREATE_CROW  = 0x00000400, /* object should be create on write */
-        OBD_FL_TRUNCLOCK    = 0x00000800, /* delegate DLM locking during punch*/
+        OBD_FL_SRVLOCK      = 0x00000800, /* delegate DLM locking to server */
         OBD_FL_CKSUM_CRC32  = 0x00001000, /* CRC32 checksum type */
         OBD_FL_CKSUM_ADLER  = 0x00002000, /* ADLER checksum type */
         OBD_FL_CKSUM_RSVD1  = 0x00004000, /* for future cksum types */
@@ -1060,7 +1060,8 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLOSSCAPA   (0x0000040000000000ULL) /* OSS capability */
 #define OBD_MD_FLCKSPLIT   (0x0000080000000000ULL) /* Check split on server */
 #define OBD_MD_FLCROSSREF  (0x0000100000000000ULL) /* Cross-ref case */
-
+#define OBD_MD_FLGETATTRLOCK (0x0000200000000000ULL) /* Get IOEpoch attributes
+                                                      * under lock */
 #define OBD_FL_TRUNC       (0x0000200000000000ULL) /* for filter_truncate */
 
 #define OBD_MD_FLRMTLSETFACL    (0x0001000000000000ULL) /* lfs lsetfacl case */
@@ -1247,6 +1248,10 @@ enum md_op_flags {
         MF_MDC_CANCEL_FID2      = (1 << 4),
         MF_MDC_CANCEL_FID3      = (1 << 5),
         MF_MDC_CANCEL_FID4      = (1 << 6),
+        /* There is a pending attribute update. */
+        MF_SOM_AU               = (1 << 7),
+        /* Cancel OST locks while getattr OST attributes. */
+        MF_GETATTR_LOCK         = (1 << 8),
 };
 
 #define MF_SOM_LOCAL_FLAGS (MF_SOM_CHANGE | MF_EPOCH_OPEN | MF_EPOCH_CLOSE)

@@ -155,10 +155,60 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
+/**
+ * Helper function for getting server side [start, start+count] DLM lock
+ * if asked by client.
+ */
+static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
+                        __u64 start, __u64 count, struct lustre_handle *lh,
+                        int mode, int flags)
+{
+        struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0} };
+        ldlm_policy_data_t policy;
+        __u64 end = start + count;
+
+        ENTRY;
+
+        LASSERT(!lustre_handle_is_used(lh));
+        LASSERT((oa->o_valid & (OBD_MD_FLID | OBD_MD_FLGROUP)) ==
+                (OBD_MD_FLID | OBD_MD_FLGROUP));
+
+        if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+            !(oa->o_flags & OBD_FL_SRVLOCK))
+                RETURN(0);
+
+        CDEBUG(D_INODE, "OST-side extent lock.\n");
+
+        policy.l_extent.start = start & CFS_PAGE_MASK;
+
+        /* If ->o_blocks is EOF it means "lock till the end of the
+         * file". Otherwise, it's size of a hole being punched (in bytes) */
+        if (count == OBD_OBJECT_EOF || end < start)
+                policy.l_extent.end = OBD_OBJECT_EOF;
+        else
+                policy.l_extent.end = end | ~CFS_PAGE_MASK;
+
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
+                                      LDLM_EXTENT, &policy, mode, &flags,
+                                      ldlm_blocking_ast, ldlm_completion_ast,
+                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
+}
+
+/* Helper function: release lock, if any. */
+static void ost_lock_put(struct obd_export *exp,
+                         struct lustre_handle *lh, int mode)
+{
+        ENTRY;
+        if (lustre_handle_is_used(lh))
+                ldlm_lock_decref(lh, mode);
+        EXIT;
+}
+
 static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
         struct obd_info oinfo = { { { 0 } } };
+        struct lustre_handle lh = { 0 };
         int rc;
         ENTRY;
 
@@ -173,6 +223,10 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         repbody->oa = body->oa;
 
+        rc = ost_lock_get(exp, &body->oa, 0, OBD_OBJECT_EOF, &lh, LCK_PR, 0);
+        if (rc)
+                RETURN(rc);
+
         oinfo.oi_oa = &repbody->oa;
         if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
                 oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
@@ -184,6 +238,8 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         }
 
         req->rq_status = obd_getattr(exp, &oinfo);
+        ost_lock_put(exp, &lh, LCK_PR);
+
         ost_drop_id(exp, &repbody->oa);
         RETURN(0);
 }
@@ -232,75 +288,12 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
-/**
- * Helper function for ost_punch(): if asked by client, acquire [size, EOF]
- * lock on the file being truncated.
- */
-static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
-                              struct lustre_handle *lh)
-{
-        int flags;
-        struct ldlm_res_id res_id;
-        ldlm_policy_data_t policy;
-        __u64 start;
-        __u64 finis;
-
-        ENTRY;
-
-        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
-        LASSERT(!lustre_handle_is_used(lh));
-
-        if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
-            !(oa->o_flags & OBD_FL_TRUNCLOCK))
-                RETURN(0);
-
-        CDEBUG(D_INODE, "OST-side truncate lock.\n");
-
-        start = oa->o_size;
-        finis = start + oa->o_blocks;
-
-        /*
-         * standard truncate optimization: if file body is completely
-         * destroyed, don't send data back to the server.
-         */
-        flags = (start == 0) ? LDLM_AST_DISCARD_DATA : 0;
-
-        policy.l_extent.start = start & CFS_PAGE_MASK;
-
-        /*
-         * If ->o_blocks is EOF it means "lock till the end of the
-         * file". Otherwise, it's size of a hole being punched (in bytes)
-         */
-        if (oa->o_blocks == OBD_OBJECT_EOF || finis < start)
-                policy.l_extent.end = OBD_OBJECT_EOF;
-        else
-                policy.l_extent.end = finis | ~CFS_PAGE_MASK;
-
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
-                                      LDLM_EXTENT, &policy, LCK_PW, &flags,
-                                      ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
-}
-
-/**
- * Helper function for ost_punch(): release lock acquired by
- * ost_punch_lock_get(), if any.
- */
-static void ost_punch_lock_put(struct obd_export *exp, struct obdo *oa,
-                               struct lustre_handle *lh)
-{
-        ENTRY;
-        if (lustre_handle_is_used(lh))
-                ldlm_lock_decref(lh, LCK_PW);
-        EXIT;
-}
-
 static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
         struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
-        int rc;
+        int rc, flags = 0;
         struct lustre_handle lh = {0,};
         ENTRY;
 
@@ -323,13 +316,19 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
+        /* standard truncate optimization: if file body is completely
+         * destroyed, don't send data back to the server. */
+        if (oinfo.oi_oa->o_size == 0)
+                flags |= LDLM_AST_DISCARD_DATA;
+
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        rc = ost_punch_lock_get(exp, oinfo.oi_oa, &lh);
+        rc = ost_lock_get(exp, oinfo.oi_oa, oinfo.oi_oa->o_size,
+                          oinfo.oi_oa->o_blocks, &lh, LCK_PW, flags);
         if (rc == 0) {
                 if (oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
-                    oinfo.oi_oa->o_flags == OBD_FL_TRUNCLOCK)
+                    oinfo.oi_oa->o_flags == OBD_FL_SRVLOCK)
                         /*
-                         * If OBD_FL_TRUNCLOCK is the only bit set in
+                         * If OBD_FL_SRVLOCK is the only bit set in
                          * ->o_flags, clear OBD_MD_FLFLAGS to avoid falling
                          * through filter_setattr() to filter_iocontrol().
                          */
@@ -344,7 +343,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                         }
                 }
                 req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
-                ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
+                ost_lock_put(exp, &lh, LCK_PW);
         }
         repbody->oa = *oinfo.oi_oa;
         ost_drop_id(exp, &repbody->oa);
@@ -1863,7 +1862,7 @@ static int ost_punch_hpreq_check(struct ptlrpc_request *req)
                 RETURN(-EFAULT);
 
         LASSERT(!(body->oa.o_valid & OBD_MD_FLFLAGS) ||
-                !(body->oa.o_flags & OBD_FL_TRUNCLOCK));
+                !(body->oa.o_flags & OBD_FL_SRVLOCK));
 
         RETURN(ost_punch_prolong_locks(req, &body->oa));
 }
@@ -1962,7 +1961,7 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                         }
 
                         if (!(body->oa.o_valid & OBD_MD_FLFLAGS) ||
-                            !(body->oa.o_flags & OBD_FL_TRUNCLOCK))
+                            !(body->oa.o_flags & OBD_FL_SRVLOCK))
                                 req->rq_ops = &ost_hpreq_punch;
                 }
         }

@@ -222,6 +222,7 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *request = NULL;
+        __u32 old_flags;
         struct obdo *oa;
         int rc;
         ENTRY;
@@ -238,11 +239,13 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
                 RETURN(-ENOMEM);
         }
 
+        old_flags = op_data->op_flags;
         op_data->op_flags = MF_SOM_CHANGE;
 
         /* If inode is already in another epoch, skip getattr from OSTs. */
         if (lli->lli_ioepoch == op_data->op_ioepoch) {
-                rc = ll_inode_getattr(inode, oa, op_data->op_ioepoch);
+                rc = ll_inode_getattr(inode, oa, op_data->op_ioepoch,
+                                      old_flags & MF_GETATTR_LOCK);
                 if (rc) {
                         oa->o_valid = 0;
                         if (rc == -ENOENT)

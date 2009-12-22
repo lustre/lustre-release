@@ -688,7 +688,7 @@ out_openerr:
 /* Fills the obdo with the attributes for the lsm */
 static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
                           struct obd_capa *capa, struct obdo *obdo,
-                          __u64 ioepoch)
+                          __u64 ioepoch, int sync)
 {
         struct ptlrpc_request_set *set;
         struct obd_info            oinfo = { { { 0 } } };
@@ -710,6 +710,10 @@ static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                OBD_MD_FLGROUP | OBD_MD_FLEPOCH;
         oinfo.oi_capa = capa;
+        if (sync) {
+                oinfo.oi_oa->o_valid |= OBD_MD_FLFLAGS;
+                oinfo.oi_oa->o_flags |= OBD_FL_SRVLOCK;
+        }
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
@@ -728,8 +732,12 @@ static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
         RETURN(rc);
 }
 
-/** Performs the getattr for @ioepoch on the inode and updates its fields. */
-int ll_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch)
+/**
+  * Performs the getattr on the inode and updates its fields.
+  * If @sync != 0, perform the getattr under the server-side lock.
+  */
+int ll_inode_getattr(struct inode *inode, struct obdo *obdo,
+                     __u64 ioepoch, int sync)
 {
         struct ll_inode_info *lli  = ll_i2info(inode);
         struct obd_capa      *capa = ll_mdscapa_get(inode);
@@ -737,7 +745,7 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo, __u64 ioepoch)
         ENTRY;
 
         rc = ll_lsm_getattr(lli->lli_smd, ll_i2dtexp(inode),
-                            capa, obdo, ioepoch);
+                            capa, obdo, ioepoch, sync);
         capa_put(capa);
         if (rc == 0) {
                 obdo_refresh_inode(inode, obdo, obdo->o_valid);
@@ -779,7 +787,7 @@ int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
         struct obdo obdo = { 0 };
         int rc;
 
-        rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, &obdo, 0);
+        rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, &obdo, 0, 0);
         if (rc == 0) {
                 st->st_size   = obdo.o_size;
                 st->st_blocks = obdo.o_blocks;

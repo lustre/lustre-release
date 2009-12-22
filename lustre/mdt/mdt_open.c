@@ -280,6 +280,7 @@ static inline int mdt_ioepoch_close_on_eviction(struct mdt_thread_info *info,
 static inline int mdt_ioepoch_close_on_replay(struct mdt_thread_info *info,
                                               struct mdt_object *o)
 {
+        int rc = MDT_IOEPOCH_CLOSED;
         ENTRY;
 
         down(&o->mot_ioepoch_sem);
@@ -287,17 +288,24 @@ static inline int mdt_ioepoch_close_on_replay(struct mdt_thread_info *info,
                o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_ioepoch_count);
         o->mot_ioepoch_count--;
 
+        /* Get an info from the replayed request if client is supposed
+         * to send an Attibute Update, reconstruct @rc if so */
+        if (info->mti_ioepoch->flags & MF_SOM_AU)
+                rc = MDT_IOEPOCH_GETATTR;
+
         if (!mdt_ioepoch_opened(o))
                 mdt_object_som_enable(o, info->mti_ioepoch->ioepoch);
         up(&o->mot_ioepoch_sem);
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 /**
  * Regular file IOepoch close.
  * Closes the ioepoch, checks the object state, apply obtained attributes and
- * re-enable SOM on the object, if possible.
+ * re-enable SOM on the object, if possible. Also checks if the recovery is
+ * needed and packs OBD_MD_FLGETATTRLOCK flag into the reply to force the client
+ * to obtain SOM attributes under the server-side OST locks.
  *
  * Return value:
  * MDT_IOEPOCH_CLOSED if ioepoch is closed.
@@ -383,10 +391,20 @@ static inline int mdt_ioepoch_close_reg(struct mdt_thread_info *info,
                 mdt_object_som_enable(o, o->mot_ioepoch);
         }
 
-        EXIT;
+        up(&o->mot_ioepoch_sem);
+        /* If recovery is needed, tell the client to perform GETATTR under
+         * the lock. */
+        if (ret == MDT_IOEPOCH_GETATTR && recovery) {
+                struct mdt_body *rep;
+                rep = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+                rep->valid |= OBD_MD_FLGETATTRLOCK;
+        }
+
+        RETURN(rc ? : ret);
+
 error_up:
         up(&o->mot_ioepoch_sem);
-        return rc ? : ret;
+        return rc;
 }
 
 /**
@@ -1618,7 +1636,8 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 /* If this is a replay, reconstruct the transno. */
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         mdt_empty_transno(info);
-                        RETURN(0);
+                        RETURN(info->mti_ioepoch->flags & MF_SOM_AU ?
+                               -EAGAIN : 0);
                 }
                 RETURN(-ESTALE);
         }
