@@ -50,16 +50,7 @@ unset SEC
 KRB5_CCACHE_DIR=/tmp
 KRB5_CRED=$KRB5_CCACHE_DIR/krb5cc_$RUNAS_ID
 KRB5_CRED_SAVE=$KRB5_CCACHE_DIR/krb5cc.sanity.save
-CLICOUNT=2
-cnt_mdt2ost=0
-cnt_mdt2mdt=0
-cnt_cli2ost=0
-cnt_cli2mdt=0
-cnt_all2ost=0
-cnt_all2mdt=0
-cnt_all2all=0
 DBENCH_PID=0
-PROC_CLI="srpc_info"
 
 # set manually
 GSS=true
@@ -86,258 +77,6 @@ rm -rf $DIR/[df][0-9]*
 check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
-
-combination()
-{
-    local M=$1
-    local N=$2
-    local R=1
-
-    if [ $M -lt $N ]; then
-        R=0
-    else
-        N=$((N + 1))
-        while [ $N -le $M ]; do
-            R=$((R * N))
-            N=$((N + 1))
-        done
-    fi
-
-    echo $R
-    return 0
-}
-
-calc_connection_cnt() {
-    # MDT->MDT = 2 * C(M, 2)
-    # MDT->OST = M * O
-    # CLI->OST = C * O
-    # CLI->MDT = C * M
-    comb_m2=$(combination $MDSCOUNT 2)
-
-    cnt_mdt2mdt=$((comb_m2 * 2))
-    cnt_mdt2ost=$((MDSCOUNT * OSTCOUNT))
-    cnt_cli2ost=$((CLICOUNT * OSTCOUNT))
-    cnt_cli2mdt=$((CLICOUNT * MDSCOUNT))
-    cnt_all2ost=$((cnt_mdt2ost + cnt_cli2ost))
-    cnt_all2mdt=$((cnt_mdt2mdt + cnt_cli2mdt))
-    cnt_all2all=$((cnt_mdt2ost + cnt_mdt2mdt + cnt_cli2ost + cnt_cli2mdt))
-}
-
-set_rule()
-{
-    local tgt=$1
-    local net=$2
-    local dir=$3
-    local flavor=$4
-    local cmd="$tgt.srpc.flavor"
-
-    if [ $net == "any" ]; then
-        net="default"
-    fi
-    cmd="$cmd.$net"
-
-    if [ $dir != "any" ]; then
-        cmd="$cmd.$dir"
-    fi
-
-    cmd="$cmd=$flavor"
-    log "Setting sptlrpc rule: $cmd"
-    do_facet mgs "$LCTL conf_param $cmd"
-}
-
-count_flvr()
-{
-    local output=$1
-    local flavor=$2
-    local count=0
-
-    rpc_flvr=`echo $flavor | awk -F - '{ print $1 }'`
-    bulkspec=`echo $flavor | awk -F - '{ print $2 }'`
-
-    count=`echo "$output" | grep "rpc flavor" | grep $rpc_flvr | wc -l`
-
-    if [ "x$bulkspec" != "x" ]; then
-        algs=`echo $bulkspec | awk -F : '{ print $2 }'`
-
-        if [ "x$algs" != "x" ]; then
-            bulk_count=`echo "$output" | grep "bulk flavor" | grep $algs | wc -l`
-        else
-            bulk=`echo $bulkspec | awk -F : '{ print $1 }'`
-            if [ $bulk == "bulkn" ]; then
-                bulk_count=`echo "$output" | grep "bulk flavor" \
-                            | grep "null/null" | wc -l`
-            elif [ $bulk == "bulki" ]; then
-                bulk_count=`echo "$output" | grep "bulk flavor" \
-                            | grep "/null" | grep -v "null/" | wc -l`
-            else
-                bulk_count=`echo "$output" | grep "bulk flavor" \
-                            | grep -v "/null" | grep -v "null/" | wc -l`
-            fi
-        fi
-
-        [ $bulk_count -lt $count ] && count=$bulk_count
-    fi
-
-    echo $count
-}
-
-flvr_cnt_cli2mdt()
-{
-    local flavor=$1
-
-    output=`do_facet client lctl get_param -n mdc.*-MDT*-mdc-*.$PROC_CLI 2>/dev/null`
-    count_flvr "$output" $flavor
-}
-
-flvr_cnt_cli2ost()
-{
-    local flavor=$1
-
-    output=`do_facet client lctl get_param -n osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null`
-    count_flvr "$output" $flavor
-}
-
-flvr_cnt_mdt2mdt()
-{
-    local flavor=$1
-    local cnt=0
-
-    if [ $MDSCOUNT -le 1 ]; then
-        echo 0
-        return
-    fi
-
-    for num in `seq $MDSCOUNT`; do
-        output=`do_facet mds$num lctl get_param -n mdc.*-MDT*-mdc[0-9]*.$PROC_CLI 2>/dev/null`
-        tmpcnt=`count_flvr "$output" $flavor`
-        cnt=$((cnt + tmpcnt))
-    done
-    echo $cnt;
-}
-
-flvr_cnt_mdt2ost()
-{
-    local flavor=$1
-    local cnt=0
-
-    for num in `seq $MDSCOUNT`; do
-        output=`do_facet mds$num lctl get_param -n osc.*OST*-osc-MDT*.$PROC_CLI 2>/dev/null`
-        tmpcnt=`count_flvr "$output" $flavor`
-        cnt=$((cnt + tmpcnt))
-    done
-    echo $cnt;
-}
-
-flvr_cnt_mgc2mgs()
-{
-    local flavor=$1
-
-    output=`do_facet client lctl get_param -n mgc.*.$PROC_CLI 2>/dev/null`
-    count_flvr "$output" $flavor
-}
-
-do_check_flavor()
-{
-    local dir=$1        # from to
-    local flavor=$2     # flavor expected
-    local res=0
-
-    if [ $dir == "cli2mdt" ]; then
-        res=`flvr_cnt_cli2mdt $flavor`
-    elif [ $dir == "cli2ost" ]; then
-        res=`flvr_cnt_cli2ost $flavor`
-    elif [ $dir == "mdt2mdt" ]; then
-        res=`flvr_cnt_mdt2mdt $flavor`
-    elif [ $dir == "mdt2ost" ]; then
-        res=`flvr_cnt_mdt2ost $flavor`
-    elif [ $dir == "all2ost" ]; then
-        res1=`flvr_cnt_mdt2ost $flavor`
-        res2=`flvr_cnt_cli2ost $flavor`
-        res=$((res1 + res2))
-    elif [ $dir == "all2mdt" ]; then
-        res1=`flvr_cnt_mdt2mdt $flavor`
-        res2=`flvr_cnt_cli2mdt $flavor`
-        res=$((res1 + res2))
-    elif [ $dir == "all2all" ]; then
-        res1=`flvr_cnt_mdt2ost $flavor`
-        res2=`flvr_cnt_cli2ost $flavor`
-        res3=`flvr_cnt_mdt2mdt $flavor`
-        res4=`flvr_cnt_cli2mdt $flavor`
-        res=$((res1 + res2 + res3 + res4))
-    fi
-
-    echo $res
-}
-
-wait_flavor()
-{
-    local dir=$1        # from to
-    local flavor=$2     # flavor expected
-    local expect=$3     # number expected
-    local res=0
-
-    for ((i=0;i<20;i++)); do
-        echo -n "checking..."
-        res=$(do_check_flavor $dir $flavor)
-        if [ $res -eq $expect ]; then
-            echo "found $res $flavor connections of $dir, OK"
-            return 0
-        else
-            echo "found $res $flavor connections of $dir, not ready ($expect)"
-            sleep 4
-        fi
-    done
-
-    echo "Error checking $flavor of $dir: expect $expect, actual $res"
-    return 1
-}
-
-restore_to_default_flavor()
-{
-    local proc="mgs.MGS.live.$FSNAME"
-
-    echo "restoring to default flavor..."
-
-    nrule=`do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
-
-    # remove all existing rules if any
-    if [ $nrule -ne 0 ]; then
-        echo "$nrule existing rules"
-        for rule in `do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor."`; do
-            echo "remove rule: $rule"
-            spec=`echo $rule | awk -F = '{print $1}'`
-            do_facet mgs "$LCTL conf_param $spec="
-        done
-    fi
-
-    # verify no rules left
-    nrule=`do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
-    [ $nrule -ne 0 ] && error "still $nrule rules left"
-
-    # wait for default flavor to be applied
-    # currently default flavor for all connections are 'null'
-    wait_flavor all2all null $cnt_all2all
-    echo "now at default flavor settings"
-}
-
-set_flavor_all()
-{
-    local flavor=$1
-
-    echo "setting all flavor to $flavor"
-
-    res=$(do_check_flavor all2all $flavor)
-    if [ $res -eq $cnt_all2all ]; then
-        echo "already have total $res $flavor connections"
-        return
-    fi
-
-    echo "found $res $flavor out of total $cnt_all2all connections"
-    restore_to_default_flavor
-
-    set_rule $FSNAME any any $flavor
-    wait_flavor all2all $flavor $cnt_all2all
-}
 
 start_dbench()
 {
@@ -456,6 +195,7 @@ test_1() {
     local file=$DIR/$tfile
 
     chmod 0777 $DIR || error "chmod $DIR failed"
+    $RUNAS touch $DIR
     # access w/o cred
     $RUNAS kdestroy
     $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
@@ -573,9 +313,9 @@ test_5() {
     [ -f $file1 ] || error "$file1 not found"
 
     # stop lsvcgssd
-    send_sigint mds lsvcgssd
+    send_sigint $(comma_list $(mdts_nodes)) lsvcgssd
     sleep 5
-    check_gss_daemon_facet mds lsvcgssd && error "lsvcgssd still running"
+    check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd && error "lsvcgssd still running"
 
     # flush context, and touch
     $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
@@ -591,9 +331,9 @@ test_5() {
 
     # restart lsvcgssd, expect touch suceed
     echo "restart lsvcgssd and recovering"
-    do_facet mds "$LSVCGSSD -v"
+    start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -v"
     sleep 5
-    check_gss_daemon_facet mds lsvcgssd
+    check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd
     wait $TOUCHPID || error "touch fail"
     [ -f $file2 ] || error "$file2 not found"
 }
@@ -697,7 +437,7 @@ test_90() {
 
     restore_to_default_flavor
     set_rule $FSNAME any any krb5p
-    wait_flavor all2all krb5p $cnt_all2all
+    wait_flavor all2all krb5p
 
     start_dbench
 
@@ -782,23 +522,23 @@ test_100() {
     # all: null -> krb5n -> krb5a -> krb5i -> krb5p -> plain
     #
     set_rule $FSNAME any any krb5n
-    wait_flavor all2all krb5n $cnt_all2all || error_dbench "1"
+    wait_flavor all2all krb5n || error_dbench "1"
     check_dbench
 
     set_rule $FSNAME any any krb5a
-    wait_flavor all2all krb5a $cnt_all2all || error_dbench "2"
+    wait_flavor all2all krb5a || error_dbench "2"
     check_dbench
 
     set_rule $FSNAME any any krb5i
-    wait_flavor all2all krb5i $cnt_all2all || error_dbench "3"
+    wait_flavor all2all krb5i || error_dbench "3"
     check_dbench
 
     set_rule $FSNAME any any krb5p
-    wait_flavor all2all krb5p $cnt_all2all || error_dbench "4"
+    wait_flavor all2all krb5p || error_dbench "4"
     check_dbench
 
     set_rule $FSNAME any any plain
-    wait_flavor all2all plain $cnt_all2all || error_dbench "5"
+    wait_flavor all2all plain || error_dbench "5"
     check_dbench
 
     #
@@ -808,19 +548,19 @@ test_100() {
     # C - O: krb5n
     #
     set_rule $FSNAME any mdt2mdt krb5a
-    wait_flavor mdt2mdt krb5a $cnt_mdt2mdt || error_dbench "6"
+    wait_flavor mdt2mdt krb5a || error_dbench "6"
     check_dbench
 
     set_rule $FSNAME any cli2mdt krb5i
-    wait_flavor cli2mdt krb5i $cnt_cli2mdt || error_dbench "7"
+    wait_flavor cli2mdt krb5i || error_dbench "7"
     check_dbench
 
     set_rule $FSNAME any mdt2ost krb5p
-    wait_flavor mdt2ost krb5p $cnt_mdt2ost || error_dbench "8"
+    wait_flavor mdt2ost krb5p || error_dbench "8"
     check_dbench
 
     set_rule $FSNAME any cli2ost krb5n
-    wait_flavor cli2ost krb5n $cnt_cli2ost || error_dbench "9"
+    wait_flavor cli2ost krb5n || error_dbench "9"
     check_dbench
 
     #
@@ -831,11 +571,11 @@ test_100() {
     #
     set_rule $FSNAME-MDT0000 any any krb5p
     set_rule $FSNAME-OST0000 any any krb5i
-    wait_flavor mdt2mdt krb5a $cnt_mdt2mdt || error_dbench "10"
-    wait_flavor cli2mdt krb5i $cnt_cli2mdt || error_dbench "11"
+    wait_flavor mdt2mdt krb5a || error_dbench "10"
+    wait_flavor cli2mdt krb5i || error_dbench "11"
     check_dbench
-    wait_flavor mdt2ost krb5p $cnt_mdt2ost || error_dbench "12"
-    wait_flavor cli2ost krb5n $cnt_cli2ost || error_dbench "13"
+    wait_flavor mdt2ost krb5p || error_dbench "12"
+    wait_flavor cli2ost krb5n || error_dbench "13"
 
     #
     # delete all dir-specific rules
@@ -845,10 +585,10 @@ test_100() {
     set_rule $FSNAME any mdt2ost
     set_rule $FSNAME any cli2ost
     wait_flavor mdt2mdt krb5p $((MDSCOUNT - 1)) || error_dbench "14"
-    wait_flavor cli2mdt krb5p $CLICOUNT || error_dbench "15"
+    wait_flavor cli2mdt krb5p $(get_clients_mount_count) || error_dbench "15"
     check_dbench
     wait_flavor mdt2ost krb5i $MDSCOUNT || error_dbench "16"
-    wait_flavor cli2ost krb5i $CLICOUNT || error_dbench "17"
+    wait_flavor cli2ost krb5i $(get_clients_mount_count) || error_dbench "17"
     check_dbench
 
     #
@@ -858,7 +598,7 @@ test_100() {
     #
     set_rule $FSNAME-MDT0000 any any
     set_rule $FSNAME-OST0000 any any || error_dbench "18"
-    wait_flavor all2all plain $cnt_all2all || error_dbench "19"
+    wait_flavor all2all plain || error_dbench "19"
     check_dbench
 
     stop_dbench
@@ -882,7 +622,7 @@ switch_sec_test()
     log ">>>>>>>>>>>>>>> Testing $flavor0 -> $flavor1 <<<<<<<<<<<<<<<<<<<"
 
     set_rule $FSNAME any cli2mdt $flavor0
-    wait_flavor cli2mdt $flavor0 $cnt_cli2mdt
+    wait_flavor cli2mdt $flavor0
     rm -f $filename || error "remove old $filename failed"
 
 #MDS_REINT = 36
@@ -896,7 +636,7 @@ switch_sec_test()
     sleep 1
 
     set_rule $FSNAME any cli2mdt $flavor1
-    wait_flavor cli2mdt $flavor1 $cnt_cli2mdt
+    wait_flavor cli2mdt $flavor1
 
     num=`ps --no-headers -p $multiop_pid 2>/dev/null | wc -l`
     [ $num -eq 1 ] || error "multiop($multiop_pid) already ended ($num)"
@@ -951,7 +691,7 @@ test_102() {
     set_rule $FSNAME any any null
 
     check_dbench
-    wait_flavor all2all null $cnt_all2all || error_dbench "1"
+    wait_flavor all2all null || error_dbench "1"
     check_dbench
 
     echo "waiting for 15s and check again"
@@ -966,7 +706,7 @@ test_102() {
     set_rule $FSNAME any any krb5i
 
     check_dbench
-    wait_flavor all2all krb5i $cnt_all2all || error_dbench "2"
+    wait_flavor all2all krb5i || error_dbench "2"
     check_dbench
 
     echo "waiting for 15s and check again"

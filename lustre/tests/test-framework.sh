@@ -167,7 +167,7 @@ init_test_env() {
         xkrb5*)
             echo "Using GSS/krb5 ptlrpc security flavor"
             which lgss_keyring > /dev/null 2>&1 || \
-                error "built with gss disabled! SEC=$SEC"
+                error_exit "built with gss disabled! SEC=$SEC"
             GSS=true
             GSS_KRB5=true
             ;;
@@ -351,6 +351,17 @@ unload_modules() {
     return 0
 }
 
+check_gss_daemon_nodes() {
+    local list=$1
+    dname=$2
+
+    do_nodes --verbose $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
+if [ \\\"\\\$num\\\" -ne 1 ]; then
+    echo \\\$num instance of $dname;
+    exit 1;
+fi; "
+}
+
 check_gss_daemon_facet() {
     facet=$1
     dname=$2
@@ -364,27 +375,41 @@ check_gss_daemon_facet() {
 }
 
 send_sigint() {
-    local facet=$1
+    local list=$1
     shift
-    do_facet $facet "killall -2 $@ 2>/dev/null || true"
+    echo Stopping $@ on $list
+    do_nodes $list "killall -2 $@ 2>/dev/null || true"
 }
 
+# start gss daemons on all nodes, or
+# "daemon" on "list" if set
 start_gss_daemons() {
-    # starting on MDT
-    for num in `seq $MDSCOUNT`; do
-        do_facet mds$num "$LSVCGSSD -v"
-        if $GSS_PIPEFS; then
-            do_facet mds$num "$LGSSD -v"
-        fi
-    done
-    # starting on OSTs
-    for num in `seq $OSTCOUNT`; do
-        do_facet ost$num "$LSVCGSSD -v"
-    done
-    # starting on client
-    # FIXME: is "client" the right facet name?
+    local list=$1
+    local daemon=$2
+
+    if [ "$list" ] && [ "$daemon" ] ; then
+        echo "Starting gss daemon on nodes: $list"
+        do_nodes $list "$daemon" || return 8
+        return 0
+    fi
+
+    local list=$(comma_list $(mdts_nodes))
+
+    echo "Starting gss daemon on mds: $list"
+    do_nodes $list "$LSVCGSSD -v" || return 1
     if $GSS_PIPEFS; then
-        do_facet client "$LGSSD -v"
+        do_nodes $list "$LGSSD -v" || return 2
+    fi
+
+    list=$(comma_list $(osts_nodes))
+    echo "Starting gss daemon on ost: $list"
+    do_nodes $list "$LSVCGSSD -v" || return 3
+    # starting on clients
+
+    local clients=${CLIENTS:-`hostname`}
+    if $GSS_PIPEFS; then
+        echo "Starting $LGSSD on clients $clients "
+        do_nodes $clients  "$LGSSD -v" || return 4
     fi
 
     # wait daemons entering "stable" status
@@ -393,33 +418,37 @@ start_gss_daemons() {
     #
     # check daemons are running
     #
-    for num in `seq $MDSCOUNT`; do
-        check_gss_daemon_facet mds$num lsvcgssd
-        if $GSS_PIPEFS; then
-            check_gss_daemon_facet mds$num lgssd
-        fi
-    done
-    for num in `seq $OSTCOUNT`; do
-        check_gss_daemon_facet ost$num lsvcgssd
-    done
+    list=$(comma_list $(mdts_nodes) $(osts_nodes))
+    check_gss_daemon_nodes $list lsvcgssd || return 5
     if $GSS_PIPEFS; then
-        check_gss_daemon_facet client lgssd
+        list=$(comma_list $(mdts_nodes))
+        check_gss_daemon_nodes $list lgssd || return 6
+    fi
+    if $GSS_PIPEFS; then
+        check_gss_daemon_nodes $clients lgssd || return 7
     fi
 }
 
 stop_gss_daemons() {
-    for num in `seq $MDSCOUNT`; do
-        send_sigint mds$num lsvcgssd lgssd
-    done
-    for num in `seq $OSTCOUNT`; do
-        send_sigint ost$num lsvcgssd
-    done
-    send_sigint client lgssd
+    local list=$(comma_list $(mdts_nodes))
+    
+    send_sigint $list lsvcgssd lgssd
+
+    list=$(comma_list $(osts_nodes))
+    send_sigint $list lsvcgssd
+
+    list=${CLIENTS:-`hostname`}
+    send_sigint $list lgssd
 }
 
 init_gss() {
     if $GSS; then
-        start_gss_daemons
+        if ! module_loaded ptlrpc_gss; then
+            load_module ptlrpc/gss/ptlrpc_gss
+            module_loaded ptlrpc_gss ||
+                error_exit "init_gss : GSS=$GSS, but gss/krb5 is not supported!"
+        fi
+        start_gss_daemons || error_exit "start gss daemon failed! rc=$?"
 
         if [ -n "$LGSS_KEYRING_DEBUG" ]; then
             echo $LGSS_KEYRING_DEBUG > /proc/fs/lustre/sptlrpc/gss/lgss_keyring/debug_level
@@ -1589,12 +1618,6 @@ formatall() {
 
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
 
-    if [ ! -z $SEC ]; then
-        MDS_MKFS_OPTS="$MDS_MKFS_OPTS --param srpc.flavor.default=$SEC"
-        MDSn_MKFS_OPTS="$MDSn_MKFS_OPTS --param srpc.flavor.default=$SEC"
-        OST_MKFS_OPTS="$OST_MKFS_OPTS --param srpc.flavor.default=$SEC"
-    fi
-
     stopall
     # We need ldiskfs here, may as well load them all
     load_modules
@@ -1694,7 +1717,7 @@ setupall() {
         error "environments are insane!"
 
     load_modules
-    init_gss
+
     if [ -z "$CLIENTONLY" ]; then
         echo Setup mgs, mdt, osts
         echo $WRITECONF | grep -q "writeconf" && \
@@ -1731,9 +1754,14 @@ setupall() {
 
         done
     fi
+
+    init_gss
+
     # wait a while to allow sptlrpc configuration be propogated to targets,
     # only needed when mounting new target devices.
-    $GSS && sleep 10
+    if $GSS; then
+        sleep 10
+    fi
 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
@@ -1752,6 +1780,7 @@ setupall() {
     # by a context negotiation rpc with $TIMEOUT.
     # FIXME better by monitoring import status.
     if $GSS; then
+        set_flavor_all $SEC
         sleep $((TIMEOUT + 5))
     else
         sleep 5
@@ -2013,6 +2042,10 @@ check_and_setup_lustre() {
             lctl set_param debug_mb=${DEBUG_SIZE};
             sync"
     fi
+
+    init_gss
+    set_flavor_all $SEC
+
     if [ "$ONLY" == "setup" ]; then
         exit 0
     fi
@@ -3384,4 +3417,298 @@ do_ls () {
 
     return $rc
 }
+
+get_clients_mount_count () {
+    local clients=${CLIENTS:-`hostname`}
+
+    # we need to take into account the clients mounts and
+    # exclude mds/ost mounts if any;
+    do_nodes $clients cat /proc/mounts | grep lustre | grep $MOUNT | wc -l
+}
+
+# gss functions
+PROC_CLI="srpc_info"
+
+combination()
+{
+    local M=$1
+    local N=$2
+    local R=1
+
+    if [ $M -lt $N ]; then
+        R=0
+    else
+        N=$((N + 1))
+        while [ $N -le $M ]; do
+            R=$((R * N))
+            N=$((N + 1))
+        done
+    fi
+
+    echo $R
+    return 0
+}
+
+calc_connection_cnt() {
+    local dir=$1
+
+    # MDT->MDT = 2 * C(M, 2)
+    # MDT->OST = M * O
+    # CLI->OST = C * O
+    # CLI->MDT = C * M
+    comb_m2=$(combination $MDSCOUNT 2)
+
+    local num_clients=$(get_clients_mount_count)
+
+    local cnt_mdt2mdt=$((comb_m2 * 2))
+    local cnt_mdt2ost=$((MDSCOUNT * OSTCOUNT))
+    local cnt_cli2ost=$((num_clients * OSTCOUNT))
+    local cnt_cli2mdt=$((num_clients * MDSCOUNT))
+    local cnt_all2ost=$((cnt_mdt2ost + cnt_cli2ost))
+    local cnt_all2mdt=$((cnt_mdt2mdt + cnt_cli2mdt))
+    local cnt_all2all=$((cnt_mdt2ost + cnt_mdt2mdt + cnt_cli2ost + cnt_cli2mdt))
+
+    local var=cnt_$dir
+    local res=${!var}
+
+    echo $res
+}
+
+set_rule()
+{
+    local tgt=$1
+    local net=$2
+    local dir=$3
+    local flavor=$4
+    local cmd="$tgt.srpc.flavor"
+
+    if [ $net == "any" ]; then
+        net="default"
+    fi
+    cmd="$cmd.$net"
+
+    if [ $dir != "any" ]; then
+        cmd="$cmd.$dir"
+    fi
+
+    cmd="$cmd=$flavor"
+    log "Setting sptlrpc rule: $cmd"
+    do_facet mgs "$LCTL conf_param $cmd"
+}
+
+count_flvr()
+{
+    local output=$1
+    local flavor=$2
+    local count=0
+
+    rpc_flvr=`echo $flavor | awk -F - '{ print $1 }'`
+    bulkspec=`echo $flavor | awk -F - '{ print $2 }'`
+
+    count=`echo "$output" | grep "rpc flavor" | grep $rpc_flvr | wc -l`
+
+    if [ "x$bulkspec" != "x" ]; then
+        algs=`echo $bulkspec | awk -F : '{ print $2 }'`
+
+        if [ "x$algs" != "x" ]; then
+            bulk_count=`echo "$output" | grep "bulk flavor" | grep $algs | wc -l`
+        else
+            bulk=`echo $bulkspec | awk -F : '{ print $1 }'`
+            if [ $bulk == "bulkn" ]; then
+                bulk_count=`echo "$output" | grep "bulk flavor" \
+                            | grep "null/null" | wc -l`
+            elif [ $bulk == "bulki" ]; then
+                bulk_count=`echo "$output" | grep "bulk flavor" \
+                            | grep "/null" | grep -v "null/" | wc -l`
+            else
+                bulk_count=`echo "$output" | grep "bulk flavor" \
+                            | grep -v "/null" | grep -v "null/" | wc -l`
+            fi
+        fi
+
+        [ $bulk_count -lt $count ] && count=$bulk_count
+    fi
+
+    echo $count
+}
+
+flvr_cnt_cli2mdt()
+{
+    local flavor=$1
+    local cnt
+
+    local clients=${CLIENTS:-`hostname`}
+
+    for c in ${clients//,/ }; do
+        output=`do_node $c lctl get_param -n mdc.*-MDT*-mdc-*.$PROC_CLI 2>/dev/null`
+        tmpcnt=`count_flvr "$output" $flavor`
+        cnt=$((cnt + tmpcnt))
+    done
+    echo $cnt
+}
+
+flvr_cnt_cli2ost()
+{
+    local flavor=$1
+    local cnt
+
+    local clients=${CLIENTS:-`hostname`}
+
+    for c in ${clients//,/ }; do
+        output=`do_node $c lctl get_param -n osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null`
+        tmpcnt=`count_flvr "$output" $flavor`
+        cnt=$((cnt + tmpcnt))
+    done
+    echo $cnt
+}
+
+flvr_cnt_mdt2mdt()
+{
+    local flavor=$1
+    local cnt=0
+
+    if [ $MDSCOUNT -le 1 ]; then
+        echo 0
+        return
+    fi
+
+    for num in `seq $MDSCOUNT`; do
+        output=`do_facet mds$num lctl get_param -n mdc.*-MDT*-mdc[0-9]*.$PROC_CLI 2>/dev/null`
+        tmpcnt=`count_flvr "$output" $flavor`
+        cnt=$((cnt + tmpcnt))
+    done
+    echo $cnt;
+}
+
+flvr_cnt_mdt2ost()
+{
+    local flavor=$1
+    local cnt=0
+
+    for num in `seq $MDSCOUNT`; do
+        output=`do_facet mds$num lctl get_param -n osc.*OST*-osc-MDT*.$PROC_CLI 2>/dev/null`
+        tmpcnt=`count_flvr "$output" $flavor`
+        cnt=$((cnt + tmpcnt))
+    done
+    echo $cnt;
+}
+
+flvr_cnt_mgc2mgs()
+{
+    local flavor=$1
+
+    output=`do_facet client lctl get_param -n mgc.*.$PROC_CLI 2>/dev/null`
+    count_flvr "$output" $flavor
+}
+
+do_check_flavor()
+{
+    local dir=$1        # from to
+    local flavor=$2     # flavor expected
+    local res=0
+
+    if [ $dir == "cli2mdt" ]; then
+        res=`flvr_cnt_cli2mdt $flavor`
+    elif [ $dir == "cli2ost" ]; then
+        res=`flvr_cnt_cli2ost $flavor`
+    elif [ $dir == "mdt2mdt" ]; then
+        res=`flvr_cnt_mdt2mdt $flavor`
+    elif [ $dir == "mdt2ost" ]; then
+        res=`flvr_cnt_mdt2ost $flavor`
+    elif [ $dir == "all2ost" ]; then
+        res1=`flvr_cnt_mdt2ost $flavor`
+        res2=`flvr_cnt_cli2ost $flavor`
+        res=$((res1 + res2))
+    elif [ $dir == "all2mdt" ]; then
+        res1=`flvr_cnt_mdt2mdt $flavor`
+        res2=`flvr_cnt_cli2mdt $flavor`
+        res=$((res1 + res2))
+    elif [ $dir == "all2all" ]; then
+        res1=`flvr_cnt_mdt2ost $flavor`
+        res2=`flvr_cnt_cli2ost $flavor`
+        res3=`flvr_cnt_mdt2mdt $flavor`
+        res4=`flvr_cnt_cli2mdt $flavor`
+        res=$((res1 + res2 + res3 + res4))
+    fi
+
+    echo $res
+}
+
+wait_flavor()
+{
+    local dir=$1        # from to
+    local flavor=$2     # flavor expected
+    local expect=${3:-$(calc_connection_cnt $dir)}     # number expected
+
+    local res=0
+
+    for ((i=0;i<20;i++)); do
+        echo -n "checking..."
+        res=$(do_check_flavor $dir $flavor)
+        if [ $res -eq $expect ]; then
+            echo "found $res $flavor connections of $dir, OK"
+            return 0
+        else
+            echo "found $res $flavor connections of $dir, not ready ($expect)"
+            sleep 4
+        fi
+    done
+
+    echo "Error checking $flavor of $dir: expect $expect, actual $res"
+    return 1
+}
+
+restore_to_default_flavor()
+{
+    local proc="mgs.MGS.live.$FSNAME"
+
+    echo "restoring to default flavor..."
+
+    nrule=`do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
+
+    # remove all existing rules if any
+    if [ $nrule -ne 0 ]; then
+        echo "$nrule existing rules"
+        for rule in `do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor."`; do
+            echo "remove rule: $rule"
+            spec=`echo $rule | awk -F = '{print $1}'`
+            do_facet mgs "$LCTL conf_param $spec="
+        done
+    fi
+
+    # verify no rules left
+    nrule=`do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
+    [ $nrule -ne 0 ] && error "still $nrule rules left"
+
+    # wait for default flavor to be applied
+    # currently default flavor for all connections are 'null'
+    wait_flavor all2all null
+    echo "now at default flavor settings"
+}
+
+set_flavor_all()
+{
+    local flavor=${1:-null}
+
+    echo "setting all flavor to $flavor"
+
+    # FIXME need parameter to this fn
+    # and remove global vars
+    local cnt_all2all=$(calc_connection_cnt all2all)
+
+    local res=$(do_check_flavor all2all $flavor)
+    if [ $res -eq $cnt_all2all ]; then
+        echo "already have total $res $flavor connections"
+        return
+    fi
+
+    echo "found $res $flavor out of total $cnt_all2all connections"
+    restore_to_default_flavor
+
+    [[ $flavor = null ]] && return 0
+
+    set_rule $FSNAME any any $flavor
+    wait_flavor all2all $flavor
+}
+
 
