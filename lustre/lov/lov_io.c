@@ -118,8 +118,12 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
         }
         case CIT_READ:
         case CIT_WRITE: {
-                io->u.ci_rw.crw_pos = start;
-                io->u.ci_rw.crw_count = end - start;
+                if (cl_io_is_append(parent)) {
+                        io->u.ci_wr.wr_append = 1;
+                } else {
+                        io->u.ci_rw.crw_pos = start;
+                        io->u.ci_rw.crw_count = end - start;
+                }
                 break;
         }
         default:

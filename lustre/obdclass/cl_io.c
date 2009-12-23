@@ -657,7 +657,7 @@ cl_io_slice_page(const struct cl_io_slice *ios, struct cl_page *page)
  */
 static int cl_page_in_io(const struct cl_page *page, const struct cl_io *io)
 {
-        int     result;
+        int     result = 1;
         loff_t  start;
         loff_t  end;
         pgoff_t idx;
@@ -670,10 +670,13 @@ static int cl_page_in_io(const struct cl_page *page, const struct cl_io *io)
                  * check that [start, end) and [pos, pos + count) extents
                  * overlap.
                  */
-                start = cl_offset(page->cp_obj, idx);
-                end   = cl_offset(page->cp_obj, idx + 1);
-                result = io->u.ci_rw.crw_pos < end &&
-                        start < io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
+                if (!cl_io_is_append(io)) {
+                        const struct cl_io_rw_common *crw = &(io->u.ci_rw);
+                        start = cl_offset(page->cp_obj, idx);
+                        end   = cl_offset(page->cp_obj, idx + 1);
+                        result = crw->crw_pos < end &&
+                                 start < crw->crw_pos + crw->crw_count;
+                }
                 break;
         case CIT_FAULT:
                 result = io->u.ci_fault.ft_index == idx;

@@ -805,7 +805,7 @@ void ll_io_init(struct cl_io *io, const struct file *file, int write)
         memset(io, 0, sizeof *io);
         io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
         if (write)
-                io->u.ci_wr.wr_append = file->f_flags & O_APPEND;
+                io->u.ci_wr.wr_append = !!(file->f_flags & O_APPEND);
         io->ci_obj     = ll_i2info(inode)->lli_clob;
         io->ci_lockreq = CILR_MAYBE;
         if (ll_file_nolock(file)) {
