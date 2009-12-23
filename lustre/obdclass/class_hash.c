@@ -508,13 +508,20 @@ lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb func, void *data)
 {
         struct hlist_node    *hnode;
         lustre_hash_bucket_t *lhb;
+        lustre_hash_bucket_t **lhb_last = NULL;
         void                 *obj;
-        int                   i;
+        int                   i = 0;
         ENTRY;
 
 restart:
         lh_read_lock(lh);
-        lh_for_each_bucket(lh, lhb, i) {
+        /* If the hash table has changed since we last held lh_rwlock,
+         * we need to start traversing the list from the start. */
+        if (lh->lh_buckets != lhb_last) {
+                i = 0;
+                lhb_last = lh->lh_buckets;
+        }
+        lh_for_each_bucket_restart(lh, lhb, i) {
                 write_lock(&lhb->lhb_rwlock);
                 while (!hlist_empty(&lhb->lhb_head)) {
                         hnode =  lhb->lhb_head.first;

@@ -346,7 +346,13 @@ lh_u64_hash(__u64 key, unsigned mask)
 #define lh_for_each_bucket(lh, lhb, pos)         \
         for (pos = 0;                            \
              pos <= lh->lh_cur_mask &&           \
-             ({ lhb = lh->lh_buckets[i]; 1; });  \
+             (lhb = lh->lh_buckets[pos]);       \
+             pos++)
+
+#define lh_for_each_bucket_restart(lh, lhb, pos) \
+        for (/* pos=0 done once by caller */;    \
+             pos <= lh->lh_cur_mask &&           \
+             (lhb = lh->lh_buckets[pos]);       \
              pos++)
 
 #endif /* __CLASS_HASH_H */
