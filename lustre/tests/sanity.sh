@@ -1238,6 +1238,12 @@ test_27y() {
         [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
+        local last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*0000-osc-MDT0000.prealloc_last_id)
+        local next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*0000-osc-MDT0000.prealloc_next_id)
+        local fcount=$((last_id - next_id))
+        [ $fcount -eq 0 ] && skip "not enough space on OST0" && return
+        [ $fcount -gt $OSTCOUNT ] && fcount=$OSTCOUNT
+
         MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
         OFFSET=$(($OSTCOUNT-1))
         OST=-1
@@ -1256,7 +1262,7 @@ test_27y() {
 
         do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
         sleep_maxage
-        createmany -o $DIR/$tdir/$tfile $OSTCOUNT
+        createmany -o $DIR/$tdir/$tfile $fcount
         do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
 
         for i in `seq 0 $OFFSET`; do
