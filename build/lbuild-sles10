@@ -21,7 +21,7 @@ cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.p
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
                -e "/flavor=\${config/a\
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
-          SOURCES/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec || fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
 
         if $KERNEL_LUSTRE_NAMING; then
             # these are all of the changes needed because we change the package names
@@ -32,7 +32,7 @@ Provides:       kernel-$spec = %{version}-%{release}
 " \
                    -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
                    -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
-              SOURCES/kernel-${spec}.spec
+              SOURCES/kernel-${spec}.spec || fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
         fi
 
     # XXX - a building-on-Ubuntu hack
@@ -42,7 +42,7 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
                -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
                -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
                -e 's/ -a 109//' \
-          SOURCES/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec || fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
      fi
     done
 }

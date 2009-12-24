@@ -25,7 +25,8 @@ cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.p
                -e "/flavor=\${config/a\
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
                -e "s/^\(BuildRequires:  kernel-dummy\)/# \1/" \
-          SOURCES/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
 
         if $KERNEL_LUSTRE_NAMING; then
             # these are all of the changes needed because we change the package names
@@ -43,7 +44,8 @@ Provides:       kernel-$spec = %{version}-%{release}
                -e "s/^\(Provides:.*kernel-\)\(.*\)/\1lustre-\2/" \
                -e "s/^\(Requires:.*kernel-\)\(.*\)/\1lustre-\2/" \
                -e "s/^\(Supplements:.*kernel-\)\(.*\)/\1lustre-\2/" \
-          SOURCES/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
         fi
 
     # XXX - a building-on-Ubuntu hack
@@ -53,8 +55,9 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
                    -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
                    -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
                    -e 's/ -a 109//' \
-              SOURCES/kernel-${spec}.spec
-    fi
+              SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+        fi
     done
 }
 
@@ -79,26 +82,4 @@ unpack_linux_devel_rpm-sles11() {
         fatal 1 "Unpack error for $kernelrpm"
     fi
 
-}
-
-# this is actually valid for sles10 and sles11 but let's test it on sles11 only, first
-find_linux_devel_paths() {
-    local path="$1"
-
-    LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}
-
-    local objects=$TARGET_ARCH/$RPMSMPTYPE
-    if [ -d $path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}-obj/powerpc ]; then
-        objects="powerpc/$TARGET_ARCH"
-    elif [ $TARGET_ARCH == 'i686' ]; then
-        objects="i386/$RPMSMPTYPE"
-    fi
-
-    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}-obj/$objects
-
-    LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
-    if [ -z "$LINUXRELEASE" ]; then
-        echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
-        RC=255
-    fi
 }

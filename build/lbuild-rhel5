@@ -54,7 +54,8 @@ Patch99995: linux-%{kversion}-lustre.patch' \
            -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
     cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3 \
     cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
-          SPECS/kernel-2.6.spec
+          SPECS/kernel-2.6.spec 2>&1 || \
+        fatal 1 "Error while editing SPECS/kernel-2.6.spec"
 
     if $KERNEL_LUSTRE_NAMING; then
         # these are all of the changes needed because we change the package names
@@ -79,14 +80,17 @@ Obsoletes: kernel-debuginfo-common
 Provides: kernel-debuginfo = %{KVERREL}
 Obsoletes: kernel-debuginfo
 ' \
-              SPECS/kernel-2.6.spec
+              SPECS/kernel-2.6.sp 2>&1 || \
+            fatal 1 "Error while editing SPECS/kernel-2.6.spec"ec
     fi
 
     # XXX - a building-on-Ubuntu hack
     if grep -q "Ubuntu" /etc/issue; then
         sed  -i -e 's/^\(BuildPreReq: .*\)$/#NOU \1/g' \
                -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
-          SPECS/kernel-2.6.spec
+               -e 's/sha512hmac/md5sum/g' \
+            SPECS/kernel-2.6.spec 2>&1 || \
+                fatal 1 "Error while editing SPECS/kernel-2.6.spec"
     fi
 
     # finally, work around RH bug 491775, if needed
@@ -95,7 +99,8 @@ Obsoletes: kernel-debuginfo
         # XXX - i wonder if we will need to do this ad-hoc patching enough to
         #       formalize a patching system.  let's assume not for the time
         #       being.
-        patch -s -p0 <<"EOF" || fatal 1 "Error while patching SPECS/kernel-2.6.spec"
+        patch -s -p0 <<"EOF" 2>&1 || \
+            fatal 1 "Error while patching SPECS/kernel-2.6.spec"
 --- SPECS/kernel-2.6.spec.dist	2009-03-23 20:30:55.000000000 -0400
 +++ SPECS/kernel-2.6.spec	2009-03-23 20:37:03.000000000 -0400
 @@ -6961,6 +6961,10 @@
@@ -161,9 +166,11 @@ EOF
     # now build it
     if ! $RPMBUILD $rpmbuildopt $targets --with baseonly \
                    --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-2.6.spec >&2; then
-        fatal 1 "Failed to build kernel RPM"
+                   $TOPDIR/SPECS/kernel-2.6.spec 2>&1; then
+        return 1
     fi
+
+    return 0
 
 }
 
@@ -189,4 +196,20 @@ rpm_BUILD_kernel_dirname() {
         $lustre="-lustre"
     fi
     echo kernel${lustre}${lnxmaj}${lnxmin}/linux-${lnxmaj}.$arch
+}
+
+find_linux_devel_paths() {
+    local path="$1"
+
+    LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}-${TARGET_ARCH}
+    # RHEL doesn't have the -obj tree
+    LINUXOBJ=""
+    # XXX - i don't think we need this any more
+    #LINUXRELEASE=$(find_linux_release "$LINUX")
+    #if [ -z "$LINUXRELEASE" ]; then
+    #    echo "Failed to find linux release in $LINUX"
+    #    return 255
+    #fi
+
+    return 0
 }
