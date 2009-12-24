@@ -243,8 +243,8 @@ int llapi_file_lookup(int dirfd, const char *name)
 static void
 process_args(int argc, char *argv[])
 {
-        char   c, *cp, *endptr;
-        int    i, index, offset, tmpend, rc;
+        char   *cp, *endptr;
+        int    i, index, offset, tmpend, rc, c;
         char   tmp[16];
         FILE * seed_file;
         struct option *opt;
