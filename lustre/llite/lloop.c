@@ -499,7 +499,12 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         lo->lo_queue->unplug_fn = loop_unplug;
 
         /* queue parameters */
-        blk_queue_hardsect_size(lo->lo_queue, CFS_PAGE_SIZE);
+        /*
+         * using unsigned type cast instead of unsigned short cast in order
+         * to avoid truncate of CFS_PAGE_SIZE (= 2**16) value
+         */
+        blk_queue_hardsect_size(lo->lo_queue,
+                                min_t(unsigned, CFS_PAGE_SIZE, 16384));
         blk_queue_max_sectors(lo->lo_queue,
                               LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
         blk_queue_max_phys_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
