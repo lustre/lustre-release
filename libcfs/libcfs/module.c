@@ -220,20 +220,11 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 }
 EXPORT_SYMBOL(libcfs_deregister_ioctl);
 
-static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *arg)
+static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
+                            void *arg, struct libcfs_ioctl_data *data)
 {
-        char    buf[1024];
         int err = -EINVAL;
-        struct libcfs_ioctl_data *data;
         ENTRY;
-
-        /* 'cmd' and permissions get checked in our arch-specific caller */
-
-        if (libcfs_ioctl_getdata(buf, buf + 800, (void *)arg)) {
-                CERROR("PORTALS ioctl: data error\n");
-                RETURN(-EINVAL);
-        }
-        data = (struct libcfs_ioctl_data *)buf;
 
         switch (cmd) {
         case IOC_LIBCFS_CLEAR_DEBUG:
@@ -336,6 +327,32 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
 
         RETURN(err);
 }
+
+static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *arg)
+{
+        char    *buf;
+        struct libcfs_ioctl_data *data;
+        int err;
+        ENTRY;
+
+        LIBCFS_ALLOC_GFP(buf, 1024, CFS_ALLOC_STD);
+        if (buf == NULL)
+                RETURN(-ENOMEM);
+
+        /* 'cmd' and permissions get checked in our arch-specific caller */
+        if (libcfs_ioctl_getdata(buf, buf + 800, (void *)arg)) {
+                CERROR("PORTALS ioctl: data error\n");
+                GOTO(out, err = -EINVAL);
+        }
+        data = (struct libcfs_ioctl_data *)buf;
+
+        err = libcfs_ioctl_int(pfile, cmd, arg, data);
+
+out:
+        LIBCFS_FREE(buf, 1024);
+        RETURN(err);
+}
+
 
 struct cfs_psdev_ops libcfs_psdev_ops = {
         libcfs_psdev_open,

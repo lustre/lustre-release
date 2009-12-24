@@ -552,7 +552,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         int                     master_lockm = 0;
         struct lustre_handle   *lockh = NULL;
         struct ptlrpc_request  *mreq = *reqp;
-        struct lustre_handle    master_lockh;
+        struct lustre_handle    master_lockh = { 0 };
         struct md_op_data      *op_data;
         struct ldlm_lock       *lock;
         unsigned long           size = 0;
