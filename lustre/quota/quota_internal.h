@@ -87,7 +87,7 @@
 #define LQS_DEBUG(lqs, fmt, arg...)                                           \
         CDEBUG(D_QUOTA, "lqs(%p) id(%u) flag(%lu) type(%c) bunit(%lu) "       \
                "btune(%lu) iunit(%lu) itune(%lu) lqs_bwrite_pending(%lu) "    \
-               "lqs_iwrite_pending(%lu) ino_rec("LPD64") blk_rec("LPD64" ) "  \
+               "lqs_iwrite_pending(%lu) ino_rec(%lld) blk_rec(%lld) "         \
                "refcount(%d): "                                               \
                fmt, lqs, lqs->lqs_id, lqs->lqs_flags,                         \
                LQS_IS_GRP(lqs) ? 'g' : 'u',                                   \
