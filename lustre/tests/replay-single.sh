@@ -2083,6 +2083,61 @@ test_84() {
 }
 run_test 84 "stale open during export disconnect"
 
+test_85a() { #bug 16774
+    lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+
+    for i in `seq 100`; do
+        echo "tag-$i" > $DIR/$tfile-$i
+        grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
+    done
+
+    lov_id=`lctl dl | grep "clilov"` 
+    addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
+    count=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
+    echo "before recovery: unused locks count = $count"
+
+    fail mds
+    
+    count2=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
+    echo "after recovery: unused locks count = $count2"
+
+    if [ $count2 -ge $count ]; then
+        error "unused locks are not canceled"
+    fi
+}
+run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
+
+test_85b() { #bug 16774
+    lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+
+    lfs setstripe -o 0 -c 1 $DIR
+
+    for i in `seq 100`; do
+        dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 count=32 >/dev/null 2>&1
+    done
+
+    cancel_lru_locks osc
+
+    for i in `seq 100`; do
+        dd if=$DIR/$tfile-$i of=/dev/null bs=4096 count=32 >/dev/null 2>&1
+    done
+
+    lov_id=`lctl dl | grep "clilov"` 
+    addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
+    count=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
+    echo "before recovery: unused locks count = $count"
+
+    fail ost1
+    
+    count2=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
+    echo "after recovery: unused locks count = $count2"
+
+    if [ $count2 -ge $count ]; then
+        error "unused locks are not canceled"
+    fi
+}
+run_test 85b "check the cancellation of unused locks during recovery(EXTENT)"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
