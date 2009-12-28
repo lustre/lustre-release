@@ -184,8 +184,10 @@ struct lprocfs_vars lprocfs_mgs_module_vars[] = {
 
 void mgs_counter_incr(struct obd_export *exp, int opcode)
 {
-        lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
-        lprocfs_counter_incr(exp->exp_ops_stats, opcode);
+        if (exp->exp_obd && exp->exp_obd->obd_stats)
+                lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
+                lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
 }
 
 void mgs_stats_counter_init(struct lprocfs_stats *stats)

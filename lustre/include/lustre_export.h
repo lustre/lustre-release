@@ -139,7 +139,6 @@ struct obd_export {
         struct obd_device        *exp_obd;
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct nid_stat          *exp_nid_stats;
-        struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
         lustre_hash_t            *exp_lock_hash; /* existing lock hash */

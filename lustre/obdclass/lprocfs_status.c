@@ -1776,7 +1776,6 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
 
         nidstat_putref(exp->exp_nid_stats);
         exp->exp_nid_stats = NULL;
-        lprocfs_free_stats(&exp->exp_ops_stats);
 
         return 0;
 }
