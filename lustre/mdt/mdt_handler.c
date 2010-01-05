@@ -4379,9 +4379,9 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
          */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
-        mdt_procfs_fini(m);
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
+        mdt_procfs_fini(m);
 
         if (ls) {
                 struct md_site *mite;
