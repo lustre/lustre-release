@@ -51,6 +51,21 @@
 
 #include <net/sock.h>
 
+#ifndef HIPQUAD
+// XXX Should just kill all users
+#if defined(__LITTLE_ENDIAN)
+#define HIPQUAD(addr) \
+        ((unsigned char *)&addr)[3], \
+        ((unsigned char *)&addr)[2], \
+        ((unsigned char *)&addr)[1], \
+        ((unsigned char *)&addr)[0]
+#elif defined(__BIG_ENDIAN)
+#define HIPQUAD NIPQUAD
+#else
+#error "Please fix asm/byteorder.h"
+#endif /* __LITTLE_ENDIAN */
+#endif
+
 typedef struct socket   cfs_socket_t;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))

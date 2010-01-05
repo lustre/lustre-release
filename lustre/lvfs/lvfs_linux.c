@@ -89,9 +89,13 @@ static void push_group_info(struct lvfs_run_ctxt *save,
                 save->ngroups = current_ngroups;
                 current_ngroups = 0;
         } else {
+                struct cred *cred;
                 task_lock(current);
-                save->group_info = current->group_info;
-                current->group_info = ginfo;
+                save->group_info = current_cred()->group_info;
+                if ((cred = prepare_creds())) {
+                        cred->group_info = ginfo;
+                        commit_creds(cred);
+                }
                 task_unlock(current);
         }
 }
@@ -102,8 +106,12 @@ static void pop_group_info(struct lvfs_run_ctxt *save,
         if (!ginfo) {
                 current_ngroups = save->ngroups;
         } else {
+                struct cred *cred;
                 task_lock(current);
-                current->group_info = save->group_info;
+                if ((cred = prepare_creds())) {
+                        cred->group_info = save->group_info;
+                        commit_creds(cred);
+                }
                 task_unlock(current);
         }
 }
@@ -122,7 +130,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         save->pwd = dget(cfs_fs_pwd(current->fs));
         save->pwdmnt = mntget(cfs_fs_mnt(current->fs));
         save->luc.luc_umask = current->fs->umask;
-        save->ngroups = current->group_info->ngroups;
+        save->ngroups = current_cred()->group_info->ngroups;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -130,17 +138,21 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
-                save->luc.luc_uid = current->uid;
-                save->luc.luc_gid = current->gid;
-                save->luc.luc_fsuid = current->fsuid;
-                save->luc.luc_fsgid = current->fsgid;
-                save->luc.luc_cap = current->cap_effective;
+                struct cred *cred;
+                save->luc.luc_uid = current_uid();
+                save->luc.luc_gid = current_gid();
+                save->luc.luc_fsuid = current_fsuid();
+                save->luc.luc_fsgid = current_fsgid();
+                save->luc.luc_cap = current_cap();
 
-                current->uid = uc->luc_uid;
-                current->gid = uc->luc_gid;
-                current->fsuid = uc->luc_fsuid;
-                current->fsgid = uc->luc_fsgid;
-                current->cap_effective = uc->luc_cap;
+                if ((cred = prepare_creds())) {
+                        cred->uid = uc->luc_uid;
+                        cred->gid = uc->luc_gid;
+                        cred->fsuid = uc->luc_fsuid;
+                        cred->fsgid = uc->luc_fsgid;
+                        cred->cap_effective = uc->luc_cap;
+                        commit_creds(cred);
+                }
 
                 push_group_info(save,
                                 uc->luc_ginfo ?:
@@ -171,11 +183,16 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
         mntput(saved->pwdmnt);
         current->fs->umask = saved->luc.luc_umask;
         if (uc) {
-                current->uid = saved->luc.luc_uid;
-                current->gid = saved->luc.luc_gid;
-                current->fsuid = saved->luc.luc_fsuid;
-                current->fsgid = saved->luc.luc_fsgid;
-                current->cap_effective = saved->luc.luc_cap;
+                struct cred *cred;
+                if ((cred = prepare_creds())) {
+                        cred->uid = saved->luc.luc_uid;
+                        cred->gid = saved->luc.luc_gid;
+                        cred->fsuid = saved->luc.luc_fsuid;
+                        cred->fsgid = saved->luc.luc_fsgid;
+                        cred->cap_effective = saved->luc.luc_cap;
+                        commit_creds(cred);
+                }
+
                 pop_group_info(saved,
                                uc->luc_ginfo ?:
                                uc->luc_identity ? uc->luc_identity->mi_ginfo :
@@ -367,7 +384,7 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
                              int flags)
 {
         mntget(ctxt->pwdmnt);
-        return dentry_open(de, ctxt->pwdmnt, flags);
+        return ll_dentry_open(de, ctxt->pwdmnt, flags, current_cred());
 }
 EXPORT_SYMBOL(l_dentry_open);
 

@@ -405,6 +405,51 @@ AC_MSG_RESULT(no)
 CFLAGS="$tmp_flags"
 
 
+AC_MSG_CHECKING(for POSIX 2008 preadv)
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror"
+AC_TRY_COMPILE([
+#include <sys/uio.h>
+ssize_t preadv (int __fd, const struct iovec *__iovec,
+                int __count, off_t off)
+{
+    return 0;
+}
+],[
+],[
+AC_DEFINE(HAVE_POSIX2008_PREADV, 1, [POSIX 2008 preadv])
+AC_MSG_RESULT(yes)
+],[
+AC_MSG_RESULT(no)
+])
+CFLAGS="$tmp_flags"
+
+AC_MSG_CHECKING(for POSIX 2008 scandir)
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror"
+AC_TRY_COMPILE([
+#define _BSD_SOURCE
+
+#include <stdio.h>
+#include <dirent.h>
+
+int scandir(const char *dir,
+        struct dirent ***namelist,
+        int(*filter)(const struct dirent *),
+        int(*compar)(const struct dirent **,
+                     const struct dirent **)
+       );
+
+],[
+], [
+AC_DEFINE(HAVE_POSIX2008_SCANDIR, 1, [POSIX 2008 scandir])
+AC_MSG_RESULT(yes) 
+],[
+AC_MSG_RESULT(no)
+])
+CFLAGS="$tmp_flags"
+
+
 AC_MSG_CHECKING(whether .text pseudo-op must be used)
 AC_CACHE_VAL(am_cv_sysio_asm_dot_text, [dnl
 cat > conftest.s <<EOF

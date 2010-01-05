@@ -145,17 +145,29 @@ cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
 }
 
 struct proc_dir_entry *lprocfs_add_symlink(const char *name,
-                        struct proc_dir_entry *parent, const char *dest)
+                        struct proc_dir_entry *parent, const char *format, ...)
 {
         struct proc_dir_entry *entry;
+        char *dest;
+        va_list ap;
 
-        if (parent == NULL || dest == NULL)
+        if (parent == NULL || format == NULL)
                 return NULL;
+
+        OBD_ALLOC_WAIT(dest, MAX_STRING_SIZE + 1);
+        if (dest == NULL)
+                return NULL;
+
+        va_start(ap, format);
+        vsnprintf(dest, MAX_STRING_SIZE, format, ap);
+        va_end(ap);
 
         entry = proc_symlink(name, parent, dest);
         if (entry == NULL)
                 CERROR("LprocFS: Could not create symbolic link from %s to %s",
                         name, dest);
+
+        OBD_FREE(dest, MAX_STRING_SIZE + 1);
         return entry;
 }
 

@@ -468,6 +468,45 @@ out:
         RETURN(tot_bytes ? : result);
 }
 
+#ifdef HAVE_KERNEL_WRITE_BEGIN_END
+static int ll_write_begin(struct file *file, struct address_space *mapping,
+                         loff_t pos, unsigned len, unsigned flags,
+                         struct page **pagep, void **fsdata)
+{
+        pgoff_t index = pos >> PAGE_CACHE_SHIFT;
+        struct page *page;
+        int rc;
+        unsigned from = pos & (PAGE_CACHE_SIZE - 1);
+        ENTRY;
+
+        page = grab_cache_page_write_begin(mapping, index, flags);
+        if (!page)
+                RETURN(-ENOMEM);
+
+        *pagep = page;
+
+        rc = ll_prepare_write(file, page, from, from + len);
+        if (rc) {
+                unlock_page(page);
+                page_cache_release(page);
+        }
+        RETURN(rc);
+}
+
+static int ll_write_end(struct file *file, struct address_space *mapping,
+                        loff_t pos, unsigned len, unsigned copied,
+                        struct page *page, void *fsdata)
+{
+        unsigned from = pos & (PAGE_CACHE_SIZE - 1);
+        int rc;
+        rc = ll_commit_write(file, page, from, from + copied);
+
+        unlock_page(page);
+        page_cache_release(page);
+        return rc?rc:copied;
+}
+#endif
+
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
 //        .readpages      = ll_readpages,
@@ -476,8 +515,13 @@ struct address_space_operations ll_aops = {
         .writepages     = generic_writepages,
         .set_page_dirty = ll_set_page_dirty,
         .sync_page      = NULL,
+#ifdef HAVE_KERNEL_WRITE_BEGIN_END
+        .write_begin    = ll_write_begin,
+        .write_end      = ll_write_end,
+#else
         .prepare_write  = ll_prepare_write,
         .commit_write   = ll_commit_write,
+#endif
         .invalidatepage = ll_invalidatepage,
         .releasepage    = (void *)ll_releasepage,
         .bmap           = NULL

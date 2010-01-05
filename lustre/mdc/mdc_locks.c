@@ -608,7 +608,11 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         int                    flags = extra_lock_flags;
         int                    rc;
         struct ldlm_res_id res_id;
-        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
+        static const ldlm_policy_data_t lookup_policy =
+                            { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
+        static const ldlm_policy_data_t update_policy =
+                            { .l_inodebits = { MDS_INODELOCK_UPDATE } };
+        ldlm_policy_data_t const *policy = &lookup_policy;
         ENTRY;
 
         LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
@@ -619,7 +623,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         if (it)
                 flags |= LDLM_FL_HAS_INTENT;
         if (it && it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
-                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                policy = &update_policy;
 
         if (reqp)
                 req = *reqp;
@@ -630,12 +634,12 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 LASSERT(lmm && lmmsize == 0);
                 LASSERTF(einfo->ei_type == LDLM_FLOCK, "lock type %d\n",
                          einfo->ei_type);
-                policy = *(ldlm_policy_data_t *)lmm;
+                policy = (ldlm_policy_data_t *)lmm;
                 res_id.name[3] = LDLM_FLOCK;
         } else if (it->it_op & IT_OPEN) {
                 req = mdc_intent_open_pack(exp, it, op_data, lmm, lmmsize,
                                            einfo->ei_cbdata);
-                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                policy = &update_policy;
                 einfo->ei_cbdata = NULL;
                 lmm = NULL;
         } else if (it->it_op & IT_UNLINK)
@@ -660,7 +664,8 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
                 mdc_enter_request(&obddev->u.cli);
         }
-        rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
+
+        rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
                               0, lockh, 0);
         if (reqp)
                 *reqp = req;

@@ -131,11 +131,10 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                     struct obd_connect_data *data)
 {
         struct lov_obd *lov = &obd->u.lov;
-        struct obd_uuid tgt_uuid;
+        struct obd_uuid *tgt_uuid;
         struct obd_device *tgt_obd;
         static struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct obd_import *imp;
-
 #ifdef __KERNEL__
         cfs_proc_dir_entry_t *lov_proc_dir;
 #endif
@@ -145,11 +144,11 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         if (!lov->lov_tgts[index])
                 RETURN(-EINVAL);
 
-        tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
+        tgt_uuid = &lov->lov_tgts[index]->ltd_uuid;
         tgt_obd = lov->lov_tgts[index]->ltd_obd;
 
         if (!tgt_obd->obd_set_up) {
-                CERROR("Target %s not set up\n", obd_uuid2str(&tgt_uuid));
+                CERROR("Target %s not set up\n", obd_uuid2str(tgt_uuid));
                 RETURN(-EINVAL);
         }
 
@@ -174,14 +173,14 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         rc = obd_register_observer(tgt_obd, obd);
         if (rc) {
                 CERROR("Target %s register_observer error %d\n",
-                       obd_uuid2str(&tgt_uuid), rc);
+                       obd_uuid2str(tgt_uuid), rc);
                 RETURN(rc);
         }
 
 
         if (imp->imp_invalid) {
                 CERROR("not connecting OSC %s; administratively "
-                       "disabled\n", obd_uuid2str(&tgt_uuid));
+                       "disabled\n", obd_uuid2str(tgt_uuid));
                 RETURN(0);
         }
 
@@ -189,35 +188,35 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                          &lov_osc_uuid, data, NULL);
         if (rc || !lov->lov_tgts[index]->ltd_exp) {
                 CERROR("Target %s connect error %d\n",
-                       obd_uuid2str(&tgt_uuid), rc);
+                       obd_uuid2str(tgt_uuid), rc);
                 RETURN(-ENODEV);
         }
 
         lov->lov_tgts[index]->ltd_reap = 0;
 
         CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
-               obd_uuid2str(&tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
+               obd_uuid2str(tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
 
 #ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
                 struct obd_device *osc_obd = lov->lov_tgts[index]->ltd_exp->exp_obd;
                 cfs_proc_dir_entry_t *osc_symlink;
-                char name[MAX_STRING_SIZE];
 
                 LASSERT(osc_obd != NULL);
                 LASSERT(osc_obd->obd_magic == OBD_DEVICE_MAGIC);
                 LASSERT(osc_obd->obd_type->typ_name != NULL);
-                snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
-                         osc_obd->obd_type->typ_name,
-                         osc_obd->obd_name);
-                osc_symlink = lprocfs_add_symlink(osc_obd->obd_name, lov_proc_dir,
-                                                  name);
+
+                osc_symlink = lprocfs_add_symlink(osc_obd->obd_name,
+                                                  lov_proc_dir,
+                                                  "../../../%s/%s",
+                                                  osc_obd->obd_type->typ_name,
+                                                  osc_obd->obd_name);
                 if (osc_symlink == NULL) {
                         CERROR("could not register LOV target "
-                               "/proc/fs/lustre/%s/%s/target_obds/%s.",
-                               obd->obd_type->typ_name, obd->obd_name,
-                               osc_obd->obd_name);
+                                "/proc/fs/lustre/%s/%s/target_obds/%s.",
+                                obd->obd_type->typ_name, obd->obd_name,
+                                osc_obd->obd_name);
                         lprocfs_remove(&lov_proc_dir);
                 }
         }

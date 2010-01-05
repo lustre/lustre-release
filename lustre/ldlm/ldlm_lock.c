@@ -504,8 +504,6 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
          */
         if ((lock->l_resource->lr_type == LDLM_IBITS) &&
             (exp && !(exp->exp_connect_flags & OBD_CONNECT_IBITS))) {
-                struct ldlm_resource res = *lock->l_resource;
-
                 /* Make sure all the right bits are set in this lock we
                    are going to pass to client */
                 LASSERTF(lock->l_policy_data.l_inodebits.bits ==
@@ -513,8 +511,10 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
                          "Inappropriate inode lock bits during "
                          "conversion " LPU64 "\n",
                          lock->l_policy_data.l_inodebits.bits);
-                res.lr_type = LDLM_PLAIN;
-                ldlm_res2desc(&res, &desc->l_resource);
+
+                ldlm_res2desc(lock->l_resource, &desc->l_resource);
+                desc->l_resource.lr_type = LDLM_PLAIN;
+
                 /* Convert "new" lock mode to something old client can
                    understand */
                 if ((lock->l_req_mode == LCK_CR) ||

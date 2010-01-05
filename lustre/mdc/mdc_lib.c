@@ -55,10 +55,10 @@ static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
         LASSERT (b != NULL);
 
         b->suppgid = suppgid;
-        b->uid = current->uid;
-        b->gid = current->gid;
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
+        b->uid = cfs_curproc_uid();
+        b->gid = cfs_curproc_gid();
+        b->fsuid = cfs_curproc_fsuid();
+        b->fsgid = cfs_curproc_fsgid();
         b->capability = cfs_curproc_cap_pack();
 }
 
@@ -204,8 +204,8 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 
         /* XXX do something about time, uid, gid */
         rec->cr_opcode   = REINT_OPEN;
-        rec->cr_fsuid    = current->fsuid;
-        rec->cr_fsgid    = current->fsgid;
+        rec->cr_fsuid   = cfs_curproc_fsuid();
+        rec->cr_fsgid   = cfs_curproc_fsgid();
         rec->cr_cap      = cfs_curproc_cap_pack();
         if (op_data != NULL) {
                 rec->cr_fid1 = op_data->op_fid1;
@@ -284,8 +284,8 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
                                  struct md_op_data *op_data)
 {
         rec->sa_opcode  = REINT_SETATTR;
-        rec->sa_fsuid   = current->fsuid;
-        rec->sa_fsgid   = current->fsgid;
+        rec->sa_fsuid   = cfs_curproc_fsuid();
+        rec->sa_fsgid   = cfs_curproc_fsgid();
         rec->sa_cap     = cfs_curproc_cap_pack();
         rec->sa_suppgid = -1;
 
@@ -439,8 +439,8 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
         struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
                                                     &RMF_MDT_BODY);
 
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
+        b->fsuid = cfs_curproc_fsuid();
+        b->fsgid = cfs_curproc_fsgid();
         b->capability = cfs_curproc_cap_pack();
         b->valid = valid;
         if (op_data->op_bias & MDS_CHECK_SPLIT)

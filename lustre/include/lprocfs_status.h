@@ -439,7 +439,7 @@ extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
                                                 void *data,
                                                 struct file_operations *fops);
 extern struct proc_dir_entry *lprocfs_add_symlink(const char *name,
-                        struct proc_dir_entry *parent, const char *dest);
+                        struct proc_dir_entry *parent, const char *format, ...);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
                                          unsigned long count, void *data);
@@ -778,7 +778,7 @@ static inline cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *ro
                                      struct file_operations *fops)
 {return 0; }
 static inline struct proc_dir_entry *lprocfs_add_symlink(const char *name,
-                        struct proc_dir_entry *parent, const char *dest)
+                        struct proc_dir_entry *parent, const char *format, ...)
 {return NULL; }
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 {}

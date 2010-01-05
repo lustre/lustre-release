@@ -43,6 +43,7 @@
 #error sorry, lustre requires at least linux kernel 2.6.9 or later
 #endif
 
+#include <linux/fs_struct.h>
 #include <libcfs/linux/portals_compat25.h>
 
 #include <linux/lustre_patchless_compat.h>
@@ -137,8 +138,8 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
 #endif /* HAVE_DQUOTOFF_MUTEX */
 
-#define current_ngroups current->group_info->ngroups
-#define current_groups current->group_info->small_block
+#define current_ngroups current_cred()->group_info->ngroups
+#define current_groups current_cred()->group_info->small_block
 
 #ifndef page_private
 #define page_private(page) ((page)->private)
@@ -194,6 +195,18 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define kdev_t_to_nr(dev)               (dev)
 #define val_to_kdev(dev)                (dev)
 #define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, (void *)(data));
+
+#ifdef HAVE_BLKDEV_PUT_2ARGS
+#define ll_blkdev_put(a, b) blkdev_put(a, b)
+#else
+#define ll_blkdev_put(a, b) blkdev_put(a)
+#endif
+
+#ifdef HAVE_DENTRY_OPEN_4ARGS
+#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c, d)
+#else
+#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c)
+#endif
 
 #include <linux/writeback.h>
 
@@ -425,6 +438,10 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define LL_RENAME_DOES_D_MOVE   FS_RENAME_DOES_D_MOVE
 #else
 #define LL_RENAME_DOES_D_MOVE   FS_ODD_RENAME
+#endif
+
+#ifndef HAVE_D_OBTAIN_ALIAS
+#define d_obtain_alias(inode) d_alloc_anon(inode)
 #endif
 
 /* add a lustre compatible layer for crypto API */

@@ -277,6 +277,8 @@ typedef struct task_struct cfs_task_t;
 #define cfs_current()           current
 #define cfs_curproc_pid()       (current->pid)
 #define cfs_curproc_comm()      (current->comm)
+#define cfs_curproc_fsuid()     (current->fsuid)
+#define cfs_curproc_fsgid()     (current->fsgid)
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
