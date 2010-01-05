@@ -1222,6 +1222,7 @@ void ldlm_pools_recalc(ldlm_side_t client)
          * Recalc at least ldlm_namespace_nr(client) namespaces.
          */
         for (nr = atomic_read(ldlm_namespace_nr(client)); nr > 0; nr--) {
+                int     skip;
                 /*
                  * Lock the list, get first @ns in the list, getref, move it
                  * to the tail, unlock and call pool recalc. This way we avoid
@@ -1235,15 +1236,30 @@ void ldlm_pools_recalc(ldlm_side_t client)
                         break;
                 }
                 ns = ldlm_namespace_first_locked(client);
-                ldlm_namespace_get(ns);
+
+                spin_lock(&ns->ns_hash_lock);
+                /*
+                 * skip ns which is being freed, and we don't want to increase
+                 * its refcount again, not even temporarily. bz21519.
+                 */
+                if (ns->ns_refcount == 0) {
+                        skip = 1;
+                } else {
+                        skip = 0;
+                        ldlm_namespace_get_locked(ns);
+                }
+                spin_unlock(&ns->ns_hash_lock);
+
                 ldlm_namespace_move_locked(ns, client);
                 mutex_up(ldlm_namespace_lock(client));
 
                 /*
                  * After setup is done - recalc the pool.
                  */
-                ldlm_pool_recalc(&ns->ns_pool);
-                ldlm_namespace_put(ns, 1);
+                if (!skip) {
+                        ldlm_pool_recalc(&ns->ns_pool);
+                        ldlm_namespace_put(ns, 1);
+                }
         }
 }
 EXPORT_SYMBOL(ldlm_pools_recalc);
