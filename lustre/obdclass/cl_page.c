@@ -231,6 +231,7 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                          * for osc, in case of ...
                          */
                         PASSERT(env, page, slice != NULL);
+
                         page = slice->cpl_page;
                         /*
                          * Can safely call cl_page_get_trust() under
@@ -378,9 +379,11 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
  *
  * \see cl_object_find(), cl_lock_find()
  */
-struct cl_page *cl_page_find(const struct lu_env *env, struct cl_object *o,
-                             pgoff_t idx, struct page *vmpage,
-                             enum cl_page_type type)
+static struct cl_page *cl_page_find0(const struct lu_env *env,
+                                     struct cl_object *o,
+                                     pgoff_t idx, struct page *vmpage,
+                                     enum cl_page_type type,
+                                     struct cl_page *parent)
 {
         struct cl_page          *page;
         struct cl_page          *ghost = NULL;
@@ -450,6 +453,7 @@ struct cl_page *cl_page_find(const struct lu_env *env, struct cl_object *o,
                  *     consistent even when VM locking is somehow busted,
                  *     which is very useful during diagnosing and debugging.
                  */
+                page = ERR_PTR(err);
                 if (err == -EEXIST) {
                         /*
                          * XXX in case of a lookup for CPT_TRANSIENT page,
@@ -470,10 +474,15 @@ struct cl_page *cl_page_find(const struct lu_env *env, struct cl_object *o,
                                 spin_lock(&hdr->coh_page_guard);
                                 page = ERR_PTR(-EBUSY);
                         }
-                } else
-                        page = ERR_PTR(err);
-        } else
+                }
+        } else {
+                if (parent) {
+                        LASSERT(page->cp_parent == NULL);
+                        page->cp_parent = parent;
+                        parent->cp_child = page;
+                }
                 hdr->coh_pages++;
+        }
         spin_unlock(&hdr->coh_page_guard);
 
         if (unlikely(ghost != NULL)) {
@@ -483,7 +492,23 @@ struct cl_page *cl_page_find(const struct lu_env *env, struct cl_object *o,
         }
         RETURN(page);
 }
+
+struct cl_page *cl_page_find(const struct lu_env *env, struct cl_object *o,
+                             pgoff_t idx, struct page *vmpage,
+                             enum cl_page_type type)
+{
+        return cl_page_find0(env, o, idx, vmpage, type, NULL);
+}
 EXPORT_SYMBOL(cl_page_find);
+
+
+struct cl_page *cl_page_find_sub(const struct lu_env *env, struct cl_object *o,
+                                 pgoff_t idx, struct page *vmpage,
+                                 struct cl_page *parent)
+{
+        return cl_page_find0(env, o, idx, vmpage, parent->cp_type, parent);
+}
+EXPORT_SYMBOL(cl_page_find_sub);
 
 static inline int cl_page_invariant(const struct cl_page *pg)
 {
