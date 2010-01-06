@@ -469,14 +469,16 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lmv_proc_dir) {
                 struct proc_dir_entry *mdc_symlink;
+                char name[MAX_STRING_SIZE + 1];
 
                 LASSERT(mdc_obd->obd_type != NULL);
                 LASSERT(mdc_obd->obd_type->typ_name != NULL);
-                mdc_symlink = lprocfs_add_symlink(mdc_obd->obd_name,
-                                                  lmv_proc_dir,
-                                                  "../../../%s/%s",
-                                                  mdc_obd->obd_type->typ_name,
-                                                  mdc_obd->obd_name);
+                name[MAX_STRING_SIZE] = '\0';
+                snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
+                         mdc_obd->obd_type->typ_name,
+                         mdc_obd->obd_name);
+                mdc_symlink = proc_symlink(mdc_obd->obd_name,
+                                           lmv_proc_dir, name);
                 if (mdc_symlink == NULL) {
                         CERROR("Could not register LMV target "
                                "/proc/fs/lustre/%s/%s/target_obds/%s.",
@@ -1967,8 +1969,8 @@ repeat:
         CDEBUG(D_INODE, "Forward to mds #%x ("DFID")\n",
                mds, PFID(&op_data->op_fid1));
 
-        op_data->op_fsuid = cfs_curproc_fsuid();
-        op_data->op_fsgid = cfs_curproc_fsgid();
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
         op_data->op_cap = cfs_curproc_cap_pack();
         tgt = lmv_get_target(lmv, mds);
 
@@ -2061,8 +2063,8 @@ repeat:
                         RETURN(rc);
         }
 
-        op_data->op_fsuid = cfs_curproc_fsuid();
-        op_data->op_fsgid = cfs_curproc_fsgid();
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
         op_data->op_cap = cfs_curproc_cap_pack();
 
         src_tgt = lmv_get_target(lmv, mds1);
@@ -2450,8 +2452,8 @@ repeat:
                 op_data->op_bias |= MDS_CHECK_SPLIT;
         }
 
-        op_data->op_fsuid = cfs_curproc_fsuid();
-        op_data->op_fsgid = cfs_curproc_fsgid();
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
         op_data->op_cap = cfs_curproc_cap_pack();
 
         /*

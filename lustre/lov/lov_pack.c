@@ -388,9 +388,8 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
-        char buffer[sizeof(struct lov_user_md_v3)];
-        struct lov_user_md_v3 *lumv3 = (struct lov_user_md_v3 *)&buffer[0];
-        struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&buffer[0];
+        struct lov_user_md_v3 lumv3;
+        struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
         int lmm_magic;
         int stripe_count;
         int rc;
@@ -405,12 +404,12 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
                 lustre_swab_lov_user_md_v1(lumv1);
                 lmm_magic = LOV_USER_MAGIC_V1;
         } else if (lmm_magic == LOV_USER_MAGIC_V3) {
-                if (copy_from_user(lumv3, lump, sizeof(*lumv3)))
+                if (copy_from_user(&lumv3, lump, sizeof(lumv3)))
                         RETURN(-EFAULT);
         } else if (lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
-                if (copy_from_user(lumv3, lump, sizeof(*lumv3)))
+                if (copy_from_user(&lumv3, lump, sizeof(lumv3)))
                         RETURN(-EFAULT);
-                lustre_swab_lov_user_md_v3(lumv3);
+                lustre_swab_lov_user_md_v3(&lumv3);
                 lmm_magic = LOV_USER_MAGIC_V3;
         } else if (lmm_magic != LOV_USER_MAGIC_V1) {
                 CDEBUG(D_IOCTL,
@@ -464,12 +463,12 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
         if (lmm_magic == LOV_USER_MAGIC_V3) {
                 struct pool_desc *pool;
 
-                pool = lov_find_pool(lov, lumv3->lmm_pool_name);
+                pool = lov_find_pool(lov, lumv3.lmm_pool_name);
                 if (pool != NULL) {
-                        if (lumv3->lmm_stripe_offset !=
-                            (typeof(lumv3->lmm_stripe_offset))(-1)) {
+                        if (lumv3.lmm_stripe_offset !=
+                            (typeof(lumv3.lmm_stripe_offset))(-1)) {
                                 rc = lov_check_index_in_pool(
-                                        lumv3->lmm_stripe_offset, pool);
+                                        lumv3.lmm_stripe_offset, pool);
                                 if (rc < 0) {
                                         lov_pool_putref(pool);
                                         RETURN(-EINVAL);
@@ -489,7 +488,7 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
                 (*lsmp)->lsm_oinfo[0]->loi_ost_idx = lumv1->lmm_stripe_offset;
                 (*lsmp)->lsm_stripe_size = lumv1->lmm_stripe_size;
                 if (lmm_magic == LOV_USER_MAGIC_V3)
-                        strncpy((*lsmp)->lsm_pool_name, lumv3->lmm_pool_name,
+                        strncpy((*lsmp)->lsm_pool_name, lumv3.lmm_pool_name,
                                 LOV_MAXPOOLNAME);
                 rc = 0;
         }

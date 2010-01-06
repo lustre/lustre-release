@@ -1045,7 +1045,7 @@ find_linux_devel_paths() {
         # RHEL-style and SLES-style rpms
         # XXX - until bug 19336 cleans this up, we need to extricate the
         #       ${lnxmin}- from the $lnxrel
-        local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}.${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
+        local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
 
         local path
         for path in $paths; do

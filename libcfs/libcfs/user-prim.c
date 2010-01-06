@@ -242,21 +242,6 @@ uid_t cfs_curproc_uid(void)
         return getuid();
 }
 
-gid_t cfs_curproc_gid(void)
-{
-        return getgid();
-}
-
-uid_t cfs_curproc_fsuid(void)
-{
-        return getuid();
-}
-
-gid_t cfs_curproc_fsgid(void)
-{
-        return getgid();
-}
-
 void cfs_enter_debugger(void)
 {
         /*

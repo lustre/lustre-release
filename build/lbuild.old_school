@@ -519,7 +519,7 @@ patchless_build_sequence() {
     # default to source type -source and special case below
     local type=-source
     case "$DISTRO" in
-        rhel* | fc*)
+        rhel*)
             type=-devel
             ;;
     esac
@@ -546,7 +546,7 @@ patchless_build_sequence() {
     if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
         $rpmfound && build_kernel_ib
     fi
-    ( $rpmfound ) && build_lustre "$LINUX" && buildsuccess=true && find_linux_source_rpm
+    ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
     fi
 
     if $buildsuccess; then

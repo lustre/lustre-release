@@ -358,9 +358,6 @@ do_getxattr:
                 GOTO(out, rc = -ERANGE);
         }
 
-        if (body->eadatasize == 0)
-                GOTO(out, rc = -ENODATA);
-
         /* do not need swab xattr data */
         xdata = req_capsule_server_sized_get(&req->rq_pill, &RMF_EADATA,
                                              body->eadatasize);
