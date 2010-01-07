@@ -7,6 +7,15 @@ SUSEBUILD=${SUSEBUILD:-0}
 LINUX26=${LINUX26:-0}
 SUSEBUILD=${SUSEBUILD:-0}
 
+# make sure this module does not get used for anything other than RHEL4
+# as this will die when our RHEL4 support (read: need to build binaries)
+# dies
+if [ "$DISTRO" != "rhel4" ]; then
+    fatal 1 "lbuild.old_school is deprecated and only supported for RHEL4
+to add lbuild support for $DISTRO you probably want to create an lbuild-$DISTRO
+file in the lustre-build module"
+fi
+
 build_tarball() {
     local TARGET=$1
     local SRPM=$2
@@ -501,7 +510,7 @@ patchless_build_sequence() {
 	lnxmaj=$(echo $LINUXRELEASE | cut -f1 -d-)
 	EXTRA_VERSION=$(echo $LINUXRELEASE | cut -f2 -d-)_lustre.$LUSTRE_VERSION
         RPMSMPTYPE=" "
-        build_lustre && buildsuccess=true
+        build_lustre "${LINUX}" "${LINUXOBJ}" && buildsuccess=true
     else
     #try to build from kernel-devel RPM (RHEL)
     LINUX=
@@ -546,7 +555,7 @@ patchless_build_sequence() {
     if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
         $rpmfound && build_kernel_ib
     fi
-    ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
+    ( $rpmfound ) && build_lustre "${LINUX}" "${LINUXOBJ}" && buildsuccess=true && find_linux_source_rpm
     fi
 
     if $buildsuccess; then
@@ -643,7 +652,7 @@ build_sequence_rpm_reuse() {
             # by OFED >= 1.3.0 and this function appears to only be used for sles9
 
             [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
-            reuse_kernel_rpm "$reusedkernelsourcerpm" "" && build_linux nofullmake copyrpmkernel && build_lustre && buildsuccess=true
+            reuse_kernel_rpm "$reusedkernelsourcerpm" "" && build_linux nofullmake copyrpmkernel && build_lustre "${LINUX}" "${LINUXOBJ}" && buildsuccess=true
             ( $buildsuccess ) || continue
             if ( ! $NORPM ) && ( ! $PATCHLESS ) ; then
                 [ -f "$reusedkernelrpm" ] && \
@@ -707,7 +716,7 @@ build_sequence_reuse() {
 		fi
             fi
             LINUX="$curdir"
-            build_lustre || continue
+            build_lustre "${LINUX}" "${LINUXOBJ}" || continue
             touch "$curdir/../"
             buildsuccess=true
             if ( ! $NORPM ) && ( ! $PATCHLESS ) ; then
