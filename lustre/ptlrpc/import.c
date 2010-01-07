@@ -286,11 +286,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                 /* Calculate max timeout for waiting on rpcs to error
                  * out. Use obd_timeout if calculated value is smaller
                  * than it. */
-                timeout = ptlrpc_inflight_timeout(imp);
-                timeout += timeout / 3;
+                if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
+                        timeout = ptlrpc_inflight_timeout(imp);
+                        timeout += timeout / 3;
 
-                if (timeout == 0)
-                        timeout = obd_timeout;
+                        if (timeout == 0)
+                                timeout = obd_timeout;
+                } else {
+                        /* decrease the interval to increase race condition */
+                        timeout = 1;
+                }
 
                 CDEBUG(D_RPCTRACE,"Sleeping %d sec for inflight to error out\n",
                        timeout);
@@ -300,7 +305,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                  * have been locally cancelled by ptlrpc_abort_inflight. */
                 lwi = LWI_TIMEOUT_INTERVAL(
                         cfs_timeout_cap(cfs_time_seconds(timeout)),
-                        cfs_time_seconds(1), NULL, NULL);
+                        (timeout > 1)?cfs_time_seconds(1):cfs_time_seconds(1)/2,
+                        NULL, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                 (atomic_read(&imp->imp_inflight) == 0), &lwi);
                 if (rc) {
@@ -310,31 +316,40 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                cli_tgt, rc, atomic_read(&imp->imp_inflight));
 
                         spin_lock(&imp->imp_lock);
-                        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                                req = list_entry(tmp, struct ptlrpc_request,
-                                        rq_list);
-                                DEBUG_REQ(D_ERROR, req,"still on sending list");
-                        }
-                        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                                req = list_entry(tmp, struct ptlrpc_request,
-                                        rq_list);
-                                DEBUG_REQ(D_ERROR, req,"still on delayed list");
-                        }
+                        if (atomic_read(&imp->imp_inflight) == 0) {
+                                int count = atomic_read(&imp->imp_unregistering);
 
-                        if (atomic_read(&imp->imp_unregistering) == 0) {
-                                /* We know that only "unregistering" rpcs may
-                                 * still survive in sending or delaying lists
-                                 * (They are waiting for long reply unlink in
+                                /* We know that "unregistering" rpcs only can
+                                 * survive in sending or delaying lists (they
+                                 * maybe waiting for long reply unlink in
                                  * sluggish nets). Let's check this. If there
-                                 * is no unregistering and inflight != 0 this
+                                 * is no inflight and unregistering != 0, this
                                  * is bug. */
-                                LASSERT(atomic_read(&imp->imp_inflight) == 0);
+                                LASSERTF(count == 0, "Some RPCs are still "
+                                         "unregistering: %d\n", count);
 
                                 /* Let's save one loop as soon as inflight have
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
                                 rc = 0;
                         } else {
+                                list_for_each_safe(tmp, n,
+                                                   &imp->imp_sending_list) {
+                                        req = list_entry(tmp,
+                                                         struct ptlrpc_request,
+                                                         rq_list);
+                                        DEBUG_REQ(D_ERROR, req,
+                                                  "still on sending list");
+                                }
+                                list_for_each_safe(tmp, n,
+                                                   &imp->imp_delayed_list) {
+                                        req = list_entry(tmp,
+                                                         struct ptlrpc_request,
+                                                         rq_list);
+                                        DEBUG_REQ(D_ERROR, req,
+                                                  "still on delayed list");
+                                }
+
                                 CERROR("%s: RPCs in \"%s\" phase found (%d). "
                                        "Network is sluggish? Waiting them "
                                        "to error out.\n", cli_tgt,
