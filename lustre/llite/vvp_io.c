@@ -303,6 +303,22 @@ static int vvp_io_trunc_lock(const struct lu_env *env,
         return result;
 }
 
+static int vvp_do_vmtruncate(struct inode *inode, size_t size)
+{
+        int     result;
+        /*
+         * Only ll_inode_size_lock is taken at this level. lov_stripe_lock()
+         * is grabbed by ll_truncate() only over call to obd_adjust_kms().  If
+         * vmtruncate returns 0, then ll_truncate dropped ll_inode_size_lock()
+         */
+        ll_inode_size_lock(inode, 0);
+        result = vmtruncate(inode, size);
+        if (result != 0)
+                ll_inode_size_unlock(inode, 0);
+
+        return result;
+}
+
 static int vvp_io_trunc_start(const struct lu_env *env,
                               const struct cl_io_slice *ios)
 {
@@ -321,15 +337,8 @@ static int vvp_io_trunc_start(const struct lu_env *env,
         DOWN_WRITE_I_ALLOC_SEM(inode);
         cio->u.trunc.cui_locks_released = 0;
 
-        /*
-         * Only ll_inode_size_lock is taken at this level. lov_stripe_lock()
-         * is grabbed by ll_truncate() only over call to obd_adjust_kms().  If
-         * vmtruncate returns 0, then ll_truncate dropped ll_inode_size_lock()
-         */
-        ll_inode_size_lock(inode, 0);
-        result = vmtruncate(inode, size);
-        if (result != 0)
-                ll_inode_size_unlock(inode, 0);
+        result = vvp_do_vmtruncate(inode, size);
+
         /*
          * If a page is partially truncated, keep it owned across truncate to
          * prevent... races.
@@ -363,13 +372,22 @@ static int vvp_io_trunc_start(const struct lu_env *env,
 static void vvp_io_trunc_end(const struct lu_env *env,
                              const struct cl_io_slice *ios)
 {
-        struct vvp_io *vio = cl2vvp_io(env, ios);
+        struct vvp_io        *vio = cl2vvp_io(env, ios);
+        struct cl_io         *io    = ios->cis_io;
+        struct inode         *inode = ccc_object_inode(io->ci_obj);
+        size_t                size  = io->u.ci_truncate.tr_size;
 
         if (vio->cui_partpage != NULL) {
                 cl_page_disown(env, ios->cis_io, vio->cui_partpage);
                 cl_page_put(env, vio->cui_partpage);
                 vio->cui_partpage = NULL;
         }
+
+        /*
+         * Do vmtruncate again, to remove possible stale pages populated by
+         * competing read threads. bz20645.
+         */
+        vvp_do_vmtruncate(inode, size);
 }
 
 static void vvp_io_trunc_fini(const struct lu_env *env,
