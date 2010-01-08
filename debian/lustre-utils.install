@@ -1,4 +1,4 @@
 debian/tmp/sbin/*			sbin
 debian/tmp/usr/sbin/*			usr/sbin
 debian/tmp/usr/bin/*			usr/bin
-debian/tmp/usr/lib/lustre/lc_common	usr/lib/lustre
+debian/tmp/usr/libexec/lustre/lc_common	usr/libexec/lustre
