@@ -1019,6 +1019,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LN_FUNC_DEV_GET_BY_NAME_2ARG
+#
+AC_DEFUN([LN_FUNC_DEV_GET_BY_NAME_2ARG],
+[AC_MSG_CHECKING([if dev_get_by_name has two args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/netdevice.h>
+],[
+        dev_get_by_name(NULL, NULL);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_DEV_GET_BY_NAME_2ARG, 1, [dev_get_by_name has 2 args])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LN_TYPE_GFP_T
 #
 # check if gfp_t is typedef-ed
@@ -1458,6 +1475,7 @@ LN_USER__U64_LONG_LONG
 AC_DEFUN([LN_PROG_LINUX],
 [
 LN_FUNC_CPU_ONLINE
+LN_FUNC_DEV_GET_BY_NAME_2ARG
 LN_TYPE_GFP_T
 LN_TYPE_CPUMASK_T
 LN_CONFIG_AFFINITY

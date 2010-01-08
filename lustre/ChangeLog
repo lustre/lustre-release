@@ -28,6 +28,15 @@ Bugzilla   : 18630
 Description: LustreError: 9153:0:(quota_context.c:622:dqacq_completion()) LBUG
 Details    : fix race with quota release requests.
 
+Severity   : normal
+Bugzilla   : 20288
+Description: kiblnd_check_conns can deadlock
+
+Severity   : normal
+Bugzilla   : 20153
+Description: o2ib configuration issues with IB bonding
+
+
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
 	* Support for kernels:

@@ -154,7 +154,7 @@ kiblnd_post_rx (kib_rx_t *rx, int credit)
                  credit == IBLND_POSTRX_PEER_CREDIT ||
                  credit == IBLND_POSTRX_RSRVD_CREDIT);
 
-        mr = kiblnd_find_dma_mr(net, rx->rx_msgaddr, IBLND_MSG_SIZE);
+        mr = kiblnd_find_dma_mr(conn->ibc_hdev, rx->rx_msgaddr, IBLND_MSG_SIZE);
         LASSERT (mr != NULL);
 
         rx->rx_sge.lkey   = mr->lkey;
@@ -535,8 +535,8 @@ kiblnd_kvaddr_to_page (unsigned long vaddr)
 static int
 kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 {
-        kib_dev_t          *ibdev  = net->ibn_dev;
-        __u64              *pages  = tx->tx_pages;
+        kib_hca_dev_t      *hdev  = tx->tx_pool->tpo_hdev;
+        __u64              *pages = tx->tx_pages;
         int                 npages;
         int                 size;
         int                 rc;
@@ -544,9 +544,9 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 
         for (i = 0, npages = 0; i < rd->rd_nfrags; i++) {
                 for (size = 0; size <  rd->rd_frags[i].rf_nob;
-                               size += ibdev->ibd_page_size) {
+                               size += hdev->ibh_page_size) {
                         pages[npages ++] = (rd->rd_frags[i].rf_addr &
-                                            ibdev->ibd_page_mask) + size;
+                                            hdev->ibh_page_mask) + size;
                 }
         }
 
@@ -560,7 +560,7 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
          * the rkey */
         rd->rd_key = (rd != tx->tx_rd) ? tx->tx_u.fmr.fmr_pfmr->fmr->rkey :
                                          tx->tx_u.fmr.fmr_pfmr->fmr->lkey;
-        rd->rd_frags[0].rf_addr &= ~ibdev->ibd_page_mask;
+        rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
         rd->rd_frags[0].rf_nob   = nob;
         rd->rd_nfrags = 1;
 
@@ -570,12 +570,13 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 static int
 kiblnd_pmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 {
+        kib_hca_dev_t *hdev = tx->tx_pool->tpo_hdev;
         __u64   iova;
         int     rc;
 
-        iova = rd->rd_frags[0].rf_addr & ~net->ibn_dev->ibd_page_mask;
+        iova = rd->rd_frags[0].rf_addr & ~hdev->ibh_page_mask;
 
-        rc = kiblnd_pmr_pool_map(&net->ibn_pmr_ps, rd, &iova, &tx->tx_u.pmr);
+        rc = kiblnd_pmr_pool_map(&net->ibn_pmr_ps, hdev, rd, &iova, &tx->tx_u.pmr);
         if (rc != 0) {
                 CERROR("Failed to create MR by phybuf: %d\n", rc);
                 return rc;
@@ -608,7 +609,7 @@ kiblnd_unmap_tx(lnet_ni_t *ni, kib_tx_t *tx)
         }
 
         if (tx->tx_nfrags != 0) {
-                kiblnd_dma_unmap_sg(net->ibn_dev->ibd_cmid->device,
+                kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev->ibh_ibdev,
                                     tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
                 tx->tx_nfrags = 0;
         }
@@ -618,6 +619,7 @@ int
 kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx,
               kib_rdma_desc_t *rd, int nfrags)
 {
+        kib_hca_dev_t      *hdev  = tx->tx_pool->tpo_hdev;
         kib_net_t          *net   = ni->ni_data;
         struct ib_mr       *mr    = NULL;
         __u32               nob;
@@ -629,19 +631,19 @@ kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx,
         tx->tx_nfrags = nfrags;
 
         rd->rd_nfrags =
-                kiblnd_dma_map_sg(net->ibn_dev->ibd_cmid->device,
+                kiblnd_dma_map_sg(hdev->ibh_ibdev,
                                   tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
 
         for (i = 0, nob = 0; i < rd->rd_nfrags; i++) {
                 rd->rd_frags[i].rf_nob  = kiblnd_sg_dma_len(
-                        net->ibn_dev->ibd_cmid->device, &tx->tx_frags[i]);
+                        hdev->ibh_ibdev, &tx->tx_frags[i]);
                 rd->rd_frags[i].rf_addr = kiblnd_sg_dma_address(
-                        net->ibn_dev->ibd_cmid->device, &tx->tx_frags[i]);
+                        hdev->ibh_ibdev, &tx->tx_frags[i]);
                 nob += rd->rd_frags[i].rf_nob;
         }
 
         /* looking for pre-mapping MR */
-        mr = kiblnd_find_rd_dma_mr(net, rd);
+        mr = kiblnd_find_rd_dma_mr(hdev, rd);
         if (mr != NULL) {
                 /* found pre-mapping MR */
                 rd->rd_key = (rd != tx->tx_rd) ? mr->rkey : mr->lkey;
@@ -832,11 +834,17 @@ kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
         list_add(&tx->tx_list, &conn->ibc_active_txs);
 
         /* I'm still holding ibc_lock! */
-        if (conn->ibc_state != IBLND_CONN_ESTABLISHED)
+        if (conn->ibc_state != IBLND_CONN_ESTABLISHED) {
                 rc = -ECONNABORTED;
-        else
+        } else if (tx->tx_pool->tpo_pool.po_failed ||
+                 conn->ibc_hdev != tx->tx_pool->tpo_hdev) {
+                /* close_conn will launch failover */
+                rc = -ENETDOWN;
+        } else {
                 rc = ib_post_send(conn->ibc_cmid->qp,
                                   tx->tx_wrq, &bad_wrq);
+        }
+
         conn->ibc_last_send = jiffies;
 
         if (rc == 0)
@@ -995,20 +1003,19 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
 void
 kiblnd_init_tx_msg (lnet_ni_t *ni, kib_tx_t *tx, int type, int body_nob)
 {
-        kib_net_t         *net = ni->ni_data;
+        kib_hca_dev_t     *hdev = tx->tx_pool->tpo_hdev;
         struct ib_sge     *sge = &tx->tx_sge[tx->tx_nwrq];
         struct ib_send_wr *wrq = &tx->tx_wrq[tx->tx_nwrq];
         int                nob = offsetof (kib_msg_t, ibm_u) + body_nob;
         struct ib_mr      *mr;
 
-        LASSERT (net != NULL);
         LASSERT (tx->tx_nwrq >= 0);
         LASSERT (tx->tx_nwrq < IBLND_MAX_RDMA_FRAGS + 1);
         LASSERT (nob <= IBLND_MSG_SIZE);
 
         kiblnd_init_msg(tx->tx_msg, type, body_nob);
 
-        mr = kiblnd_find_dma_mr(net, tx->tx_msgaddr, nob);
+        mr = kiblnd_find_dma_mr(hdev, tx->tx_msgaddr, nob);
         LASSERT (mr != NULL);
 
         sge->lkey   = mr->lkey;
@@ -1342,6 +1349,7 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
         kiblnd_peer_addref(peer);
         list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
+	kiblnd_data.kib_peers_version++;
 
         write_unlock_irqrestore(g_lock, flags);
 
@@ -1758,8 +1766,9 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
          * connection to be finished off by the connd.  Otherwise the connd is
          * already dealing with it (either to set it up or tear it down).
          * Caller holds kib_global_lock exclusively in irq context */
-        unsigned long     flags;
         kib_peer_t       *peer = conn->ibc_peer;
+        kib_dev_t        *dev;
+        unsigned long     flags;
 
         LASSERT (error != 0 || conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
@@ -1785,7 +1794,9 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
         }
 
+        dev = ((kib_net_t *)peer->ibp_ni->ni_data)->ibn_dev;
         list_del(&conn->ibc_list);
+	peer->ibp_conns_version++;
         /* connd (see below) takes over ibc_list's ref */
 
         if (list_empty (&peer->ibp_conns) &&    /* no more conns */
@@ -1797,6 +1808,13 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
         }
 
         kiblnd_set_conn_state(conn, IBLND_CONN_CLOSING);
+
+        if (error != 0 &&
+            kiblnd_dev_can_failover(dev)) {
+                list_add_tail(&dev->ibd_fail_list,
+                              &kiblnd_data.kib_failed_devs);
+                wake_up(&kiblnd_data.kib_failover_waitq);
+        }
 
         spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 
@@ -1997,6 +2015,7 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
          * peer instance... */
         kiblnd_conn_addref(conn);               /* +1 ref for ibc_list */
         list_add(&conn->ibc_list, &peer->ibp_conns);
+	peer->ibp_conns_version++;
         if (active)
                 peer->ibp_connecting--;
         else
@@ -2257,6 +2276,7 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
 
                 kiblnd_peer_addref(peer);
                 list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
+		kiblnd_data.kib_peers_version++;
 
                 write_unlock_irqrestore(g_lock, flags);
         }
@@ -2901,22 +2921,26 @@ kiblnd_conn_timed_out (kib_conn_t *conn)
 void
 kiblnd_check_conns (int idx)
 {
+        rwlock_t          *glock = &kiblnd_data.kib_global_lock;
         struct list_head  *peers = &kiblnd_data.kib_peers[idx];
         struct list_head  *ptmp;
         kib_peer_t        *peer;
         kib_conn_t        *conn;
         struct list_head  *ctmp;
         unsigned long      flags;
+	__u32              conns_version;
+	__u64              peers_version;
 
- again:
         /* NB. We expect to have a look at all the peers and not find any
          * rdmas to time out, so we just use a shared lock while we
          * take a look... */
-        read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-
+	read_lock_irqsave(glock, flags);
+again:
+	peers_version = kiblnd_data.kib_peers_version;
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, kib_peer_t, ibp_list);
-
+again2:
+		conns_version = peer->ibp_conns_version;
                 list_for_each (ctmp, &peer->ibp_conns) {
                         conn = list_entry (ctmp, kib_conn_t, ibc_list);
 
@@ -2925,19 +2949,27 @@ kiblnd_check_conns (int idx)
                         /* In case we have enough credits to return via a
                          * NOOP, but there were no non-blocking tx descs
                          * free to do it last time... */
+			kiblnd_conn_addref(conn); /* 1 ref for me... */
+			read_unlock_irqrestore(glock, flags);
+
                         kiblnd_check_sends(conn);
 
-                        if (!kiblnd_conn_timed_out(conn))
+			if (!kiblnd_conn_timed_out(conn)) {
+				kiblnd_conn_decref(conn); /* ...until here */
+				read_lock_irqsave(glock, flags);
+				if (peers_version != kiblnd_data.kib_peers_version)
+					goto again;
+				/* we know the peer is still on peer table */
+				if (conns_version != peer->ibp_conns_version)
+					goto again2;
+
+				/* safe to continue */
                                 continue;
+			}
 
                         /* Handle timeout by closing the whole connection.  We
                          * can only be sure RDMA activity has ceased once the
                          * QP has been modified. */
-
-                        kiblnd_conn_addref(conn); /* 1 ref for me... */
-
-                        read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-                                               flags);
 
                         CERROR("Timed out RDMA with %s (%lu)\n",
                                libcfs_nid2str(peer->ibp_nid),
@@ -2947,12 +2979,16 @@ kiblnd_check_conns (int idx)
                         kiblnd_close_conn(conn, -ETIMEDOUT);
                         kiblnd_conn_decref(conn); /* ...until here */
 
-                        /* start again now I've dropped the lock */
-                        goto again;
+			read_lock_irqsave(glock, flags);
+			/* start again now if something changed */
+			if (peers_version != kiblnd_data.kib_peers_version)
+				goto again;
+			else
+				goto again2;
                 }
         }
 
-        read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	read_unlock_irqrestore(glock, flags);
 }
 
 void
@@ -3280,4 +3316,95 @@ kiblnd_scheduler(void *arg)
 
         kiblnd_thread_fini();
         return (0);
+}
+
+int
+kiblnd_failover_thread(void *arg)
+{
+        rwlock_t          *glock = &kiblnd_data.kib_global_lock;
+        kib_dev_t         *dev;
+        wait_queue_t       wait;
+        unsigned long      flags;
+        int                rc;
+
+        LASSERT (*kiblnd_tunables.kib_dev_failover != 0);
+
+        cfs_daemonize ("kiblnd_failover");
+        cfs_block_allsigs ();
+
+        init_waitqueue_entry (&wait, current);
+        write_lock_irqsave(glock, flags);
+
+        while (!kiblnd_data.kib_shutdown) {
+                int     do_failover = 0;
+                int     long_sleep;
+
+                list_for_each_entry(dev, &kiblnd_data.kib_failed_devs,
+                                    ibd_fail_list) {
+                        if (cfs_time_before(cfs_time_current(),
+                                            dev->ibd_next_failover))
+                                continue;
+                        do_failover = 1;
+                        break;
+                }
+
+                if (do_failover) {
+                        list_del_init(&dev->ibd_fail_list);
+                        dev->ibd_failover = 1;
+                        write_unlock_irqrestore(glock, flags);
+
+                        rc = kiblnd_dev_failover(dev);
+
+                        write_lock_irqsave(glock, flags);
+
+                        LASSERT (dev->ibd_failover);
+                        dev->ibd_failover = 0;
+                        if (rc >= 0) { /* Device is OK or failover succeed */
+                                dev->ibd_next_failover = cfs_time_shift(3);
+                                continue;
+                        }
+
+                        /* failed to failover, retry later */
+                        dev->ibd_next_failover =
+                                cfs_time_shift(min(dev->ibd_failed_failover, 10));
+                        if (kiblnd_dev_can_failover(dev)) {
+                                list_add_tail(&dev->ibd_fail_list,
+                                              &kiblnd_data.kib_failed_devs);
+                        }
+
+                        continue;
+                }
+
+                /* long sleep if no more pending failover */
+                long_sleep = list_empty(&kiblnd_data.kib_failed_devs);
+
+                set_current_state (TASK_INTERRUPTIBLE);
+                add_wait_queue (&kiblnd_data.kib_failover_waitq, &wait);
+                write_unlock_irqrestore(glock, flags);
+
+                rc = schedule_timeout(long_sleep ? cfs_time_seconds(10) :
+                                                   cfs_time_seconds(1));
+                set_current_state (TASK_RUNNING);
+                remove_wait_queue (&kiblnd_data.kib_failover_waitq, &wait);
+                write_lock_irqsave(glock, flags);
+
+                if (!long_sleep || rc != 0)
+                        continue;
+
+                /* have a long sleep, routine check all active devices,
+                 * we need checking like this because if there is not active
+                 * connection on the dev and no SEND from local, we may listen
+                 * on wrong HCA for ever while there is a bonding failover */
+                list_for_each_entry(dev, &kiblnd_data.kib_devs, ibd_list) {
+                        if (kiblnd_dev_can_failover(dev)) {
+                                list_add_tail(&dev->ibd_fail_list,
+                                              &kiblnd_data.kib_failed_devs);
+                        }
+                }
+        }
+
+        write_unlock_irqrestore(glock, flags);
+
+        kiblnd_thread_fini();
+        return 0;
 }

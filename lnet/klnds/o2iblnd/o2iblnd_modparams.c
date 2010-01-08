@@ -120,7 +120,17 @@ static int pmr_pool_size = 512;
 CFS_MODULE_PARM(pmr_pool_size, "i", int, 0444,
                 "size of the MR cache pmr pool");
 
+/*
+ * 0: disable failover
+ * 1: enable failover if necessary
+ * 2: force to failover (for debug)
+ */
+static int dev_failover = 1;
+CFS_MODULE_PARM(dev_failover, "i", int, 0444,
+               "HCA failover for bonding");
+
 kib_tunables_t kiblnd_tunables = {
+        .kib_dev_failover           = &dev_failover,
         .kib_service                = &service,
         .kib_cksum                  = &cksum,
         .kib_timeout                = &timeout,
@@ -169,7 +179,8 @@ enum {
         O2IBLND_FMR_POOL_SIZE,
         O2IBLND_FMR_FLUSH_TRIGGER,
         O2IBLND_FMR_CACHE,
-        O2IBLND_PMR_POOL_SIZE
+        O2IBLND_PMR_POOL_SIZE,
+        O2IBLND_DEV_FAILOVER
 };
 #else
 
@@ -193,6 +204,7 @@ enum {
 #define O2IBLND_FMR_FLUSH_TRIGGER CTL_UNNUMBERED
 #define O2IBLND_FMR_CACHE        CTL_UNNUMBERED
 #define O2IBLND_PMR_POOL_SIZE    CTL_UNNUMBERED
+#define O2IBLND_DEV_FAILOVER     CTL_UNNUMBERED
 
 #endif
 
@@ -354,6 +366,14 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .ctl_name = O2IBLND_PMR_POOL_SIZE,
                 .procname = "pmr_pool_size",
                 .data     = &pmr_pool_size,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = O2IBLND_DEV_FAILOVER,
+                .procname = "dev_failover",
+                .data     = &dev_failover,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec
