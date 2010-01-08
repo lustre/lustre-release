@@ -564,11 +564,24 @@ static void enable_default_backfs_features(struct mkfs_opts *mop)
 /* Build fs according to type */
 int make_lustre_backfs(struct mkfs_opts *mop)
 {
+        __u64 device_sz = mop->mo_device_sz, block_count = 0;
         char mkfs_cmd[PATH_MAX];
         char buf[64];
         char *dev;
         int ret = 0;
-        int block_count = 0;
+
+        if (!(mop->mo_flags & MO_IS_LOOP)) {
+                mop->mo_device_sz = get_device_size(mop->mo_device);
+
+                if (mop->mo_device_sz == 0)
+                        return ENODEV;
+
+                /* Compare to real size */
+                if (device_sz == 0 || device_sz > mop->mo_device_sz)
+                        device_sz = mop->mo_device_sz;
+                else
+                        mop->mo_device_sz = device_sz;
+        }
 
         if (mop->mo_device_sz != 0) {
                 if (mop->mo_device_sz < 8096){
@@ -583,15 +596,6 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
             (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) ||
             (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2)) {
-                __u64 device_sz = mop->mo_device_sz;
-
-                /* we really need the size */
-                if (device_sz == 0) {
-                        device_sz = get_device_size(mop->mo_device);
-                        if (device_sz == 0)
-                                return ENODEV;
-                }
-
                 /* Journal size in MB */
                 if (strstr(mop->mo_mkfsopts, "-J") == NULL) {
                         /* Choose our own default journal size */
@@ -699,7 +703,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         vprint("formatting backing filesystem %s on %s\n",
                MT_STR(&mop->mo_ldd), dev);
         vprint("\ttarget name  %s\n", mop->mo_ldd.ldd_svname);
-        vprint("\t4k blocks     %d\n", block_count);
+        vprint("\t4k blocks     %llu\n", block_count);
         vprint("\toptions       %s\n", mop->mo_mkfsopts);
 
         /* mkfs_cmd's trailing space is important! */
@@ -707,7 +711,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         strscat(mkfs_cmd, " ", sizeof(mkfs_cmd));
         strscat(mkfs_cmd, dev, sizeof(mkfs_cmd));
         if (block_count != 0) {
-                sprintf(buf, " %d", block_count);
+                sprintf(buf, " %llu", block_count);
                 strscat(mkfs_cmd, buf, sizeof(mkfs_cmd));
         }
 
@@ -834,7 +838,8 @@ int write_local_files(struct mkfs_opts *mop)
         if (mop->mo_flags & MO_IS_LOOP)
                 dev = mop->mo_loopdev;
 
-        ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
+        ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0,
+                    mop->mo_ldd.ldd_mount_opts);
         if (ret) {
                 fprintf(stderr, "%s: Unable to mount %s: %s\n",
                         progname, dev, strerror(errno));
