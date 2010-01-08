@@ -2,6 +2,12 @@
 
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
+# this is an alternative FD for stdout, to be used especially when we are
+# taking stdout from a function as it's return value.  i.e. foo=$(bar)
+# this is a workaround until a version of bash where we can put xtrace
+# on a specific FD
+exec 3>&1; STDOUT=3
+
 #set -x
 xtrace="+x"
 if [[ $SHELLOPTS = *xtrace* ]]; then
@@ -106,7 +112,7 @@ cleanup() {
 error() {
     local msg="$1"
 
-    [ -n "$msg" ] && echo -e "\n${0##*/}: $msg" >&2
+    [ -n "$msg" ] && echo -e "\n${0##*/}: $msg" >&3
 
 }
 
@@ -328,22 +334,24 @@ check_options() {
     fi
 
     if [ -n "$CCACHE" ]; then
-        which "$DISTCC" 2>/dev/null && export DISTCC RPM_BUILD_NCPUS
+        which "$DISTCC" &>/dev/null && export DISTCC RPM_BUILD_NCPUS
 
-        if which "$CCACHE" 2>/dev/null; then
+        if which "$CCACHE" &>/dev/null; then
             local ccache=$(which "$CCACHE")
             local bindir="$TOPDIR/bin"
 
-            [ -d $bindir ] || mkdir -p $bindir
-            if [ -d $bindir ]; then
-                rm ${bindir}/* > /dev/null 2>&1
-                ln -s "$ccache" ${bindir}/ccache
-                ln -s "$ccache" ${bindir}/cc
-                ln -s "$ccache" ${bindir}/$CC
-                export PATH=$bindir:$PATH
+            if [ ! -d $bindir ]; then
+                mkdir -p $bindir || fatal 1 "error trying to create $bindir"
+            else
+                rm ${bindir}/* > /dev/null 2>&1 || true
             fi
+            ln -s "$ccache" ${bindir}/ccache
+            ln -s "$ccache" ${bindir}/cc
+            ln -s "$ccache" ${bindir}/$CC
+            export PATH=$bindir:$PATH
             export CCACHE && export CC="ccache $CC"
             # zero the cache so we can see how effective we are being with it
+            echo -n "ccache "
             ccache -z
 
             # get some ccache stats when we are done
@@ -399,7 +407,7 @@ download_srpm() {
         if $DOWNLOAD; then
             local location="http://downloads.lustre.org/public/kernels/$target/old"
             echo "Downloading $location/$srpm..."
-            if ! wget -nv "$location/$srpm" -O "$KERNELDIR/$srpm" ||
+            if ! wget -nv "$location/$srpm" -O "$KERNELDIR/$srpm" 2>&1 ||
                [ ! -s "$KERNELDIR/$srpm" ]; then
                 rm -f $KERNELDIR/$srpm
                 fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
@@ -577,7 +585,7 @@ load_target() {
     [ -z "$RPMSMPTYPE" ] && set_rpm_smp_type
 
     # CC might have been overwriten in TARGET_FILE
-    if [[ $CC != ccache\ * ]] && which "$CCACHE" 2>/dev/null; then
+    if [[ $CC != ccache\ * ]] && which "$CCACHE" &>/dev/null; then
         export CCACHE && export CC="ccache $CC"
     fi
 
@@ -755,7 +763,7 @@ do_patch_linux() {
                     fatal 1 "Error adding patch $patch to full patch."
                 }
                 if $do_patch; then
-                    patch -s -p1 < "$PATCH_FILE" || {
+                    patch -s -p1 < "$PATCH_FILE" 2>&1 || {
                         rm -f $FULL_PATCH
                         fatal 1 "Error applying patch $patch."
                     }
@@ -792,7 +800,7 @@ build_lustre() {
         confoptions="$confoptions --with-linux-obj=${linuxobj}"
     fi
 
-    ./configure $confoptions ${CONFIGURE_FLAGS}
+    ./configure $confoptions ${CONFIGURE_FLAGS} 2>&1
     if [ "$?" != "0" ]; then
         local saved_config="../config.log.$(date +%s)"
         cp config.log $saved_config
@@ -835,14 +843,14 @@ build_lustre() {
     $RPMBUILD $targets $rpmbuildopt ../lustre.spec \
         ${is_patchless:+--define "lustre_name lustre-client"} \
         --define "_tmppath $TMPDIR" \
-        --define "_topdir $TOPDIR" || \
+        --define "_topdir $TOPDIR" 2>&1 || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     popd >/dev/null
     ( $(skeep_ldiskfs_rpm $TAG) ) && return
 
     pushd lustre/ldiskfs || return 255
-    make dist
+    make dist 2>&1
     if [ "$?" != "0" ]; then
         popd
         return 255
@@ -857,19 +865,17 @@ build_lustre() {
     < $ldiskfs_spec \
     > ../lustre-ldiskfs.spec
 
-    $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
+    if ! $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
         --define "_tmppath /var/tmp" \
-        --define "_topdir $TOPDIR"
-    if [ "$?" != "0" ]; then
+        --define "_topdir $TOPDIR" 2>&1; then
         popd
         return 255
     fi
 
     if $DO_SRC; then
-            $RPMBUILD -bs ../lustre-ldiskfs.spec \
+        if ! $RPMBUILD -bs ../lustre-ldiskfs.spec \
             --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR"
-        if [ "$?" != "0" ]; then
+            --define "_topdir $TOPDIR" 2>&1; then
             popd
             return 255
         fi
@@ -1010,7 +1016,7 @@ unpack_linux_devel_rpm() {
     [ -f "$kernelrpm" ] || return 255
     [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused || return 255
 
-    pushd $TOPDIR/reused || return 255
+    pushd $TOPDIR/reused &>/dev/null || return 255
 
     if ! rpm2cpio < "$kernelrpm" | cpio -id > /dev/null 2>&1; then
         return 255
@@ -1021,7 +1027,7 @@ unpack_linux_devel_rpm() {
         unpack_linux_devel_rpm-$DISTRO "$kernelrpm"
     fi
 
-    popd
+    popd &>/dev/null
 
     find_linux_devel_paths $TOPDIR/reused
 
@@ -1297,9 +1303,14 @@ find_rpm() {
 }
 
 build_kernel_with_srpm() {
+    local outfd=$1
+
+    if [ -z "$outfd" ] || [ $outfd = 1 ]; then
+        fatal 1 "You must supply a file descriptor to ${FUNCNAME[0]} and it cannot be 1"
+    fi
 
     # need to generate the patch for this target
-    do_patch_linux false >&2    # sets global $FULL_PATCH (yeah, yuck)
+    do_patch_linux false >&${outfd}    # sets global $FULL_PATCH (yeah, yuck)
 
     # get an md5sum of the kernel patch + config for reuse check
     # XXX really, there needs to be a signature and a CONFIG_FILE per arch
@@ -1314,7 +1325,7 @@ build_kernel_with_srpm() {
     # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
     local CAN_LINK_FOR_REUSE=false
     touch $REUSEBUILD/$$
-    if cp -al $REUSEBUILD/$$ $TOPDIR/; then
+    if cp -al $REUSEBUILD/$$ $TOPDIR/ 2>/dev/null; then
         CAN_LINK_FOR_REUSE=true
     fi
     rm $REUSEBUILD/$$
@@ -1326,11 +1337,12 @@ build_kernel_with_srpm() {
                                    "$REUSE_SIGNATURE"; then
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
-            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&2
+            echo "Downloading kernel SRPM"
+            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&${outfd}
         fi
 
         if ! rpm -ivh $KERNELDIR/$KERNEL_SRPM \
-                  --define "_topdir $TOPDIR" >&2; then
+                  --define "_topdir $TOPDIR" >&${outfd} 2>&1; then
             # should we clean this up or leave it for analysis?
             #rm -rf $RPMTOPDIR
             fatal 1 "Error installing kernel SRPM."
@@ -1338,9 +1350,11 @@ build_kernel_with_srpm() {
 
         # put the Lustre kernel patch into the RPM build tree
         cp $FULL_PATCH $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch
-        prepare_and_build_srpm >&2
+        prepare_and_build_srpm >&${outfd} ||
+            fatal 1 "failed to prepare_and_build_srpm"
 
         # store the resulting kernel RPM build tree for future use
+        echo "caching the built kenel for future builds..." >&${outfd}
         if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
                              "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
                              "$CAN_LINK_FOR_REUSE"; then
@@ -1566,7 +1580,7 @@ build_with_srpm() {
 
     if ! $PATCHLESS; then
         local kernel_extra_version
-        if ! kernel_extra_version=$(build_kernel_with_srpm); then
+        if ! kernel_extra_version=$(build_kernel_with_srpm ${STDOUT}); then
             fatal 1 "Failed to build the kernel from it's SRPM"
         fi
 
@@ -1732,7 +1746,7 @@ backtrace() {
 seen_list=$(new_list)
 trap 'set +x;
 echo "An unexpected error has occurred at ${BASH_SOURCE[0]##*/}:$((LINENO-1)).
-Unfortunately the above line number in the fail may or may not be correct,
+Unfortunately the above line number in the message may or may not be correct,
 but details have been send to the lbuild maintainer.  Attempting to continue."; (echo "Untrapped error"
 echo
 # have we seen this one
