@@ -1,5 +1,7 @@
 2010-01-08 Sun Microsystems, Inc.
 	* version 1.8.1.1-BOM
+	* Support for kernel:
+	 2.6.18-128.1.14.el5 (RHEL 5)
 
 Severity   : major
 Bugzilla   : 20892
@@ -41,6 +43,13 @@ Bugzilla   : 17086
 Description: LSI Fusion MPT driver hacks to improve performance on Thor and
 	     Riverwalk
 Details    : bump CONFIG_FUSION_MAX_SGE to 256 for rhel5
+
+Severity   : normal
+Bugzilla   : 20400
+Description: Downgrade RHEL5 kernel to 2.6.18-128.1.14.el5
+Details    : BoM needs 2.6.18-128.1.14.el5, so revert the patch from bug 20400
+
+-------------------------------------------------------------------------------
 
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
