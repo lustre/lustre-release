@@ -36,6 +36,11 @@ Severity   : normal
 Bugzilla   : 20153
 Description: o2ib configuration issues with IB bonding
 
+Severity   : normal
+Bugzilla   : 17086
+Description: LSI Fusion MPT driver hacks to improve performance on Thor and
+	     Riverwalk
+Details    : bump CONFIG_FUSION_MAX_SGE to 256 for rhel5
 
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
