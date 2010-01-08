@@ -769,7 +769,10 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
                        cli->cl_dirty, cli->cl_dirty_transit, cli->cl_dirty_max);
                 oa->o_undirty = 0;
         } else if (atomic_read(&obd_dirty_pages) -
-                   atomic_read(&obd_dirty_transit_pages) > obd_max_dirty_pages){
+                   atomic_read(&obd_dirty_transit_pages) > obd_max_dirty_pages + 1){
+                /* The atomic_read() allowing the atomic_inc() are not covered
+                 * by a lock thus they may safely race and trip this CERROR()
+                 * unless we add in a small fudge factor (+1). */
                 CERROR("dirty %d - %d > system dirty_max %d\n",
                        atomic_read(&obd_dirty_pages),
                        atomic_read(&obd_dirty_transit_pages),
