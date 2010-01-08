@@ -271,6 +271,7 @@ do {                                                                    \
 
 #define CWARN(format, a...)          CDEBUG_LIMIT(D_WARNING, format, ## a)
 #define CERROR(format, a...)         CDEBUG_LIMIT(D_ERROR, format, ## a)
+#define CNETERR(format, a...)        CDEBUG_LIMIT(D_NETERROR, format, ## a)
 #define CEMERG(format, a...)         CDEBUG_LIMIT(D_EMERG, format, ## a)
 
 #define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)

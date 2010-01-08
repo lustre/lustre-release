@@ -437,9 +437,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
                                 level = D_INODE;
-                        CDEBUG(level, "error creating objects for "
-                                      "inode %lu: rc = %d\n",
-                               inode->i_ino, rc);
+                        CDEBUG_LIMIT(level, "error creating objects for "
+                                     "inode %lu: rc = %d\n", inode->i_ino, rc);
                         if (rc > 0) {
                                 CERROR("obd_create returned invalid "
                                        "rc %d\n", rc);

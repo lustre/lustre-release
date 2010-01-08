@@ -240,8 +240,8 @@ gmnal_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
                 return;
 
         case GM_SEND_DROPPED:
-                CDEBUG(D_NETERROR, "Dropped tx %p to %s\n",
-                       tx, libcfs_nid2str(tx->tx_nid));
+                CNETERR("Dropped tx %p to %s\n",
+                        tx, libcfs_nid2str(tx->tx_nid));
                 /* Another tx failed and called gm_drop_sends() which made this
                  * one complete immediately */
                 gmnal_tx_done(tx, -EIO);
@@ -250,9 +250,9 @@ gmnal_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
         default:
                 /* Some error; NB don't complete tx yet; we need its credit for
                  * gm_drop_sends() */
-                CDEBUG(D_NETERROR, "tx %p error %d(%s), nid %s\n",
-                       tx, status, gmnal_gmstatus2str(status),
-                       libcfs_nid2str(tx->tx_nid));
+                CNETERR("tx %p error %d(%s), nid %s\n",
+                        tx, status, gmnal_gmstatus2str(status),
+                        libcfs_nid2str(tx->tx_nid));
 
                 gmnal_notify_peer_down(tx);
 

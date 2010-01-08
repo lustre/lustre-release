@@ -1112,7 +1112,7 @@ kibnal_tx_complete (kib_tx_t *tx, vv_comp_status_t vvrc)
         int           failed = (vvrc != vv_comp_status_success);
         int           idle;
 
-        CDEBUG(D_NET, "tx %p conn %p sending %d nwrq %d vvrc %d\n", 
+        CDEBUG(D_NET, "tx %p conn %p sending %d nwrq %d vvrc %d\n",
                tx, conn, tx->tx_sending, tx->tx_nwrq, vvrc);
 
         LASSERT (tx->tx_sending > 0);
@@ -1120,8 +1120,8 @@ kibnal_tx_complete (kib_tx_t *tx, vv_comp_status_t vvrc)
         if (failed &&
             tx->tx_status == 0 &&
             conn->ibc_state == IBNAL_CONN_ESTABLISHED)
-                CDEBUG(D_NETERROR, "tx -> %s type %x cookie "LPX64
-                       "sending %d waiting %d: failed %d\n", 
+                CNETERR("tx -> %s type %x cookie "LPX64
+                       "sending %d waiting %d: failed %d\n",
                        libcfs_nid2str(conn->ibc_peer->ibp_nid),
                        tx->tx_msg->ibm_type, tx->tx_cookie,
                        tx->tx_sending, tx->tx_waiting, vvrc);
@@ -1928,14 +1928,16 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
                        libcfs_nid2str(peer->ibp_nid),
                        conn->ibc_txseq, conn->ibc_rxseq);
         } else {
-                CDEBUG(D_NETERROR, "Closing conn to %s: error %d%s%s%s%s"
-                       " rx# "LPD64" tx# "LPD64"\n",
-                       libcfs_nid2str(peer->ibp_nid), error,
-                       list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
-                       list_empty(&conn->ibc_tx_queue_rsrvd) ? "" : "(sending_rsrvd)",
-                       list_empty(&conn->ibc_tx_queue_nocred) ? "" : "(sending_nocred)",
-                       list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
-                       conn->ibc_txseq, conn->ibc_rxseq);
+                CNETERR("Closing conn to %s: error %d%s%s%s%s"
+                        " rx# "LPD64" tx# "LPD64"\n",
+                        libcfs_nid2str(peer->ibp_nid), error,
+                        list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
+                        list_empty(&conn->ibc_tx_queue_rsrvd) ?
+                                "" : "(sending_rsrvd)",
+                        list_empty(&conn->ibc_tx_queue_nocred) ?
+                                "" : "(sending_nocred)",
+                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
+                        conn->ibc_txseq, conn->ibc_rxseq);
         }
 
         list_del (&conn->ibc_list);
@@ -2115,7 +2117,7 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int error)
         if (list_empty (&zombies))
                 return;
 
-        CDEBUG (D_NETERROR, "Deleting messages for %s: connection failed\n",
+        CNETERR("Deleting messages for %s: connection failed\n",
                 libcfs_nid2str(peer->ibp_nid));
 
         kibnal_txlist_done(&zombies, -EHOSTUNREACH);
@@ -3007,17 +3009,17 @@ kibnal_check_connreply (kib_conn_t *conn)
                         kibnal_reconnect(conn, -ESTALE);
                         return;
                 } else {
-                        CDEBUG(D_NETERROR, "conn -> %s rejected: reason %d\n",
-                               libcfs_nid2str(peer->ibp_nid),
-                               cv->cv_conndata.data.reject.reason);
+                        CNETERR("conn -> %s rejected: reason %d\n",
+                                libcfs_nid2str(peer->ibp_nid),
+                                cv->cv_conndata.data.reject.reason);
                         kibnal_connreq_done(conn, 1, -ECONNREFUSED);
                         return;
                 }
                 /* NOT REACHED */
         }
 
-        CDEBUG(D_NETERROR, "conn -> %s failed: %d\n",
-               libcfs_nid2str(peer->ibp_nid), cv->cv_conndata.status);
+        CNETERR("conn -> %s failed: %d\n",
+                libcfs_nid2str(peer->ibp_nid), cv->cv_conndata.status);
         kibnal_connreq_done(conn, 1, -ECONNABORTED);
 }
 
@@ -3038,9 +3040,9 @@ kibnal_arp_done (kib_conn_t *conn)
         LASSERT (peer->ibp_arp_count > 0);
 
         if (cv->cv_arprc != ibat_stat_ok) {
-                CDEBUG(D_NETERROR, "Arp %s @ %u.%u.%u.%u failed: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
-                       cv->cv_arprc);
+                CNETERR("Arp %s @ %u.%u.%u.%u failed: %d\n",
+                        libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
+                        cv->cv_arprc);
                 goto failed;
         }
 
@@ -3137,17 +3139,17 @@ kibnal_arp_done (kib_conn_t *conn)
                 /* final ARP attempt failed */
                 write_unlock_irqrestore(&kibnal_data.kib_global_lock,
                                         flags);
-                CDEBUG(D_NETERROR, "Arp %s @ %u.%u.%u.%u failed (final attempt)\n",
-                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
+                CNETERR("Arp %s @ %u.%u.%u.%u failed (final attempt)\n",
+                        libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
         } else {
                 /* Retry ARP: ibp_connecting++ so terminating conn
                  * doesn't end peer's connection attempt */
                 peer->ibp_connecting++;
                 write_unlock_irqrestore(&kibnal_data.kib_global_lock,
                                         flags);
-                CDEBUG(D_NETERROR, "Arp %s @ %u.%u.%u.%u failed (%d attempts left)\n",
-                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
-                       peer->ibp_arp_count);
+                CNETERR("Arp %s @ %u.%u.%u.%u failed (%d attempts left)\n",
+                        libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
+                        peer->ibp_arp_count);
 
                 kibnal_schedule_peer_arp(peer);
         }
@@ -3167,8 +3169,9 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         peer = conn->ibc_peer;
 
         if (arprc != ibat_stat_ok)
-                CDEBUG(D_NETERROR, "Arp %s at %u.%u.%u.%u failed: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip), arprc);
+                CNETERR("Arp %s at %u.%u.%u.%u failed: %d\n",
+                        libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
+                        arprc);
         else
                 CDEBUG(D_NET, "Arp %s at %u.%u.%u.%u OK: LID %s PATH %s\n",
                        libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
@@ -3665,8 +3668,8 @@ kibnal_scheduler(void *arg)
                                  * I give a scheduler on another CPU a chance
                                  * to get the final SEND completion, so the tx
                                  * descriptor can get freed as I inspect it. */
-                                CDEBUG(D_NETERROR, "RDMA failed: %d\n",
-                                       wc.completion_status);
+                                CNETERR("RDMA failed: %d\n",
+                                        wc.completion_status);
                                 break;
 
                         default:

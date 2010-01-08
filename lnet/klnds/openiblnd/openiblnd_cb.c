@@ -848,14 +848,14 @@ kibnal_tx_callback (struct ib_cq_entry *e)
         if (e->status != IB_COMPLETION_STATUS_SUCCESS &&
             tx->tx_status == 0)
                 tx->tx_status = -ECONNABORTED;
-                
+
         spin_unlock_irqrestore(&conn->ibc_lock, flags);
 
         if (idle)
                 kibnal_tx_done (tx);
 
         if (e->status != IB_COMPLETION_STATUS_SUCCESS) {
-                CDEBUG (D_NETERROR, "Tx completion to %s failed: %d\n", 
+                CNETERR("Tx completion to %s failed: %d\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid), e->status);
                 kibnal_close_conn (conn, -ENETDOWN);
         } else {
@@ -1520,10 +1520,10 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
          * Caller holds kib_global_lock exclusively in irq context */
         kib_peer_t   *peer = conn->ibc_peer;
 
-        CDEBUG (error == 0 ? D_NET : D_NETERROR,
-                "closing conn to %s: error %d\n", 
-                libcfs_nid2str(peer->ibp_nid), error);
-        
+        CDEBUG_LIMIT(error == 0 ? D_NET : D_NETERROR,
+                     "closing conn to %s: error %d\n",
+                     libcfs_nid2str(peer->ibp_nid), error);
+
         LASSERT (conn->ibc_state == IBNAL_CONN_ESTABLISHED ||
                  conn->ibc_state == IBNAL_CONN_CONNECTING);
 
@@ -1627,13 +1627,13 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int error)
                 /* Can't have blocked transmits if there are connections */
                 LASSERT (list_empty(&peer->ibp_tx_queue));
         }
-        
+
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
         kibnal_peer_notify(peer);
-        
+
         if (!list_empty (&zombies))
-                CDEBUG (D_NETERROR, "Deleting messages for %s: connection failed\n",
+                CNETERR("Deleting messages for %s: connection failed\n",
                         libcfs_nid2str(peer->ibp_nid));
 
         kibnal_txlist_done(&zombies, -EHOSTUNREACH);
@@ -1936,14 +1936,14 @@ kibnal_conn_callback (tTS_IB_CM_EVENT event,
 
         switch (event) {
         default:
-                CDEBUG(D_NETERROR, "Connection %p -> %s ERROR %d\n",
-                       conn, libcfs_nid2str(conn->ibc_peer->ibp_nid), event);
+                CNETERR("Connection %p -> %s ERROR %d\n",
+                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid), event);
                 kibnal_close_conn (conn, -ECONNABORTED);
                 break;
-                
+
         case TS_IB_CM_DISCONNECTED:
-                CDEBUG(D_NETERROR, "Connection %p -> %s DISCONNECTED.\n",
-                       conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+                CNETERR("Connection %p -> %s DISCONNECTED.\n",
+                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_close_conn (conn, 0);
                 break;
 
@@ -2119,8 +2119,8 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 return TS_IB_CM_CALLBACK_PROCEED;
 
         case TS_IB_CM_IDLE:
-                CDEBUG(D_NETERROR, "Connection %p -> %s IDLE\n",
-                       conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+                CNETERR("Connection %p -> %s IDLE\n",
+                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 /* I assume this connection attempt was rejected because the
                  * peer found a stale QP; I'll just try again */
                 write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
@@ -2132,8 +2132,8 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 return TS_IB_CM_CALLBACK_ABORT;
 
         default:
-                CDEBUG(D_NETERROR, "Connection %p -> %s ERROR %d\n",
-                       conn, libcfs_nid2str(conn->ibc_peer->ibp_nid), event);
+                CNETERR("Connection %p -> %s ERROR %d\n",
+                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid), event);
                 kibnal_connreq_done(conn, 1, -ECONNABORTED);
                 kibnal_conn_decref(conn); /* drop CM's ref */
                 return TS_IB_CM_CALLBACK_ABORT;
@@ -2150,7 +2150,7 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
         kib_msg_t  *msg = &conn->ibc_connreq->cr_msg;
 
         if (status != 0) {
-                CDEBUG (D_NETERROR, "Pathreq %p -> %s failed: %d\n",
+                CNETERR("Pathreq %p -> %s failed: %d\n",
                         conn, libcfs_nid2str(peer->ibp_nid), status);
                 kibnal_connreq_done(conn, 1, status);
                 kibnal_conn_decref(conn); /* drop callback's ref */
@@ -2161,7 +2161,7 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
 
         kibnal_init_msg(msg, IBNAL_MSG_CONNREQ, sizeof(msg->ibm_u.connparams));
         msg->ibm_u.connparams.ibcp_queue_depth = IBNAL_MSG_QUEUE_SIZE;
-        kibnal_pack_msg(msg, conn->ibc_version, 0, 
+        kibnal_pack_msg(msg, conn->ibc_version, 0,
                         peer->ibp_nid, conn->ibc_incarnation);
 
         conn->ibc_connreq->cr_connparam = (struct ib_cm_active_param) {

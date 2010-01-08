@@ -345,7 +345,7 @@ mxlnd_init_mx(lnet_ni_t *ni)
         mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id, MXLND_MSG_MAGIC,
                            MXLND_CONNECT_TIMEOUT/HZ*1000, &kmxlnd_data.kmx_epa);
         if (mxret != MX_SUCCESS) {
-                CDEBUG(D_NETERROR, "unable to connect to myself (%s)\n", mx_strerror(mxret));
+                CNETERR("unable to connect to myself (%s)\n", mx_strerror(mxret));
                 goto failed_with_endpoint;
         }
 

@@ -1040,79 +1040,79 @@ kibnal_tx_complete (IB_WORK_COMPLETION *wc)
                 IB_LOCAL_DATASEGMENT *gl = &tx->tx_gl[0];
                 lnet_msg_t           *lntmsg = tx->tx_lntmsg[0];
 #endif
-                CDEBUG(D_NETERROR, "tx -> %s type %x cookie "LPX64
-                       " sending %d waiting %d failed %d nwrk %d\n", 
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid),
-                       tx->tx_msg->ibm_type, tx->tx_cookie,
-                       tx->tx_sending, tx->tx_waiting, wc->Status,
-                       tx->tx_nwrq);
+                CNETERR("tx -> %s type %x cookie "LPX64
+                        " sending %d waiting %d failed %d nwrk %d\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid),
+                        tx->tx_msg->ibm_type, tx->tx_cookie,
+                        tx->tx_sending, tx->tx_waiting, wc->Status,
+                        tx->tx_nwrq);
 #if KIBLND_DETAILED_DEBUG
                 for (i = 0; i < tx->tx_nwrq; i++, wrq++, gl++) {
                         switch (wrq->Operation) {
                         default:
-                                CDEBUG(D_NETERROR, "    [%3d] Addr %p Next %p OP %d "
-                                       "DSList %p(%p)/%d: "LPX64"/%d K %x\n",
-                                       i, wrq, wrq->Next, wrq->Operation,
-                                       wrq->DSList, gl, wrq->DSListDepth,
-                                       gl->Address, gl->Length, gl->Lkey);
+                                CNETERR("    [%3d] Addr %p Next %p OP %d "
+                                        "DSList %p(%p)/%d: "LPX64"/%d K %x\n",
+                                        i, wrq, wrq->Next, wrq->Operation,
+                                        wrq->DSList, gl, wrq->DSListDepth,
+                                        gl->Address, gl->Length, gl->Lkey);
                                 break;
                         case WROpSend:
-                                CDEBUG(D_NETERROR, "    [%3d] Addr %p Next %p SEND "
-                                       "DSList %p(%p)/%d: "LPX64"/%d K %x\n",
-                                       i, wrq, wrq->Next, 
-                                       wrq->DSList, gl, wrq->DSListDepth,
-                                       gl->Address, gl->Length, gl->Lkey);
+                                CNETERR("    [%3d] Addr %p Next %p SEND "
+                                        "DSList %p(%p)/%d: "LPX64"/%d K %x\n",
+                                        i, wrq, wrq->Next,
+                                        wrq->DSList, gl, wrq->DSListDepth,
+                                        gl->Address, gl->Length, gl->Lkey);
                                 break;
                         case WROpRdmaWrite:
-                                CDEBUG(D_NETERROR, "    [%3d] Addr %p Next %p DMA "
-                                       "DSList: %p(%p)/%d "LPX64"/%d K %x -> "
-                                       LPX64" K %x\n",
-                                       i, wrq, wrq->Next, 
-                                       wrq->DSList, gl, wrq->DSListDepth,
-                                       gl->Address, gl->Length, gl->Lkey,
-                                       wrq->Req.SendRC.RemoteDS.Address,
-                                       wrq->Req.SendRC.RemoteDS.Rkey);
+                                CNETERR("    [%3d] Addr %p Next %p DMA "
+                                        "DSList: %p(%p)/%d "LPX64"/%d K %x -> "
+                                        LPX64" K %x\n",
+                                        i, wrq, wrq->Next,
+                                        wrq->DSList, gl, wrq->DSListDepth,
+                                        gl->Address, gl->Length, gl->Lkey,
+                                        wrq->Req.SendRC.RemoteDS.Address,
+                                        wrq->Req.SendRC.RemoteDS.Rkey);
                                 break;
                         }
                 }
-                
+
                 switch (tx->tx_msg->ibm_type) {
                 default:
-                        CDEBUG(D_NETERROR, "  msg type %x %p/%d, No RDMA\n", 
-                               tx->tx_msg->ibm_type, 
-                               tx->tx_msg, tx->tx_msg->ibm_nob);
+                        CNETERR("  msg type %x %p/%d, No RDMA\n",
+                                tx->tx_msg->ibm_type,
+                                tx->tx_msg, tx->tx_msg->ibm_nob);
                         break;
 
                 case IBNAL_MSG_PUT_DONE:
                 case IBNAL_MSG_GET_DONE:
-                        CDEBUG(D_NETERROR, "  msg type %x %p/%d, RDMA key %x frags %d...\n", 
-                               tx->tx_msg->ibm_type, 
+                        CNETERR("  msg type %x %p/%d, RDMA key %x frags %d..\n",
+                               tx->tx_msg->ibm_type,
                                tx->tx_msg, tx->tx_msg->ibm_nob,
                                tx->tx_rd->rd_key, tx->tx_rd->rd_nfrag);
                         for (i = 0; i < tx->tx_rd->rd_nfrag; i++)
-                                CDEBUG(D_NETERROR, "    [%d] "LPX64"/%d\n", i,
-                                       tx->tx_rd->rd_frags[i].rf_addr,
-                                       tx->tx_rd->rd_frags[i].rf_nob);
+                                CNETERR(, "    [%d] "LPX64"/%d\n", i,
+                                        tx->tx_rd->rd_frags[i].rf_addr,
+                                        tx->tx_rd->rd_frags[i].rf_nob);
                         if (lntmsg == NULL) {
-                                CDEBUG(D_NETERROR, "  No lntmsg\n");
+                                CNETERR("  No lntmsg\n");
                         } else if (lntmsg->msg_iov != NULL) {
-                                CDEBUG(D_NETERROR, "  lntmsg in %d VIRT frags...\n", 
-                                       lntmsg->msg_niov);
+                                CNETERR("  lntmsg in %d VIRT frags...\n",
+                                        lntmsg->msg_niov);
                                 for (i = 0; i < lntmsg->msg_niov; i++)
-                                        CDEBUG(D_NETERROR, "    [%d] %p/%d\n", i,
-                                               lntmsg->msg_iov[i].iov_base,
-                                               lntmsg->msg_iov[i].iov_len);
+                                        CNETERR("    [%d] %p/%d\n", i,
+                                                lntmsg->msg_iov[i].iov_base,
+                                                lntmsg->msg_iov[i].iov_len);
                         } else if (lntmsg->msg_kiov != NULL) {
-                                CDEBUG(D_NETERROR, "  lntmsg in %d PAGE frags...\n", 
-                                       lntmsg->msg_niov);
+                                CNETERR("  lntmsg in %d PAGE frags...\n",
+                                        lntmsg->msg_niov);
                                 for (i = 0; i < lntmsg->msg_niov; i++)
-                                        CDEBUG(D_NETERROR, "    [%d] %p+%d/%d\n", i,
-                                               lntmsg->msg_kiov[i].kiov_page,
-                                               lntmsg->msg_kiov[i].kiov_offset,
-                                               lntmsg->msg_kiov[i].kiov_len);
+                                        CNETERR("    [%d] %p+%d/%d\n", i,
+                                                lntmsg->msg_kiov[i].kiov_page,
+                                                lntmsg->msg_kiov[i].kiov_offset,
+                                                lntmsg->msg_kiov[i].kiov_len);
                         } else {
-                                CDEBUG(D_NETERROR, "  lntmsg in %d frags\n", 
-                                       lntmsg->msg_niov);
+                                CNETERR("  lntmsg in %d frags\n",
+                                        lntmsg->msg_niov);
                         }
                         
                         break;
@@ -1948,36 +1948,38 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
             list_empty(&conn->ibc_tx_queue_nocred) &&
             list_empty(&conn->ibc_active_txs)) {
                 CDEBUG(D_NET, "closing conn to %s"
-                       " rx# "LPD64" tx# "LPD64"\n", 
+                       " rx# "LPD64" tx# "LPD64"\n",
                        libcfs_nid2str(peer->ibp_nid),
                        conn->ibc_txseq, conn->ibc_rxseq);
         } else {
-                CDEBUG(D_NETERROR, "Closing conn to %s: error %d%s%s%s%s"
-                       " rx# "LPD64" tx# "LPD64"\n",
-                       libcfs_nid2str(peer->ibp_nid), error,
-                       list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
-                       list_empty(&conn->ibc_tx_queue_rsrvd) ? "" : "(sending_rsrvd)",
-                       list_empty(&conn->ibc_tx_queue_nocred) ? "" : "(sending_nocred)",
-                       list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
-                       conn->ibc_txseq, conn->ibc_rxseq);
+                CNETERR("Closing conn to %s: error %d%s%s%s%s"
+                        " rx# "LPD64" tx# "LPD64"\n",
+                        libcfs_nid2str(peer->ibp_nid), error,
+                        list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
+                        list_empty(&conn->ibc_tx_queue_rsrvd) ?
+                                "" : "(sending_rsrvd)",
+                        list_empty(&conn->ibc_tx_queue_nocred) ?
+                                "" : "(sending_nocred)",
+                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
+                        conn->ibc_txseq, conn->ibc_rxseq);
 #if 0
-                /* can't skip down the queue without holding ibc_lock (see above) */
+                /* can't skip down queue without holding ibc_lock (see above) */
                 list_for_each(tmp, &conn->ibc_tx_queue) {
                         kib_tx_t *tx = list_entry(tmp, kib_tx_t, tx_list);
-                        
+
                         CERROR("   queued tx type %x cookie "LPX64
-                               " sending %d waiting %d ticks %ld/%d\n", 
-                               tx->tx_msg->ibm_type, tx->tx_cookie, 
+                               " sending %d waiting %d ticks %ld/%d\n",
+                               tx->tx_msg->ibm_type, tx->tx_cookie,
                                tx->tx_sending, tx->tx_waiting,
                                (long)(tx->tx_deadline - jiffies), HZ);
                 }
 
                 list_for_each(tmp, &conn->ibc_active_txs) {
                         kib_tx_t *tx = list_entry(tmp, kib_tx_t, tx_list);
-                        
+
                         CERROR("   active tx type %x cookie "LPX64
-                               " sending %d waiting %d ticks %ld/%d\n", 
-                               tx->tx_msg->ibm_type, tx->tx_cookie, 
+                               " sending %d waiting %d ticks %ld/%d\n",
+                               tx->tx_msg->ibm_type, tx->tx_cookie,
                                tx->tx_sending, tx->tx_waiting,
                                (long)(tx->tx_deadline - jiffies), HZ);
                 }
@@ -2158,15 +2160,15 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int type, int error)
         }
 
         peer->ibp_error = error;
-        
+
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
         kibnal_peer_notify(peer);
 
         if (list_empty (&zombies))
                 return;
-        
-        CDEBUG (D_NETERROR, "Deleting messages for %s: connection failed\n",
+
+        CNETERR("Deleting messages for %s: connection failed\n",
                 libcfs_nid2str(peer->ibp_nid));
 
         kibnal_txlist_done (&zombies, -EHOSTUNREACH);
@@ -2805,10 +2807,10 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
         CM_REQUEST_INFO   *req = &conn->ibc_cvars->cv_cmci.Info.Request;
         PATH_RESULTS      *path = (PATH_RESULTS *)qrslt->QueryResult;
         FSTATUS            frc;
-        
-        if (qrslt->Status != FSUCCESS || 
+
+        if (qrslt->Status != FSUCCESS ||
             qrslt->ResultDataSize < sizeof(*path)) {
-                CDEBUG (D_NETERROR, "pathreq %s failed: status %d data size %d\n", 
+                CNETERR("pathreq %s failed: status %d data size %d\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid),
                         qrslt->Status, qrslt->ResultDataSize);
                 kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
@@ -2816,7 +2818,7 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
         }
 
         if (path->NumPathRecords < 1) {
-                CDEBUG (D_NETERROR, "pathreq %s failed: no path records\n",
+                CNETERR("pathreq %s failed: no path records\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
                 return;
@@ -2905,16 +2907,16 @@ kibnal_dump_service_records(SERVICE_RECORD_RESULTS *results)
 }
 
 void
-kibnal_service_get_callback (void *arg, QUERY *qry, 
+kibnal_service_get_callback (void *arg, QUERY *qry,
                              QUERY_RESULT_VALUES *qrslt)
 {
         kib_conn_t              *conn = arg;
         SERVICE_RECORD_RESULTS  *svc;
         FSTATUS                  frc;
 
-        if (qrslt->Status != FSUCCESS || 
+        if (qrslt->Status != FSUCCESS ||
             qrslt->ResultDataSize < sizeof(*svc)) {
-                CDEBUG (D_NETERROR, "Lookup %s failed: status %d data size %d\n", 
+                CNETERR("Lookup %s failed: status %d data size %d\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid),
                         qrslt->Status, qrslt->ResultDataSize);
                 kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
@@ -2923,7 +2925,7 @@ kibnal_service_get_callback (void *arg, QUERY *qry,
 
         svc = (SERVICE_RECORD_RESULTS *)qrslt->QueryResult;
         if (svc->NumServiceRecords < 1) {
-                CDEBUG (D_NETERROR, "lookup %s failed: no service records\n",
+                CNETERR("lookup %s failed: no service records\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
                 return;

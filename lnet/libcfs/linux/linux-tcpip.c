@@ -683,9 +683,10 @@ libcfs_sock_connect (struct socket **sockp, int *fatal,
          * port... */
         *fatal = !(rc == -EADDRNOTAVAIL);
 
-        CDEBUG(*fatal ? D_NETERROR : D_NET,
-               "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
-               HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
+        CDEBUG_LIMIT(*fatal ? D_NETERROR : D_NET,
+                     "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n",
+                     rc, HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip),
+                     peer_port);
 
         sock_release(*sockp);
         return rc;
