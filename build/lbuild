@@ -991,7 +991,8 @@ find_linux_rpm() {
     for arch in $TARGET_ARCHS_ALL; do
         local found_rpm="" rpm
         for rpm in ${pathtorpms}/${arch}/*.rpm; do
-            if rpm -q --provides -p "$rpm" | grep -q "kernel${prefix} = $wanted_kernel"; then
+            if rpm -q --provides -p "$rpm" 2>&3 | grep -q "kernel${prefix} = $wanted_kernel" 2>&3; then
+
                 found_rpm="$rpm"
                 ret=0
                 break
@@ -1294,7 +1295,7 @@ find_rpm() {
         case "$match_type" in
             provides)
                 # match is any valid ERE (i.e. given to egrep) match
-                if rpm -q --provides -p "$file" | egrep -q "$match"; then
+                if rpm -q --provides -p "$file" 2>&3 | egrep -q "$match"; then
                     echo "$file"
                     popd >/dev/null
                     return 0
@@ -1441,7 +1442,7 @@ build_mptlinux() {
                   --define "_tmppath /var/tmp" \
                   --define "_topdir ${TOPDIR}" \
                   --define "kernel_obj $linux" \
-                  ${TOPDIR}/SPECS/mptlinux.spec; then
+                  ${TOPDIR}/SPECS/mptlinux.spec 2>&1; then
         return 1
     fi
     if $DO_SRC; then
@@ -1449,7 +1450,7 @@ build_mptlinux() {
                       --define "_tmppath /var/tmp" \
                       --define "_topdir ${TOPDIR}" \
                       --define "kernel_obj $linux" \
-                      ${TOPDIR}/SPECS/mptlinux.spec; then
+                      ${TOPDIR}/SPECS/mptlinux.spec 2>&1; then
             return 1
         fi
     fi
@@ -1497,7 +1498,7 @@ build_rdac() {
                   --define "_tmppath /var/tmp" \
                   --define "_topdir ${TOPDIR}" \
                   --define "kernel_obj $linux" \
-                  ${TOPDIR}/SPECS/rdac.spec; then
+                  ${TOPDIR}/SPECS/rdac.spec 2>&1; then
         return 1
     fi
     if $DO_SRC; then
@@ -1505,7 +1506,7 @@ build_rdac() {
                       --define "_tmppath /var/tmp" \
                       --define "_topdir ${TOPDIR}" \
                       --define "kernel_obj $linux" \
-                      ${TOPDIR}/SPECS/rdac.spec; then
+                      ${TOPDIR}/SPECS/rdac.spec 2>&1; then
             return 1
         fi
     fi

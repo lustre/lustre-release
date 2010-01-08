@@ -34,7 +34,7 @@ build_tarball() {
         mkdir $RPMTOPDIR/BUILD/
         rpm -ivh $KERNELDIR/$SRPM --define "_topdir $RPMTOPDIR" || \
             { rm -rf $RPMTOPDIR; fatal 1 "Error installing kernel SRPM."; }
-        $RPMBUILD -bp --nodeps --target i686 $RPMTOPDIR/SPECS/$SPEC --define "_topdir $RPMTOPDIR"
+        $RPMBUILD -bp --nodeps --target i686 $RPMTOPDIR/SPECS/$SPEC --define "_topdir $RPMTOPDIR" 2>&1
         pushd $RPMTOPDIR/BUILD/kernel-${lnxmaj}/linux-${lnxmaj} && {
             make mrproper
             cp configs/kernel-${lnxmaj}-i686-smp.config .config
@@ -184,13 +184,13 @@ build_kernel() {
 
     $RPMBUILD $targets $rpmbuildopt lustre-kernel-2.4.spec \
         --define "_tmppath $TMPDIR" \
-        --define "_topdir $TOPDIR" || \
+        --define "_topdir $TOPDIR" 2>&1 || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     if $DO_SRC; then
         $RPMBUILD -bs lustre-kernel-2.4.spec \
             --define "_tmppath $TMPDIR" \
-            --define "_topdir $TOPDIR" || \
+            --define "_topdir $TOPDIR" 2>&1 || \
             fatal 1 "Error building .src.rpm."
     fi
 
