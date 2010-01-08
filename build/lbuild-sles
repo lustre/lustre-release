@@ -86,24 +86,22 @@ rpm_BUILD_kernel_dirname() {
 find_linux_devel_paths() {
     local path="$1"
 
-    LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
+    LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}
 
     local objects=$TARGET_ARCH/$RPMSMPTYPE
-    if [ -d $path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/powerpc ]; then
+    if [ -d $path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}-obj/powerpc ]; then
         objects="powerpc/$TARGET_ARCH"
     elif [ $TARGET_ARCH == 'i686' ]; then
         objects="i386/$RPMSMPTYPE"
     fi
 
-    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$objects
-    LINUXRELEASE=$(find_linux_release "$LINUXOBJ")
+    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}-obj/$objects
 
+    LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
     if [ -z "$LINUXRELEASE" ]; then
-        echo "Failed to find linux release in $LINUXOBJ"
-        return 255
+        echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
+        RC=255
     fi
-
-    return 0
 }
 
 mcpu_rpmbuild_opt() {
