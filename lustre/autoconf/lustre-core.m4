@@ -853,26 +853,28 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 # LC_CANCEL_DIRTY_PAGE
-# 2.6.20 introduse cancel_dirty_page instead of
-# clear_page_dirty.
+# 2.6.20 introduced cancel_dirty_page instead of clear_page_dirty.
 AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
-[AC_MSG_CHECKING([kernel has cancel_dirty_page])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-        #include <linux/page-flags.h>
+        [AC_MSG_CHECKING([kernel has cancel_dirty_page])
+        # the implementation of cancel_dirty_page in OFED 1.4.1's SLES10 SP2
+        # backport is broken, so ignore it
+        if test -f $OFED_BACKPORT_PATH/linux/mm.h &&
+           test "$(sed -ne '/^static inline void cancel_dirty_page(struct page \*page, unsigned int account_size)$/,/^}$/p' $OFED_BACKPORT_PATH/linux/mm.h | md5sum)" = "c518cb32d6394760c5bca14cb7538d3e  -"; then
+                AC_MSG_RESULT(no)
+        else
+                LB_LINUX_TRY_COMPILE([
+                        #include <linux/mm.h>
+                        #include <linux/page-flags.h>
 ],[
-        /* tmp workaround for broken OFED 1.4.1 at SLES10 */
-        #if defined(CONFIG_SLE_VERSION) && CONFIG_SLE_VERSION == 10 && defined(_BACKPORT_LINUX_MM_H_)
-        #error badly implementation of cancel_dirty_pages
-        #endif
-        cancel_dirty_page(NULL, 0);
+                        cancel_dirty_page(NULL, 0);
 ],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
-                  [kernel has cancel_dirty_page instead of clear_page_dirty])
+                        AC_MSG_RESULT(yes)
+                        AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
+                                  [kernel has cancel_dirty_page instead of clear_page_dirty])
 ],[
-        AC_MSG_RESULT(no)
+                        AC_MSG_RESULT(no)
 ])
+        fi
 ])
 
 #
