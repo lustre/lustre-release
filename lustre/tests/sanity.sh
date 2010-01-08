@@ -66,7 +66,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
@@ -1602,13 +1602,13 @@ test_36e() {
 }
 run_test 36e "utime on non-owned file (should return error) ===="
 
-test_36f() {
+subr_36fh() {
+	local fl="$1"
 	export LANG=C LC_LANG=C # for date language
 
 	DATESTR="Dec 20  2000"
 	mkdir -p $DIR/$tdir
-	#define OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
-	lctl set_param fail_loc=0x80000214
+	lctl set_param fail_loc=$fl
 	date; date +%s
 	cp /etc/hosts $DIR/$tdir/$tfile
 	sync & # write RPC generated with "current" inode timestamp, but delayed
@@ -1623,6 +1623,11 @@ test_36f() {
 		echo "AFTER : $LS_AFTER" && \
 		echo "WANT  : $DATESTR" && \
 		error "$DIR/$tdir/$tfile timestamps changed" || true
+}
+
+test_36f() {
+        #define OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
+        subr_36fh "0x80000214"
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
@@ -1640,6 +1645,12 @@ test_36g() {
 		error "fmd didn't expire after ping" || true
 }
 run_test 36g "filter mod data cache expiry ====================="
+
+test_36h() {
+        #define OBD_FAIL_OST_BRW_PAUSE_BULK2 0x227
+        subr_36fh "0x80000227"
+}
+run_test 36h "utime on file racing with OST BRW write =========="
 
 test_37() {
 	mkdir -p $DIR/$tdir
