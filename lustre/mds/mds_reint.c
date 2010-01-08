@@ -2490,6 +2490,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_tgtdir = NULL;
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
+        struct dentry *trap;
         struct inode *old_inode = NULL, *new_inode = NULL;
         struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct mds_obd *mds = mds_req2mds(req);
@@ -2604,11 +2605,6 @@ no_unlink:
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
-        /* Check if we are moving old entry into its child. 2.6 does not
-           check for this in vfs_rename() anymore */
-        if (is_subdir(de_new, de_old))
-                GOTO(cleanup, rc = -EINVAL);
-
         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
         /* check that lmm size is not 0 */
         sz = lustre_msg_buflen(req->rq_repmsg, offset + 1) > 0 ?
@@ -2619,13 +2615,23 @@ no_unlink:
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
-        lock_kernel();
+        trap = lock_rename(de_tgtdir, de_srcdir);
+        /* source should not be ancestor of target */
+        if (de_old == trap) {
+                unlock_rename(de_tgtdir, de_srcdir);
+                GOTO(cleanup, rc = -EINVAL);
+        }
+        /* target should not be an ancestor of source */
+        if (de_new == trap) {
+                unlock_rename(de_tgtdir, de_srcdir);
+                GOTO(cleanup, rc = -ENOTEMPTY);
+        }
         de_old->d_fsdata = req;
         de_new->d_fsdata = req;
 
-        rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt, 
+        rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt,
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
-        unlock_kernel();
+        unlock_rename(de_tgtdir, de_srcdir);
 
         if (rc == 0) {
                 struct iattr iattr;
