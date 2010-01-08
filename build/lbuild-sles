@@ -45,7 +45,7 @@ prepare_and_build_srpm() {
     # now build it
     if ! $RPMBUILD $rpmbuildopt $targets \
                    --define "_topdir $TOPDIR" \
-                   $TOPDIR/SOURCES/kernel-$RPMSMPTYPE.spec >&2; then
+                   $TOPDIR/SOURCES/kernel-$RPMSMPTYPE.spec 2>&1; then
         fatal 1 "Failed to build kernel RPM"
     fi
 #fi
@@ -53,7 +53,7 @@ prepare_and_build_srpm() {
     # for SLES, we also need to build the kernel-source rpm
     if ! $RPMBUILD $rpmbuildopt $targets \
                    --define "_topdir $TOPDIR" \
-                   $TOPDIR/SOURCES/kernel-source.spec >&2; then
+                   $TOPDIR/SOURCES/kernel-source.spec 2>&1; then
         fatal 1 "Failed to build kernel source RPM"
     fi
 
@@ -100,7 +100,7 @@ find_linux_devel_paths() {
     LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
     if [ -z "$LINUXRELEASE" ]; then
         echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
-        RC=255
+        return 255
     fi
 }
 
