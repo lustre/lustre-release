@@ -1520,7 +1520,7 @@ int ksocknal_scheduler (void *arg)
                                         !ksocknal_sched_cansleep(sched), rc);
                                 LASSERT (rc == 0);
                         } else {
-                                our_cond_resched();
+                                cfs_cond_resched();
                         }
 
                         cfs_spin_lock_bh (&sched->kss_lock);

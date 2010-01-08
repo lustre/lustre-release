@@ -153,6 +153,16 @@ typedef long                            cfs_task_state_t;
 #define cfs_schedule_timeout(s, t)      schedule_timeout(t)
 #define cfs_schedule()                  schedule()
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static inline void cfs_cond_resched(void)
+{
+        if (current->need_resched)
+               schedule();
+}
+#else
+#define cfs_cond_resched()              cond_resched()
+#endif
+
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
 

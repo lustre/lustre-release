@@ -3186,7 +3186,7 @@ kiblnd_scheduler(void *arg)
                         spin_unlock_irqrestore(&kiblnd_data.kib_sched_lock,
                                                flags);
 
-                        our_cond_resched();
+                        cfs_cond_resched();
                         busy_loops = 0;
 
                         spin_lock_irqsave(&kiblnd_data.kib_sched_lock, flags);

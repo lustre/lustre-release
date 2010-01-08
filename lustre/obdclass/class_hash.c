@@ -484,6 +484,7 @@ restart:
                         read_unlock(&lh->lh_rwlock);
                         func(obj, data);
                         (void)lh_put(lh, hnode);
+                        cfs_cond_resched();
                         goto restart;
                 }
                 write_unlock(&lhb->lhb_rwlock);
