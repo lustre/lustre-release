@@ -538,14 +538,12 @@ build_kernel_ib()
     if [ "$OFED_VERSION" = "1.3" ]; then
         K_SRC="KSRC"
     fi
-    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
-	      --define "_topdir $(lbuild_topdir)" --target ${TARGET_ARCH} \
-	      --define "KVERSION ${FULL_VERSION}" \
-	      --define "$K_SRC ${PWD}/linux" \
-	      --define "LIB_MOD_DIR /lib/modules/${FULL_VERSION}" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-*.src.rpm
-
-    if [ ${PIPESTATUS[0]} != 0 ]; then
+    if ! $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+                   --define "_topdir $(lbuild_topdir)" --target ${TARGET_ARCH} \
+                   --define "KVERSION ${FULL_VERSION}" \
+                   --define "$K_SRC ${PWD}/linux" \
+                   --define "LIB_MOD_DIR /lib/modules/${FULL_VERSION}" \
+                   --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-*.src.rpm 2>&1; then
         fatal 1 "Error building kernel-ib"
     fi
 
@@ -587,7 +585,7 @@ build_lustre()
     $RPMBUILD --target ${TARGET_ARCH} -bb lustre.spec \
         ${PATCHLESS:+--define "lustre_name lustre-client"} \
         --define "_tmppath $TMPDIR" \
-	--define "_topdir $(lbuild_topdir)" || \
+	--define "_topdir $(lbuild_topdir)" 2>&1 || \
 	fatal 1 "Error building Lustre rpms."
     # $MAKE_J "$MAKE_CC" || fatal 1 "Error building Lustre."
     popd >/dev/null
@@ -905,7 +903,7 @@ if [ -n "$OFED_VERSION" ]; then
     if [ "$OFED_VERSION" = "inkernel" ]; then
 	CONFIGURE_FLAGS="--with-o2ib=yes ${CONFIGURE_FLAGS}"
     else
-    build_kernel_ib
+        build_kernel_ib
     fi
 fi
 
