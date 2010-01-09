@@ -10,7 +10,7 @@ SUSEBUILD=${SUSEBUILD:-0}
 # make sure this module does not get used for anything other than RHEL4
 # as this will die when our RHEL4 support (read: need to build binaries)
 # dies
-if [ "$DISTRO" != "rhel4" ]; then
+if [ "$DISTRO" != "rhel4" -a "$DISTRO" != "sles9" ]; then
     fatal 1 "lbuild.old_school is deprecated and only supported for RHEL4
 to add lbuild support for $DISTRO you probably want to create an lbuild-$DISTRO
 file in the lustre-build module"
