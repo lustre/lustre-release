@@ -320,8 +320,7 @@ void usage(char *proc)
 
 int main(int argc, char *argv[])
 {
-        int i, iterations = 16;
-        char c;
+        int i, iterations = 16, c;
         long stride = -1;
         unsigned int seed = 0;
 
