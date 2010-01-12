@@ -372,7 +372,7 @@ test_6() {
     reintegrate_clients || return 1
     sleep 5 
 
-    wait_remote_prog df $((TIMEOUT * 3 + 20)) 
+    wait_remote_prog "stat -f" $((TIMEOUT * 3 + 20)) 
     wait $DFPIDA
     wait $DFPIDB
 
