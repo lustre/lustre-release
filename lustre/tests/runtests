@@ -64,8 +64,8 @@ mkdir $DST || error "can't mkdir $DST" 10
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=$TMP/runtests.files
-# print0 is to use "NUL" instead of newline as filename terminator, bug 19702 
-find $RUNTESTS_SRC -type f -mtime +1 -print0 | head -n $COUNT > $FILES
+# use "NUL" instead of newline as filename terminator, bug 19702 
+find $RUNTESTS_SRC -type f -mtime +1 | head -n $COUNT | tr '\n' '\0' > $FILES
 [ -s "$FILES" ] || error "$RUNTESTS_SRC contains only files modifed less than 2 days ago"
 
 log "copying files from $RUNTESTS_SRC to $DST$RUNTESTS_SRC at `date`"
