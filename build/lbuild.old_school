@@ -90,8 +90,8 @@ patch_linux() {
 pack_linux() {
     TARBALL="$(readlink linux)-$EXTRA_VERSION.tar.gz"
     echo "Creating patched linux tarball $TARBALL..."
-    tar zcf "$TARBALL" "$(readlink linux)" \
-        --exclude "CVS" --exclude ".cvsignore" || \
+    tar -zcf "$TARBALL" "$(readlink linux)" \
+        --exclude "CVS" --exclude ".cvsignore" \
         --exclude "*.orig" --exclude "*~" --exclude "*.rej" || \
         fatal 1 "Error creating patched Linux tarball."
 }
@@ -203,19 +203,17 @@ build_kernel() {
     < $ldiskfs_spec \
     > ../lustre-ldiskfs.spec
 
-    $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
-        --define "_tmppath /var/tmp" \
-        --define "_topdir $TOPDIR"
-    if [ "$?" != "0" ] ; then
+    if ! $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
+                   --define "_tmppath /var/tmp" \
+                   --define "_topdir $TOPDIR" 2>&1; then
         popd
         return 255
     fi
 
     if $DO_SRC; then
-            $RPMBUILD -bs ../lustre-ldiskfs.spec \
-            --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR"
-        if [ "$?" != "0" ] ; then
+            if ! $RPMBUILD -bs ../lustre-ldiskfs.spec \
+                           --define "_tmppath /var/tmp" \
+                           --define "_topdir $TOPDIR" 2>&1; then
             popd
             return 255
         fi

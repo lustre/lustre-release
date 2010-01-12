@@ -375,8 +375,7 @@ autodetect_distro() {
                   sed -e 's/^[^0-9.]*//g' | sed -e 's/[ \.].*//')
     fi
     if [ -z "$name" -o -z "$version" ]; then
-        fatal 1 "I don't know how to determine distro type/version.\n" \
-                "Either update autodetect_distro() or use the --distro argument"
+        fatal 1 "I don't know how to determine distro type/version.\nEither update autodetect_distro() or use the --distro argument"
     fi
 
     echo ${name}${version}
@@ -403,8 +402,7 @@ download_srpm() {
             if ! wget -nv "$location/$srpm" -O "$KERNELDIR/$srpm" ||
                [ ! -s "$KERNELDIR/$srpm" ]; then
                 rm -f $KERNELDIR/$srpm
-                fatal 1 "Could not download target $target's kernel SRPM" \
-                        "$srpm from $location."
+                fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
             fi
         else
             fatal 1 "$srpm not found in directory $KERNELDIR."
@@ -594,9 +592,7 @@ load_target() {
             for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/lustre/kernel_patches"; do
                 [ -r "$patchesdir/series/$series" ] && continue 2
             done
-            fatal 1 "Target $TARGET's series $SERIES could not be" \
-                    "found.\nSearched:\n\t$EXTERNAL_PATCHES/series\n" \
-                    "\t$TOPDIR/lustre/lustre/kernel_patches/series."
+            fatal 1 "Target $TARGET's series $SERIES could not be found.\nSearched:\n\t$EXTERNAL_PATCHES/series\n\t$TOPDIR/lustre/lustre/kernel_patches/series."
         done
     fi
 
@@ -619,8 +615,7 @@ load_target() {
     PRISTINE_EXTRA_VERSION=$EXTRA_VERSION
 
     if ! $PATCHLESS && [ ! -f "$CONFIG_FILE" ]; then
-        fatal 1 "Config file for target $TARGET missing from" \
-                "$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
+        fatal 1 "Config file for target $TARGET missing from $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
     fi
 
     if [ "$EXTRA_VERSION_save" ]; then
@@ -1141,16 +1136,14 @@ EOF
     fi
 
     local linuxrelease=$(find_linux_release "$linux")
-    $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
-              --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
-              --define "KVERSION ${linuxrelease}" \
-              --define "$K_SRC ${linux}" \
-              --define "LIB_MOD_DIR /lib/modules/${linuxrelease}/updates" \
-              ${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
-              --define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
-              ${SOURCE}
-
-    if [ ${PIPESTATUS[0]} != 0 ]; then
+    if ! $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+                  --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
+                  --define "KVERSION ${linuxrelease}" \
+                  --define "$K_SRC ${linux}" \
+                  --define "LIB_MOD_DIR /lib/modules/${linuxrelease}/updates" \
+                  ${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
+                  --define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
+                  ${SOURCE} 2>&1; then
         fatal 1 "Error building kernel-ib"
     fi
 
@@ -1211,9 +1204,7 @@ reuse() {
             # signal that the caching was completed.  if that flag is not
             # there, then the cache is invalid (and should be removed in fact)
             mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} ||
-                fatal 1 "failed to clean up a bad cache in location" \
-                      "\"$REUSEBUILD/$signature/$module\" -- manual cleanup" \
-                      "will be necessary"
+                fatal 1 "failed to clean up a bad cache in location $REUSEBUILD/$signature/$module\" -- manual cleanup will be necessary"
             return 1
         fi
 
@@ -1761,7 +1752,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1899,6 +1890,10 @@ while [ "$1" ]; do
         --xen)
             XEN=true
             shift
+            ;;
+        --set-value)
+            eval $2
+            shift 2
             ;;
         --)
             shift
