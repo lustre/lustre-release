@@ -764,10 +764,27 @@ void class_unlink_export(struct obd_export *exp)
         spin_unlock(&exp->exp_obd->obd_dev_lock);
         /* Keep these counter valid always */
         spin_lock_bh(&exp->exp_obd->obd_processing_task_lock);
-        if (exp->exp_delayed)
+        if (exp->exp_delayed) {
+                spin_lock(&exp->exp_lock);
+                exp->exp_delayed = 0;
+                spin_unlock(&exp->exp_lock);
+                LASSERT(exp->exp_obd->obd_delayed_clients);
                 exp->exp_obd->obd_delayed_clients--;
-        else if (exp->exp_replay_needed)
-                exp->exp_obd->obd_recoverable_clients--;
+        } else if (exp->exp_replay_needed) {
+                        spin_lock(&exp->exp_lock);
+                        exp->exp_replay_needed = 0;
+                        spin_unlock(&exp->exp_lock);
+                        LASSERT(exp->exp_obd->obd_recoverable_clients);
+                        exp->exp_obd->obd_recoverable_clients--;
+        }
+
+        if (exp->exp_obd->obd_recovering && exp->exp_in_recovery) {
+                spin_lock(&exp->exp_lock);
+                exp->exp_in_recovery = 0;
+                spin_unlock(&exp->exp_lock);
+                LASSERT(exp->exp_obd->obd_connected_clients);
+                exp->exp_obd->obd_connected_clients--;
+        }
         spin_unlock_bh(&exp->exp_obd->obd_processing_task_lock);
         class_export_put(exp);
 }
@@ -1124,9 +1141,6 @@ void class_set_export_delayed(struct obd_export *exp)
         struct obd_device *obd = class_exp2obd(exp);
 
         LASSERT(!exp->exp_delayed);
-        spin_lock(&exp->exp_lock);
-        exp->exp_delayed = 1;
-        spin_unlock(&exp->exp_lock);
 
         /* no need to ping delayed exports */
         spin_lock(&obd->obd_dev_lock);
@@ -1137,8 +1151,15 @@ void class_set_export_delayed(struct obd_export *exp)
         LASSERT(obd->obd_recoverable_clients > 0);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
-        obd->obd_delayed_clients++;
-        obd->obd_recoverable_clients--;
+        /* race with target_queue_last_replay_reply? */
+        if (exp->exp_replay_needed) {
+                spin_lock(&exp->exp_lock);
+                exp->exp_delayed = 1;
+                spin_unlock(&exp->exp_lock);
+
+                obd->obd_delayed_clients++;
+                obd->obd_recoverable_clients--;
+        }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         CDEBUG(D_HA, "%s: set client %s as delayed\n",
