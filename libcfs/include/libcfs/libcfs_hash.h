@@ -407,8 +407,13 @@ cfs_hash_u64_hash(__u64 key, unsigned mask)
 #define cfs_hash_for_each_bucket(hs, hsb, pos)   \
         for (pos = 0;                            \
              pos <= hs->hs_cur_mask &&           \
-             ({ hsb = hs->hs_buckets[i]; 1; });  \
+             (hsb = hs->hs_buckets[pos]);       \
              pos++)
 
+#define cfs_hash_for_each_bucket_restart(hs, hsb, pos)  \
+        for (/* pos=0 done once by caller */;           \
+             pos <= hs->hs_cur_mask &&                  \
+             (hsb = hs->hs_buckets[pos]);              \
+             pos++)
 /* !__LIBCFS__HASH_H__ */
 #endif

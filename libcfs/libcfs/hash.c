@@ -515,13 +515,20 @@ cfs_hash_for_each_empty(cfs_hash_t *hs,
 {
         cfs_hlist_node_t     *hnode;
         cfs_hash_bucket_t    *hsb;
+        cfs_hash_bucket_t    **hsb_last = NULL;
         void                 *obj;
-        int                   i;
+        int                   i = 0;
         ENTRY;
 
 restart:
         cfs_hash_rlock(hs);
-        cfs_hash_for_each_bucket(hs, hsb, i) {
+        /* If the hash table has changed since we last held lh_rwlock,
+         * we need to start traversing the list from the start. */
+        if (hs->hs_buckets != hsb_last) {
+                i = 0;
+                hsb_last = hs->hs_buckets;
+        }
+        cfs_hash_for_each_bucket_restart(hs, hsb, i) {
                 cfs_write_lock(&hsb->hsb_rwlock);
                 while (!cfs_hlist_empty(&hsb->hsb_head)) {
                         hnode =  hsb->hsb_head.first;
