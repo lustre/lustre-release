@@ -1690,7 +1690,7 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
 {
         unsigned long index;
         int rc;
-        char *dash = strchr(svname, '-');
+        char *dash = strrchr(svname, '-');
         if (!dash)
                 return(-EINVAL);
 
