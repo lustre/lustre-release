@@ -110,6 +110,8 @@ init_test_env() {
     if ! echo $PATH | grep -q $LUSTRE/test; then
 	export PATH=$PATH:$LUSTRE/tests
     fi
+    export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
+    [ ! -f "$LST" ] && export LST=$(which lst)
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mpi/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     if ! echo $PATH | grep -q $LUSTRE/tests/racer; then
@@ -224,7 +226,11 @@ load_module() {
 
     module_loaded ${BASE} && return
 
-    if [ -f ${LUSTRE}/${module}${EXT} ]; then
+    if [ "$BASE" == "lnet_selftest" ] && \
+            [ -f ${LUSTRE}/../lnet/selftest/${module}${EXT} ]; then
+        insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
+
+    elif [ -f ${LUSTRE}/${module}${EXT} ]; then
         insmod ${LUSTRE}/${module}${EXT} $@
     else
         # must be testing a "make install" or "rpm" installation
@@ -324,9 +330,11 @@ unload_modules() {
 
     if $LOAD_MODULES_REMOTE ; then
         local list=$(comma_list $(remote_nodes_list))
-        echo unloading modules on $list
-        do_rpc_nodes $list $LUSTRE_RMMOD $FSTYPE
-        do_rpc_nodes $list check_mem_leak
+        if [ ! -z $list ]; then
+            echo unloading modules on $list
+            do_rpc_nodes $list $LUSTRE_RMMOD $FSTYPE
+            do_rpc_nodes $list check_mem_leak
+        fi
     fi
 
     $LUSTRE_RMMOD $FSTYPE || return 2
@@ -2384,6 +2392,12 @@ remote_mgs_nodsh()
 
 remote_servers () {
     remote_ost && remote_mds
+}
+
+local_mode ()
+{
+    remote_mds_nodsh || remote_ost_nodsh || \
+        $(single_local_node $(comma_list $(nodes_list)))
 }
 
 osts_nodes () {
