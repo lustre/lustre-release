@@ -415,7 +415,7 @@ int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
         rc = mdd_changelog_llog_write(mdd, rec, NULL);
 
         /* assume on or off event; reset repeat-access time */
-        mdd->mdd_cl.mc_starttime = rec->cr.cr_time;
+        mdd->mdd_cl.mc_starttime = cfs_time_current_64();
 
         OBD_FREE(rec, reclen);
         RETURN(rc);
