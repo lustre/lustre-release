@@ -1485,6 +1485,7 @@ void obd_zombie_impexp_cull(void)
                 if (export != NULL)
                         class_export_destroy(export);
 
+                cfs_cond_resched();
         } while (import != NULL || export != NULL);
         EXIT;
 }

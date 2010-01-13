@@ -53,8 +53,6 @@
 #include <libcfs/darwin/darwin-prim.h>
 #include <lnet/lnet.h>
 
-#define our_cond_resched() cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, 1)
-
 #ifdef CONFIG_SMP
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0) /* XXX */
 #else

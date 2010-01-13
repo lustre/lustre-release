@@ -531,6 +531,7 @@ restart:
                         cfs_hash_runlock(hs);
                         func(obj, data);
                         (void)cfs_hash_put(hs, hnode);
+                        cfs_cond_resched();
                         goto restart;
                 }
                 cfs_write_unlock(&hsb->hsb_rwlock);

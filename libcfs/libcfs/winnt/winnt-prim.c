@@ -576,15 +576,6 @@ void cfs_clear_sigpending(void)
     return;
 }
 
-int cfs_need_resched(void)
-{
-        return 0;
-}
-
-void cfs_cond_resched(void)
-{
-}
-
 /*
  *  thread cpu affinity routines
  */
