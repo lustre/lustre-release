@@ -700,7 +700,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         strscat(mkfs_cmd, " ", sizeof(mkfs_cmd));
         strscat(mkfs_cmd, dev, sizeof(mkfs_cmd));
         if (block_count != 0) {
-                sprintf(buf, LPU64, block_count);
+                sprintf(buf, " "LPU64, block_count);
                 strscat(mkfs_cmd, buf, sizeof(mkfs_cmd));
         }
 
