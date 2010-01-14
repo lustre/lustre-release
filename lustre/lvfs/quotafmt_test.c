@@ -230,7 +230,7 @@ static struct lustre_dquot *get_rand_dquot(struct lustre_quota_info *lqi)
         if (dquot == NULL)
                 return NULL;
 
-        get_random_bytes(&rand, sizeof(rand));
+        ll_get_random_bytes(&rand, sizeof(rand));
         if (!rand)
                 rand = 1000;
 
@@ -273,7 +273,7 @@ static int write_check_dquot(struct lustre_quota_info *lqi)
                 GOTO(out, rc);
         }
 
-        clear_bit(DQ_FAKE_B, &dquot->dq_flags);
+        cfs_clear_bit(DQ_FAKE_B, &dquot->dq_flags);
         /* for already exists entry, we rewrite it */
         rc = lustre_commit_dquot(dquot);
         if (rc) {
@@ -308,7 +308,7 @@ static int quotfmt_test_3(struct lustre_quota_info *lqi)
         if (dquot == NULL)
                 RETURN(-ENOMEM);
       repeat:
-        clear_bit(DQ_FAKE_B, &dquot->dq_flags);
+        cfs_clear_bit(DQ_FAKE_B, &dquot->dq_flags);
         /* write a new dquot */
         rc = lustre_commit_dquot(dquot);
         if (rc) {
@@ -324,13 +324,13 @@ static int quotfmt_test_3(struct lustre_quota_info *lqi)
                 CERROR("read dquot failed! (rc:%d)\n", rc);
                 GOTO(out, rc);
         }
-        if (!dquot->dq_off || test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
+        if (!dquot->dq_off || cfs_test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
                 CERROR("the dquot isn't committed\n");
                 GOTO(out, rc = -EINVAL);
         }
 
         /* remove this dquot */
-        set_bit(DQ_FAKE_B, &dquot->dq_flags);
+        cfs_set_bit(DQ_FAKE_B, &dquot->dq_flags);
         dquot->dq_dqb.dqb_curspace = 0;
         dquot->dq_dqb.dqb_curinodes = 0;
         rc = lustre_commit_dquot(dquot);
@@ -340,14 +340,14 @@ static int quotfmt_test_3(struct lustre_quota_info *lqi)
         }
 
         /* check if the dquot is really removed */
-        clear_bit(DQ_FAKE_B, &dquot->dq_flags);
+        cfs_clear_bit(DQ_FAKE_B, &dquot->dq_flags);
         dquot->dq_off = 0;
         rc = lustre_read_dquot(dquot);
         if (rc) {
                 CERROR("read dquot failed! (rc:%d)\n", rc);
                 GOTO(out, rc);
         }
-        if (!test_bit(DQ_FAKE_B, &dquot->dq_flags) || dquot->dq_off) {
+        if (!cfs_test_bit(DQ_FAKE_B, &dquot->dq_flags) || dquot->dq_off) {
                 CERROR("the dquot isn't removed!\n");
                 GOTO(out, rc = -EINVAL);
         }
@@ -386,18 +386,18 @@ static int quotfmt_test_5(struct lustre_quota_info *lqi)
         int i, rc = 0;
 
         for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {
-                struct list_head list;
+                cfs_list_t list;
                 struct dquot_id *dqid, *tmp;
 
-                INIT_LIST_HEAD(&list);
+                CFS_INIT_LIST_HEAD(&list);
                 rc = lustre_get_qids(lqi->qi_files[i], NULL, i, &list);
                 if (rc) {
                         CERROR("%s get all %ss (rc:%d):\n",
                                rc ? "error" : "success",
                                i == USRQUOTA ? "uid" : "gid", rc);
                 }
-                list_for_each_entry_safe(dqid, tmp, &list, di_link) {
-                        list_del_init(&dqid->di_link);
+                cfs_list_for_each_entry_safe(dqid, tmp, &list, di_link) {
+                        cfs_list_del_init(&dqid->di_link);
                         if (rc == 0)
                                 CDEBUG(D_INFO, "%d ", dqid->di_id);
                         kfree(dqid);

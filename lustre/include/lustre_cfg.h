@@ -45,7 +45,7 @@
 #define LUSTRE_CFG_MAX_BUFCOUNT 8
 
 #define LCFG_HDR_SIZE(count) \
-    size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
+    cfs_size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
 
 /* If the LCFG_REQUIRED bit is set in a configuration command,
  * then the client is required to understand this parameter
@@ -160,7 +160,7 @@ static inline void *lustre_cfg_buf(struct lustre_cfg *lcfg, int index)
 
         offset = LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
         for (i = 0; i < index; i++)
-                offset += size_round(lcfg->lcfg_buflens[i]);
+                offset += cfs_size_round(lcfg->lcfg_buflens[i]);
         return (char *)lcfg + offset;
 }
 
@@ -191,7 +191,7 @@ static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
          */
         if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
                 int last = min((int)lcfg->lcfg_buflens[index], 
-                               size_round(lcfg->lcfg_buflens[index]) - 1);
+                               cfs_size_round(lcfg->lcfg_buflens[index]) - 1);
                 char lost = s[last];
                 s[last] = '\0';
                 if (lost != '\0') {
@@ -210,9 +210,9 @@ static inline int lustre_cfg_len(__u32 bufcount, __u32 *buflens)
 
         len = LCFG_HDR_SIZE(bufcount);
         for (i = 0; i < bufcount; i++)
-                len += size_round(buflens[i]);
+                len += cfs_size_round(buflens[i]);
 
-        RETURN(size_round(len));
+        RETURN(cfs_size_round(len));
 }
 
 

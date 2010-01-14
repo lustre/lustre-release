@@ -110,9 +110,9 @@ static int echo_destroy_export(struct obd_export *exp)
 {
         obd_id id;
 
-        spin_lock(&obddev->u.echo.eo_lock);
+        cfs_spin_lock(&obddev->u.echo.eo_lock);
         id = ++obddev->u.echo.eo_lastino;
-        spin_unlock(&obddev->u.echo.eo_lock);
+        cfs_spin_unlock(&obddev->u.echo.eo_lock);
 
         return id;
 }
@@ -431,7 +431,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 }
         }
 
-        atomic_add(*pages, &obd->u.echo.eo_prep);
+        cfs_atomic_add(*pages, &obd->u.echo.eo_prep);
 
         if (cmd & OBD_BRW_READ)
                 lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
@@ -441,7 +441,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                                     tot_bytes);
 
         CDEBUG(D_PAGE, "%d pages allocated after prep\n",
-               atomic_read(&obd->u.echo.eo_prep));
+               cfs_atomic_read(&obd->u.echo.eo_prep));
 
         RETURN(0);
 
@@ -458,7 +458,7 @@ preprw_cleanup:
                  * lose the extra ref gained above */
                 OBD_PAGE_FREE(res[i].page);
                 res[i].page = NULL;
-                atomic_dec(&obd->u.echo.eo_prep);
+                cfs_atomic_dec(&obd->u.echo.eo_prep);
         }
 
         return rc;
@@ -518,14 +518,14 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
 
         }
 
-        atomic_sub(pgs, &obd->u.echo.eo_prep);
+        cfs_atomic_sub(pgs, &obd->u.echo.eo_prep);
 
         CDEBUG(D_PAGE, "%d pages remain after commit\n",
-               atomic_read(&obd->u.echo.eo_prep));
+               cfs_atomic_read(&obd->u.echo.eo_prep));
         RETURN(rc);
 
 commitrw_cleanup:
-        atomic_sub(pgs, &obd->u.echo.eo_prep);
+        cfs_atomic_sub(pgs, &obd->u.echo.eo_prep);
 
         CERROR("cleaning up %d pages (%d obdos)\n",
                niocount - pgs - 1, objcount);
@@ -538,7 +538,7 @@ commitrw_cleanup:
 
                 /* NB see comment above regarding persistent pages */
                 OBD_PAGE_FREE(page);
-                atomic_dec(&obd->u.echo.eo_prep);
+                cfs_atomic_dec(&obd->u.echo.eo_prep);
         }
         return rc;
 }
@@ -552,7 +552,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         char                       ns_name[48];
         ENTRY;
 
-        spin_lock_init(&obd->u.echo.eo_lock);
+        cfs_spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
         sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
@@ -594,16 +594,16 @@ static int echo_cleanup(struct obd_device *obd)
         lprocfs_obd_cleanup(obd);
         lprocfs_free_obd_stats(obd);
 
-        ldlm_lock_decref (&obd->u.echo.eo_nl_lock, LCK_NL);
+        ldlm_lock_decref(&obd->u.echo.eo_nl_lock, LCK_NL);
 
         /* XXX Bug 3413; wait for a bit to ensure the BL callback has
          * happened before calling ldlm_namespace_free() */
-        cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
+        cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT, cfs_time_seconds(1));
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
         obd->obd_namespace = NULL;
 
-        leaked = atomic_read(&obd->u.echo.eo_prep);
+        leaked = cfs_atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)
                 CERROR("%d prep/commitrw pages leaked\n", leaked);
 

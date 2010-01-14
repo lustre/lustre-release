@@ -90,12 +90,7 @@ do {                                                                          \
 
 #define PageUptodate Page_Uptodate
 #define our_recalc_sigpending(current) recalc_sigpending(current)
-#define num_online_cpus() smp_num_cpus
-static inline void our_cond_resched(void)
-{
-        if (current->need_resched)
-               schedule ();
-}
+#define cfs_num_online_cpus() smp_num_cpus
 #define work_struct_t                   struct tq_struct
 #define cfs_get_work_data(type,field,data)   (data)
 #else
@@ -120,13 +115,10 @@ do {                                                                          \
 
 #endif
 
+#define cfs_num_online_cpus() num_online_cpus()
 #define wait_on_page wait_on_page_locked
 #define our_recalc_sigpending(current) recalc_sigpending()
 #define strtok(a,b) strpbrk(a, b)
-static inline void our_cond_resched(void)
-{
-        cond_resched();
-}
 #define work_struct_t      struct work_struct
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
@@ -210,7 +202,9 @@ static inline void our_cond_resched(void)
 # define time(a) CURRENT_TIME
 
 #ifndef num_possible_cpus
-#define num_possible_cpus() NR_CPUS
+#define cfs_num_possible_cpus() NR_CPUS
+#else
+#define cfs_num_possible_cpus() num_possible_cpus()
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 #define i_size_read(a) ((a)->i_size)
@@ -255,9 +249,9 @@ typedef struct {
 #  if !KLWT_SUPPORT
 
 typedef struct _lwt_page {
-        struct list_head     lwtp_list;
-        struct page         *lwtp_page;
-        lwt_event_t         *lwtp_events;
+        cfs_list_t               lwtp_list;
+        struct page             *lwtp_page;
+        lwt_event_t             *lwtp_events;
 } lwt_page_t;
 
 typedef struct {
@@ -292,8 +286,8 @@ do {                                                                    \
                                                                         \
                 if (cpu->lwtc_current_index >= LWT_EVENTS_PER_PAGE) {   \
                         cpu->lwtc_current_page =                        \
-                                list_entry (p->lwtp_list.next,          \
-                                            lwt_page_t, lwtp_list);     \
+                                cfs_list_entry (p->lwtp_list.next,      \
+                                                lwt_page_t, lwtp_list); \
                         cpu->lwtc_current_index = 0;                    \
                 }                                                       \
                                                                         \
@@ -316,7 +310,7 @@ extern void lwt_fini (void);
 extern int  lwt_lookup_string (int *size, char *knlptr,
                                char *usrptr, int usrsize);
 extern int  lwt_control (int enable, int clear);
-extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
+extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
                           void *user_ptr, int user_size);
 # else  /* __KERNEL__ */
 #  define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
@@ -404,6 +398,8 @@ static inline void sg_set_page(struct scatterlist *sg, struct page *page,
         sg->length = len;
 }
 #endif
+
+#define cfs_smp_processor_id()  smp_processor_id()
 
 #ifndef get_cpu
 # ifdef CONFIG_PREEMPT

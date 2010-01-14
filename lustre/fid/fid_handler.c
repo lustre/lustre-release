@@ -74,7 +74,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
          * Ask client for new range, assign that range to ->seq_space and write
          * seq state to backing store should be atomic.
          */
-        down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
 
         if (cli == NULL) {
                 CDEBUG(D_INFO, "%s: Detached sequence client %s\n",
@@ -96,7 +96,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         cli->lcs_space.lsr_mdt = seq->lss_site->ms_node_id;
         EXIT;
 out_up:
-        up(&seq->lss_sem);
+        cfs_up(&seq->lss_sem);
         return rc;
 }
 EXPORT_SYMBOL(seq_server_set_cli);
@@ -185,9 +185,9 @@ int seq_server_alloc_super(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
         rc = __seq_server_alloc_super(seq, in, out, env);
-        up(&seq->lss_sem);
+        cfs_up(&seq->lss_sem);
 
         RETURN(rc);
 }
@@ -331,9 +331,9 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
         rc = __seq_server_alloc_meta(seq, in, out, env);
-        up(&seq->lss_sem);
+        cfs_up(&seq->lss_sem);
 
         RETURN(rc);
 }
@@ -540,7 +540,7 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->lss_type = type;
         seq->lss_site = ms;
         range_init(&seq->lss_space);
-        sema_init(&seq->lss_sem, 1);
+        cfs_sema_init(&seq->lss_sem, 1);
 
         seq->lss_width = is_srv ?
                 LUSTRE_SEQ_META_WIDTH : LUSTRE_SEQ_SUPER_WIDTH;

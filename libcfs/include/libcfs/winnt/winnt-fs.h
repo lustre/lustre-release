@@ -91,7 +91,7 @@
 
 struct file_operations
 {
-    struct module *owner;
+    cfs_module_t *owner;
     loff_t (*llseek)(struct file * file, loff_t offset, int origin);
     ssize_t (*read) (struct file * file, char * buf, size_t nbytes, loff_t *ppos);
     ssize_t (*write)(struct file * file, const char * buffer,
@@ -240,14 +240,14 @@ struct inode {
         int             i_uid;
         int             i_gid;
         __u32           i_flags;
-        mutex_t         i_sem;
+        cfs_mutex_t     i_sem;
         void *          i_priv;
 };
 
 #define I_FREEING       0x0001
 
 struct dentry {
-        atomic_t        d_count;
+        cfs_atomic_t    d_count;
         struct {
             int         len;
             char *      name;
@@ -276,7 +276,7 @@ static inline void i_size_write(struct inode *inode, loff_t i_size)
     inode->i_size = i_size;
 }
 
-struct kstatfs {
+typedef struct cfs_kstatfs {
         u64     f_type;
         long    f_bsize;
         u64     f_blocks;
@@ -288,7 +288,7 @@ struct kstatfs {
         long    f_namelen;
         long    f_frsize;
         long    f_spare[5];
-};
+} cfs_kstatfs_t;
 
 struct super_block {
         void *  s_fs_info;
@@ -370,14 +370,15 @@ VOID RadixInitTable(IN PRTL_GENERIC_TABLE Table);
 /* all radix tree routines should be protected by external locks */
 unsigned int
 radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
-			unsigned long first_index, unsigned int max_items);
+                       unsigned long first_index, unsigned int max_items);
 void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index);
-int radix_tree_insert(struct radix_tree_root *root,unsigned long index, void *item);
+int radix_tree_insert(struct radix_tree_root *root, unsigned long index,
+                      void *item);
 void *radix_tree_delete(struct radix_tree_root *root, unsigned long index);
 
-struct rcu_head {
+typedef struct cfs_rcu_head {
     int     foo;
-};
+} cfs_rcu_head_t;
 
 #else  /* !__KERNEL__ */
 

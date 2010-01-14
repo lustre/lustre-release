@@ -68,7 +68,7 @@ struct llu_sb_info {
         struct lu_fid            ll_root_fid;
         int                      ll_flags;
         struct lustre_client_ocd ll_lco;
-        struct list_head         ll_conn_chain;
+        cfs_list_t               ll_conn_chain;
 
         struct obd_uuid          ll_mds_uuid;
         struct obd_uuid          ll_mds_peer_uuid;
@@ -90,7 +90,7 @@ struct llu_inode_info {
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
-        struct semaphore        lli_open_sem;
+        cfs_semaphore_t         lli_open_sem;
         __u64                   lli_maxbytes;
         unsigned long           lli_flags;
         __u64                   lli_ioepoch;

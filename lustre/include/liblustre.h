@@ -54,7 +54,7 @@
 
 #define loff_t long long
 #define ERESTART 2001
-typedef unsigned short umode_t;
+typedef unsigned short cfs_umode_t;
 
 #endif
 
@@ -87,18 +87,18 @@ void *inter_module_get(char *arg);
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
 #ifdef __BIG_ENDIAN
-        return set_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+        return cfs_set_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
 #else
-        return set_bit(nr, addr);
+        return cfs_set_bit(nr, addr);
 #endif
 }
 
 static __inline__ int ext2_clear_bit(int nr, void *addr)
 {
 #ifdef __BIG_ENDIAN
-        return clear_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+        return cfs_clear_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
 #else
-        return clear_bit(nr, addr);
+        return cfs_clear_bit(nr, addr);
 #endif
 }
 
@@ -108,7 +108,7 @@ static __inline__ int ext2_test_bit(int nr, void *addr)
         __const__ unsigned char *tmp = (__const__ unsigned char *) addr;
         return (tmp[nr >> 3] >> (nr & 7)) & 1;
 #else
-        return test_bit(nr, addr);
+        return cfs_test_bit(nr, addr);
 #endif
 }
 
@@ -130,7 +130,7 @@ extern int echo_client_init(void);
 
 #define EXPORT_SYMBOL(S)
 
-struct rcu_head { };
+typedef struct cfs_rcu_head { } cfs_rcu_head_t;
 
 typedef __u64 kdev_t;
 
@@ -157,17 +157,17 @@ typedef __u64 kdev_t;
 #ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
 #endif
-#define HZ 1
+#define CFS_HZ 1
 
 /* random */
 
-void get_random_bytes(void *ptr, int size);
+void cfs_get_random_bytes(void *ptr, int size);
 
 /* memory */
 
 /* memory size: used for some client tunables */
-#define num_physpages      (256 * 1024) /* 1GB */
-#define CFS_NUM_CACHEPAGES num_physpages
+#define cfs_num_physpages  (256 * 1024) /* 1GB */
+#define CFS_NUM_CACHEPAGES cfs_num_physpages
 
 
 /* VFS stuff */
@@ -191,7 +191,7 @@ void get_random_bytes(void *ptr, int size);
 
 struct iattr {
         unsigned int    ia_valid;
-        umode_t         ia_mode;
+        cfs_umode_t     ia_mode;
         uid_t           ia_uid;
         gid_t           ia_gid;
         loff_t          ia_size;
@@ -279,12 +279,12 @@ typedef struct task_struct cfs_task_t;
 #define cfs_curproc_comm()      (current->comm)
 
 extern struct task_struct *current;
-int in_group_p(gid_t gid);
+int cfs_curproc_is_in_groups(gid_t gid);
 
-#define set_current_state(foo) do { current->state = foo; } while (0)
+#define cfs_set_current_state(foo) do { current->state = foo; } while (0)
 
-#define wait_event_interruptible(wq, condition)                         \
-({                                                                      \
+#define cfs_wait_event_interruptible(wq, condition, ret)                \
+{                                                                       \
         struct l_wait_info lwi;                                         \
         int timeout = 100000000;/* for ever */                          \
         int ret;                                                        \
@@ -293,20 +293,20 @@ int in_group_p(gid_t gid);
         ret = l_wait_event(NULL, condition, &lwi);                      \
                                                                         \
         ret;                                                            \
-})
+}
 
-#define lock_kernel() do {} while (0)
-#define unlock_kernel() do {} while (0)
+#define cfs_lock_kernel() do {} while (0)
+#define cfs_unlock_kernel() do {} while (0)
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)
-#define kernel_thread(l,m,n) LBUG()
+#define cfs_kernel_thread(l,m,n) LBUG()
 
 #define USERMODEHELPER(path, argv, envp) (0)
 #define SIGNAL_MASK_ASSERT()
-#define KERN_INFO
+#define CFS_KERN_INFO
 
-#if HZ != 1
+#if CFS_HZ != 1
 #error "liblustre's jiffies currently expects HZ to be 1"
 #endif
 #define jiffies                                 \
@@ -326,12 +326,12 @@ int in_group_p(gid_t gid);
 #define unlikely(exp) (exp)
 #endif
 
-#define might_sleep()
+#define cfs_might_sleep()
 #define might_sleep_if(c)
 #define smp_mb()
 
-#define libcfs_memory_pressure_get() (0) 
-#define libcfs_memory_pressure_put() do {} while (0) 
+#define libcfs_memory_pressure_get() (0)
+#define libcfs_memory_pressure_put() do {} while (0)
 #define libcfs_memory_pressure_clr() do {} while (0)
 
 /* FIXME sys/capability will finally included linux/fs.h thus
@@ -360,10 +360,10 @@ static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
 
 
 struct liblustre_wait_callback {
-        struct list_head    llwc_list;
-        const char         *llwc_name;
-        int               (*llwc_fn)(void *arg);
-        void               *llwc_arg;
+        cfs_list_t              llwc_list;
+        const char             *llwc_name;
+        int                   (*llwc_fn)(void *arg);
+        void                   *llwc_arg;
 };
 
 void *liblustre_register_wait_callback(const char *name,
@@ -384,9 +384,9 @@ struct nfs_lock_info {
 };
 
 typedef struct file_lock {
-        struct file_lock *fl_next;      /* singly linked list for this inode  */
-        struct list_head fl_link;       /* doubly linked list of all locks */
-        struct list_head fl_block;      /* circular list of blocked processes */
+        struct file_lock *fl_next;  /* singly linked list for this inode  */
+        cfs_list_t fl_link;   /* doubly linked list of all locks */
+        cfs_list_t fl_block;  /* circular list of blocked processes */
         void *fl_owner;
         unsigned int fl_pid;
         cfs_waitq_t fl_wait;
@@ -438,7 +438,7 @@ struct posix_acl_entry {
 };
 
 struct posix_acl {
-        atomic_t                a_refcount;
+        cfs_atomic_t            a_refcount;
         unsigned int            a_count;
         struct posix_acl_entry  a_entries[0];
 };

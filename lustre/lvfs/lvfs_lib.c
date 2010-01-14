@@ -66,7 +66,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                        obd_memory_sum(),
                        obd_pages_sum() << CFS_PAGE_SHIFT,
                        obd_pages_sum(),
-                       atomic_read(&libcfs_kmemory));
+                       cfs_atomic_read(&libcfs_kmemory));
                 return 1;
         }
         return 0;
@@ -75,13 +75,13 @@ EXPORT_SYMBOL(obd_alloc_fail);
 
 int __obd_fail_check_set(__u32 id, __u32 value, int set)
 {
-        static atomic_t obd_fail_count = ATOMIC_INIT(0);
+        static cfs_atomic_t obd_fail_count = CFS_ATOMIC_INIT(0);
 
         LASSERT(!(id & OBD_FAIL_ONCE));
 
         if ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE)) ==
             (OBD_FAILED | OBD_FAIL_ONCE)) {
-                atomic_set(&obd_fail_count, 0); /* paranoia */
+                cfs_atomic_set(&obd_fail_count, 0); /* paranoia */
                 return 0;
         }
 
@@ -93,18 +93,18 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set)
 
         /* Skip the first obd_fail_val, then fail */
         if (obd_fail_loc & OBD_FAIL_SKIP) {
-                if (atomic_inc_return(&obd_fail_count) <= obd_fail_val)
+                if (cfs_atomic_inc_return(&obd_fail_count) <= obd_fail_val)
                         return 0;
         }
 
         /* Fail obd_fail_val times, overridden by FAIL_ONCE */
         if (obd_fail_loc & OBD_FAIL_SOME &&
             (!(obd_fail_loc & OBD_FAIL_ONCE) || obd_fail_val <= 1)) {
-                int count = atomic_inc_return(&obd_fail_count);
+                int count = cfs_atomic_inc_return(&obd_fail_count);
 
                 if (count >= obd_fail_val) {
-                        set_bit(OBD_FAIL_ONCE_BIT, &obd_fail_loc);
-                        atomic_set(&obd_fail_count, 0);
+                        cfs_set_bit(OBD_FAIL_ONCE_BIT, &obd_fail_loc);
+                        cfs_atomic_set(&obd_fail_count, 0);
                         /* we are lost race to increase obd_fail_count */
                         if (count > obd_fail_val)
                                 return 0;
@@ -113,10 +113,10 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set)
 
         if ((set == OBD_FAIL_LOC_ORSET || set == OBD_FAIL_LOC_RESET) &&
             (value & OBD_FAIL_ONCE))
-                set_bit(OBD_FAIL_ONCE_BIT, &obd_fail_loc);
+                cfs_set_bit(OBD_FAIL_ONCE_BIT, &obd_fail_loc);
 
         /* Lost race to set OBD_FAILED_BIT. */
-        if (test_and_set_bit(OBD_FAILED_BIT, &obd_fail_loc)) {
+        if (cfs_test_and_set_bit(OBD_FAILED_BIT, &obd_fail_loc)) {
                 /* If OBD_FAIL_ONCE is valid, only one process can fail,
                  * otherwise multi-process can fail at the same time. */
                 if (obd_fail_loc & OBD_FAIL_ONCE)
@@ -149,9 +149,9 @@ int __obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
         if (ret) {
                 CERROR("obd_fail_timeout id %x sleeping for %dms\n",
                        id, ms);
-                cfs_schedule_timeout(CFS_TASK_UNINT,
-                                     cfs_time_seconds(ms) / 1000);
-                set_current_state(CFS_TASK_RUNNING);
+                cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT,
+                                                   cfs_time_seconds(ms) / 1000);
+                cfs_set_current_state(CFS_TASK_RUNNING);
                 CERROR("obd_fail_timeout id %x awake\n", id);
         }
         return ret;
@@ -173,7 +173,7 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
         smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
 
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         percpu_cntr->lc_count++;
 
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
@@ -188,7 +188,7 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                 if (amount > percpu_cntr->lc_max)
                         percpu_cntr->lc_max = amount;
         }
-        atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
         lprocfs_stats_unlock(stats);
 }
 EXPORT_SYMBOL(lprocfs_counter_add);
@@ -207,7 +207,7 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
         smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
 
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
                 /*
                  * currently lprocfs_count_add() can only be called in thread
@@ -222,7 +222,7 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
                 else
                         percpu_cntr->lc_sum -= amount;
         }
-        atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
         lprocfs_stats_unlock(stats);
 }
 EXPORT_SYMBOL(lprocfs_counter_sub);

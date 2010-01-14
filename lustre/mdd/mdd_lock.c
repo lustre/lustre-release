@@ -51,7 +51,7 @@
 
 
 #ifdef CONFIG_LOCKDEP
-static struct lock_class_key mdd_pdirop_key;
+static cfs_lock_class_key_t mdd_pdirop_key;
 
 #define RETIP ((unsigned long)__builtin_return_address(0))
 

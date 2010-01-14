@@ -106,8 +106,8 @@
 #include <libcfs/user-bitops.h>
 #include <libcfs/posix/posix-kernelcomm.h>
 
-# define do_gettimeofday(tv) gettimeofday(tv, NULL);
-typedef unsigned long long cycles_t;
+# define cfs_gettimeofday(tv) gettimeofday(tv, NULL);
+typedef unsigned long long cfs_cycles_t;
 
 #define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
 #define PTR_ERR(a) ((long)(a))
@@ -197,12 +197,14 @@ typedef struct dirent64 cfs_dirent_t;
 
 
 # ifndef THREAD_SIZE /* x86_64 linux has THREAD_SIZE in userspace */
-#  define THREAD_SIZE 8192
+#  define CFS_THREAD_SIZE 8192
+# else
+#  define CFS_THREAD_SIZE THREAD_SIZE
 # endif
 
-#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
+#define LUSTRE_TRACE_SIZE (CFS_THREAD_SIZE >> 5)
 
-#define CHECK_STACK() do { } while(0)
+#define CFS_CHECK_STACK() do { } while(0)
 #define CDEBUG_STACK() (0L)
 
 /* initial pid  */
@@ -225,10 +227,10 @@ typedef __u32 cfs_kernel_cap_t;
 /**
  * Module support (probably shouldn't be used in generic code?)
  */
-struct module {
+typedef struct cfs_module {
         int count;
         char *name;
-};
+} cfs_module_t;
 
 static inline void MODULE_AUTHOR(char *name)
 {
@@ -241,26 +243,26 @@ static inline void MODULE_AUTHOR(char *name)
 #define __init
 #define __exit
 
-static inline int request_module(const char *name, ...)
+static inline int cfs_request_module(const char *name, ...)
 {
         return (-EINVAL);
 }
 
-static inline void __module_get(struct module *module)
+static inline void __cfs_module_get(cfs_module_t *module)
 {
 }
 
-static inline int try_module_get(struct module *module)
+static inline int cfs_try_module_get(cfs_module_t *module)
 {
         return 1;
 }
 
-static inline void module_put(struct module *module)
+static inline void cfs_module_put(cfs_module_t *module)
 {
 }
 
 
-static inline int module_refcount(struct module *m)
+static inline int cfs_module_refcount(cfs_module_t *m)
 {
         return 1;
 }
@@ -271,20 +273,21 @@ static inline int module_refcount(struct module *m)
  *
  ***************************************************************************/
 
-struct shrinker {
+struct cfs_shrinker {
         ;
 };
 
-#define DEFAULT_SEEKS (0)
+#define CFS_DEFAULT_SEEKS (0)
 
-typedef int (*shrinker_t)(int, unsigned int);
+typedef int (*cfs_shrinker_t)(int, unsigned int);
 
-static inline struct shrinker *set_shrinker(int seeks, shrinker_t shrinkert)
+static inline
+struct cfs_shrinker *cfs_set_shrinker(int seeks, cfs_shrinker_t shrink)
 {
-        return (struct shrinker *)0xdeadbea1; // Cannot return NULL here
+        return (struct cfs_shrinker *)0xdeadbea1; // Cannot return NULL here
 }
 
-static inline void remove_shrinker(struct shrinker *shrinker)
+static inline void cfs_remove_shrinker(struct cfs_shrinker *shrinker)
 {
 }
 
@@ -299,12 +302,12 @@ static inline void remove_shrinker(struct shrinker *shrinker)
  ***************************************************************************/
 
 struct radix_tree_root {
-        struct list_head list;
+        cfs_list_t list;
         void *rnode;
 };
 
 struct radix_tree_node {
-        struct list_head _node;
+        cfs_list_t _node;
         unsigned long index;
         void *item;
 };
@@ -334,7 +337,7 @@ static inline int radix_tree_insert(struct radix_tree_root *root,
         CFS_INIT_LIST_HEAD(&node->_node);
         node->index = idx;
         node->item = item;
-        list_add_tail(&node->_node, &root->list);
+        cfs_list_add_tail(&node->_node, &root->list);
         root->rnode = (void *)1001;
         return 0;
 }
@@ -344,7 +347,7 @@ static inline struct radix_tree_node *radix_tree_lookup0(struct radix_tree_root 
 {
         struct radix_tree_node *node;
 
-        if (list_empty(&root->list))
+        if (cfs_list_empty(&root->list))
                 return NULL;
 
         cfs_list_for_each_entry_typed(node, &root->list,
@@ -374,10 +377,10 @@ static inline void *radix_tree_delete(struct radix_tree_root *root,
         if (p == NULL)
                 return NULL;
 
-        list_del_init(&p->_node);
+        cfs_list_del_init(&p->_node);
         item = p->item;
         free(p);
-        if (list_empty(&root->list))
+        if (cfs_list_empty(&root->list))
                 root->rnode = NULL;
 
         return item;

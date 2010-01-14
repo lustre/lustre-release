@@ -65,8 +65,8 @@ static char source_nid[sizeof(tmp_utsname->nodename)];
 #endif /* HAVE_CATAMOUNT_DATA_H */
 
 static int source_pid;
-int smp_processor_id = 1;
-char debug_file_path[1024];
+int cfs_smp_processor_id = 1;
+char libcfs_debug_file_path[1024];
 FILE *debug_file_fd;
 
 int portals_do_debug_dumplog(void *arg)
@@ -176,15 +176,17 @@ int libcfs_debug_init(unsigned long bufsize)
 
         debug_filename = getenv("LIBLUSTRE_DEBUG_BASE");
         if (debug_filename)
-                strncpy(debug_file_path,debug_filename,sizeof(debug_file_path));
+                strncpy(libcfs_debug_file_path, debug_filename,
+                        sizeof(libcfs_debug_file_path));
 
         debug_filename = getenv("LIBLUSTRE_DEBUG_FILE");
         if (debug_filename)
                 strncpy(debug_file_name,debug_filename,sizeof(debug_file_name));
 
-        if (debug_file_name[0] == '\0' && debug_file_path[0] != '\0')
+        if (debug_file_name[0] == '\0' && libcfs_debug_file_path[0] != '\0')
                 snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-                         "%s-%s-"CFS_TIME_T".log", debug_file_path, source_nid, time(0));
+                         "%s-%s-"CFS_TIME_T".log", libcfs_debug_file_path,
+                         source_nid, time(0));
 
         if (strcmp(debug_file_name, "stdout") == 0 ||
             strcmp(debug_file_name, "-") == 0) {

@@ -62,7 +62,7 @@ void cfs_waitq_init(cfs_waitq_t *waitq)
     waitq->magic = CFS_WAITQ_MAGIC;
     waitq->flags = 0;
     CFS_INIT_LIST_HEAD(&(waitq->waiters));
-    spin_lock_init(&(waitq->guard));
+    cfs_spin_lock_init(&(waitq->guard));
 }
 
 /*
@@ -101,7 +101,7 @@ void cfs_waitlink_init(cfs_waitlink_t *link)
     link->event = &(slot->Event);
     link->hits  = &(slot->hits);
 
-    atomic_inc(&slot->count);
+    cfs_atomic_inc(&slot->count);
 
     CFS_INIT_LIST_HEAD(&(link->waitq[0].link));
     CFS_INIT_LIST_HEAD(&(link->waitq[1].link));
@@ -141,7 +141,7 @@ void cfs_waitlink_fini(cfs_waitlink_t *link)
     cfs_assert(link->waitq[0].waitq == NULL);
     cfs_assert(link->waitq[1].waitq == NULL);
 
-    atomic_dec(&slot->count);
+    cfs_atomic_dec(&slot->count);
 }
 
 
@@ -171,15 +171,15 @@ void cfs_waitq_add_internal(cfs_waitq_t *waitq,
     LASSERT(link->magic == CFS_WAITLINK_MAGIC);
     LASSERT(waitqid < CFS_WAITQ_CHANNELS);
 
-    spin_lock(&(waitq->guard));
+    cfs_spin_lock(&(waitq->guard));
     LASSERT(link->waitq[waitqid].waitq == NULL);
     link->waitq[waitqid].waitq = waitq;
     if (link->flags & CFS_WAITQ_EXCLUSIVE) {
-        list_add_tail(&link->waitq[waitqid].link, &waitq->waiters);
+        cfs_list_add_tail(&link->waitq[waitqid].link, &waitq->waiters);
     } else {
-        list_add(&link->waitq[waitqid].link, &waitq->waiters);
+        cfs_list_add(&link->waitq[waitqid].link, &waitq->waiters);
     }
-    spin_unlock(&(waitq->guard));
+    cfs_spin_unlock(&(waitq->guard));
 }
 /*
  * cfs_waitq_add
@@ -256,7 +256,7 @@ void cfs_waitq_del( cfs_waitq_t *waitq,
     LASSERT(waitq->magic == CFS_WAITQ_MAGIC);
     LASSERT(link->magic == CFS_WAITLINK_MAGIC);
 
-    spin_lock(&(waitq->guard));
+    cfs_spin_lock(&(waitq->guard));
 
     for (i=0; i < CFS_WAITQ_CHANNELS; i++) {
         if (link->waitq[i].waitq == waitq)
@@ -265,12 +265,12 @@ void cfs_waitq_del( cfs_waitq_t *waitq,
 
     if (i < CFS_WAITQ_CHANNELS) {
         link->waitq[i].waitq = NULL;
-        list_del_init(&link->waitq[i].link);
+        cfs_list_del_init(&link->waitq[i].link);
     } else {
         cfs_enter_debugger();
     }
 
-    spin_unlock(&(waitq->guard));
+    cfs_spin_unlock(&(waitq->guard));
 }
 
 /*
@@ -321,7 +321,7 @@ void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
     LASSERT(waitq != NULL);
     LASSERT(waitq->magic == CFS_WAITQ_MAGIC);
 
-    spin_lock(&waitq->guard);
+    cfs_spin_lock(&waitq->guard);
     cfs_list_for_each_entry_typed(scan, &waitq->waiters, 
                             cfs_waitlink_channel_t,
                             link) {
@@ -332,14 +332,14 @@ void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
         LASSERT( result == FALSE || result == TRUE );
 
         if (result) {
-            atomic_inc(waitl->hits);
+            cfs_atomic_inc(waitl->hits);
         }
 
         if ((waitl->flags & CFS_WAITQ_EXCLUSIVE) && --nr == 0)
             break;
     }
 
-    spin_unlock(&waitq->guard);
+    cfs_spin_unlock(&waitq->guard);
     return;
 }
 
@@ -404,9 +404,9 @@ void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
     LASSERT(link != NULL);
     LASSERT(link->magic == CFS_WAITLINK_MAGIC);
 
-    if (atomic_read(link->hits) > 0) {
-        atomic_dec(link->hits);
-        LASSERT((__u32)atomic_read(link->hits) < (__u32)0xFFFFFF00);
+    if (cfs_atomic_read(link->hits) > 0) {
+        cfs_atomic_dec(link->hits);
+        LASSERT((__u32)cfs_atomic_read(link->hits) < (__u32)0xFFFFFF00);
     } else {
         cfs_wait_event_internal(link->event, 0);
     }
@@ -434,9 +434,9 @@ int64_t cfs_waitq_timedwait( cfs_waitlink_t *link,
                              int64_t timeout)
 { 
 
-    if (atomic_read(link->hits) > 0) {
-        atomic_dec(link->hits);
-        LASSERT((__u32)atomic_read(link->hits) < (__u32)0xFFFFFF00);
+    if (cfs_atomic_read(link->hits) > 0) {
+        cfs_atomic_dec(link->hits);
+        LASSERT((__u32)cfs_atomic_read(link->hits) < (__u32)0xFFFFFF00);
         return (int64_t)TRUE;
     }
 

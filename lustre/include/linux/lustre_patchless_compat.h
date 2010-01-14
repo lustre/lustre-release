@@ -55,13 +55,13 @@ static inline void ll_remove_from_page_cache(struct page *page)
 #ifdef HAVE_RW_TREE_LOCK
         write_lock_irq(&mapping->tree_lock);
 #else
-	spin_lock_irq(&mapping->tree_lock);
+	cfs_spin_lock_irq(&mapping->tree_lock);
 #endif
         radix_tree_delete(&mapping->page_tree, page->index);
         page->mapping = NULL;
         mapping->nrpages--;
 #ifdef HAVE_NR_PAGECACHE
-        atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
+        cfs_atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
 #else
         __dec_zone_page_state(page, NR_FILE_PAGES);
 #endif
@@ -69,7 +69,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
 #ifdef HAVE_RW_TREE_LOCK
         write_unlock_irq(&mapping->tree_lock);
 #else
-	spin_unlock_irq(&mapping->tree_lock);
+	cfs_spin_unlock_irq(&mapping->tree_lock);
 #endif
 }
 

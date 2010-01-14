@@ -77,19 +77,19 @@ cfs_sysctl_table_header_t       root_table_header;
 /* The global lock to protect all the access */
 
 #if LIBCFS_PROCFS_SPINLOCK
-spinlock_t                      proc_fs_lock;
+cfs_spinlock_t                  proc_fs_lock;
 
-#define INIT_PROCFS_LOCK()      spin_lock_init(&proc_fs_lock)
-#define LOCK_PROCFS()           spin_lock(&proc_fs_lock)
-#define UNLOCK_PROCFS()         spin_unlock(&proc_fs_lock)
+#define INIT_PROCFS_LOCK()      cfs_spin_lock_init(&proc_fs_lock)
+#define LOCK_PROCFS()           cfs_spin_lock(&proc_fs_lock)
+#define UNLOCK_PROCFS()         cfs_spin_unlock(&proc_fs_lock)
 
 #else
 
-mutex_t                         proc_fs_lock;
+cfs_mutex_t                     proc_fs_lock;
 
-#define INIT_PROCFS_LOCK()      init_mutex(&proc_fs_lock)
-#define LOCK_PROCFS()           mutex_down(&proc_fs_lock)
-#define UNLOCK_PROCFS()         mutex_up(&proc_fs_lock)
+#define INIT_PROCFS_LOCK()      cfs_init_mutex(&proc_fs_lock)
+#define LOCK_PROCFS()           cfs_mutex_down(&proc_fs_lock)
+#define UNLOCK_PROCFS()         cfs_mutex_up(&proc_fs_lock)
 
 #endif
 
@@ -137,7 +137,7 @@ proc_file_read(struct file * file, const char * buf, size_t nbytes, loff_t *ppos
             break;
         }
         
-        n -= copy_to_user((void *)buf, start, n);
+        n -= cfs_copy_to_user((void *)buf, start, n);
         if (n == 0) {
             if (retval == 0)
                 retval = -EFAULT;
@@ -927,7 +927,7 @@ void register_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t * root)
             continue;
         /* Maybe we can't do anything with it... */
         if (!table->proc_handler && !table->child) {
-            printk(KERN_WARNING "SYSCTL: Can't register %s\n",
+            printk(CFS_KERN_WARNING "SYSCTL: Can't register %s\n",
                 table->procname);
             continue;
         }
@@ -974,7 +974,7 @@ void unregister_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t *root)
             continue;
         if (de->mode & S_IFDIR) {
             if (!table->child) {
-                printk (KERN_ALERT "Help - malformed sysctl tree on free\n");
+                printk (CFS_KERN_ALERT "Help- malformed sysctl tree on free\n");
                 continue;
             }
             unregister_proc_table(table->child, de);
@@ -1011,7 +1011,7 @@ int sysctl_string(cfs_sysctl_table_t *table, int *name, int nlen,
             if (len > l) len = l;
             if (len >= table->maxlen)
                 len = table->maxlen;
-            if(copy_to_user(oldval, table->data, len))
+            if(cfs_copy_to_user(oldval, table->data, len))
                 return -EFAULT;
             if(put_user(0, ((char *) oldval) + len))
                 return -EFAULT;
@@ -1023,7 +1023,7 @@ int sysctl_string(cfs_sysctl_table_t *table, int *name, int nlen,
         len = newlen;
         if (len > table->maxlen)
             len = table->maxlen;
-        if(copy_from_user(table->data, newval, len))
+        if(cfs_copy_from_user(table->data, newval, len))
             return -EFAULT;
         if (len == table->maxlen)
             len--;
@@ -1106,7 +1106,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
             len = left;
             if (len > TMPBUFLEN-1)
                 len = TMPBUFLEN-1;
-            if(copy_from_user(buf, buffer, len))
+            if(cfs_copy_from_user(buf, buffer, len))
                 return -EFAULT;
             buf[len] = 0;
             p = buf;
@@ -1143,7 +1143,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
             len = strlen(buf);
             if (len > left)
                 len = left;
-            if(copy_to_user(buffer, buf, len))
+            if(cfs_copy_to_user(buffer, buf, len))
                 return -EFAULT;
             left -= len;
             (char *)buffer += len;
@@ -1235,7 +1235,7 @@ int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
         }
         if (len >= (size_t)table->maxlen)
             len = (size_t)table->maxlen-1;
-        if(copy_from_user(table->data, buffer, len))
+        if(cfs_copy_from_user(table->data, buffer, len))
             return -EFAULT;
         ((char *) table->data)[len] = 0;
         filp->f_pos += *lenp;
@@ -1246,7 +1246,7 @@ int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
         if (len > *lenp)
             len = *lenp;
         if (len)
-            if(copy_to_user(buffer, table->data, len))
+            if(cfs_copy_to_user(buffer, table->data, len))
                 return -EFAULT;
         if (len < *lenp) {
             if(put_user('\n', ((char *) buffer) + len))
@@ -1290,7 +1290,7 @@ int do_sysctl_strategy (cfs_sysctl_table_t *table,
             if (len) {
                 if (len > (size_t)table->maxlen)
                     len = (size_t)table->maxlen;
-                if(copy_to_user(oldval, table->data, len))
+                if(cfs_copy_to_user(oldval, table->data, len))
                     return -EFAULT;
                 if(put_user(len, oldlenp))
                     return -EFAULT;
@@ -1300,7 +1300,7 @@ int do_sysctl_strategy (cfs_sysctl_table_t *table,
             len = newlen;
             if (len > (size_t)table->maxlen)
                 len = (size_t)table->maxlen;
-            if(copy_from_user(table->data, newval, len))
+            if(cfs_copy_from_user(table->data, newval, len))
                 return -EFAULT;
         }
     }
@@ -1353,7 +1353,7 @@ repeat:
 int do_sysctl(int *name, int nlen, void *oldval, size_t *oldlenp,
            void *newval, size_t newlen)
 {
-    struct list_head *tmp;
+    cfs_list_t *tmp;
 
     if (nlen <= 0 || nlen >= CTL_MAXNAME)
         return -ENOTDIR;
@@ -1365,7 +1365,7 @@ int do_sysctl(int *name, int nlen, void *oldval, size_t *oldlenp,
     tmp = &root_table_header.ctl_entry;
     do {
         struct ctl_table_header *head =
-            list_entry(tmp, struct ctl_table_header, ctl_entry);
+            cfs_list_entry(tmp, struct ctl_table_header, ctl_entry);
         void *context = NULL;
         int error = parse_table(name, nlen, oldval, oldlenp, 
                     newval, newlen, head->ctl_table,
@@ -1459,9 +1459,9 @@ struct ctl_table_header *register_sysctl_table(cfs_sysctl_table_t * table,
 
     CFS_INIT_LIST_HEAD(&tmp->ctl_entry);
     if (insert_at_head)
-        list_add(&tmp->ctl_entry, &root_table_header.ctl_entry);
+        cfs_list_add(&tmp->ctl_entry, &root_table_header.ctl_entry);
     else
-        list_add_tail(&tmp->ctl_entry, &root_table_header.ctl_entry);
+        cfs_list_add_tail(&tmp->ctl_entry, &root_table_header.ctl_entry);
 #ifdef CONFIG_PROC_FS
     register_proc_table(table, cfs_proc_sys);
 #endif
@@ -1477,7 +1477,7 @@ struct ctl_table_header *register_sysctl_table(cfs_sysctl_table_t * table,
  */
 void unregister_sysctl_table(struct ctl_table_header * header)
 {
-    list_del(&header->ctl_entry);
+    cfs_list_del(&header->ctl_entry);
 #ifdef CONFIG_PROC_FS
     unregister_proc_table(header->ctl_table, cfs_proc_sys);
 #endif
@@ -1569,7 +1569,7 @@ static struct ctl_table top_table[2] = {
 int trace_write_dump_kernel(struct file *file, const char *buffer,
                              unsigned long count, void *data)
 {
-        int rc = trace_dump_debug_buffer_usrstr((void *)buffer, count);
+        int rc = cfs_trace_dump_debug_buffer_usrstr((void *)buffer, count);
         
         return (rc < 0) ? rc : count;
 }
@@ -1577,7 +1577,7 @@ int trace_write_dump_kernel(struct file *file, const char *buffer,
 int trace_write_daemon_file(struct file *file, const char *buffer,
                             unsigned long count, void *data)
 {
-        int rc = trace_daemon_command_usrstr((void *)buffer, count);
+        int rc = cfs_trace_daemon_command_usrstr((void *)buffer, count);
 
         return (rc < 0) ? rc : count;
 }
@@ -1586,9 +1586,9 @@ int trace_read_daemon_file(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         int rc;
-        tracefile_read_lock();
-        rc = trace_copyout_string(page, count, tracefile, "\n");
-        tracefile_read_unlock();
+        cfs_tracefile_read_lock();
+        rc = cfs_trace_copyout_string(page, count, cfs_tracefile, "\n");
+        cfs_tracefile_read_unlock();
         return rc;
 }
 
@@ -1605,9 +1605,9 @@ int trace_read_debug_mb(char *page, char **start, off_t off, int count,
 {
         char   str[32];
 
-        snprintf(str, sizeof(str), "%d\n", trace_get_debug_mb());
+        snprintf(str, sizeof(str), "%d\n", cfs_trace_get_debug_mb());
 
-        return trace_copyout_string(page, count, str, NULL);
+        return cfs_trace_copyout_string(page, count, str, NULL);
 }
 
 int insert_proc(void)
@@ -1751,14 +1751,14 @@ lustre_ioctl_file(cfs_file_t * fh, PCFS_PROC_IOCTL devctl)
 
             if (obd->ioc_plen1) {
                 obd->ioc_pbuf1 = (char *)(data + off);
-                off += size_round(obd->ioc_plen1);
+                off += cfs_size_round(obd->ioc_plen1);
             } else {
                 obd->ioc_pbuf1 = NULL;
             }
 
             if (obd->ioc_plen2) {
                 obd->ioc_pbuf2 = (char *)(data + off);
-                off += size_round(obd->ioc_plen2);
+                off += cfs_size_round(obd->ioc_plen2);
             } else {
                 obd->ioc_pbuf2 = NULL;
             }
@@ -1843,7 +1843,7 @@ int seq_open(struct file *file, const struct seq_operations *op)
 		file->private_data = p;
 	}
 	memset(p, 0, sizeof(*p));
-	mutex_init(&p->lock);
+	cfs_mutex_init(&p->lock);
 	p->op = op;
 
 	/*
@@ -1877,7 +1877,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	void *p;
 	int err = 0;
 
-	mutex_lock(&m->lock);
+	cfs_mutex_lock(&m->lock);
 	/*
 	 * seq_file->op->..m_start/m_stop/m_next may do special actions
 	 * or optimisations based on the file->f_version, so we want to
@@ -1899,7 +1899,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	/* if not empty - flush it first */
 	if (m->count) {
 		n = min(m->count, size);
-		err = copy_to_user(buf, m->buf + m->from, n);
+		err = cfs_copy_to_user(buf, m->buf + m->from, n);
 		if (err)
 			goto Efault;
 		m->count -= n;
@@ -1954,7 +1954,7 @@ Fill:
 	}
 	m->op->stop(m, p);
 	n = min(m->count, size);
-	err = copy_to_user(buf, m->buf, n);
+	err = cfs_copy_to_user(buf, m->buf, n);
 	if (err)
 		goto Efault;
 	copied += n;
@@ -1970,7 +1970,7 @@ Done:
 	else
 		*ppos += copied;
 	file->f_version = m->version;
-	mutex_unlock(&m->lock);
+	cfs_mutex_unlock(&m->lock);
 	return copied;
 Enomem:
 	err = -ENOMEM;
@@ -2047,7 +2047,7 @@ loff_t seq_lseek(struct file *file, loff_t offset, int origin)
 	struct seq_file *m = (struct seq_file *)file->private_data;
 	long long retval = -EINVAL;
 
-	mutex_lock(&m->lock);
+	cfs_mutex_lock(&m->lock);
 	m->version = file->f_version;
 	switch (origin) {
 		case 1:
@@ -2071,7 +2071,7 @@ loff_t seq_lseek(struct file *file, loff_t offset, int origin)
 			}
 	}
 	file->f_version = m->version;
-	mutex_unlock(&m->lock);
+	cfs_mutex_unlock(&m->lock);
 	return retval;
 }
 EXPORT_SYMBOL(seq_lseek);
@@ -2298,11 +2298,11 @@ int seq_puts(struct seq_file *m, const char *s)
 }
 EXPORT_SYMBOL(seq_puts);
 
-struct list_head *seq_list_start(struct list_head *head, loff_t pos)
+cfs_list_t *seq_list_start(cfs_list_t *head, loff_t pos)
 {
-	struct list_head *lh;
+	cfs_list_t *lh;
 
-	list_for_each(lh, head)
+	cfs_list_for_each(lh, head)
 		if (pos-- == 0)
 			return lh;
 
@@ -2311,7 +2311,8 @@ struct list_head *seq_list_start(struct list_head *head, loff_t pos)
 
 EXPORT_SYMBOL(seq_list_start);
 
-struct list_head *seq_list_start_head(struct list_head *head, loff_t pos)
+cfs_list_t *seq_list_start_head(cfs_list_t *head,
+                                loff_t pos)
 {
 	if (!pos)
 		return head;
@@ -2321,11 +2322,12 @@ struct list_head *seq_list_start_head(struct list_head *head, loff_t pos)
 
 EXPORT_SYMBOL(seq_list_start_head);
 
-struct list_head *seq_list_next(void *v, struct list_head *head, loff_t *ppos)
+cfs_list_t *seq_list_next(void *v, cfs_list_t *head,
+                          loff_t *ppos)
 {
-	struct list_head *lh;
+	cfs_list_t *lh;
 
-	lh = ((struct list_head *)v)->next;
+	lh = ((cfs_list_t *)v)->next;
 	++*ppos;
 	return lh == head ? NULL : lh;
 }

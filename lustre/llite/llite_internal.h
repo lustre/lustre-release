@@ -89,7 +89,7 @@ extern struct file_operations ll_pgcache_seq_fops;
 
 /* llite setxid/access permission for user on remote client */
 struct ll_remote_perm {
-        struct hlist_node       lrp_list;
+        cfs_hlist_node_t        lrp_list;
         uid_t                   lrp_uid;
         gid_t                   lrp_gid;
         uid_t                   lrp_fsuid;
@@ -118,10 +118,10 @@ enum lli_flags {
 
 struct ll_inode_info {
         int                     lli_inode_magic;
-        struct semaphore        lli_size_sem;           /* protect open and change size */
+        cfs_semaphore_t         lli_size_sem;           /* protect open and change size */
         void                   *lli_size_sem_owner;
-        struct semaphore        lli_write_sem;
-        struct semaphore        lli_trunc_sem;
+        cfs_semaphore_t         lli_write_sem;
+        cfs_semaphore_t         lli_trunc_sem;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
         __u64                   lli_ioepoch;
@@ -129,8 +129,8 @@ struct ll_inode_info {
         cfs_time_t              lli_contention_time;
 
         /* this lock protects posix_acl, pending_write_llaps, mmap_cnt */
-        spinlock_t              lli_lock;
-        struct list_head        lli_close_list;
+        cfs_spinlock_t          lli_lock;
+        cfs_list_t              lli_close_list;
         /* handle is to be sent to MDS later on done_writing and setattr.
          * Open handle data are needed for the recovery to reconstruct
          * the inode state on the MDS. XXX: recovery is not ready yet. */
@@ -142,13 +142,13 @@ struct ll_inode_info {
         struct posix_acl       *lli_posix_acl;
 
         /* remote permission hash */
-        struct hlist_head      *lli_remote_perms;
+        cfs_hlist_head_t       *lli_remote_perms;
         unsigned long           lli_rmtperm_utime;
-        struct semaphore        lli_rmtperm_sem;
+        cfs_semaphore_t         lli_rmtperm_sem;
 
-        struct list_head        lli_dead_list;
+        cfs_list_t              lli_dead_list;
 
-        struct semaphore        lli_och_sem; /* Protects access to och pointers
+        cfs_semaphore_t         lli_och_sem; /* Protects access to och pointers
                                                 and their usage counters */
         /* We need all three because every inode may be opened in different
            modes */
@@ -168,9 +168,9 @@ struct ll_inode_info {
         /* fid capability */
         /* open count currently used by capability only, indicate whether
          * capability needs renewal */
-        atomic_t                lli_open_count;
+        cfs_atomic_t            lli_open_count;
         struct obd_capa        *lli_mds_capa;
-        struct list_head        lli_oss_capas;
+        cfs_list_t              lli_oss_capas;
 
         /* metadata stat-ahead */
         /*
@@ -229,7 +229,7 @@ enum ra_stat {
 };
 
 struct ll_ra_info {
-        atomic_t                  ra_cur_pages;
+        cfs_atomic_t              ra_cur_pages;
         unsigned long             ra_max_pages;
         unsigned long             ra_max_pages_per_file;
         unsigned long             ra_max_read_ahead_whole_pages;
@@ -310,20 +310,20 @@ enum stats_track_type {
 #define RCE_HASHES      32
 
 struct rmtacl_ctl_entry {
-        struct list_head rce_list;
+        cfs_list_t       rce_list;
         pid_t            rce_key; /* hash key */
         int              rce_ops; /* acl operation type */
 };
 
 struct rmtacl_ctl_table {
-        spinlock_t       rct_lock;
-        struct list_head rct_entries[RCE_HASHES];
+        cfs_spinlock_t   rct_lock;
+        cfs_list_t       rct_entries[RCE_HASHES];
 };
 
 #define EE_HASHES       32
 
 struct eacl_entry {
-        struct list_head      ee_list;
+        cfs_list_t            ee_list;
         pid_t                 ee_key; /* hash key */
         struct lu_fid         ee_fid;
         int                   ee_type; /* ACL type for ACCESS or DEFAULT */
@@ -331,17 +331,17 @@ struct eacl_entry {
 };
 
 struct eacl_table {
-        spinlock_t       et_lock;
-        struct list_head et_entries[EE_HASHES];
+        cfs_spinlock_t   et_lock;
+        cfs_list_t       et_entries[EE_HASHES];
 };
 
 struct ll_sb_info {
-        struct list_head          ll_list;
+        cfs_list_t                ll_list;
         /* this protects pglist and ra_info.  It isn't safe to
          * grab from interrupt contexts */
-        spinlock_t                ll_lock;
-        spinlock_t                ll_pp_extent_lock; /* Lock for pp_extent entries */
-        spinlock_t                ll_process_lock; /* Lock for ll_rw_process_info */
+        cfs_spinlock_t            ll_lock;
+        cfs_spinlock_t            ll_pp_extent_lock; /* Lock for pp_extent entries */
+        cfs_spinlock_t            ll_process_lock; /* Lock for ll_rw_process_info */
         struct obd_uuid           ll_sb_uuid;
         struct obd_export        *ll_md_exp;
         struct obd_export        *ll_dt_exp;
@@ -349,10 +349,10 @@ struct ll_sb_info {
         struct lu_fid             ll_root_fid; /* root object fid */
 
         int                       ll_flags;
-        struct list_head          ll_conn_chain; /* per-conn chain of SBs */
+        cfs_list_t                ll_conn_chain; /* per-conn chain of SBs */
         struct lustre_client_ocd  ll_lco;
 
-        struct list_head          ll_orphan_dentry_list; /*please don't ask -p*/
+        cfs_list_t                ll_orphan_dentry_list; /*please don't ask -p*/
         struct ll_close_queue    *ll_lcq;
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
@@ -367,8 +367,8 @@ struct ll_sb_info {
         struct file_operations   *ll_fop;
 
 #ifdef HAVE_EXPORT___IGET
-        struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
-        spinlock_t                ll_deathrow_lock;
+        cfs_list_t                ll_deathrow;/*inodes to be destroyed (b1443)*/
+        cfs_spinlock_t            ll_deathrow_lock;
 #endif
         /* =0 - hold lock over whole read/write
          * >0 - max. chunk to be read/written w/o lock re-acquiring */
@@ -389,9 +389,9 @@ struct ll_sb_info {
 
         /* metadata stat-ahead */
         unsigned int              ll_sa_max;     /* max statahead RPCs */
-        atomic_t                  ll_sa_total;   /* statahead thread started
+        cfs_atomic_t              ll_sa_total;   /* statahead thread started
                                                   * count */
-        atomic_t                  ll_sa_wrong;   /* statahead thread stopped for
+        cfs_atomic_t              ll_sa_wrong;   /* statahead thread stopped for
                                                   * low hit ratio */
 
         dev_t                     ll_sdev_orig; /* save s_dev before assign for
@@ -406,14 +406,14 @@ struct ll_ra_read {
         pgoff_t             lrr_start;
         pgoff_t             lrr_count;
         struct task_struct *lrr_reader;
-        struct list_head    lrr_linkage;
+        cfs_list_t          lrr_linkage;
 };
 
 /*
  * per file-descriptor read-ahead data.
  */
 struct ll_readahead_state {
-        spinlock_t      ras_lock;
+        cfs_spinlock_t  ras_lock;
         /*
          * index of the last page that read(2) needed and that wasn't in the
          * cache. Used by ras_update() to detect seeks.
@@ -471,7 +471,7 @@ struct ll_readahead_state {
          * progress against this file descriptor. Used by read-ahead code,
          * protected by ->ras_lock.
          */
-        struct list_head ras_read_beads;
+        cfs_list_t      ras_read_beads;
         /*
          * The following 3 items are used for detecting the stride I/O
          * mode.
@@ -483,16 +483,16 @@ struct ll_readahead_state {
          * ras_stride_pages = stride_pages;
          * Note: all these three items are counted by pages.
          */
-        unsigned long ras_stride_length;
-        unsigned long ras_stride_pages;
-        pgoff_t ras_stride_offset;
+        unsigned long   ras_stride_length;
+        unsigned long   ras_stride_pages;
+        pgoff_t         ras_stride_offset;
         /*
          * number of consecutive stride request count, and it is similar as
          * ras_consecutive_requests, but used for stride I/O mode.
          * Note: only more than 2 consecutive stride request are detected,
          * stride read-ahead will be enable
          */
-        unsigned long ras_consecutive_stride_requests;
+        unsigned long   ras_consecutive_stride_requests;
 };
 
 struct ll_file_dir {
@@ -511,7 +511,7 @@ struct ll_file_data {
 
 struct lov_stripe_md;
 
-extern spinlock_t inode_lock;
+extern cfs_spinlock_t inode_lock;
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
@@ -742,11 +742,11 @@ extern struct inode_operations ll_fast_symlink_inode_operations;
 
 /* llite/llite_close.c */
 struct ll_close_queue {
-        spinlock_t              lcq_lock;
-        struct list_head        lcq_head;
-        wait_queue_head_t       lcq_waitq;
-        struct completion       lcq_comp;
-        atomic_t                lcq_stop;
+        cfs_spinlock_t          lcq_lock;
+        cfs_list_t              lcq_head;
+        cfs_waitq_t             lcq_waitq;
+        cfs_completion_t        lcq_comp;
+        cfs_atomic_t            lcq_stop;
 };
 
 struct ccc_object *cl_inode2ccc(struct inode *inode);
@@ -926,8 +926,8 @@ typedef struct rb_node  rb_node_t;
 struct ll_lock_tree_node;
 struct ll_lock_tree {
         rb_root_t                       lt_root;
-        struct list_head                lt_locked_list;
-        struct ll_file_data             *lt_fd;
+        cfs_list_t                      lt_locked_list;
+        struct ll_file_data            *lt_fd;
 };
 
 int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last);
@@ -1013,8 +1013,8 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 extern cfs_mem_cache_t *ll_remote_perm_cachep;
 extern cfs_mem_cache_t *ll_rmtperm_hash_cachep;
 
-struct hlist_head *alloc_rmtperm_hash(void);
-void free_rmtperm_hash(struct hlist_head *hash);
+cfs_hlist_head_t *alloc_rmtperm_hash(void);
+void free_rmtperm_hash(cfs_hlist_head_t *hash);
 int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm);
 int lustre_check_remote_perm(struct inode *inode, int mask);
 
@@ -1089,7 +1089,7 @@ void et_fini(struct eacl_table *et);
 struct ll_statahead_info {
         struct inode           *sai_inode;
         unsigned int            sai_generation; /* generation for statahead */
-        atomic_t                sai_refcount;   /* when access this struct, hold
+        cfs_atomic_t            sai_refcount;   /* when access this struct, hold
                                                  * refcount */
         unsigned int            sai_sent;       /* stat requests sent count */
         unsigned int            sai_replied;    /* stat requests which received
@@ -1115,9 +1115,9 @@ struct ll_statahead_info {
                                                  * hidden entries */
         cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
         struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
-        struct list_head        sai_entries_sent;     /* entries sent out */
-        struct list_head        sai_entries_received; /* entries returned */
-        struct list_head        sai_entries_stated;   /* entries stated */
+        cfs_list_t              sai_entries_sent;     /* entries sent out */
+        cfs_list_t              sai_entries_received; /* entries returned */
+        cfs_list_t              sai_entries_stated;   /* entries stated */
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
@@ -1139,10 +1139,10 @@ void ll_statahead_mark(struct inode *dir, struct dentry *dentry)
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         if (likely(lli->lli_sai != NULL && ldd != NULL))
                 ldd->lld_sa_generation = lli->lli_sai->sai_generation;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 }
 
 static inline

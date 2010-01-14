@@ -114,15 +114,15 @@ struct obd_client_handle {
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed
 
 /* statfs_pack.c */
-void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs);
-void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs);
+void statfs_pack(struct obd_statfs *osfs, cfs_kstatfs_t *sfs);
+void statfs_unpack(cfs_kstatfs_t *sfs, struct obd_statfs *osfs);
 
 /* l_lock.c */
 struct lustre_lock {
         int l_depth;
         cfs_task_t *l_owner;
-        struct semaphore l_sem;
-        spinlock_t l_spin;
+        cfs_semaphore_t l_sem;
+        cfs_spinlock_t l_spin;
 };
 
 void l_lock_init(struct lustre_lock *);
@@ -190,11 +190,11 @@ struct obd_ioctl_hdr {
 
 static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 {
-        int len = size_round(sizeof(struct obd_ioctl_data));
-        len += size_round(data->ioc_inllen1);
-        len += size_round(data->ioc_inllen2);
-        len += size_round(data->ioc_inllen3);
-        len += size_round(data->ioc_inllen4);
+        int len = cfs_size_round(sizeof(struct obd_ioctl_data));
+        len += cfs_size_round(data->ioc_inllen1);
+        len += cfs_size_round(data->ioc_inllen2);
+        len += cfs_size_round(data->ioc_inllen3);
+        len += cfs_size_round(data->ioc_inllen4);
         return len;
 }
 
@@ -343,7 +343,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         int offset = 0;
         ENTRY;
 
-        err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
+        err = cfs_copy_from_user(&hdr, (void *)arg, sizeof(hdr));
         if (err)
                 RETURN(err);
 
@@ -374,7 +374,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         *len = hdr.ioc_len;
         data = (struct obd_ioctl_data *)*buf;
 
-        err = copy_from_user(*buf, (void *)arg, hdr.ioc_len);
+        err = cfs_copy_from_user(*buf, (void *)arg, hdr.ioc_len);
         if (err) {
                 OBD_VFREE(*buf, hdr.ioc_len);
                 RETURN(err);
@@ -388,17 +388,17 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
         if (data->ioc_inllen1) {
                 data->ioc_inlbuf1 = &data->ioc_bulk[0];
-                offset += size_round(data->ioc_inllen1);
+                offset += cfs_size_round(data->ioc_inllen1);
         }
 
         if (data->ioc_inllen2) {
                 data->ioc_inlbuf2 = &data->ioc_bulk[0] + offset;
-                offset += size_round(data->ioc_inllen2);
+                offset += cfs_size_round(data->ioc_inllen2);
         }
 
         if (data->ioc_inllen3) {
                 data->ioc_inlbuf3 = &data->ioc_bulk[0] + offset;
-                offset += size_round(data->ioc_inllen3);
+                offset += cfs_size_round(data->ioc_inllen3);
         }
 
         if (data->ioc_inllen4) {
@@ -410,7 +410,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 static inline int obd_ioctl_popdata(void *arg, void *data, int len)
 {
-        int err = copy_to_user(arg, data, len);
+        int err = cfs_copy_to_user(arg, data, len);
         if (err)
                 err = -EFAULT;
         return err;
@@ -683,7 +683,7 @@ do {                                                                           \
                 __blocked = l_w_e_set_sigs(0);                                 \
                                                                                \
         for (;;) {                                                             \
-                set_current_state(TASK_INTERRUPTIBLE);                         \
+                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);                 \
                                                                                \
                 if (condition)                                                 \
                         break;                                                 \
@@ -735,7 +735,7 @@ do {                                                                           \
                                                                                \
         cfs_block_sigs(__blocked);                                             \
                                                                                \
-        set_current_state(TASK_RUNNING);                                       \
+        cfs_set_current_state(CFS_TASK_RUNNING);                               \
         cfs_waitq_del(&wq, &__wait);                                           \
 } while (0)
 
@@ -805,7 +805,7 @@ do {                                                                    \
         __ret;                                                  \
 })
 
-#define cfs_wait_event(wq, condition)                          \
+#define l_cfs_wait_event(wq, condition)                         \
 ({                                                              \
         struct l_wait_info lwi = { 0 };                         \
         l_wait_event(wq, condition, &lwi);                      \

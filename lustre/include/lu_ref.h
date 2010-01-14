@@ -123,34 +123,34 @@ struct lu_ref {
         /**
          * Spin-lock protecting lu_ref::lf_list.
          */
-        spinlock_t       lf_guard;
+        cfs_spinlock_t       lf_guard;
         /**
          * List of all outstanding references (each represented by struct
          * lu_ref_link), pointing to this object.
          */
-        struct list_head lf_list;
+        cfs_list_t           lf_list;
         /**
          * # of links.
          */
-        short            lf_refs;
+        short                lf_refs;
         /**
          * Flag set when lu_ref_add() failed to allocate lu_ref_link. It is
          * used to mask spurious failure of the following lu_ref_del().
          */
-        short            lf_failed;
+        short                lf_failed;
         /**
          * flags - attribute for the lu_ref, for pad and future use.
          */
-        short            lf_flags;
+        short                lf_flags;
         /**
          * Where was I initialized?
          */
-        short            lf_line;
-        const char      *lf_func;
+        short                lf_line;
+        const char          *lf_func;
         /**
          * Linkage into a global list of all lu_ref's (lu_ref_refs).
          */
-        struct list_head lf_linkage;
+        cfs_list_t           lf_linkage;
 };
 
 void lu_ref_init_loc(struct lu_ref *ref, const char *func, const int line);

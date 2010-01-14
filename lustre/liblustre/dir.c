@@ -61,8 +61,6 @@
 #include <file.h>
 #endif
 
-#undef LIST_HEAD
-
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #elif defined(HAVE_UNISTD_H)

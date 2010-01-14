@@ -96,7 +96,7 @@ typedef time_t cfs_duration_t;
 
 #include <libcfs/winnt/portals_compat25.h>
 
-#define HZ (100)
+#define CFS_HZ (100)
 
 struct timespec {
     __u32   tv_sec;
@@ -115,7 +115,7 @@ typedef struct timeval cfs_fs_time_t;
 #define jiffies     (ULONG_PTR)JIFFIES()
 #define cfs_jiffies (ULONG_PTR)JIFFIES()
 
-static inline void do_gettimeofday(struct timeval *tv)
+static inline void cfs_gettimeofday(struct timeval *tv)
 {
     LARGE_INTEGER Time;
 
@@ -125,8 +125,6 @@ static inline void do_gettimeofday(struct timeval *tv)
     tv->tv_usec = (suseconds_t) (Time.QuadPart % 10000000) / 10;
 }
 
-#define cfs_do_gettimeofday(tv) do_gettimeofday(tv)
-
 static inline LONGLONG JIFFIES()
 {
     LARGE_INTEGER Tick;
@@ -135,7 +133,7 @@ static inline LONGLONG JIFFIES()
     KeQueryTickCount(&Tick);
 
     Elapse.QuadPart  = Tick.QuadPart * KeQueryTimeIncrement();
-    Elapse.QuadPart /= (10000000 / HZ);
+    Elapse.QuadPart /= (10000000 / CFS_HZ);
 
     return Elapse.QuadPart;
 }
@@ -147,11 +145,11 @@ static inline cfs_time_t cfs_time_current(void)
 
 static inline time_t cfs_time_current_sec(void)
 {
-    return (time_t)(JIFFIES() / HZ);
+    return (time_t)(JIFFIES() / CFS_HZ);
 }
 
-#define time_before(t1, t2) (((signed)(t1) - (signed)(t2)) < 0) 
-#define time_before_eq(t1, t2) (((signed)(t1) - (signed)(t2)) <= 0) 
+#define cfs_time_before(t1, t2) (((signed)(t1) - (signed)(t2)) < 0)
+#define cfs_time_beforeq(t1, t2) (((signed)(t1) - (signed)(t2)) <= 0)
 
 static inline void cfs_fs_time_current(cfs_fs_time_t *t)
 {
@@ -195,26 +193,26 @@ static inline int cfs_fs_time_beforeq(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
 
 static inline cfs_duration_t cfs_time_seconds(cfs_duration_t seconds)
 {
-    return  (cfs_duration_t)(seconds * HZ);
+    return  (cfs_duration_t)(seconds * CFS_HZ);
 }
 
 static inline time_t cfs_duration_sec(cfs_duration_t d)
 {
-    return (time_t)(d / HZ);
+    return (time_t)(d / CFS_HZ);
 }
 
 static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 {
-    s->tv_sec = (__u32)(d / HZ);
-    s->tv_usec = (__u32)((d - (cfs_duration_t)s->tv_sec * HZ) *
-                              ONE_MILLION / HZ);
+    s->tv_sec = (__u32)(d / CFS_HZ);
+    s->tv_usec = (__u32)((d - (cfs_duration_t)s->tv_sec * CFS_HZ) *
+                              ONE_MILLION / CFS_HZ);
 }
 
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
-    s->tv_sec = (__u32) (d / HZ);
-    s->tv_nsec = (__u32)((d - (cfs_duration_t)s->tv_sec * HZ) *
-                           ONE_BILLION / HZ);
+    s->tv_sec = (__u32) (d / CFS_HZ);
+    s->tv_nsec = (__u32)((d - (cfs_duration_t)s->tv_sec * CFS_HZ) *
+                           ONE_BILLION / CFS_HZ);
 }
 
 static inline void cfs_fs_time_usec(cfs_fs_time_t *t, struct timeval *v)
@@ -278,7 +276,7 @@ struct timespec {
 /* liblustre. time(2) based implementation. */
 int nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
 void sleep(int time);
-void do_gettimeofday(struct timeval *tv);
+void cfs_gettimeofday(struct timeval *tv);
 int gettimeofday(struct timeval *tv, void * tz);
 
 #endif /* !__KERNEL__ */

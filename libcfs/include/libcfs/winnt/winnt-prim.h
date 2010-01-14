@@ -96,10 +96,10 @@ void cfs_enter_debugger(void);
 #define CFS_SYMBOL_LEN     64
 
 struct  cfs_symbol {
-	char    name[CFS_SYMBOL_LEN];
-	void    *value;
-	int     ref;
-	struct  list_head sym_list;
+	char       name[CFS_SYMBOL_LEN];
+	void      *value;
+	int        ref;
+	cfs_list_t sym_list;
 };
 
 extern int      cfs_symbol_register(const char *, const void *);
@@ -260,7 +260,7 @@ struct ctl_table
 struct ctl_table_header
 {
 	cfs_sysctl_table_t *    ctl_table;
-	struct list_head        ctl_entry;
+	cfs_list_t              ctl_entry;
 };
 
 /* proc root entries, support routines */
@@ -321,7 +321,7 @@ struct seq_file {
 	size_t count;
 	loff_t index;
 	u32    version;
-	mutex_t lock;
+	cfs_mutex_t lock;
 	const struct seq_operations *op;
 	void *private;
 };
@@ -358,12 +358,9 @@ int seq_release_private(struct inode *, struct file *);
  * Helpers for iteration over list_head-s in seq_files
  */
 
-extern struct list_head *seq_list_start(struct list_head *head,
-		loff_t pos);
-extern struct list_head *seq_list_start_head(struct list_head *head,
-		loff_t pos);
-extern struct list_head *seq_list_next(void *v, struct list_head *head,
-		loff_t *ppos);
+extern cfs_list_t *seq_list_start(cfs_list_t *head, loff_t pos);
+extern cfs_list_t *seq_list_start_head(cfs_list_t *head, loff_t pos);
+extern cfs_list_t *seq_list_next(void *v, cfs_list_t *head, loff_t *ppos);
 
 /*
  *  declaration of proc kernel process routines
@@ -405,9 +402,9 @@ lustre_write_file( cfs_file_t *    fh,
 
 typedef int cfs_task_state_t;
 
-#define CFS_TASK_INTERRUPTIBLE	0x00000001
-#define CFS_TASK_UNINT	        0x00000002
-#define CFS_TASK_RUNNING        0x00000003
+#define CFS_TASK_INTERRUPTIBLE	 0x00000001
+#define CFS_TASK_UNINT	         0x00000002
+#define CFS_TASK_RUNNING         0x00000003
 #define CFS_TASK_UNINTERRUPTIBLE CFS_TASK_UNINT
 
 #define CFS_WAITQ_MAGIC     'CWQM'
@@ -415,11 +412,11 @@ typedef int cfs_task_state_t;
 
 typedef struct cfs_waitq {
 
-    unsigned int        magic;
-    unsigned int        flags;
-    
-    spinlock_t          guard;
-    struct list_head    waiters;
+    unsigned int            magic;
+    unsigned int            flags;
+
+    cfs_spinlock_t          guard;
+    cfs_list_t              waiters;
 
 } cfs_waitq_t;
 
@@ -434,7 +431,7 @@ typedef struct cfs_waitlink cfs_waitlink_t;
 
 
 typedef struct cfs_waitlink_channel {
-    struct list_head        link;
+    cfs_list_t              link;
     cfs_waitq_t *           waitq;
     cfs_waitlink_t *        waitl;
 } cfs_waitlink_channel_t;
@@ -444,7 +441,7 @@ struct cfs_waitlink {
     unsigned int            magic;
     int                     flags;
     event_t  *              event;
-    atomic_t *              hits;
+    cfs_atomic_t *          hits;
 
     cfs_waitlink_channel_t  waitq[CFS_WAITQ_CHANNELS];
 };
@@ -465,7 +462,6 @@ typedef struct _cfs_thread_context {
 } cfs_thread_context_t;
 
 int cfs_kernel_thread(int (*func)(void *), void *arg, int flag);
-#define kernel_thread cfs_kernel_thread
 
 /*
  * thread creation flags from Linux, not used in winnt
@@ -490,44 +486,52 @@ int cfs_kernel_thread(int (*func)(void *), void *arg, int flag);
  */
 #define NGROUPS_SMALL           32
 #define NGROUPS_PER_BLOCK       ((int)(PAGE_SIZE / sizeof(gid_t)))
-struct group_info {
+typedef struct cfs_group_info {
         int ngroups;
-        atomic_t usage;
+        cfs_atomic_t usage;
         gid_t small_block[NGROUPS_SMALL];
         int nblocks;
         gid_t *blocks[0];
-};
+} cfs_group_info_t;
 
-#define get_group_info(group_info) do { \
-        atomic_inc(&(group_info)->usage); \
+#define cfs_get_group_info(group_info) do { \
+        cfs_atomic_inc(&(group_info)->usage); \
 } while (0)
 
-#define put_group_info(group_info) do { \
-        if (atomic_dec_and_test(&(group_info)->usage)) \
-                groups_free(group_info); \
+#define cfs_put_group_info(group_info) do { \
+        if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
+                cfs_groups_free(group_info); \
 } while (0)
 
-static __inline struct group_info *groups_alloc(int gidsetsize)
+static __inline cfs_group_info_t *cfs_groups_alloc(int gidsetsize)
 {
-    struct group_info * groupinfo;
+    cfs_group_info_t * groupinfo;
     KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__, __FUNCTION__));
-    groupinfo = (struct group_info *)cfs_alloc(sizeof(struct group_info), 0);
+    groupinfo =
+        (cfs_group_info_t *)cfs_alloc(sizeof(cfs_group_info_t), 0);
+
     if (groupinfo) {
-        memset(groupinfo, 0, sizeof(struct group_info));
+        memset(groupinfo, 0, sizeof(cfs_group_info_t));
     }
     return groupinfo;
 }
-static __inline void groups_free(struct group_info *group_info)
+static __inline void cfs_groups_free(cfs_group_info_t *group_info)
 {
-    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__, __FUNCTION__));
+    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
+            __FUNCTION__));
     cfs_free(group_info);
 }
-static __inline int set_current_groups(struct group_info *group_info) {
-    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__, __FUNCTION__));
+static __inline int
+cfs_set_current_groups(cfs_group_info_t *group_info)
+{
+    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
+             __FUNCTION__));
     return 0;
 }
-static __inline int groups_search(struct group_info *group_info, gid_t grp) {
-    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__, __FUNCTION__));
+static __inline int groups_search(cfs_group_info_t *group_info,
+                                  gid_t grp) {
+    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
+            __FUNCTION__));
     return 0;
 }
 
@@ -564,34 +568,34 @@ typedef __u32 cfs_kernel_cap_t;
  * Task struct
  */
 
-#define CFS_MAX_SCHEDULE_TIMEOUT ((long_ptr_t)(~0UL>>12))
-#define schedule_timeout(t)      cfs_schedule_timeout(0, t)
+#define CFS_MAX_SCHEDULE_TIMEOUT     ((long_ptr_t)(~0UL>>12))
+#define cfs_schedule_timeout(t)      cfs_schedule_timeout_and_set_state(0, t)
 
 struct vfsmount;
 
 #define NGROUPS 1
 #define CFS_CURPROC_COMM_MAX (16)
 typedef struct task_sruct{
-    mode_t           umask;
-    sigset_t         blocked;
+    mode_t                umask;
+    sigset_t              blocked;
 
-    pid_t            pid;
-    pid_t            pgrp;
+    pid_t                 pid;
+    pid_t                 pgrp;
 
-    uid_t            uid,euid,suid,fsuid;
-    gid_t            gid,egid,sgid,fsgid;
+    uid_t                 uid,euid,suid,fsuid;
+    gid_t                 gid,egid,sgid,fsgid;
 
-    int              ngroups;
-    int              cgroups;
-    gid_t            groups[NGROUPS];
-    struct group_info *group_info;
-    cfs_kernel_cap_t cap_effective,
-                     cap_inheritable,
-                     cap_permitted;
+    int                   ngroups;
+    int                   cgroups;
+    gid_t                 groups[NGROUPS];
+    cfs_group_info_t     *group_info;
+    cfs_kernel_cap_t      cap_effective,
+                          cap_inheritable,
+                          cap_permitted;
 
-    char             comm[CFS_CURPROC_COMM_MAX];
-    void            *journal_info;
-    struct vfsmount *fs;
+    char                  comm[CFS_CURPROC_COMM_MAX];
+    void                 *journal_info;
+    struct vfsmount      *fs;
 }  cfs_task_t;
 
 static inline void task_lock(cfs_task_t *t)
@@ -611,46 +615,46 @@ static inline void task_unlock(cfs_task_t *t)
 
 typedef struct _TASK_MAN {
 
-    ULONG       Magic;      /* Magic and Flags */
-    ULONG       Flags;
+    ULONG           Magic;      /* Magic and Flags */
+    ULONG           Flags;
 
-    spinlock_t  Lock;       /* Protection lock */
+    cfs_spinlock_t  Lock;       /* Protection lock */
 
-    cfs_mem_cache_t * slab; /* Memory slab for task slot */
+    cfs_mem_cache_t *slab; /* Memory slab for task slot */
 
-    ULONG       NumOfTasks; /* Total tasks (threads) */
-    LIST_ENTRY  TaskList;   /* List of task slots */
+    ULONG           NumOfTasks; /* Total tasks (threads) */
+    LIST_ENTRY      TaskList;   /* List of task slots */
 
 } TASK_MAN, *PTASK_MAN;
 
 typedef struct _TASK_SLOT {
 
-    ULONG       Magic;      /* Magic and Flags */
-    ULONG       Flags;
+    ULONG           Magic;      /* Magic and Flags */
+    ULONG           Flags;
 
-    LIST_ENTRY  Link;       /* To be linked to TaskMan */
+    LIST_ENTRY      Link;       /* To be linked to TaskMan */
 
-    event_t     Event;      /* Schedule event */
+    event_t         Event;      /* Schedule event */
 
-    HANDLE      Pid;        /* Process id */
-    HANDLE      Tid;        /* Thread id */
-    PETHREAD    Tet;        /* Pointer to ethread */
+    HANDLE          Pid;        /* Process id */
+    HANDLE          Tid;        /* Thread id */
+    PETHREAD        Tet;        /* Pointer to ethread */
 
-    atomic_t    count;      /* refer count */
-    atomic_t    hits;       /* times of waken event singaled */
+    cfs_atomic_t    count;      /* refer count */
+    cfs_atomic_t    hits;       /* times of waken event singaled */
 
-    KIRQL       irql;       /* irql for rwlock ... */
+    KIRQL           irql;       /* irql for rwlock ... */
 
-    cfs_task_t  task;       /* linux task part */
+    cfs_task_t      task;       /* linux task part */
 
 } TASK_SLOT, *PTASK_SLOT;
 
 
 #define current                      cfs_current()
-#define set_current_state(s)         do {;} while (0)
-#define cfs_set_current_state(state) set_current_state(state)
+#define cfs_set_current_state(s)     do {;} while (0)
+#define cfs_set_current_state(state) cfs_set_current_state(state)
 
-#define wait_event(wq, condition)                               \
+#define cfs_wait_event(wq, condition)                           \
 do {                                                            \
         cfs_waitlink_t __wait;                                  \
                                                                 \
@@ -723,7 +727,7 @@ void    cleanup_task_manager();
 cfs_task_t * cfs_current();
 int     wake_up_process(cfs_task_t * task);
 void sleep_on(cfs_waitq_t *waitq);
-#define might_sleep() do {} while(0)
+#define cfs_might_sleep() do {} while(0)
 #define CFS_DECL_JOURNAL_DATA	
 #define CFS_PUSH_JOURNAL	    do {;} while(0)
 #define CFS_POP_JOURNAL		    do {;} while(0)
@@ -738,14 +742,14 @@ void sleep_on(cfs_waitq_t *waitq);
 #define __init
 #endif
 
-struct module {
+typedef struct cfs_module {
     const char *name;
-};
+} cfs_module_t;
 
-extern struct module libcfs_global_module;
+extern cfs_module_t libcfs_global_module;
 #define THIS_MODULE  &libcfs_global_module
 
-#define request_module(x, y) (0)
+#define cfs_request_module(x, y) (0)
 #define EXPORT_SYMBOL(s)
 #define MODULE_AUTHOR(s)
 #define MODULE_DESCRIPTION(s)
@@ -768,9 +772,9 @@ extern struct module libcfs_global_module;
 
 /* Module interfaces */
 #define cfs_module(name, version, init, fini) \
-module_init(init);                            \
-module_exit(fini)
-#define module_refcount(x) (1)
+        module_init(init);                    \
+        module_exit(fini)
+#define cfs_module_refcount(x) (1)
 
 /*
  * typecheck
@@ -797,7 +801,7 @@ module_exit(fini)
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
 
 #if 0 /* defined in libcfs/libcfs_hash.h */
-static inline u32 hash_long(u32 val, unsigned int bits)
+static inline u32 cfs_hash_long(u32 val, unsigned int bits)
 {
 	/* On some cpus multiply is faster, on others gcc will do shifts */
 	u32 hash = val * GOLDEN_RATIO_PRIME_32;
@@ -844,7 +848,7 @@ libcfs_arch_cleanup(void);
  *  cache alignment size
  */
 
-#define L1_CACHE_ALIGN(x) (x)
+#define CFS_L1_CACHE_ALIGN(x) (x)
 
 #define __cacheline_aligned
 
@@ -854,11 +858,11 @@ libcfs_arch_cleanup(void);
 
 
 #define SMP_CACHE_BYTES             128
-#define NR_CPUS                     (32)
+#define CFS_NR_CPUS                 (32)
 #define smp_num_cpus                ((CCHAR)KeNumberProcessors)
-#define num_possible_cpus()         smp_num_cpus
-#define num_online_cpus()           smp_num_cpus
-#define smp_processor_id()		    ((USHORT)KeGetCurrentProcessorNumber())
+#define cfs_num_possible_cpus()     smp_num_cpus
+#define cfs_num_online_cpus()       smp_num_cpus
+#define cfs_smp_processor_id()	    ((USHORT)KeGetCurrentProcessorNumber())
 #define smp_call_function(f, a, n, w)		do {} while(0)
 #define smp_rmb()                   do {} while(0)
 
@@ -866,22 +870,21 @@ libcfs_arch_cleanup(void);
  *  Irp related
  */
 
-#define NR_IRQS				        512
-#define in_interrupt()			    (0)
-#define cfs_in_interrupt()                  in_interrupt()
+#define CFS_NR_IRQS                 512
+#define cfs_in_interrupt()          (0)
 
 /*
  *  printk flags
  */
 
-#define KERN_EMERG      "<0>"   /* system is unusable                   */
-#define KERN_ALERT      "<1>"   /* action must be taken immediately     */
-#define KERN_CRIT       "<2>"   /* critical conditions                  */
-#define KERN_ERR        "<3>"   /* error conditions                     */
-#define KERN_WARNING    "<4>"   /* warning conditions                   */
-#define KERN_NOTICE     "<5>"   /* normal but significant condition     */
-#define KERN_INFO       "<6>"   /* informational                        */
-#define KERN_DEBUG      "<7>"   /* debug-level messages                 */
+#define CFS_KERN_EMERG      "<0>"   /* system is unusable                   */
+#define CFS_KERN_ALERT      "<1>"   /* action must be taken immediately     */
+#define CFS_KERN_CRIT       "<2>"   /* critical conditions                  */
+#define CFS_KERN_ERR        "<3>"   /* error conditions                     */
+#define CFS_KERN_WARNING    "<4>"   /* warning conditions                   */
+#define CFS_KERN_NOTICE     "<5>"   /* normal but significant condition     */
+#define CFS_KERN_INFO       "<6>"   /* informational                        */
+#define CFS_KERN_DEBUG      "<7>"   /* debug-level messages                 */
 
 /*
  * Misc
@@ -897,8 +900,8 @@ libcfs_arch_cleanup(void);
 #define unlikely(exp) (exp)
 #endif
 
-#define lock_kernel()               do {} while(0)
-#define unlock_kernel()             do {} while(0)
+#define cfs_lock_kernel()               do {} while(0)
+#define cfs_unlock_kernel()             do {} while(0)
 
 #define local_irq_save(x)
 #define local_irq_restore(x)
@@ -1106,16 +1109,16 @@ void globfree(glob_t *__pglog);
  *  module routines
  */
 
-static inline void __module_get(struct module *module)
+static inline void __cfs_module_get(cfs_module_t *module)
 {
 }
 
-static inline int try_module_get(struct module *module)
+static inline int cfs_try_module_get(cfs_module_t *module)
 {
     return 1;
 }
 
-static inline void module_put(struct module *module)
+static inline void cfs_module_put(cfs_module_t *module)
 {
 }
 
@@ -1323,7 +1326,7 @@ static __inline void   __cdecl set_getenv(const char *ENV, const char *value, in
 
 int setenv(const char *envname, const char *envval, int overwrite);
 
-struct utsname {
+typedef struct utsname {
          char sysname[64];
          char nodename[64];
          char release[128];

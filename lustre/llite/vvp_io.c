@@ -350,9 +350,9 @@ static int vvp_io_trunc_start(const struct lu_env *env,
                 struct cl_object_header *hdr;
 
                 hdr = cl_object_header(obj);
-                spin_lock(&hdr->coh_page_guard);
+                cfs_spin_lock(&hdr->coh_page_guard);
                 vio->cui_partpage = cl_page_lookup(hdr, start);
-                spin_unlock(&hdr->coh_page_guard);
+                cfs_spin_unlock(&hdr->coh_page_guard);
 
                 if (vio->cui_partpage != NULL)
                         /*

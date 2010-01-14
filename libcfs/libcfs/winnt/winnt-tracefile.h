@@ -41,9 +41,9 @@
  * only define one trace_data type for windows
  */
 typedef enum {
-        TCD_TYPE_PASSIVE = 0,
-        TCD_TYPE_DISPATCH,
-        TCD_TYPE_MAX
-} trace_buf_type_t;
+        CFS_TCD_TYPE_PASSIVE = 0,
+        CFS_TCD_TYPE_DISPATCH,
+        CFS_TCD_TYPE_MAX
+} cfs_trace_buf_type_t;
 
 #endif

@@ -70,7 +70,7 @@
 /* Caller must list_del and OBD_FREE each dentry from the list */
 int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                                 struct vfsmount *inmnt,
-                                struct list_head *dentry_list){
+                                cfs_list_t *dentry_list){
         /* see mds_cleanup_pending */
         struct lvfs_run_ctxt saved;
         struct file *file;
@@ -176,7 +176,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 CDEBUG(D_MGS, "OST index for %s is %u (%s)\n",
                        lustre_cfg_string(lcfg, 1), index,
                        lustre_cfg_string(lcfg, 2));
-                set_bit(index, fsdb->fsdb_ost_index_map);
+                cfs_set_bit(index, fsdb->fsdb_ost_index_map);
         }
 
         /* Figure out mdt indicies */
@@ -192,7 +192,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 }
                 rc = 0;
                 CDEBUG(D_MGS, "MDT index is %u\n", index);
-                set_bit(index, fsdb->fsdb_mdt_index_map);
+                cfs_set_bit(index, fsdb->fsdb_mdt_index_map);
         }
 
         /* COMPAT_146 */
@@ -275,7 +275,7 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, struct fs_db *fsdb)
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         LASSERT(ctxt != NULL);
         name_create(&logname, fsdb->fsdb_name, "-client");
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = llog_create(ctxt, &loghandle, NULL, logname);
         if (rc)
@@ -296,7 +296,7 @@ out_close:
                 rc = rc2;
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
         name_destroy(&logname);
         llog_ctxt_put(ctxt);
 
@@ -327,10 +327,10 @@ static struct fs_db *mgs_find_fsdb(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *fsdb;
-        struct list_head *tmp;
+        cfs_list_t *tmp;
 
-        list_for_each(tmp, &mgs->mgs_fs_db_list) {
-                fsdb = list_entry(tmp, struct fs_db, fsdb_list);
+        cfs_list_for_each(tmp, &mgs->mgs_fs_db_list) {
+                fsdb = cfs_list_entry(tmp, struct fs_db, fsdb_list);
                 if (strcmp(fsdb->fsdb_name, fsname) == 0)
                         return fsdb;
         }
@@ -355,7 +355,7 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
                 RETURN(NULL);
 
         strcpy(fsdb->fsdb_name, fsname);
-        sema_init(&fsdb->fsdb_sem, 1);
+        cfs_sema_init(&fsdb->fsdb_sem, 1);
         fsdb->fsdb_fl_udesc = 1;
 
         if (strcmp(fsname, MGSSELF_NAME) == 0) {
@@ -384,7 +384,7 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
                 lproc_mgs_add_live(obd, fsdb);
         }
 
-        list_add(&fsdb->fsdb_list, &mgs->mgs_fs_db_list);
+        cfs_list_add(&fsdb->fsdb_list, &mgs->mgs_fs_db_list);
 
         RETURN(fsdb);
 err:
@@ -403,9 +403,9 @@ err:
 static void mgs_free_fsdb(struct obd_device *obd, struct fs_db *fsdb)
 {
         /* wait for anyone with the sem */
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
         lproc_mgs_del_live(obd, fsdb);
-        list_del(&fsdb->fsdb_list);
+        cfs_list_del(&fsdb->fsdb_list);
         if (fsdb->fsdb_ost_index_map)
                 OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
         if (fsdb->fsdb_mdt_index_map)
@@ -430,13 +430,13 @@ int mgs_cleanup_fsdb_list(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *fsdb;
-        struct list_head *tmp, *tmp2;
-        down(&mgs->mgs_sem);
-        list_for_each_safe(tmp, tmp2, &mgs->mgs_fs_db_list) {
-                fsdb = list_entry(tmp, struct fs_db, fsdb_list);
+        cfs_list_t *tmp, *tmp2;
+        cfs_down(&mgs->mgs_sem);
+        cfs_list_for_each_safe(tmp, tmp2, &mgs->mgs_fs_db_list) {
+                fsdb = cfs_list_entry(tmp, struct fs_db, fsdb_list);
                 mgs_free_fsdb(obd, fsdb);
         }
-        up(&mgs->mgs_sem);
+        cfs_up(&mgs->mgs_sem);
         return 0;
 }
 
@@ -447,17 +447,17 @@ int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
         struct fs_db *fsdb;
         int rc = 0;
 
-        down(&mgs->mgs_sem);
+        cfs_down(&mgs->mgs_sem);
         fsdb = mgs_find_fsdb(obd, name);
         if (fsdb) {
-                up(&mgs->mgs_sem);
+                cfs_up(&mgs->mgs_sem);
                 *dbh = fsdb;
                 return 0;
         }
 
         CDEBUG(D_MGS, "Creating new db\n");
         fsdb = mgs_new_fsdb(obd, name);
-        up(&mgs->mgs_sem);
+        cfs_up(&mgs->mgs_sem);
         if (!fsdb)
                 return -ENOMEM;
 
@@ -512,7 +512,7 @@ int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti)
         else
                 RETURN(-EINVAL);
 
-        if (test_bit(mti->mti_stripe_index, imap))
+        if (cfs_test_bit(mti->mti_stripe_index, imap))
                 RETURN(1);
         RETURN(0);
 }
@@ -521,7 +521,7 @@ static __inline__ int next_index(void *index_map, int map_len)
 {
         int i;
         for (i = 0; i < map_len * 8; i++)
-                 if (!test_bit(i, index_map)) {
+                 if (!cfs_test_bit(i, index_map)) {
                          return i;
                  }
         CERROR("max index %d exceeded.\n", i);
@@ -567,7 +567,7 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
                 RETURN(-ERANGE);
         }
 
-        if (test_bit(mti->mti_stripe_index, imap)) {
+        if (cfs_test_bit(mti->mti_stripe_index, imap)) {
                 if ((mti->mti_flags & LDD_F_VIRGIN) &&
                     !(mti->mti_flags & LDD_F_WRITECONF)) {
                         LCONSOLE_ERROR_MSG(0x140, "Server %s requested index "
@@ -583,7 +583,7 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
                 }
         }
 
-        set_bit(mti->mti_stripe_index, imap);
+        cfs_set_bit(mti->mti_stripe_index, imap);
         fsdb->fsdb_flags &= ~FSDB_LOG_EMPTY;
         server_make_name(mti->mti_flags, mti->mti_stripe_index,
                          mti->mti_fsname, mti->mti_svname);
@@ -997,7 +997,7 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
                              char *devname, char *comment)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
-        struct list_head dentry_list;
+        cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
         char *fsname = mti->mti_fsname;
         char *logname;
@@ -1027,8 +1027,8 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
         }
 
         /* Could use fsdb index maps instead of directory listing */
-        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                list_del(&dirent->lld_list);
+        cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
+                cfs_list_del(&dirent->lld_list);
                 /* don't write to sptlrpc rule log */
                 if (strncmp(fsname, dirent->lld_name, len) == 0 &&
                     strstr(dirent->lld_name, "-sptlrpc") == NULL) {
@@ -1646,7 +1646,7 @@ out:
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                 char *mdtname;
                 if (i !=  mti->mti_stripe_index &&
-                    test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+                    cfs_test_bit(i,  fsdb->fsdb_mdt_index_map)) {
                         name_create_mdt(&mdtname, mti->mti_fsname, i);
                         rc = mgs_write_log_mdc_to_mdt(obd, fsdb, mti, mdtname);
                         name_destroy(&mdtname);
@@ -1789,7 +1789,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
 
         /* Add ost to all MDT lov defs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                if (test_bit(i, fsdb->fsdb_mdt_index_map)) {
+                if (cfs_test_bit(i, fsdb->fsdb_mdt_index_map)) {
                         char mdt_index[9];
 
                         name_create_mdt_and_lov(&logname, &lovname, fsdb, i);
@@ -1865,7 +1865,7 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
                 int i;
 
                 for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                        if (!test_bit(i, fsdb->fsdb_mdt_index_map))
+                        if (!cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
                                 continue;
                         name_create_mdt(&logname, mti->mti_fsname, i);
                         name_create_mdt_osc(&cliname, mti->mti_svname, fsdb, i);
@@ -2380,7 +2380,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 /* Modify mdtlov */
                 /* Add to all MDT logs for CMD */
                 for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                        if (!test_bit(i, fsdb->fsdb_mdt_index_map))
+                        if (!cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
                                 continue;
                         name_create_mdt(&logname, mti->mti_fsname, i);
                         rc = mgs_modify(obd, fsdb, mti, logname,
@@ -2492,7 +2492,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                         int i;
 
                         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                                if (!test_bit(i, fsdb->fsdb_mdt_index_map))
+                                if (!cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
                                         continue;
                                 name_destroy(&cname);
                                 name_create_mdt_osc(&cname, mti->mti_svname,
@@ -2529,8 +2529,8 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                         goto active_err;
                 if (rc & LDD_F_SV_ALL) {
                         for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                                if (!test_bit(i,
-                                              fsdb->fsdb_mdt_index_map))
+                                if (!cfs_test_bit(i,
+                                                  fsdb->fsdb_mdt_index_map))
                                         continue;
                                 name_create_mdt(&logname, mti->mti_fsname, i);
                                 rc = mgs_wlp_lcfg(obd, fsdb, mti,
@@ -2593,9 +2593,9 @@ int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti)
            the failover list.  Modify mti->params for rewriting back at
            server_register_target(). */
 
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
         rc = mgs_write_log_add_failnid(obd, fsdb, mti);
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
 
         RETURN(rc);
 #endif
@@ -2656,7 +2656,7 @@ int mgs_write_log_target(struct obd_device *obd,
                 RETURN(rc);
         }
 
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
 
         if (mti->mti_flags &
             (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {
@@ -2705,7 +2705,7 @@ int mgs_write_log_target(struct obd_device *obd,
         OBD_FREE(buf, strlen(mti->mti_params) + 1);
 
 out_up:
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
         RETURN(rc);
 }
 
@@ -2811,7 +2811,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         static struct fs_db *fsdb;
-        struct list_head dentry_list;
+        cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
         int rc, len = strlen(fsname);
         ENTRY;
@@ -2824,15 +2824,15 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 RETURN(rc);
         }
 
-        down(&mgs->mgs_sem);
+        cfs_down(&mgs->mgs_sem);
 
         /* Delete the fs db */
         fsdb = mgs_find_fsdb(obd, fsname);
         if (fsdb)
                 mgs_free_fsdb(obd, fsdb);
 
-        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                list_del(&dirent->lld_list);
+        cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
+                cfs_list_del(&dirent->lld_list);
                 if (strncmp(fsname, dirent->lld_name, len) == 0) {
                         CDEBUG(D_MGS, "Removing log %s\n", dirent->lld_name);
                         mgs_erase_log(obd, dirent->lld_name);
@@ -2840,7 +2840,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 OBD_FREE(dirent, sizeof(*dirent));
         }
 
-        up(&mgs->mgs_sem);
+        cfs_up(&mgs->mgs_sem);
 
         RETURN(rc);
 }
@@ -2945,11 +2945,11 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
 
         mti->mti_flags = rc | LDD_F_PARAM;
 
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
         /* this is lctl conf_param's single param path, there is not
            need to loop through parameters */
         rc = mgs_write_log_param(obd, fsdb, mti, mti->mti_params);
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
 
 out:
         OBD_FREE_PTR(mti);
@@ -3052,7 +3052,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
         }
         }
 
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
 
         if (canceled_label != NULL) {
                 OBD_ALLOC_PTR(mti);
@@ -3062,7 +3062,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
 
         /* write pool def to all MDT logs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                 if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+                 if (cfs_test_bit(i,  fsdb->fsdb_mdt_index_map)) {
                         name_create_mdt_and_lov(&logname, &lovname, fsdb, i);
 
                         if (canceled_label != NULL) {
@@ -3088,7 +3088,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                            cmd, fsname, poolname, ostname, label);
         name_destroy(&logname);
 
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
 
         EXIT;
 out:

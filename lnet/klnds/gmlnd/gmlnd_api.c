@@ -159,13 +159,13 @@ gmnal_startup(lnet_ni_t *ni)
 
         memset(gmni, 0, sizeof(*gmni));
         gmni->gmni_ni = ni;
-        spin_lock_init(&gmni->gmni_tx_lock);
-        spin_lock_init(&gmni->gmni_gm_lock);
-        INIT_LIST_HEAD(&gmni->gmni_idle_txs);
-        INIT_LIST_HEAD(&gmni->gmni_idle_ltxbs);
-        INIT_LIST_HEAD(&gmni->gmni_buf_txq);
-        INIT_LIST_HEAD(&gmni->gmni_cred_txq);
-        sema_init(&gmni->gmni_rx_mutex, 1);
+        cfs_spin_lock_init(&gmni->gmni_tx_lock);
+        cfs_spin_lock_init(&gmni->gmni_gm_lock);
+        CFS_INIT_LIST_HEAD(&gmni->gmni_idle_txs);
+        CFS_INIT_LIST_HEAD(&gmni->gmni_idle_ltxbs);
+        CFS_INIT_LIST_HEAD(&gmni->gmni_buf_txq);
+        CFS_INIT_LIST_HEAD(&gmni->gmni_cred_txq);
+        cfs_sema_init(&gmni->gmni_rx_mutex, 1);
         PORTAL_MODULE_USE;
 
         /*

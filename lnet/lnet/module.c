@@ -44,7 +44,7 @@ static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
-static struct semaphore lnet_config_mutex;
+static cfs_semaphore_t lnet_config_mutex;
 
 int
 lnet_configure (void *arg)
@@ -119,7 +119,7 @@ init_lnet(void)
         int                  rc;
         ENTRY;
 
-        init_mutex(&lnet_config_mutex);
+        cfs_init_mutex(&lnet_config_mutex);
 
         rc = LNetInit();
         if (rc != 0) {

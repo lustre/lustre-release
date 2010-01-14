@@ -60,8 +60,8 @@ struct fsfilt_objinfo {
 
 struct lustre_dquot;
 struct fsfilt_operations {
-        struct list_head fs_list;
-        struct module *fs_owner;
+        cfs_list_t fs_list;
+        cfs_module_t *fs_owner;
         char   *fs_type;
         char   *(* fs_getlabel)(struct super_block *sb);
         int     (* fs_setlabel)(struct super_block *sb, char *label);
@@ -105,7 +105,7 @@ struct fsfilt_operations {
         int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
                                        int pages, unsigned long *blocks,
                                        int *created, int create,
-                                       struct semaphore *sem);
+                                       cfs_semaphore_t *sem);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
@@ -120,7 +120,7 @@ struct fsfilt_operations {
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
                                  int cmd);
         int     (* fs_qids)(struct file *file, struct inode *inode, int type,
-                            struct list_head *list);
+                            cfs_list_t *list);
         int     (* fs_get_mblk)(struct super_block *sb, int *count,
                                 struct inode *inode, int frags);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
@@ -182,19 +182,19 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
 #define FSFILT_OP_UNLINK_PARTIAL_PARENT 22
 #define FSFILT_OP_CREATE_PARTIAL_CHILD  23
 
-#define __fsfilt_check_slow(obd, start, msg)                            \
-do {                                                                    \
-        if (time_before(jiffies, start + 15 * HZ))                      \
-                break;                                                  \
-        else if (time_before(jiffies, start + 30 * HZ))                 \
-                CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name, \
-                       msg, (jiffies-start) / HZ);                      \
-        else if (time_before(jiffies, start + DISK_TIMEOUT * HZ))       \
-                CWARN("%s: slow %s %lus\n", obd->obd_name, msg,         \
-                      (jiffies - start) / HZ);                          \
-        else                                                            \
-                CERROR("%s: slow %s %lus\n", obd->obd_name, msg,        \
-                       (jiffies - start) / HZ);                         \
+#define __fsfilt_check_slow(obd, start, msg)                              \
+do {                                                                      \
+        if (cfs_time_before(jiffies, start + 15 * CFS_HZ))                \
+                break;                                                    \
+        else if (cfs_time_before(jiffies, start + 30 * CFS_HZ))           \
+                CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name,   \
+                       msg, (jiffies-start) / CFS_HZ);                    \
+        else if (cfs_time_before(jiffies, start + DISK_TIMEOUT * CFS_HZ)) \
+                CWARN("%s: slow %s %lus\n", obd->obd_name, msg,           \
+                      (jiffies - start) / CFS_HZ);                        \
+        else                                                              \
+                CERROR("%s: slow %s %lus\n", obd->obd_name, msg,          \
+                       (jiffies - start) / CFS_HZ);                       \
 } while (0)
 
 #define fsfilt_check_slow(obd, start, msg)              \
@@ -436,7 +436,7 @@ static inline int fsfilt_quotainfo(struct obd_device *obd,
 
 static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
                               struct inode *inode, int type,
-                              struct list_head *list)
+                              cfs_list_t *list)
 {
         if (obd->obd_fsops->fs_qids)
                 return obd->obd_fsops->fs_qids(file, inode, type, list);
@@ -464,7 +464,7 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
                                          struct inode *inode,
                                          struct page **page, int pages,
                                          unsigned long *blocks, int *created,
-                                         int create, struct semaphore *sem)
+                                         int create, cfs_semaphore_t *sem)
 {
         return obd->obd_fsops->fs_map_inode_pages(inode, page, pages, blocks,
                                                   created, create, sem);

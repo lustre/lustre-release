@@ -42,8 +42,8 @@
 
 #define LMV_MAX_TGT_COUNT 128
 
-#define lmv_init_lock(lmv)   down(&lmv->init_sem);
-#define lmv_init_unlock(lmv) up(&lmv->init_sem);
+#define lmv_init_lock(lmv)   cfs_down(&lmv->init_sem);
+#define lmv_init_unlock(lmv) cfs_up(&lmv->init_sem);
 
 #define LL_IT2STR(it)				        \
 	((it) ? ldlm_it2str((it)->it_op) : "0")
@@ -73,11 +73,11 @@ struct lmv_object {
         /**
          * Link to global objects list.
          */
-        struct list_head        lo_list;
+        cfs_list_t              lo_list;
         /**
          * Sema for protecting fields.
          */
-        struct semaphore        lo_guard;
+        cfs_semaphore_t         lo_guard;
         /**
          * Object state like O_FREEING.
          */
@@ -85,7 +85,7 @@ struct lmv_object {
         /**
          * Object ref counter.
          */
-        atomic_t                lo_count;
+        cfs_atomic_t            lo_count;
         /**
          * Object master fid.
          */
@@ -115,14 +115,14 @@ static inline void
 lmv_object_lock(struct lmv_object *obj)
 {
         LASSERT(obj);
-        down(&obj->lo_guard);
+        cfs_down(&obj->lo_guard);
 }
 
 static inline void
 lmv_object_unlock(struct lmv_object *obj)
 {
         LASSERT(obj);
-        up(&obj->lo_guard);
+        cfs_up(&obj->lo_guard);
 }
 
 void lmv_object_add(struct lmv_object *obj);

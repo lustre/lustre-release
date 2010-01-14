@@ -74,16 +74,16 @@
 
 #define GSS_SVC_UPCALL_TIMEOUT  (20)
 
-static spinlock_t __ctx_index_lock;
+static cfs_spinlock_t __ctx_index_lock;
 static __u64 __ctx_index;
 
 __u64 gss_get_next_ctx_index(void)
 {
         __u64 idx;
 
-        spin_lock(&__ctx_index_lock);
+        cfs_spin_lock(&__ctx_index_lock);
         idx = __ctx_index++;
-        spin_unlock(&__ctx_index_lock);
+        cfs_spin_unlock(&__ctx_index_lock);
 
         return idx;
 }
@@ -106,7 +106,7 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
                 len++;
 
                 if ((len & (BITS_PER_LONG/8-1)) == 0)
-                        hash = hash_long(hash^l, BITS_PER_LONG);
+                        hash = cfs_hash_long(hash^l, BITS_PER_LONG);
         } while (len);
 
         return hash >> (BITS_PER_LONG - bits);
@@ -124,7 +124,7 @@ struct rsi {
         struct cache_head       h;
         __u32                   lustre_svc;
         __u64                   nid;
-        wait_queue_head_t       waitq;
+        cfs_waitq_t             waitq;
         rawobj_t                in_handle, in_token;
         rawobj_t                out_handle, out_token;
         int                     major_status, minor_status;
@@ -193,7 +193,7 @@ static inline void __rsi_init(struct rsi *new, struct rsi *item)
 
         new->lustre_svc = item->lustre_svc;
         new->nid = item->nid;
-        init_waitqueue_head(&new->waitq);
+        cfs_waitq_init(&new->waitq);
 }
 
 static inline void __rsi_update(struct rsi *new, struct rsi *item)
@@ -338,7 +338,7 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 out:
         rsi_free(&rsii);
         if (rsip) {
-                wake_up_all(&rsip->waitq);
+                cfs_waitq_broadcast(&rsip->waitq);
                 cache_put(&rsip->h, &rsi_cache);
         } else {
                 status = -ENOMEM;
@@ -355,7 +355,7 @@ static void rsi_put(struct cache_head *item, struct cache_detail *cd)
 {
         struct rsi *rsi = container_of(item, struct rsi, h);
 
-        LASSERT(atomic_read(&item->refcnt) > 0);
+        LASSERT(cfs_atomic_read(&item->refcnt) > 0);
 
         if (cache_put(item, cd)) {
                 LASSERT(item->next == NULL);
@@ -456,7 +456,7 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 out:
         rsi_free(&rsii);
         if (rsip) {
-                wake_up_all(&rsip->waitq);
+                cfs_waitq_broadcast(&rsip->waitq);
                 rsi_put(&rsip->h, &rsi_cache);
         }
 
@@ -573,7 +573,7 @@ static inline void __rsc_update(struct rsc *new, struct rsc *tmp)
         tmp->ctx.gsc_mechctx = NULL;
 
         memset(&new->ctx.gsc_seqdata, 0, sizeof(new->ctx.gsc_seqdata));
-        spin_lock_init(&new->ctx.gsc_seqdata.ssd_lock);
+        cfs_spin_lock_init(&new->ctx.gsc_seqdata.ssd_lock);
 }
 
 #ifdef HAVE_SUNRPC_CACHE_V2
@@ -688,7 +688,7 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
                 goto out;
         if (rv == -ENOENT) {
                 CERROR("NOENT? set rsc entry negative\n");
-                set_bit(CACHE_NEGATIVE, &rsci.h.flags);
+                cfs_set_bit(CACHE_NEGATIVE, &rsci.h.flags);
         } else {
                 rawobj_t tmp_buf;
                 unsigned long ctx_expiry;
@@ -750,7 +750,7 @@ static void rsc_put(struct cache_head *item, struct cache_detail *cd)
 {
         struct rsc *rsci = container_of(item, struct rsc, h);
 
-        LASSERT(atomic_read(&item->refcnt) > 0);
+        LASSERT(cfs_atomic_read(&item->refcnt) > 0);
 
         if (cache_put(item, cd)) {
                 LASSERT(item->next == NULL);
@@ -835,7 +835,7 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
                 goto out;
         if (rv == -ENOENT) {
                 CERROR("NOENT? set rsc entry negative\n");
-                set_bit(CACHE_NEGATIVE, &rsci.h.flags);
+                cfs_set_bit(CACHE_NEGATIVE, &rsci.h.flags);
         } else {
                 struct gss_api_mech *gm;
                 rawobj_t tmp_buf;
@@ -960,7 +960,7 @@ static void rsc_flush(rsc_entry_match *match, long data)
         int n;
         ENTRY;
 
-        write_lock(&rsc_cache.hash_lock);
+        cfs_write_lock(&rsc_cache.hash_lock);
         for (n = 0; n < RSC_HASHMAX; n++) {
                 for (ch = &rsc_cache.hash_table[n]; *ch;) {
                         rscp = container_of(*ch, struct rsc, h);
@@ -974,12 +974,12 @@ static void rsc_flush(rsc_entry_match *match, long data)
                         *ch = (*ch)->next;
                         rscp->h.next = NULL;
                         cache_get(&rscp->h);
-                        set_bit(CACHE_NEGATIVE, &rscp->h.flags);
+                        cfs_set_bit(CACHE_NEGATIVE, &rscp->h.flags);
                         COMPAT_RSC_PUT(&rscp->h, &rsc_cache);
                         rsc_cache.entries--;
                 }
         }
-        write_unlock(&rsc_cache.hash_lock);
+        cfs_write_unlock(&rsc_cache.hash_lock);
         EXIT;
 }
 
@@ -1207,7 +1207,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
         struct ptlrpc_reply_state *rs;
         struct rsc                *rsci = NULL;
         struct rsi                *rsip = NULL, rsikey;
-        wait_queue_t               wait;
+        cfs_waitlink_t             wait;
         int                        replen = sizeof(struct ptlrpc_body);
         struct gss_rep_header     *rephdr;
         int                        first_check = 1;
@@ -1246,9 +1246,9 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
         }
 
         cache_get(&rsip->h); /* take an extra ref */
-        init_waitqueue_head(&rsip->waitq);
-        init_waitqueue_entry(&wait, current);
-        add_wait_queue(&rsip->waitq, &wait);
+        cfs_waitq_init(&rsip->waitq);
+        cfs_waitlink_init(&wait);
+        cfs_waitq_add(&rsip->waitq, &wait);
 
 cache_check:
         /* Note each time cache_check() will drop a reference if return
@@ -1263,13 +1263,14 @@ cache_check:
                         first_check = 0;
 
                         read_lock(&rsi_cache.hash_lock);
-                        valid = test_bit(CACHE_VALID, &rsip->h.flags);
+                        valid = cfs_test_bit(CACHE_VALID, &rsip->h.flags);
                         if (valid == 0)
-                                set_current_state(TASK_INTERRUPTIBLE);
+                                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
                         read_unlock(&rsi_cache.hash_lock);
 
                         if (valid == 0)
-                                schedule_timeout(GSS_SVC_UPCALL_TIMEOUT * HZ);
+                                cfs_schedule_timeout(GSS_SVC_UPCALL_TIMEOUT *
+                                                     CFS_HZ);
 
                         cache_get(&rsip->h);
                         goto cache_check;
@@ -1289,7 +1290,7 @@ cache_check:
                 break;
         }
 
-        remove_wait_queue(&rsip->waitq, &wait);
+        cfs_waitq_del(&rsip->waitq, &wait);
         cache_put(&rsip->h, &rsi_cache);
 
         if (rc)
@@ -1325,7 +1326,7 @@ cache_check:
         }
 
         grctx->src_init = 1;
-        grctx->src_reserve_len = size_round4(rsip->out_token.len);
+        grctx->src_reserve_len = cfs_size_round4(rsip->out_token.len);
 
         rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
         if (rc) {
@@ -1369,7 +1370,7 @@ out:
         if (rsci) {
                 /* if anything went wrong, we don't keep the context too */
                 if (rc != SECSVC_OK)
-                        set_bit(CACHE_NEGATIVE, &rsci->h.flags);
+                        cfs_set_bit(CACHE_NEGATIVE, &rsci->h.flags);
                 else
                         CDEBUG(D_SEC, "create rsc with idx "LPX64"\n",
                                gss_handle_to_u64(&rsci->handle));
@@ -1407,7 +1408,7 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
         struct rsc *rsc = container_of(ctx, struct rsc, ctx);
 
         /* can't be found */
-        set_bit(CACHE_NEGATIVE, &rsc->h.flags);
+        cfs_set_bit(CACHE_NEGATIVE, &rsc->h.flags);
         /* to be removed at next scan */
         rsc->h.expiry_time = 1;
 }
@@ -1416,14 +1417,14 @@ int __init gss_init_svc_upcall(void)
 {
         int     i;
 
-        spin_lock_init(&__ctx_index_lock);
+        cfs_spin_lock_init(&__ctx_index_lock);
         /*
          * this helps reducing context index confliction. after server reboot,
          * conflicting request from clients might be filtered out by initial
          * sequence number checking, thus no chance to sent error notification
          * back to clients.
          */
-        get_random_bytes(&__ctx_index, sizeof(__ctx_index));
+        ll_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
 
         cache_register(&rsi_cache);
@@ -1437,9 +1438,9 @@ int __init gss_init_svc_upcall(void)
         for (i = 0; i < 6; i++) {
                 if (atomic_read(&rsi_cache.readers) > 0)
                         break;
-                set_current_state(TASK_UNINTERRUPTIBLE);
-                LASSERT(HZ >= 4);
-                schedule_timeout(HZ / 4);
+                cfs_set_current_state(TASK_UNINTERRUPTIBLE);
+                LASSERT(CFS_HZ >= 4);
+                cfs_schedule_timeout(CFS_HZ / 4);
         }
 
         if (atomic_read(&rsi_cache.readers) == 0)

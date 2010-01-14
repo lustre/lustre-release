@@ -69,8 +69,8 @@
  *  cfs_time_t     cfs_time_current(void);
  *  cfs_time_t     cfs_time_add    (cfs_time_t, cfs_duration_t);
  *  cfs_duration_t cfs_time_sub    (cfs_time_t, cfs_time_t);
- *  int            cfs_time_before (cfs_time_t, cfs_time_t);
- *  int            cfs_time_beforeq(cfs_time_t, cfs_time_t);
+ *  int            cfs_impl_time_before (cfs_time_t, cfs_time_t);
+ *  int            cfs_impl_time_before_eq(cfs_time_t, cfs_time_t);
  *
  *  cfs_duration_t cfs_duration_build(int64_t);
  *
@@ -92,6 +92,7 @@
 
 #define ONE_BILLION ((u_int64_t)1000000000)
 #define ONE_MILLION 1000000
+#define CFS_HZ      HZ
 
 #ifndef __KERNEL__
 #error This include is only for kernel use.
@@ -177,7 +178,17 @@ static inline unsigned long long __cfs_fs_time_flat(cfs_fs_time_t *t)
 
 typedef unsigned long cfs_time_t;      /* jiffies */
 typedef long cfs_duration_t;
+typedef cycles_t cfs_cycles_t;
 
+static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
+{       
+        return time_before(t1, t2);
+}
+
+static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
+{       
+        return time_before_eq(t1, t2);
+}
 
 static inline cfs_time_t cfs_time_current(void)
 {
@@ -246,7 +257,8 @@ static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
         s->tv_usec = t;
 #else
         s->tv_sec = d / HZ;
-        s->tv_usec = ((d - (cfs_duration_t)s->tv_sec * HZ) * ONE_MILLION) / HZ;
+        s->tv_usec = ((d - (cfs_duration_t)s->tv_sec * HZ) * \
+                ONE_MILLION) / HZ;
 #endif
 }
 
@@ -306,7 +318,7 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 #define CFS_TIME_T              "%lu"
 #define CFS_DURATION_T          "%ld"
 
-#define cfs_do_gettimeofday(tv) do_gettimeofday(tv)
+#define cfs_gettimeofday(tv) do_gettimeofday(tv)
 
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */
 /*

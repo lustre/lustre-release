@@ -77,6 +77,11 @@
 #include <linux/kallsyms.h>
 #endif
 
+/* We need to pass a pointer here, but elsewhere this must be a const */
+static char *debug_file_path = &libcfs_debug_file_path_arr[0];
+CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
+                "Path for dumping debug logs (deprecated)");
+
 char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
 char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";
 
@@ -173,7 +178,8 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
-                         "LBUG - trying to dump log to %s\n", debug_file_path);
+                         "LBUG - trying to dump log to %s\n",
+                         libcfs_debug_file_path);
         libcfs_debug_dumplog();
         libcfs_run_lbug_upcall(file, func, line);
         asm("int $3");
@@ -310,7 +316,7 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
          * console on the rare cases it is ever triggered. */
 
         if (in_interrupt()) {
-                trace_debug_print();
+                cfs_trace_debug_print();
         } else {
                 while (current->lock_depth >= 0)
                         unlock_kernel();

@@ -192,7 +192,7 @@ static inline void l_mutex_done(l_mutex_t *mutex)
 static inline void l_mutex_lock(l_mutex_t *mutex)
 {
 #if L_LOCK_DEBUG
-	printf("lock mutex  :%s\n", mutex->s_name);
+	printf("lock cfs_mutex  :%s\n", mutex->s_name);
 #endif
 	sem_wait(mutex->s_sem);
 }
@@ -200,7 +200,7 @@ static inline void l_mutex_lock(l_mutex_t *mutex)
 static inline void l_mutex_unlock(l_mutex_t *mutex)
 {
 #if L_LOCK_DEBUG
-	printf("unlock mutex: %s\n", mutex->s_name);
+	printf("unlock cfs_mutex: %s\n", mutex->s_name);
 #endif
 	sem_post(mutex->s_sem);
 }

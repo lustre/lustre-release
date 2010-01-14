@@ -48,11 +48,11 @@
 #include <lnet/ptllnd.h>           /* Depends on portals/p30.h */
 #include <stdarg.h>
 
-/* Hack to record history 
+/* Hack to record history
  * This should really be done by CDEBUG(D_NETTRACE...  */
 
 typedef struct {
-        struct list_head          he_list;
+        cfs_list_t                he_list;
         struct timeval            he_time;
         const char               *he_fn;
         const char               *he_file;
@@ -67,7 +67,7 @@ void ptllnd_history(const char *fn, const char *file, const int line,
 #define PTLLND_HISTORY(fmt, a...) \
         ptllnd_history(__FUNCTION__, __FILE__, __LINE__, fmt, ## a)
 
-        
+
 #define PTLLND_MD_OPTIONS        (PTL_MD_LUSTRE_COMPLETION_SEMANTICS |\
                                   PTL_MD_EVENT_START_DISABLE)
 typedef struct
@@ -91,8 +91,8 @@ typedef struct
         int                        plni_timeout;
 
         __u64                      plni_stamp;
-        struct list_head           plni_active_txs;
-        struct list_head           plni_zombie_txs;
+        cfs_list_t                 plni_active_txs;
+        cfs_list_t                 plni_zombie_txs;
         int                        plni_ntxs;
         int                        plni_nrxs;
 
@@ -100,16 +100,16 @@ typedef struct
         ptl_handle_eq_t            plni_eqh;
         ptl_process_id_t           plni_portals_id;   /* Portals ID of interface */
 
-        struct list_head          *plni_peer_hash;
+        cfs_list_t                *plni_peer_hash;
         int                        plni_npeers;
 
         int                        plni_watchdog_nextt;
         int                        plni_watchdog_peeridx;
 
-        struct list_head           plni_tx_history;
+        cfs_list_t                 plni_tx_history;
         int                        plni_ntx_history;
 
-        struct list_head           plni_buffers;
+        cfs_list_t                 plni_buffers;
         int                        plni_nbuffers;
         int                        plni_nposted_buffers;
         int                        plni_nmsgs;
@@ -119,7 +119,7 @@ typedef struct
 
 typedef struct
 {
-        struct list_head           plp_list;
+        cfs_list_t                 plp_list;
         lnet_ni_t                 *plp_ni;
         lnet_process_id_t          plp_id;
         ptl_process_id_t           plp_ptlid;
@@ -145,14 +145,14 @@ typedef struct
         int                        plp_closing:1;
         __u64                      plp_match;
         __u64                      plp_stamp;
-        struct list_head           plp_txq;
-        struct list_head           plp_noopq;
-        struct list_head           plp_activeq;
+        cfs_list_t                 plp_txq;
+        cfs_list_t                 plp_noopq;
+        cfs_list_t                 plp_activeq;
 } ptllnd_peer_t;
 
 typedef struct
 {
-        struct list_head           plb_list;
+        cfs_list_t                 plb_list;
         lnet_ni_t                 *plb_ni;
         int                        plb_posted;
         ptl_handle_md_t            plb_md;
@@ -168,7 +168,7 @@ typedef struct
 
 typedef struct
 {
-        struct list_head           tx_list;
+        cfs_list_t                 tx_list;
         int                        tx_type;
         int                        tx_status;
         ptllnd_peer_t             *tx_peer;

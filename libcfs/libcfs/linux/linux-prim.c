@@ -74,7 +74,7 @@ EXPORT_SYMBOL(cfs_waitq_add);
 
 void
 cfs_waitq_add_exclusive(cfs_waitq_t *waitq,
-                             cfs_waitlink_t *link)
+                        cfs_waitlink_t *link)
 {
         add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
 }
@@ -123,16 +123,24 @@ cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
 EXPORT_SYMBOL(cfs_waitq_wait);
 
 int64_t
-cfs_waitq_timedwait(cfs_waitlink_t *link, cfs_task_state_t state, int64_t timeout)
+cfs_waitq_timedwait(cfs_waitlink_t *link, cfs_task_state_t state,
+                    int64_t timeout)
 {
         return schedule_timeout(timeout);
 }
 EXPORT_SYMBOL(cfs_waitq_timedwait);
 
 void
-cfs_schedule_timeout(cfs_task_state_t state, int64_t timeout)
+cfs_schedule_timeout_and_set_state(cfs_task_state_t state, int64_t timeout)
 {
         set_current_state(state);
+        schedule_timeout(timeout);
+}
+EXPORT_SYMBOL(cfs_schedule_timeout_and_set_state);
+
+void
+cfs_schedule_timeout(int64_t timeout)
+{
         schedule_timeout(timeout);
 }
 EXPORT_SYMBOL(cfs_schedule_timeout);

@@ -219,7 +219,7 @@ static int auto_quota_on(struct obd_device *obd, int type,
         if (!oqctl)
                 RETURN(-ENOMEM);
 
-        down(&obt->obt_quotachecking);
+        cfs_down(&obt->obt_quotachecking);
         id = UGQUOTA2LQC(type);
         /* quota already turned on */
         if ((obt->obt_qctxt.lqc_flags & id) == id)
@@ -239,7 +239,7 @@ static int auto_quota_on(struct obd_device *obd, int type,
 
         if (is_master) {
                 mds = &obd->u.mds;
-                down(&mds->mds_qonoff_sem);
+                cfs_down(&mds->mds_qonoff_sem);
                 /* turn on cluster wide quota */
                 rc1 = mds_admin_quota_on(obd, oqctl);
                 if (rc1 && rc1 != -EALREADY) {
@@ -279,11 +279,11 @@ static int auto_quota_on(struct obd_device *obd, int type,
 
 out_ctxt:
         if (mds != NULL)
-                up(&mds->mds_qonoff_sem);
+                cfs_up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
 out:
-        up(&obt->obt_quotachecking);
+        cfs_up(&obt->obt_quotachecking);
         OBD_FREE_PTR(oqctl);
         return rc;
 }
@@ -306,7 +306,7 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         if (count > MAX_STYPE_SIZE)
                 return -EINVAL;
 
-        if (copy_from_user(stype, buffer, count))
+        if (cfs_copy_from_user(stype, buffer, count))
                 return -EFAULT;
 
         for (i = 0 ; i < count ; i++) {

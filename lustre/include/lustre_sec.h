@@ -375,17 +375,17 @@ struct ptlrpc_ctx_ops {
                                         PTLRPC_CTX_ERROR)
 
 struct ptlrpc_cli_ctx {
-        struct hlist_node       cc_cache;      /* linked into ctx cache */
-        atomic_t                cc_refcount;
+        cfs_hlist_node_t        cc_cache;      /* linked into ctx cache */
+        cfs_atomic_t            cc_refcount;
         struct ptlrpc_sec      *cc_sec;
         struct ptlrpc_ctx_ops  *cc_ops;
         cfs_time_t              cc_expire;     /* in seconds */
         unsigned int            cc_early_expire:1;
         unsigned long           cc_flags;
         struct vfs_cred         cc_vcred;
-        spinlock_t              cc_lock;
-        struct list_head        cc_req_list;   /* waiting reqs linked here */
-        struct list_head        cc_gc_chain;   /* linked to gc chain */
+        cfs_spinlock_t          cc_lock;
+        cfs_list_t              cc_req_list;   /* waiting reqs linked here */
+        cfs_list_t              cc_gc_chain;   /* linked to gc chain */
 };
 
 struct ptlrpc_sec_cops {
@@ -473,7 +473,7 @@ struct ptlrpc_sec_sops {
 };
 
 struct ptlrpc_sec_policy {
-        struct module                  *sp_owner;
+        cfs_module_t                   *sp_owner;
         char                           *sp_name;
         __u16                           sp_policy; /* policy number */
         struct ptlrpc_sec_cops         *sp_cops;   /* client ops */
@@ -488,18 +488,18 @@ struct ptlrpc_sec_policy {
 
 struct ptlrpc_sec {
         struct ptlrpc_sec_policy       *ps_policy;
-        atomic_t                        ps_refcount;
-        atomic_t                        ps_nctx;        /* statistic only */
+        cfs_atomic_t                    ps_refcount;
+        cfs_atomic_t                    ps_nctx;        /* statistic only */
         int                             ps_id;          /* unique identifier */
         struct sptlrpc_flavor           ps_flvr;        /* flavor */
         enum lustre_sec_part            ps_part;
         unsigned int                    ps_dying:1;
         struct obd_import              *ps_import;      /* owning import */
-        spinlock_t                      ps_lock;        /* protect ccache */
+        cfs_spinlock_t                  ps_lock;        /* protect ccache */
         /*
          * garbage collection
          */
-        struct list_head                ps_gc_list;
+        cfs_list_t                      ps_gc_list;
         cfs_time_t                      ps_gc_interval; /* in seconds */
         cfs_time_t                      ps_gc_next;     /* in seconds */
 };
@@ -516,7 +516,7 @@ static inline int sec_is_rootonly(struct ptlrpc_sec *sec)
 
 
 struct ptlrpc_svc_ctx {
-        atomic_t                        sc_refcount;
+        cfs_atomic_t                    sc_refcount;
         struct ptlrpc_sec_policy       *sc_policy;
 };
 
@@ -618,14 +618,14 @@ char *sptlrpc_secflags2str(__u32 flags, char *buf, int bufsize);
 static inline
 struct ptlrpc_sec_policy *sptlrpc_policy_get(struct ptlrpc_sec_policy *policy)
 {
-        __module_get(policy->sp_owner);
+        __cfs_module_get(policy->sp_owner);
         return policy;
 }
 
 static inline
 void sptlrpc_policy_put(struct ptlrpc_sec_policy *policy)
 {
-        module_put(policy->sp_owner);
+        cfs_module_put(policy->sp_owner);
 }
 
 /*

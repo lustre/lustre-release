@@ -112,16 +112,16 @@ seq_server_proc_write_space(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lss_space);
 	if (rc == 0) {
 		CDEBUG(D_INFO, "%s: Space: "DRANGE"\n",
                        seq->lss_name, PRANGE(&seq->lss_space));
 	}
-	
-	up(&seq->lss_sem);
-	
+
+        cfs_up(&seq->lss_sem);
+
         RETURN(count);
 }
 
@@ -135,11 +135,11 @@ seq_server_proc_read_space(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
 	rc = seq_proc_read_common(page, start, off, count, eof,
                                   data, &seq->lss_space);
-	up(&seq->lss_sem);
-	
+        cfs_up(&seq->lss_sem);
+
 	RETURN(rc);
 }
 
@@ -167,7 +167,7 @@ seq_server_proc_read_server(char *page, char **start, off_t off,
 	} else {
 		rc = snprintf(page, count, "<none>\n");
 	}
-	
+
 	RETURN(rc);
 }
 
@@ -181,7 +181,7 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
@@ -193,9 +193,9 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
 		CDEBUG(D_INFO, "%s: Width: "LPU64"\n",
                        seq->lss_name, seq->lss_width);
 	}
-	
-	up(&seq->lss_sem);
-	
+
+        cfs_up(&seq->lss_sem);
+
         RETURN(count);
 }
 
@@ -209,10 +209,10 @@ seq_server_proc_read_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lss_sem);
+        cfs_down(&seq->lss_sem);
         rc = snprintf(page, count, LPU64"\n", seq->lss_width);
-	up(&seq->lss_sem);
-	
+        cfs_up(&seq->lss_sem);
+
 	RETURN(rc);
 }
 
@@ -227,7 +227,7 @@ seq_client_proc_write_space(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lcs_space);
 
@@ -235,9 +235,9 @@ seq_client_proc_write_space(struct file *file, const char *buffer,
 		CDEBUG(D_INFO, "%s: Space: "DRANGE"\n",
                        seq->lcs_name, PRANGE(&seq->lcs_space));
 	}
-	
-	up(&seq->lcs_sem);
-	
+
+        cfs_up(&seq->lcs_sem);
+
         RETURN(count);
 }
 
@@ -251,11 +251,11 @@ seq_client_proc_read_space(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
 	rc = seq_proc_read_common(page, start, off, count, eof,
                                   data, &seq->lcs_space);
-	up(&seq->lcs_sem);
-	
+        cfs_up(&seq->lcs_sem);
+
 	RETURN(rc);
 }
 
@@ -269,7 +269,7 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
@@ -283,9 +283,9 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
                                seq->lcs_name, seq->lcs_width);
                 }
         }
-	
-	up(&seq->lcs_sem);
-	
+
+        cfs_up(&seq->lcs_sem);
+
         RETURN(count);
 }
 
@@ -299,10 +299,10 @@ seq_client_proc_read_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
         rc = snprintf(page, count, LPU64"\n", seq->lcs_width);
-	up(&seq->lcs_sem);
-	
+        cfs_up(&seq->lcs_sem);
+
 	RETURN(rc);
 }
 
@@ -316,10 +316,10 @@ seq_client_proc_read_fid(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
         rc = snprintf(page, count, DFID"\n", PFID(&seq->lcs_fid));
-	up(&seq->lcs_sem);
-	
+        cfs_up(&seq->lcs_sem);
+
 	RETURN(rc);
 }
 

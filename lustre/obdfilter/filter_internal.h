@@ -71,12 +71,13 @@ extern struct file_operations filter_per_nid_stats_fops;
 
 /* per-client-per-object persistent state (LRU) */
 struct filter_mod_data {
-        struct list_head fmd_list;      /* linked to fed_mod_list */
-        __u64            fmd_id;        /* object being written to */
-        __u64            fmd_gr;        /* group being written to */
-        __u64            fmd_mactime_xid;/* xid highest {m,a,c}time setattr */
-        unsigned long    fmd_expire;    /* jiffies when it should expire */
-        int              fmd_refcount;  /* reference counter - list holds 1 */
+        cfs_list_t       fmd_list;       /* linked to fed_mod_list */
+        __u64            fmd_id;         /* object being written to */
+        __u64            fmd_gr;         /* group being written to */
+        __u64            fmd_mactime_xid;/* xid highest {m,a,c}time
+                                              * setattr */
+        unsigned long    fmd_expire;   /* jiffies when it should expire */
+        int              fmd_refcount; /* reference counter, list holds 1 */
 };
 
 #ifdef HAVE_BGL_SUPPORT
@@ -85,7 +86,7 @@ struct filter_mod_data {
 #define FILTER_FMD_MAX_NUM_DEFAULT  32
 #endif
 /* Client cache seconds */
-#define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
+#define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * CFS_HZ)
 
 #ifndef HAVE_PAGE_CONSTANT
 #define mapping_cap_page_constant_write(mapping) 0

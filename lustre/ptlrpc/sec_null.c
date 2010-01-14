@@ -143,7 +143,7 @@ struct ptlrpc_cli_ctx *null_lookup_ctx(struct ptlrpc_sec *sec,
                                        struct vfs_cred *vcred,
                                        int create, int remove_dead)
 {
-        atomic_inc(&null_cli_ctx.cc_refcount);
+        cfs_atomic_inc(&null_cli_ctx.cc_refcount);
         return &null_cli_ctx;
 }
 
@@ -274,7 +274,7 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
 }
 
 static struct ptlrpc_svc_ctx null_svc_ctx = {
-        .sc_refcount    = ATOMIC_INIT(1),
+        .sc_refcount    = CFS_ATOMIC_INIT(1),
         .sc_policy      = &null_policy,
 };
 
@@ -295,7 +295,7 @@ int null_accept(struct ptlrpc_request *req)
         req->rq_reqlen = req->rq_reqdata_len;
 
         req->rq_svc_ctx = &null_svc_ctx;
-        atomic_inc(&req->rq_svc_ctx->sc_refcount);
+        cfs_atomic_inc(&req->rq_svc_ctx->sc_refcount);
 
         return SECSVC_OK;
 }
@@ -322,7 +322,7 @@ int null_alloc_rs(struct ptlrpc_request *req, int msgsize)
         }
 
         rs->rs_svc_ctx = req->rq_svc_ctx;
-        atomic_inc(&req->rq_svc_ctx->sc_refcount);
+        cfs_atomic_inc(&req->rq_svc_ctx->sc_refcount);
 
         rs->rs_repbuf = (struct lustre_msg *) (rs + 1);
         rs->rs_repbuf_len = rs_size - sizeof(*rs);
@@ -335,8 +335,8 @@ int null_alloc_rs(struct ptlrpc_request *req, int msgsize)
 static
 void null_free_rs(struct ptlrpc_reply_state *rs)
 {
-        LASSERT(atomic_read(&rs->rs_svc_ctx->sc_refcount) > 1);
-        atomic_dec(&rs->rs_svc_ctx->sc_refcount);
+        LASSERT(cfs_atomic_read(&rs->rs_svc_ctx->sc_refcount) > 1);
+        cfs_atomic_dec(&rs->rs_svc_ctx->sc_refcount);
 
         if (!rs->rs_prealloc)
                 OBD_FREE(rs, rs->rs_size);
@@ -401,31 +401,31 @@ static struct ptlrpc_sec_policy null_policy = {
 
 static void null_init_internal(void)
 {
-        static HLIST_HEAD(__list);
+        static CFS_HLIST_HEAD(__list);
 
         null_sec.ps_policy = &null_policy;
-        atomic_set(&null_sec.ps_refcount, 1);     /* always busy */
+        cfs_atomic_set(&null_sec.ps_refcount, 1);     /* always busy */
         null_sec.ps_id = -1;
         null_sec.ps_import = NULL;
         null_sec.ps_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
         null_sec.ps_flvr.sf_flags = 0;
         null_sec.ps_part = LUSTRE_SP_ANY;
         null_sec.ps_dying = 0;
-        spin_lock_init(&null_sec.ps_lock);
-        atomic_set(&null_sec.ps_nctx, 1);         /* for "null_cli_ctx" */
+        cfs_spin_lock_init(&null_sec.ps_lock);
+        cfs_atomic_set(&null_sec.ps_nctx, 1);         /* for "null_cli_ctx" */
         CFS_INIT_LIST_HEAD(&null_sec.ps_gc_list);
         null_sec.ps_gc_interval = 0;
         null_sec.ps_gc_next = 0;
 
-        hlist_add_head(&null_cli_ctx.cc_cache, &__list);
-        atomic_set(&null_cli_ctx.cc_refcount, 1);    /* for hash */
+        cfs_hlist_add_head(&null_cli_ctx.cc_cache, &__list);
+        cfs_atomic_set(&null_cli_ctx.cc_refcount, 1);    /* for hash */
         null_cli_ctx.cc_sec = &null_sec;
         null_cli_ctx.cc_ops = &null_ctx_ops;
         null_cli_ctx.cc_expire = 0;
         null_cli_ctx.cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_ETERNAL |
                                 PTLRPC_CTX_UPTODATE;
         null_cli_ctx.cc_vcred.vc_uid = 0;
-        spin_lock_init(&null_cli_ctx.cc_lock);
+        cfs_spin_lock_init(&null_cli_ctx.cc_lock);
         CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
         CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
 }

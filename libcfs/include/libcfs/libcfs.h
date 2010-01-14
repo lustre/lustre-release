@@ -103,14 +103,8 @@ static inline int __is_po2(unsigned long long val)
 
 #include <libcfs/list.h>
 
-/* for_each_possible_cpu is defined newly, the former is
- * for_each_cpu(eg. sles9 and sles10) b=15878 */
-#ifndef for_each_possible_cpu
-# ifdef for_each_cpu
-#  define for_each_possible_cpu(cpu) for_each_cpu(cpu)
-# else
-#  error for_each_possible_cpu is not supported by kernel!
-# endif
+#ifndef cfs_for_each_possible_cpu
+#  error cfs_for_each_possible_cpu is not supported by kernel!
 #endif
 
 /* libcfs tcpip */
@@ -141,7 +135,7 @@ struct lc_watchdog *lc_watchdog_add(int time,
 
 /* Enables a watchdog and resets its timer. */
 void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout);
-#define GET_TIMEOUT(svc) (max_t(int, obd_timeout,                       \
+#define CFS_GET_TIMEOUT(svc) (max_t(int, obd_timeout,                   \
                           AT_OFF ? 0 : at_get(&svc->srv_at_estimate)) * \
                           svc->srv_watchdog_factor)
 

@@ -145,7 +145,7 @@ int seq_client_replay_super(struct lu_client_seq *seq,
         int rc;
         ENTRY;
 
-        down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
 
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
@@ -159,7 +159,7 @@ int seq_client_replay_super(struct lu_client_seq *seq,
 #ifdef __KERNEL__
         }
 #endif
-        up(&seq->lcs_sem);
+        cfs_up(&seq->lcs_sem);
         RETURN(rc);
 }
 
@@ -234,7 +234,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         LASSERT(seq != NULL);
         LASSERT(fid != NULL);
 
-        down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
 
         if (fid_is_zero(&seq->lcs_fid) ||
             fid_oid(&seq->lcs_fid) >= seq->lcs_width)
@@ -245,7 +245,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                 if (rc) {
                         CERROR("%s: Can't allocate new sequence, "
                                "rc %d\n", seq->lcs_name, rc);
-                        up(&seq->lcs_sem);
+                        cfs_up(&seq->lcs_sem);
                         RETURN(rc);
                 }
 
@@ -268,7 +268,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         }
 
         *fid = seq->lcs_fid;
-        up(&seq->lcs_sem);
+        cfs_up(&seq->lcs_sem);
 
         CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n", seq->lcs_name,  PFID(fid));
         RETURN(rc);
@@ -282,7 +282,7 @@ EXPORT_SYMBOL(seq_client_alloc_fid);
 void seq_client_flush(struct lu_client_seq *seq)
 {
         LASSERT(seq != NULL);
-        down(&seq->lcs_sem);
+        cfs_down(&seq->lcs_sem);
         fid_zero(&seq->lcs_fid);
         /**
          * this id shld not be used for seq range allocation.
@@ -292,7 +292,7 @@ void seq_client_flush(struct lu_client_seq *seq)
         seq->lcs_space.lsr_mdt = -1;
 
         range_init(&seq->lcs_space);
-        up(&seq->lcs_sem);
+        cfs_up(&seq->lcs_sem);
 }
 EXPORT_SYMBOL(seq_client_flush);
 
@@ -367,7 +367,7 @@ int seq_client_init(struct lu_client_seq *seq,
         seq->lcs_exp = exp;
         seq->lcs_srv = srv;
         seq->lcs_type = type;
-        sema_init(&seq->lcs_sem, 1);
+        cfs_sema_init(&seq->lcs_sem, 1);
         seq->lcs_width = LUSTRE_SEQ_MAX_WIDTH;
 
         /* Make sure that things are clear before work is started. */

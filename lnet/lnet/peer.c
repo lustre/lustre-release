@@ -43,11 +43,11 @@
 int
 lnet_create_peer_table(void)
 {
-	struct list_head *hash;
-	int               i;
+	cfs_list_t  *hash;
+	int          i;
 
 	LASSERT (the_lnet.ln_peer_hash == NULL);
-	LIBCFS_ALLOC(hash, LNET_PEER_HASHSIZE * sizeof(struct list_head));
+	LIBCFS_ALLOC(hash, LNET_PEER_HASHSIZE * sizeof(cfs_list_t));
 	
 	if (hash == NULL) {
 		CERROR("Can't allocate peer hash table\n");
@@ -70,10 +70,10 @@ lnet_destroy_peer_table(void)
                 return;
 
 	for (i = 0; i < LNET_PEER_HASHSIZE; i++)
-		LASSERT (list_empty(&the_lnet.ln_peer_hash[i]));
-	
+		LASSERT (cfs_list_empty(&the_lnet.ln_peer_hash[i]));
+
 	LIBCFS_FREE(the_lnet.ln_peer_hash,
-		    LNET_PEER_HASHSIZE * sizeof (struct list_head));
+		    LNET_PEER_HASHSIZE * sizeof (cfs_list_t));
         the_lnet.ln_peer_hash = NULL;
 }
 
@@ -83,16 +83,17 @@ lnet_clear_peer_table(void)
 	int         i;
 
         LASSERT (the_lnet.ln_shutdown);         /* i.e. no new peers */
-	
+
 	for (i = 0; i < LNET_PEER_HASHSIZE; i++) {
-		struct list_head *peers = &the_lnet.ln_peer_hash[i];
+		cfs_list_t *peers = &the_lnet.ln_peer_hash[i];
 
 		LNET_LOCK();
-		while (!list_empty(peers)) {
-			lnet_peer_t *lp = list_entry(peers->next,
-						     lnet_peer_t, lp_hashlist);
-			
-			list_del(&lp->lp_hashlist);
+		while (!cfs_list_empty(peers)) {
+			lnet_peer_t *lp = cfs_list_entry(peers->next,
+                                                         lnet_peer_t,
+                                                         lp_hashlist);
+
+			cfs_list_del(&lp->lp_hashlist);
                         lnet_peer_decref_locked(lp);   /* lose hash table's ref */
 		}
 		LNET_UNLOCK();
@@ -120,7 +121,7 @@ lnet_destroy_peer_locked (lnet_peer_t *lp)
 
         LASSERT (lp->lp_refcount == 0);
         LASSERT (lp->lp_rtr_refcount == 0);
-	LASSERT (list_empty(&lp->lp_txq));
+	LASSERT (cfs_list_empty(&lp->lp_txq));
         LASSERT (lp->lp_txqnob == 0);
         LASSERT (lp->lp_rcd == NULL);
 
@@ -136,22 +137,22 @@ lnet_peer_t *
 lnet_find_peer_locked (lnet_nid_t nid)
 {
 	unsigned int      idx = LNET_NIDADDR(nid) % LNET_PEER_HASHSIZE;
-	struct list_head *peers = &the_lnet.ln_peer_hash[idx];
-	struct list_head *tmp;
+	cfs_list_t       *peers = &the_lnet.ln_peer_hash[idx];
+	cfs_list_t       *tmp;
         lnet_peer_t      *lp;
 
 	if (the_lnet.ln_shutdown)
                 return NULL;
 
-	list_for_each (tmp, peers) {
-		lp = list_entry(tmp, lnet_peer_t, lp_hashlist);
-		
+	cfs_list_for_each (tmp, peers) {
+		lp = cfs_list_entry(tmp, lnet_peer_t, lp_hashlist);
+
 		if (lp->lp_nid == nid) {
                         lnet_peer_addref_locked(lp);
 			return lp;
                 }
 	}
-        
+
 	return NULL;
 }
 
@@ -230,7 +231,7 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
         /* can't add peers after shutdown starts */
         LASSERT (!the_lnet.ln_shutdown);
 
-        list_add_tail(&lp->lp_hashlist, lnet_nid2peerhash(nid));
+        cfs_list_add_tail(&lp->lp_hashlist, lnet_nid2peerhash(nid));
         the_lnet.ln_npeers++;
         the_lnet.ln_peertable_version++;
         *lpp = lp;

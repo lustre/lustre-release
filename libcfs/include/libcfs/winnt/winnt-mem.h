@@ -60,12 +60,12 @@ typedef struct cfs_mem_cache cfs_mem_cache_t;
 #define CFS_PAGE_MASK                   (~(PAGE_SIZE - 1))
 
 typedef struct cfs_page {
-    void *      addr;
-    atomic_t    count;
-    void *      private;
-    void *      mapping;
-    __u32       index;
-    __u32       flags;
+    void *          addr;
+    cfs_atomic_t    count;
+    void *          private;
+    void *          mapping;
+    __u32           index;
+    __u32           flags;
 } cfs_page_t;
 
 #define page cfs_page
@@ -108,42 +108,42 @@ typedef struct cfs_page {
 
 /* Make it prettier to test the above... */
 #define UnlockPage(page)        unlock_page(page)
-#define Page_Uptodate(page)     test_bit(PG_uptodate, &(page)->flags)
+#define Page_Uptodate(page)     cfs_test_bit(PG_uptodate, &(page)->flags)
 #define SetPageUptodate(page) \
 	do {								\
 		arch_set_page_uptodate(page);				\
-		set_bit(PG_uptodate, &(page)->flags);			\
+		cfs_set_bit(PG_uptodate, &(page)->flags);               \
 	} while (0)
-#define ClearPageUptodate(page) clear_bit(PG_uptodate, &(page)->flags)
-#define PageDirty(page)         test_bit(PG_dirty, &(page)->flags)
-#define SetPageDirty(page)      set_bit(PG_dirty, &(page)->flags)
-#define ClearPageDirty(page)    clear_bit(PG_dirty, &(page)->flags)
-#define PageLocked(page)        test_bit(PG_locked, &(page)->flags)
-#define LockPage(page)          set_bit(PG_locked, &(page)->flags)
-#define TryLockPage(page)       test_and_set_bit(PG_locked, &(page)->flags)
-#define PageChecked(page)       test_bit(PG_checked, &(page)->flags)
-#define SetPageChecked(page)    set_bit(PG_checked, &(page)->flags)
-#define ClearPageChecked(page)  clear_bit(PG_checked, &(page)->flags)
-#define PageLaunder(page)       test_bit(PG_launder, &(page)->flags)
-#define SetPageLaunder(page)    set_bit(PG_launder, &(page)->flags)
-#define ClearPageLaunder(page)  clear_bit(PG_launder, &(page)->flags)
-#define ClearPageArch1(page)    clear_bit(PG_arch_1, &(page)->flags)
+#define ClearPageUptodate(page) cfs_clear_bit(PG_uptodate, &(page)->flags)
+#define PageDirty(page)         cfs_test_bit(PG_dirty, &(page)->flags)
+#define SetPageDirty(page)      cfs_set_bit(PG_dirty, &(page)->flags)
+#define ClearPageDirty(page)    cfs_clear_bit(PG_dirty, &(page)->flags)
+#define PageLocked(page)        cfs_test_bit(PG_locked, &(page)->flags)
+#define LockPage(page)          cfs_set_bit(PG_locked, &(page)->flags)
+#define TryLockPage(page)       cfs_test_and_set_bit(PG_locked, &(page)->flags)
+#define PageChecked(page)       cfs_test_bit(PG_checked, &(page)->flags)
+#define SetPageChecked(page)    cfs_set_bit(PG_checked, &(page)->flags)
+#define ClearPageChecked(page)  cfs_clear_bit(PG_checked, &(page)->flags)
+#define PageLaunder(page)       cfs_test_bit(PG_launder, &(page)->flags)
+#define SetPageLaunder(page)    cfs_set_bit(PG_launder, &(page)->flags)
+#define ClearPageLaunder(page)  cfs_clear_bit(PG_launder, &(page)->flags)
+#define ClearPageArch1(page)    cfs_clear_bit(PG_arch_1, &(page)->flags)
 
-#define PageError(page)		test_bit(PG_error, &(page)->flags)
-#define SetPageError(page)	set_bit(PG_error, &(page)->flags)
-#define ClearPageError(page)	clear_bit(PG_error, &(page)->flags)
-#define PageReferenced(page)    test_bit(PG_referenced, &(page)->flags)
-#define SetPageReferenced(page) set_bit(PG_referenced, &(page)->flags)
-#define ClearPageReferenced(page)       clear_bit(PG_referenced, &(page)->flags)
+#define PageError(page)		cfs_test_bit(PG_error, &(page)->flags)
+#define SetPageError(page)	cfs_set_bit(PG_error, &(page)->flags)
+#define ClearPageError(page)	cfs_clear_bit(PG_error, &(page)->flags)
+#define PageReferenced(page)    cfs_test_bit(PG_referenced, &(page)->flags)
+#define SetPageReferenced(page) cfs_set_bit(PG_referenced, &(page)->flags)
+#define ClearPageReferenced(page) cfs_clear_bit(PG_referenced, &(page)->flags)
 
-#define PageActive(page)        test_bit(PG_active, &(page)->flags)
-#define SetPageActive(page)     set_bit(PG_active, &(page)->flags)
-#define ClearPageActive(page)   clear_bit(PG_active, &(page)->flags)
+#define PageActive(page)        cfs_test_bit(PG_active, &(page)->flags)
+#define SetPageActive(page)     cfs_set_bit(PG_active, &(page)->flags)
+#define ClearPageActive(page)   cfs_clear_bit(PG_active, &(page)->flags)
 
-#define PageWriteback(page)	test_bit(PG_writeback, &(page)->flags)
-#define TestSetPageWriteback(page) test_and_set_bit(PG_writeback,	\
+#define PageWriteback(page)	cfs_test_bit(PG_writeback, &(page)->flags)
+#define TestSetPageWriteback(page) cfs_test_and_set_bit(PG_writeback,	\
 							&(page)->flags)
-#define TestClearPageWriteback(page) test_and_clear_bit(PG_writeback,	\
+#define TestClearPageWriteback(page) cfs_test_and_clear_bit(PG_writeback, \
 							&(page)->flags)
 
 #define __GFP_FS    (1)
@@ -178,17 +178,17 @@ static inline void cfs_kunmap(cfs_page_t *page)
 
 static inline void cfs_get_page(cfs_page_t *page)
 {
-    atomic_inc(&page->count);
+    cfs_atomic_inc(&page->count);
 }
 
 static inline void cfs_put_page(cfs_page_t *page)
 {
-    atomic_dec(&page->count);
+    cfs_atomic_dec(&page->count);
 }
 
 static inline int cfs_page_count(cfs_page_t *page)
 {
-    return atomic_read(&page->count);
+    return cfs_atomic_read(&page->count);
 }
 
 #define cfs_page_index(p)       ((p)->index)
@@ -210,7 +210,7 @@ extern void  cfs_free_large(void *addr);
  * SLAB allocator
  */
 
-#define SLAB_HWCACHE_ALIGN		0
+#define CFS_SLAB_HWCACHE_ALIGN		0
 
 /* The cache name is limited to 20 chars */
 
@@ -221,26 +221,27 @@ struct cfs_mem_cache {
 };
 
 
-extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long);
-extern int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
-extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
-extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
+extern cfs_mem_cache_t *cfs_mem_cache_create (const char *, size_t, size_t,
+                                              unsigned long);
+extern int cfs_mem_cache_destroy (cfs_mem_cache_t * );
+extern void *cfs_mem_cache_alloc (cfs_mem_cache_t *, int);
+extern void cfs_mem_cache_free (cfs_mem_cache_t *, void *);
 
 /*
  * shrinker 
  */
 typedef int (*shrink_callback)(int nr_to_scan, gfp_t gfp_mask);
-struct shrinker {
-    shrink_callback cb;
+struct cfs_shrinker {
+        shrink_callback cb;
 	int seeks;	/* seeks to recreate an obj */
 
 	/* These are for internal use */
-	struct list_head list;
+	cfs_list_t list;
 	long nr;	/* objs pending delete */
 };
 
-struct shrinker * set_shrinker(int seeks, shrink_callback cb);
-void remove_shrinker(struct shrinker *s);
+struct cfs_shrinker *cfs_set_shrinker(int seeks, shrink_callback cb);
+void cfs_remove_shrinker(struct cfs_shrinker *s);
 
 int start_shrinker_timer();
 void stop_shrinker_timer();
@@ -258,16 +259,15 @@ extern cfs_mem_cache_t *cfs_page_p_slab;
 #define CFS_MMSPACE_CLOSE   do {} while(0)
 
 
-#define mb()     do {} while(0)
-#define rmb()    mb()
-#define wmb()    mb()
-#define cfs_mb() mb()
+#define cfs_mb()     do {} while(0)
+#define rmb()        cfs_mb()
+#define wmb()        cfs_mb()
 
 /*
  * MM defintions from (linux/mm.h)
  */
 
-#define DEFAULT_SEEKS 2 /* shrink seek */
+#define CFS_DEFAULT_SEEKS 2 /* shrink seek */
 
 #else  /* !__KERNEL__ */
 

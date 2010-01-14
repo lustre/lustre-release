@@ -55,8 +55,8 @@ cfs_page_t * virt_to_page(void * addr)
     memset(pg, 0, sizeof(cfs_page_t));
     pg->addr = (void *)((__u64)addr & (~((__u64)PAGE_SIZE-1)));
     pg->mapping = addr;
-    atomic_set(&pg->count, 1);
-    set_bit(PG_virt, &(pg->flags));
+    cfs_atomic_set(&pg->count, 1);
+    cfs_set_bit(PG_virt, &(pg->flags));
     cfs_enter_debugger();
     return pg;
 }
@@ -76,7 +76,7 @@ cfs_page_t * virt_to_page(void * addr)
  *   N/A
  */
 
-atomic_t libcfs_total_pages;
+cfs_atomic_t libcfs_total_pages;
 
 cfs_page_t * cfs_alloc_page(int flags)
 {
@@ -90,13 +90,13 @@ cfs_page_t * cfs_alloc_page(int flags)
 
     memset(pg, 0, sizeof(cfs_page_t));
     pg->addr = cfs_mem_cache_alloc(cfs_page_p_slab, 0);
-    atomic_set(&pg->count, 1);
+    cfs_atomic_set(&pg->count, 1);
 
     if (pg->addr) {
         if (cfs_is_flag_set(flags, CFS_ALLOC_ZERO)) {
             memset(pg->addr, 0, CFS_PAGE_SIZE);
         }
-        atomic_inc(&libcfs_total_pages);
+        cfs_atomic_inc(&libcfs_total_pages);
     } else {
         cfs_enter_debugger();
         cfs_mem_cache_free(cfs_page_t_slab, pg);
@@ -123,11 +123,11 @@ void cfs_free_page(cfs_page_t *pg)
 {
     ASSERT(pg != NULL);
     ASSERT(pg->addr  != NULL);
-    ASSERT(atomic_read(&pg->count) <= 1);
+    ASSERT(cfs_atomic_read(&pg->count) <= 1);
 
-    if (!test_bit(PG_virt, &pg->flags)) {
+    if (!cfs_test_bit(PG_virt, &pg->flags)) {
         cfs_mem_cache_free(cfs_page_p_slab, pg->addr);
-        atomic_dec(&libcfs_total_pages);
+        cfs_atomic_dec(&libcfs_total_pages);
     } else {
         cfs_enter_debugger();
     }
@@ -146,13 +146,13 @@ cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
 
     memset(pg, 0, sizeof(cfs_page_t));
     pg->addr = cfs_alloc((CFS_PAGE_SIZE << order),0);
-    atomic_set(&pg->count, 1);
+    cfs_atomic_set(&pg->count, 1);
 
     if (pg->addr) {
         if (cfs_is_flag_set(flags, CFS_ALLOC_ZERO)) {
             memset(pg->addr, 0, CFS_PAGE_SIZE << order);
         }
-        atomic_add(1 << order, &libcfs_total_pages);
+        cfs_atomic_add(1 << order, &libcfs_total_pages);
     } else {
         cfs_enter_debugger();
         cfs_mem_cache_free(cfs_page_t_slab, pg);
@@ -166,9 +166,9 @@ void __cfs_free_pages(cfs_page_t *pg, unsigned int order)
 {
     ASSERT(pg != NULL);
     ASSERT(pg->addr  != NULL);
-    ASSERT(atomic_read(&pg->count) <= 1);
+    ASSERT(cfs_atomic_read(&pg->count) <= 1);
 
-    atomic_sub(1 << order, &libcfs_total_pages);
+    cfs_atomic_sub(1 << order, &libcfs_total_pages);
     cfs_free(pg->addr);
     cfs_mem_cache_free(cfs_page_t_slab, pg);
 }
@@ -415,56 +415,56 @@ void cfs_mem_cache_free(cfs_mem_cache_t * kmc, void * buf)
     ExFreeToNPagedLookasideList(&(kmc->npll), buf);
 }
 
-spinlock_t  shrinker_guard = {0};
+cfs_spinlock_t  shrinker_guard = {0};
 CFS_LIST_HEAD(shrinker_hdr);
 cfs_timer_t shrinker_timer = {0};
 
-struct shrinker * set_shrinker(int seeks, shrink_callback cb)
+struct cfs_shrinker * cfs_set_shrinker(int seeks, shrink_callback cb)
 {
-    struct shrinker * s = (struct shrinker *)
-        cfs_alloc(sizeof(struct shrinker), CFS_ALLOC_ZERO);
+    struct cfs_shrinker * s = (struct cfs_shrinker *)
+        cfs_alloc(sizeof(struct cfs_shrinker), CFS_ALLOC_ZERO);
     if (s) {
         s->cb = cb;
         s->seeks = seeks;
         s->nr = 2;
-        spin_lock(&shrinker_guard);
-        list_add(&s->list, &shrinker_hdr); 
-        spin_unlock(&shrinker_guard);
+        cfs_spin_lock(&shrinker_guard);
+        cfs_list_add(&s->list, &shrinker_hdr); 
+        cfs_spin_unlock(&shrinker_guard);
     }
 
     return s;
 }
 
-void remove_shrinker(struct shrinker *s)
+void cfs_remove_shrinker(struct cfs_shrinker *s)
 {
-    struct shrinker *tmp;
-    spin_lock(&shrinker_guard);
+    struct cfs_shrinker *tmp;
+    cfs_spin_lock(&shrinker_guard);
 #if TRUE
     cfs_list_for_each_entry_typed(tmp, &shrinker_hdr,
-                            struct shrinker, list) {
+                                  struct cfs_shrinker, list) {
         if (tmp == s) {
-            list_del(&tmp->list);
+            cfs_list_del(&tmp->list);
             break;
         } 
     }
 #else
-    list_del(&s->list);
+    cfs_list_del(&s->list);
 #endif
-    spin_unlock(&shrinker_guard);
+    cfs_spin_unlock(&shrinker_guard);
     cfs_free(s);
 }
 
 /* time ut test proc */
 void shrinker_timer_proc(ulong_ptr_t arg)
 {
-    struct shrinker *s;
-    spin_lock(&shrinker_guard);
+    struct cfs_shrinker *s;
+    cfs_spin_lock(&shrinker_guard);
 
     cfs_list_for_each_entry_typed(s, &shrinker_hdr,
-                            struct shrinker, list) {
-        s->cb(s->nr, __GFP_FS);
+                                  struct cfs_shrinker, list) {
+            s->cb(s->nr, __GFP_FS);
     }
-    spin_unlock(&shrinker_guard);
+    cfs_spin_unlock(&shrinker_guard);
     cfs_timer_arm(&shrinker_timer, 300);
 }
 

@@ -44,9 +44,6 @@
 
 #define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
 
-#define cond_resched our_cond_resched
-void our_cond_resched();
-
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 
@@ -93,7 +90,7 @@ void libcfs_unregister_panic_notifier();
 #define cfs_assert     _ASSERT
 
 #ifndef get_cpu
-#define cfs_get_cpu() smp_processor_id()
+#define cfs_get_cpu() cfs_smp_processor_id()
 #define cfs_put_cpu() do { } while (0)
 #else
 #define cfs_get_cpu() get_cpu()

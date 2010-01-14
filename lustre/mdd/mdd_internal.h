@@ -102,13 +102,13 @@ struct mdd_txn_op_descr {
 #define CLM_PURGE 0x40000
 
 struct mdd_changelog {
-        spinlock_t                       mc_lock;    /* for index */
+        cfs_spinlock_t                   mc_lock;    /* for index */
         cfs_waitq_t                      mc_waitq;
         int                              mc_flags;
         int                              mc_mask;
         __u64                            mc_index;
         __u64                            mc_starttime;
-        spinlock_t                       mc_user_lock;
+        cfs_spinlock_t                   mc_user_lock;
         int                              mc_lastuser;
 };
 
@@ -546,7 +546,7 @@ static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
         return lu_object_fid(&obj->mod_obj.mo_lu);
 }
 
-static inline umode_t mdd_object_type(const struct mdd_object *obj)
+static inline cfs_umode_t mdd_object_type(const struct mdd_object *obj)
 {
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }

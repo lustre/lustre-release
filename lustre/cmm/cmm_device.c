@@ -81,7 +81,7 @@ int cmm_root_get(const struct lu_env *env, struct md_device *md,
 }
 
 static int cmm_statfs(const struct lu_env *env, struct md_device *md,
-                      struct kstatfs *sfs)
+                      cfs_kstatfs_t *sfs)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
@@ -428,16 +428,16 @@ static int cmm_post_init_mdc(const struct lu_env *env,
 
         /* get the max mdsize and cookiesize from lower layer */
         rc = cmm_maxsize_get(env, &cmm->cmm_md_dev, &max_mdsize,
-                                                &max_cookiesize);
+                             &max_cookiesize);
         if (rc)
                 RETURN(rc);
 
-        spin_lock(&cmm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
-                                 mc_linkage) {
+        cfs_spin_lock(&cmm->cmm_tgt_guard);
+        cfs_list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
+                                     mc_linkage) {
                 cmm_mdc_init_ea_size(env, mc, max_mdsize, max_cookiesize);
         }
-        spin_unlock(&cmm->cmm_tgt_guard);
+        cfs_spin_unlock(&cmm->cmm_tgt_guard);
         RETURN(rc);
 }
 
@@ -468,15 +468,15 @@ static int cmm_add_mdc(const struct lu_env *env,
                 RETURN(-EINVAL);
         }
 
-        spin_lock(&cm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
-                                 mc_linkage) {
+        cfs_spin_lock(&cm->cmm_tgt_guard);
+        cfs_list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
+                                     mc_linkage) {
                 if (mc->mc_num == mdc_num) {
-                        spin_unlock(&cm->cmm_tgt_guard);
+                        cfs_spin_unlock(&cm->cmm_tgt_guard);
                         RETURN(-EEXIST);
                 }
         }
-        spin_unlock(&cm->cmm_tgt_guard);
+        cfs_spin_unlock(&cm->cmm_tgt_guard);
         ld = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
         if (IS_ERR(ld))
                 RETURN(PTR_ERR(ld));
@@ -496,23 +496,23 @@ static int cmm_add_mdc(const struct lu_env *env,
                 RETURN(rc);
         }
 
-        spin_lock(&cm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
-                                 mc_linkage) {
+        cfs_spin_lock(&cm->cmm_tgt_guard);
+        cfs_list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
+                                     mc_linkage) {
                 if (mc->mc_num == mdc_num) {
-                        spin_unlock(&cm->cmm_tgt_guard);
+                        cfs_spin_unlock(&cm->cmm_tgt_guard);
                         ldt->ldt_ops->ldto_device_fini(env, ld);
                         ldt->ldt_ops->ldto_device_free(env, ld);
                         RETURN(-EEXIST);
                 }
         }
         mc = lu2mdc_dev(ld);
-        list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
+        cfs_list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
         cm->cmm_tgt_count++;
 #ifdef HAVE_QUOTA_SUPPORT
         first = cm->cmm_tgt_count;
 #endif
-        spin_unlock(&cm->cmm_tgt_guard);
+        cfs_spin_unlock(&cm->cmm_tgt_guard);
 
         lu_device_get(cmm_lu);
         lu_ref_add(&cmm_lu->ld_reference, "mdc-child", ld);
@@ -552,13 +552,13 @@ static void cmm_device_shutdown(const struct lu_env *env,
         fld_client_del_target(cm->cmm_fld, cm->cmm_local_num);
 
         /* Finish all mdc devices. */
-        spin_lock(&cm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
+        cfs_spin_lock(&cm->cmm_tgt_guard);
+        cfs_list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
                 fld_client_del_target(cm->cmm_fld, mc->mc_num);
                 ld_m->ld_ops->ldo_process_config(env, ld_m, cfg);
         }
-        spin_unlock(&cm->cmm_tgt_guard);
+        cfs_spin_unlock(&cm->cmm_tgt_guard);
 
         /* remove upcall device*/
         md_upcall_fini(&cm->cmm_md_dev);
@@ -687,7 +687,7 @@ static struct lu_device *cmm_device_free(const struct lu_env *env,
         ENTRY;
 
         LASSERT(m->cmm_tgt_count == 0);
-        LASSERT(list_empty(&m->cmm_targets));
+        LASSERT(cfs_list_empty(&m->cmm_targets));
         if (m->cmm_fld != NULL) {
                 OBD_FREE_PTR(m->cmm_fld);
                 m->cmm_fld = NULL;
@@ -784,7 +784,7 @@ static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
         int err = 0;
         ENTRY;
 
-        spin_lock_init(&m->cmm_tgt_guard);
+        cfs_spin_lock_init(&m->cmm_tgt_guard);
         CFS_INIT_LIST_HEAD(&m->cmm_targets);
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
@@ -813,19 +813,19 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
         ENTRY;
 
         /* Finish all mdc devices */
-        spin_lock(&cm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
+        cfs_spin_lock(&cm->cmm_tgt_guard);
+        cfs_list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
                 struct lu_device *ld_c = cmm2lu_dev(cm);
 
-                list_del_init(&mc->mc_linkage);
+                cfs_list_del_init(&mc->mc_linkage);
                 lu_ref_del(&ld_c->ld_reference, "mdc-child", ld_m);
                 lu_device_put(ld_c);
                 ld_m->ld_type->ldt_ops->ldto_device_fini(env, ld_m);
                 ld_m->ld_type->ldt_ops->ldto_device_free(env, ld_m);
                 cm->cmm_tgt_count--;
         }
-        spin_unlock(&cm->cmm_tgt_guard);
+        cfs_spin_unlock(&cm->cmm_tgt_guard);
 
         fld_client_fini(cm->cmm_fld);
         ls = cmm2lu_dev(cm)->ld_site;

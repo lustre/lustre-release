@@ -61,10 +61,10 @@ struct mdc_cli_desc {
 struct mdc_device {
         struct md_device        mc_md_dev;
         /* other MD servers in cluster */
-        struct list_head        mc_linkage;
+        cfs_list_t              mc_linkage;
         mdsno_t                 mc_num;
         struct mdc_cli_desc     mc_desc;
-        struct semaphore        mc_fid_sem;
+        cfs_semaphore_t         mc_fid_sem;
 };
 
 struct mdc_thread_info {

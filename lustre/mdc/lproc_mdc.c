@@ -154,7 +154,7 @@ static int lproc_mdc_wr_changelog(struct file *file, const char *buffer,
         if (count != sizeof(cs))
                 return -EINVAL;
 
-        if (copy_from_user(&cs, buffer, sizeof(cs)))
+        if (cfs_copy_from_user(&cs, buffer, sizeof(cs)))
                 return -EFAULT;
 
         CDEBUG(D_CHANGELOG, "changelog to pid=%d start "LPU64"\n",
@@ -214,7 +214,7 @@ static int mdc_wr_netlink(struct file *file, const char *buffer,
         CWARN("message to pid %d\n", pid);
 
         len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
-                /* for mockup below */ 2 * size_round(sizeof(*hai));
+                /* for mockup below */ 2 * cfs_size_round(sizeof(*hai));
 
         OBD_ALLOC(lh, len);
 

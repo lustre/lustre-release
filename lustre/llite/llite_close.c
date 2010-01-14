@@ -52,11 +52,12 @@ void vvp_write_pending(struct ccc_object *club, struct ccc_page *page)
         struct ll_inode_info *lli = ll_i2info(club->cob_inode);
 
         ENTRY;
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         lli->lli_flags |= LLIF_SOM_DIRTY;
-        if (page != NULL && list_empty(&page->cpg_pending_linkage))
-                list_add(&page->cpg_pending_linkage, &club->cob_pending_list);
-        spin_unlock(&lli->lli_lock);
+        if (page != NULL && cfs_list_empty(&page->cpg_pending_linkage))
+                cfs_list_add(&page->cpg_pending_linkage,
+                             &club->cob_pending_list);
+        cfs_spin_unlock(&lli->lli_lock);
         EXIT;
 }
 
@@ -67,12 +68,12 @@ void vvp_write_complete(struct ccc_object *club, struct ccc_page *page)
         int rc = 0;
 
         ENTRY;
-        spin_lock(&lli->lli_lock);
-        if (page != NULL && !list_empty(&page->cpg_pending_linkage)) {
-                list_del_init(&page->cpg_pending_linkage);
+        cfs_spin_lock(&lli->lli_lock);
+        if (page != NULL && !cfs_list_empty(&page->cpg_pending_linkage)) {
+                cfs_list_del_init(&page->cpg_pending_linkage);
                 rc = 1;
         }
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         if (rc)
                 ll_queue_done_writing(club->cob_inode, 0);
         EXIT;
@@ -87,11 +88,11 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
         struct ccc_object *club = cl2ccc(ll_i2info(inode)->lli_clob);
         ENTRY;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         lli->lli_flags |= flags;
 
         if ((lli->lli_flags & LLIF_DONE_WRITING) &&
-            list_empty(&club->cob_pending_list)) {
+            cfs_list_empty(&club->cob_pending_list)) {
                 struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
 
                 if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
@@ -100,12 +101,12 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
                                inode->i_ino, inode->i_generation,
                                lli->lli_flags);
                 /* DONE_WRITING is allowed and inode has no dirty page. */
-                spin_lock(&lcq->lcq_lock);
+                cfs_spin_lock(&lcq->lcq_lock);
 
-                LASSERT(list_empty(&lli->lli_close_list));
+                LASSERT(cfs_list_empty(&lli->lli_close_list));
                 CDEBUG(D_INODE, "adding inode %lu/%u to close list\n",
                        inode->i_ino, inode->i_generation);
-                list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
+                cfs_list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
 
                 /* Avoid a concurrent insertion into the close thread queue:
                  * an inode is already in the close thread, open(), write(),
@@ -115,10 +116,10 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
                  * it. */
                 lli->lli_flags &= ~LLIF_DONE_WRITING;
 
-                wake_up(&lcq->lcq_waitq);
-                spin_unlock(&lcq->lcq_lock);
+                cfs_waitq_signal(&lcq->lcq_waitq);
+                cfs_spin_unlock(&lcq->lcq_lock);
         }
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         EXIT;
 }
 
@@ -151,8 +152,8 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
         struct ccc_object *club = cl2ccc(ll_i2info(inode)->lli_clob);
         ENTRY;
 
-        spin_lock(&lli->lli_lock);
-        if (!(list_empty(&club->cob_pending_list))) {
+        cfs_spin_lock(&lli->lli_lock);
+        if (!(cfs_list_empty(&club->cob_pending_list))) {
                 if (!(lli->lli_flags & LLIF_EPOCH_PENDING)) {
                         LASSERT(*och != NULL);
                         LASSERT(lli->lli_pending_och == NULL);
@@ -160,7 +161,7 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
                          * request yet, DONE_WRITE is to be sent later. */
                         lli->lli_flags |= LLIF_EPOCH_PENDING;
                         lli->lli_pending_och = *och;
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
 
                         inode = igrab(inode);
                         LASSERT(inode);
@@ -172,7 +173,7 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
                          * and try DONE_WRITE again later. */
                         LASSERT(!(lli->lli_flags & LLIF_DONE_WRITING));
                         lli->lli_flags |= LLIF_DONE_WRITING;
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
 
                         inode = igrab(inode);
                         LASSERT(inode);
@@ -192,21 +193,21 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
         } else {
                 /* Pack Size-on-MDS inode attributes only if they has changed */
                 if (!(lli->lli_flags & LLIF_SOM_DIRTY)) {
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                         GOTO(out, 0);
                 }
 
                 /* There is a pending DONE_WRITE -- close epoch with no
                  * attribute change. */
                 if (lli->lli_flags & LLIF_EPOCH_PENDING) {
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                         GOTO(out, 0);
                 }
         }
 
-        LASSERT(list_empty(&club->cob_pending_list));
+        LASSERT(cfs_list_empty(&club->cob_pending_list));
         lli->lli_flags &= ~LLIF_SOM_DIRTY;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         ll_done_writing_attr(inode, op_data);
 
         EXIT;
@@ -334,16 +335,16 @@ static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
 {
         struct ll_inode_info *lli = NULL;
 
-        spin_lock(&lcq->lcq_lock);
+        cfs_spin_lock(&lcq->lcq_lock);
 
-        if (!list_empty(&lcq->lcq_head)) {
-                lli = list_entry(lcq->lcq_head.next, struct ll_inode_info,
-                                 lli_close_list);
-                list_del_init(&lli->lli_close_list);
-        } else if (atomic_read(&lcq->lcq_stop))
+        if (!cfs_list_empty(&lcq->lcq_head)) {
+                lli = cfs_list_entry(lcq->lcq_head.next, struct ll_inode_info,
+                                     lli_close_list);
+                cfs_list_del_init(&lli->lli_close_list);
+        } else if (cfs_atomic_read(&lcq->lcq_stop))
                 lli = ERR_PTR(-EALREADY);
 
-        spin_unlock(&lcq->lcq_lock);
+        cfs_spin_unlock(&lcq->lcq_lock);
         return lli;
 }
 
@@ -358,7 +359,7 @@ static int ll_close_thread(void *arg)
                 cfs_daemonize(name);
         }
 
-        complete(&lcq->lcq_comp);
+        cfs_complete(&lcq->lcq_comp);
 
         while (1) {
                 struct l_wait_info lwi = { 0 };
@@ -379,7 +380,7 @@ static int ll_close_thread(void *arg)
         }
 
         CDEBUG(D_INFO, "ll_close exiting\n");
-        complete(&lcq->lcq_comp);
+        cfs_complete(&lcq->lcq_comp);
         RETURN(0);
 }
 
@@ -395,27 +396,27 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
         if (lcq == NULL)
                 return -ENOMEM;
 
-        spin_lock_init(&lcq->lcq_lock);
-        INIT_LIST_HEAD(&lcq->lcq_head);
-        init_waitqueue_head(&lcq->lcq_waitq);
-        init_completion(&lcq->lcq_comp);
+        cfs_spin_lock_init(&lcq->lcq_lock);
+        CFS_INIT_LIST_HEAD(&lcq->lcq_head);
+        cfs_waitq_init(&lcq->lcq_waitq);
+        cfs_init_completion(&lcq->lcq_comp);
 
-        pid = kernel_thread(ll_close_thread, lcq, 0);
+        pid = cfs_kernel_thread(ll_close_thread, lcq, 0);
         if (pid < 0) {
                 OBD_FREE(lcq, sizeof(*lcq));
                 return pid;
         }
 
-        wait_for_completion(&lcq->lcq_comp);
+        cfs_wait_for_completion(&lcq->lcq_comp);
         *lcq_ret = lcq;
         return 0;
 }
 
 void ll_close_thread_shutdown(struct ll_close_queue *lcq)
 {
-        init_completion(&lcq->lcq_comp);
-        atomic_inc(&lcq->lcq_stop);
-        wake_up(&lcq->lcq_waitq);
-        wait_for_completion(&lcq->lcq_comp);
+        cfs_init_completion(&lcq->lcq_comp);
+        cfs_atomic_inc(&lcq->lcq_stop);
+        cfs_waitq_signal(&lcq->lcq_waitq);
+        cfs_wait_for_completion(&lcq->lcq_comp);
         OBD_FREE(lcq, sizeof(*lcq));
 }

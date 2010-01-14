@@ -124,8 +124,8 @@ struct lustre_client_ocd {
          * mount is connected to. This field is updated by ll_ocd_update()
          * under ->lco_lock.
          */
-        __u64      lco_flags;
-        struct semaphore   lco_lock;
+        __u64              lco_flags;
+        cfs_semaphore_t    lco_lock;
         struct obd_export *lco_md_exp;
         struct obd_export *lco_dt_exp;
 };

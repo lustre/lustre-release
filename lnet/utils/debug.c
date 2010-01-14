@@ -601,7 +601,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 strcpy(filename, argv[1]);
         else
                 sprintf(filename, "%s"CFS_TIME_T".%u",
-			DEBUG_FILE_PATH_DEFAULT, time(NULL), getpid());
+			LIBCFS_DEBUG_FILE_PATH_DEFAULT, time(NULL), getpid());
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);

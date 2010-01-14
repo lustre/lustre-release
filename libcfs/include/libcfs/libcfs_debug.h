@@ -55,10 +55,7 @@ extern cfs_duration_t libcfs_console_max_delay;
 extern cfs_duration_t libcfs_console_min_delay;
 extern unsigned int libcfs_console_backoff;
 extern unsigned int libcfs_debug_binary;
-extern char debug_file_path_arr[1024];
-#ifdef __KERNEL__
-extern char *debug_file_path;
-#endif
+extern char libcfs_debug_file_path_arr[1024];
 
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
 int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
@@ -177,7 +174,7 @@ typedef struct {
 /**
  * Filters out logging messages based on mask and subsystem.
  */
-static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
+static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
         return mask & D_CANTMASK ||
                 ((libcfs_debug & mask) && (libcfs_subsystem_debug & subsystem));
@@ -185,9 +182,9 @@ static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
 
 #define __CDEBUG(cdls, mask, format, ...)                               \
 do {                                                                    \
-        CHECK_STACK();                                                  \
+        CFS_CHECK_STACK();                                              \
                                                                         \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM))                         \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                     \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, mask,           \
                                  __FILE__, __FUNCTION__, __LINE__,      \
                                  format, ## __VA_ARGS__);               \
@@ -203,7 +200,7 @@ do {                                            \
 } while (0)
 
 #else /* !CDEBUG_ENABLED */
-static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
+static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
         return 0;
 }
@@ -335,17 +332,17 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
     libcfs_debug_vmsg2(cdls, subsys, mask, file, fn,line,NULL,NULL,format, ## __VA_ARGS__)
 
 #define cdebug_va(cdls, mask, file, func, line, fmt, args)      do {          \
-        CHECK_STACK();                                                        \
+        CFS_CHECK_STACK();                                                    \
                                                                               \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                           \
                 libcfs_debug_vmsg(cdls, DEBUG_SUBSYSTEM, (mask),              \
                                   (file), (func), (line), fmt, args);         \
 } while(0)
 
 #define cdebug(cdls, mask, file, func, line, fmt, ...) do {                   \
-        CHECK_STACK();                                                        \
+        CFS_CHECK_STACK();                                                    \
                                                                               \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                           \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),               \
                                  (file), (func), (line), fmt, ## __VA_ARGS__);\
 } while(0)
@@ -354,18 +351,18 @@ extern void libcfs_assertion_failed(const char *expr, const char *file,
                                     const char *fn, const int line);
 
 /* one more external symbol that tracefile provides: */
-extern int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
-                                const char *knl_buffer, char *append);
+extern int cfs_trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
+                                    const char *knl_buffer, char *append);
 
 
 #if defined(HAVE_BGL_SUPPORT)
-#define DEBUG_FILE_PATH_DEFAULT "/bgl/ion/tmp/lustre-log"
+#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/bgl/ion/tmp/lustre-log"
 #elif defined(__arch_um__)
-#define DEBUG_FILE_PATH_DEFAULT "/r/tmp/lustre-log"
+#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/r/tmp/lustre-log"
 #elif defined(__WINNT__)
-#define DEBUG_FILE_PATH_DEFAULT "\\SystemRoot\\temp\\lustre-log"
+#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "\\SystemRoot\\temp\\lustre-log"
 #else
-#define DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
+#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
 #endif
 
 #endif	/* __LIBCFS_DEBUG_H__ */

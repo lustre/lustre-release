@@ -96,8 +96,8 @@ static int __proc_lnet_stats(void *data, int write,
         if (pos >= min_t(int, len, strlen(tmpstr)))
                 rc = 0;
         else
-                rc = trace_copyout_string(buffer, nob,
-                                          tmpstr + pos, "\n");
+                rc = cfs_trace_copyout_string(buffer, nob,
+                                              tmpstr + pos, "\n");
 
         LIBCFS_FREE(tmpstr, tmpsiz);
         LIBCFS_FREE(ctrs, sizeof(*ctrs));
@@ -141,8 +141,8 @@ int LL_PROC_PROTO(proc_lnet_routes)
                 *ver_p = (unsigned int)the_lnet.ln_remote_nets_version;
                 LNET_UNLOCK();
         } else {
-                struct list_head  *n;
-                struct list_head  *r;
+                cfs_list_t        *n;
+                cfs_list_t        *r;
                 lnet_route_t      *route = NULL;
                 lnet_remotenet_t  *rnet  = NULL;
                 int                skip  = *ppos - 1;
@@ -158,13 +158,14 @@ int LL_PROC_PROTO(proc_lnet_routes)
                 n = the_lnet.ln_remote_nets.next;
 
                 while (n != &the_lnet.ln_remote_nets && route == NULL) {
-                        rnet = list_entry(n, lnet_remotenet_t, lrn_list);
+                        rnet = cfs_list_entry(n, lnet_remotenet_t, lrn_list);
 
                         r = rnet->lrn_routes.next;
 
                         while (r != &rnet->lrn_routes) {
-                                lnet_route_t *re = list_entry(r, lnet_route_t,
-                                                              lr_list);
+                                lnet_route_t *re =
+                                        cfs_list_entry(r, lnet_route_t,
+                                                       lr_list);
                                 if (skip == 0) {
                                         route = re;
                                         break;
@@ -197,7 +198,7 @@ int LL_PROC_PROTO(proc_lnet_routes)
         if (len > *lenp) {    /* linux-supplied buffer is too small */
                 rc = -EINVAL;
         } else if (len > 0) { /* wrote something */
-                if (copy_to_user(buffer, tmpstr, len))
+                if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
                 else
                         *ppos += 1;
@@ -244,7 +245,7 @@ int LL_PROC_PROTO(proc_lnet_routers)
                 *ver_p = (unsigned int)the_lnet.ln_routers_version;
                 LNET_UNLOCK();
         } else {
-                struct list_head  *r;
+                cfs_list_t        *r;
                 lnet_peer_t       *peer = NULL;
                 int                skip = *ppos - 1;
 
@@ -259,8 +260,8 @@ int LL_PROC_PROTO(proc_lnet_routers)
                 r = the_lnet.ln_routers.next;
 
                 while (r != &the_lnet.ln_routers) {
-                        lnet_peer_t *lp = list_entry(r, lnet_peer_t,
-                                                     lp_rtr_list);
+                        lnet_peer_t *lp = cfs_list_entry(r, lnet_peer_t,
+                                                         lp_rtr_list);
 
                         if (skip == 0) {
                                 peer = lp;
@@ -311,7 +312,7 @@ int LL_PROC_PROTO(proc_lnet_routers)
         if (len > *lenp) {    /* linux-supplied buffer is too small */
                 rc = -EINVAL;
         } else if (len > 0) { /* wrote something */
-                if (copy_to_user(buffer, tmpstr, len))
+                if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
                 else
                         *ppos += 1;
@@ -384,7 +385,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
                 num++;
         } else {
-                struct list_head  *p    = NULL;
+                cfs_list_t        *p    = NULL;
                 lnet_peer_t       *peer = NULL;
                 int                skip = num - 1;
 
@@ -401,8 +402,8 @@ int LL_PROC_PROTO(proc_lnet_peers)
                                 p = the_lnet.ln_peer_hash[idx].next;
 
                         while (p != &the_lnet.ln_peer_hash[idx]) {
-                                lnet_peer_t *lp = list_entry(p, lnet_peer_t,
-                                                             lp_hashlist);
+                                lnet_peer_t *lp = cfs_list_entry(p, lnet_peer_t,
+                                                                 lp_hashlist);
                                 if (skip == 0) {
                                         peer = lp;
 
@@ -463,7 +464,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
         if (len > *lenp) {    /* linux-supplied buffer is too small */
                 rc = -EINVAL;
         } else if (len > 0) { /* wrote something */
-                if (copy_to_user(buffer, tmpstr, len))
+                if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
                 else
                         *ppos = LNET_PHASH_POS_MAKE(idx, num);
@@ -524,8 +525,8 @@ static int __proc_lnet_buffers(void *data, int write,
         if (pos >= min_t(int, len, strlen(tmpstr)))
                 rc = 0;
         else
-                rc = trace_copyout_string(buffer, nob,
-                                          tmpstr + pos, NULL);
+                rc = cfs_trace_copyout_string(buffer, nob,
+                                              tmpstr + pos, NULL);
 
         LIBCFS_FREE(tmpstr, tmpsiz);
         return rc;
@@ -561,7 +562,7 @@ int LL_PROC_PROTO(proc_lnet_nis)
                               "rtr", "max", "tx", "min");
                 LASSERT (tmpstr + tmpsiz - s > 0);
         } else {
-                struct list_head  *n;
+                cfs_list_t        *n;
                 lnet_ni_t         *ni   = NULL;
                 int                skip = *ppos - 1;
 
@@ -570,7 +571,7 @@ int LL_PROC_PROTO(proc_lnet_nis)
                 n = the_lnet.ln_nis.next;
 
                 while (n != &the_lnet.ln_nis) {
-                        lnet_ni_t *a_ni = list_entry(n, lnet_ni_t, ni_list);
+                        lnet_ni_t *a_ni = cfs_list_entry(n, lnet_ni_t, ni_list);
 
                         if (skip == 0) {
                                 ni = a_ni;
@@ -619,7 +620,7 @@ int LL_PROC_PROTO(proc_lnet_nis)
         if (len > *lenp) {    /* linux-supplied buffer is too small */
                 rc = -EINVAL;
         } else if (len > 0) { /* wrote something */
-                if (copy_to_user(buffer, tmpstr, len))
+                if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
                 else
                         *ppos += 1;

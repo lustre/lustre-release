@@ -77,7 +77,7 @@
 #include "gss_asn1.h"
 #include "gss_krb5.h"
 
-static spinlock_t krb5_seq_lock;
+static cfs_spinlock_t krb5_seq_lock;
 
 struct krb5_enctype {
         char           *ke_dispname;
@@ -777,9 +777,9 @@ static void fill_krb5_header(struct krb5_ctx *kctx,
         }
 
         khdr->kh_filler = 0xff;
-        spin_lock(&krb5_seq_lock);
+        cfs_spin_lock(&krb5_seq_lock);
         khdr->kh_seq = cpu_to_be64(kctx->kc_seq_send++);
-        spin_unlock(&krb5_seq_lock);
+        cfs_spin_unlock(&krb5_seq_lock);
 }
 
 static __u32 verify_krb5_header(struct krb5_ctx *kctx,
@@ -1248,7 +1248,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         fill_krb5_header(kctx, khdr, 1);
 
         /* generate confounder */
-        get_random_bytes(conf, ke->ke_conf_size);
+        ll_get_random_bytes(conf, ke->ke_conf_size);
 
         /* get encryption blocksize. note kc_keye might not associated with
          * a tfm, currently only for arcfour-hmac */
@@ -1418,7 +1418,7 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
         fill_krb5_header(kctx, khdr, 1);
 
         /* generate confounder */
-        get_random_bytes(conf, ke->ke_conf_size);
+        ll_get_random_bytes(conf, ke->ke_conf_size);
 
         /* get encryption blocksize. note kc_keye might not associated with
          * a tfm, currently only for arcfour-hmac */
@@ -1828,7 +1828,7 @@ int __init init_kerberos_module(void)
 {
         int status;
 
-        spin_lock_init(&krb5_seq_lock);
+        cfs_spin_lock_init(&krb5_seq_lock);
 
         status = lgss_mech_register(&gss_kerberos_mech);
         if (status)

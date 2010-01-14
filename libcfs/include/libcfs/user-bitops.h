@@ -42,7 +42,7 @@
 #define __LIBCFS_USER_BITOPS_H__
 
 /* test if bit nr is set in bitmap addr; returns previous value of bit nr */
-static __inline__ int test_and_set_bit(int nr, unsigned long *addr)
+static __inline__ int cfs_test_and_set_bit(int nr, unsigned long *addr)
 {
         unsigned long mask;
 
@@ -53,10 +53,10 @@ static __inline__ int test_and_set_bit(int nr, unsigned long *addr)
         return nr;
 }
 
-#define set_bit(n, a) test_and_set_bit(n, a)
+#define cfs_set_bit(n, a) cfs_test_and_set_bit(n, a)
 
 /* clear bit nr in bitmap addr; returns previous value of bit nr*/
-static __inline__ int test_and_clear_bit(int nr, unsigned long *addr)
+static __inline__ int cfs_test_and_clear_bit(int nr, unsigned long *addr)
 {
         unsigned long mask;
 
@@ -67,16 +67,16 @@ static __inline__ int test_and_clear_bit(int nr, unsigned long *addr)
         return nr;
 }
 
-#define clear_bit(n, a) test_and_clear_bit(n, a)
+#define cfs_clear_bit(n, a) cfs_test_and_clear_bit(n, a)
 
-static __inline__ int test_bit(int nr, const unsigned long *addr)
+static __inline__ int cfs_test_bit(int nr, const unsigned long *addr)
 {
         return ((1UL << (nr & (BITS_PER_LONG - 1))) &
                 ((addr)[nr / BITS_PER_LONG])) != 0;
 }
 
 /* using binary seach */
-static __inline__ unsigned long __fls(long data)
+static __inline__ unsigned long __cfs_fls(long data)
 {
 	int pos = 32;
 
@@ -115,7 +115,7 @@ static __inline__ unsigned long __fls(long data)
 	return pos;
 }
 
-static __inline__ unsigned long __ffs(long data)
+static __inline__ unsigned long __cfs_ffs(long data)
 {
         int pos = 0;
 
@@ -147,16 +147,17 @@ static __inline__ unsigned long __ffs(long data)
         return pos;
 }
 
-#define __ffz(x)	__ffs(~(x))
-#define __flz(x)	__fls(~(x))
+#define __cfs_ffz(x)	__cfs_ffs(~(x))
+#define __cfs_flz(x)	__cfs_fls(~(x))
 
-unsigned long find_next_bit(unsigned long *addr,
-                            unsigned long size, unsigned long offset);
+unsigned long cfs_find_next_bit(unsigned long *addr,
+                                unsigned long size, unsigned long offset);
 
-unsigned long find_next_zero_bit(unsigned long *addr,
-                                 unsigned long size, unsigned long offset);
+unsigned long cfs_find_next_zero_bit(unsigned long *addr,
+                                     unsigned long size, unsigned long offset);
 
-#define find_first_bit(addr,size)       (find_next_bit((addr),(size),0))
-#define find_first_zero_bit(addr,size)  (find_next_zero_bit((addr),(size),0))
+#define cfs_find_first_bit(addr,size)     (cfs_find_next_bit((addr),(size),0))
+#define cfs_find_first_zero_bit(addr,size)  \
+        (cfs_find_next_zero_bit((addr),(size),0))
 
 #endif

@@ -78,7 +78,7 @@ struct lprocfs_static_vars {
 /* if we find more consumers this could be generalized */
 #define OBD_HIST_MAX 32
 struct obd_histogram {
-        spinlock_t      oh_lock;
+        cfs_spinlock_t      oh_lock;
         unsigned long   oh_buckets[OBD_HIST_MAX];
 };
 
@@ -139,8 +139,8 @@ enum {
 };
 
 struct lprocfs_atomic {
-        atomic_t               la_entry;
-        atomic_t               la_exit;
+        cfs_atomic_t               la_entry;
+        cfs_atomic_t               la_exit;
 };
 
 #define LC_MIN_INIT ((~(__u64)0) >> 1)
@@ -186,7 +186,7 @@ enum lprocfs_fields_flags {
 struct lprocfs_stats {
         unsigned int           ls_num;     /* # of counters */
         int                    ls_flags; /* See LPROCFS_STATS_FLAG_* */
-        spinlock_t             ls_lock;  /* Lock used only when there are
+        cfs_spinlock_t         ls_lock;  /* Lock used only when there are
                                           * no percpu stats areas */
         struct lprocfs_percpu *ls_percpu[0];
 };
@@ -356,10 +356,10 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
                         rc = 1;
                 if (type & LPROCFS_GET_SMP_ID)
                         rc = 0;
-                spin_lock(&stats->ls_lock);
+                cfs_spin_lock(&stats->ls_lock);
         } else {
                 if (type & LPROCFS_GET_NUM_CPU)
-                        rc = num_possible_cpus();
+                        rc = cfs_num_possible_cpus();
                 if (type & LPROCFS_GET_SMP_ID) {
                         stats->ls_flags |= LPROCFS_STATS_GET_SMP_ID;
                         rc = cfs_get_cpu();
@@ -371,7 +371,7 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
 static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats)
 {
         if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
-                spin_unlock(&stats->ls_lock);
+                cfs_spin_unlock(&stats->ls_lock);
         else if (stats->ls_flags & LPROCFS_STATS_GET_SMP_ID)
                 cfs_put_cpu();
 }
@@ -403,7 +403,7 @@ static inline __u64 lprocfs_stats_collector(struct lprocfs_stats *stats,
         int i;
 
         LASSERT(stats != NULL);
-        for (i = 0; i < num_possible_cpus(); i++)
+        for (i = 0; i < cfs_num_possible_cpus(); i++)
                 ret += lprocfs_read_helper(&(stats->ls_percpu[i]->lp_cntr[idx]),
                                            field);
         return ret;
@@ -573,12 +573,12 @@ int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
 extern int lprocfs_seq_release(struct inode *, struct file *);
 
 /* in lprocfs_stat.c, to protect the private data for proc entries */
-extern struct rw_semaphore _lprocfs_lock;
+extern cfs_rw_semaphore_t _lprocfs_lock;
 #define LPROCFS_ENTRY()           do {  \
-        down_read(&_lprocfs_lock);      \
+        cfs_down_read(&_lprocfs_lock);  \
 } while(0)
 #define LPROCFS_EXIT()            do {  \
-        up_read(&_lprocfs_lock);        \
+        cfs_up_read(&_lprocfs_lock);    \
 } while(0)
 
 #ifdef HAVE_PROCFS_DELETED
@@ -602,10 +602,10 @@ int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
 #endif
 
 #define LPROCFS_WRITE_ENTRY()     do {  \
-        down_write(&_lprocfs_lock);     \
+        cfs_down_write(&_lprocfs_lock); \
 } while(0)
 #define LPROCFS_WRITE_EXIT()      do {  \
-        up_write(&_lprocfs_lock);       \
+        cfs_up_write(&_lprocfs_lock);   \
 } while(0)
 
 
@@ -613,14 +613,14 @@ int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
  * the import in a client obd_device for a lprocfs entry */
 #define LPROCFS_CLIMP_CHECK(obd) do {           \
         typecheck(struct obd_device *, obd);    \
-        down_read(&(obd)->u.cli.cl_sem);        \
+        cfs_down_read(&(obd)->u.cli.cl_sem);    \
         if ((obd)->u.cli.cl_import == NULL) {   \
-             up_read(&(obd)->u.cli.cl_sem);     \
+             cfs_up_read(&(obd)->u.cli.cl_sem); \
              return -ENODEV;                    \
         }                                       \
 } while(0)
 #define LPROCFS_CLIMP_EXIT(obd)                 \
-        up_read(&(obd)->u.cli.cl_sem);
+        cfs_up_read(&(obd)->u.cli.cl_sem);
 
 
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only

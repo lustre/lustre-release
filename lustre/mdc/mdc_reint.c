@@ -77,7 +77,7 @@ static int mdc_reint(struct ptlrpc_request *request,
  * found by @fid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
 int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
-                            struct list_head *cancels, ldlm_mode_t mode,
+                            cfs_list_t *cancels, ldlm_mode_t mode,
                             __u64 bits)
 {
         ldlm_policy_data_t policy = {{0}};
@@ -102,7 +102,7 @@ int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
 }
 
 static int mdc_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
-                            struct list_head *cancels, int count)
+                            cfs_list_t *cancels, int count)
 {
         return ldlm_prep_elc_req(exp, req, LUSTRE_MDS_VERSION, MDS_REINT,
                                  0, cancels, count);

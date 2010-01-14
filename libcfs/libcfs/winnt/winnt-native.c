@@ -208,7 +208,7 @@ int nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 }
 
 
-void do_gettimeofday(struct timeval *tv)
+void cfs_gettimeofday(struct timeval *tv)
 {
     LARGE_INTEGER Time;
 
@@ -220,7 +220,7 @@ void do_gettimeofday(struct timeval *tv)
 
 int gettimeofday(struct timeval *tv, void * tz)
 {
-    do_gettimeofday(tv);
+    cfs_gettimeofday(tv);
     return 0;
 }
 
@@ -523,7 +523,7 @@ int cfs_proc_ioctl(int fd, int cmd, void *buffer)
         length = portal->ioc_len;
     } else if (_IOC_TYPE(cmd) == 'f') {
         length = obd->ioc_len;
-        extra = size_round(obd->ioc_plen1) + size_round(obd->ioc_plen2);
+        extra = cfs_size_round(obd->ioc_plen1) + cfs_size_round(obd->ioc_plen2);
     } else if(_IOC_TYPE(cmd) == 'u') {
         length = 4;
         extra  = 0;
@@ -560,7 +560,7 @@ int cfs_proc_ioctl(int fd, int cmd, void *buffer)
             if (obd->ioc_pbuf1 && data->ioc_plen1) {
                 data->ioc_pbuf1 = &procdat[length];
                 memcpy(data->ioc_pbuf1, obd->ioc_pbuf1, obd->ioc_plen1); 
-                length += size_round(obd->ioc_plen1);
+                length += cfs_size_round(obd->ioc_plen1);
             } else {
                 data->ioc_plen1 = 0;
                 data->ioc_pbuf1 = NULL;
@@ -569,7 +569,7 @@ int cfs_proc_ioctl(int fd, int cmd, void *buffer)
             if (obd->ioc_pbuf2 && obd->ioc_plen2) {
                 data->ioc_pbuf2 = &procdat[length];
                 memcpy(data->ioc_pbuf2, obd->ioc_pbuf2, obd->ioc_plen2);
-                length += size_round(obd->ioc_plen2);
+                length += cfs_size_round(obd->ioc_plen2);
             } else {
                 data->ioc_plen2 = 0;
                 data->ioc_pbuf2 = NULL;
@@ -603,13 +603,13 @@ int cfs_proc_ioctl(int fd, int cmd, void *buffer)
                 ASSERT(obd->ioc_plen1 == data->ioc_plen1);
                 data->ioc_pbuf1 = &procdat[length];
                 memcpy(obd->ioc_pbuf1, data->ioc_pbuf1, obd->ioc_plen1);
-                length += size_round(obd->ioc_plen1);
+                length += cfs_size_round(obd->ioc_plen1);
             }
             if (obd->ioc_pbuf2) {
                 ASSERT(obd->ioc_plen2 == data->ioc_plen2);
                 data->ioc_pbuf2 = &procdat[length];
                 memcpy(obd->ioc_pbuf2, data->ioc_pbuf2, obd->ioc_plen2);
-                length += size_round(obd->ioc_plen2);
+                length += cfs_size_round(obd->ioc_plen2);
             }
         }
         data->ioc_inlbuf1 = obd->ioc_inlbuf1;

@@ -65,26 +65,26 @@ struct lstcon_test;
 struct lstcon_node;
 
 typedef struct lstcon_rpc {
-        struct list_head        crp_link;       /* chain on rpc transaction */
-        srpc_client_rpc_t      *crp_rpc;        /* client rpc */
-        struct lstcon_node     *crp_node;       /* destination node */
+        cfs_list_t               crp_link;       /* chain on rpc transaction */
+        srpc_client_rpc_t       *crp_rpc;        /* client rpc */
+        struct lstcon_node      *crp_node;       /* destination node */
         struct lstcon_rpc_trans *crp_trans;     /* conrpc transaction */
 
-        int                     crp_posted:1;   /* rpc is posted */
-        int                     crp_finished:1; /* rpc is finished */
-        int                     crp_unpacked:1; /* reply is unpacked */
-        int                     crp_static:1;   /* not from RPC buffer */
-        int                     crp_status;     /* console rpc errors */
-        cfs_time_t              crp_stamp;      /* replied time stamp */
+        int                      crp_posted:1;   /* rpc is posted */
+        int                      crp_finished:1; /* rpc is finished */
+        int                      crp_unpacked:1; /* reply is unpacked */
+        int                      crp_static:1;   /* not from RPC buffer */
+        int                      crp_status;     /* console rpc errors */
+        cfs_time_t               crp_stamp;      /* replied time stamp */
 } lstcon_rpc_t;
 
 typedef struct lstcon_rpc_trans {
-        struct list_head        tas_olink;      /* link chain on owner list */
-        struct list_head        tas_link;       /* link chain on global list */
-        int                     tas_opc;        /* operation code of transaction */
-        cfs_waitq_t             tas_waitq;      /* wait queue head */
-        atomic_t                tas_remaining;  /* # of un-scheduled rpcs */
-        struct list_head        tas_rpcs_list;  /* queued requests */
+        cfs_list_t            tas_olink;     /* link chain on owner list */
+        cfs_list_t            tas_link;      /* link chain on global list */
+        int                   tas_opc;       /* operation code of transaction */
+        cfs_waitq_t           tas_waitq;     /* wait queue head */
+        cfs_atomic_t          tas_remaining; /* # of un-scheduled rpcs */
+        cfs_list_t            tas_rpcs_list; /* queued requests */
 } lstcon_rpc_trans_t;
 
 #define LST_TRANS_PRIVATE       0x1000
@@ -115,16 +115,16 @@ int  lstcon_testrpc_prep(struct lstcon_node *nd, int transop,
                          struct lstcon_test *test, lstcon_rpc_t **crpc);
 int  lstcon_statrpc_prep(struct lstcon_node *nd, lstcon_rpc_t **crpc);
 void lstcon_rpc_put(lstcon_rpc_t *crpc);
-int  lstcon_rpc_trans_prep(struct list_head *translist,
+int  lstcon_rpc_trans_prep(cfs_list_t *translist,
                            int transop, lstcon_rpc_trans_t **transpp);
-int  lstcon_rpc_trans_ndlist(struct list_head *ndlist,
-                             struct list_head *translist, int transop,
+int  lstcon_rpc_trans_ndlist(cfs_list_t *ndlist,
+                             cfs_list_t *translist, int transop,
                              void *arg, lstcon_rpc_cond_func_t condition,
                              lstcon_rpc_trans_t **transpp);
 void lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans,
                            lstcon_trans_stat_t *stat);
 int  lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
-                                  struct list_head *head_up,
+                                  cfs_list_t *head_up,
                                   lstcon_rpc_readent_func_t readent);
 void lstcon_rpc_trans_abort(lstcon_rpc_trans_t *trans, int error);
 void lstcon_rpc_trans_destroy(lstcon_rpc_trans_t *trans);

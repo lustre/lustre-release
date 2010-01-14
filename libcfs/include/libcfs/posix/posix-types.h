@@ -44,7 +44,9 @@
 
 #include <asm/types.h>
 #ifndef HAVE_UMODE_T
-typedef unsigned short umode_t;
+typedef unsigned short cfs_umode_t;
+#else
+typedef umode_t cfs_umode_t;
 #endif
 
 /*

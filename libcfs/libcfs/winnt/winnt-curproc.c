@@ -206,7 +206,7 @@ task_manager_notify(
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    spin_lock(&(cfs_win_task_manger.Lock));
+    cfs_spin_lock(&(cfs_win_task_manger.Lock));
 
     ListEntry = cfs_win_task_manger.TaskList.Flink;
     while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
@@ -228,7 +228,7 @@ task_manager_notify(
         ListEntry = ListEntry->Flink;
     }
 
-    spin_unlock(&(cfs_win_task_manger.Lock));
+    cfs_spin_unlock(&(cfs_win_task_manger.Lock));
 }
 
 int
@@ -241,7 +241,7 @@ init_task_manager()
     cfs_win_task_manger.Magic = TASKMAN_MAGIC;
 
     /* initialize the spinlock protection */
-    spin_lock_init(&cfs_win_task_manger.Lock);
+    cfs_spin_lock_init(&cfs_win_task_manger.Lock);
 
     /* create slab memory cache */
     cfs_win_task_manger.slab = cfs_mem_cache_create(
@@ -287,7 +287,7 @@ cleanup_task_manager()
     }
 
     /* cleanup all the taskslots attached to the list */
-    spin_lock(&(cfs_win_task_manger.Lock));
+    cfs_spin_lock(&(cfs_win_task_manger.Lock));
 
     while (!IsListEmpty(&(cfs_win_task_manger.TaskList))) {
 
@@ -298,7 +298,7 @@ cleanup_task_manager()
         cleanup_task_slot(TaskSlot);
     }
 
-    spin_unlock(&cfs_win_task_manger.Lock);
+    cfs_spin_unlock(&cfs_win_task_manger.Lock);
 
     /* destroy the taskslot cache slab */
     cfs_mem_cache_destroy(cfs_win_task_manger.slab);
@@ -321,7 +321,7 @@ cfs_current()
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    spin_lock(&(cfs_win_task_manger.Lock));
+    cfs_spin_lock(&(cfs_win_task_manger.Lock));
 
     ListEntry = cfs_win_task_manger.TaskList.Flink;
     while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
@@ -417,7 +417,7 @@ cfs_current()
 
 errorout:
 
-    spin_unlock(&(cfs_win_task_manger.Lock));
+    cfs_spin_unlock(&(cfs_win_task_manger.Lock));
 
     if (!TaskSlot) {
         cfs_enter_debugger();
@@ -431,17 +431,11 @@ errorout:
 void
 cfs_pause(cfs_duration_t ticks)
 {
-    cfs_schedule_timeout(CFS_TASK_UNINTERRUPTIBLE, ticks);
+    cfs_schedule_timeout_and_set_state(CFS_TASK_UNINTERRUPTIBLE, ticks);
 }
 
 void
-our_cond_resched()
-{
-    cfs_schedule_timeout(CFS_TASK_UNINTERRUPTIBLE, 1i64);
-}
-
-void
-cfs_schedule_timeout(cfs_task_state_t state, int64_t time)
+cfs_schedule_timeout_and_set_state(cfs_task_state_t state, int64_t time)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -464,7 +458,7 @@ cfs_schedule_timeout(cfs_task_state_t state, int64_t time)
 void
 cfs_schedule()
 {
-    cfs_schedule_timeout(CFS_TASK_UNINTERRUPTIBLE, 0);
+    cfs_schedule_timeout_and_set_state(CFS_TASK_UNINTERRUPTIBLE, 0);
 }
 
 int

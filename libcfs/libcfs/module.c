@@ -187,19 +187,19 @@ static int libcfs_psdev_release(unsigned long flags, void *args)
         RETURN(0);
 }
 
-static struct rw_semaphore ioctl_list_sem;
-static struct list_head ioctl_list;
+static cfs_rw_semaphore_t ioctl_list_sem;
+static cfs_list_t ioctl_list;
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand)
 {
         int rc = 0;
 
-        down_write(&ioctl_list_sem);
-        if (!list_empty(&hand->item))
+        cfs_down_write(&ioctl_list_sem);
+        if (!cfs_list_empty(&hand->item))
                 rc = -EBUSY;
         else
-                list_add_tail(&hand->item, &ioctl_list);
-        up_write(&ioctl_list_sem);
+                cfs_list_add_tail(&hand->item, &ioctl_list);
+        cfs_up_write(&ioctl_list_sem);
 
         return rc;
 }
@@ -209,12 +209,12 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 {
         int rc = 0;
 
-        down_write(&ioctl_list_sem);
-        if (list_empty(&hand->item))
+        cfs_down_write(&ioctl_list_sem);
+        if (cfs_list_empty(&hand->item))
                 rc = -ENOENT;
         else
-                list_del_init(&hand->item);
-        up_write(&ioctl_list_sem);
+                cfs_list_del_init(&hand->item);
+        cfs_up_write(&ioctl_list_sem);
 
         return rc;
 }
@@ -247,9 +247,9 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
                 break;
 
         case IOC_LIBCFS_LWT_SNAPSHOT: {
-                cycles_t   now;
-                int        ncpu;
-                int        total_size;
+                cfs_cycles_t   now;
+                int            ncpu;
+                int            total_size;
 
                 err = lwt_snapshot (&now, &ncpu, &total_size,
                                     data->ioc_pbuf1, data->ioc_plen1);
@@ -309,7 +309,7 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
         default: {
                 struct libcfs_ioctl_handler *hand;
                 err = -EINVAL;
-                down_read(&ioctl_list_sem);
+                cfs_down_read(&ioctl_list_sem);
                 cfs_list_for_each_entry_typed(hand, &ioctl_list,
                         struct libcfs_ioctl_handler, item) {
                         err = hand->handle_ioctl(cmd, data);
@@ -320,7 +320,7 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
                                 break;
                         }
                 }
-                up_read(&ioctl_list_sem);
+                cfs_up_read(&ioctl_list_sem);
                 break;
         }
         }
@@ -369,8 +369,8 @@ MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
 extern cfs_psdev_t libcfs_dev;
-extern struct rw_semaphore tracefile_sem;
-extern struct semaphore trace_thread_sem;
+extern cfs_rw_semaphore_t cfs_tracefile_sem;
+extern cfs_semaphore_t cfs_trace_thread_sem;
 
 extern void libcfs_init_nidstrings(void);
 extern int libcfs_arch_init(void);
@@ -382,14 +382,14 @@ static int init_libcfs_module(void)
 
         libcfs_arch_init();
         libcfs_init_nidstrings();
-        init_rwsem(&tracefile_sem);
-        init_mutex(&trace_thread_sem);
-        init_rwsem(&ioctl_list_sem);
+        cfs_init_rwsem(&cfs_tracefile_sem);
+        cfs_init_mutex(&cfs_trace_thread_sem);
+        cfs_init_rwsem(&ioctl_list_sem);
         CFS_INIT_LIST_HEAD(&ioctl_list);
 
         rc = libcfs_debug_init(5 * 1024 * 1024);
         if (rc < 0) {
-                printk(KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
+                printk(CFS_KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
                 return (rc);
         }
 
@@ -433,7 +433,7 @@ static void exit_libcfs_module(void)
         remove_proc();
 
         CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
-               atomic_read(&libcfs_kmemory));
+               cfs_atomic_read(&libcfs_kmemory));
 
         rc = cfs_psdev_deregister(&libcfs_dev);
         if (rc)
@@ -443,16 +443,17 @@ static void exit_libcfs_module(void)
         lwt_fini();
 #endif
 
-        if (atomic_read(&libcfs_kmemory) != 0)
+        if (cfs_atomic_read(&libcfs_kmemory) != 0)
                 CERROR("Portals memory leaked: %d bytes\n",
-                       atomic_read(&libcfs_kmemory));
+                       cfs_atomic_read(&libcfs_kmemory));
 
         rc = libcfs_debug_cleanup();
         if (rc)
-                printk(KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n", rc);
+                printk(CFS_KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
+                       rc);
 
-        fini_rwsem(&ioctl_list_sem);
-        fini_rwsem(&tracefile_sem);
+        cfs_fini_rwsem(&ioctl_list_sem);
+        cfs_fini_rwsem(&cfs_tracefile_sem);
 
         libcfs_arch_cleanup();
 }

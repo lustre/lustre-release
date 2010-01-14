@@ -70,7 +70,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         if (uc->mu_valid != UCRED_INIT) {
                 uc->mu_suppgids[0] = uc->mu_suppgids[1] = -1;
                 if (uc->mu_ginfo) {
-                        put_group_info(uc->mu_ginfo);
+                        cfs_put_group_info(uc->mu_ginfo);
                         uc->mu_ginfo = NULL;
                 }
                 if (uc->mu_identity) {
@@ -82,15 +82,15 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         }
 }
 
-static int match_nosquash_list(struct rw_semaphore *sem,
-                               struct list_head *nidlist,
+static int match_nosquash_list(cfs_rw_semaphore_t *sem,
+                               cfs_list_t *nidlist,
                                lnet_nid_t peernid)
 {
         int rc;
         ENTRY;
-        down_read(sem);
+        cfs_down_read(sem);
         rc = cfs_match_nid(peernid, nidlist);
-        up_read(sem);
+        cfs_up_read(sem);
         RETURN(rc);
 }
 
@@ -251,7 +251,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         if (!remote && perm & CFS_SETGRP_PERM) {
                 if (pud->pud_ngroups) {
                         /* setgroups for local client */
-                        ucred->mu_ginfo = groups_alloc(pud->pud_ngroups);
+                        ucred->mu_ginfo = cfs_groups_alloc(pud->pud_ngroups);
                         if (!ucred->mu_ginfo) {
                                 CERROR("failed to alloc %d groups\n",
                                        pud->pud_ngroups);
@@ -293,7 +293,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 out:
         if (rc) {
                 if (ucred->mu_ginfo) {
-                        put_group_info(ucred->mu_ginfo);
+                        cfs_put_group_info(ucred->mu_ginfo);
                         ucred->mu_ginfo = NULL;
                 }
                 if (ucred->mu_identity) {

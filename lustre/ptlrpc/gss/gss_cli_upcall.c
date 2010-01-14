@@ -138,11 +138,11 @@ int ctx_init_pack_request(struct obd_import *imp,
         /* 4. now the token */
         LASSERT(size >= (sizeof(__u32) + token_size));
         *p++ = cpu_to_le32(((__u32) token_size));
-        if (copy_from_user(p, token, token_size)) {
+        if (cfs_copy_from_user(p, token, token_size)) {
                 CERROR("can't copy token\n");
                 return -EFAULT;
         }
-        size -= sizeof(__u32) + size_round4(token_size);
+        size -= sizeof(__u32) + cfs_size_round4(token_size);
 
         req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, offset,
                                                 msg->lm_buflens[offset] - size, 0);
@@ -173,8 +173,8 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
                 return -EPROTO;
         }
 
-        if (outlen < (4 + 2) * 4 + size_round4(ghdr->gh_handle.len) +
-                     size_round4(msg->lm_buflens[2])) {
+        if (outlen < (4 + 2) * 4 + cfs_size_round4(ghdr->gh_handle.len) +
+                     cfs_size_round4(msg->lm_buflens[2])) {
                 CERROR("output buffer size %ld too small\n", outlen);
                 return -EFAULT;
         }
@@ -182,16 +182,16 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
         status = 0;
         effective = 0;
 
-        if (copy_to_user(outbuf, &status, 4))
+        if (cfs_copy_to_user(outbuf, &status, 4))
                 return -EFAULT;
         outbuf += 4;
-        if (copy_to_user(outbuf, &ghdr->gh_major, 4))
+        if (cfs_copy_to_user(outbuf, &ghdr->gh_major, 4))
                 return -EFAULT;
         outbuf += 4;
-        if (copy_to_user(outbuf, &ghdr->gh_minor, 4))
+        if (cfs_copy_to_user(outbuf, &ghdr->gh_minor, 4))
                 return -EFAULT;
         outbuf += 4;
-        if (copy_to_user(outbuf, &ghdr->gh_seqwin, 4))
+        if (cfs_copy_to_user(outbuf, &ghdr->gh_seqwin, 4))
                 return -EFAULT;
         outbuf += 4;
         effective += 4 * 4;
@@ -199,10 +199,10 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
         /* handle */
         obj_len = ghdr->gh_handle.len;
         round_len = (obj_len + 3) & ~ 3;
-        if (copy_to_user(outbuf, &obj_len, 4))
+        if (cfs_copy_to_user(outbuf, &obj_len, 4))
                 return -EFAULT;
         outbuf += 4;
-        if (copy_to_user(outbuf, (char *) ghdr->gh_handle.data, round_len))
+        if (cfs_copy_to_user(outbuf, (char *) ghdr->gh_handle.data, round_len))
                 return -EFAULT;
         outbuf += round_len;
         effective += 4 + round_len;
@@ -210,10 +210,10 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
         /* out token */
         obj_len = msg->lm_buflens[2];
         round_len = (obj_len + 3) & ~ 3;
-        if (copy_to_user(outbuf, &obj_len, 4))
+        if (cfs_copy_to_user(outbuf, &obj_len, 4))
                 return -EFAULT;
         outbuf += 4;
-        if (copy_to_user(outbuf, lustre_msg_buf(msg, 2, 0), round_len))
+        if (cfs_copy_to_user(outbuf, lustre_msg_buf(msg, 2, 0), round_len))
                 return -EFAULT;
         outbuf += round_len;
         effective += 4 + round_len;
@@ -252,7 +252,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                        "version\n", count, (unsigned long) sizeof(param));
                 RETURN(-EINVAL);
         }
-        if (copy_from_user(&param, buffer, sizeof(param))) {
+        if (cfs_copy_from_user(&param, buffer, sizeof(param))) {
                 CERROR("failed copy data from lgssd\n");
                 RETURN(-EFAULT);
         }
@@ -280,10 +280,10 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                 RETURN(-EINVAL);
         }
 
-        spin_lock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
         if (obd->obd_stopping) {
                 CERROR("obd %s has stopped\n", obdname);
-                spin_unlock(&obd->obd_dev_lock);
+                cfs_spin_unlock(&obd->obd_dev_lock);
                 RETURN(-EINVAL);
         }
 
@@ -291,18 +291,18 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
             strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
             strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
                 CERROR("obd %s is not a client device\n", obdname);
-                spin_unlock(&obd->obd_dev_lock);
+                cfs_spin_unlock(&obd->obd_dev_lock);
                 RETURN(-EINVAL);
         }
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
-        down_read(&obd->u.cli.cl_sem);
+        cfs_down_read(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import == NULL) {
                 CERROR("obd %s: import has gone\n", obd->obd_name);
                 RETURN(-EINVAL);
         }
         imp = class_import_get(obd->u.cli.cl_import);
-        up_read(&obd->u.cli.cl_sem);
+        cfs_up_read(&obd->u.cli.cl_sem);
 
         if (imp->imp_deactive) {
                 CERROR("import has been deactivated\n");
@@ -367,7 +367,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         param.reply_length = lsize;
 
 out_copy:
-        if (copy_to_user(buffer, &param, sizeof(param)))
+        if (cfs_copy_to_user(buffer, &param, sizeof(param)))
                 rc = -EFAULT;
         else
                 rc = 0;
@@ -386,7 +386,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         int                      rc;
         ENTRY;
 
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
         if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
                 CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
@@ -395,7 +395,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
                 RETURN(0);
         }
 
-        might_sleep();
+        cfs_might_sleep();
 
         CWARN("%s ctx %p idx "LPX64" (%u->%s)\n",
               sec_is_reverse(ctx->cc_sec) ?

@@ -69,29 +69,29 @@
 #include "gss_api.h"
 
 static CFS_LIST_HEAD(registered_mechs);
-static spinlock_t registered_mechs_lock = SPIN_LOCK_UNLOCKED;
+static cfs_spinlock_t registered_mechs_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 int lgss_mech_register(struct gss_api_mech *gm)
 {
-        spin_lock(&registered_mechs_lock);
-        list_add(&gm->gm_list, &registered_mechs);
-        spin_unlock(&registered_mechs_lock);
+        cfs_spin_lock(&registered_mechs_lock);
+        cfs_list_add(&gm->gm_list, &registered_mechs);
+        cfs_spin_unlock(&registered_mechs_lock);
         CWARN("Register %s mechanism\n", gm->gm_name);
         return 0;
 }
 
 void lgss_mech_unregister(struct gss_api_mech *gm)
 {
-        spin_lock(&registered_mechs_lock);
-        list_del(&gm->gm_list);
-        spin_unlock(&registered_mechs_lock);
+        cfs_spin_lock(&registered_mechs_lock);
+        cfs_list_del(&gm->gm_list);
+        cfs_spin_unlock(&registered_mechs_lock);
         CWARN("Unregister %s mechanism\n", gm->gm_name);
 }
 
 
 struct gss_api_mech *lgss_mech_get(struct gss_api_mech *gm)
 {
-        __module_get(gm->gm_owner);
+        __cfs_module_get(gm->gm_owner);
         return gm;
 }
 
@@ -99,16 +99,16 @@ struct gss_api_mech *lgss_name_to_mech(char *name)
 {
         struct gss_api_mech *pos, *gm = NULL;
 
-        spin_lock(&registered_mechs_lock);
-        list_for_each_entry(pos, &registered_mechs, gm_list) {
+        cfs_spin_lock(&registered_mechs_lock);
+        cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
                 if (0 == strcmp(name, pos->gm_name)) {
-                        if (!try_module_get(pos->gm_owner))
+                        if (!cfs_try_module_get(pos->gm_owner))
                                 continue;
                         gm = pos;
                         break;
                 }
         }
-        spin_unlock(&registered_mechs_lock);
+        cfs_spin_unlock(&registered_mechs_lock);
         return gm;
 
 }
@@ -129,24 +129,24 @@ struct gss_api_mech *lgss_subflavor_to_mech(__u32 subflavor)
 {
         struct gss_api_mech *pos, *gm = NULL;
 
-        spin_lock(&registered_mechs_lock);
-        list_for_each_entry(pos, &registered_mechs, gm_list) {
-                if (!try_module_get(pos->gm_owner))
+        cfs_spin_lock(&registered_mechs_lock);
+        cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
+                if (!cfs_try_module_get(pos->gm_owner))
                         continue;
                 if (!mech_supports_subflavor(pos, subflavor)) {
-                        module_put(pos->gm_owner);
+                        cfs_module_put(pos->gm_owner);
                         continue;
                 }
                 gm = pos;
                 break;
         }
-        spin_unlock(&registered_mechs_lock);
+        cfs_spin_unlock(&registered_mechs_lock);
         return gm;
 }
 
 void lgss_mech_put(struct gss_api_mech *gm)
 {
-        module_put(gm->gm_owner);
+        cfs_module_put(gm->gm_owner);
 }
 
 /* The mech could probably be determined from the token instead, but it's just

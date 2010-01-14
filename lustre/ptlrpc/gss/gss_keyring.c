@@ -128,14 +128,14 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 static inline void keyring_upcall_lock(struct gss_sec_keyring *gsec_kr)
 {
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
-        mutex_lock(&gsec_kr->gsk_uc_lock);
+        cfs_mutex_lock(&gsec_kr->gsk_uc_lock);
 #endif
 }
 
 static inline void keyring_upcall_unlock(struct gss_sec_keyring *gsec_kr)
 {
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
-        mutex_unlock(&gsec_kr->gsk_uc_lock);
+        cfs_mutex_unlock(&gsec_kr->gsk_uc_lock);
 #endif
 }
 
@@ -166,7 +166,7 @@ void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, long timeout)
         LASSERT(timer);
 
         CDEBUG(D_SEC, "ctx %p: start timer %lds\n", ctx, timeout);
-        timeout = timeout * HZ + cfs_time_current();
+        timeout = timeout * CFS_HZ + cfs_time_current();
 
         init_timer(timer);
         timer->expires = timeout;
@@ -224,8 +224,8 @@ struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
         }
 
         ctx->cc_expire = cfs_time_current_sec() + KEYRING_UPCALL_TIMEOUT;
-        clear_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags);
-        atomic_inc(&ctx->cc_refcount); /* for the caller */
+        cfs_clear_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags);
+        cfs_atomic_inc(&ctx->cc_refcount); /* for the caller */
 
         return ctx;
 }
@@ -239,9 +239,9 @@ static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
 
         /* at this time the association with key has been broken. */
         LASSERT(sec);
-        LASSERT(atomic_read(&sec->ps_refcount) > 0);
-        LASSERT(atomic_read(&sec->ps_nctx) > 0);
-        LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
+        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
+        LASSERT(cfs_atomic_read(&sec->ps_nctx) > 0);
+        LASSERT(cfs_test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
         LASSERT(gctx_kr->gck_key == NULL);
 
         ctx_clear_timer_kr(ctx);
@@ -252,7 +252,7 @@ static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
 
         OBD_FREE_PTR(gctx_kr);
 
-        atomic_dec(&sec->ps_nctx);
+        cfs_atomic_dec(&sec->ps_nctx);
         sptlrpc_sec_put(sec);
 }
 
@@ -261,16 +261,16 @@ static void ctx_release_kr(struct ptlrpc_cli_ctx *ctx, int sync)
         if (sync) {
                 ctx_destroy_kr(ctx);
         } else {
-                atomic_inc(&ctx->cc_refcount);
+                cfs_atomic_inc(&ctx->cc_refcount);
                 sptlrpc_gc_add_ctx(ctx);
         }
 }
 
 static void ctx_put_kr(struct ptlrpc_cli_ctx *ctx, int sync)
 {
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
-        if (atomic_dec_and_test(&ctx->cc_refcount))
+        if (cfs_atomic_dec_and_test(&ctx->cc_refcount))
                 ctx_release_kr(ctx, sync);
 }
 
@@ -288,16 +288,16 @@ static void ctx_put_kr(struct ptlrpc_cli_ctx *ctx, int sync)
  *   - lock ctx -> unlist -> unlock ctx -> lock key -> unbind -> unlock key
  */
 
-static inline void spin_lock_if(spinlock_t *lock, int condition)
+static inline void spin_lock_if(cfs_spinlock_t *lock, int condition)
 {
         if (condition)
-                spin_lock(lock);
+                cfs_spin_lock(lock);
 }
 
-static inline void spin_unlock_if(spinlock_t *lock, int condition)
+static inline void spin_unlock_if(cfs_spinlock_t *lock, int condition)
 {
         if (condition)
-                spin_unlock(lock);
+                cfs_spin_unlock(lock);
 }
 
 static void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
@@ -305,14 +305,14 @@ static void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
         struct ptlrpc_sec      *sec = ctx->cc_sec;
         struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
 
-        LASSERT(!test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(!cfs_test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
         spin_lock_if(&sec->ps_lock, !locked);
 
-        atomic_inc(&ctx->cc_refcount);
-        set_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
-        hlist_add_head(&ctx->cc_cache, &gsec_kr->gsk_clist);
+        cfs_atomic_inc(&ctx->cc_refcount);
+        cfs_set_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
+        cfs_hlist_add_head(&ctx->cc_cache, &gsec_kr->gsk_clist);
         if (is_root)
                 gsec_kr->gsk_root_ctx = ctx;
 
@@ -332,7 +332,7 @@ static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
         struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
 
         /* if hashed bit has gone, leave the job to somebody who is doing it */
-        if (test_and_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0)
+        if (cfs_test_and_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0)
                 return 0;
 
         /* drop ref inside spin lock to prevent race with other operations */
@@ -340,8 +340,8 @@ static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
 
         if (gsec_kr->gsk_root_ctx == ctx)
                 gsec_kr->gsk_root_ctx = NULL;
-        hlist_del_init(&ctx->cc_cache);
-        atomic_dec(&ctx->cc_refcount);
+        cfs_hlist_del_init(&ctx->cc_cache);
+        cfs_atomic_dec(&ctx->cc_refcount);
 
         spin_unlock_if(&sec->ps_lock, !locked);
 
@@ -354,14 +354,14 @@ static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
  */
 static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(atomic_read(&key->usage) > 0);
         LASSERT(ctx2gctx_keyring(ctx)->gck_key == NULL);
         LASSERT(key->payload.data == NULL);
 
         /* at this time context may or may not in list. */
         key_get(key);
-        atomic_inc(&ctx->cc_refcount);
+        cfs_atomic_inc(&ctx->cc_refcount);
         ctx2gctx_keyring(ctx)->gck_key = key;
         key->payload.data = ctx;
 }
@@ -373,7 +373,7 @@ static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
         LASSERT(key->payload.data == ctx);
-        LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
+        LASSERT(cfs_test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
 
         /* must revoke the key, or others may treat it as newly created */
         key_revoke_locked(key);
@@ -444,14 +444,14 @@ static void kill_key_locked(struct key *key)
 /*
  * caller should hold one ref on contexts in freelist.
  */
-static void dispose_ctx_list_kr(struct hlist_head *freelist)
+static void dispose_ctx_list_kr(cfs_hlist_head_t *freelist)
 {
-        struct hlist_node      *pos, *next;
+        cfs_hlist_node_t       *pos, *next;
         struct ptlrpc_cli_ctx  *ctx;
         struct gss_cli_ctx     *gctx;
 
-        hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
-                hlist_del_init(&ctx->cc_cache);
+        cfs_hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
+                cfs_hlist_del_init(&ctx->cc_cache);
 
                 /* reverse ctx: update current seq to buddy svcctx if exist.
                  * ideally this should be done at gss_cli_ctx_finalize(), but
@@ -465,7 +465,7 @@ static void dispose_ctx_list_kr(struct hlist_head *freelist)
                 if (!rawobj_empty(&gctx->gc_svc_handle) &&
                     sec_is_reverse(gctx->gc_base.cc_sec)) {
                         gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
-                                        (__u32) atomic_read(&gctx->gc_seq));
+                                        (__u32) cfs_atomic_read(&gctx->gc_seq));
                 }
 
                 /* we need to wakeup waiting reqs here. the context might
@@ -488,18 +488,19 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
         struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
         struct ptlrpc_cli_ctx   *ctx = NULL;
 
-        spin_lock(&sec->ps_lock);
+        cfs_spin_lock(&sec->ps_lock);
 
         ctx = gsec_kr->gsk_root_ctx;
 
         if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
-                struct hlist_node      *node;
+                cfs_hlist_node_t       *node;
                 struct ptlrpc_cli_ctx  *tmp;
 
                 /* reverse ctx, search root ctx in list, choose the one
                  * with shortest expire time, which is most possibly have
                  * an established peer ctx at client side. */
-                hlist_for_each_entry(tmp, node, &gsec_kr->gsk_clist, cc_cache) {
+                cfs_hlist_for_each_entry(tmp, node, &gsec_kr->gsk_clist,
+                                         cc_cache) {
                         if (ctx == NULL || ctx->cc_expire == 0 ||
                             ctx->cc_expire > tmp->cc_expire) {
                                 ctx = tmp;
@@ -510,12 +511,12 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
         }
 
         if (ctx) {
-                LASSERT(atomic_read(&ctx->cc_refcount) > 0);
-                LASSERT(!hlist_empty(&gsec_kr->gsk_clist));
-                atomic_inc(&ctx->cc_refcount);
+                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+                LASSERT(!cfs_hlist_empty(&gsec_kr->gsk_clist));
+                cfs_atomic_inc(&ctx->cc_refcount);
         }
 
-        spin_unlock(&sec->ps_lock);
+        cfs_spin_unlock(&sec->ps_lock);
 
         return ctx;
 }
@@ -528,19 +529,19 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
                                  struct key *key)
 {
         struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-        struct hlist_node      *hnode;
+        cfs_hlist_node_t       *hnode;
         struct ptlrpc_cli_ctx  *ctx;
         cfs_time_t              now;
         ENTRY;
 
         LASSERT(sec_is_reverse(sec));
 
-        spin_lock(&sec->ps_lock);
+        cfs_spin_lock(&sec->ps_lock);
 
         now = cfs_time_current_sec();
 
         /* set all existing ctxs short expiry */
-        hlist_for_each_entry(ctx, hnode, &gsec_kr->gsk_clist, cc_cache) {
+        cfs_hlist_for_each_entry(ctx, hnode, &gsec_kr->gsk_clist, cc_cache) {
                 if (ctx->cc_expire > now + RVS_CTX_EXPIRE_NICE) {
                         ctx->cc_early_expire = 1;
                         ctx->cc_expire = now + RVS_CTX_EXPIRE_NICE;
@@ -556,7 +557,7 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
         if (key)
                 bind_key_ctx(key, new_ctx);
 
-        spin_unlock(&sec->ps_lock);
+        cfs_spin_unlock(&sec->ps_lock);
 }
 
 static void construct_key_desc(void *buf, int bufsize,
@@ -584,9 +585,9 @@ struct ptlrpc_sec * gss_sec_create_kr(struct obd_import *imp,
 
         CFS_INIT_HLIST_HEAD(&gsec_kr->gsk_clist);
         gsec_kr->gsk_root_ctx = NULL;
-        mutex_init(&gsec_kr->gsk_root_uc_lock);
+        cfs_mutex_init(&gsec_kr->gsk_root_uc_lock);
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
-        mutex_init(&gsec_kr->gsk_uc_lock);
+        cfs_mutex_init(&gsec_kr->gsk_uc_lock);
 #endif
 
         if (gss_sec_create_common(&gsec_kr->gsk_base, &gss_policy_keyring,
@@ -614,7 +615,7 @@ void gss_sec_destroy_kr(struct ptlrpc_sec *sec)
 
         CDEBUG(D_SEC, "destroy %s@%p\n", sec->ps_policy->sp_name, sec);
 
-        LASSERT(hlist_empty(&gsec_kr->gsk_clist));
+        LASSERT(cfs_hlist_empty(&gsec_kr->gsk_clist));
         LASSERT(gsec_kr->gsk_root_ctx == NULL);
 
         gss_sec_destroy_common(gsec);
@@ -712,7 +713,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
          * the root upcall lock, make sure nobody else populated new root
          * context after last check. */
         if (is_root) {
-                mutex_lock(&gsec_kr->gsk_root_uc_lock);
+                cfs_mutex_lock(&gsec_kr->gsk_root_uc_lock);
 
                 ctx = sec_lookup_root_ctx_kr(sec);
                 if (ctx)
@@ -773,13 +774,13 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         if (likely(key->payload.data != NULL)) {
                 ctx = key->payload.data;
 
-                LASSERT(atomic_read(&ctx->cc_refcount) >= 1);
+                LASSERT(cfs_atomic_read(&ctx->cc_refcount) >= 1);
                 LASSERT(ctx2gctx_keyring(ctx)->gck_key == key);
                 LASSERT(atomic_read(&key->usage) >= 2);
 
                 /* simply take a ref and return. it's upper layer's
                  * responsibility to detect & replace dead ctx. */
-                atomic_inc(&ctx->cc_refcount);
+                cfs_atomic_inc(&ctx->cc_refcount);
         } else {
                 /* pre initialization with a cli_ctx. this can't be done in
                  * key_instantiate() because we'v no enough information
@@ -810,7 +811,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         key_put(key);
 out:
         if (is_root)
-                mutex_unlock(&gsec_kr->gsk_root_uc_lock);
+                cfs_mutex_unlock(&gsec_kr->gsk_root_uc_lock);
         RETURN(ctx);
 }
 
@@ -819,8 +820,8 @@ void gss_sec_release_ctx_kr(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx,
                             int sync)
 {
-        LASSERT(atomic_read(&sec->ps_refcount) > 0);
-        LASSERT(atomic_read(&ctx->cc_refcount) == 0);
+        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) == 0);
         ctx_release_kr(ctx, sync);
 }
 
@@ -878,46 +879,46 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
                              int grace, int force)
 {
         struct gss_sec_keyring *gsec_kr;
-        struct hlist_head       freelist = CFS_HLIST_HEAD_INIT;
-        struct hlist_node      *pos, *next;
+        cfs_hlist_head_t        freelist = CFS_HLIST_HEAD_INIT;
+        cfs_hlist_node_t       *pos, *next;
         struct ptlrpc_cli_ctx  *ctx;
         ENTRY;
 
         gsec_kr = sec2gsec_keyring(sec);
 
-        spin_lock(&sec->ps_lock);
-        hlist_for_each_entry_safe(ctx, pos, next,
-                                  &gsec_kr->gsk_clist, cc_cache) {
-                LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        cfs_spin_lock(&sec->ps_lock);
+        cfs_hlist_for_each_entry_safe(ctx, pos, next,
+                                      &gsec_kr->gsk_clist, cc_cache) {
+                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
                 if (uid != -1 && uid != ctx->cc_vcred.vc_uid)
                         continue;
 
                 /* at this moment there's at least 2 base reference:
                  * key association and in-list. */
-                if (atomic_read(&ctx->cc_refcount) > 2) {
+                if (cfs_atomic_read(&ctx->cc_refcount) > 2) {
                         if (!force)
                                 continue;
                         CWARN("flush busy ctx %p(%u->%s, extra ref %d)\n",
                               ctx, ctx->cc_vcred.vc_uid,
                               sec2target_str(ctx->cc_sec),
-                              atomic_read(&ctx->cc_refcount) - 2);
+                              cfs_atomic_read(&ctx->cc_refcount) - 2);
                 }
 
-                set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags);
+                cfs_set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags);
                 if (!grace)
-                        clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
+                        cfs_clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-                atomic_inc(&ctx->cc_refcount);
+                cfs_atomic_inc(&ctx->cc_refcount);
 
                 if (ctx_unlist_kr(ctx, 1)) {
-                        hlist_add_head(&ctx->cc_cache, &freelist);
+                        cfs_hlist_add_head(&ctx->cc_cache, &freelist);
                 } else {
-                        LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
-                        atomic_dec(&ctx->cc_refcount);
+                        LASSERT(cfs_atomic_read(&ctx->cc_refcount) >= 2);
+                        cfs_atomic_dec(&ctx->cc_refcount);
                 }
         }
-        spin_unlock(&sec->ps_lock);
+        cfs_spin_unlock(&sec->ps_lock);
 
         dispose_ctx_list_kr(&freelist);
         EXIT;
@@ -931,7 +932,8 @@ int gss_sec_flush_ctx_cache_kr(struct ptlrpc_sec *sec,
         ENTRY;
 
         CDEBUG(D_SEC, "sec %p(%d, nctx %d), uid %d, grace %d, force %d\n",
-               sec, atomic_read(&sec->ps_refcount), atomic_read(&sec->ps_nctx),
+               sec, cfs_atomic_read(&sec->ps_refcount),
+               cfs_atomic_read(&sec->ps_nctx),
                uid, grace, force);
 
         if (uid != -1 && uid != 0)
@@ -946,29 +948,29 @@ static
 void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 {
         struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-        struct hlist_head       freelist = CFS_HLIST_HEAD_INIT;
-        struct hlist_node      *pos, *next;
+        cfs_hlist_head_t        freelist = CFS_HLIST_HEAD_INIT;
+        cfs_hlist_node_t       *pos, *next;
         struct ptlrpc_cli_ctx  *ctx;
         ENTRY;
 
         CWARN("running gc\n");
 
-        spin_lock(&sec->ps_lock);
-        hlist_for_each_entry_safe(ctx, pos, next,
-                                  &gsec_kr->gsk_clist, cc_cache) {
-                LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        cfs_spin_lock(&sec->ps_lock);
+        cfs_hlist_for_each_entry_safe(ctx, pos, next,
+                                      &gsec_kr->gsk_clist, cc_cache) {
+                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
-                atomic_inc(&ctx->cc_refcount);
+                cfs_atomic_inc(&ctx->cc_refcount);
 
                 if (cli_ctx_check_death(ctx) && ctx_unlist_kr(ctx, 1)) {
-                        hlist_add_head(&ctx->cc_cache, &freelist);
+                        cfs_hlist_add_head(&ctx->cc_cache, &freelist);
                         CWARN("unhashed ctx %p\n", ctx);
                 } else {
-                        LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
-                        atomic_dec(&ctx->cc_refcount);
+                        LASSERT(cfs_atomic_read(&ctx->cc_refcount) >= 2);
+                        cfs_atomic_dec(&ctx->cc_refcount);
                 }
         }
-        spin_unlock(&sec->ps_lock);
+        cfs_spin_unlock(&sec->ps_lock);
 
         dispose_ctx_list_kr(&freelist);
         EXIT;
@@ -979,14 +981,14 @@ static
 int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 {
         struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-        struct hlist_node      *pos, *next;
+        cfs_hlist_node_t       *pos, *next;
         struct ptlrpc_cli_ctx  *ctx;
         struct gss_cli_ctx     *gctx;
         time_t                  now = cfs_time_current_sec();
         ENTRY;
 
-        spin_lock(&sec->ps_lock);
-        hlist_for_each_entry_safe(ctx, pos, next,
+        cfs_spin_lock(&sec->ps_lock);
+        cfs_hlist_for_each_entry_safe(ctx, pos, next,
                                   &gsec_kr->gsk_clist, cc_cache) {
                 struct key             *key;
                 char                    flags_str[40];
@@ -1008,11 +1010,11 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
                            "seq %d, win %u, key %08x(ref %d), "
                            "hdl "LPX64":"LPX64", mech: %s\n",
                            ctx, ctx->cc_vcred.vc_uid,
-                           atomic_read(&ctx->cc_refcount),
+                           cfs_atomic_read(&ctx->cc_refcount),
                            ctx->cc_expire,
                            ctx->cc_expire ?  ctx->cc_expire - now : 0,
                            flags_str,
-                           atomic_read(&gctx->gc_seq),
+                           cfs_atomic_read(&gctx->gc_seq),
                            gctx->gc_win,
                            key ? key->serial : 0,
                            key ? atomic_read(&key->usage) : 0,
@@ -1020,7 +1022,7 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
                            gss_handle_to_u64(&gctx->gc_svc_handle),
                            mech);
         }
-        spin_unlock(&sec->ps_lock);
+        cfs_spin_unlock(&sec->ps_lock);
 
         RETURN(0);
 }
@@ -1039,7 +1041,7 @@ int gss_cli_ctx_refresh_kr(struct ptlrpc_cli_ctx *ctx)
 static
 int gss_cli_ctx_validate_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(ctx->cc_sec);
 
         if (cli_ctx_check_death(ctx)) {
@@ -1055,7 +1057,7 @@ int gss_cli_ctx_validate_kr(struct ptlrpc_cli_ctx *ctx)
 static
 void gss_cli_ctx_die_kr(struct ptlrpc_cli_ctx *ctx, int grace)
 {
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(ctx->cc_sec);
 
         cli_ctx_expire(ctx);
@@ -1231,9 +1233,9 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
          */
         LASSERT(cfs_current()->signal->session_keyring);
 
-        lockdep_off();
+        cfs_lockdep_off();
         rc = key_link(cfs_current()->signal->session_keyring, key);
-        lockdep_on();
+        cfs_lockdep_on();
         if (unlikely(rc)) {
                 CERROR("failed to link key %08x to keyring %08x: %d\n",
                        key->serial,
@@ -1280,7 +1282,7 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                         RETURN(rc);
         }
 
-        LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(ctx->cc_sec);
 
         ctx_clear_timer_kr(ctx);
@@ -1358,7 +1360,7 @@ out:
                 cli_ctx_expire(ctx);
 
                 if (rc != -ERESTART)
-                        set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
+                        cfs_set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
         }
 
         /* let user space think it's a success */

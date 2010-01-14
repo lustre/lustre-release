@@ -50,19 +50,20 @@
 #include <obd_support.h>
 
 #define lustre_get_group_info(group_info) do {             \
-        atomic_inc(&(group_info)->usage);                  \
+        cfs_atomic_inc(&(group_info)->usage);              \
 } while (0)
 
 #define lustre_put_group_info(group_info) do {             \
-        if (atomic_dec_and_test(&(group_info)->usage))     \
-                groups_free(group_info);                   \
+        if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
+                cfs_groups_free(group_info);               \
 } while (0)
 
 /*
  * groups_search() is copied from linux kernel!
  * A simple bsearch.
  */
-static int lustre_groups_search(struct group_info *group_info, gid_t grp)
+static int lustre_groups_search(cfs_group_info_t *group_info,
+                                gid_t grp)
 {
         int left, right;
 
@@ -85,7 +86,7 @@ static int lustre_groups_search(struct group_info *group_info, gid_t grp)
         return 0;
 }
 
-void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist)
+void lustre_groups_from_list(cfs_group_info_t *ginfo, gid_t *glist)
 {
         int i;
         int count = ginfo->ngroups;
@@ -104,7 +105,7 @@ EXPORT_SYMBOL(lustre_groups_from_list);
 
 /* groups_sort() is copied from linux kernel! */
 /* a simple shell-metzner sort */
-void lustre_groups_sort(struct group_info *group_info)
+void lustre_groups_sort(cfs_group_info_t *group_info)
 {
         int base, max, stride;
         int gidsetsize = group_info->ngroups;
@@ -139,7 +140,7 @@ int lustre_in_group_p(struct md_ucred *mu, gid_t grp)
         int rc = 1;
 
         if (grp != mu->mu_fsgid) {
-                struct group_info *group_info = NULL;
+                cfs_group_info_t *group_info = NULL;
 
                 if (mu->mu_ginfo || !mu->mu_identity ||
                     mu->mu_valid == UCRED_OLD)
@@ -164,10 +165,10 @@ int lustre_in_group_p(struct md_ucred *mu, gid_t grp)
 EXPORT_SYMBOL(lustre_in_group_p);
 
 struct lustre_idmap_entry {
-        struct list_head lie_rmt_uid_hash; /* hashed as lie_rmt_uid; */
-        struct list_head lie_lcl_uid_hash; /* hashed as lie_lcl_uid; */
-        struct list_head lie_rmt_gid_hash; /* hashed as lie_rmt_gid; */
-        struct list_head lie_lcl_gid_hash; /* hashed as lie_lcl_gid; */
+        cfs_list_t       lie_rmt_uid_hash; /* hashed as lie_rmt_uid; */
+        cfs_list_t       lie_lcl_uid_hash; /* hashed as lie_lcl_uid; */
+        cfs_list_t       lie_rmt_gid_hash; /* hashed as lie_rmt_gid; */
+        cfs_list_t       lie_lcl_gid_hash; /* hashed as lie_lcl_gid; */
         uid_t            lie_rmt_uid;      /* remote uid */
         uid_t            lie_lcl_uid;      /* local uid */
         gid_t            lie_rmt_gid;      /* remote gid */
@@ -203,14 +204,14 @@ struct lustre_idmap_entry *idmap_entry_alloc(uid_t rmt_uid, uid_t lcl_uid,
 
 static void idmap_entry_free(struct lustre_idmap_entry *e)
 {
-        if (!list_empty(&e->lie_rmt_uid_hash))
-                list_del(&e->lie_rmt_uid_hash);
-        if (!list_empty(&e->lie_lcl_uid_hash))
-                list_del(&e->lie_lcl_uid_hash);
-        if (!list_empty(&e->lie_rmt_gid_hash))
-                list_del(&e->lie_rmt_gid_hash);
-        if (!list_empty(&e->lie_lcl_gid_hash))
-                list_del(&e->lie_lcl_gid_hash);
+        if (!cfs_list_empty(&e->lie_rmt_uid_hash))
+                cfs_list_del(&e->lie_rmt_uid_hash);
+        if (!cfs_list_empty(&e->lie_lcl_uid_hash))
+                cfs_list_del(&e->lie_lcl_uid_hash);
+        if (!cfs_list_empty(&e->lie_rmt_gid_hash))
+                cfs_list_del(&e->lie_rmt_gid_hash);
+        if (!cfs_list_empty(&e->lie_lcl_gid_hash))
+                cfs_list_del(&e->lie_lcl_gid_hash);
         OBD_FREE_PTR(e);
 }
 
@@ -225,11 +226,11 @@ struct lustre_idmap_entry *idmap_search_entry(struct lustre_idmap_table *t,
                                               uid_t rmt_uid, uid_t lcl_uid,
                                               gid_t rmt_gid, gid_t lcl_gid)
 {
-        struct list_head *head;
+        cfs_list_t *head;
         struct lustre_idmap_entry *e;
 
         head = &t->lit_idmaps[RMT_UIDMAP_IDX][lustre_idmap_hashfunc(rmt_uid)];
-        list_for_each_entry(e, head, lie_rmt_uid_hash)
+        cfs_list_for_each_entry(e, head, lie_rmt_uid_hash)
                 if (e->lie_rmt_uid == rmt_uid) {
                         if (e->lie_lcl_uid == lcl_uid) {
                                 if (e->lie_rmt_gid == rmt_gid &&
@@ -246,7 +247,7 @@ struct lustre_idmap_entry *idmap_search_entry(struct lustre_idmap_table *t,
                 }
 
         head = &t->lit_idmaps[RMT_GIDMAP_IDX][lustre_idmap_hashfunc(rmt_gid)];
-        list_for_each_entry(e, head, lie_rmt_gid_hash)
+        cfs_list_for_each_entry(e, head, lie_rmt_gid_hash)
                 if (e->lie_rmt_gid == rmt_gid) {
                         if (e->lie_lcl_gid == lcl_gid) {
                                 if (unlikely(e->lie_rmt_uid == rmt_uid &&
@@ -266,17 +267,18 @@ struct lustre_idmap_entry *idmap_search_entry(struct lustre_idmap_table *t,
         return NULL;
 }
 
-static __u32 idmap_lookup_uid(struct list_head *hash, int reverse, __u32 uid)
+static __u32 idmap_lookup_uid(cfs_list_t *hash, int reverse,
+                              __u32 uid)
 {
-        struct list_head *head = &hash[lustre_idmap_hashfunc(uid)];
+        cfs_list_t *head = &hash[lustre_idmap_hashfunc(uid)];
         struct lustre_idmap_entry *e;
 
         if (!reverse) {
-                list_for_each_entry(e, head, lie_rmt_uid_hash)
+                cfs_list_for_each_entry(e, head, lie_rmt_uid_hash)
                         if (e->lie_rmt_uid == uid)
                                 return e->lie_lcl_uid;
         } else {
-                list_for_each_entry(e, head, lie_lcl_uid_hash)
+                cfs_list_for_each_entry(e, head, lie_lcl_uid_hash)
                         if (e->lie_lcl_uid == uid)
                                 return e->lie_rmt_uid;
         }
@@ -284,17 +286,17 @@ static __u32 idmap_lookup_uid(struct list_head *hash, int reverse, __u32 uid)
         return CFS_IDMAP_NOTFOUND;
 }
 
-static __u32 idmap_lookup_gid(struct list_head *hash, int reverse, __u32 gid)
+static __u32 idmap_lookup_gid(cfs_list_t *hash, int reverse, __u32 gid)
 {
-        struct list_head *head = &hash[lustre_idmap_hashfunc(gid)];
+        cfs_list_t *head = &hash[lustre_idmap_hashfunc(gid)];
         struct lustre_idmap_entry *e;
 
         if (!reverse) {
-                list_for_each_entry(e, head, lie_rmt_gid_hash)
+                cfs_list_for_each_entry(e, head, lie_rmt_gid_hash)
                         if (e->lie_rmt_gid == gid)
                                 return e->lie_lcl_gid;
         } else {
-                list_for_each_entry(e, head, lie_lcl_gid_hash)
+                cfs_list_for_each_entry(e, head, lie_lcl_gid_hash)
                         if (e->lie_lcl_gid == gid)
                                 return e->lie_rmt_gid;
         }
@@ -310,31 +312,31 @@ int lustre_idmap_add(struct lustre_idmap_table *t,
 
         LASSERT(t);
 
-        spin_lock(&t->lit_lock);
+        cfs_spin_lock(&t->lit_lock);
         e0 = idmap_search_entry(t, ruid, luid, rgid, lgid);
-        spin_unlock(&t->lit_lock);
+        cfs_spin_unlock(&t->lit_lock);
         if (!e0) {
                 e0 = idmap_entry_alloc(ruid, luid, rgid, lgid);
                 if (!e0)
                         return -ENOMEM;
 
-                spin_lock(&t->lit_lock);
+                cfs_spin_lock(&t->lit_lock);
                 e1 = idmap_search_entry(t, ruid, luid, rgid, lgid);
                 if (e1 == NULL) {
-                        list_add_tail(&e0->lie_rmt_uid_hash,
-                                      &t->lit_idmaps[RMT_UIDMAP_IDX]
-                                        [lustre_idmap_hashfunc(ruid)]);
-                        list_add_tail(&e0->lie_lcl_uid_hash,
-                                      &t->lit_idmaps[LCL_UIDMAP_IDX]
-                                        [lustre_idmap_hashfunc(luid)]);
-                        list_add_tail(&e0->lie_rmt_gid_hash,
-                                      &t->lit_idmaps[RMT_GIDMAP_IDX]
-                                        [lustre_idmap_hashfunc(rgid)]);
-                        list_add_tail(&e0->lie_lcl_gid_hash,
-                                      &t->lit_idmaps[LCL_GIDMAP_IDX]
-                                        [lustre_idmap_hashfunc(lgid)]);
-                } 
-                spin_unlock(&t->lit_lock);
+                        cfs_list_add_tail(&e0->lie_rmt_uid_hash,
+                                          &t->lit_idmaps[RMT_UIDMAP_IDX]
+                                          [lustre_idmap_hashfunc(ruid)]);
+                        cfs_list_add_tail(&e0->lie_lcl_uid_hash,
+                                          &t->lit_idmaps[LCL_UIDMAP_IDX]
+                                          [lustre_idmap_hashfunc(luid)]);
+                        cfs_list_add_tail(&e0->lie_rmt_gid_hash,
+                                          &t->lit_idmaps[RMT_GIDMAP_IDX]
+                                          [lustre_idmap_hashfunc(rgid)]);
+                        cfs_list_add_tail(&e0->lie_lcl_gid_hash,
+                                          &t->lit_idmaps[LCL_GIDMAP_IDX]
+                                          [lustre_idmap_hashfunc(lgid)]);
+                }
+                cfs_spin_unlock(&t->lit_lock);
                 if (e1 != NULL) {
                         idmap_entry_free(e0);
                         if (IS_ERR(e1))
@@ -357,13 +359,13 @@ int lustre_idmap_del(struct lustre_idmap_table *t,
 
         LASSERT(t);
 
-        spin_lock(&t->lit_lock);
+        cfs_spin_lock(&t->lit_lock);
         e = idmap_search_entry(t, ruid, luid, rgid, lgid);
         if (IS_ERR(e))
                 rc = PTR_ERR(e);
         else if (e)
                 idmap_entry_free(e);
-        spin_unlock(&t->lit_lock);
+        cfs_spin_unlock(&t->lit_lock);
 
         return rc;
 }
@@ -373,7 +375,7 @@ int lustre_idmap_lookup_uid(struct md_ucred *mu,
                             struct lustre_idmap_table *t,
                             int reverse, uid_t uid)
 {
-        struct list_head *hash;
+        cfs_list_t *hash;
 
         if (mu && (mu->mu_valid == UCRED_OLD || mu->mu_valid == UCRED_NEW)) {
                 if (!reverse) {
@@ -394,9 +396,9 @@ int lustre_idmap_lookup_uid(struct md_ucred *mu,
 
         hash = t->lit_idmaps[reverse ? LCL_UIDMAP_IDX : RMT_UIDMAP_IDX];
 
-        spin_lock(&t->lit_lock);
+        cfs_spin_lock(&t->lit_lock);
         uid = idmap_lookup_uid(hash, reverse, uid);
-        spin_unlock(&t->lit_lock);
+        cfs_spin_unlock(&t->lit_lock);
 
         return uid;
 }
@@ -405,7 +407,7 @@ EXPORT_SYMBOL(lustre_idmap_lookup_uid);
 int lustre_idmap_lookup_gid(struct md_ucred *mu, struct lustre_idmap_table *t,
                             int reverse, gid_t gid)
 {
-        struct list_head *hash;
+        cfs_list_t *hash;
 
         if (mu && (mu->mu_valid == UCRED_OLD || mu->mu_valid == UCRED_NEW)) {
                 if (!reverse) {
@@ -426,9 +428,9 @@ int lustre_idmap_lookup_gid(struct md_ucred *mu, struct lustre_idmap_table *t,
 
         hash = t->lit_idmaps[reverse ? LCL_GIDMAP_IDX : RMT_GIDMAP_IDX];
 
-        spin_lock(&t->lit_lock);
+        cfs_spin_lock(&t->lit_lock);
         gid = idmap_lookup_gid(hash, reverse, gid);
-        spin_unlock(&t->lit_lock);
+        cfs_spin_unlock(&t->lit_lock);
 
         return gid;
 }
@@ -443,10 +445,10 @@ struct lustre_idmap_table *lustre_idmap_init(void)
         if(unlikely(t == NULL))
                 return (ERR_PTR(-ENOMEM));
 
-        spin_lock_init(&t->lit_lock);
+        cfs_spin_lock_init(&t->lit_lock);
         for (i = 0; i < ARRAY_SIZE(t->lit_idmaps); i++)
                 for (j = 0; j < ARRAY_SIZE(t->lit_idmaps[i]); j++)
-                        INIT_LIST_HEAD(&t->lit_idmaps[i][j]);
+                        CFS_INIT_LIST_HEAD(&t->lit_idmaps[i][j]);
 
         return t;
 }
@@ -454,20 +456,21 @@ EXPORT_SYMBOL(lustre_idmap_init);
 
 void lustre_idmap_fini(struct lustre_idmap_table *t)
 {
-        struct list_head *list;
+        cfs_list_t *list;
         struct lustre_idmap_entry *e;
         int i;
         LASSERT(t);
 
         list = t->lit_idmaps[RMT_UIDMAP_IDX];
-        spin_lock(&t->lit_lock);
+        cfs_spin_lock(&t->lit_lock);
         for (i = 0; i < CFS_IDMAP_HASHSIZE; i++)
-                while (!list_empty(&list[i])) {
-                        e = list_entry(list[i].next, struct lustre_idmap_entry,
-                                       lie_rmt_uid_hash);
+                while (!cfs_list_empty(&list[i])) {
+                        e = cfs_list_entry(list[i].next,
+                                           struct lustre_idmap_entry,
+                                           lie_rmt_uid_hash);
                         idmap_entry_free(e);
                 }
-        spin_unlock(&t->lit_lock);
+        cfs_spin_unlock(&t->lit_lock);
 
         OBD_FREE_PTR(t);
 }

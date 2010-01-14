@@ -54,27 +54,27 @@ lnd_t               the_ptllnd = {
 
 static int ptllnd_ni_count = 0;
 
-static struct list_head ptllnd_idle_history;
-static struct list_head ptllnd_history_list;
+static cfs_list_t ptllnd_idle_history;
+static cfs_list_t ptllnd_history_list;
 
 void
 ptllnd_history_fini(void)
 {
         ptllnd_he_t *he;
 
-        while (!list_empty(&ptllnd_idle_history)) {
-                he = list_entry(ptllnd_idle_history.next,
-                                ptllnd_he_t, he_list);
+        while (!cfs_list_empty(&ptllnd_idle_history)) {
+                he = cfs_list_entry(ptllnd_idle_history.next,
+                                    ptllnd_he_t, he_list);
 
-                list_del(&he->he_list);
+                cfs_list_del(&he->he_list);
                 LIBCFS_FREE(he, sizeof(*he));
         }
 
-        while (!list_empty(&ptllnd_history_list)) {
-                he = list_entry(ptllnd_history_list.next,
-                                ptllnd_he_t, he_list);
+        while (!cfs_list_empty(&ptllnd_history_list)) {
+                he = cfs_list_entry(ptllnd_history_list.next,
+                                    ptllnd_he_t, he_list);
 
-                list_del(&he->he_list);
+                cfs_list_del(&he->he_list);
                 LIBCFS_FREE(he, sizeof(*he));
         }
 }
@@ -101,7 +101,7 @@ ptllnd_history_init(void)
                         return -ENOMEM;
                 }
 
-                list_add(&he->he_list, &ptllnd_idle_history);
+                cfs_list_add(&he->he_list, &ptllnd_idle_history);
         }
 
         PTLLND_HISTORY("Init");
@@ -118,18 +118,18 @@ ptllnd_history(const char *fn, const char *file, const int line,
         va_list        ap;
         ptllnd_he_t   *he;
 
-        if (!list_empty(&ptllnd_idle_history)) {
-                he = list_entry(ptllnd_idle_history.next,
-                                ptllnd_he_t, he_list);
-        } else if (!list_empty(&ptllnd_history_list)) {
-                he = list_entry(ptllnd_history_list.next,
-                                ptllnd_he_t, he_list);
+        if (!cfs_list_empty(&ptllnd_idle_history)) {
+                he = cfs_list_entry(ptllnd_idle_history.next,
+                                    ptllnd_he_t, he_list);
+        } else if (!cfs_list_empty(&ptllnd_history_list)) {
+                he = cfs_list_entry(ptllnd_history_list.next,
+                                    ptllnd_he_t, he_list);
         } else {
                 return;
         }
 
-        list_del(&he->he_list);
-        list_add_tail(&he->he_list, &ptllnd_history_list);
+        cfs_list_del(&he->he_list);
+        cfs_list_add_tail(&he->he_list, &ptllnd_history_list);
 
         he->he_seq = seq++;
         he->he_fn = fn;
@@ -149,17 +149,17 @@ ptllnd_dump_history(void)
 
         PTLLND_HISTORY("dumping...");
 
-        while (!list_empty(&ptllnd_history_list)) {
-                he = list_entry(ptllnd_history_list.next,
+        while (!cfs_list_empty(&ptllnd_history_list)) {
+                he = cfs_list_entry(ptllnd_history_list.next,
                                 ptllnd_he_t, he_list);
 
-                list_del(&he->he_list);
+                cfs_list_del(&he->he_list);
 
                 CDEBUG(D_WARNING, "%d %d.%06d (%s:%d:%s()) %s\n", he->he_seq,
                        (int)he->he_time.tv_sec, (int)he->he_time.tv_usec,
                        he->he_file, he->he_line, he->he_fn, he->he_msg);
 
-                list_add_tail(&he->he_list, &ptllnd_idle_history);
+                cfs_list_add_tail(&he->he_list, &ptllnd_idle_history);
         }
 
         PTLLND_HISTORY("complete");
@@ -413,7 +413,7 @@ ptllnd_create_buffer (lnet_ni_t *ni)
                 return NULL;
         }
 
-        list_add(&buf->plb_list, &plni->plni_buffers);
+        cfs_list_add(&buf->plb_list, &plni->plni_buffers);
         plni->plni_nbuffers++;
 
         return buf;
@@ -427,7 +427,7 @@ ptllnd_destroy_buffer (ptllnd_buffer_t *buf)
         LASSERT (!buf->plb_posted);
 
         plni->plni_nbuffers--;
-        list_del(&buf->plb_list);
+        cfs_list_del(&buf->plb_list);
         LIBCFS_FREE(buf->plb_buffer, plni->plni_buffer_size);
         LIBCFS_FREE(buf, sizeof(*buf));
 }
@@ -480,14 +480,14 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
 {
         ptllnd_ni_t       *plni = ni->ni_data;
         ptllnd_buffer_t   *buf;
-        struct list_head  *tmp;
-        struct list_head  *nxt;
+        cfs_list_t        *tmp;
+        cfs_list_t        *nxt;
 
         CDEBUG(D_NET, "nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
         CDEBUG(D_NET, "nbuffers = %d (before)\n",plni->plni_nbuffers);
 
-        list_for_each_safe(tmp, nxt, &plni->plni_buffers) {
-                buf = list_entry(tmp, ptllnd_buffer_t, plb_list);
+        cfs_list_for_each_safe(tmp, nxt, &plni->plni_buffers) {
+                buf = cfs_list_entry(tmp, ptllnd_buffer_t, plb_list);
 
                 //CDEBUG(D_NET, "buf=%p posted=%d\n",buf,buf->plb_posted);
 
@@ -568,7 +568,7 @@ ptllnd_destroy_peer_hash (lnet_ni_t *ni)
         LASSERT( plni->plni_npeers == 0);
 
         for (i = 0; i < plni->plni_peer_hash_size; i++)
-                LASSERT (list_empty(&plni->plni_peer_hash[i]));
+                LASSERT (cfs_list_empty(&plni->plni_peer_hash[i]));
 
         LIBCFS_FREE(plni->plni_peer_hash,
                     plni->plni_peer_hash_size * sizeof(*plni->plni_peer_hash));
@@ -582,9 +582,9 @@ ptllnd_close_peers (lnet_ni_t *ni)
         int             i;
 
         for (i = 0; i < plni->plni_peer_hash_size; i++)
-                while (!list_empty(&plni->plni_peer_hash[i])) {
-                        plp = list_entry(plni->plni_peer_hash[i].next,
-                                         ptllnd_peer_t, plp_list);
+                while (!cfs_list_empty(&plni->plni_peer_hash[i])) {
+                        plp = cfs_list_entry(plni->plni_peer_hash[i].next,
+                                             ptllnd_peer_t, plp_list);
 
                         ptllnd_close_peer(plp, 0);
                 }

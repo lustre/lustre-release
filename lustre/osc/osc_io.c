@@ -152,16 +152,16 @@ static int osc_io_submit(const struct lu_env *env,
                 exp = osc_export(osc);
 
                 if (priority > CRP_NORMAL) {
-                        spin_lock(&oap->oap_lock);
+                        cfs_spin_lock(&oap->oap_lock);
                         oap->oap_async_flags |= ASYNC_HP;
-                        spin_unlock(&oap->oap_lock);
+                        cfs_spin_unlock(&oap->oap_lock);
                 }
                 /*
                  * This can be checked without cli->cl_loi_list_lock, because
                  * ->oap_*_item are always manipulated when the page is owned.
                  */
-                if (!list_empty(&oap->oap_urgent_item) ||
-                    !list_empty(&oap->oap_rpc_item)) {
+                if (!cfs_list_empty(&oap->oap_urgent_item) ||
+                    !cfs_list_empty(&oap->oap_rpc_item)) {
                         result = -EBUSY;
                         break;
                 }
@@ -177,7 +177,7 @@ static int osc_io_submit(const struct lu_env *env,
                 result = cl_page_prep(env, io, page, crt);
                 if (result == 0) {
                         cl_page_list_move(qout, qin, page);
-                        if (list_empty(&oap->oap_pending_item)) {
+                        if (cfs_list_empty(&oap->oap_pending_item)) {
                                 osc_io_submit_page(env, cl2osc_io(env, ios),
                                                    opg, crt);
                         } else {
@@ -380,7 +380,7 @@ static int osc_punch_upcall(void *a, int rc)
         struct osc_punch_cbargs *args = a;
 
         args->opc_rc = rc;
-        complete(&args->opc_sync);
+        cfs_complete(&args->opc_sync);
         return 0;
 }
 
@@ -422,8 +422,9 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
         cl_page_list_disown(env, io, list);
         cl_page_list_fini(env, list);
 
-        spin_lock(&obj->oo_seatbelt);
-        list_for_each_entry(cp, &obj->oo_inflight[CRT_WRITE], ops_inflight) {
+        cfs_spin_lock(&obj->oo_seatbelt);
+        cfs_list_for_each_entry(cp, &obj->oo_inflight[CRT_WRITE],
+                                ops_inflight) {
                 page = cp->ops_cl.cpl_page;
                 if (page->cp_index >= start + partial) {
                         cfs_task_t *submitter;
@@ -437,7 +438,7 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
                         libcfs_debug_dumpstack(submitter);
                 }
         }
-        spin_unlock(&obj->oo_seatbelt);
+        cfs_spin_unlock(&obj->oo_seatbelt);
 }
 #else /* __KERNEL__ */
 # define osc_trunc_check(env, io, oio, size) do {;} while (0)
@@ -488,7 +489,7 @@ static int osc_io_trunc_start(const struct lu_env *env,
                 oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
                 capa = io->u.ci_truncate.tr_capa;
-                init_completion(&cbargs->opc_sync);
+                cfs_init_completion(&cbargs->opc_sync);
                 result = osc_punch_base(osc_export(cl2osc(obj)), oa, capa,
                                         osc_punch_upcall, cbargs, PTLRPCD_SET);
         }
@@ -504,7 +505,7 @@ static void osc_io_trunc_end(const struct lu_env *env,
         struct obdo             *oa     = &oio->oi_oa;
         int result;
 
-        wait_for_completion(&cbargs->opc_sync);
+        cfs_wait_for_completion(&cbargs->opc_sync);
 
         result = io->ci_result = cbargs->opc_rc;
         if (result == 0) {
@@ -631,7 +632,7 @@ static void osc_req_attr_set(const struct lu_env *env,
         }
         if (flags & OBD_MD_FLHANDLE) {
                 clerq = slice->crs_req;
-                LASSERT(!list_empty(&clerq->crq_pages));
+                LASSERT(!cfs_list_empty(&clerq->crq_pages));
                 apage = container_of(clerq->crq_pages.next,
                                      struct cl_page, cp_flight);
                 opg = osc_cl_page_osc(apage);
@@ -642,7 +643,8 @@ static void osc_req_attr_set(const struct lu_env *env,
                         struct cl_lock          *scan;
 
                         head = cl_object_header(apage->cp_obj);
-                        list_for_each_entry(scan, &head->coh_locks, cll_linkage)
+                        cfs_list_for_each_entry(scan, &head->coh_locks,
+                                                cll_linkage)
                                 CL_LOCK_DEBUG(D_ERROR, env, scan,
                                               "no cover page!\n");
                         CL_PAGE_DEBUG(D_ERROR, env, apage,

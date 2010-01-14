@@ -175,7 +175,7 @@ unsigned long long lu_time_stamp_get(void)
 	struct timeval now;
 	unsigned long long ret;
 
-	do_gettimeofday(&now);
+	cfs_gettimeofday(&now);
 	ret = now.tv_sec;
 	ret *= 1000000;
 	ret += now.tv_usec;

@@ -48,20 +48,20 @@
 #include <lprocfs_status.h>
 
 struct uuid_nid_data {
-        struct list_head un_list;
+        cfs_list_t       un_list;
         lnet_nid_t       un_nid;
         char            *un_uuid;
         int              un_count;  /* nid/uuid pair refcount */
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
-static struct list_head g_uuid_list;
-static spinlock_t       g_uuid_lock;
+static cfs_list_t           g_uuid_list;
+static cfs_spinlock_t       g_uuid_lock;
 
 void class_init_uuidlist(void)
 {
         CFS_INIT_LIST_HEAD(&g_uuid_list);
-        spin_lock_init(&g_uuid_lock);
+        cfs_spin_lock_init(&g_uuid_lock);
 }
 
 void class_exit_uuidlist(void)
@@ -72,24 +72,24 @@ void class_exit_uuidlist(void)
 
 int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
 {
-        struct list_head *tmp;
+        cfs_list_t *tmp;
 
-        spin_lock (&g_uuid_lock);
+        cfs_spin_lock (&g_uuid_lock);
 
-        list_for_each(tmp, &g_uuid_list) {
+        cfs_list_for_each(tmp, &g_uuid_list) {
                 struct uuid_nid_data *data =
-                        list_entry(tmp, struct uuid_nid_data, un_list);
+                        cfs_list_entry(tmp, struct uuid_nid_data, un_list);
 
                 if (!strcmp(data->un_uuid, uuid) &&
                     index-- == 0) {
                         *peer_nid = data->un_nid;
 
-                        spin_unlock (&g_uuid_lock);
+                        cfs_spin_unlock (&g_uuid_lock);
                         return 0;
                 }
         }
 
-        spin_unlock (&g_uuid_lock);
+        cfs_spin_unlock (&g_uuid_lock);
         return -ENOENT;
 }
 
@@ -120,9 +120,9 @@ int class_add_uuid(const char *uuid, __u64 nid)
         data->un_nid = nid;
         data->un_count = 1;
 
-        spin_lock (&g_uuid_lock);
+        cfs_spin_lock (&g_uuid_lock);
 
-        list_for_each_entry(entry, &g_uuid_list, un_list) {
+        cfs_list_for_each_entry(entry, &g_uuid_list, un_list) {
                 if (entry->un_nid == nid && 
                     (strcmp(entry->un_uuid, uuid) == 0)) {
                         found++;
@@ -131,8 +131,8 @@ int class_add_uuid(const char *uuid, __u64 nid)
                 }
         }
         if (!found) 
-                list_add(&data->un_list, &g_uuid_list);
-        spin_unlock (&g_uuid_lock);
+                cfs_list_add(&data->un_list, &g_uuid_list);
+        cfs_spin_unlock (&g_uuid_lock);
 
         if (found) {
                 CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid, 
@@ -152,23 +152,23 @@ int class_del_uuid(const char *uuid)
         struct uuid_nid_data *data;
         int found = 0;
 
-        spin_lock (&g_uuid_lock);
+        cfs_spin_lock (&g_uuid_lock);
         if (uuid == NULL) {
-                list_splice_init(&g_uuid_list, &deathrow);
+                cfs_list_splice_init(&g_uuid_list, &deathrow);
                 found = 1;
         } else {
-                list_for_each_entry(data, &g_uuid_list, un_list) {
+                cfs_list_for_each_entry(data, &g_uuid_list, un_list) {
                         if (strcmp(data->un_uuid, uuid))
                                 continue;
                         --data->un_count;
                         LASSERT(data->un_count >= 0);
                         if (data->un_count == 0)
-                                list_move(&data->un_list, &deathrow);
+                                cfs_list_move(&data->un_list, &deathrow);
                         found = 1;
                         break;
                 }
         }
-        spin_unlock (&g_uuid_lock);
+        cfs_spin_unlock (&g_uuid_lock);
 
         if (!found) {
                 if (uuid)
@@ -176,9 +176,10 @@ int class_del_uuid(const char *uuid)
                 return -EINVAL;
         }
 
-        while (!list_empty(&deathrow)) {
-                data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
-                list_del(&data->un_list);
+        while (!cfs_list_empty(&deathrow)) {
+                data = cfs_list_entry(deathrow.next, struct uuid_nid_data,
+                                      un_list);
+                cfs_list_del(&data->un_list);
 
                 CDEBUG(D_INFO, "del uuid %s %s\n", data->un_uuid,
                        libcfs_nid2str(data->un_nid));

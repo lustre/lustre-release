@@ -124,11 +124,11 @@
  *
  * No locking. Callers synchronize.
  */
-static LIST_HEAD(iam_formats);
+static CFS_LIST_HEAD(iam_formats);
 
 void iam_format_register(struct iam_format *fmt)
 {
-        list_add(&fmt->if_linkage, &iam_formats);
+        cfs_list_add(&fmt->if_linkage, &iam_formats);
 }
 EXPORT_SYMBOL(iam_format_register);
 
@@ -155,7 +155,7 @@ static int iam_format_guess(struct iam_container *c)
         }
 
         result = -ENOENT;
-        list_for_each_entry(fmt, &iam_formats, if_linkage) {
+        cfs_list_for_each_entry(fmt, &iam_formats, if_linkage) {
                 result = fmt->if_guess(c);
                 if (result == 0)
                         break;
@@ -172,7 +172,7 @@ int iam_container_init(struct iam_container *c,
         memset(c, 0, sizeof *c);
         c->ic_descr  = descr;
         c->ic_object = inode;
-        init_rwsem(&c->ic_sem);
+        cfs_init_rwsem(&c->ic_sem);
         return 0;
 }
 EXPORT_SYMBOL(iam_container_init);
@@ -364,7 +364,7 @@ static int iam_leaf_load(struct iam_path *path)
         block = path->ip_frame->leaf;
         if (block == 0) {
                 /* XXX bug 11027 */
-                printk(KERN_EMERG "wrong leaf: %lu %d [%p %p %p]\n",
+                printk(CFS_KERN_EMERG "wrong leaf: %lu %d [%p %p %p]\n",
                        (long unsigned)path->ip_frame->leaf,
                        dx_get_count(dx_node_get_entries(path, path->ip_frame)),
                        path->ip_frames[0].bh, path->ip_frames[1].bh,
@@ -581,22 +581,22 @@ static int iam_it_get_exact(struct iam_iterator *it, const struct iam_key *k)
 
 void iam_container_write_lock(struct iam_container *ic)
 {
-        down_write(&ic->ic_sem);
+        cfs_down_write(&ic->ic_sem);
 }
 
 void iam_container_write_unlock(struct iam_container *ic)
 {
-        up_write(&ic->ic_sem);
+        cfs_up_write(&ic->ic_sem);
 }
 
 void iam_container_read_lock(struct iam_container *ic)
 {
-        down_read(&ic->ic_sem);
+        cfs_down_read(&ic->ic_sem);
 }
 
 void iam_container_read_unlock(struct iam_container *ic)
 {
-        up_read(&ic->ic_sem);
+        cfs_up_read(&ic->ic_sem);
 }
 
 /*

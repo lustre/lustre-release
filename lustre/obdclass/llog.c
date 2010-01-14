@@ -68,7 +68,7 @@ struct llog_handle *llog_alloc_handle(void)
         if (loghandle == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        init_rwsem(&loghandle->lgh_lock);
+        cfs_init_rwsem(&loghandle->lgh_lock);
 
         RETURN(loghandle);
 }
@@ -83,9 +83,9 @@ void llog_free_handle(struct llog_handle *loghandle)
         if (!loghandle->lgh_hdr)
                 goto out;
         if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
-                list_del_init(&loghandle->u.phd.phd_entry);
+                cfs_list_del_init(&loghandle->u.phd.phd_entry);
         if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
-                LASSERT(list_empty(&loghandle->u.chd.chd_head));
+                LASSERT(cfs_list_empty(&loghandle->u.chd.chd_head));
         OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
 
  out:
@@ -237,7 +237,7 @@ static int llog_process_thread(void *arg)
         if (!buf) {
                 lpi->lpi_rc = -ENOMEM;
 #ifdef __KERNEL__
-                complete(&lpi->lpi_completion);
+                cfs_complete(&lpi->lpi_completion);
 #endif
                 return 0;
         }
@@ -349,7 +349,7 @@ static int llog_process_thread(void *arg)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
         lpi->lpi_rc = rc;
 #ifdef __KERNEL__
-        complete(&lpi->lpi_completion);
+        cfs_complete(&lpi->lpi_completion);
 #endif
         return 0;
 }
@@ -372,14 +372,14 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         lpi->lpi_catdata   = catdata;
 
 #ifdef __KERNEL__
-        init_completion(&lpi->lpi_completion);
+        cfs_init_completion(&lpi->lpi_completion);
         rc = cfs_kernel_thread(llog_process_thread, lpi, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE_PTR(lpi);
                 RETURN(rc);
         }
-        wait_for_completion(&lpi->lpi_completion);
+        cfs_wait_for_completion(&lpi->lpi_completion);
 #else
         llog_process_thread(lpi);
 #endif

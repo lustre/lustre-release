@@ -162,7 +162,7 @@ int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
 
 void
 set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
-		    const int line, unsigned long stack)
+                    const int line, unsigned long stack)
 {
 	struct timeval tv;
 	

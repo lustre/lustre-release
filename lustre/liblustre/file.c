@@ -60,8 +60,6 @@
 #include <file.h>
 #endif
 
-#undef LIST_HEAD
-
 #include "llite_lib.h"
 
 /* Pack the required supplementary groups into the supplied groups array.
@@ -73,13 +71,13 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         LASSERT(i1 != NULL);
         LASSERT(suppgids != NULL);
 
-        if (in_group_p(i1->i_stbuf.st_gid))
+        if (cfs_curproc_is_in_groups(i1->i_stbuf.st_gid))
                 suppgids[0] = i1->i_stbuf.st_gid;
         else
                 suppgids[0] = -1;
 
         if (i2) {
-                if (in_group_p(i2->i_stbuf.st_gid))
+                if (cfs_curproc_is_in_groups(i2->i_stbuf.st_gid))
                         suppgids[1] = i2->i_stbuf.st_gid;
                 else
                         suppgids[1] = -1;
@@ -112,7 +110,7 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_name = name;
         op_data->op_mode = mode;
         op_data->op_namelen = namelen;
-        op_data->op_mod_time = CURRENT_TIME;
+        op_data->op_mod_time = CFS_CURRENT_TIME;
         op_data->op_data = NULL;
 }
 

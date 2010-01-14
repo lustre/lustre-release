@@ -383,16 +383,16 @@ struct cl_object_header {
          */
         /** @{ */
         /** Lock protecting page tree. */
-        spinlock_t               coh_page_guard;
+        cfs_spinlock_t           coh_page_guard;
         /** Lock protecting lock list. */
-        spinlock_t               coh_lock_guard;
+        cfs_spinlock_t           coh_lock_guard;
         /** @} locks */
         /** Radix tree of cl_page's, cached for this object. */
         struct radix_tree_root   coh_tree;
         /** # of pages in radix tree. */
         unsigned long            coh_pages;
         /** List of cl_lock's granted for this object. */
-        struct list_head         coh_locks;
+        cfs_list_t               coh_locks;
 
         /**
          * Parent object. It is assumed that an object has a well-defined
@@ -409,7 +409,7 @@ struct cl_object_header {
          *
          * \todo XXX this can be read/write lock if needed.
          */
-        spinlock_t               coh_attr_guard;
+        cfs_spinlock_t           coh_attr_guard;
         /**
          * Number of objects above this one: 0 for a top-object, 1 for its
          * sub-object, etc.
@@ -421,18 +421,18 @@ struct cl_object_header {
  * Helper macro: iterate over all layers of the object \a obj, assigning every
  * layer top-to-bottom to \a slice.
  */
-#define cl_object_for_each(slice, obj)                                  \
-        list_for_each_entry((slice),                                    \
-                            &(obj)->co_lu.lo_header->loh_layers,        \
-                            co_lu.lo_linkage)
+#define cl_object_for_each(slice, obj)                                      \
+        cfs_list_for_each_entry((slice),                                    \
+                                &(obj)->co_lu.lo_header->loh_layers,        \
+                                co_lu.lo_linkage)
 /**
  * Helper macro: iterate over all layers of the object \a obj, assigning every
  * layer bottom-to-top to \a slice.
  */
-#define cl_object_for_each_reverse(slice, obj)                          \
-        list_for_each_entry_reverse((slice),                            \
-                                    &(obj)->co_lu.lo_header->loh_layers, \
-                                    co_lu.lo_linkage)
+#define cl_object_for_each_reverse(slice, obj)                               \
+        cfs_list_for_each_entry_reverse((slice),                             \
+                                        &(obj)->co_lu.lo_header->loh_layers, \
+                                        co_lu.lo_linkage)
 /** @} cl_object */
 
 #ifndef pgoff_t
@@ -696,13 +696,13 @@ enum cl_page_flags {
  */
 struct cl_page {
         /** Reference counter. */
-        atomic_t                 cp_ref;
+        cfs_atomic_t             cp_ref;
         /** An object this page is a part of. Immutable after creation. */
         struct cl_object        *cp_obj;
         /** Logical page index within the object. Immutable after creation. */
         pgoff_t                  cp_index;
         /** List of slices. Immutable after creation. */
-        struct list_head         cp_layers;
+        cfs_list_t               cp_layers;
         /** Parent page, NULL for top-level page. Immutable after creation. */
         struct cl_page          *cp_parent;
         /** Lower-layer page. NULL for bottommost page. Immutable after
@@ -716,11 +716,11 @@ struct cl_page {
         /**
          * Linkage of pages within some group. Protected by
          * cl_page::cp_mutex. */
-        struct list_head         cp_batch;
+        cfs_list_t               cp_batch;
         /** Mutex serializing membership of a page in a batch. */
-        struct mutex             cp_mutex;
+        cfs_mutex_t              cp_mutex;
         /** Linkage of pages within cl_req. */
-        struct list_head         cp_flight;
+        cfs_list_t               cp_flight;
         /** Transfer error. */
         int                      cp_error;
 
@@ -771,7 +771,7 @@ struct cl_page_slice {
         struct cl_object                *cpl_obj;
         const struct cl_page_operations *cpl_ops;
         /** Linkage into cl_page::cp_layers. Immutable after creation. */
-        struct list_head                 cpl_linkage;
+        cfs_list_t                       cpl_linkage;
 };
 
 /**
@@ -1064,7 +1064,7 @@ struct cl_page_operations {
 do {                                                                    \
         static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
                 cl_page_print(env, &__info, lu_cdebug_printer, page);   \
                 CDEBUG(mask, format , ## __VA_ARGS__);                  \
         }                                                               \
@@ -1077,7 +1077,7 @@ do {                                                                    \
 do {                                                                    \
         static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
                 cl_page_header_print(env, &__info, lu_cdebug_printer, page); \
                 CDEBUG(mask, format , ## __VA_ARGS__);                  \
         }                                                               \
@@ -1476,7 +1476,7 @@ struct cl_lock_closure {
          * List of enclosed locks, so far. Locks are linked here through
          * cl_lock::cll_inclosure.
          */
-        struct list_head  clc_list;
+        cfs_list_t        clc_list;
         /**
          * True iff closure is in a `wait' mode. This determines what
          * cl_lock_enclosure() does when a lock L to be added to the closure
@@ -1502,14 +1502,14 @@ struct cl_lock_closure {
  */
 struct cl_lock {
         /** Reference counter. */
-        atomic_t              cll_ref;
+        cfs_atomic_t          cll_ref;
         /** List of slices. Immutable after creation. */
-        struct list_head      cll_layers;
+        cfs_list_t            cll_layers;
         /**
          * Linkage into cl_lock::cll_descr::cld_obj::coh_locks list. Protected
          * by cl_lock::cll_descr::cld_obj::coh_lock_guard.
          */
-        struct list_head      cll_linkage;
+        cfs_list_t            cll_linkage;
         /**
          * Parameters of this lock. Protected by
          * cl_lock::cll_descr::cld_obj::coh_lock_guard nested within
@@ -1534,7 +1534,7 @@ struct cl_lock {
          *
          * \see osc_lock_enqueue_wait(), lov_lock_cancel(), lov_sublock_wait().
          */
-        struct mutex          cll_guard;
+        cfs_mutex_t           cll_guard;
         cfs_task_t           *cll_guarder;
         int                   cll_depth;
 
@@ -1568,7 +1568,7 @@ struct cl_lock {
          *
          * \see cl_lock_closure
          */
-        struct list_head      cll_inclosure;
+        cfs_list_t            cll_inclosure;
         /**
          * Confict lock at queuing time.
          */
@@ -1603,7 +1603,7 @@ struct cl_lock_slice {
         struct cl_object                *cls_obj;
         const struct cl_lock_operations *cls_ops;
         /** Linkage into cl_lock::cll_layers. Immutable after creation. */
-        struct list_head                 cls_linkage;
+        cfs_list_t                       cls_linkage;
 };
 
 /**
@@ -1788,7 +1788,7 @@ struct cl_lock_operations {
 do {                                                                    \
         static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
                 cl_lock_print(env, &__info, lu_cdebug_printer, lock);   \
                 CDEBUG(mask, format , ## __VA_ARGS__);                  \
         }                                                               \
@@ -1816,9 +1816,9 @@ do {                                                                    \
  * @{
  */
 struct cl_page_list {
-        unsigned         pl_nr;
-        struct list_head pl_pages;
-        cfs_task_t      *pl_owner;
+        unsigned             pl_nr;
+        cfs_list_t           pl_pages;
+        cfs_task_t          *pl_owner;
 };
 
 /** 
@@ -1966,7 +1966,7 @@ struct cl_io_slice {
          * linkage into a list of all slices for a given cl_io, hanging off
          * cl_io::ci_layers. Immutable after creation.
          */
-        struct list_head               cis_linkage;
+        cfs_list_t                     cis_linkage;
 };
 
 
@@ -2163,7 +2163,7 @@ enum cl_enq_flags {
  */
 struct cl_io_lock_link {
         /** linkage into one of cl_lockset lists. */
-        struct list_head     cill_linkage;
+        cfs_list_t           cill_linkage;
         struct cl_lock_descr cill_descr;
         struct cl_lock      *cill_lock;
         /** optional destructor */
@@ -2202,11 +2202,11 @@ struct cl_io_lock_link {
  */
 struct cl_lockset {
         /** locks to be acquired. */
-        struct list_head cls_todo;
+        cfs_list_t  cls_todo;
         /** locks currently being processed. */
-        struct list_head cls_curr;
+        cfs_list_t  cls_curr;
         /** locks acquired. */
-        struct list_head cls_done;
+        cfs_list_t  cls_done;
 };
 
 /**
@@ -2251,7 +2251,7 @@ struct cl_io {
          */
         struct cl_io                  *ci_parent;
         /** List of slices. Immutable after creation. */
-        struct list_head               ci_layers;
+        cfs_list_t                     ci_layers;
         /** list of locks (to be) acquired by this io. */
         struct cl_lockset              ci_lockset;
         /** lock requirements, this is just a help info for sublayers. */
@@ -2448,16 +2448,16 @@ struct cl_req_obj {
  * req's pages.
  */
 struct cl_req {
-        enum cl_req_type    crq_type;
+        enum cl_req_type      crq_type;
         /** A list of pages being transfered */
-        struct list_head    crq_pages;
+        cfs_list_t            crq_pages;
         /** Number of pages in cl_req::crq_pages */
-        unsigned            crq_nrpages;
+        unsigned              crq_nrpages;
         /** An array of objects which pages are in ->crq_pages */
-        struct cl_req_obj  *crq_o;
+        struct cl_req_obj    *crq_o;
         /** Number of elements in cl_req::crq_objs[] */
-        unsigned            crq_nrobjs;
-        struct list_head    crq_layers;
+        unsigned              crq_nrobjs;
+        cfs_list_t            crq_layers;
 };
 
 /**
@@ -2466,7 +2466,7 @@ struct cl_req {
 struct cl_req_slice {
         struct cl_req    *crs_req;
         struct cl_device *crs_dev;
-        struct list_head  crs_linkage;
+        cfs_list_t        crs_linkage;
         const struct cl_req_operations *crs_ops;
 };
 
@@ -2478,16 +2478,16 @@ struct cl_req_slice {
 struct cache_stats {
         const char    *cs_name;
         /** how many entities were created at all */
-        atomic_t       cs_created;
+        cfs_atomic_t   cs_created;
         /** how many cache lookups were performed */
-        atomic_t       cs_lookup;
+        cfs_atomic_t   cs_lookup;
         /** how many times cache lookup resulted in a hit */
-        atomic_t       cs_hit;
+        cfs_atomic_t   cs_hit;
         /** how many entities are in the cache right now */
-        atomic_t       cs_total;
+        cfs_atomic_t   cs_total;
         /** how many entities in the cache are actively used (and cannot be
          * evicted) right now */
-        atomic_t       cs_busy;
+        cfs_atomic_t   cs_busy;
 };
 
 /** These are not exported so far */
@@ -2513,8 +2513,8 @@ struct cl_site {
          */
         struct cache_stats    cs_pages;
         struct cache_stats    cs_locks;
-        atomic_t              cs_pages_state[CPS_NR];
-        atomic_t              cs_locks_state[CLS_NR];
+        cfs_atomic_t          cs_pages_state[CPS_NR];
+        cfs_atomic_t          cs_locks_state[CLS_NR];
 };
 
 int  cl_site_init (struct cl_site *s, struct cl_device *top);
@@ -2847,7 +2847,7 @@ void cl_lock_signal      (const struct lu_env *env, struct cl_lock *lock);
 int  cl_lock_state_wait  (const struct lu_env *env, struct cl_lock *lock);
 void cl_lock_state_set   (const struct lu_env *env, struct cl_lock *lock,
                           enum cl_lock_state state);
-int  cl_queue_match      (const struct list_head *queue,
+int  cl_queue_match      (const cfs_list_t *queue,
                           const struct cl_lock_descr *need);
 
 void cl_lock_mutex_get  (const struct lu_env *env, struct cl_lock *lock);
@@ -2957,13 +2957,13 @@ do {                                                                    \
  * Iterate over pages in a page list.
  */
 #define cl_page_list_for_each(page, list)                               \
-        list_for_each_entry((page), &(list)->pl_pages, cp_batch)
+        cfs_list_for_each_entry((page), &(list)->pl_pages, cp_batch)
 
 /**
  * Iterate over pages in a page list, taking possible removals into account.
  */
 #define cl_page_list_for_each_safe(page, temp, list)                    \
-        list_for_each_entry_safe((page), (temp), &(list)->pl_pages, cp_batch)
+        cfs_list_for_each_entry_safe((page), (temp), &(list)->pl_pages, cp_batch)
 
 void cl_page_list_init   (struct cl_page_list *plist);
 void cl_page_list_add    (struct cl_page_list *plist, struct cl_page *page);
@@ -3022,11 +3022,11 @@ void cl_req_completion(const struct lu_env *env, struct cl_req *req, int ioret);
  */
 struct cl_sync_io {
         /** number of pages yet to be transferred. */
-        atomic_t             csi_sync_nr;
+        cfs_atomic_t          csi_sync_nr;
         /** completion to be signaled when transfer is complete. */
         cfs_waitq_t          csi_waitq;
         /** error code. */
-        int                  csi_sync_rc;
+        int                   csi_sync_rc;
 };
 
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages);

@@ -62,8 +62,8 @@ struct cmm_device {
         /* other MD servers in cluster */
         mdsno_t                 cmm_local_num;
         __u32                   cmm_tgt_count;
-        struct list_head        cmm_targets;
-        spinlock_t              cmm_tgt_guard;
+        cfs_list_t              cmm_targets;
+        cfs_spinlock_t          cmm_tgt_guard;
         cfs_proc_dir_entry_t   *cmm_proc_entry;
         struct lprocfs_stats   *cmm_stats;
 };

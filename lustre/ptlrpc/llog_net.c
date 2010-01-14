@@ -76,7 +76,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
 
         ENTRY;
 
-        if (list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
+        if (cfs_list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
                 CDEBUG(D_HA, "there is no record related to ctxt %p\n", ctxt);
                 RETURN(0);
         }
@@ -161,7 +161,7 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
         ENTRY;
 
         LASSERT(ctxt);
-        mutex_down(&ctxt->loc_sem);
+        cfs_mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp != imp) {
                 if (ctxt->loc_imp) {
                         CWARN("changing the import %p - %p\n",
@@ -170,7 +170,7 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
                 }
                 ctxt->loc_imp = class_import_get(imp);
         }
-        mutex_up(&ctxt->loc_sem);
+        cfs_mutex_up(&ctxt->loc_sem);
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_receptor_accept);
@@ -194,13 +194,13 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
         new_imp = ctxt->loc_obd->u.cli.cl_import;
         LASSERTF(ctxt->loc_imp == NULL || ctxt->loc_imp == new_imp,
                  "%p - %p\n", ctxt->loc_imp, new_imp);
-        mutex_down(&ctxt->loc_sem);
+        cfs_mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp != new_imp) {
                 if (ctxt->loc_imp)
                         class_import_put(ctxt->loc_imp);
                 ctxt->loc_imp = class_import_get(new_imp);
         }
-        mutex_up(&ctxt->loc_sem);
+        cfs_mutex_up(&ctxt->loc_sem);
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);

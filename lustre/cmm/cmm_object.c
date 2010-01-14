@@ -801,14 +801,14 @@ static struct lu_device *cmr_child_dev(struct cmm_device *d, __u32 num)
         struct lu_device *next = NULL;
         struct mdc_device *mdc;
 
-        spin_lock(&d->cmm_tgt_guard);
-        list_for_each_entry(mdc, &d->cmm_targets, mc_linkage) {
+        cfs_spin_lock(&d->cmm_tgt_guard);
+        cfs_list_for_each_entry(mdc, &d->cmm_targets, mc_linkage) {
                 if (mdc->mc_num == num) {
                         next = mdc2lu_dev(mdc);
                         break;
                 }
         }
-        spin_unlock(&d->cmm_tgt_guard);
+        cfs_spin_unlock(&d->cmm_tgt_guard);
         return next;
 }
 

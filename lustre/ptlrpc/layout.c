@@ -1897,7 +1897,8 @@ int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
 
         for (; i < fmt->rf_fields[loc].nr; ++i)
                 if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
-                        size += size_round(fmt->rf_fields[loc].d[i]->rmf_size);
+                        size += cfs_size_round(fmt->rf_fields[loc].d[i]->
+                                               rmf_size);
         return size;
 }
 

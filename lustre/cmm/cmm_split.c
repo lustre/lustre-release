@@ -264,13 +264,13 @@ static int cmm_split_fid_alloc(const struct lu_env *env,
 
         LASSERT(cmm != NULL && mc != NULL && fid != NULL);
 
-        down(&mc->mc_fid_sem);
+        cfs_down(&mc->mc_fid_sem);
 
         /* Alloc new fid on @mc. */
         rc = obd_fid_alloc(mc->mc_desc.cl_exp, fid, NULL);
         if (rc > 0)
                 rc = 0;
-        up(&mc->mc_fid_sem);
+        cfs_up(&mc->mc_fid_sem);
 
         RETURN(rc);
 }
@@ -346,7 +346,7 @@ static int cmm_split_slaves_create(const struct lu_env *env,
         slave_lmv->mea_magic = MEA_MAGIC_HASH_SEGMENT;
         slave_lmv->mea_count = 0;
 
-        list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets, mc_linkage) {
+        cfs_list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets, mc_linkage) {
                 rc = cmm_split_slave_create(env, cmm, mc, &lmv->mea_ids[i],
                                             ma, slave_lmv, sizeof(*slave_lmv));
                 if (rc)

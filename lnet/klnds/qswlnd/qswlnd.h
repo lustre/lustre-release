@@ -184,21 +184,21 @@ typedef union {
 
 typedef struct kqswnal_rx
 {
-        struct list_head krx_list;              /* enqueue -> thread */
-        struct kqswnal_rx *krx_alloclist;       /* stack in kqn_rxds */
-        EP_RCVR         *krx_eprx;              /* port to post receives to */
-        EP_RXD          *krx_rxd;               /* receive descriptor (for repost) */
-        EP_NMD           krx_elanbuffer;        /* contiguous Elan buffer */
-        int              krx_npages;            /* # pages in receive buffer */
-        int              krx_nob;               /* Number Of Bytes received into buffer */
-        int              krx_rpc_reply_needed:1; /* peer waiting for EKC RPC reply */
-        int              krx_state;             /* what this RX is doing */
-        atomic_t         krx_refcount;          /* how to tell when rpc is done */
+        cfs_list_t           krx_list;     /* enqueue -> thread */
+        struct kqswnal_rx   *krx_alloclist;/* stack in kqn_rxds */
+        EP_RCVR             *krx_eprx;     /* port to post receives to */
+        EP_RXD              *krx_rxd;      /* receive descriptor (for repost) */
+        EP_NMD               krx_elanbuffer;/* contiguous Elan buffer */
+        int                  krx_npages;    /* # pages in receive buffer */
+        int                  krx_nob;       /* Number Of Bytes received into buffer */
+        int                  krx_rpc_reply_needed:1; /* peer waiting for EKC RPC reply */
+        int                  krx_state;     /* what this RX is doing */
+        cfs_atomic_t         krx_refcount;  /* how to tell when rpc is done */
 #if KQSW_CKSUM
-        __u32            krx_cksum;             /* checksum */
+        __u32                krx_cksum;     /* checksum */
 #endif
-        kqswnal_rpc_reply_t krx_rpc_reply;      /* rpc reply status block */
-        lnet_kiov_t      krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
+        kqswnal_rpc_reply_t  krx_rpc_reply; /* rpc reply status block */
+        lnet_kiov_t          krx_kiov[KQSW_NRXMSGPAGES_LARGE];/* buffer frags */
 }  kqswnal_rx_t;
 
 #define KRX_POSTED       1                      /* receiving */
@@ -208,31 +208,31 @@ typedef struct kqswnal_rx
 
 typedef struct kqswnal_tx
 {
-        struct list_head  ktx_list;             /* enqueue idle/active */
-        struct list_head  ktx_schedlist;        /* enqueue on scheduler */
-        struct kqswnal_tx *ktx_alloclist;       /* stack in kqn_txds */
-        unsigned int      ktx_state:7;          /* What I'm doing */
-        unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
-        __u32             ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
-        int               ktx_npages;           /* pages reserved for mapping messages */
-        int               ktx_nmappedpages;     /* # pages mapped for current message */
-        int               ktx_port;             /* destination ep port */
-        lnet_nid_t        ktx_nid;              /* destination node */
-        void             *ktx_args[3];          /* completion passthru */
-        char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
-        cfs_time_t        ktx_launchtime;       /*  when (in jiffies) the transmit
-                                                 *  was launched */
-        int               ktx_status;           /* completion status */
+        cfs_list_t            ktx_list;         /* enqueue idle/active */
+        cfs_list_t            ktx_schedlist;    /* enqueue on scheduler */
+        struct kqswnal_tx    *ktx_alloclist;    /* stack in kqn_txds */
+        unsigned int          ktx_state:7;      /* What I'm doing */
+        unsigned int          ktx_firsttmpfrag:1;  /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
+        __u32                 ktx_basepage;     /* page offset in reserved elan tx vaddrs for mapping pages */
+        int                   ktx_npages;       /* pages reserved for mapping messages */
+        int                   ktx_nmappedpages; /* # pages mapped for current message */
+        int                   ktx_port;         /* destination ep port */
+        lnet_nid_t            ktx_nid;          /* destination node */
+        void                 *ktx_args[3];      /* completion passthru */
+        char                 *ktx_buffer;       /* pre-allocated contiguous buffer for hdr + small payloads */
+        cfs_time_t            ktx_launchtime;   /* when (in jiffies) the
+                                                 * transmit was launched */
+        int                   ktx_status;       /* completion status */
 #if KQSW_CKSUM
-        __u32             ktx_cksum;            /* optimized GET payload checksum */
+        __u32                 ktx_cksum;        /* optimized GET payload checksum */
 #endif
         /* debug/info fields */
-        pid_t             ktx_launcher;         /* pid of launching process */
+        pid_t                 ktx_launcher;     /* pid of launching process */
 
-        int               ktx_nfrag;            /* # message frags */
-        int               ktx_rail;             /* preferred rail */
-        EP_NMD            ktx_ebuffer;          /* elan mapping of ktx_buffer */
-        EP_NMD            ktx_frags[EP_MAXFRAG];/* elan mapping of msg frags */
+        int                   ktx_nfrag;        /* # message frags */
+        int                   ktx_rail;         /* preferred rail */
+        EP_NMD                ktx_ebuffer;      /* elan mapping of ktx_buffer */
+        EP_NMD                ktx_frags[EP_MAXFRAG];/* elan mapping of msg frags */
 } kqswnal_tx_t;
 
 #define KTX_IDLE        0                       /* on kqn_idletxds */
@@ -265,40 +265,40 @@ typedef struct
 
 typedef struct
 {
-        char               kqn_init;            /* what's been initialised */
-        char               kqn_shuttingdown;    /* I'm trying to shut down */
-        atomic_t           kqn_nthreads;        /* # threads running */
-        lnet_ni_t         *kqn_ni;              /* _the_ instance of me */
+        char                 kqn_init;        /* what's been initialised */
+        char                 kqn_shuttingdown;/* I'm trying to shut down */
+        cfs_atomic_t         kqn_nthreads;    /* # threads running */
+        lnet_ni_t           *kqn_ni;          /* _the_ instance of me */
 
-        kqswnal_rx_t      *kqn_rxds;            /* stack of all the receive descriptors */
-        kqswnal_tx_t      *kqn_txds;            /* stack of all the transmit descriptors */
+        kqswnal_rx_t        *kqn_rxds;        /* stack of all the receive descriptors */
+        kqswnal_tx_t        *kqn_txds;        /* stack of all the transmit descriptors */
 
-        struct list_head   kqn_idletxds;        /* transmit descriptors free to use */
-        struct list_head   kqn_activetxds;      /* transmit descriptors being used */
-        spinlock_t         kqn_idletxd_lock;    /* serialise idle txd access */
-        atomic_t           kqn_pending_txs;     /* # transmits being prepped */
+        cfs_list_t           kqn_idletxds;    /* transmit descriptors free to use */
+        cfs_list_t           kqn_activetxds;  /* transmit descriptors being used */
+        cfs_spinlock_t       kqn_idletxd_lock; /* serialise idle txd access */
+        cfs_atomic_t         kqn_pending_txs;/* # transmits being prepped */
 
-        spinlock_t         kqn_sched_lock;      /* serialise packet schedulers */
-        wait_queue_head_t  kqn_sched_waitq;     /* scheduler blocks here */
+        cfs_spinlock_t       kqn_sched_lock; /* serialise packet schedulers */
+        cfs_waitq_t          kqn_sched_waitq;/* scheduler blocks here */
 
-        struct list_head   kqn_readyrxds;       /* rxds full of data */
-        struct list_head   kqn_donetxds;        /* completed transmits */
-        struct list_head   kqn_delayedtxds;     /* delayed transmits */
+        cfs_list_t           kqn_readyrxds;  /* rxds full of data */
+        cfs_list_t           kqn_donetxds;   /* completed transmits */
+        cfs_list_t           kqn_delayedtxds;/* delayed transmits */
 
-        EP_SYS            *kqn_ep;              /* elan system */
-        EP_NMH            *kqn_ep_tx_nmh;       /* elan reserved tx vaddrs */
-        EP_NMH            *kqn_ep_rx_nmh;       /* elan reserved rx vaddrs */
-        EP_XMTR           *kqn_eptx;            /* elan transmitter */
-        EP_RCVR           *kqn_eprx_small;      /* elan receiver (small messages) */
-        EP_RCVR           *kqn_eprx_large;      /* elan receiver (large messages) */
+        EP_SYS              *kqn_ep;         /* elan system */
+        EP_NMH              *kqn_ep_tx_nmh;  /* elan reserved tx vaddrs */
+        EP_NMH              *kqn_ep_rx_nmh;  /* elan reserved rx vaddrs */
+        EP_XMTR             *kqn_eptx;       /* elan transmitter */
+        EP_RCVR             *kqn_eprx_small; /* elan receiver (small messages) */
+        EP_RCVR             *kqn_eprx_large; /* elan receiver (large messages) */
 
-        int                kqn_nnodes;          /* this cluster's size */
-        int                kqn_elanid;          /* this nodes's elan ID */
+        int                  kqn_nnodes;     /* this cluster's size */
+        int                  kqn_elanid;     /* this nodes's elan ID */
 
-        EP_STATUSBLK       kqn_rpc_success;     /* preset RPC reply status blocks */
-        EP_STATUSBLK       kqn_rpc_failed;
-        EP_STATUSBLK       kqn_rpc_version;     /* reply to future version query */
-        EP_STATUSBLK       kqn_rpc_magic;       /* reply to future version query */
+        EP_STATUSBLK         kqn_rpc_success;/* preset RPC reply status blocks */
+        EP_STATUSBLK         kqn_rpc_failed;
+        EP_STATUSBLK         kqn_rpc_version;/* reply to future version query */
+        EP_STATUSBLK         kqn_rpc_magic;  /* reply to future version query */
 }  kqswnal_data_t;
 
 /* kqn_init state */
@@ -347,8 +347,8 @@ kqswnal_pages_spanned (void *base, int nob)
 
 static inline void kqswnal_rx_decref (kqswnal_rx_t *krx)
 {
-        LASSERT (atomic_read (&krx->krx_refcount) > 0);
-        if (atomic_dec_and_test (&krx->krx_refcount))
+        LASSERT (cfs_atomic_read (&krx->krx_refcount) > 0);
+        if (cfs_atomic_dec_and_test (&krx->krx_refcount))
                 kqswnal_rx_done(krx);
 }
 

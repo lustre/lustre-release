@@ -53,6 +53,8 @@
 #include <libcfs/linux/linux-lock.h>
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/linux/linux-tcpip.h>
+#include <libcfs/linux/linux-bitops.h>
+#include <libcfs/linux/linux-types.h>
 #include <libcfs/linux/kp30.h>
 
 #ifdef HAVE_ASM_TYPES_H
@@ -62,6 +64,7 @@
 #include <asm/timex.h>
 #include <linux/sched.h> /* THREAD_SIZE */
 
+#define CFS_THREAD_SIZE   THREAD_SIZE
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #if !defined(__x86_64__)
@@ -77,7 +80,7 @@
 
 #define __CHECK_STACK(file, func, line)                                 \
 do {                                                                    \
-        unsigned long _stack = CDEBUG_STACK();                           \
+        unsigned long _stack = CDEBUG_STACK();                          \
                                                                         \
         if (_stack > 3*THREAD_SIZE/4 && _stack > libcfs_stack) {        \
                 libcfs_stack = _stack;                                  \
@@ -88,9 +91,9 @@ do {                                                                    \
               /*panic("LBUG");*/                                        \
         }                                                               \
 } while (0)
-#define CHECK_STACK()     __CHECK_STACK(__FILE__, __func__, __LINE__)
+#define CFS_CHECK_STACK()     __CHECK_STACK(__FILE__, __func__, __LINE__)
 #else /* __x86_64__ */
-#define CHECK_STACK() do { } while(0)
+#define CFS_CHECK_STACK() do { } while(0)
 #define CDEBUG_STACK() (0L)
 #endif /* __x86_64__ */
 

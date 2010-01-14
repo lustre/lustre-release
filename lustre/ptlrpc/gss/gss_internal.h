@@ -207,7 +207,7 @@ static inline __u64 gss_handle_to_u64(rawobj_t *handle)
                                          GSS_SEQ_WIN_MAIN / 4)
 
 struct gss_svc_seq_data {
-        spinlock_t              ssd_lock;
+        cfs_spinlock_t          ssd_lock;
         /*
          * highest sequence number seen so far, for main and back window
          */
@@ -264,7 +264,7 @@ struct gss_cli_ctx {
         __u32                   gc_flavor;
         __u32                   gc_proc;
         __u32                   gc_win;
-        atomic_t                gc_seq;
+        cfs_atomic_t            gc_seq;
         rawobj_t                gc_handle;
         struct gss_ctx         *gc_mechctx;
         /* handle for the buddy svc ctx */
@@ -280,14 +280,14 @@ struct gss_cli_ctx_keyring {
 struct gss_sec {
         struct ptlrpc_sec       gs_base;
         struct gss_api_mech    *gs_mech;
-        spinlock_t              gs_lock;
+        cfs_spinlock_t          gs_lock;
         __u64                   gs_rvs_hdl;
 };
 
 struct gss_sec_pipefs {
         struct gss_sec          gsp_base;
         int                     gsp_chash_size;  /* must be 2^n */
-        struct hlist_head       gsp_chash[0];
+        cfs_hlist_head_t        gsp_chash[0];
 };
 
 /*
@@ -300,7 +300,7 @@ struct gss_sec_keyring {
         /*
          * all contexts listed here. access is protected by sec spinlock.
          */
-        struct hlist_head       gsk_clist;
+        cfs_hlist_head_t        gsk_clist;
         /*
          * specially point to root ctx (only one at a time). access is
          * protected by sec spinlock.
@@ -309,10 +309,10 @@ struct gss_sec_keyring {
         /*
          * specially serialize upcalls for root context.
          */
-        struct mutex            gsk_root_uc_lock;
+        cfs_mutex_t             gsk_root_uc_lock;
 
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
-        struct mutex            gsk_uc_lock;        /* serialize upcalls */
+        cfs_mutex_t             gsk_uc_lock;        /* serialize upcalls */
 #endif
 };
 

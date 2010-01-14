@@ -143,10 +143,11 @@ typedef char *dqbuf_t;
 
 #define MAX_UL (0xffffffffUL)
 
-#define lustre_info_dirty(info) test_bit(DQF_INFO_DIRTY_B, &(info)->dqi_flags)
+#define lustre_info_dirty(info) \
+        cfs_test_bit(DQF_INFO_DIRTY_B, &(info)->dqi_flags)
 
 struct dqblk {
-        struct list_head link;
+        cfs_list_t link;
         uint blk;
 };
 
@@ -175,7 +176,7 @@ int insert_free_dqentry(struct file *filp,
 ssize_t quota_read(struct file *file, struct inode *inode, int type,
                    uint blk, dqbuf_t buf);
 int walk_tree_dqentry(struct file *filp, struct inode *inode, int type,
-                      uint blk, int depth, struct list_head *list);
+                      uint blk, int depth, cfs_list_t *list);
 int check_quota_file(struct file *f, struct inode *inode, int type,
                      lustre_quota_version_t version);
 int lustre_check_quota_file(struct lustre_quota_info *lqi, int type);
@@ -183,7 +184,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot);
 int lustre_commit_dquot(struct lustre_dquot *dquot);
 int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *fp, struct inode *inode, int type,
-                    struct list_head *list);
+                    cfs_list_t *list);
 ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
                           char *buf, int count, loff_t pos);
 

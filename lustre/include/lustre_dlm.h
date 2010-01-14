@@ -63,7 +63,7 @@ struct obd_device;
 /* 1.5 times the maximum 128 tasks available in VN mode */
 #define LDLM_DEFAULT_LRU_SIZE 196
 #else
-#define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
+#define LDLM_DEFAULT_LRU_SIZE (100 * cfs_num_online_cpus())
 #endif
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 #define LDLM_CTIME_AGE_LIMIT (10)
@@ -304,27 +304,27 @@ struct ldlm_pool {
         /**
          * Lock for protecting slv/clv updates.
          */
-        spinlock_t             pl_lock;
+        cfs_spinlock_t         pl_lock;
         /**
          * Number of allowed locks in in pool, both, client and server side.
          */
-        atomic_t               pl_limit;
+        cfs_atomic_t           pl_limit;
         /**
          * Number of granted locks in
          */
-        atomic_t               pl_granted;
+        cfs_atomic_t           pl_granted;
         /**
          * Grant rate per T.
          */
-        atomic_t               pl_grant_rate;
+        cfs_atomic_t           pl_grant_rate;
         /**
          * Cancel rate per T.
          */
-        atomic_t               pl_cancel_rate;
+        cfs_atomic_t           pl_cancel_rate;
         /**
          * Grant speed (GR-CR) per T.
          */
-        atomic_t               pl_grant_speed;
+        cfs_atomic_t           pl_grant_speed;
         /**
          * Server lock volume. Protected by pl_lock.
          */
@@ -337,7 +337,7 @@ struct ldlm_pool {
          * Lock volume factor. SLV on client is calculated as following:
          * server_slv * lock_volume_factor.
          */
-        atomic_t               pl_lock_volume_factor;
+        cfs_atomic_t           pl_lock_volume_factor;
         /**
          * Time when last slv from server was obtained.
          */
@@ -409,8 +409,8 @@ struct ldlm_namespace {
         /**
          * Hash table for namespace.
          */
-        struct list_head      *ns_hash;
-        spinlock_t             ns_hash_lock;
+        cfs_list_t            *ns_hash;
+        cfs_spinlock_t         ns_hash_lock;
 
          /**
           * Count of resources in the hash.
@@ -420,19 +420,19 @@ struct ldlm_namespace {
          /**
           * All root resources in namespace.
           */
-        struct list_head       ns_root_list;
+        cfs_list_t             ns_root_list;
 
         /**
          * Position in global namespace list.
          */
-        struct list_head       ns_list_chain;
+        cfs_list_t             ns_list_chain;
 
         /**
          * All root resources in namespace.
          */
-        struct list_head       ns_unused_list;
+        cfs_list_t             ns_unused_list;
         int                    ns_nr_unused;
-        spinlock_t             ns_unused_lock;
+        cfs_spinlock_t         ns_unused_lock;
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
@@ -447,7 +447,7 @@ struct ldlm_namespace {
          */
         cfs_time_t             ns_next_dump;
 
-        atomic_t               ns_locks;
+        cfs_atomic_t           ns_locks;
         __u64                  ns_resources;
         ldlm_res_policy        ns_policy;
         struct ldlm_valblock_ops *ns_lvbo;
@@ -530,7 +530,7 @@ typedef unsigned long (*ldlm_weigh_callback)(struct ldlm_lock *lock);
 /* Interval node data for each LDLM_EXTENT lock */
 struct ldlm_interval {
         struct interval_node li_node;   /* node for tree mgmt */
-        struct list_head     li_group;  /* the locks which have the same
+        cfs_list_t           li_group;  /* the locks which have the same
                                          * policy - group of the policy */
 };
 #define to_ldlm_interval(n) container_of(n, struct ldlm_interval, li_node)
@@ -554,12 +554,12 @@ struct ldlm_lock {
         /**
          * Lock reference count.
          */
-        atomic_t                 l_refc;
+        cfs_atomic_t             l_refc;
         /**
          * Internal spinlock protects l_resource.  we should hold this lock
          * first before grabbing res_lock.
          */
-        spinlock_t               l_lock;
+        cfs_spinlock_t           l_lock;
         /**
          * ldlm_lock_change_resource() can change this.
          */
@@ -567,11 +567,11 @@ struct ldlm_lock {
         /**
          * Protected by ns_hash_lock. List item for client side lru list.
          */
-        struct list_head         l_lru;
+        cfs_list_t               l_lru;
         /**
          * Protected by lr_lock, linkage to resource's lock queues.
          */
-        struct list_head         l_res_link;
+        cfs_list_t               l_res_link;
         /**
          * Tree node for ldlm_extent.
          */
@@ -580,7 +580,7 @@ struct ldlm_lock {
          * Protected by per-bucket exp->exp_lock_hash locks. Per export hash
          * of locks.
          */
-        struct hlist_node        l_exp_hash;
+        cfs_hlist_node_t         l_exp_hash;
         /**
          * Protected by lr_lock. Requested mode.
          */
@@ -665,10 +665,10 @@ struct ldlm_lock {
         void                 *l_lvb_data;
 
         void                 *l_ast_data;
-        spinlock_t            l_extents_list_lock;
-        struct list_head      l_extents_list;
+        cfs_spinlock_t        l_extents_list_lock;
+        cfs_list_t            l_extents_list;
 
-        struct list_head      l_cache_locks_list;
+        cfs_list_t            l_cache_locks_list;
 
         /*
          * Server-side-only members.
@@ -680,7 +680,7 @@ struct ldlm_lock {
         /**
          * Protected by elt_lock. Callbacks pending.
          */
-        struct list_head      l_pending_chain;
+        cfs_list_t            l_pending_chain;
 
         cfs_time_t            l_callback_timeout;
 
@@ -692,15 +692,15 @@ struct ldlm_lock {
         /**
          * For ldlm_add_ast_work_item().
          */
-        struct list_head      l_bl_ast;
+        cfs_list_t            l_bl_ast;
         /**
          * For ldlm_add_ast_work_item().
          */
-        struct list_head      l_cp_ast;
+        cfs_list_t            l_cp_ast;
         /**
          * For ldlm_add_ast_work_item().
          */
-        struct list_head      l_rk_ast;
+        cfs_list_t            l_rk_ast;
 
         struct ldlm_lock     *l_blocking_lock;
         int                   l_bl_ast_run;
@@ -708,8 +708,8 @@ struct ldlm_lock {
         /**
          * Protected by lr_lock, linkages to "skip lists".
          */
-        struct list_head      l_sl_mode;
-        struct list_head      l_sl_policy;
+        cfs_list_t            l_sl_mode;
+        cfs_list_t            l_sl_policy;
         struct lu_ref         l_reference;
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
         /* Debugging stuff for bug 20498, for tracking export
@@ -717,7 +717,7 @@ struct ldlm_lock {
         /** number of export references taken */
         int                   l_exp_refs_nr;
         /** link all locks referencing one export */
-        struct list_head      l_exp_refs_link;
+        cfs_list_t            l_exp_refs_link;
         /** referenced export object */
         struct obd_export    *l_exp_refs_target;
 #endif
@@ -727,26 +727,26 @@ struct ldlm_resource {
         struct ldlm_namespace *lr_namespace;
 
         /* protected by ns_hash_lock */
-        struct list_head       lr_hash;
+        cfs_list_t             lr_hash;
         struct ldlm_resource  *lr_parent;   /* 0 for a root resource */
-        struct list_head       lr_children; /* list head for child resources */
-        struct list_head       lr_childof;  /* part of ns_root_list if root res,
+        cfs_list_t             lr_children; /* list head for child resources */
+        cfs_list_t             lr_childof;  /* part of ns_root_list if root res,
                                              * part of lr_children if child */
-        spinlock_t             lr_lock;
+        cfs_spinlock_t         lr_lock;
 
         /* protected by lr_lock */
-        struct list_head       lr_granted;
-        struct list_head       lr_converting;
-        struct list_head       lr_waiting;
+        cfs_list_t             lr_granted;
+        cfs_list_t             lr_converting;
+        cfs_list_t             lr_waiting;
         ldlm_mode_t            lr_most_restr;
         ldlm_type_t            lr_type; /* LDLM_{PLAIN,EXTENT,FLOCK} */
         struct ldlm_res_id     lr_name;
-        atomic_t               lr_refcount;
+        cfs_atomic_t           lr_refcount;
 
         struct ldlm_interval_tree lr_itree[LCK_MODE_NUM];  /* interval trees*/
 
         /* Server-side-only lock value block elements */
-        struct semaphore       lr_lvb_sem;
+        cfs_semaphore_t        lr_lvb_sem;
         __u32                  lr_lvb_len;
         void                  *lr_lvb_data;
 
@@ -759,13 +759,13 @@ struct ldlm_resource {
 };
 
 struct ldlm_ast_work {
-        struct ldlm_lock *w_lock;
-        int               w_blocking;
-        struct ldlm_lock_desc w_desc;
-        struct list_head   w_list;
-        int w_flags;
-        void *w_data;
-        int w_datalen;
+        struct ldlm_lock      *w_lock;
+        int                    w_blocking;
+        struct ldlm_lock_desc  w_desc;
+        cfs_list_t             w_list;
+        int                    w_flags;
+        void                  *w_data;
+        int                    w_datalen;
 };
 
 /* ldlm_enqueue parameters common */
@@ -787,7 +787,7 @@ extern char *ldlm_typename[];
 extern char *ldlm_it2str(int it);
 #ifdef LIBCFS_DEBUG
 #define ldlm_lock_debug(cdls, level, lock, file, func, line, fmt, a...) do { \
-        CHECK_STACK();                                                  \
+        CFS_CHECK_STACK();                                              \
                                                                         \
         if (((level) & D_CANTMASK) != 0 ||                              \
             ((libcfs_debug & (level)) != 0 &&                           \
@@ -832,7 +832,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
 
 typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, int *flags,
                                       int first_enq, ldlm_error_t *err,
-                                      struct list_head *work_list);
+                                      cfs_list_t *work_list);
 
 /*
  * Iterators.
@@ -955,17 +955,17 @@ do {                                            \
         lock;                                   \
 })
 
-#define ldlm_lock_list_put(head, member, count)                 \
-({                                                              \
-        struct ldlm_lock *_lock, *_next;                        \
-        int c = count;                                          \
-        list_for_each_entry_safe(_lock, _next, head, member) {  \
-                if (c-- == 0)                                   \
-                        break;                                  \
-                list_del_init(&_lock->member);                  \
-                LDLM_LOCK_RELEASE(_lock);                       \
-        }                                                       \
-        LASSERT(c <= 0);                                        \
+#define ldlm_lock_list_put(head, member, count)                     \
+({                                                                  \
+        struct ldlm_lock *_lock, *_next;                            \
+        int c = count;                                              \
+        cfs_list_for_each_entry_safe(_lock, _next, head, member) {  \
+                if (c-- == 0)                                       \
+                        break;                                      \
+                cfs_list_del_init(&_lock->member);                  \
+                LDLM_LOCK_RELEASE(_lock);                           \
+        }                                                           \
+        LASSERT(c <= 0);                                            \
 })
 
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
@@ -1021,7 +1021,8 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         ldlm_type_t type, int create);
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res);
 int ldlm_resource_putref(struct ldlm_resource *res);
-void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
+void ldlm_resource_add_lock(struct ldlm_resource *res,
+                            cfs_list_t *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
@@ -1062,12 +1063,12 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      int async);
 int ldlm_prep_enqueue_req(struct obd_export *exp,
                           struct ptlrpc_request *req,
-                          struct list_head *cancels,
+                          cfs_list_t *cancels,
                           int count);
 int ldlm_prep_elc_req(struct obd_export *exp,
                       struct ptlrpc_request *req,
                       int version, int opc, int canceloff,
-                      struct list_head *cancels, int count);
+                      cfs_list_t *cancels, int count);
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
                          const struct ldlm_request *dlm_req,
                          const struct ldlm_callback_suite *cbs);
@@ -1098,14 +1099,14 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                     const struct ldlm_res_id *res_id,
                                     ldlm_policy_data_t *policy,
                                     ldlm_mode_t mode, int flags, void *opaque);
-int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *head,
+int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *head,
                         int count, int flags);
 int ldlm_cancel_resource_local(struct ldlm_resource *res,
-                               struct list_head *cancels,
+                               cfs_list_t *cancels,
                                ldlm_policy_data_t *policy,
                                ldlm_mode_t mode, int lock_flags,
                                int cancel_flags, void *opaque);
-int ldlm_cli_cancel_list(struct list_head *head, int count,
+int ldlm_cli_cancel_list(cfs_list_t *head, int count,
                          struct ptlrpc_request *req, int flags);
 
 /* mds/handler.c */
@@ -1135,19 +1136,19 @@ enum lock_res_type {
 
 static inline void lock_res(struct ldlm_resource *res)
 {
-        spin_lock(&res->lr_lock);
+        cfs_spin_lock(&res->lr_lock);
 }
 
 static inline void lock_res_nested(struct ldlm_resource *res,
                                    enum lock_res_type mode)
 {
-        spin_lock_nested(&res->lr_lock, mode);
+        cfs_spin_lock_nested(&res->lr_lock, mode);
 }
 
 
 static inline void unlock_res(struct ldlm_resource *res)
 {
-        spin_unlock(&res->lr_lock);
+        cfs_spin_unlock(&res->lr_lock);
 }
 
 static inline void check_res_locked(struct ldlm_resource *res)

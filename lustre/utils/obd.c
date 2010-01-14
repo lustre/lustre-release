@@ -909,8 +909,8 @@ int jt_get_version(int argc, char **argv)
 
         memset(buf, 0, sizeof(rawbuf));
         data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_inllen1 = sizeof(rawbuf) - size_round(sizeof(*data));
-        data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
+        data->ioc_inllen1 = sizeof(rawbuf) - cfs_size_round(sizeof(*data));
+        data->ioc_inlbuf1 = buf + cfs_size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 
         rc = l2_ioctl(OBD_DEV_ID, OBD_GET_VERSION, buf);
@@ -991,8 +991,9 @@ int jt_obd_list_ioctl(int argc, char **argv)
         for (index = 0;; index++) {
                 memset(buf, 0, sizeof(rawbuf));
                 data->ioc_version = OBD_IOCTL_VERSION;
-                data->ioc_inllen1 = sizeof(rawbuf) - size_round(sizeof(*data));
-                data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
+                data->ioc_inllen1 =
+                        sizeof(rawbuf) - cfs_size_round(sizeof(*data));
+                data->ioc_inlbuf1 = buf + cfs_size_round(sizeof(*data));
                 data->ioc_len = obd_ioctl_packlen(data);
                 data->ioc_count = index;
 
@@ -1648,7 +1649,7 @@ int jt_obd_test_brw(int argc, char **argv)
                         l_cond_broadcast(&shared_data->cond);
                 else
                         l_cond_wait(&shared_data->cond,
-                                          &shared_data->mutex);
+                                    &shared_data->mutex);
 
                 shmem_unlock ();
         }
@@ -2075,7 +2076,7 @@ int jt_llog_catlist(int argc, char **argv)
 
         memset(&data, 0x00, sizeof(data));
         data.ioc_dev = cur_device;
-        data.ioc_inllen1 = sizeof(rawbuf) - size_round(sizeof(data));
+        data.ioc_inllen1 = sizeof(rawbuf) - cfs_size_round(sizeof(data));
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
@@ -2106,8 +2107,8 @@ int jt_llog_info(int argc, char **argv)
         data.ioc_dev = cur_device;
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen2 = sizeof(rawbuf) - size_round(sizeof(data)) -
-                size_round(data.ioc_inllen1);
+        data.ioc_inllen2 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
+                cfs_size_round(data.ioc_inllen1);
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
@@ -2151,10 +2152,10 @@ int jt_llog_print(int argc, char **argv)
                 data.ioc_inllen3 = strlen(to) + 1;
                 data.ioc_inlbuf3 = to;
         }
-        data.ioc_inllen4 = sizeof(rawbuf) - size_round(sizeof(data)) -
-                size_round(data.ioc_inllen1) -
-                size_round(data.ioc_inllen2) -
-                size_round(data.ioc_inllen3);
+        data.ioc_inllen4 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
+                cfs_size_round(data.ioc_inllen1) -
+                cfs_size_round(data.ioc_inllen2) -
+                cfs_size_round(data.ioc_inllen3);
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
@@ -2233,10 +2234,10 @@ int jt_llog_check(int argc, char **argv)
                 data.ioc_inllen3 = strlen(to) + 1;
                 data.ioc_inlbuf3 = to;
         }
-        data.ioc_inllen4 = sizeof(rawbuf) - size_round(sizeof(data)) -
-                size_round(data.ioc_inllen1) -
-                size_round(data.ioc_inllen2) -
-                size_round(data.ioc_inllen3);
+        data.ioc_inllen4 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
+                cfs_size_round(data.ioc_inllen1) -
+                cfs_size_round(data.ioc_inllen2) -
+                cfs_size_round(data.ioc_inllen3);
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {

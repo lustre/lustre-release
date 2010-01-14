@@ -173,9 +173,9 @@ static int changelog_user_init_cb(struct llog_handle *llh,
                " in log "LPX64"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
                rec->cur_id, rec->cur_endrec, llh->lgh_id.lgl_oid);
 
-        spin_lock(&mdd->mdd_cl.mc_user_lock);
+        cfs_spin_lock(&mdd->mdd_cl.mc_user_lock);
         mdd->mdd_cl.mc_lastuser = rec->cur_id;
-        spin_unlock(&mdd->mdd_cl.mc_user_lock);
+        cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
         RETURN(LLOG_PROC_BREAK);
 }
@@ -240,12 +240,12 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
         int rc;
 
         mdd->mdd_cl.mc_index = 0;
-        spin_lock_init(&mdd->mdd_cl.mc_lock);
+        cfs_spin_lock_init(&mdd->mdd_cl.mc_lock);
         cfs_waitq_init(&mdd->mdd_cl.mc_waitq);
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
         mdd->mdd_cl.mc_flags = 0; /* off by default */
         mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
-        spin_lock_init(&mdd->mdd_cl.mc_user_lock);
+        cfs_spin_lock_init(&mdd->mdd_cl.mc_user_lock);
         mdd->mdd_cl.mc_lastuser = 0;
 
         rc = mdd_changelog_llog_init(mdd);
@@ -275,17 +275,17 @@ int mdd_changelog_on(struct mdd_device *mdd, int on)
                                mdd2obd_dev(mdd)->obd_name);
                         rc = -ESRCH;
                 } else {
-                        spin_lock(&mdd->mdd_cl.mc_lock);
+                        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
                         mdd->mdd_cl.mc_flags |= CLM_ON;
-                        spin_unlock(&mdd->mdd_cl.mc_lock);
+                        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
                         rc = mdd_changelog_write_header(mdd, CLM_START);
                 }
         } else if ((on == 0) && ((mdd->mdd_cl.mc_flags & CLM_ON) == CLM_ON)) {
                 LCONSOLE_INFO("%s: changelog off\n",mdd2obd_dev(mdd)->obd_name);
                 rc = mdd_changelog_write_header(mdd, CLM_FINI);
-                spin_lock(&mdd->mdd_cl.mc_lock);
+                cfs_spin_lock(&mdd->mdd_cl.mc_lock);
                 mdd->mdd_cl.mc_flags &= ~CLM_ON;
-                spin_unlock(&mdd->mdd_cl.mc_lock);
+                cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
         }
         return rc;
 }
@@ -319,12 +319,12 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         /* llog_lvfs_write_rec sets the llog tail len */
         rec->cr_hdr.lrh_type = CHANGELOG_REC;
         rec->cr.cr_time = cl_time();
-        spin_lock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         /* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
            but as long as the MDD transactions are ordered correctly for e.g.
            rename conflicts, I don't think this should matter. */
         rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-        spin_unlock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL)
                 return -ENXIO;
@@ -355,9 +355,9 @@ int mdd_changelog_llog_cancel(struct mdd_device *mdd, long long endrec)
         if (ctxt == NULL)
                 return -ENXIO;
 
-        spin_lock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         cur = (long long)mdd->mdd_cl.mc_index;
-        spin_unlock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
         if (endrec > cur)
                 endrec = cur;
 
@@ -1129,7 +1129,7 @@ static int mdd_root_get(const struct lu_env *env,
  * No permission check is needed.
  */
 static int mdd_statfs(const struct lu_env *env, struct md_device *m,
-                      struct kstatfs *sfs)
+                      cfs_kstatfs_t *sfs)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;
@@ -1223,7 +1223,7 @@ static struct lu_device *mdd_device_free(const struct lu_env *env,
         struct lu_device  *next = &m->mdd_child->dd_lu_dev;
         ENTRY;
 
-        LASSERT(atomic_read(&lu->ld_ref) == 0);
+        LASSERT(cfs_atomic_read(&lu->ld_ref) == 0);
         md_device_fini(&m->mdd_md_dev);
         OBD_FREE_PTR(m);
         RETURN(next);
@@ -1313,15 +1313,15 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
 
         rec->cur_hdr.lrh_len = sizeof(*rec);
         rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
-        spin_lock(&mdd->mdd_cl.mc_user_lock);
+        cfs_spin_lock(&mdd->mdd_cl.mc_user_lock);
         if (mdd->mdd_cl.mc_lastuser == (unsigned int)(-1)) {
-                spin_unlock(&mdd->mdd_cl.mc_user_lock);
+                cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
                 CERROR("Maximum number of changelog users exceeded!\n");
                 GOTO(out, rc = -EOVERFLOW);
         }
         *id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
         rec->cur_endrec = mdd->mdd_cl.mc_index;
-        spin_unlock(&mdd->mdd_cl.mc_user_lock);
+        cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
         rc = llog_add(ctxt, &rec->cur_hdr, NULL, NULL, 0);
 
@@ -1417,9 +1417,9 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
         data.mcud_minrec = 0;
         data.mcud_usercount = 0;
         data.mcud_endrec = endrec;
-        spin_lock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         endrec = mdd->mdd_cl.mc_index;
-        spin_unlock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
         if ((data.mcud_endrec == 0) ||
             ((data.mcud_endrec > endrec) &&
              (data.mcud_endrec != MCUD_UNREGISTER)))

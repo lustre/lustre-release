@@ -130,13 +130,13 @@ typedef     __u32       suseconds_t;
 typedef     __u16       uid_t, gid_t;
 
 typedef     __u16       mode_t;
-typedef     __u16       umode_t;
+typedef     __u16       cfs_umode_t;
 
 typedef     __u32       sigset_t;
 
 typedef int64_t         loff_t;
 typedef void *          cfs_handle_t;
-typedef uint64_t        cycles_t;
+typedef uint64_t        cfs_cycles_t;
 
 #ifndef INVALID_HANDLE_VALUE
 #define INVALID_HANDLE_VALUE ((HANDLE)-1)

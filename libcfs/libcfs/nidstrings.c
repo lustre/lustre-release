@@ -71,15 +71,15 @@ static char      libcfs_nidstrings[LNET_NIDSTR_COUNT][LNET_NIDSTR_SIZE];
 static int       libcfs_nidstring_idx = 0;
 
 #ifdef __KERNEL__
-static spinlock_t libcfs_nidstring_lock;
+static cfs_spinlock_t libcfs_nidstring_lock;
 
 void libcfs_init_nidstrings (void)
 {
-        spin_lock_init(&libcfs_nidstring_lock);
+        cfs_spin_lock_init(&libcfs_nidstring_lock);
 }
 
-# define NIDSTR_LOCK(f)   spin_lock_irqsave(&libcfs_nidstring_lock, f)
-# define NIDSTR_UNLOCK(f) spin_unlock_irqrestore(&libcfs_nidstring_lock, f)
+# define NIDSTR_LOCK(f)   cfs_spin_lock_irqsave(&libcfs_nidstring_lock, f)
+# define NIDSTR_UNLOCK(f) cfs_spin_unlock_irqrestore(&libcfs_nidstring_lock, f)
 #else
 # define NIDSTR_LOCK(f)   (f=0)                 /* avoid unused var warnings */
 # define NIDSTR_UNLOCK(f) (f=0)
@@ -108,10 +108,10 @@ static int  libcfs_ip_str2addr(const char *str, int nob, __u32 *addr);
 static void libcfs_decnum_addr2str(__u32 addr, char *str);
 static void libcfs_hexnum_addr2str(__u32 addr, char *str);
 static int  libcfs_num_str2addr(const char *str, int nob, __u32 *addr);
-static int  libcfs_ip_parse(char *str, int len, struct list_head *list);
-static int  libcfs_num_parse(char *str, int len, struct list_head *list);
-static int  libcfs_ip_match(__u32 addr, struct list_head *list);
-static int  libcfs_num_match(__u32 addr, struct list_head *list);
+static int  libcfs_ip_parse(char *str, int len, cfs_list_t *list);
+static int  libcfs_num_parse(char *str, int len, cfs_list_t *list);
+static int  libcfs_ip_match(__u32 addr, cfs_list_t *list);
+static int  libcfs_num_match(__u32 addr, cfs_list_t *list);
 
 struct netstrfns {
         int          nf_type;
@@ -120,8 +120,8 @@ struct netstrfns {
         void       (*nf_addr2str)(__u32 addr, char *str);
         int        (*nf_str2addr)(const char *str, int nob, __u32 *addr);
         int        (*nf_parse_addrlist)(char *str, int len,
-                                        struct list_head *list);
-        int        (*nf_match_addr)(__u32 addr, struct list_head *list);
+                                        cfs_list_t *list);
+        int        (*nf_match_addr)(__u32 addr, cfs_list_t *list);
 };
 
 static struct netstrfns  libcfs_netstrfns[] = {
@@ -601,11 +601,11 @@ struct nidrange {
          * Link to list of this structures which is built on nid range
          * list parsing.
          */
-        struct list_head nr_link;
+        cfs_list_t nr_link;
         /**
          * List head for addrrange::ar_link.
          */
-        struct list_head nr_addrranges;
+        cfs_list_t nr_addrranges;
         /**
          * Flag indicating that *@<net> is found.
          */
@@ -627,11 +627,11 @@ struct addrrange {
         /**
          * Link to nidrange::nr_addrranges.
          */
-        struct list_head ar_link;
+        cfs_list_t ar_link;
         /**
          * List head for numaddr_range::nar_link.
          */
-        struct list_head ar_numaddr_ranges;
+        cfs_list_t ar_numaddr_ranges;
 };
 
 /**
@@ -641,11 +641,11 @@ struct numaddr_range {
         /**
          * Link to addrrange::ar_numaddr_ranges.
          */
-        struct list_head nar_link;
+        cfs_list_t nar_link;
         /**
          * List head for range_expr::re_link.
          */
-        struct list_head nar_range_exprs;
+        cfs_list_t nar_range_exprs;
 };
 
 /**
@@ -655,7 +655,7 @@ struct range_expr {
         /**
          * Link to numaddr_range::nar_range_exprs.
          */
-        struct list_head re_link;
+        cfs_list_t re_link;
         __u32 re_lo;
         __u32 re_hi;
         __u32 re_stride;
@@ -830,7 +830,7 @@ failed:
  * \retval 0 otherwise
  */
 static int
-parse_expr_list(struct lstr *str, struct list_head *list,
+parse_expr_list(struct lstr *str, cfs_list_t *list,
                 unsigned min, unsigned max)
 {
         struct lstr res;
@@ -847,7 +847,7 @@ parse_expr_list(struct lstr *str, struct list_head *list,
                 range = parse_range_expr(&res, min, max);
                 if (range == NULL)
                         return 0;
-                list_add_tail(&range->re_link, list);
+                cfs_list_add_tail(&range->re_link, list);
         }
         return 1;
 }
@@ -860,7 +860,7 @@ parse_expr_list(struct lstr *str, struct list_head *list,
  */
 static int
 num_parse(char *str, int len,
-          struct list_head *list, unsigned min, unsigned max)
+          cfs_list_t *list, unsigned min, unsigned max)
 {
         __u32 num;
         struct lstr src;
@@ -872,7 +872,7 @@ num_parse(char *str, int len,
         LIBCFS_ALLOC(numaddr, sizeof(struct numaddr_range));
         if (numaddr == NULL)
                 return 0;
-        list_add_tail(&numaddr->nar_link, list);
+        cfs_list_add_tail(&numaddr->nar_link, list);
         CFS_INIT_LIST_HEAD(&numaddr->nar_range_exprs);
 
         if (libcfs_str2num_check(src.ls_str, src.ls_len, &num, min, max)) {
@@ -885,7 +885,7 @@ num_parse(char *str, int len,
 
                 expr->re_lo = expr->re_hi = num;
                 expr->re_stride = 1;
-                list_add_tail(&expr->re_link, &numaddr->nar_range_exprs);
+                cfs_list_add_tail(&expr->re_link, &numaddr->nar_range_exprs);
                 return 1;
         }
 
@@ -901,7 +901,7 @@ num_parse(char *str, int len,
  * \retval 0 otherwise
  */
 static int
-libcfs_num_parse(char *str, int len, struct list_head *list)
+libcfs_num_parse(char *str, int len, cfs_list_t *list)
 {
         return num_parse(str, len, list, 0, MAX_NUMERIC_VALUE);
 }
@@ -916,7 +916,7 @@ libcfs_num_parse(char *str, int len, struct list_head *list)
  */
 static int
 libcfs_ip_parse(char *str, int len,
-                struct list_head *list)
+                cfs_list_t *list)
 {
         struct lstr src, res;
         int i;
@@ -957,7 +957,7 @@ parse_addrange(const struct lstr *src, struct nidrange *nidrange)
         LIBCFS_ALLOC(addrrange, sizeof(struct addrrange));
         if (addrrange == NULL)
                 return 0;
-        list_add_tail(&addrrange->ar_link, &nidrange->nr_addrranges);
+        cfs_list_add_tail(&addrrange->ar_link, &nidrange->nr_addrranges);
         CFS_INIT_LIST_HEAD(&addrrange->ar_numaddr_ranges);
 
         return nidrange->nr_netstrfns->nf_parse_addrlist(src->ls_str,
@@ -977,7 +977,7 @@ parse_addrange(const struct lstr *src, struct nidrange *nidrange)
  */
 static struct nidrange *
 add_nidrange(const struct lstr *src,
-             struct list_head *nidlist)
+             cfs_list_t *nidlist)
 {
         struct netstrfns *nf;
         struct nidrange *nr;
@@ -1004,7 +1004,7 @@ add_nidrange(const struct lstr *src,
                         return NULL;
         }
 
-        list_for_each_entry(nr, nidlist, nr_link) {
+        cfs_list_for_each_entry(nr, nidlist, nr_link) {
                 if (nr->nr_netstrfns != nf)
                         continue;
                 if (nr->nr_netnum != netnum)
@@ -1015,7 +1015,7 @@ add_nidrange(const struct lstr *src,
         LIBCFS_ALLOC(nr, sizeof(struct nidrange));
         if (nr == NULL)
                 return NULL;
-        list_add_tail(&nr->nr_link, nidlist);
+        cfs_list_add_tail(&nr->nr_link, nidlist);
         CFS_INIT_LIST_HEAD(&nr->nr_addrranges);
         nr->nr_netstrfns = nf;
         nr->nr_all = 0;
@@ -1031,7 +1031,7 @@ add_nidrange(const struct lstr *src,
  * \retval 0 otherwise
  */
 static int
-parse_nidrange(struct lstr *src, struct list_head *nidlist)
+parse_nidrange(struct lstr *src, cfs_list_t *nidlist)
 {
         struct lstr addrrange, net, tmp;
         struct nidrange *nr;
@@ -1062,13 +1062,13 @@ parse_nidrange(struct lstr *src, struct list_head *nidlist)
  * \retval none
  */
 static void
-free_range_exprs(struct list_head *list)
+free_range_exprs(cfs_list_t *list)
 {
-        struct list_head *pos, *next;
+        cfs_list_t *pos, *next;
 
-        list_for_each_safe(pos, next, list) {
-                list_del(pos);
-                LIBCFS_FREE(list_entry(pos, struct range_expr, re_link),
+        cfs_list_for_each_safe(pos, next, list) {
+                cfs_list_del(pos);
+                LIBCFS_FREE(cfs_list_entry(pos, struct range_expr, re_link),
                             sizeof(struct range_expr));
         }
 }
@@ -1082,15 +1082,15 @@ free_range_exprs(struct list_head *list)
  * \retval none
  */
 static void
-free_numaddr_ranges(struct list_head *list)
+free_numaddr_ranges(cfs_list_t *list)
 {
-        struct list_head *pos, *next;
+        cfs_list_t *pos, *next;
         struct numaddr_range *numaddr;
 
-        list_for_each_safe(pos, next, list) {
-                numaddr = list_entry(pos, struct numaddr_range, nar_link);
+        cfs_list_for_each_safe(pos, next, list) {
+                numaddr = cfs_list_entry(pos, struct numaddr_range, nar_link);
                 free_range_exprs(&numaddr->nar_range_exprs);
-                list_del(pos);
+                cfs_list_del(pos);
                 LIBCFS_FREE(numaddr, sizeof(struct numaddr_range));
         }
 }
@@ -1104,15 +1104,15 @@ free_numaddr_ranges(struct list_head *list)
  * \retval none
  */
 static void
-free_addrranges(struct list_head *list)
+free_addrranges(cfs_list_t *list)
 {
-        struct list_head *pos, *next;
+        cfs_list_t *pos, *next;
         struct addrrange *ar;
 
-        list_for_each_safe(pos, next, list) {
-                ar = list_entry(pos, struct addrrange, ar_link);
+        cfs_list_for_each_safe(pos, next, list) {
+                ar = cfs_list_entry(pos, struct addrrange, ar_link);
                 free_numaddr_ranges(&ar->ar_numaddr_ranges);
-                list_del(pos);
+                cfs_list_del(pos);
                 LIBCFS_FREE(ar, sizeof(struct addrrange));
         }
 }
@@ -1126,15 +1126,15 @@ free_addrranges(struct list_head *list)
  * \retval none
  */
 void
-cfs_free_nidlist(struct list_head *list)
+cfs_free_nidlist(cfs_list_t *list)
 {
-        struct list_head *pos, *next;
+        cfs_list_t *pos, *next;
         struct nidrange *nr;
 
-        list_for_each_safe(pos, next, list) {
-                nr = list_entry(pos, struct nidrange, nr_link);
+        cfs_list_for_each_safe(pos, next, list) {
+                nr = cfs_list_entry(pos, struct nidrange, nr_link);
                 free_addrranges(&nr->nr_addrranges);
-                list_del(pos);
+                cfs_list_del(pos);
                 LIBCFS_FREE(nr, sizeof(struct nidrange));
         }
 }
@@ -1153,7 +1153,7 @@ cfs_free_nidlist(struct list_head *list)
  * \retval 0 otherwise
  */
 int
-cfs_parse_nidlist(char *str, int len, struct list_head *nidlist)
+cfs_parse_nidlist(char *str, int len, cfs_list_t *nidlist)
 {
         struct lstr src, res;
         int rc;
@@ -1186,18 +1186,19 @@ cfs_parse_nidlist(char *str, int len, struct list_head *nidlist)
  * \retval 0 otherwise
  */
 static int
-match_numaddr(__u32 addr, struct list_head *list, int shift, __u32 mask)
+match_numaddr(__u32 addr, cfs_list_t *list, int shift, __u32 mask)
 {
         struct numaddr_range *numaddr;
         struct range_expr *expr;
         int ip, ok;
         ENTRY;
 
-        list_for_each_entry(numaddr, list, nar_link) {
+        cfs_list_for_each_entry(numaddr, list, nar_link) {
                 ip = (addr >> shift) & mask;
                 shift -= 8;
                 ok = 0;
-                list_for_each_entry(expr, &numaddr->nar_range_exprs, re_link) {
+                cfs_list_for_each_entry(expr, &numaddr->nar_range_exprs,
+                                        re_link) {
                         if (ip >= expr->re_lo &&
                             ip <= expr->re_hi &&
                             ((ip - expr->re_lo) % expr->re_stride) == 0) {
@@ -1218,7 +1219,7 @@ match_numaddr(__u32 addr, struct list_head *list, int shift, __u32 mask)
  * \retval 0 otherwise
  */
 static int
-libcfs_num_match(__u32 addr, struct list_head *numaddr)
+libcfs_num_match(__u32 addr, cfs_list_t *numaddr)
 {
         return match_numaddr(addr, numaddr, 0, 0xffffffff);
 }
@@ -1230,7 +1231,7 @@ libcfs_num_match(__u32 addr, struct list_head *numaddr)
  * \retval 0 otherwise
  */
 static int
-libcfs_ip_match(__u32 addr, struct list_head *numaddr)
+libcfs_ip_match(__u32 addr, cfs_list_t *numaddr)
 {
         return match_numaddr(addr, numaddr, 24, 0xff);
 }
@@ -1243,20 +1244,20 @@ libcfs_ip_match(__u32 addr, struct list_head *numaddr)
  * \retval 1 on match
  * \retval 0  otherwises
  */
-int cfs_match_nid(lnet_nid_t nid, struct list_head *nidlist)
+int cfs_match_nid(lnet_nid_t nid, cfs_list_t *nidlist)
 {
         struct nidrange *nr;
         struct addrrange *ar;
         ENTRY;
 
-        list_for_each_entry(nr, nidlist, nr_link) {
+        cfs_list_for_each_entry(nr, nidlist, nr_link) {
                 if (nr->nr_netstrfns->nf_type != LNET_NETTYP(LNET_NIDNET(nid)))
                         continue;
                 if (nr->nr_netnum != LNET_NETNUM(LNET_NIDNET(nid)))
                         continue;
                 if (nr->nr_all)
                         RETURN(1);
-                list_for_each_entry(ar, &nr->nr_addrranges, ar_link)
+                cfs_list_for_each_entry(ar, &nr->nr_addrranges, ar_link)
                         if (nr->nr_netstrfns->nf_match_addr(LNET_NIDADDR(nid),
                                                        &ar->ar_numaddr_ranges))
                                 RETURN(1);

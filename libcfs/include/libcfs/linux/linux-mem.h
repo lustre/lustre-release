@@ -62,6 +62,11 @@ typedef struct page                     cfs_page_t;
 #define CFS_PAGE_SHIFT                  PAGE_CACHE_SHIFT
 #define CFS_PAGE_MASK                   (~((__u64)CFS_PAGE_SIZE-1))
 
+#define cfs_num_physpages               num_physpages
+
+#define cfs_copy_from_user(to, from, n) copy_from_user(to, from, n)
+#define cfs_copy_to_user(to, from, n)   copy_to_user(to, from, n)
+
 static inline void *cfs_page_address(cfs_page_t *page)
 {
         /*
@@ -116,9 +121,10 @@ extern void __cfs_free_pages(cfs_page_t *page, unsigned int order);
 
 #if BITS_PER_LONG == 32
 /* limit to lowmem on 32-bit systems */
-#define CFS_NUM_CACHEPAGES min(num_physpages, 1UL << (30-CFS_PAGE_SHIFT) *3/4)
+#define CFS_NUM_CACHEPAGES \
+        min(cfs_num_physpages, 1UL << (30 - CFS_PAGE_SHIFT) * 3 / 4)
 #else
-#define CFS_NUM_CACHEPAGES num_physpages
+#define CFS_NUM_CACHEPAGES cfs_num_physpages
 #endif
 
 /*
@@ -142,10 +148,28 @@ extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
 extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 extern int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 
-/*
- */
 #define CFS_DECL_MMSPACE                mm_segment_t __oldfs
-#define CFS_MMSPACE_OPEN                do { __oldfs = get_fs(); set_fs(get_ds());} while(0)
+#define CFS_MMSPACE_OPEN \
+        do { __oldfs = get_fs(); set_fs(get_ds());} while(0)
 #define CFS_MMSPACE_CLOSE               set_fs(__oldfs)
 
+#define CFS_SLAB_HWCACHE_ALIGN          SLAB_HWCACHE_ALIGN
+#define CFS_SLAB_KERNEL                 SLAB_KERNEL
+#define CFS_SLAB_NOFS                   SLAB_NOFS
+
+/*
+ * Shrinker
+ */
+
+#ifndef HAVE_REGISTER_SHRINKER
+/* Shrinker callback */
+typedef shrinker_t cfs_shrinker_t;
+#define cfs_set_shrinker(seeks, shrinker) set_shrinker(seeks, shrinker)
+#define cfs_remove_shrinker(shrinker)     remove_shrinker(shrinker)
+#endif /* !HAVE_REGISTER_SHRINKER */
+
+/* struct shrinker */
+#define cfs_shrinker shrinker
+
+#define CFS_DEFAULT_SEEKS                 DEFAULT_SEEKS
 #endif /* __LINUX_CFS_MEM_H__ */

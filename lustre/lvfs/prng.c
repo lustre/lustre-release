@@ -47,7 +47,7 @@
 
 #ifndef __KERNEL__
 #include <liblustre.h>
-#define get_random_bytes(val, size)     (*val) = 0
+#define cfs_get_random_bytes(val, size)     (*val) = 0
 #endif
 #include <obd_class.h>
 #if defined(HAVE_LINUX_RANDOM_H)
@@ -112,7 +112,7 @@ void ll_get_random_bytes(void *buf, int size)
 
         rem = min((int)((unsigned long)buf & (sizeof(int) - 1)), size);
         if (rem) {
-                get_random_bytes(&tmp, sizeof(tmp));
+                cfs_get_random_bytes(&tmp, sizeof(tmp));
                 tmp ^= ll_rand();
                 memcpy(buf, &tmp, rem);
                 p = buf + rem;
@@ -120,14 +120,14 @@ void ll_get_random_bytes(void *buf, int size)
         }
 
         while (size >= sizeof(int)) {
-                get_random_bytes(&tmp, sizeof(tmp));
+                cfs_get_random_bytes(&tmp, sizeof(tmp));
                 *p = ll_rand() ^ tmp;
                 size -= sizeof(int);
                 p++;
         }
         buf = p;
         if (size) {
-                get_random_bytes(&tmp, sizeof(tmp));
+                cfs_get_random_bytes(&tmp, sizeof(tmp));
                 tmp ^= ll_rand();
                 memcpy(buf, &tmp, size);
         }

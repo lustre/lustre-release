@@ -107,7 +107,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
 
 /********************** config llog list **********************/
 static CFS_LIST_HEAD(config_llog_list);
-static spinlock_t       config_list_lock = SPIN_LOCK_UNLOCKED;
+static cfs_spinlock_t       config_list_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 /* Take a reference to a config log */
 static int config_log_get(struct config_llog_data *cld)
@@ -115,9 +115,9 @@ static int config_log_get(struct config_llog_data *cld)
         ENTRY;
         if (cld->cld_stopping)
                 RETURN(1);
-        atomic_inc(&cld->cld_refcount);
+        cfs_atomic_inc(&cld->cld_refcount);
         CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
-               atomic_read(&cld->cld_refcount));
+               cfs_atomic_read(&cld->cld_refcount));
         RETURN(0);
 }
 
@@ -128,14 +128,14 @@ static void config_log_put(struct config_llog_data *cld)
         ENTRY;
 
         CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
-               atomic_read(&cld->cld_refcount));
-        LASSERT(atomic_read(&cld->cld_refcount) > 0);
+               cfs_atomic_read(&cld->cld_refcount));
+        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
 
         /* spinlock to make sure no item with 0 refcount in the list */
-        spin_lock(&config_list_lock);
-        if (unlikely(atomic_dec_and_test(&cld->cld_refcount))) {
-                list_del(&cld->cld_list_chain);
-                spin_unlock(&config_list_lock);
+        cfs_spin_lock(&config_list_lock);
+        if (unlikely(cfs_atomic_dec_and_test(&cld->cld_refcount))) {
+                cfs_list_del(&cld->cld_list_chain);
+                cfs_spin_unlock(&config_list_lock);
 
                 CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
 
@@ -151,7 +151,7 @@ static void config_log_put(struct config_llog_data *cld)
                                  strlen(cld->cld_cfg.cfg_instance) + 1);
                 OBD_FREE(cld, sizeof(*cld));
         } else {
-                spin_unlock(&config_list_lock);
+                cfs_spin_unlock(&config_list_lock);
         }
 
         EXIT;
@@ -176,8 +176,8 @@ struct config_llog_data *config_log_find(char *logname,
                 RETURN(ERR_PTR(-EINVAL));
         }
 
-        spin_lock(&config_list_lock);
-        list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
+        cfs_spin_lock(&config_list_lock);
+        cfs_list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
                 if (match_instance && cld->cld_cfg.cfg_instance &&
                     strcmp(logid, cld->cld_cfg.cfg_instance) == 0)
                         goto out_found;
@@ -185,13 +185,13 @@ struct config_llog_data *config_log_find(char *logname,
                     strcmp(logid, cld->cld_logname) == 0)
                         goto out_found;
         }
-        spin_unlock(&config_list_lock);
+        cfs_spin_unlock(&config_list_lock);
 
         CDEBUG(D_CONFIG, "can't get log %s\n", logid);
         RETURN(ERR_PTR(-ENOENT));
 out_found:
-        atomic_inc(&cld->cld_refcount);
-        spin_unlock(&config_list_lock);
+        cfs_atomic_inc(&cld->cld_refcount);
+        cfs_spin_unlock(&config_list_lock);
         LASSERT(cld->cld_stopping == 0 || cld->cld_is_sptlrpc == 0);
         RETURN(cld);
 }
@@ -225,7 +225,7 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         cld->cld_is_sptlrpc = is_sptlrpc;
-        atomic_set(&cld->cld_refcount, 1);
+        cfs_atomic_set(&cld->cld_refcount, 1);
 
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(obd->obd_self_export);
@@ -243,9 +243,9 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 
         rc = mgc_logname2resid(logname, &cld->cld_resid);
 
-        spin_lock(&config_list_lock);
-        list_add(&cld->cld_list_chain, &config_llog_list);
-        spin_unlock(&config_list_lock);
+        cfs_spin_lock(&config_list_lock);
+        cfs_list_add(&cld->cld_list_chain, &config_llog_list);
+        cfs_spin_unlock(&config_list_lock);
 
         if (rc) {
                 config_log_put(cld);
@@ -311,7 +311,7 @@ static int config_log_add(struct obd_device *obd, char *logname,
         RETURN(0);
 }
 
-DECLARE_MUTEX(llog_process_lock);
+CFS_DECLARE_MUTEX(llog_process_lock);
 
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
@@ -324,7 +324,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         if (IS_ERR(cld))
                 RETURN(PTR_ERR(cld));
 
-        down(&llog_process_lock);
+        cfs_down(&llog_process_lock);
         /*
          * if cld_stopping is set, it means we didn't start the log thus
          * not owning the start ref. this can happen after previous umount:
@@ -333,19 +333,19 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
          * calling start_log.
          */
         if (unlikely(cld->cld_stopping)) {
-                up(&llog_process_lock);
+                cfs_up(&llog_process_lock);
                 /* drop the ref from the find */
                 config_log_put(cld);
                 RETURN(rc);
         }
 
         cld->cld_stopping = 1;
-        up(&llog_process_lock);
+        cfs_up(&llog_process_lock);
 
-        spin_lock(&config_list_lock);
+        cfs_spin_lock(&config_list_lock);
         cld_sptlrpc = cld->cld_sptlrpc;
         cld->cld_sptlrpc = NULL;
-        spin_unlock(&config_list_lock);
+        cfs_spin_unlock(&config_list_lock);
 
         if (cld_sptlrpc)
                 config_log_put(cld_sptlrpc);
@@ -372,12 +372,12 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later);
 
 static void do_requeue(struct config_llog_data *cld)
 {
-        LASSERT(atomic_read(&cld->cld_refcount) > 0);
+        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
 
         /* Do not run mgc_process_log on a disconnected export or an
            export which is being disconnected. Take the client
            semaphore to make the check non-racy. */
-        down_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
+        cfs_down_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
         if (cld->cld_mgcexp->exp_obd->u.cli.cl_conn_count != 0) {
                 CDEBUG(D_MGC, "updating log %s\n", cld->cld_logname);
                 mgc_process_log(cld->cld_mgcexp->exp_obd, cld);
@@ -385,7 +385,7 @@ static void do_requeue(struct config_llog_data *cld)
                 CDEBUG(D_MGC, "disconnecting, won't update log %s\n",
                        cld->cld_logname);
         }
-        up_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
+        cfs_up_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
 
         /* Whether we enqueued again or not in mgc_process_log, we're done
          * with the ref from the old enqueue */
@@ -404,20 +404,21 @@ static int mgc_requeue_thread(void *data)
 
         CDEBUG(D_MGC, "Starting requeue thread\n");
 
-        lwi_later = LWI_TIMEOUT(60 * HZ, NULL, NULL);
+        lwi_later = LWI_TIMEOUT(60 * CFS_HZ, NULL, NULL);
         l_wait_event(rq_waitq, rq_state & (RQ_NOW | RQ_STOP), &lwi_later);
 
         /* Keep trying failed locks periodically */
-        spin_lock(&config_list_lock);
+        cfs_spin_lock(&config_list_lock);
         while (rq_state & (RQ_NOW | RQ_LATER)) {
                 /* Any new or requeued lostlocks will change the state */
                 rq_state &= ~(RQ_NOW | RQ_LATER);
-                spin_unlock(&config_list_lock);
+                cfs_spin_unlock(&config_list_lock);
 
                 /* Always wait a few seconds to allow the server who
                    caused the lock revocation to finish its setup, plus some
                    random so everyone doesn't try to reconnect at once. */
-                lwi_now = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0xff) * (HZ / 100),
+                lwi_now = LWI_TIMEOUT(3 * CFS_HZ + (ll_rand() & 0xff) * \
+                                      (CFS_HZ / 100),
                                       NULL, NULL);
                 l_wait_event(rq_waitq, rq_state & RQ_STOP, &lwi_now);
 
@@ -435,49 +436,49 @@ static int mgc_requeue_thread(void *data)
                  */
                 cld_prev = NULL;
 
-                spin_lock(&config_list_lock);
-                list_for_each_entry_safe(cld, cld_next, &config_llog_list,
-                                         cld_list_chain) {
+                cfs_spin_lock(&config_list_lock);
+                cfs_list_for_each_entry_safe(cld, cld_next, &config_llog_list,
+                                             cld_list_chain) {
                         if (cld->cld_list_chain.next != &config_llog_list)
-                                atomic_inc(&cld_next->cld_refcount);
+                                cfs_atomic_inc(&cld_next->cld_refcount);
 
                         if (cld->cld_lostlock) {
                                 if (cld->cld_sptlrpc &&
                                     cld->cld_sptlrpc->cld_lostlock) {
                                         cld->cld_sptlrpc->cld_lostlock = 0;
 
-                                        spin_unlock(&config_list_lock);
+                                        cfs_spin_unlock(&config_list_lock);
                                         do_requeue(cld->cld_sptlrpc);
-                                        spin_lock(&config_list_lock);
+                                        cfs_spin_lock(&config_list_lock);
                                         LASSERT(cld->cld_lostlock);
                                 }
 
                                 cld->cld_lostlock = 0;
 
-                                spin_unlock(&config_list_lock);
+                                cfs_spin_unlock(&config_list_lock);
                                 do_requeue(cld);
-                                spin_lock(&config_list_lock);
+                                cfs_spin_lock(&config_list_lock);
                         }
 
 
                         if (cld_prev) {
-                                spin_unlock(&config_list_lock);
+                                cfs_spin_unlock(&config_list_lock);
                                 config_log_put(cld_prev);
-                                spin_lock(&config_list_lock);
+                                cfs_spin_lock(&config_list_lock);
                         }
 
                         cld_prev = cld_next;
                 }
-                spin_unlock(&config_list_lock);
+                cfs_spin_unlock(&config_list_lock);
 
                 /* Wait a bit to see if anyone else needs a requeue */
                 l_wait_event(rq_waitq, rq_state & (RQ_NOW | RQ_STOP),
                              &lwi_later);
-                spin_lock(&config_list_lock);
+                cfs_spin_lock(&config_list_lock);
         }
         /* spinlock and while guarantee RQ_NOW and RQ_LATER are not set */
         rq_state &= ~RQ_RUNNING;
-        spin_unlock(&config_list_lock);
+        cfs_spin_unlock(&config_list_lock);
 
         CDEBUG(D_MGC, "Ending requeue thread\n");
         RETURN(rc);
@@ -490,16 +491,16 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
         int rc = 0;
 
         CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n",
-               cld->cld_logname, later, atomic_read(&cld->cld_refcount),
+               cld->cld_logname, later, cfs_atomic_read(&cld->cld_refcount),
                cld->cld_stopping, rq_state);
-        LASSERT(atomic_read(&cld->cld_refcount) > 0);
+        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
 
         /* Hold lock for rq_state */
-        spin_lock(&config_list_lock);
+        cfs_spin_lock(&config_list_lock);
 
         if (cld->cld_stopping || (rq_state & RQ_STOP)) {
                 cld->cld_lostlock = 0;
-                spin_unlock(&config_list_lock);
+                cfs_spin_unlock(&config_list_lock);
                 config_log_put(cld);
                 RETURN(0);
         }
@@ -509,7 +510,7 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
         if (!(rq_state & RQ_RUNNING)) {
                 LASSERT(rq_state == 0);
                 rq_state = RQ_RUNNING | (later ? RQ_LATER : RQ_NOW);
-                spin_unlock(&config_list_lock);
+                cfs_spin_unlock(&config_list_lock);
                 rc = cfs_kernel_thread(mgc_requeue_thread, 0,
                                        CLONE_VM | CLONE_FILES);
                 if (rc < 0) {
@@ -523,7 +524,7 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
                 }
         } else {
                 rq_state |= later ? RQ_LATER : RQ_NOW;
-                spin_unlock(&config_list_lock);
+                cfs_spin_unlock(&config_list_lock);
                 cfs_waitq_signal(&rq_waitq);
         }
 
@@ -547,13 +548,13 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         LASSERT(lsi->lsi_srv_mnt == mnt);
 
         /* The mgc fs exclusion sem. Only one fs can be setup at a time. */
-        down(&cli->cl_mgc_sem);
+        cfs_down(&cli->cl_mgc_sem);
 
-        cleanup_group_info();
+        cfs_cleanup_group_info();
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
-                up(&cli->cl_mgc_sem);
+                cfs_up(&cli->cl_mgc_sem);
                 CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd),
                        PTR_ERR(obd->obd_fsops));
                 RETURN(PTR_ERR(obd->obd_fsops));
@@ -594,7 +595,7 @@ err_ops:
         fsfilt_put_ops(obd->obd_fsops);
         obd->obd_fsops = NULL;
         cli->cl_mgc_vfsmnt = NULL;
-        up(&cli->cl_mgc_sem);
+        cfs_up(&cli->cl_mgc_sem);
         RETURN(err);
 }
 
@@ -619,12 +620,12 @@ static int mgc_fs_cleanup(struct obd_device *obd)
         if (obd->obd_fsops)
                 fsfilt_put_ops(obd->obd_fsops);
 
-        up(&cli->cl_mgc_sem);
+        cfs_up(&cli->cl_mgc_sem);
 
         RETURN(rc);
 }
 
-static atomic_t mgc_count = ATOMIC_INIT(0);
+static cfs_atomic_t mgc_count = CFS_ATOMIC_INIT(0);
 static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
@@ -634,12 +635,12 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EARLY:
                 break;
         case OBD_CLEANUP_EXPORTS:
-                if (atomic_dec_and_test(&mgc_count)) {
+                if (cfs_atomic_dec_and_test(&mgc_count)) {
                         /* Kick the requeue waitq - cld's should all be
                            stopping */
-                        spin_lock(&config_list_lock);
+                        cfs_spin_lock(&config_list_lock);
                         rq_state |= RQ_STOP;
-                        spin_unlock(&config_list_lock);
+                        cfs_spin_unlock(&config_list_lock);
                         cfs_waitq_signal(&rq_waitq);
                 }
                 rc = obd_llog_finish(obd, 0);
@@ -693,13 +694,13 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lprocfs_obd_setup(obd, lvars.obd_vars);
         sptlrpc_lprocfs_cliobd_attach(obd);
 
-        spin_lock(&config_list_lock);
-        atomic_inc(&mgc_count);
-        if (atomic_read(&mgc_count) == 1) {
+        cfs_spin_lock(&config_list_lock);
+        cfs_atomic_inc(&mgc_count);
+        if (cfs_atomic_read(&mgc_count) == 1) {
                 rq_state &= ~RQ_STOP;
                 cfs_waitq_init(&rq_waitq);
         }
-        spin_unlock(&config_list_lock);
+        cfs_spin_unlock(&config_list_lock);
 
         RETURN(rc);
 
@@ -868,7 +869,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int rc;
         ENTRY;
 
-        if (!try_module_get(THIS_MODULE)) {
+        if (!cfs_try_module_get(THIS_MODULE)) {
                 CERROR("Can't get module. Is it alive?");
                 return -EINVAL;
         }
@@ -905,7 +906,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, rc = -ENOTTY);
         }
 out:
-        module_put(THIS_MODULE);
+        cfs_module_put(THIS_MODULE);
 
         return rc;
 }
@@ -961,9 +962,9 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
-                spin_lock(&imp->imp_lock);
+                cfs_spin_lock(&imp->imp_lock);
                 imp->imp_initial_recov = *(int *)val;
-                spin_unlock(&imp->imp_lock);
+                cfs_spin_unlock(&imp->imp_lock);
                 CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
                        exp->exp_obd->obd_name, imp->imp_initial_recov);
                 RETURN(0);
@@ -974,12 +975,12 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 value = *(int *)val;
-                spin_lock(&imp->imp_lock);
+                cfs_spin_lock(&imp->imp_lock);
                 imp->imp_initial_recov_bk = value > 0;
                 /* Even after the initial connection, give up all comms if
                    nobody answers the first time. */
                 imp->imp_recon_bk = 1;
-                spin_unlock(&imp->imp_lock);
+                cfs_spin_unlock(&imp->imp_lock);
                 CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n",
                        imp->imp_obd->obd_name, value, imp->imp_initial_recov,
                        imp->imp_deactive, imp->imp_invalid,
@@ -1307,10 +1308,10 @@ int mgc_process_log(struct obd_device *mgc,
            sounds like badness.  It actually might be fine, as long as
            we're not trying to update from the same log
            simultaneously (in which case we should use a per-log sem.) */
-        down(&llog_process_lock);
+        cfs_down(&llog_process_lock);
 
         if (cld->cld_stopping) {
-                up(&llog_process_lock);
+                cfs_up(&llog_process_lock);
                 RETURN(0);
         }
 
@@ -1325,7 +1326,7 @@ int mgc_process_log(struct obd_device *mgc,
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
                 CERROR("missing llog context\n");
-                up(&llog_process_lock);
+                cfs_up(&llog_process_lock);
                 RETURN(-EINVAL);
         }
 
@@ -1411,7 +1412,7 @@ out_pop:
         CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
                mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
 
-        up(&llog_process_lock);
+        cfs_up(&llog_process_lock);
 
         RETURN(rc);
 }

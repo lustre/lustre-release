@@ -63,7 +63,7 @@
 
 static struct it_node {
         struct interval_node node;
-        struct list_head list;
+        cfs_list_t list;
         int hit, valid;
 } *it_array;
 static int it_count;
@@ -379,7 +379,7 @@ static int it_test_performance(struct interval_node *root, unsigned long len)
         /* list */
         contended_count = 0;
         gettimeofday(&start, NULL);
-        list_for_each_entry(n, &header, list) {
+        cfs_list_for_each_entry(n, &header, list) {
                 if (extent_overlapped(&ext, &n->node.in_extent)) {
                         count = LOOP_COUNT;
                         while (count--);
@@ -424,7 +424,7 @@ static struct interval_node *it_test_helper(struct interval_node *root)
                                 __F(&n->node.in_extent));
                         interval_erase(&n->node, &root);
                         n->valid = 0;
-                        list_del_init(&n->list);
+                        cfs_list_del_init(&n->list);
                 } else {
                         __u64 low, high;
                         low = (random() % max_count) & ALIGN_MASK;
@@ -437,7 +437,7 @@ static struct interval_node *it_test_helper(struct interval_node *root)
                         dprintf("Adding a node "__S"\n",
                                 __F(&n->node.in_extent));
                         n->valid = 1;
-                        list_add(&n->list, &header);
+                        cfs_list_add(&n->list, &header);
                 }
         }
 
@@ -474,9 +474,9 @@ static struct interval_node *it_test_init(int count)
                 n->hit = 0;
                 n->valid = 1;
                 if (i == 0)
-                        list_add_tail(&n->list, &header);
+                        cfs_list_add_tail(&n->list, &header);
                 else
-                        list_add_tail(&n->list, &it_array[rand()%i].list);
+                        cfs_list_add_tail(&n->list, &it_array[rand()%i].list);
         }
 
         return root;

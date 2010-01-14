@@ -49,7 +49,6 @@
 #include <linux/lustre_compat25.h>
 #include <linux/lvfs_linux.h>
 #else
-struct group_info { /* unused */ };
 #include <liblustre.h>
 #endif
 
@@ -103,7 +102,7 @@ int lustre_rename(struct dentry *dir, struct vfsmount *mnt, char *oldname,
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
-long l_readdir(struct file * file, struct list_head *dentry_list);
+long l_readdir(struct file * file, cfs_list_t *dentry_list);
 int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
                     struct iattr *newattrs);
 int simple_truncate(struct dentry *dir, struct vfsmount *mnt,
@@ -114,7 +113,7 @@ static inline void l_dput(struct dentry *de)
         if (!de || IS_ERR(de))
                 return;
         //shrink_dcache_parent(de);
-        LASSERT(atomic_read(&de->d_count) > 0);
+        LASSERT(cfs_atomic_read(&de->d_count) > 0);
         dput(de);
 }
 
@@ -147,9 +146,9 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
 
 static inline void ll_sleep(int t)
 {
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(t * HZ);
-        set_current_state(TASK_RUNNING);
+        cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
+        cfs_schedule_timeout(t * CFS_HZ);
+        cfs_set_current_state(CFS_TASK_RUNNING);
 }
 #endif
 

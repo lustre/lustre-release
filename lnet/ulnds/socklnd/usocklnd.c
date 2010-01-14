@@ -143,7 +143,7 @@ usocklnd_release_poll_states(int n)
                 libcfs_sock_release(pt->upt_notifier[1]);
 
                 pthread_mutex_destroy(&pt->upt_pollrequests_lock);
-                cfs_fini_completion(&pt->upt_completion);
+                cfs_mt_fini_completion(&pt->upt_completion);
 
                 LIBCFS_FREE (pt->upt_pollfd,
                              sizeof(struct pollfd) * pt->upt_npollfd);
@@ -286,7 +286,7 @@ usocklnd_base_startup()
                 CFS_INIT_LIST_HEAD (&pt->upt_pollrequests);
                 CFS_INIT_LIST_HEAD (&pt->upt_stale_list);
                 pthread_mutex_init(&pt->upt_pollrequests_lock, NULL);
-                cfs_init_completion(&pt->upt_completion);
+                cfs_mt_init_completion(&pt->upt_completion);
         }
 
         /* Initialize peer hash list */
@@ -335,7 +335,7 @@ usocklnd_base_shutdown(int n)
         for (i = 0; i < n; i++) {
                 usock_pollthread_t *pt = &usock_data.ud_pollthreads[i];
                 usocklnd_wakeup_pollthread(i);
-                cfs_wait_for_completion(&pt->upt_completion);
+                cfs_mt_wait_for_completion(&pt->upt_completion);
         }
 
         pthread_rwlock_destroy(&usock_data.ud_peers_lock);
@@ -516,16 +516,16 @@ usocklnd_shutdown(lnet_ni_t *ni)
 void
 usocklnd_del_all_peers(lnet_ni_t *ni)
 {
-        struct list_head  *ptmp;
-        struct list_head  *pnxt;
+        cfs_list_t        *ptmp;
+        cfs_list_t        *pnxt;
         usock_peer_t      *peer;
         int                i;
 
         pthread_rwlock_wrlock(&usock_data.ud_peers_lock);
 
         for (i = 0; i < UD_PEER_HASH_SIZE; i++) {
-                list_for_each_safe (ptmp, pnxt, &usock_data.ud_peers[i]) {
-                        peer = list_entry (ptmp, usock_peer_t, up_list);
+                cfs_list_for_each_safe (ptmp, pnxt, &usock_data.ud_peers[i]) {
+                        peer = cfs_list_entry (ptmp, usock_peer_t, up_list);
 
                         if (peer->up_ni != ni)
                                 continue;
@@ -552,7 +552,7 @@ usocklnd_del_peer_and_conns(usock_peer_t *peer)
         pthread_mutex_unlock(&peer->up_lock);
 
         /* peer hash list is still protected by the caller */
-        list_del(&peer->up_list);
+        cfs_list_del(&peer->up_list);
 
         usocklnd_peer_decref(peer); /* peer isn't in hash list anymore */
 }

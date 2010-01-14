@@ -115,7 +115,7 @@ static int target_quotacheck_thread(void *data)
 
         rc = target_quotacheck_callback(exp, oqctl);
         class_export_put(exp);
-        up(qta->qta_sem);
+        cfs_up(qta->qta_sem);
         OBD_FREE_PTR(qta);
         return rc;
 }
@@ -132,7 +132,7 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         if (!qta)
                 RETURN(ENOMEM);
 
-        down(&obt->obt_quotachecking);
+        cfs_down(&obt->obt_quotachecking);
 
         qta->qta_exp = exp;
         qta->qta_obd = obd;
@@ -174,7 +174,8 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         /* we get ref for exp because target_quotacheck_callback() will use this
          * export later b=18126 */
         class_export_get(exp);
-        rc = kernel_thread(target_quotacheck_thread, qta, CLONE_VM|CLONE_FILES);
+        rc = cfs_kernel_thread(target_quotacheck_thread, qta,
+                               CLONE_VM|CLONE_FILES);
         if (rc >= 0) {
                 CDEBUG(D_INFO, "%s: target_quotacheck_thread: %d\n",
                        obd->obd_name, rc);
@@ -187,7 +188,7 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         }
 
 out:
-        up(&obt->obt_quotachecking);
+        cfs_up(&obt->obt_quotachecking);
         OBD_FREE_PTR(qta);
         return rc;
 }

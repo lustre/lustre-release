@@ -43,9 +43,9 @@
 #if defined(_X86_)
 
 void __declspec (naked) FASTCALL
-atomic_add(
+cfs_atomic_add(
     int i,
-    atomic_t *v
+    cfs_atomic_t *v
     )
 {
     // ECX = i
@@ -58,9 +58,9 @@ atomic_add(
 }
 
 void __declspec (naked) FASTCALL
-atomic_sub(
+cfs_atomic_sub(
     int i,
-    atomic_t *v
+    cfs_atomic_t *v
    ) 
 {
     // ECX = i
@@ -73,8 +73,8 @@ atomic_sub(
 }
 
 void __declspec (naked) FASTCALL
-atomic_inc(
-    atomic_t *v
+cfs_atomic_inc(
+    cfs_atomic_t *v
     )
 {
     //InterlockedIncrement((PULONG)(&((v)->counter)));
@@ -88,8 +88,8 @@ atomic_inc(
 }
 
 void __declspec (naked) FASTCALL
-atomic_dec(
-    atomic_t *v
+cfs_atomic_dec(
+    cfs_atomic_t *v
     )
 {
     // ECX = v ; [ECX][0] = v->counter
@@ -101,9 +101,9 @@ atomic_dec(
 }
 
 int __declspec (naked) FASTCALL 
-atomic_sub_and_test(
+cfs_atomic_sub_and_test(
     int i,
-    atomic_t *v
+    cfs_atomic_t *v
     )
 {
 
@@ -119,8 +119,8 @@ atomic_sub_and_test(
 }
 
 int __declspec (naked) FASTCALL
-atomic_inc_and_test(
-    atomic_t *v
+cfs_atomic_inc_and_test(
+    cfs_atomic_t *v
     )
 {
     // ECX = v ; [ECX][0] = v->counter
@@ -134,8 +134,8 @@ atomic_inc_and_test(
 }
 
 int __declspec (naked) FASTCALL
-atomic_dec_and_test(
-    atomic_t *v
+cfs_atomic_dec_and_test(
+    cfs_atomic_t *v
     )
 {
     // ECX = v ; [ECX][0] = v->counter
@@ -151,43 +151,43 @@ atomic_dec_and_test(
 #elif defined(_AMD64_)
 
 void FASTCALL
-atomic_add(
+cfs_atomic_add(
     int i,
-    atomic_t *v
+    cfs_atomic_t *v
     )
 {
     InterlockedExchangeAdd( (PULONG)(&((v)->counter)) , (LONG) (i));
 }
 
 void FASTCALL
-atomic_sub(
+cfs_atomic_sub(
     int i,
-    atomic_t *v
+    cfs_atomic_t *v
    ) 
 {
     InterlockedExchangeAdd( (PULONG)(&((v)->counter)) , (LONG) (-1*i));
 }
 
 void FASTCALL
-atomic_inc(
-    atomic_t *v
+cfs_atomic_inc(
+    cfs_atomic_t *v
     )
 {
    InterlockedIncrement((PULONG)(&((v)->counter)));
 }
 
 void FASTCALL
-atomic_dec(
-    atomic_t *v
+cfs_atomic_dec(
+    cfs_atomic_t *v
     )
 {
     InterlockedDecrement((PULONG)(&((v)->counter)));
 }
 
 int FASTCALL 
-atomic_sub_and_test(
+cfs_atomic_sub_and_test(
     int i,
-    atomic_t *v
+    cfs_atomic_t *v
     )
 {
     int counter, result;
@@ -206,8 +206,8 @@ atomic_sub_and_test(
 }
 
 int FASTCALL
-atomic_inc_and_test(
-    atomic_t *v
+cfs_atomic_inc_and_test(
+    cfs_atomic_t *v
     )
 {
     int counter, result;
@@ -226,8 +226,8 @@ atomic_inc_and_test(
 }
 
 int FASTCALL
-atomic_dec_and_test(
-    atomic_t *v
+cfs_atomic_dec_and_test(
+    cfs_atomic_t *v
     )
 {
     int counter, result;
@@ -258,7 +258,7 @@ atomic_dec_and_test(
  *
  * Atomically adds \a i to \a v and returns \a i + \a v
  */
-int FASTCALL atomic_add_return(int i, atomic_t *v)
+int FASTCALL cfs_atomic_add_return(int i, cfs_atomic_t *v)
 {
     int counter, result;
 
@@ -283,21 +283,21 @@ int FASTCALL atomic_add_return(int i, atomic_t *v)
  *
  * Atomically subtracts \a i from \a v and returns \a v - \a i
  */
-int FASTCALL atomic_sub_return(int i, atomic_t *v)
+int FASTCALL cfs_atomic_sub_return(int i, cfs_atomic_t *v)
 {
-	return atomic_add_return(-i, v);
+	return cfs_atomic_add_return(-i, v);
 }
 
-int FASTCALL atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
+int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, cfs_spinlock_t *lock)
 {
-    if (atomic_read(v) != 1) {
+    if (cfs_atomic_read(v) != 1) {
         return 0;
-    } 
+    }
 
-	spin_lock(lock);
-	if (atomic_dec_and_test(v))
+	cfs_spin_lock(lock);
+	if (cfs_atomic_dec_and_test(v))
 		return 1;
-	spin_unlock(lock);
+	cfs_spin_unlock(lock);
 	return 0;
 }
 
@@ -308,19 +308,19 @@ int FASTCALL atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
 
 
 void
-rwlock_init(rwlock_t * rwlock)
+cfs_rwlock_init(cfs_rwlock_t * rwlock)
 {
-    spin_lock_init(&rwlock->guard);
+    cfs_spin_lock_init(&rwlock->guard);
     rwlock->count = 0;
 }
 
 void
-rwlock_fini(rwlock_t * rwlock)
+cfs_rwlock_fini(cfs_rwlock_t * rwlock)
 {
 }
 
 void
-read_lock(rwlock_t * rwlock)
+cfs_read_lock(cfs_rwlock_t * rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -337,18 +337,18 @@ read_lock(rwlock_t * rwlock)
     slot->irql = KeRaiseIrqlToDpcLevel();
 
     while (TRUE) {
-	    spin_lock(&rwlock->guard);
+	    cfs_spin_lock(&rwlock->guard);
         if (rwlock->count >= 0)
             break;
-        spin_unlock(&rwlock->guard);
+        cfs_spin_unlock(&rwlock->guard);
     }
 
 	rwlock->count++;
-	spin_unlock(&rwlock->guard);
+	cfs_spin_unlock(&rwlock->guard);
 }
 
 void
-read_unlock(rwlock_t * rwlock)
+cfs_read_unlock(cfs_rwlock_t * rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -362,19 +362,19 @@ read_unlock(rwlock_t * rwlock)
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     ASSERT(slot->Magic == TASKSLT_MAGIC);
    
-    spin_lock(&rwlock->guard);
+    cfs_spin_lock(&rwlock->guard);
 	ASSERT(rwlock->count > 0);
     rwlock->count--;
     if (rwlock < 0) {
         cfs_enter_debugger();
     }
-	spin_unlock(&rwlock->guard);
+	cfs_spin_unlock(&rwlock->guard);
 
     KeLowerIrql(slot->irql);
 }
 
 void
-write_lock(rwlock_t * rwlock)
+cfs_write_lock(cfs_rwlock_t * rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -391,18 +391,18 @@ write_lock(rwlock_t * rwlock)
     slot->irql = KeRaiseIrqlToDpcLevel();
 
     while (TRUE) {
-	    spin_lock(&rwlock->guard);
+	    cfs_spin_lock(&rwlock->guard);
         if (rwlock->count == 0)
             break;
-        spin_unlock(&rwlock->guard);
+        cfs_spin_unlock(&rwlock->guard);
     }
 
 	rwlock->count = -1;
-	spin_unlock(&rwlock->guard);
+	cfs_spin_unlock(&rwlock->guard);
 }
 
 void
-write_unlock(rwlock_t * rwlock)
+cfs_write_unlock(cfs_rwlock_t * rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -416,10 +416,10 @@ write_unlock(rwlock_t * rwlock)
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     ASSERT(slot->Magic == TASKSLT_MAGIC);
    
-    spin_lock(&rwlock->guard);
+    cfs_spin_lock(&rwlock->guard);
 	ASSERT(rwlock->count == -1);
     rwlock->count = 0;
-	spin_unlock(&rwlock->guard);
+	cfs_spin_unlock(&rwlock->guard);
 
     KeLowerIrql(slot->irql);
 }

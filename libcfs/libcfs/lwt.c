@@ -50,7 +50,7 @@
 
 #if !KLWT_SUPPORT
 int         lwt_enabled;
-lwt_cpu_t   lwt_cpus[NR_CPUS];
+lwt_cpu_t   lwt_cpus[CFS_NR_CPUS];
 #endif
 
 int         lwt_pages_per_cpu;
@@ -63,7 +63,7 @@ lwt_lookup_string (int *size, char *knl_ptr,
                    char *user_ptr, int user_size)
 {
         int   maxsize = 128;
-        
+
         /* knl_ptr was retrieved from an LWT snapshot and the caller wants to
          * turn it into a string.  NB we can crash with an access violation
          * trying to determine the string length, so we're trusting our
@@ -77,17 +77,17 @@ lwt_lookup_string (int *size, char *knl_ptr,
                 maxsize = user_size;
 
         *size = strnlen (knl_ptr, maxsize - 1) + 1;
-        
+
         if (user_ptr != NULL) {
                 if (user_size < 4)
                         return (-EINVAL);
-                
-                if (copy_to_user (user_ptr, knl_ptr, *size))
+
+                if (cfs_copy_to_user (user_ptr, knl_ptr, *size))
                         return (-EFAULT);
 
                 /* Did I truncate the string?  */
                 if (knl_ptr[*size - 1] != 0)
-                        copy_to_user (user_ptr + *size - 4, "...", 4);
+                        cfs_copy_to_user (user_ptr + *size - 4, "...", 4);
         }
 
         return (0);
@@ -106,12 +106,12 @@ lwt_control (int enable, int clear)
         if (!enable) {
                 LWT_EVENT(0,0,0,0);
                 lwt_enabled = 0;
-                mb();
+                cfs_mb();
                 /* give people some time to stop adding traces */
-                schedule_timeout(10);
+                cfs_schedule_timeout(10);
         }
 
-        for (i = 0; i < num_online_cpus(); i++) {
+        for (i = 0; i < cfs_num_online_cpus(); i++) {
                 p = lwt_cpus[i].lwtc_current_page;
 
                 if (p == NULL)
@@ -123,14 +123,14 @@ lwt_control (int enable, int clear)
                 for (j = 0; j < lwt_pages_per_cpu; j++) {
                         memset (p->lwtp_events, 0, CFS_PAGE_SIZE);
 
-                        p = list_entry (p->lwtp_list.next,
-                                        lwt_page_t, lwtp_list);
+                        p = cfs_list_entry (p->lwtp_list.next,
+                                            lwt_page_t, lwtp_list);
                 }
         }
 
         if (enable) {
                 lwt_enabled = 1;
-                mb();
+                cfs_mb();
                 LWT_EVENT(0,0,0,0);
         }
 
@@ -138,7 +138,7 @@ lwt_control (int enable, int clear)
 }
 
 int
-lwt_snapshot (cycles_t *now, int *ncpu, int *total_size, 
+lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
               void *user_ptr, int user_size)
 {
         const int    events_per_page = CFS_PAGE_SIZE / sizeof(lwt_event_t);
@@ -150,28 +150,28 @@ lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
         if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 return (-EPERM);
 
-        *ncpu = num_online_cpus();
-        *total_size = num_online_cpus() * lwt_pages_per_cpu * bytes_per_page;
+        *ncpu = cfs_num_online_cpus();
+        *total_size = cfs_num_online_cpus() * lwt_pages_per_cpu *
+                bytes_per_page;
         *now = get_cycles();
-        
+
         if (user_ptr == NULL)
                 return (0);
 
-        for (i = 0; i < num_online_cpus(); i++) {
+        for (i = 0; i < cfs_num_online_cpus(); i++) {
                 p = lwt_cpus[i].lwtc_current_page;
 
                 if (p == NULL)
                         return (-ENODATA);
-                
+
                 for (j = 0; j < lwt_pages_per_cpu; j++) {
-                        if (copy_to_user(user_ptr, p->lwtp_events,
-                                         bytes_per_page))
+                        if (cfs_copy_to_user(user_ptr, p->lwtp_events,
+                                             bytes_per_page))
                                 return (-EFAULT);
 
                         user_ptr = ((char *)user_ptr) + bytes_per_page;
-                        p = list_entry(p->lwtp_list.next,
-                                       lwt_page_t, lwtp_list);
-                        
+                        p = cfs_list_entry(p->lwtp_list.next,
+                                           lwt_page_t, lwtp_list);
                 }
         }
 
@@ -179,22 +179,23 @@ lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 }
 
 int
-lwt_init () 
+lwt_init ()
 {
 	int     i;
         int     j;
 
-        for (i = 0; i < num_online_cpus(); i++)
+        for (i = 0; i < cfs_num_online_cpus(); i++)
                 if (lwt_cpus[i].lwtc_current_page != NULL)
                         return (-EALREADY);
-        
+
         LASSERT (!lwt_enabled);
 
 	/* NULL pointers, zero scalars */
 	memset (lwt_cpus, 0, sizeof (lwt_cpus));
-        lwt_pages_per_cpu = LWT_MEMORY / (num_online_cpus() * CFS_PAGE_SIZE);
+        lwt_pages_per_cpu =
+                LWT_MEMORY / (cfs_num_online_cpus() * CFS_PAGE_SIZE);
 
-	for (i = 0; i < num_online_cpus(); i++)
+	for (i = 0; i < cfs_num_online_cpus(); i++)
 		for (j = 0; j < lwt_pages_per_cpu; j++) {
 			struct page *page = alloc_page (GFP_KERNEL);
 			lwt_page_t  *lwtp;
@@ -218,16 +219,16 @@ lwt_init ()
 			memset (lwtp->lwtp_events, 0, CFS_PAGE_SIZE);
 
 			if (j == 0) {
-				INIT_LIST_HEAD (&lwtp->lwtp_list);
+				CFS_INIT_LIST_HEAD (&lwtp->lwtp_list);
 				lwt_cpus[i].lwtc_current_page = lwtp;
 			} else {
-				list_add (&lwtp->lwtp_list,
+				cfs_list_add (&lwtp->lwtp_list,
 				    &lwt_cpus[i].lwtc_current_page->lwtp_list);
 			}
                 }
 
         lwt_enabled = 1;
-        mb();
+        cfs_mb();
 
         LWT_EVENT(0,0,0,0);
 
@@ -235,24 +236,24 @@ lwt_init ()
 }
 
 void
-lwt_fini () 
+lwt_fini ()
 {
         int    i;
 
         lwt_control(0, 0);
-        
-        for (i = 0; i < num_online_cpus(); i++)
+
+        for (i = 0; i < cfs_num_online_cpus(); i++)
                 while (lwt_cpus[i].lwtc_current_page != NULL) {
                         lwt_page_t *lwtp = lwt_cpus[i].lwtc_current_page;
-                        
-                        if (list_empty (&lwtp->lwtp_list)) {
+
+                        if (cfs_list_empty (&lwtp->lwtp_list)) {
                                 lwt_cpus[i].lwtc_current_page = NULL;
                         } else {
                                 lwt_cpus[i].lwtc_current_page =
-                                        list_entry (lwtp->lwtp_list.next,
-                                                    lwt_page_t, lwtp_list);
+                                        cfs_list_entry (lwtp->lwtp_list.next,
+                                                        lwt_page_t, lwtp_list);
 
-                                list_del (&lwtp->lwtp_list);
+                                cfs_list_del (&lwtp->lwtp_list);
                         }
                         
                         __free_page (lwtp->lwtp_page);

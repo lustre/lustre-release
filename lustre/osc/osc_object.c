@@ -78,9 +78,9 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 
         osc->oo_oinfo = cconf->u.coc_oinfo;
 #ifdef INVARIANT_CHECK
-        mutex_init(&osc->oo_debug_mutex);
+        cfs_mutex_init(&osc->oo_debug_mutex);
 #endif
-        spin_lock_init(&osc->oo_seatbelt);
+        cfs_spin_lock_init(&osc->oo_seatbelt);
         for (i = 0; i < CRT_NR; ++i)
                 CFS_INIT_LIST_HEAD(&osc->oo_inflight[i]);
         return 0;
@@ -92,7 +92,7 @@ static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
         int i;
 
         for (i = 0; i < CRT_NR; ++i)
-                LASSERT(list_empty(&osc->oo_inflight[i]));
+                LASSERT(cfs_list_empty(&osc->oo_inflight[i]));
 
         lu_object_fini(obj);
         OBD_SLAB_FREE_PTR(osc, osc_object_kmem);

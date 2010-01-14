@@ -65,9 +65,9 @@ mxlnd_free_pages(kmx_pages_t *p)
         for (i = 0; i < npages; i++) {
                 if (p->mxg_pages[i] != NULL) {
                         __free_page(p->mxg_pages[i]);
-                        spin_lock(&kmxlnd_data.kmx_mem_lock);
+                        cfs_spin_lock(&kmxlnd_data.kmx_mem_lock);
                         kmxlnd_data.kmx_mem_used -= PAGE_SIZE;
-                        spin_unlock(&kmxlnd_data.kmx_mem_lock);
+                        cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock);
                 }
         }
 
@@ -98,9 +98,9 @@ mxlnd_alloc_pages(kmx_pages_t **pp, int npages)
                         mxlnd_free_pages(p);
                         return -ENOMEM;
                 }
-                spin_lock(&kmxlnd_data.kmx_mem_lock);
+                cfs_spin_lock(&kmxlnd_data.kmx_mem_lock);
                 kmxlnd_data.kmx_mem_used += PAGE_SIZE;
-                spin_unlock(&kmxlnd_data.kmx_mem_lock);
+                cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock);
         }
 
         *pp = p;
@@ -120,8 +120,8 @@ mxlnd_ctx_init(kmx_ctx_t *ctx)
         ctx->mxc_incarnation = 0;
         ctx->mxc_deadline = 0;
         ctx->mxc_state = MXLND_CTX_IDLE;
-        if (!list_empty(&ctx->mxc_list))
-                list_del_init(&ctx->mxc_list);
+        if (!cfs_list_empty(&ctx->mxc_list))
+                cfs_list_del_init(&ctx->mxc_list);
         /* ignore mxc_rx_list */
         if (ctx->mxc_type == MXLND_REQ_TX) {
                 ctx->mxc_nid = 0;
@@ -230,7 +230,7 @@ mxlnd_init_txs(void)
                 tx = &kmxlnd_data.kmx_txs[i];
                 tx->mxc_type = MXLND_REQ_TX;
 
-                INIT_LIST_HEAD(&tx->mxc_list);
+                CFS_INIT_LIST_HEAD(&tx->mxc_list);
 
                 /* map mxc_msg to page */
                 page = pages->mxg_pages[ipage];
@@ -251,7 +251,7 @@ mxlnd_init_txs(void)
                 }
 
                 /* in startup(), no locks required */
-                list_add_tail(&tx->mxc_list, &kmxlnd_data.kmx_tx_idle);
+                cfs_list_add_tail(&tx->mxc_list, &kmxlnd_data.kmx_tx_idle);
         }
 
         return 0;
@@ -271,8 +271,10 @@ mxlnd_free_peers(void)
         kmx_peer_t     *next   = NULL;
 
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
-                list_for_each_entry_safe(peer, next, &kmxlnd_data.kmx_peers[i], mxp_list) {
-                        list_del_init(&peer->mxp_list);
+                cfs_list_for_each_entry_safe(peer, next,
+                                             &kmxlnd_data.kmx_peers[i],
+                                             mxp_list) {
+                        cfs_list_del_init(&peer->mxp_list);
                         if (peer->mxp_conn) mxlnd_conn_decref(peer->mxp_conn);
                         mxlnd_peer_decref(peer);
                         count++;
@@ -342,8 +344,9 @@ mxlnd_init_mx(lnet_ni_t *ni)
 
         mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &kmxlnd_data.kmx_epa);
         mx_decompose_endpoint_addr(kmxlnd_data.kmx_epa, &nic_id, &ep_id);
-        mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id, MXLND_MSG_MAGIC,
-                           MXLND_CONNECT_TIMEOUT/HZ*1000, &kmxlnd_data.kmx_epa);
+        mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id,
+                           MXLND_MSG_MAGIC, MXLND_CONNECT_TIMEOUT/CFS_HZ*1000,
+                           &kmxlnd_data.kmx_epa);
         if (mxret != MX_SUCCESS) {
                 CDEBUG(D_NETERROR, "unable to connect to myself (%s)\n", mx_strerror(mxret));
                 goto failed_with_endpoint;
@@ -361,7 +364,8 @@ mxlnd_init_mx(lnet_ni_t *ni)
                          mx_strerror(mxret));
                 goto failed_with_endpoint;
         }
-        mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL, MXLND_COMM_TIMEOUT/HZ*1000);
+        mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL,
+                                       MXLND_COMM_TIMEOUT/CFS_HZ*1000);
         if (mxret != MX_SUCCESS) {
                 CERROR("mx_set_request_timeout() failed with %s\n",
                         mx_strerror(mxret));
@@ -390,13 +394,13 @@ mxlnd_thread_start(int (*fn)(void *arg), void *arg)
         int     pid = 0;
         int     i   = (int) ((long) arg);
 
-        atomic_inc(&kmxlnd_data.kmx_nthreads);
-        init_completion(&kmxlnd_data.kmx_completions[i]);
+        cfs_atomic_inc(&kmxlnd_data.kmx_nthreads);
+        cfs_init_completion(&kmxlnd_data.kmx_completions[i]);
 
-        pid = kernel_thread (fn, arg, 0);
+        pid = cfs_kernel_thread (fn, arg, 0);
         if (pid < 0) {
-                CERROR("kernel_thread() failed with %d\n", pid);
-                atomic_dec(&kmxlnd_data.kmx_nthreads);
+                CERROR("cfs_kernel_thread() failed with %d\n", pid);
+                cfs_atomic_dec(&kmxlnd_data.kmx_nthreads);
         }
         return pid;
 }
@@ -411,8 +415,8 @@ void
 mxlnd_thread_stop(long id)
 {
         int     i       = (int) id;
-        atomic_dec (&kmxlnd_data.kmx_nthreads);
-        complete(&kmxlnd_data.kmx_completions[i]);
+        cfs_atomic_dec (&kmxlnd_data.kmx_nthreads);
+        cfs_complete(&kmxlnd_data.kmx_completions[i]);
 }
 
 /**
@@ -433,12 +437,12 @@ mxlnd_shutdown (lnet_ni_t *ni)
         CDEBUG(D_NET, "in shutdown()\n");
 
         CDEBUG(D_MALLOC, "before MXLND cleanup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory),
+                         "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
 
 
         CDEBUG(D_NET, "setting shutdown = 1\n");
-        atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+        cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
 
         switch (kmxlnd_data.kmx_init) {
 
@@ -449,9 +453,9 @@ mxlnd_shutdown (lnet_ni_t *ni)
 
                 /* wakeup request_waitds */
                 mx_wakeup(kmxlnd_data.kmx_endpt);
-                up(&kmxlnd_data.kmx_tx_queue_sem);
-                up(&kmxlnd_data.kmx_conn_sem);
-                mxlnd_sleep(2 * HZ);
+                cfs_up(&kmxlnd_data.kmx_tx_queue_sem);
+                cfs_up(&kmxlnd_data.kmx_conn_sem);
+                mxlnd_sleep(2 * CFS_HZ);
 
                 /* fall through */
 
@@ -460,13 +464,13 @@ mxlnd_shutdown (lnet_ni_t *ni)
                 CDEBUG(D_NET, "waiting on threads\n");
                 /* wait for threads to complete */
                 for (i = 0; i < nthreads; i++) {
-                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
-                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
 
                 CDEBUG(D_NET, "freeing completions\n");
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                            nthreads * sizeof(struct completion));
+                            nthreads * sizeof(cfs_completion_t));
 
                 /* fall through */
 
@@ -507,7 +511,7 @@ mxlnd_shutdown (lnet_ni_t *ni)
         CDEBUG(D_NET, "shutdown complete\n");
 
         CDEBUG(D_MALLOC, "after MXLND cleanup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory),
+                         "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
 
         kmxlnd_data.kmx_init = MXLND_INIT_NOTHING;
@@ -538,7 +542,7 @@ mxlnd_startup (lnet_ni_t *ni)
                 return -EPERM;
         }
         CDEBUG(D_MALLOC, "before MXLND startup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory),
+                         "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
 
         ni->ni_maxtxcredits = MXLND_TX_MSGS();
@@ -552,29 +556,29 @@ mxlnd_startup (lnet_ni_t *ni)
         kmxlnd_data.kmx_ni = ni;
         ni->ni_data = &kmxlnd_data;
 
-        do_gettimeofday(&tv);
+        cfs_gettimeofday(&tv);
         kmxlnd_data.kmx_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
         CDEBUG(D_NET, "my incarnation is %llu\n", kmxlnd_data.kmx_incarnation);
 
-        rwlock_init (&kmxlnd_data.kmx_global_lock);
-        spin_lock_init (&kmxlnd_data.kmx_mem_lock);
+        cfs_rwlock_init (&kmxlnd_data.kmx_global_lock);
+        cfs_spin_lock_init (&kmxlnd_data.kmx_mem_lock);
 
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_reqs);
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_zombies);
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_orphan_msgs);
-        spin_lock_init (&kmxlnd_data.kmx_conn_lock);
-        sema_init(&kmxlnd_data.kmx_conn_sem, 0);
+        CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_reqs);
+        CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_zombies);
+        CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_orphan_msgs);
+        cfs_spin_lock_init (&kmxlnd_data.kmx_conn_lock);
+        cfs_sema_init(&kmxlnd_data.kmx_conn_sem, 0);
 
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
-                INIT_LIST_HEAD (&kmxlnd_data.kmx_peers[i]);
+                CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_peers[i]);
         }
 
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_idle);
-        spin_lock_init (&kmxlnd_data.kmx_tx_idle_lock);
+        CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_idle);
+        cfs_spin_lock_init (&kmxlnd_data.kmx_tx_idle_lock);
         kmxlnd_data.kmx_tx_next_cookie = 1;
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_queue);
-        spin_lock_init (&kmxlnd_data.kmx_tx_queue_lock);
-        sema_init(&kmxlnd_data.kmx_tx_queue_sem, 0);
+        CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_queue);
+        cfs_spin_lock_init (&kmxlnd_data.kmx_tx_queue_lock);
+        cfs_sema_init(&kmxlnd_data.kmx_tx_queue_sem, 0);
 
         kmxlnd_data.kmx_init = MXLND_INIT_DATA;
         /*****************************************************/
@@ -599,13 +603,13 @@ mxlnd_startup (lnet_ni_t *ni)
         /* start threads */
 
         MXLND_ALLOC(kmxlnd_data.kmx_completions,
-                     nthreads * sizeof(struct completion));
+                     nthreads * sizeof(cfs_completion_t));
         if (kmxlnd_data.kmx_completions == NULL) {
                 CERROR("failed to alloc kmxlnd_data.kmx_completions\n");
                 goto failed;
         }
         memset(kmxlnd_data.kmx_completions, 0,
-               nthreads * sizeof(struct completion));
+               nthreads * sizeof(cfs_completion_t));
 
         CDEBUG(D_NET, "using %d %s in mx_wait_any()\n",
                 *kmxlnd_tunables.kmx_n_waitd,
@@ -615,14 +619,14 @@ mxlnd_startup (lnet_ni_t *ni)
                 ret = mxlnd_thread_start(mxlnd_request_waitd, (void*)((long)i));
                 if (ret < 0) {
                         CERROR("Starting mxlnd_request_waitd[%d] failed with %d\n", i, ret);
-                        atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                        cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                         mx_wakeup(kmxlnd_data.kmx_endpt);
                         for (--i; i >= 0; i--) {
-                                wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                                cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                         }
-                        LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                        LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                         MXLND_FREE(kmxlnd_data.kmx_completions,
-                                nthreads * sizeof(struct completion));
+                                nthreads * sizeof(cfs_completion_t));
 
                         goto failed;
                 }
@@ -630,42 +634,42 @@ mxlnd_startup (lnet_ni_t *ni)
         ret = mxlnd_thread_start(mxlnd_tx_queued, (void*)((long)i++));
         if (ret < 0) {
                 CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
-                atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                 mx_wakeup(kmxlnd_data.kmx_endpt);
                 for (--i; i >= 0; i--) {
-                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
-                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                        nthreads * sizeof(struct completion));
+                        nthreads * sizeof(cfs_completion_t));
                 goto failed;
         }
         ret = mxlnd_thread_start(mxlnd_timeoutd, (void*)((long)i++));
         if (ret < 0) {
                 CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
-                atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                 mx_wakeup(kmxlnd_data.kmx_endpt);
-                up(&kmxlnd_data.kmx_tx_queue_sem);
+                cfs_up(&kmxlnd_data.kmx_tx_queue_sem);
                 for (--i; i >= 0; i--) {
-                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
-                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                        nthreads * sizeof(struct completion));
+                        nthreads * sizeof(cfs_completion_t));
                 goto failed;
         }
         ret = mxlnd_thread_start(mxlnd_connd, (void*)((long)i++));
         if (ret < 0) {
                 CERROR("Starting mxlnd_connd failed with %d\n", ret);
-                atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                 mx_wakeup(kmxlnd_data.kmx_endpt);
-                up(&kmxlnd_data.kmx_tx_queue_sem);
+                cfs_up(&kmxlnd_data.kmx_tx_queue_sem);
                 for (--i; i >= 0; i--) {
-                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
-                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                        nthreads * sizeof(struct completion));
+                        nthreads * sizeof(cfs_completion_t));
                 goto failed;
         }
 

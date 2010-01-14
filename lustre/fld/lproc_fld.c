@@ -73,9 +73,9 @@ fld_proc_read_targets(char *page, char **start, off_t off,
 
         LASSERT(fld != NULL);
 
-        spin_lock(&fld->lcf_lock);
-        list_for_each_entry(target,
-                            &fld->lcf_targets, ft_chain)
+        cfs_spin_lock(&fld->lcf_lock);
+        cfs_list_for_each_entry(target,
+                                &fld->lcf_targets, ft_chain)
         {
                 rc = snprintf(page, count, "%s\n",
                               fld_target_name(target));
@@ -85,7 +85,7 @@ fld_proc_read_targets(char *page, char **start, off_t off,
                 if (count == 0)
                         break;
         }
-        spin_unlock(&fld->lcf_lock);
+        cfs_spin_unlock(&fld->lcf_lock);
 	RETURN(total);
 }
 
@@ -99,10 +99,10 @@ fld_proc_read_hash(char *page, char **start, off_t off,
 
         LASSERT(fld != NULL);
 
-        spin_lock(&fld->lcf_lock);
+        cfs_spin_lock(&fld->lcf_lock);
         rc = snprintf(page, count, "%s\n",
                       fld->lcf_hash->fh_name);
-        spin_unlock(&fld->lcf_lock);
+        cfs_spin_unlock(&fld->lcf_lock);
 
 	RETURN(rc);
 }
@@ -129,9 +129,9 @@ fld_proc_write_hash(struct file *file, const char *buffer,
         }
 
         if (hash != NULL) {
-                spin_lock(&fld->lcf_lock);
+                cfs_spin_lock(&fld->lcf_lock);
                 fld->lcf_hash = hash;
-                spin_unlock(&fld->lcf_lock);
+                cfs_spin_unlock(&fld->lcf_lock);
 
                 CDEBUG(D_INFO, "%s: Changed hash to \"%s\"\n",
                        fld->lcf_name, hash->fh_name);

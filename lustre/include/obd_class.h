@@ -60,7 +60,7 @@
 
 /* OBD Device Declarations */
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
-extern spinlock_t obd_dev_lock;
+extern cfs_spinlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
@@ -149,20 +149,21 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
 
 /* list of active configuration logs  */
 struct config_llog_data {
-        char               *cld_logname;
-        struct ldlm_res_id  cld_resid;
+        char                       *cld_logname;
+        struct ldlm_res_id          cld_resid;
         struct config_llog_instance cld_cfg;
-        struct list_head    cld_list_chain;
-        atomic_t            cld_refcount;
-        struct config_llog_data *cld_sptlrpc;/* depended sptlrpc log */
-        struct obd_export  *cld_mgcexp;
-        unsigned int        cld_stopping:1, /* we were told to stop watching */
-                            cld_lostlock:1, /* lock not requeued */
-                            cld_is_sptlrpc:1;
+        cfs_list_t                  cld_list_chain;
+        cfs_atomic_t                cld_refcount;
+        struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
+        struct obd_export          *cld_mgcexp;
+        unsigned int                cld_stopping:1, /* we were told to stop
+                                                     * watching */
+                                    cld_lostlock:1, /* lock not requeued */
+                                    cld_is_sptlrpc:1;
 };
 
 struct lustre_profile {
-        struct list_head lp_list;
+        cfs_list_t       lp_list;
         char            *lp_profile;
         char            *lp_dt;
         char            *lp_md;
@@ -187,54 +188,54 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #define class_export_rpc_get(exp)                                       \
 ({                                                                      \
-        atomic_inc(&(exp)->exp_rpc_count);                              \
+        cfs_atomic_inc(&(exp)->exp_rpc_count);                          \
         CDEBUG(D_INFO, "RPC GETting export %p : new rpc_count %d\n",    \
-               (exp), atomic_read(&(exp)->exp_rpc_count));              \
+               (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
         class_export_get(exp);                                          \
 })
 
 #define class_export_rpc_put(exp)                                       \
 ({                                                                      \
-        LASSERT(atomic_read(&exp->exp_rpc_count) > 0);                  \
-        atomic_dec(&(exp)->exp_rpc_count);                              \
+        LASSERT(cfs_atomic_read(&exp->exp_rpc_count) > 0);              \
+        cfs_atomic_dec(&(exp)->exp_rpc_count);                          \
         CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
-               (exp), atomic_read(&(exp)->exp_rpc_count));              \
+               (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
         class_export_put(exp);                                          \
 })
 
 #define class_export_lock_get(exp, lock)                                \
 ({                                                                      \
-        atomic_inc(&(exp)->exp_locks_count);                            \
+        cfs_atomic_inc(&(exp)->exp_locks_count);                        \
         __class_export_add_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
-               (exp), atomic_read(&(exp)->exp_locks_count));            \
+               (exp), cfs_atomic_read(&(exp)->exp_locks_count));        \
         class_export_get(exp);                                          \
 })
 
 #define class_export_lock_put(exp, lock)                                \
 ({                                                                      \
-        LASSERT(atomic_read(&exp->exp_locks_count) > 0);                \
-        atomic_dec(&(exp)->exp_locks_count);                            \
+        LASSERT(cfs_atomic_read(&exp->exp_locks_count) > 0);            \
+        cfs_atomic_dec(&(exp)->exp_locks_count);                        \
         __class_export_del_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
-               (exp), atomic_read(&(exp)->exp_locks_count));            \
+               (exp), cfs_atomic_read(&(exp)->exp_locks_count));        \
         class_export_put(exp);                                          \
 })
 
 #define class_export_cb_get(exp)                                        \
 ({                                                                      \
-        atomic_inc(&(exp)->exp_cb_count);                               \
+        cfs_atomic_inc(&(exp)->exp_cb_count);                           \
         CDEBUG(D_INFO, "callback GETting export %p : new cb_count %d\n",\
-               (exp), atomic_read(&(exp)->exp_cb_count));               \
+               (exp), cfs_atomic_read(&(exp)->exp_cb_count));           \
         class_export_get(exp);                                          \
 })
 
 #define class_export_cb_put(exp)                                        \
 ({                                                                      \
-        LASSERT(atomic_read(&exp->exp_cb_count) > 0);                   \
-        atomic_dec(&(exp)->exp_cb_count);                               \
+        LASSERT(cfs_atomic_read(&exp->exp_cb_count) > 0);               \
+        cfs_atomic_dec(&(exp)->exp_cb_count);                           \
         CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
-               (exp), atomic_read(&(exp)->exp_cb_count));               \
+               (exp), cfs_atomic_read(&(exp)->exp_cb_count));           \
         class_export_put(exp);                                          \
 })
 
@@ -1116,10 +1117,6 @@ obd_lvfs_open_llog(struct obd_export *exp, __u64 id_ino, struct dentry *dentry)
         return 0;
 }
 
-#ifndef time_before
-#define time_before(t1, t2) ((long)t2 - (long)t1 > 0)
-#endif
-
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
@@ -1147,9 +1144,9 @@ static inline int obd_statfs_async(struct obd_device *obd,
                        obd->obd_name, &obd->obd_osfs,
                        obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
                        obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
-                spin_lock(&obd->obd_osfs_lock);
+                cfs_spin_lock(&obd->obd_osfs_lock);
                 memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
-                spin_unlock(&obd->obd_osfs_lock);
+                cfs_spin_unlock(&obd->obd_osfs_lock);
                 oinfo->oi_flags |= OBD_STATFS_FROM_CACHE;
                 if (oinfo->oi_cb_up)
                         oinfo->oi_cb_up(oinfo, 0);
@@ -1199,10 +1196,10 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(obd, osfs, max_age, flags);
                 if (rc == 0) {
-                        spin_lock(&obd->obd_osfs_lock);
+                        cfs_spin_lock(&obd->obd_osfs_lock);
                         memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
                         obd->obd_osfs_age = cfs_time_current_64();
-                        spin_unlock(&obd->obd_osfs_lock);
+                        cfs_spin_unlock(&obd->obd_osfs_lock);
                 }
         } else {
                 CDEBUG(D_SUPER,"%s: use %p cache blocks "LPU64"/"LPU64
@@ -1210,9 +1207,9 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                        obd->obd_name, &obd->obd_osfs,
                        obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
                        obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
-                spin_lock(&obd->obd_osfs_lock);
+                cfs_spin_lock(&obd->obd_osfs_lock);
                 memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
-                spin_unlock(&obd->obd_osfs_lock);
+                cfs_spin_unlock(&obd->obd_osfs_lock);
         }
         RETURN(rc);
 }
@@ -1595,7 +1592,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 
 #if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt)
-                do_gettimeofday(&work_start);
+                cfs_gettimeofday(&work_start);
 #endif
         EXP_CHECK_DT_OP(exp, quota_adjust_qunit);
         EXP_COUNTER_INCREMENT(exp, quota_adjust_qunit);
@@ -1604,7 +1601,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 
 #if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt) {
-                do_gettimeofday(&work_end);
+                cfs_gettimeofday(&work_end);
                 timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
                 lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_ADJUST_QUNIT,
                                     timediff);
@@ -1644,13 +1641,13 @@ static inline int obd_register_observer(struct obd_device *obd,
 {
         ENTRY;
         OBD_CHECK_DEV(obd);
-        down_write(&obd->obd_observer_link_sem);
+        cfs_down_write(&obd->obd_observer_link_sem);
         if (obd->obd_observer && observer) {
-                up_write(&obd->obd_observer_link_sem);
+                cfs_up_write(&obd->obd_observer_link_sem);
                 RETURN(-EALREADY);
         }
         obd->obd_observer = observer;
-        up_write(&obd->obd_observer_link_sem);
+        cfs_up_write(&obd->obd_observer_link_sem);
         RETURN(0);
 }
 
@@ -1658,10 +1655,10 @@ static inline int obd_pin_observer(struct obd_device *obd,
                                    struct obd_device **observer)
 {
         ENTRY;
-        down_read(&obd->obd_observer_link_sem);
+        cfs_down_read(&obd->obd_observer_link_sem);
         if (!obd->obd_observer) {
                 *observer = NULL;
-                up_read(&obd->obd_observer_link_sem);
+                cfs_up_read(&obd->obd_observer_link_sem);
                 RETURN(-ENOENT);
         }
         *observer = obd->obd_observer;
@@ -1671,7 +1668,7 @@ static inline int obd_pin_observer(struct obd_device *obd,
 static inline int obd_unpin_observer(struct obd_device *obd)
 {
         ENTRY;
-        up_read(&obd->obd_observer_link_sem);
+        cfs_up_read(&obd->obd_observer_link_sem);
         RETURN(0);
 }
 

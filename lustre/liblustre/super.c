@@ -65,8 +65,6 @@
 #include <file.h>
 #endif
 
-#undef LIST_HEAD
-
 #include "llite_lib.h"
 
 #ifndef MAY_EXEC
@@ -84,7 +82,7 @@ static int ll_permission(struct inode *inode, int mask)
 
         if (current->fsuid == st->st_uid)
                 mode >>= 6;
-        else if (in_group_p(st->st_gid))
+        else if (cfs_curproc_is_in_groups(st->st_gid))
                 mode >>= 3;
 
         if ((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask)
@@ -111,7 +109,7 @@ static void llu_fsop_gone(struct filesys *fs)
         int next = 0;
         ENTRY;
 
-        list_del(&sbi->ll_conn_chain);
+        cfs_list_del(&sbi->ll_conn_chain);
         cl_sb_fini(sbi);
         obd_disconnect(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_md_exp);
@@ -648,7 +646,8 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
                 st->st_ctime = attr->ia_ctime;
         if (ia_valid & ATTR_MODE) {
                 st->st_mode = attr->ia_mode;
-                if (!in_group_p(st->st_gid) && !cfs_capable(CFS_CAP_FSETID))
+                if (!cfs_curproc_is_in_groups(st->st_gid) &&
+                    !cfs_capable(CFS_CAP_FSETID))
                         st->st_mode &= ~S_ISGID;
         }
         /* mark_inode_dirty(inode); */
@@ -766,15 +765,15 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
         if (attr->ia_valid & ATTR_CTIME) {
-                attr->ia_ctime = CURRENT_TIME;
+                attr->ia_ctime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
         if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
-                attr->ia_atime = CURRENT_TIME;
+                attr->ia_atime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
         if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
-                attr->ia_mtime = CURRENT_TIME;
+                attr->ia_mtime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
         if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
@@ -792,7 +791,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 CDEBUG(D_INODE, "setting mtime "CFS_TIME_T", ctime "CFS_TIME_T
 		       ", now = "CFS_TIME_T"\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
-                       LTIME_S(CURRENT_TIME));
+                       LTIME_S(CFS_CURRENT_TIME));
 
         /* NB: ATTR_SIZE will only be set after this point if the size
          * resides on the MDS, ie, this file has no objects. */
@@ -902,7 +901,7 @@ static int llu_iop_setattr(struct pnode *pno,
         }
 
         iattr.ia_valid |= ATTR_RAW | ATTR_CTIME;
-        iattr.ia_ctime = CURRENT_TIME;
+        iattr.ia_ctime = CFS_CURRENT_TIME;
 
         rc = llu_setattr_raw(ino, &iattr);
         liblustre_wait_idle();
@@ -1211,7 +1210,7 @@ static int llu_statfs(struct llu_sb_info *sbi, struct statfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = llu_statfs_internal(sbi, &osfs, cfs_time_current_64() - HZ);
+        rc = llu_statfs_internal(sbi, &osfs, cfs_time_current_64() - CFS_HZ);
         if (rc)
                 return rc;
 
@@ -1672,7 +1671,7 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         LASSERT(sizeof(lum) == sizeof(*lump));
         LASSERT(sizeof(lum.lmm_objects[0]) ==
                 sizeof(lump->lmm_objects[0]));
-        if (copy_from_user(&lum, lump, sizeof(lum)))
+        if (cfs_copy_from_user(&lum, lump, sizeof(lum)))
                 return(-EFAULT);
 
         switch (lum.lmm_magic) {
@@ -1780,7 +1779,7 @@ static int llu_lov_file_setstripe(struct inode *ino, unsigned long arg)
 
         LASSERT(sizeof(lum) == sizeof(*lump));
         LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lump->lmm_objects[0]));
-        if (copy_from_user(&lum, lump, sizeof(lum)))
+        if (cfs_copy_from_user(&lum, lump, sizeof(lum)))
                 RETURN(-EFAULT);
 
         rc = llu_lov_setstripe_ea_info(ino, flags, &lum, sizeof(lum));

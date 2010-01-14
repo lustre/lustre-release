@@ -37,7 +37,7 @@
 #include "ptllnd.h"
 
 #ifdef CRAY_XT3
-static struct semaphore   ptltrace_mutex;
+static cfs_semaphore_t    ptltrace_mutex;
 static cfs_waitq_t        ptltrace_debug_ctlwq;
 
 void
@@ -139,7 +139,7 @@ kptllnd_dump_ptltrace_thread(void *arg)
         libcfs_daemonize("kpt_ptltrace_dump");
 
         /* serialise with other instances of me */
-        mutex_down(&ptltrace_mutex);
+        cfs_mutex_down(&ptltrace_mutex);
 
         snprintf(fname, sizeof(fname), "%s.%ld.%ld",
                  *kptllnd_tunables.kptl_ptltrace_basename,
@@ -147,7 +147,7 @@ kptllnd_dump_ptltrace_thread(void *arg)
 
         kptllnd_ptltrace_to_file(fname);
 
-        mutex_up(&ptltrace_mutex);
+        cfs_mutex_up(&ptltrace_mutex);
 
         /* unblock my creator */
         cfs_waitq_signal(&ptltrace_debug_ctlwq);
@@ -157,13 +157,13 @@ kptllnd_dump_ptltrace_thread(void *arg)
 void
 kptllnd_dump_ptltrace(void)
 {
-        int            rc;     
+        int            rc;
         cfs_waitlink_t wait;
         ENTRY;
 
         /* taken from libcfs_debug_dumplog */
         cfs_waitlink_init(&wait);
-        set_current_state(TASK_INTERRUPTIBLE);
+        cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
         cfs_waitq_add(&ptltrace_debug_ctlwq, &wait);
 
         rc = cfs_kernel_thread(kptllnd_dump_ptltrace_thread,
@@ -175,9 +175,9 @@ kptllnd_dump_ptltrace(void)
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
         }
 
-        /* teardown if kernel_thread() failed */
+        /* teardown if cfs_kernel_thread() failed */
         cfs_waitq_del(&ptltrace_debug_ctlwq, &wait);
-        set_current_state(TASK_RUNNING);
+        cfs_set_current_state(CFS_TASK_RUNNING);
         EXIT;
 }
 
@@ -185,6 +185,6 @@ void
 kptllnd_init_ptltrace(void)
 {
         cfs_waitq_init(&ptltrace_debug_ctlwq);
-        init_mutex(&ptltrace_mutex);
+        cfs_init_mutex(&ptltrace_mutex);
 }
 #endif

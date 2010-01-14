@@ -577,13 +577,14 @@ struct hsm_action_list {
 static __inline__ struct hsm_action_item * hai_zero(struct hsm_action_list *hal)
 {
         return (struct hsm_action_item *)(hal->hal_fsname +
-                                          size_round(strlen(hal->hal_fsname)));
+                                          cfs_size_round(strlen(hal-> \
+                                                                hal_fsname)));
 }
 /* Return pointer to next hai */
 static __inline__ struct hsm_action_item * hai_next(struct hsm_action_item *hai)
 {
         return (struct hsm_action_item *)((char *)hai +
-                                          size_round(hai->hai_len));
+                                          cfs_size_round(hai->hai_len));
 }
 
 

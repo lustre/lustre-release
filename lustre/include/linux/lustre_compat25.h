@@ -83,12 +83,12 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
         struct dentry *old_pwd;
         struct vfsmount *old_pwdmnt;
 
-        write_lock(&fs->lock);
+        cfs_write_lock(&fs->lock);
         old_pwd = fs->pwd;
         old_pwdmnt = fs->pwdmnt;
         fs->pwdmnt = mntget(mnt);
         fs->pwd = dget(dentry);
-        write_unlock(&fs->lock);
+        cfs_write_unlock(&fs->lock);
 
         if (old_pwd) {
                 dput(old_pwd);
@@ -104,24 +104,26 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ATTR_BLOCKS    (1 << 27)
 
 #if HAVE_INODE_I_MUTEX
-#define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
-#define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
+#define UNLOCK_INODE_MUTEX(inode) \
+do {cfs_mutex_unlock(&(inode)->i_mutex); } while(0)
+#define LOCK_INODE_MUTEX(inode) \
+do {cfs_mutex_lock(&(inode)->i_mutex); } while(0)
 #define LOCK_INODE_MUTEX_PARENT(inode) \
-do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
-#define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
+do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
+#define TRYLOCK_INODE_MUTEX(inode) cfs_mutex_trylock(&(inode)->i_mutex)
 #else
-#define UNLOCK_INODE_MUTEX(inode) do {up(&(inode)->i_sem); } while(0)
-#define LOCK_INODE_MUTEX(inode) do {down(&(inode)->i_sem); } while(0)
+#define UNLOCK_INODE_MUTEX(inode) do  cfs_up(&(inode)->i_sem); } while(0)
+#define LOCK_INODE_MUTEX(inode) do  cfs_down(&(inode)->i_sem); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
 #define LOCK_INODE_MUTEX_PARENT(inode) LOCK_INODE_MUTEX(inode)
 #endif /* HAVE_INODE_I_MUTEX */
 
 #ifdef HAVE_SEQ_LOCK
-#define LL_SEQ_LOCK(seq) mutex_lock(&(seq)->lock)
-#define LL_SEQ_UNLOCK(seq) mutex_unlock(&(seq)->lock)
+#define LL_SEQ_LOCK(seq) cfs_mutex_lock(&(seq)->lock)
+#define LL_SEQ_UNLOCK(seq) cfs_mutex_unlock(&(seq)->lock)
 #else
-#define LL_SEQ_LOCK(seq) down(&(seq)->sem)
-#define LL_SEQ_UNLOCK(seq) up(&(seq)->sem)
+#define LL_SEQ_LOCK(seq) cfs_down(&(seq)->sem)
+#define LL_SEQ_UNLOCK(seq) cfs_up(&(seq)->sem)
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
@@ -130,11 +132,11 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #endif
 
 #ifdef HAVE_DQUOTOFF_MUTEX
-#define UNLOCK_DQONOFF_MUTEX(dqopt) do {mutex_unlock(&(dqopt)->dqonoff_mutex); } while(0)
-#define LOCK_DQONOFF_MUTEX(dqopt) do {mutex_lock(&(dqopt)->dqonoff_mutex); } while(0)
+#define UNLOCK_DQONOFF_MUTEX(dqopt) cfs_mutex_unlock(&(dqopt)->dqonoff_mutex)
+#define LOCK_DQONOFF_MUTEX(dqopt) cfs_mutex_lock(&(dqopt)->dqonoff_mutex)
 #else
-#define UNLOCK_DQONOFF_MUTEX(dqopt) do {up(&(dqopt)->dqonoff_sem); } while(0)
-#define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
+#define UNLOCK_DQONOFF_MUTEX(dqopt) cfs_up(&(dqopt)->dqonoff_sem)
+#define LOCK_DQONOFF_MUTEX(dqopt) cfs_down(&(dqopt)->dqonoff_sem)
 #endif /* HAVE_DQUOTOFF_MUTEX */
 
 #define current_ngroups current->group_info->ngroups
@@ -149,8 +151,8 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define gfp_t int
 #endif
 
-#define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
-#define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
+#define lock_dentry(___dentry)          cfs_spin_lock(&(___dentry)->d_lock)
+#define unlock_dentry(___dentry)        cfs_spin_unlock(&(___dentry)->d_lock)
 
 #define ll_kernel_locked()      kernel_locked()
 
@@ -178,8 +180,8 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define ll_path_lookup                  path_lookup
 #define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
 
-#define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
-#define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
+#define ll_pgcache_lock(mapping)          cfs_spin_lock(&mapping->page_lock)
+#define ll_pgcache_unlock(mapping)        cfs_spin_unlock(&mapping->page_lock)
 #define ll_call_writepage(inode, page)  \
                                 (inode)->i_mapping->a_ops->writepage(page, NULL)
 #define ll_invalidate_inode_pages(inode) \
@@ -197,7 +199,7 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 
 #include <linux/writeback.h>
 
-static inline int cleanup_group_info(void)
+static inline int cfs_cleanup_group_info(void)
 {
         struct group_info *ginfo;
 
@@ -256,9 +258,9 @@ static inline int mapping_has_pages(struct address_space *mapping)
         int rc = 1;
 
         ll_pgcache_lock(mapping);
-        if (list_empty(&mapping->dirty_pages) &&
-            list_empty(&mapping->clean_pages) &&
-            list_empty(&mapping->locked_pages)) {
+        if (cfs_list_empty(&mapping->dirty_pages) &&
+            cfs_list_empty(&mapping->clean_pages) &&
+            cfs_list_empty(&mapping->locked_pages)) {
                 rc = 0;
         }
         ll_pgcache_unlock(mapping);
@@ -295,9 +297,9 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
 #else
 #define ll_set_dflags(dentry, flags) do { \
-                spin_lock(&dentry->d_lock); \
+                cfs_spin_lock(&dentry->d_lock); \
                 dentry->d_flags |= flags; \
-                spin_unlock(&dentry->d_lock); \
+                cfs_spin_unlock(&dentry->d_lock); \
         } while(0)
 #endif
 
@@ -367,7 +369,7 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
         if (!type)
                 return ERR_PTR(-ENODEV);
         mnt = vfs_kern_mount(type, flags, name, data);
-        module_put(type->owner);
+        cfs_module_put(type->owner);
         return mnt;
 }
 #else
@@ -394,8 +396,8 @@ static inline u32 get_sb_time_gran(struct super_block *sb)
 #define TREE_READ_LOCK_IRQ(mapping)     read_lock_irq(&(mapping)->tree_lock)
 #define TREE_READ_UNLOCK_IRQ(mapping) read_unlock_irq(&(mapping)->tree_lock)
 #else
-#define TREE_READ_LOCK_IRQ(mapping) spin_lock_irq(&(mapping)->tree_lock)
-#define TREE_READ_UNLOCK_IRQ(mapping) spin_unlock_irq(&(mapping)->tree_lock)
+#define TREE_READ_LOCK_IRQ(mapping) cfs_spin_lock_irq(&(mapping)->tree_lock)
+#define TREE_READ_UNLOCK_IRQ(mapping) cfs_spin_unlock_irq(&(mapping)->tree_lock)
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
@@ -648,8 +650,10 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
                 vfs_rename(old,old_dir,new,new_dir)
 #endif /* HAVE_SECURITY_PLUG */
 
-#ifndef for_each_possible_cpu
-#define for_each_possible_cpu(i) for_each_cpu(i)
+#ifdef for_each_possible_cpu
+#define cfs_for_each_possible_cpu(cpu) for_each_possible_cpu(cpu)
+#elif defined(for_each_cpu)
+#define cfs_for_each_possible_cpu(cpu) for_each_cpu(cpu)
 #endif
 
 #ifndef cpu_to_node
@@ -657,10 +661,10 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #endif
 
 #ifdef HAVE_REGISTER_SHRINKER
-typedef int (*shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
+typedef int (*cfs_shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
 
 static inline
-struct shrinker *set_shrinker(int seek, shrinker_t func)
+struct shrinker *cfs_set_shrinker(int seek, cfs_shrinker_t func)
 {
         struct shrinker *s;
 
@@ -677,7 +681,7 @@ struct shrinker *set_shrinker(int seek, shrinker_t func)
 }
 
 static inline
-void remove_shrinker(struct shrinker *shrinker) 
+void cfs_remove_shrinker(struct shrinker *shrinker)
 {
         if (shrinker == NULL)
                 return;
@@ -719,11 +723,6 @@ static inline long labs(long x)
 }
 #endif /* HAVE_REGISTER_SHRINKER */
 
-/* Using kernel fls(). Userspace will use one defined in user-bitops.h. */
-#ifndef __fls
-#define __fls fls
-#endif
-
 #ifdef HAVE_INVALIDATE_INODE_PAGES
 #define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
 #endif
@@ -735,7 +734,9 @@ static inline long labs(long x)
 #endif
 
 #ifndef SLAB_DESTROY_BY_RCU
-#define SLAB_DESTROY_BY_RCU 0
+#define CFS_SLAB_DESTROY_BY_RCU 0
+#else
+#define CFS_SLAB_DESTROY_BY_RCU SLAB_DESTROY_BY_RCU
 #endif
 
 #ifdef HAVE_SB_HAS_QUOTA_ACTIVE

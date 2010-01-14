@@ -116,7 +116,7 @@ int LL_PROC_PROTO(proc_fail_loc)
 
         rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
         if (old_fail_loc != obd_fail_loc)
-                wake_up(&obd_race_waitq);
+                cfs_waitq_signal(&obd_race_waitq);
         return rc;
 }
 
@@ -147,7 +147,7 @@ int LL_PROC_PROTO(proc_memory_alloc)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
+        if (cfs_copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -171,7 +171,7 @@ int LL_PROC_PROTO(proc_pages_alloc)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
+        if (cfs_copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -195,7 +195,7 @@ int LL_PROC_PROTO(proc_mem_max)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
+        if (cfs_copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -219,7 +219,7 @@ int LL_PROC_PROTO(proc_pages_max)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
+        if (cfs_copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -239,13 +239,14 @@ int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
                 rc = lprocfs_write_frac_helper(buffer, *lenp,
                                                (unsigned int*)table->data,
                                                1 << (20 - CFS_PAGE_SHIFT));
-                /* Don't allow them to let dirty pages exceed 90% of system memory,
-                 * and set a hard minimum of 4MB. */
-                if (obd_max_dirty_pages > ((num_physpages / 10) * 9)) {
+                /* Don't allow them to let dirty pages exceed 90% of system
+                 * memory and set a hard minimum of 4MB. */
+                if (obd_max_dirty_pages > ((cfs_num_physpages / 10) * 9)) {
                         CERROR("Refusing to set max dirty pages to %u, which "
-                               "is more than 90%% of available RAM; setting to %lu\n",
-                               obd_max_dirty_pages, ((num_physpages / 10) * 9));
-                        obd_max_dirty_pages = ((num_physpages / 10) * 9);
+                               "is more than 90%% of available RAM; setting "
+                               "to %lu\n", obd_max_dirty_pages,
+                               ((cfs_num_physpages / 10) * 9));
+                        obd_max_dirty_pages = ((cfs_num_physpages / 10) * 9);
                 } else if (obd_max_dirty_pages < 4 << (20 - CFS_PAGE_SHIFT)) {
                         obd_max_dirty_pages = 4 << (20 - CFS_PAGE_SHIFT);
                 }
@@ -259,7 +260,7 @@ int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
                 if (len > *lenp)
                         len = *lenp;
                 buf[len] = '\0';
-                if (copy_to_user(buffer, buf, len))
+                if (cfs_copy_to_user(buffer, buf, len))
                         return -EFAULT;
                 *lenp = len;
         }
@@ -291,7 +292,7 @@ int LL_PROC_PROTO(proc_alloc_fail_rate)
                 if (len > *lenp)
                         len = *lenp;
                 buf[len] = '\0';
-                if (copy_to_user(buffer, buf, len))
+                if (cfs_copy_to_user(buffer, buf, len))
                         return -EFAULT;
                 *lenp = len;
         }

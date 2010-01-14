@@ -77,24 +77,24 @@ char * ul2dstr(ulong_ptr_t address, char *buf, int len);
 
 unsigned long simple_strtoul(const char *cp,char **endp, unsigned int base);
 
-static inline int set_bit(int nr, void * addr)
+static inline int cfs_set_bit(int nr, void * addr)
 {
     (((volatile ULONG *) addr)[nr >> 5]) |= (1UL << (nr & 31));
     return *((int *) addr);
 }
 
-static inline int test_bit(int nr, void * addr)
+static inline int cfs_test_bit(int nr, void * addr)
 {
     return (int)(((1UL << (nr & 31)) & (((volatile ULONG *) addr)[nr >> 5])) != 0);
 }
 
-static inline int clear_bit(int nr, void * addr)
+static inline int cfs_clear_bit(int nr, void * addr)
 {
     (((volatile ULONG *) addr)[nr >> 5]) &= (~(1UL << (nr & 31)));
     return *((int *) addr);
 }
 
-static inline int test_and_set_bit(int nr, volatile void *addr)
+static inline int cfs_test_and_set_bit(int nr, volatile void *addr)
 {
     int rc;
     unsigned char  mask;
@@ -108,11 +108,11 @@ static inline int test_and_set_bit(int nr, volatile void *addr)
     return rc;
 }
 
-#define ext2_set_bit(nr,addr)   (set_bit(nr, addr), 0)
-#define ext2_clear_bit(nr,addr)	(clear_bit(nr, addr), 0)
-#define ext2_test_bit(nr,addr)  test_bit(nr, addr)
+#define ext2_set_bit(nr,addr)   (cfs_set_bit(nr, addr), 0)
+#define ext2_clear_bit(nr,addr)	(cfs_clear_bit(nr, addr), 0)
+#define ext2_test_bit(nr,addr)  cfs_test_bit(nr, addr)
 
-static inline int ffs(int x)
+static inline int cfs_ffs(int x)
 {
         int r = 1;
 
@@ -141,7 +141,7 @@ static inline int ffs(int x)
         return r;
 }
 
-static inline unsigned long __ffs(unsigned long word)
+static inline unsigned long __cfs_ffs(unsigned long word)
 {
         int num = 0;
 
@@ -180,7 +180,7 @@ static inline unsigned long __ffs(unsigned long word)
  * Note fls(0) = 0, fls(1) = 1, fls(0x80000000) = 32.
  */
 static inline
-int fls(int x)
+int cfs_fls(int x)
 {
         int r = 32;
 
@@ -209,14 +209,15 @@ int fls(int x)
         return r;
 }
 
-static inline unsigned find_first_bit(const unsigned long *addr, unsigned size)
+static inline unsigned cfs_find_first_bit(const unsigned long *addr,
+                                          unsigned size)
 {
         unsigned x = 0;
 
         while (x < size) {
                 unsigned long val = *addr++;
                 if (val)
-                        return __ffs(val) + x;
+                        return __cfs_ffs(val) + x;
                 x += (sizeof(*addr)<<3);
         }
         return x;
@@ -239,7 +240,7 @@ static inline void read_random(char *buf, int len)
     }
 }
 
-#define get_random_bytes(buf, len)  read_random(buf, len)
+#define cfs_get_random_bytes(buf, len)  read_random(buf, len)
 
 /* do NOT use function or expression as parameters ... */
 
@@ -264,13 +265,13 @@ static inline void read_random(char *buf, int len)
 	((unsigned char *)&addr)[1],	\
 	((unsigned char *)&addr)[0]
 
-static int copy_from_user(void *to, void *from, int c) 
+static int cfs_copy_from_user(void *to, void *from, int c) 
 {
     memcpy(to, from, c);
     return 0;
 }
 
-static int copy_to_user(void *to, const void *from, int c) 
+static int cfs_copy_to_user(void *to, const void *from, int c) 
 {
     memcpy(to, from, c);
     return 0;
@@ -296,8 +297,8 @@ clear_user(void __user *to, unsigned long n)
     0                           \
 )
 
-#define num_physpages			(64 * 1024)
-#define CFS_NUM_CACHEPAGES		num_physpages
+#define cfs_num_physpages               (64 * 1024)
+#define CFS_NUM_CACHEPAGES              cfs_num_physpages
 
 #else
 

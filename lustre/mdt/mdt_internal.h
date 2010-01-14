@@ -84,7 +84,7 @@ struct mdt_object;
 /* file data for open files on MDS */
 struct mdt_file_data {
         struct portals_handle mfd_handle; /* must be first */
-        struct list_head      mfd_list;   /* protected by med_open_lock */
+        cfs_list_t            mfd_list;   /* protected by med_open_lock */
         __u64                 mfd_xid;    /* xid of the open request */
         struct lustre_handle  mfd_old_handle; /* old handle in replay case */
         int                   mfd_mode;   /* open mode provided by client */
@@ -126,7 +126,7 @@ struct mdt_device {
         __u32                      mdt_fl_cfglog:1,
                                    mdt_fl_synced:1;
         /* lock to protect IOepoch */
-        spinlock_t                 mdt_ioepoch_lock;
+        cfs_spinlock_t             mdt_ioepoch_lock;
         __u64                      mdt_ioepoch;
 
         /* transaction callbacks */
@@ -140,7 +140,7 @@ struct mdt_device {
         struct upcall_cache        *mdt_identity_cache;
 
         /* sptlrpc rules */
-        rwlock_t                   mdt_sptlrpc_lock;
+        cfs_rwlock_t               mdt_sptlrpc_lock;
         struct sptlrpc_rule_set    mdt_sptlrpc_rset;
 
         /* capability keys */
@@ -158,10 +158,10 @@ struct mdt_device {
         /* root squash */
         uid_t                      mdt_squash_uid;
         gid_t                      mdt_squash_gid;
-        struct list_head           mdt_nosquash_nids;
+        cfs_list_t                 mdt_nosquash_nids;
         char                      *mdt_nosquash_str;
         int                        mdt_nosquash_strlen;
-        struct rw_semaphore        mdt_squash_sem;
+        cfs_rw_semaphore_t         mdt_squash_sem;
 
         cfs_proc_dir_entry_t      *mdt_proc_entry;
         struct lprocfs_stats      *mdt_stats;
@@ -190,7 +190,7 @@ struct mdt_object {
         int                     mot_ioepoch_count;
         int                     mot_writecount;
         /* Lock to protect object's IO epoch. */
-        struct semaphore        mot_ioepoch_sem;
+        cfs_semaphore_t        mot_ioepoch_sem;
 };
 
 enum mdt_object_flags {
@@ -368,7 +368,7 @@ struct mdt_thread_info {
                 struct obd_uuid    uuid[2];       /* for mdt_seq_init_cli()  */
                 char               ns_name[48];   /* for mdt_init0()         */
                 struct lustre_cfg_bufs bufs;      /* for mdt_stack_fini()    */
-                struct kstatfs     ksfs;          /* for mdt_statfs()        */
+                cfs_kstatfs_t      ksfs;          /* for mdt_statfs()        */
                 struct {
                         /* for mdt_readpage()      */
                         struct lu_rdpg     mti_rdpg;

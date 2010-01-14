@@ -66,21 +66,21 @@ struct capa_hmac_alg {
 }
 
 struct client_capa {
-        struct inode             *inode;      
-        struct list_head          lli_list;     /* link to lli_oss_capas */
+        struct inode             *inode;
+        cfs_list_t                lli_list;     /* link to lli_oss_capas */
 };
 
 struct target_capa {
-        struct hlist_node         c_hash;       /* link to capa hash */
+        cfs_hlist_node_t          c_hash;       /* link to capa hash */
 };
 
 struct obd_capa {
-        struct list_head          c_list;       /* link to capa_list */
+        cfs_list_t                c_list;       /* link to capa_list */
 
         struct lustre_capa        c_capa;       /* capa */
-        atomic_t                  c_refc;       /* ref count */
+        cfs_atomic_t              c_refc;       /* ref count */
         cfs_time_t                c_expiry;     /* jiffies */
-        spinlock_t                c_lock;       /* protect capa content */
+        cfs_spinlock_t            c_lock;       /* protect capa content */
         int                       c_site;
 
         union {
@@ -168,17 +168,18 @@ CDEBUG(level, fmt " capability key@%p mdsid "LPU64" keyid %u\n",               \
 typedef int (* renew_capa_cb_t)(struct obd_capa *, struct lustre_capa *);
 
 /* obdclass/capa.c */
-extern struct list_head capa_list[];
-extern spinlock_t capa_lock;
+extern cfs_list_t capa_list[];
+extern cfs_spinlock_t capa_lock;
 extern int capa_count[];
 extern cfs_mem_cache_t *capa_cachep;
 
-struct hlist_head *init_capa_hash(void);
-void cleanup_capa_hash(struct hlist_head *hash);
+cfs_hlist_head_t *init_capa_hash(void);
+void cleanup_capa_hash(cfs_hlist_head_t *hash);
 
-struct obd_capa *capa_add(struct hlist_head *hash, struct lustre_capa *capa);
-struct obd_capa *capa_lookup(struct hlist_head *hash, struct lustre_capa *capa,
-                             int alive);
+struct obd_capa *capa_add(cfs_hlist_head_t *hash,
+                          struct lustre_capa *capa);
+struct obd_capa *capa_lookup(cfs_hlist_head_t *hash,
+                             struct lustre_capa *capa, int alive);
 
 int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key);
 int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen);
@@ -197,8 +198,8 @@ static inline struct obd_capa *alloc_capa(int site)
                 return ERR_PTR(-ENOMEM);
 
         CFS_INIT_LIST_HEAD(&ocapa->c_list);
-        atomic_set(&ocapa->c_refc, 1);
-        spin_lock_init(&ocapa->c_lock);
+        cfs_atomic_set(&ocapa->c_refc, 1);
+        cfs_spin_lock_init(&ocapa->c_lock);
         ocapa->c_site = site;
         if (ocapa->c_site == CAPA_SITE_CLIENT)
                 CFS_INIT_LIST_HEAD(&ocapa->u.cli.lli_list);
@@ -216,7 +217,7 @@ static inline struct obd_capa *capa_get(struct obd_capa *ocapa)
         if (!ocapa)
                 return NULL;
 
-        atomic_inc(&ocapa->c_refc);
+        cfs_atomic_inc(&ocapa->c_refc);
         return ocapa;
 }
 
@@ -225,17 +226,17 @@ static inline void capa_put(struct obd_capa *ocapa)
         if (!ocapa)
                 return;
 
-        if (atomic_read(&ocapa->c_refc) == 0) {
+        if (cfs_atomic_read(&ocapa->c_refc) == 0) {
                 DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "refc is 0 for");
                 LBUG();
         }
 
-        if (atomic_dec_and_test(&ocapa->c_refc)) {
-                LASSERT(list_empty(&ocapa->c_list));
+        if (cfs_atomic_dec_and_test(&ocapa->c_refc)) {
+                LASSERT(cfs_list_empty(&ocapa->c_list));
                 if (ocapa->c_site == CAPA_SITE_CLIENT) {
-                        LASSERT(list_empty(&ocapa->u.cli.lli_list));
+                        LASSERT(cfs_list_empty(&ocapa->u.cli.lli_list));
                 } else {
-                        struct hlist_node *hnode;
+                        cfs_hlist_node_t *hnode;
 
                         hnode = &ocapa->u.tgt.c_hash;
                         LASSERT(!hnode->next && !hnode->pprev);
@@ -285,7 +286,7 @@ static inline int capa_opc_supported(struct lustre_capa *capa, __u64 opc)
 }
 
 struct filter_capa_key {
-        struct list_head        k_list;
+        cfs_list_t              k_list;
         struct lustre_capa_key  k_key;
 };
 

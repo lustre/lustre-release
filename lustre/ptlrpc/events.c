@@ -75,9 +75,9 @@ void request_out_callback(lnet_event_t *ev)
                 /* Failed send: make it seem like the reply timed out, just
                  * like failing sends in client.c does currently...  */
 
-                spin_lock(&req->rq_lock);
+                cfs_spin_lock(&req->rq_lock);
                 req->rq_net_err = 1;
-                spin_unlock(&req->rq_lock);
+                cfs_spin_unlock(&req->rq_lock);
 
                 ptlrpc_client_wake_req(req);
         }
@@ -106,7 +106,7 @@ void reply_in_callback(lnet_event_t *ev)
            for adaptive timeouts' early reply. */
         LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
 
-        spin_lock(&req->rq_lock);
+        cfs_spin_lock(&req->rq_lock);
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
@@ -170,7 +170,7 @@ out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
         ptlrpc_client_wake_req(req);
-        spin_unlock(&req->rq_lock);
+        cfs_spin_unlock(&req->rq_lock);
         EXIT;
 }
 
@@ -194,7 +194,7 @@ void client_bulk_callback (lnet_event_t *ev)
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
-        spin_lock(&desc->bd_lock);
+        cfs_spin_lock(&desc->bd_lock);
 
         LASSERT(desc->bd_network_rw);
         desc->bd_network_rw = 0;
@@ -213,7 +213,7 @@ void client_bulk_callback (lnet_event_t *ev)
          * otherwise */
         ptlrpc_client_wake_req(desc->bd_req);
 
-        spin_unlock(&desc->bd_lock);
+        cfs_spin_unlock(&desc->bd_lock);
         EXIT;
 }
 
@@ -269,7 +269,7 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_reqbuf = ev->md.start + ev->offset;
         if (ev->type == LNET_EVENT_PUT && ev->status == 0)
                 req->rq_reqdata_len = ev->mlength;
-        do_gettimeofday(&req->rq_arrival_time);
+        cfs_gettimeofday(&req->rq_arrival_time);
         req->rq_peer = ev->initiator;
         req->rq_self = ev->target.nid;
         req->rq_rqbd = rqbd;
@@ -277,19 +277,19 @@ void request_in_callback(lnet_event_t *ev)
 #ifdef CRAY_XT3
         req->rq_uid = ev->uid;
 #endif
-        spin_lock_init(&req->rq_lock);
+        cfs_spin_lock_init(&req->rq_lock);
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
-        atomic_set(&req->rq_refcount, 1);
+        cfs_atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
                 CDEBUG(D_RPCTRACE, "incoming req@%p x"LPU64" msgsize %u\n",
                        req, req->rq_xid, ev->mlength);
 
         CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
 
-        spin_lock(&service->srv_lock);
+        cfs_spin_lock(&service->srv_lock);
 
         req->rq_history_seq = service->srv_request_seq++;
-        list_add_tail(&req->rq_history_list, &service->srv_request_history);
+        cfs_list_add_tail(&req->rq_history_list, &service->srv_request_history);
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
@@ -310,14 +310,14 @@ void request_in_callback(lnet_event_t *ev)
                 rqbd->rqbd_refcount++;
         }
 
-        list_add_tail(&req->rq_list, &service->srv_req_in_queue);
+        cfs_list_add_tail(&req->rq_list, &service->srv_req_in_queue);
         service->srv_n_queued_reqs++;
 
         /* NB everything can disappear under us once the request
          * has been queued and we unlock, so do the wake now... */
         cfs_waitq_signal(&service->srv_waitq);
 
-        spin_unlock(&service->srv_lock);
+        cfs_spin_unlock(&service->srv_lock);
         EXIT;
 }
 
@@ -340,7 +340,7 @@ void reply_out_callback(lnet_event_t *ev)
                  * net's ref on 'rs' */
                 LASSERT (ev->unlinked);
                 ptlrpc_rs_decref(rs);
-                atomic_dec (&svc->srv_outstanding_replies);
+                cfs_atomic_dec (&svc->srv_outstanding_replies);
                 EXIT;
                 return;
         }
@@ -350,14 +350,14 @@ void reply_out_callback(lnet_event_t *ev)
         if (ev->unlinked) {
                 /* Last network callback. The net's ref on 'rs' stays put
                  * until ptlrpc_handle_rs() is done with it */
-                spin_lock(&svc->srv_lock);
-                spin_lock(&rs->rs_lock);
+                cfs_spin_lock(&svc->srv_lock);
+                cfs_spin_lock(&rs->rs_lock);
                 rs->rs_on_net = 0;
                 if (!rs->rs_no_ack ||
                     rs->rs_transno <= rs->rs_export->exp_obd->obd_last_committed)
                         ptlrpc_schedule_difficult_reply (rs);
-                spin_unlock(&rs->rs_lock);
-                spin_unlock(&svc->srv_lock);
+                cfs_spin_unlock(&rs->rs_lock);
+                cfs_spin_unlock(&svc->srv_lock);
         }
 
         EXIT;
@@ -383,7 +383,7 @@ void server_bulk_callback (lnet_event_t *ev)
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
-        spin_lock(&desc->bd_lock);
+        cfs_spin_lock(&desc->bd_lock);
 
         if ((ev->type == LNET_EVENT_ACK ||
              ev->type == LNET_EVENT_REPLY) &&
@@ -402,7 +402,7 @@ void server_bulk_callback (lnet_event_t *ev)
                 cfs_waitq_signal(&desc->bd_waitq);
         }
 
-        spin_unlock(&desc->bd_lock);
+        cfs_spin_unlock(&desc->bd_lock);
         EXIT;
 }
 
@@ -569,7 +569,7 @@ CFS_LIST_HEAD(liblustre_idle_callbacks);
 void *liblustre_services_callback;
 
 void *
-liblustre_register_waitidle_callback (struct list_head *callback_list,
+liblustre_register_waitidle_callback (cfs_list_t *callback_list,
                                       const char *name,
                                       int (*fn)(void *arg), void *arg)
 {
@@ -581,7 +581,7 @@ liblustre_register_waitidle_callback (struct list_head *callback_list,
         llwc->llwc_name = name;
         llwc->llwc_fn = fn;
         llwc->llwc_arg = arg;
-        list_add_tail(&llwc->llwc_list, callback_list);
+        cfs_list_add_tail(&llwc->llwc_list, callback_list);
 
         return (llwc);
 }
@@ -591,7 +591,7 @@ liblustre_deregister_waitidle_callback (void *opaque)
 {
         struct liblustre_wait_callback *llwc = opaque;
 
-        list_del(&llwc->llwc_list);
+        cfs_list_del(&llwc->llwc_list);
         OBD_FREE(llwc, sizeof(*llwc));
 }
 
@@ -653,7 +653,7 @@ int liblustre_waiting = 0;
 int
 liblustre_wait_event (int timeout)
 {
-        struct list_head               *tmp;
+        cfs_list_t                     *tmp;
         struct liblustre_wait_callback *llwc;
         int                             found_something = 0;
 
@@ -666,9 +666,10 @@ liblustre_wait_event (int timeout)
                         found_something = 1;
 
                 /* Give all registered callbacks a bite at the cherry */
-                list_for_each(tmp, &liblustre_wait_callbacks) {
-                        llwc = list_entry(tmp, struct liblustre_wait_callback,
-                                          llwc_list);
+                cfs_list_for_each(tmp, &liblustre_wait_callbacks) {
+                        llwc = cfs_list_entry(tmp,
+                                              struct liblustre_wait_callback,
+                                              llwc_list);
 
                         if (llwc->llwc_fn(llwc->llwc_arg))
                                 found_something = 1;
@@ -693,7 +694,7 @@ liblustre_wait_idle(void)
 {
         static int recursed = 0;
 
-        struct list_head               *tmp;
+        cfs_list_t                     *tmp;
         struct liblustre_wait_callback *llwc;
         int                             idle = 0;
 
@@ -705,9 +706,10 @@ liblustre_wait_idle(void)
 
                 idle = 1;
 
-                list_for_each(tmp, &liblustre_idle_callbacks) {
-                        llwc = list_entry(tmp, struct liblustre_wait_callback,
-                                          llwc_list);
+                cfs_list_for_each(tmp, &liblustre_idle_callbacks) {
+                        llwc = cfs_list_entry(tmp,
+                                              struct liblustre_wait_callback,
+                                              llwc_list);
 
                         if (!llwc->llwc_fn(llwc->llwc_arg)) {
                                 idle = 0;
@@ -735,7 +737,7 @@ int ptlrpc_init_portals(void)
                 liblustre_register_wait_callback("liblustre_check_services",
                                                  &liblustre_check_services,
                                                  NULL);
-        init_completion_module(liblustre_wait_event);
+        cfs_init_completion_module(liblustre_wait_event);
 #endif
         rc = ptlrpcd_addref();
         if (rc == 0)

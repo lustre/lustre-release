@@ -56,14 +56,14 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *, struct l_dentry *,
                              int flags);
 
 struct l_linux_dirent {
-        struct list_head lld_list;
+        cfs_list_t      lld_list;
         ino_t           lld_ino;
         unsigned long   lld_off;
         char            lld_name[LL_FID_NAMELEN];
 };
 struct l_readdir_callback {
         struct l_linux_dirent *lrc_dirent;
-        struct list_head      *lrc_list;
+        cfs_list_t            *lrc_list;
 };
 
 #define LVFS_DENTRY_PARAM_MAGIC         20070216UL

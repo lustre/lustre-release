@@ -132,7 +132,7 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        fed->fed_dirty, fed->fed_pending, fed->fed_grant);
-                spin_unlock(&obd->obd_osfs_lock);
+                cfs_spin_unlock(&obd->obd_osfs_lock);
                 LBUG();
         }
         EXIT;
@@ -152,10 +152,11 @@ obd_size filter_grant_space_left(struct obd_export *exp)
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
-        if (cfs_time_before_64(obd->obd_osfs_age, cfs_time_current_64() - HZ)) {
+        if (cfs_time_before_64(obd->obd_osfs_age,
+                               cfs_time_current_64() - CFS_HZ)) {
 restat:
                 rc = fsfilt_statfs(obd, obd->u.obt.obt_sb,
-                                   cfs_time_current_64() + HZ);
+                                   cfs_time_current_64() + CFS_HZ);
                 if (rc) /* N.B. statfs can't really fail */
                         RETURN(0);
                 statfs_done = 1;
@@ -241,7 +242,7 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                                        "current"LPU64"\n",
                                        obd->obd_name, exp->exp_client_uuid.uuid,
                                        exp, fed->fed_grant, want,current_grant);
-                                spin_unlock(&obd->obd_osfs_lock);
+                                cfs_spin_unlock(&obd->obd_osfs_lock);
                                 LBUG();
                         }
                 }
@@ -399,12 +400,12 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 RETURN(rc);
 
         if (oa && oa->o_valid & OBD_MD_FLGRANT) {
-                spin_lock(&obd->obd_osfs_lock);
+                cfs_spin_lock(&obd->obd_osfs_lock);
                 filter_grant_incoming(exp, oa);
 
                 if (!(oa->o_flags & OBD_FL_SHRINK_GRANT))
                         oa->o_grant = 0;
-                spin_unlock(&obd->obd_osfs_lock);
+                cfs_spin_unlock(&obd->obd_osfs_lock);
         }
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
@@ -431,7 +432,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "preprw_read setup");
 
         /* find pages for all segments, fill array with them */
-        do_gettimeofday(&start);
+        cfs_gettimeofday(&start);
         for (i = 0, lnb = res; i < *npages; i++, lnb++) {
 
                 lnb->dentry = dentry;
@@ -463,7 +464,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_CACHE_MISS, 1);
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
         }
-        do_gettimeofday(&end);
+        cfs_gettimeofday(&end);
         timediff = cfs_timeval_sub(&end, &start, NULL);
         lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_GET_PAGE, timediff);
 
@@ -622,7 +623,7 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
                 CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        fed->fed_dirty, fed->fed_pending, fed->fed_grant);
-                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                cfs_spin_unlock(&exp->exp_obd->obd_osfs_lock);
                 LBUG();
         }
         return rc;
@@ -709,7 +710,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
 
         LASSERT(oa != NULL);
-        spin_lock(&obd->obd_osfs_lock);
+        cfs_spin_lock(&obd->obd_osfs_lock);
         filter_grant_incoming(exp, oa);
         if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
                 oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
@@ -733,7 +734,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 oa->o_grant = filter_grant(exp, oa->o_grant, oa->o_undirty,
                                            left, 1);
 
-        spin_unlock(&obd->obd_osfs_lock);
+        cfs_spin_unlock(&obd->obd_osfs_lock);
         filter_fmd_put(exp, fmd);
 
         if (rc)
@@ -748,7 +749,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * multiple writes or single truncate. */
         down_read(&dentry->d_inode->i_alloc_sem);
 
-        do_gettimeofday(&start);
+        cfs_gettimeofday(&start);
         for (i = 0, lnb = res; i < *npages; i++, lnb++) {
 
                 /* We still set up for ungranted pages so that granted pages
@@ -807,7 +808,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 if (lnb->rc == 0)
                         tot_bytes += lnb->len;
         }
-        do_gettimeofday(&end);
+        cfs_gettimeofday(&end);
         timediff = cfs_timeval_sub(&end, &start, NULL);
         lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_GET_PAGE, timediff);
 
@@ -847,10 +848,10 @@ cleanup:
         case 1:
                 filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 0:
-                spin_lock(&obd->obd_osfs_lock);
+                cfs_spin_lock(&obd->obd_osfs_lock);
                 if (oa)
                         filter_grant_incoming(exp, oa);
-                spin_unlock(&obd->obd_osfs_lock);
+                cfs_spin_unlock(&obd->obd_osfs_lock);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 break;
         default:;
@@ -930,7 +931,7 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
         unsigned long pending = 0;
         int i;
 
-        spin_lock(&exp->exp_obd->obd_osfs_lock);
+        cfs_spin_lock(&exp->exp_obd->obd_osfs_lock);
         for (i = 0, lnb = res; i < niocount; i++, lnb++)
                 pending += lnb->lnb_grant_used;
 
@@ -950,7 +951,7 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
                  filter->fo_tot_pending, pending);
         filter->fo_tot_pending -= pending;
 
-        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+        cfs_spin_unlock(&exp->exp_obd->obd_osfs_lock);
 }
 
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,

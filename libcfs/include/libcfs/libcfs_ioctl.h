@@ -94,7 +94,7 @@ do {                                                    \
 #ifdef __KERNEL__
 
 struct libcfs_ioctl_handler {
-        struct list_head item;
+        cfs_list_t item;
         int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_data *data);
 };
 
@@ -156,8 +156,8 @@ struct libcfs_ioctl_handler {
 static inline int libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 {
         int len = sizeof(*data);
-        len += size_round(data->ioc_inllen1);
-        len += size_round(data->ioc_inllen2);
+        len += cfs_size_round(data->ioc_inllen1);
+        len += cfs_size_round(data->ioc_inllen2);
         return len;
 }
 
@@ -209,7 +209,7 @@ static inline int libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
                 return 1;
         }
         if (data->ioc_inllen2 &&
-            data->ioc_bulk[size_round(data->ioc_inllen1) +
+            data->ioc_bulk[cfs_size_round(data->ioc_inllen1) +
                            data->ioc_inllen2 - 1] != '\0') {
                 CERROR ("LIBCFS ioctl: inlbuf2 not 0 terminated\n");
                 return 1;

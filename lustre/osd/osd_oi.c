@@ -81,7 +81,7 @@ struct oi_descr {
 };
 
 /** to serialize concurrent OI index initialization */
-static struct mutex oi_init_lock;
+static cfs_mutex_t oi_init_lock;
 
 static struct dt_index_features oi_feat = {
         .dif_flags       = DT_IND_UPDATE,
@@ -139,7 +139,7 @@ int osd_oi_init(struct osd_thread_info *info,
         int i;
 
         env = info->oti_env;
-        mutex_lock(&oi_init_lock);
+        cfs_mutex_lock(&oi_init_lock);
         memset(oi, 0, sizeof *oi);
 retry:
         for (i = rc = 0; i < OSD_OI_FID_NR && rc == 0; ++i) {
@@ -173,7 +173,7 @@ retry:
         if (rc != 0)
                 osd_oi_fini(info, oi);
 
-        mutex_unlock(&oi_init_lock);
+        cfs_mutex_unlock(&oi_init_lock);
         return rc;
 }
 
@@ -274,6 +274,6 @@ int osd_oi_delete(struct osd_thread_info *info,
 
 int osd_oi_mod_init()
 {
-        mutex_init(&oi_init_lock);
+        cfs_mutex_init(&oi_init_lock);
         return 0;
 }

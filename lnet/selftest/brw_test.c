@@ -110,7 +110,7 @@ brw_inject_one_error (void)
 #ifndef __KERNEL__
         gettimeofday(&tv, NULL);
 #else
-        do_gettimeofday(&tv);
+        cfs_gettimeofday(&tv);
 #endif
 
         if ((tv.tv_usec & 1) == 0) return 0;
@@ -278,7 +278,7 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
                 CERROR ("BRW RPC to %s failed with %d\n",
                         libcfs_id2str(rpc->crpc_dest), rpc->crpc_status);
                 if (!tsi->tsi_stopping) /* rpc could have been aborted */
-                        atomic_inc(&sn->sn_brw_errors);
+                        cfs_atomic_inc(&sn->sn_brw_errors);
                 goto out;
         }
 
@@ -292,7 +292,7 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
                 libcfs_id2str(rpc->crpc_dest), reply->brw_status);
 
         if (reply->brw_status != 0) {
-                atomic_inc(&sn->sn_brw_errors);
+                cfs_atomic_inc(&sn->sn_brw_errors);
                 rpc->crpc_status = -(int)reply->brw_status;
                 goto out;
         }
@@ -302,7 +302,7 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
         if (brw_check_bulk(&rpc->crpc_bulk, reqst->brw_flags, magic) != 0) {
                 CERROR ("Bulk data from %s is corrupted!\n",
                         libcfs_id2str(rpc->crpc_dest));
-                atomic_inc(&sn->sn_brw_errors);
+                cfs_atomic_inc(&sn->sn_brw_errors);
                 rpc->crpc_status = -EBADMSG;
         }
 

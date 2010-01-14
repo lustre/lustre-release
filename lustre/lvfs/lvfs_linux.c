@@ -67,7 +67,7 @@
 __u64 obd_max_pages = 0;
 __u64 obd_max_alloc = 0;
 struct lprocfs_stats *obd_memory = NULL;
-spinlock_t obd_updatemax_lock = SPIN_LOCK_UNLOCKED;
+cfs_spinlock_t obd_updatemax_lock = CFS_SPIN_LOCK_UNLOCKED;
 /* refine later and change to seqlock or simlar from libcfs */
 
 /* Debugging check only needed during development */
@@ -117,8 +117,8 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         OBD_SET_CTXT_MAGIC(save);
 
         save->fs = get_fs();
-        LASSERT(atomic_read(&cfs_fs_pwd(current->fs)->d_count));
-        LASSERT(atomic_read(&new_ctx->pwd->d_count));
+        LASSERT(cfs_atomic_read(&cfs_fs_pwd(current->fs)->d_count));
+        LASSERT(cfs_atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(cfs_fs_pwd(current->fs));
         save->pwdmnt = mntget(cfs_fs_mnt(current->fs));
         save->luc.luc_umask = current->fs->umask;
@@ -391,7 +391,7 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
         if (!dirent)
                 return -ENOMEM;
 
-        list_add_tail(&dirent->lld_list, buf->lrc_list);
+        cfs_list_add_tail(&dirent->lld_list, buf->lrc_list);
 
         buf->lrc_dirent = dirent;
         dirent->lld_ino = ino;
@@ -401,7 +401,7 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
         return 0;
 }
 
-long l_readdir(struct file *file, struct list_head *dentry_list)
+long l_readdir(struct file *file, cfs_list_t *dentry_list)
 {
         struct l_linux_dirent *lastdirent;
         struct l_readdir_callback buf;
@@ -528,12 +528,12 @@ void obd_update_maxusage()
         max1 = obd_pages_sum();
         max2 = obd_memory_sum();
 
-        spin_lock(&obd_updatemax_lock);
+        cfs_spin_lock(&obd_updatemax_lock);
         if (max1 > obd_max_pages)
                 obd_max_pages = max1;
         if (max2 > obd_max_alloc)
                 obd_max_alloc = max2;
-        spin_unlock(&obd_updatemax_lock);
+        cfs_spin_unlock(&obd_updatemax_lock);
 
 }
 
@@ -541,9 +541,9 @@ __u64 obd_memory_max(void)
 {
         __u64 ret;
 
-        spin_lock(&obd_updatemax_lock);
+        cfs_spin_lock(&obd_updatemax_lock);
         ret = obd_max_alloc;
-        spin_unlock(&obd_updatemax_lock);
+        cfs_spin_unlock(&obd_updatemax_lock);
 
         return ret;
 }
@@ -552,9 +552,9 @@ __u64 obd_pages_max(void)
 {
         __u64 ret;
 
-        spin_lock(&obd_updatemax_lock);
+        cfs_spin_lock(&obd_updatemax_lock);
         ret = obd_max_pages;
-        spin_unlock(&obd_updatemax_lock);
+        cfs_spin_unlock(&obd_updatemax_lock);
 
         return ret;
 }
@@ -574,7 +574,7 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
         if (!lc)
                 RETURN(0);
         do {
-                centry = atomic_read(&lc->lc_cntl.la_entry);
+                centry = cfs_atomic_read(&lc->lc_cntl.la_entry);
 
                 switch (field) {
                         case LPROCFS_FIELDS_FLAGS_CONFIG:
@@ -601,8 +601,8 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
                         default:
                                 break;
                 };
-        } while (centry != atomic_read(&lc->lc_cntl.la_entry) &&
-                 centry != atomic_read(&lc->lc_cntl.la_exit));
+        } while (centry != cfs_atomic_read(&lc->lc_cntl.la_entry) &&
+                 centry != cfs_atomic_read(&lc->lc_cntl.la_exit));
 
         RETURN(ret);
 }

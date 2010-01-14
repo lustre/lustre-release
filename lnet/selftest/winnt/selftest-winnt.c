@@ -67,7 +67,7 @@ DECLARE_EXIT(lnet_selftest_fini);
  * module info
  */
 
-struct module libcfs_global_module =  {"selftest"};
+cfs_module_t libcfs_global_module =  {"selftest"};
 
 /*
  * structure definitions

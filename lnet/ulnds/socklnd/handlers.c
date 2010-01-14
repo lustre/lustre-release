@@ -390,8 +390,8 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
          * Don't try to link it to peer because the conn
          * has already had a chance to proceed at the beginning */
         if (peer == NULL) {
-                LASSERT(list_empty(&conn->uc_tx_list) &&
-                        list_empty(&conn->uc_zcack_list));
+                LASSERT(cfs_list_empty(&conn->uc_tx_list) &&
+                        cfs_list_empty(&conn->uc_zcack_list));
 
                 usocklnd_conn_kill(conn);
                 return 0;
@@ -407,7 +407,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                  * make us zombie soon and take care of our txs and
                  * zc_acks */
 
-                struct list_head tx_list, zcack_list;
+                cfs_list_t tx_list, zcack_list;
                 usock_conn_t *conn2;
                 int idx = usocklnd_type2idx(conn->uc_type);
 
@@ -441,16 +441,16 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                 conn2->uc_peer = peer;
 
                 /* unlink txs and zcack from the conn */
-                list_add(&tx_list, &conn->uc_tx_list);
-                list_del_init(&conn->uc_tx_list);
-                list_add(&zcack_list, &conn->uc_zcack_list);
-                list_del_init(&conn->uc_zcack_list);
+                cfs_list_add(&tx_list, &conn->uc_tx_list);
+                cfs_list_del_init(&conn->uc_tx_list);
+                cfs_list_add(&zcack_list, &conn->uc_zcack_list);
+                cfs_list_del_init(&conn->uc_zcack_list);
 
                 /* link they to the conn2 */
-                list_add(&conn2->uc_tx_list, &tx_list);
-                list_del_init(&tx_list);
-                list_add(&conn2->uc_zcack_list, &zcack_list);
-                list_del_init(&zcack_list);
+                cfs_list_add(&conn2->uc_tx_list, &tx_list);
+                cfs_list_del_init(&tx_list);
+                cfs_list_add(&conn2->uc_zcack_list, &zcack_list);
+                cfs_list_del_init(&zcack_list);
 
                 /* make conn zombie */
                 conn->uc_peer = NULL;
@@ -488,8 +488,8 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                          * received hello, but maybe we've smth. to
                          * send? */
                         LASSERT (conn->uc_sending == 0);
-                        if ( !list_empty(&conn->uc_tx_list) ||
-                             !list_empty(&conn->uc_zcack_list) ) {
+                        if ( !cfs_list_empty(&conn->uc_tx_list) ||
+                             !cfs_list_empty(&conn->uc_zcack_list) ) {
 
                                 conn->uc_tx_deadline =
                                         cfs_time_shift(usock_tuns.ut_timeout);
@@ -660,8 +660,8 @@ usocklnd_write_handler(usock_conn_t *conn)
                 LASSERT (peer != NULL);
                 ni = peer->up_ni;
 
-                if (list_empty(&conn->uc_tx_list) &&
-                    list_empty(&conn->uc_zcack_list)) {
+                if (cfs_list_empty(&conn->uc_tx_list) &&
+                    cfs_list_empty(&conn->uc_zcack_list)) {
                         LASSERT(usock_tuns.ut_fair_limit > 1);
                         pthread_mutex_unlock(&conn->uc_lock);
                         return 0;
@@ -682,7 +682,7 @@ usocklnd_write_handler(usock_conn_t *conn)
                 rc = usocklnd_send_tx(conn, tx);
                 if (rc == 0) { /* partial send or connection closed */
                         pthread_mutex_lock(&conn->uc_lock);
-                        list_add(&tx->tx_list, &conn->uc_tx_list);
+                        cfs_list_add(&tx->tx_list, &conn->uc_tx_list);
                         conn->uc_sending = 0;
                         pthread_mutex_unlock(&conn->uc_lock);
                         break;
@@ -698,8 +698,8 @@ usocklnd_write_handler(usock_conn_t *conn)
                 pthread_mutex_lock(&conn->uc_lock);
                 conn->uc_sending = 0;
                 if (conn->uc_state != UC_DEAD &&
-                    list_empty(&conn->uc_tx_list) &&
-                    list_empty(&conn->uc_zcack_list)) {
+                    cfs_list_empty(&conn->uc_tx_list) &&
+                    cfs_list_empty(&conn->uc_zcack_list)) {
                         conn->uc_tx_flag = 0;
                         ret = usocklnd_add_pollrequest(conn,
                                                       POLL_TX_SET_REQUEST, 0);
@@ -728,18 +728,18 @@ usocklnd_write_handler(usock_conn_t *conn)
  * brand new noop tx for zc_ack from zcack_list. Return NULL
  * if an error happened */
 usock_tx_t *
-usocklnd_try_piggyback(struct list_head *tx_list_p,
-                       struct list_head *zcack_list_p)
+usocklnd_try_piggyback(cfs_list_t *tx_list_p,
+                       cfs_list_t *zcack_list_p)
 {
         usock_tx_t     *tx;
         usock_zc_ack_t *zc_ack;
 
         /* assign tx and zc_ack */
-        if (list_empty(tx_list_p))
+        if (cfs_list_empty(tx_list_p))
                 tx = NULL;
         else {
-                tx = list_entry(tx_list_p->next, usock_tx_t, tx_list);
-                list_del(&tx->tx_list);
+                tx = cfs_list_entry(tx_list_p->next, usock_tx_t, tx_list);
+                cfs_list_del(&tx->tx_list);
 
                 /* already piggybacked or partially send */
                 if (tx->tx_msg.ksm_zc_cookies[1] != 0 ||
@@ -747,13 +747,13 @@ usocklnd_try_piggyback(struct list_head *tx_list_p,
                         return tx;
         }
 
-        if (list_empty(zcack_list_p)) {
+        if (cfs_list_empty(zcack_list_p)) {
                 /* nothing to piggyback */
                 return tx;
         } else {
-                zc_ack = list_entry(zcack_list_p->next,
-                                    usock_zc_ack_t, zc_list);
-                list_del(&zc_ack->zc_list);
+                zc_ack = cfs_list_entry(zcack_list_p->next,
+                                        usock_zc_ack_t, zc_list);
+                cfs_list_del(&zc_ack->zc_list);
         }
 
         if (tx != NULL)
@@ -806,8 +806,8 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
 {
         usock_conn_t    *conn2;
         usock_peer_t    *peer;
-        struct list_head tx_list;
-        struct list_head zcack_list;
+        cfs_list_t       tx_list;
+        cfs_list_t       zcack_list;
         int              idx;
         int              rc = 0;
 
@@ -828,8 +828,8 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
 
         /* conn is passive and isn't linked to any peer,
            so its tx and zc_ack lists have to be empty */
-        LASSERT (list_empty(&conn->uc_tx_list) &&
-                 list_empty(&conn->uc_zcack_list) &&
+        LASSERT (cfs_list_empty(&conn->uc_tx_list) &&
+                 cfs_list_empty(&conn->uc_zcack_list) &&
                  conn->uc_sending == 0);
 
         rc = usocklnd_find_or_create_peer(conn->uc_ni, conn->uc_peerid, &peer);
@@ -862,16 +862,16 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
                  * We're sure that nobody but us can access to conn,
                  * nevertheless we use mutex (if we're wrong yet,
                  * deadlock is easy to see that corrupted list */
-                list_add(&tx_list, &conn2->uc_tx_list);
-                list_del_init(&conn2->uc_tx_list);
-                list_add(&zcack_list, &conn2->uc_zcack_list);
-                list_del_init(&conn2->uc_zcack_list);
+                cfs_list_add(&tx_list, &conn2->uc_tx_list);
+                cfs_list_del_init(&conn2->uc_tx_list);
+                cfs_list_add(&zcack_list, &conn2->uc_zcack_list);
+                cfs_list_del_init(&conn2->uc_zcack_list);
 
                 pthread_mutex_lock(&conn->uc_lock);
-                list_add_tail(&conn->uc_tx_list, &tx_list);
-                list_del_init(&tx_list);
-                list_add_tail(&conn->uc_zcack_list, &zcack_list);
-                list_del_init(&zcack_list);
+                cfs_list_add_tail(&conn->uc_tx_list, &tx_list);
+                cfs_list_del_init(&tx_list);
+                cfs_list_add_tail(&conn->uc_zcack_list, &zcack_list);
+                cfs_list_del_init(&zcack_list);
                 conn->uc_peer = peer;
                 pthread_mutex_unlock(&conn->uc_lock);
 
@@ -899,8 +899,8 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
                 /* we're ready to recive incoming packets and maybe
                    already have smth. to transmit */
                 LASSERT (conn->uc_sending == 0);
-                if ( list_empty(&conn->uc_tx_list) &&
-                     list_empty(&conn->uc_zcack_list) ) {
+                if ( cfs_list_empty(&conn->uc_tx_list) &&
+                     cfs_list_empty(&conn->uc_zcack_list) ) {
                         conn->uc_tx_flag = 0;
                         rc = usocklnd_add_pollrequest(conn, POLL_SET_REQUEST,
                                                  POLLIN);

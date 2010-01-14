@@ -74,7 +74,7 @@ int ll_init_inodecache(void)
 {
         ll_inode_cachep = cfs_mem_cache_create("lustre_inode_cache",
                                                sizeof(struct ll_inode_info),
-                                               0, SLAB_HWCACHE_ALIGN);
+                                               0, CFS_SLAB_HWCACHE_ALIGN);
         if (ll_inode_cachep == NULL)
                 return -ENOMEM;
         return 0;
@@ -125,7 +125,7 @@ static int __init init_lustre_lite(void)
                 return -ENOMEM;
         ll_file_data_slab = cfs_mem_cache_create("ll_file_data",
                                                  sizeof(struct ll_file_data), 0,
-                                                 SLAB_HWCACHE_ALIGN);
+                                                 CFS_SLAB_HWCACHE_ALIGN);
         if (ll_file_data_slab == NULL) {
                 ll_destroy_inodecache();
                 return -ENOMEM;
@@ -143,7 +143,7 @@ static int __init init_lustre_lite(void)
 
         ll_rmtperm_hash_cachep = cfs_mem_cache_create("ll_rmtperm_hash_cache",
                                                    REMOTE_PERM_HASHSIZE *
-                                                   sizeof(struct list_head),
+                                                   sizeof(cfs_list_t),
                                                    0, 0);
         if (ll_rmtperm_hash_cachep == NULL) {
                 cfs_mem_cache_destroy(ll_remote_perm_cachep);
@@ -175,7 +175,7 @@ static int __init init_lustre_lite(void)
                 }
         }
 
-        do_gettimeofday(&tv);
+        cfs_gettimeofday(&tv);
         ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
         init_timer(&ll_capa_timer);

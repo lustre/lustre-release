@@ -284,12 +284,12 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
          * hose a kernel by allowing the request history to grow too
          * far. */
         bufpages = (svc->srv_buf_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        if (val > num_physpages/(2 * bufpages))
+        if (val > cfs_num_physpages/(2 * bufpages))
                 return -ERANGE;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         svc->srv_max_history_rqbds = val;
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
 
         return count;
 }
@@ -320,9 +320,9 @@ ptlrpc_lprocfs_wr_threads_min(struct file *file, const char *buffer,
         if (val > svc->srv_threads_max)
                 return -ERANGE;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         svc->srv_threads_min = val;
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
 
         return count;
 }
@@ -362,9 +362,9 @@ ptlrpc_lprocfs_wr_threads_max(struct file *file, const char *buffer,
         if (val < svc->srv_threads_min)
                 return -ERANGE;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         svc->srv_threads_max = val;
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
 
         return count;
 }
@@ -379,7 +379,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service *svc,
                                     struct ptlrpc_srh_iterator *srhi,
                                     __u64 seq)
 {
-        struct list_head      *e;
+        cfs_list_t            *e;
         struct ptlrpc_request *req;
 
         if (srhi->srhi_req != NULL &&
@@ -392,7 +392,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service *svc,
                  * be near the head), we shouldn't have to do long
                  * re-scans */
                 LASSERT (srhi->srhi_seq == srhi->srhi_req->rq_history_seq);
-                LASSERT (!list_empty(&svc->srv_request_history));
+                LASSERT (!cfs_list_empty(&svc->srv_request_history));
                 e = &srhi->srhi_req->rq_history_list;
         } else {
                 /* search from start */
@@ -400,7 +400,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service *svc,
         }
 
         while (e != &svc->srv_request_history) {
-                req = list_entry(e, struct ptlrpc_request, rq_history_list);
+                req = cfs_list_entry(e, struct ptlrpc_request, rq_history_list);
 
                 if (req->rq_history_seq >= seq) {
                         srhi->srhi_seq = req->rq_history_seq;
@@ -427,9 +427,9 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
         srhi->srhi_seq = 0;
         srhi->srhi_req = NULL;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos);
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
 
         if (rc == 0) {
                 *pos = srhi->srhi_seq;
@@ -457,9 +457,9 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
         struct ptlrpc_srh_iterator  *srhi = iter;
         int                          rc;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos + 1);
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
 
         if (rc != 0) {
                 OBD_FREE(srhi, sizeof(*srhi));
@@ -507,7 +507,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
         struct ptlrpc_request      *req;
         int                         rc;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
 
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, srhi->srhi_seq);
 
@@ -533,7 +533,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                         svc->srv_request_history_print_fn(s, srhi->srhi_req);
         }
 
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
 
         return rc;
 }
@@ -611,9 +611,9 @@ static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
         if (val < 0)
                 return -ERANGE;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         svc->srv_hpreq_ratio = val;
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_lock);
         return count;
 }
 

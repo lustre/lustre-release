@@ -45,12 +45,12 @@
 void
 usocklnd_process_stale_list(usock_pollthread_t *pt_data)
 {
-        while (!list_empty(&pt_data->upt_stale_list)) {
+        while (!cfs_list_empty(&pt_data->upt_stale_list)) {
                 usock_conn_t *conn;
-                conn = list_entry(pt_data->upt_stale_list.next,
-                                  usock_conn_t, uc_stale_list);
+                conn = cfs_list_entry(pt_data->upt_stale_list.next,
+                                      usock_conn_t, uc_stale_list);
 
-                list_del(&conn->uc_stale_list);
+                cfs_list_del(&conn->uc_stale_list);
 
                 usocklnd_tear_peer_conn(conn);
                 usocklnd_conn_decref(conn); /* -1 for idx2conn[idx] or pr */
@@ -90,12 +90,12 @@ usocklnd_poll_thread(void *arg)
 
                 /* Process all enqueued poll requests */
                 pthread_mutex_lock(&pt_data->upt_pollrequests_lock);
-                while (!list_empty(&pt_data->upt_pollrequests)) {
+                while (!cfs_list_empty(&pt_data->upt_pollrequests)) {
                         usock_pollrequest_t *pr;
-                        pr = list_entry(pt_data->upt_pollrequests.next,
-                                        usock_pollrequest_t, upr_list);
+                        pr = cfs_list_entry(pt_data->upt_pollrequests.next,
+                                            usock_pollrequest_t, upr_list);
 
-                        list_del(&pr->upr_list);
+                        cfs_list_del(&pr->upr_list);
                         rc = usocklnd_process_pollrequest(pr, pt_data);
                         if (rc)
                                 break;
@@ -171,17 +171,17 @@ usocklnd_poll_thread(void *arg)
                 /* Block new poll requests to be enqueued */
                 pt_data->upt_errno = rc;
 
-                while (!list_empty(&pt_data->upt_pollrequests)) {
+                while (!cfs_list_empty(&pt_data->upt_pollrequests)) {
                         usock_pollrequest_t *pr;
-                        pr = list_entry(pt_data->upt_pollrequests.next,
+                        pr = cfs_list_entry(pt_data->upt_pollrequests.next,
                                         usock_pollrequest_t, upr_list);
 
-                        list_del(&pr->upr_list);
+                        cfs_list_del(&pr->upr_list);
 
                         if (pr->upr_type == POLL_ADD_REQUEST) {
                                 libcfs_sock_release(pr->upr_conn->uc_sock);
-                                list_add_tail(&pr->upr_conn->uc_stale_list,
-                                              &pt_data->upt_stale_list);
+                                cfs_list_add_tail(&pr->upr_conn->uc_stale_list,
+                                                  &pt_data->upt_stale_list);
                         } else {
                                 usocklnd_conn_decref(pr->upr_conn);
                         }
@@ -202,7 +202,7 @@ usocklnd_poll_thread(void *arg)
         }
 
         /* unblock usocklnd_shutdown() */
-        cfs_complete(&pt_data->upt_completion);
+        cfs_mt_complete(&pt_data->upt_completion);
 
         return 0;
 }
@@ -237,7 +237,7 @@ usocklnd_add_pollrequest(usock_conn_t *conn, int type, short value)
                 return rc;
         }
 
-        list_add_tail(&pr->upr_list, &pt->upt_pollrequests);
+        cfs_list_add_tail(&pr->upr_list, &pt->upt_pollrequests);
         pthread_mutex_unlock(&pt->upt_pollrequests_lock);
         return 0;
 }
@@ -266,7 +266,7 @@ usocklnd_add_killrequest(usock_conn_t *conn)
                         return; /* conn will be killed in poll thread anyway */
                 }
 
-                list_add_tail(&pr->upr_list, &pt->upt_pollrequests);
+                cfs_list_add_tail(&pr->upr_list, &pt->upt_pollrequests);
                 pthread_mutex_unlock(&pt->upt_pollrequests_lock);
 
                 conn->uc_preq = NULL;
@@ -387,7 +387,8 @@ usocklnd_process_pollrequest(usock_pollrequest_t *pr,
                 }
 
                 libcfs_sock_release(conn->uc_sock);
-                list_add_tail(&conn->uc_stale_list, &pt_data->upt_stale_list);
+                cfs_list_add_tail(&conn->uc_stale_list,
+                                  &pt_data->upt_stale_list);
                 break;
         case POLL_RX_SET_REQUEST:
                 pollfd[idx].events = (pollfd[idx].events & ~POLLIN) | value;

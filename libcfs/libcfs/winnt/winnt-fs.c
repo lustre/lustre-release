@@ -691,17 +691,17 @@ int cfs_file_count(cfs_file_t *fp)
 struct dentry *dget(struct dentry *de)
 {
     if (de) {
-        atomic_inc(&de->d_count);
+        cfs_atomic_inc(&de->d_count);
     }
     return de;
 }
 
 void dput(struct dentry *de)
 {
-    if (!de || atomic_read(&de->d_count) == 0) {
+    if (!de || cfs_atomic_read(&de->d_count) == 0) {
         return;
     }
-    if (atomic_dec_and_test(&de->d_count)) {
+    if (cfs_atomic_dec_and_test(&de->d_count)) {
         cfs_free(de);
     }
 }

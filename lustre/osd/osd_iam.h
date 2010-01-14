@@ -447,15 +447,15 @@ struct iam_container {
          * Underlying flat file. IO against this object is issued to
          * read/write nodes.
          */
-        struct inode     *ic_object;
+        struct inode      *ic_object;
         /*
          * container flavor.
          */
-        struct iam_descr *ic_descr;
+        struct iam_descr  *ic_descr;
         /*
          * read-write lock protecting index consistency.
          */
-        struct rw_semaphore ic_sem;
+        cfs_rw_semaphore_t ic_sem;
 };
 
 /*
@@ -1010,9 +1010,9 @@ static inline void iam_lock_bh(struct buffer_head volatile *bh)
 {
         DX_DEVAL(iam_lock_stats.dls_bh_lock++);
 #ifdef CONFIG_SMP
-        while (test_and_set_bit(BH_DXLock, &bh->b_state)) {
+        while (cfs_test_and_set_bit(BH_DXLock, &bh->b_state)) {
                 DX_DEVAL(iam_lock_stats.dls_bh_busy++);
-                while (test_bit(BH_DXLock, &bh->b_state))
+                while (cfs_test_bit(BH_DXLock, &bh->b_state))
                         cpu_relax();
         }
 #endif
@@ -1065,7 +1065,7 @@ struct iam_format {
         /*
          * Linkage into global list of container formats.
          */
-        struct list_head if_linkage;
+        cfs_list_t if_linkage;
 };
 
 void iam_format_register(struct iam_format *fmt);

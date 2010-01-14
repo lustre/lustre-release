@@ -127,7 +127,7 @@ gmnal_alloc_ltxbuf (gmnal_ni_t *gmni)
                 return rc;
         }
 
-        list_add_tail(&txb->txb_list, &gmni->gmni_idle_ltxbs);
+        cfs_list_add_tail(&txb->txb_list, &gmni->gmni_idle_ltxbs);
 
         txb->txb_next = gmni->gmni_ltxbs;
         gmni->gmni_ltxbs = txb;
@@ -166,7 +166,7 @@ gmnal_alloc_tx (gmnal_ni_t *gmni)
 
         tx->tx_gmni = gmni;
         
-        list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
+        cfs_list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
 
         tx->tx_next = gmni->gmni_txs;
         gmni->gmni_txs = tx;
@@ -590,6 +590,6 @@ gmnal_rxevent2str(gm_recv_event_t *ev)
 void
 gmnal_yield(int delay)
 {
-	set_current_state(TASK_INTERRUPTIBLE);
-	schedule_timeout(delay);
+	cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
+	cfs_schedule_timeout(delay);
 }

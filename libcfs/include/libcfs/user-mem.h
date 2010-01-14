@@ -18,7 +18,7 @@
 typedef struct page {
         void   *addr;
         unsigned long index;
-        struct list_head list;
+        cfs_list_t list;
         unsigned long private;
 
         /* internally used by liblustre file i/o */
@@ -27,7 +27,7 @@ typedef struct page {
 #ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
         int     _managed;
 #endif
-        struct list_head _node;
+        cfs_list_t _node;
 } cfs_page_t;
 
 
@@ -77,10 +77,10 @@ typedef struct {
          int size;
 } cfs_mem_cache_t;
 
-#define SLAB_HWCACHE_ALIGN 0
-#define SLAB_DESTROY_BY_RCU 0
-#define SLAB_KERNEL 0
-#define SLAB_NOFS 0
+#define CFS_SLAB_HWCACHE_ALIGN 0
+#define CFS_SLAB_DESTROY_BY_RCU 0
+#define CFS_SLAB_KERNEL 0
+#define CFS_SLAB_NOFS 0
 
 cfs_mem_cache_t *
 cfs_mem_cache_create(const char *, size_t, size_t, unsigned long);
@@ -92,13 +92,13 @@ int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 /*
  * Copy to/from user
  */
-static inline int copy_from_user(void *a,void *b, int c)
+static inline int cfs_copy_from_user(void *a,void *b, int c)
 {
         memcpy(a,b,c);
         return 0;
 }
 
-static inline int copy_to_user(void *a,void *b, int c)
+static inline int cfs_copy_to_user(void *a,void *b, int c)
 {
         memcpy(a,b,c);
         return 0;

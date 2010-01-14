@@ -70,20 +70,20 @@
 #define LLOG_EEMPTY 4711
 
 struct plain_handle_data {
-        struct list_head    phd_entry;
+        cfs_list_t          phd_entry;
         struct llog_handle *phd_cat_handle;
         struct llog_cookie  phd_cookie; /* cookie of this log in its cat */
         int                 phd_last_idx;
 };
 
 struct cat_handle_data {
-        struct list_head        chd_head;
+        cfs_list_t              chd_head;
         struct llog_handle     *chd_current_log; /* currently open log */
 };
 
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
-        struct rw_semaphore     lgh_lock;
+        cfs_rw_semaphore_t      lgh_lock;
         struct llog_logid       lgh_id;              /* id of this log */
         struct llog_log_hdr    *lgh_hdr;
         struct file            *lgh_file;
@@ -274,8 +274,8 @@ struct llog_ctxt {
         struct llog_handle      *loc_handle;
         struct llog_commit_master *loc_lcm;
         struct llog_canceld_ctxt *loc_llcd;
-        struct semaphore         loc_sem; /* protects loc_llcd and loc_imp */
-        atomic_t                 loc_refcount;
+        cfs_semaphore_t          loc_sem; /* protects loc_llcd and loc_imp */
+        cfs_atomic_t             loc_refcount;
         void                    *llog_proc_cb;
         long                     loc_flags; /* flags, see above defines */
 };
@@ -290,11 +290,11 @@ struct llog_commit_master {
         /**
          * Number of llcds onthis lcm.
          */
-        atomic_t                   lcm_count;
+        cfs_atomic_t               lcm_count;
         /**
          * The refcount for lcm
          */
-         atomic_t                  lcm_refcount;
+         cfs_atomic_t              lcm_refcount;
         /**
          * Thread control structure. Used for control commit thread.
          */
@@ -302,11 +302,11 @@ struct llog_commit_master {
         /**
          * Lock protecting list of llcds.
          */
-        spinlock_t                 lcm_lock;
+        cfs_spinlock_t             lcm_lock;
         /**
          * Llcds in flight for debugging purposes.
          */
-        struct list_head           lcm_llcds;
+        cfs_list_t                 lcm_llcds;
         /**
          * Commit thread name buffer. Only used for thread start.
          */
@@ -316,15 +316,15 @@ struct llog_commit_master {
 static inline struct llog_commit_master
 *lcm_get(struct llog_commit_master *lcm)
 {
-        LASSERT(atomic_read(&lcm->lcm_refcount) > 0);
-        atomic_inc(&lcm->lcm_refcount);
+        LASSERT(cfs_atomic_read(&lcm->lcm_refcount) > 0);
+        cfs_atomic_inc(&lcm->lcm_refcount);
         return lcm;
 }
 
 static inline void
 lcm_put(struct llog_commit_master *lcm)
 {
-        if (!atomic_dec_and_test(&lcm->lcm_refcount)) {
+        if (!cfs_atomic_dec_and_test(&lcm->lcm_refcount)) {
                 return ;
         }
         OBD_FREE_PTR(lcm);
@@ -350,7 +350,7 @@ struct llog_canceld_ctxt {
         /**
          * Link to lcm llcds list.
          */
-        struct list_head           llcd_list;
+        cfs_list_t                 llcd_list;
         /**
          * Current llcd size while gathering cookies. This should not be
          * more than ->llcd_size. Used for determining if we need to
@@ -421,15 +421,15 @@ static inline int llog_handle2ops(struct llog_handle *loghandle,
 
 static inline int llog_data_len(int len)
 {
-        return size_round(len);
+        return cfs_size_round(len);
 }
 
 static inline struct llog_ctxt *llog_ctxt_get(struct llog_ctxt *ctxt)
 {
-        LASSERT(atomic_read(&ctxt->loc_refcount) > 0);
-        atomic_inc(&ctxt->loc_refcount);
+        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) > 0);
+        cfs_atomic_inc(&ctxt->loc_refcount);
         CDEBUG(D_INFO, "GETting ctxt %p : new refcount %d\n", ctxt,
-               atomic_read(&ctxt->loc_refcount));
+               cfs_atomic_read(&ctxt->loc_refcount));
         return ctxt;
 }
 
@@ -437,18 +437,18 @@ static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
 {
         if (ctxt == NULL)
                 return;
-        LASSERT(atomic_read(&ctxt->loc_refcount) > 0);
-        LASSERT(atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
+        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
-               atomic_read(&ctxt->loc_refcount) - 1);
+               cfs_atomic_read(&ctxt->loc_refcount) - 1);
         __llog_ctxt_put(ctxt);
 }
 
 static inline void llog_group_init(struct obd_llog_group *olg, int group)
 {
         cfs_waitq_init(&olg->olg_waitq);
-        spin_lock_init(&olg->olg_lock);
-        sema_init(&olg->olg_cat_processing, 1);
+        cfs_spin_lock_init(&olg->olg_lock);
+        cfs_sema_init(&olg->olg_cat_processing, 1);
         olg->olg_group = group;
 }
 
@@ -457,13 +457,13 @@ static inline void llog_group_set_export(struct obd_llog_group *olg,
 {
         LASSERT(exp != NULL);
 
-        spin_lock(&olg->olg_lock);
+        cfs_spin_lock(&olg->olg_lock);
         if (olg->olg_exp != NULL && olg->olg_exp != exp)
                 CWARN("%s: export for group %d is changed: 0x%p -> 0x%p\n",
                       exp->exp_obd->obd_name, olg->olg_group,
                       olg->olg_exp, exp);
         olg->olg_exp = exp;
-        spin_unlock(&olg->olg_lock);
+        cfs_spin_unlock(&olg->olg_lock);
 }
 
 static inline int llog_group_set_ctxt(struct obd_llog_group *olg,
@@ -471,13 +471,13 @@ static inline int llog_group_set_ctxt(struct obd_llog_group *olg,
 {
         LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
-        spin_lock(&olg->olg_lock);
+        cfs_spin_lock(&olg->olg_lock);
         if (olg->olg_ctxts[index] != NULL) {
-                spin_unlock(&olg->olg_lock);
+                cfs_spin_unlock(&olg->olg_lock);
                 return -EEXIST;
         }
         olg->olg_ctxts[index] = ctxt;
-        spin_unlock(&olg->olg_lock);
+        cfs_spin_unlock(&olg->olg_lock);
         return 0;
 }
 
@@ -488,13 +488,13 @@ static inline struct llog_ctxt *llog_group_get_ctxt(struct obd_llog_group *olg,
 
         LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
-        spin_lock(&olg->olg_lock);
+        cfs_spin_lock(&olg->olg_lock);
         if (olg->olg_ctxts[index] == NULL) {
                 ctxt = NULL;
         } else {
                 ctxt = llog_ctxt_get(olg->olg_ctxts[index]);
         }
-        spin_unlock(&olg->olg_lock);
+        cfs_spin_unlock(&olg->olg_lock);
         return ctxt;
 }
 
@@ -536,7 +536,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                 + sizeof(struct llog_rec_tail);
         else
                 buflen = rec->lrh_len;
-        LASSERT(size_round(buflen) == buflen);
+        LASSERT(cfs_size_round(buflen) == buflen);
 
         raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
         if (!raised)

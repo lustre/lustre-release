@@ -159,7 +159,7 @@ static int __proc_dobitmasks(void *data, int write,
         int           is_subsys = (mask == &libcfs_subsystem_debug) ? 1 : 0;
         int           is_printk = (mask == &libcfs_printk) ? 1 : 0;
 
-        rc = trace_allocate_string_buffer(&tmpstr, tmpstrlen);
+        rc = cfs_trace_allocate_string_buffer(&tmpstr, tmpstrlen);
         if (rc < 0)
                 return rc;
 
@@ -170,11 +170,11 @@ static int __proc_dobitmasks(void *data, int write,
                 if (pos >= rc) {
                         rc = 0;
                 } else {
-                        rc = trace_copyout_string(buffer, nob,
-                                                  tmpstr + pos, "\n");
+                        rc = cfs_trace_copyout_string(buffer, nob,
+                                                      tmpstr + pos, "\n");
                 }
         } else {
-                rc = trace_copyin_string(tmpstr, tmpstrlen, buffer, nob);
+                rc = cfs_trace_copyin_string(tmpstr, tmpstrlen, buffer, nob);
                 if (rc < 0)
                         return rc;
 
@@ -184,7 +184,7 @@ static int __proc_dobitmasks(void *data, int write,
                         *mask |= D_EMERG;
         }
 
-        trace_free_string_buffer(tmpstr, tmpstrlen);
+        cfs_trace_free_string_buffer(tmpstr, tmpstrlen);
         return rc;
 }
 
@@ -199,7 +199,7 @@ static int __proc_dump_kernel(void *data, int write,
         if (!write)
                 return 0;
 
-        return trace_dump_debug_buffer_usrstr(buffer, nob);
+        return cfs_trace_dump_debug_buffer_usrstr(buffer, nob);
 }
 
 DECLARE_PROC_HANDLER(proc_dump_kernel)
@@ -208,16 +208,16 @@ static int __proc_daemon_file(void *data, int write,
                               loff_t pos, void *buffer, int nob)
 {
         if (!write) {
-                int len = strlen(tracefile);
+                int len = strlen(cfs_tracefile);
 
                 if (pos >= len)
                         return 0;
 
-                return trace_copyout_string(buffer, nob,
-                                            tracefile + pos, "\n");
+                return cfs_trace_copyout_string(buffer, nob,
+                                                cfs_tracefile + pos, "\n");
         }
 
-        return trace_daemon_command_usrstr(buffer, nob);
+        return cfs_trace_daemon_command_usrstr(buffer, nob);
 }
 
 DECLARE_PROC_HANDLER(proc_daemon_file)
@@ -228,15 +228,16 @@ static int __proc_debug_mb(void *data, int write,
         if (!write) {
                 char tmpstr[32];
                 int  len = snprintf(tmpstr, sizeof(tmpstr), "%d",
-                                    trace_get_debug_mb());
+                                    cfs_trace_get_debug_mb());
 
                 if (pos >= len)
                         return 0;
 
-                return trace_copyout_string(buffer, nob, tmpstr + pos, "\n");
+                return cfs_trace_copyout_string(buffer, nob, tmpstr + pos,
+                       "\n");
         }
 
-        return trace_set_debug_mb_usrstr(buffer, nob);
+        return cfs_trace_set_debug_mb_usrstr(buffer, nob);
 }
 
 DECLARE_PROC_HANDLER(proc_debug_mb)
@@ -392,8 +393,8 @@ static cfs_sysctl_table_t lnet_table[] = {
         {
                 .ctl_name = PSDEV_DEBUG_PATH,
                 .procname = "debug_path",
-                .data     = debug_file_path_arr,
-                .maxlen   = sizeof(debug_file_path_arr),
+                .data     = libcfs_debug_file_path_arr,
+                .maxlen   = sizeof(libcfs_debug_file_path_arr),
                 .mode     = 0644,
                 .proc_handler = &proc_dostring,
         },

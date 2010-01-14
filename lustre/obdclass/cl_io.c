@@ -60,9 +60,9 @@
  */
 
 #define cl_io_for_each(slice, io) \
-        list_for_each_entry((slice), &io->ci_layers, cis_linkage)
+        cfs_list_for_each_entry((slice), &io->ci_layers, cis_linkage)
 #define cl_io_for_each_reverse(slice, io)                 \
-        list_for_each_entry_reverse((slice), &io->ci_layers, cis_linkage)
+        cfs_list_for_each_entry_reverse((slice), &io->ci_layers, cis_linkage)
 
 static inline int cl_io_type_is_valid(enum cl_io_type type)
 {
@@ -114,10 +114,10 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
         LINVRNT(cl_io_invariant(io));
         ENTRY;
 
-        while (!list_empty(&io->ci_layers)) {
+        while (!cfs_list_empty(&io->ci_layers)) {
                 slice = container_of(io->ci_layers.next, struct cl_io_slice,
                                      cis_linkage);
-                list_del_init(&slice->cis_linkage);
+                cfs_list_del_init(&slice->cis_linkage);
                 if (slice->cis_iop->op[io->ci_type].cio_fini != NULL)
                         slice->cis_iop->op[io->ci_type].cio_fini(env, slice);
                 /*
@@ -257,8 +257,9 @@ static void cl_io_locks_sort(struct cl_io *io)
                 done = 1;
                 prev = NULL;
 
-                list_for_each_entry_safe(curr, temp, &io->ci_lockset.cls_todo,
-                                         cill_linkage) {
+                cfs_list_for_each_entry_safe(curr, temp,
+                                             &io->ci_lockset.cls_todo,
+                                             cill_linkage) {
                         if (prev != NULL) {
                                 switch (cl_lock_descr_cmp(&prev->cill_descr,
                                                           &curr->cill_descr)) {
@@ -271,8 +272,8 @@ static void cl_io_locks_sort(struct cl_io *io)
                                 default:
                                         LBUG();
                                 case +1:
-                                        list_move_tail(&curr->cill_linkage,
-                                                       &prev->cill_linkage);
+                                        cfs_list_move_tail(&curr->cill_linkage,
+                                                           &prev->cill_linkage);
                                         done = 0;
                                         continue; /* don't change prev: it's
                                                    * still "previous" */
@@ -292,13 +293,13 @@ static void cl_io_locks_sort(struct cl_io *io)
  * \retval +ve there is a matching lock in the \a queue
  * \retval   0 there are no matching locks in the \a queue
  */
-int cl_queue_match(const struct list_head *queue,
+int cl_queue_match(const cfs_list_t *queue,
                    const struct cl_lock_descr *need)
 {
        struct cl_io_lock_link *scan;
 
        ENTRY;
-       list_for_each_entry(scan, queue, cill_linkage) {
+       cfs_list_for_each_entry(scan, queue, cill_linkage) {
                if (cl_lock_descr_match(&scan->cill_descr, need))
                        RETURN(+1);
        }
@@ -326,11 +327,12 @@ static int cl_lockset_lock_one(const struct lu_env *env,
         lock = cl_lock_request(env, io, &link->cill_descr, "io", io);
         if (!IS_ERR(lock)) {
                 link->cill_lock = lock;
-                list_move(&link->cill_linkage, &set->cls_curr);
+                cfs_list_move(&link->cill_linkage, &set->cls_curr);
                 if (!(link->cill_descr.cld_enq_flags & CEF_ASYNC)) {
                         result = cl_wait(env, lock);
                         if (result == 0)
-                                list_move(&link->cill_linkage, &set->cls_done);
+                                cfs_list_move(&link->cill_linkage,
+                                              &set->cls_done);
                 } else
                         result = 0;
         } else
@@ -344,7 +346,7 @@ static void cl_lock_link_fini(const struct lu_env *env, struct cl_io *io,
         struct cl_lock *lock = link->cill_lock;
 
         ENTRY;
-        list_del_init(&link->cill_linkage);
+        cfs_list_del_init(&link->cill_linkage);
         if (lock != NULL) {
                 cl_lock_release(env, lock, "io", io);
                 link->cill_lock = NULL;
@@ -364,7 +366,7 @@ static int cl_lockset_lock(const struct lu_env *env, struct cl_io *io,
 
         ENTRY;
         result = 0;
-        list_for_each_entry_safe(link, temp, &set->cls_todo, cill_linkage) {
+        cfs_list_for_each_entry_safe(link, temp, &set->cls_todo, cill_linkage) {
                 if (!cl_lockset_match(set, &link->cill_descr, 0)) {
                         /* XXX some locking to guarantee that locks aren't
                          * expanded in between. */
@@ -375,12 +377,13 @@ static int cl_lockset_lock(const struct lu_env *env, struct cl_io *io,
                         cl_lock_link_fini(env, io, link);
         }
         if (result == 0) {
-                list_for_each_entry_safe(link, temp,
-                                         &set->cls_curr, cill_linkage) {
+                cfs_list_for_each_entry_safe(link, temp,
+                                             &set->cls_curr, cill_linkage) {
                         lock = link->cill_lock;
                         result = cl_wait(env, lock);
                         if (result == 0)
-                                list_move(&link->cill_linkage, &set->cls_done);
+                                cfs_list_move(&link->cill_linkage,
+                                              &set->cls_done);
                         else
                                 break;
                 }
@@ -441,13 +444,13 @@ void cl_io_unlock(const struct lu_env *env, struct cl_io *io)
         ENTRY;
         set = &io->ci_lockset;
 
-        list_for_each_entry_safe(link, temp, &set->cls_todo, cill_linkage)
+        cfs_list_for_each_entry_safe(link, temp, &set->cls_todo, cill_linkage)
                 cl_lock_link_fini(env, io, link);
 
-        list_for_each_entry_safe(link, temp, &set->cls_curr, cill_linkage)
+        cfs_list_for_each_entry_safe(link, temp, &set->cls_curr, cill_linkage)
                 cl_lock_link_fini(env, io, link);
 
-        list_for_each_entry_safe(link, temp, &set->cls_done, cill_linkage) {
+        cfs_list_for_each_entry_safe(link, temp, &set->cls_done, cill_linkage) {
                 cl_unuse(env, link->cill_lock);
                 cl_lock_link_fini(env, io, link);
         }
@@ -555,7 +558,7 @@ int cl_io_lock_add(const struct lu_env *env, struct cl_io *io,
         if (cl_lockset_match(&io->ci_lockset, &link->cill_descr, 1))
                 result = +1;
         else {
-                list_add(&link->cill_linkage, &io->ci_lockset.cls_todo);
+                cfs_list_add(&link->cill_linkage, &io->ci_lockset.cls_todo);
                 result = 0;
         }
         RETURN(result);
@@ -847,7 +850,7 @@ int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
         /*
          * If ->cio_submit() failed, no pages were sent.
          */
-        LASSERT(ergo(result != 0, list_empty(&queue->c2_qout.pl_pages)));
+        LASSERT(ergo(result != 0, cfs_list_empty(&queue->c2_qout.pl_pages)));
         RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_submit_rw);
@@ -889,7 +892,7 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
                  rc = cl_sync_io_wait(env, io, &queue->c2_qout,
                                       anchor, timeout);
         } else {
-                LASSERT(list_empty(&queue->c2_qout.pl_pages));
+                LASSERT(cfs_list_empty(&queue->c2_qout.pl_pages));
                 cl_page_list_for_each(pg, &queue->c2_qin)
                         pg->cp_sync_io = NULL;
         }
@@ -991,13 +994,13 @@ void cl_io_slice_add(struct cl_io *io, struct cl_io_slice *slice,
                      struct cl_object *obj,
                      const struct cl_io_operations *ops)
 {
-        struct list_head *linkage = &slice->cis_linkage;
+        cfs_list_t *linkage = &slice->cis_linkage;
 
         LASSERT((linkage->prev == NULL && linkage->next == NULL) ||
-                list_empty(linkage));
+                cfs_list_empty(linkage));
         ENTRY;
 
-        list_add_tail(linkage, &io->ci_layers);
+        cfs_list_add_tail(linkage, &io->ci_layers);
         slice->cis_io  = io;
         slice->cis_obj = obj;
         slice->cis_iop = ops;
@@ -1030,11 +1033,11 @@ void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page)
         LASSERT(page->cp_owner != NULL);
         LINVRNT(plist->pl_owner == cfs_current());
 
-        lockdep_off();
-        mutex_lock(&page->cp_mutex);
-        lockdep_on();
-        LASSERT(list_empty(&page->cp_batch));
-        list_add_tail(&page->cp_batch, &plist->pl_pages);
+        cfs_lockdep_off();
+        cfs_mutex_lock(&page->cp_mutex);
+        cfs_lockdep_on();
+        LASSERT(cfs_list_empty(&page->cp_batch));
+        cfs_list_add_tail(&page->cp_batch, &plist->pl_pages);
         ++plist->pl_nr;
         page->cp_queue_ref = lu_ref_add(&page->cp_reference, "queue", plist);
         cl_page_get(page);
@@ -1052,10 +1055,10 @@ void cl_page_list_del(const struct lu_env *env,
         LINVRNT(plist->pl_owner == cfs_current());
 
         ENTRY;
-        list_del_init(&page->cp_batch);
-        lockdep_off();
-        mutex_unlock(&page->cp_mutex);
-        lockdep_on();
+        cfs_list_del_init(&page->cp_batch);
+        cfs_lockdep_off();
+        cfs_mutex_unlock(&page->cp_mutex);
+        cfs_lockdep_on();
         --plist->pl_nr;
         lu_ref_del_at(&page->cp_reference, page->cp_queue_ref, "queue", plist);
         cl_page_put(env, page);
@@ -1074,7 +1077,7 @@ void cl_page_list_move(struct cl_page_list *dst, struct cl_page_list *src,
         LINVRNT(src->pl_owner == cfs_current());
 
         ENTRY;
-        list_move_tail(&page->cp_batch, &dst->pl_pages);
+        cfs_list_move_tail(&page->cp_batch, &dst->pl_pages);
         --src->pl_nr;
         ++dst->pl_nr;
         lu_ref_set_at(&page->cp_reference,
@@ -1119,10 +1122,10 @@ void cl_page_list_disown(const struct lu_env *env,
         cl_page_list_for_each_safe(page, temp, plist) {
                 LASSERT(plist->pl_nr > 0);
 
-                list_del_init(&page->cp_batch);
-                lockdep_off();
-                mutex_unlock(&page->cp_mutex);
-                lockdep_on();
+                cfs_list_del_init(&page->cp_batch);
+                cfs_lockdep_off();
+                cfs_mutex_unlock(&page->cp_mutex);
+                cfs_lockdep_on();
                 --plist->pl_nr;
                 /*
                  * cl_page_disown0 rather than usual cl_page_disown() is used,
@@ -1357,7 +1360,7 @@ void cl_req_slice_add(struct cl_req *req, struct cl_req_slice *slice,
                       const struct cl_req_operations *ops)
 {
         ENTRY;
-        list_add_tail(&slice->crs_linkage, &req->crq_layers);
+        cfs_list_add_tail(&slice->crs_linkage, &req->crq_layers);
         slice->crs_dev = dev;
         slice->crs_ops = ops;
         slice->crs_req = req;
@@ -1369,9 +1372,9 @@ static void cl_req_free(const struct lu_env *env, struct cl_req *req)
 {
         unsigned i;
 
-        LASSERT(list_empty(&req->crq_pages));
+        LASSERT(cfs_list_empty(&req->crq_pages));
         LASSERT(req->crq_nrpages == 0);
-        LINVRNT(list_empty(&req->crq_layers));
+        LINVRNT(cfs_list_empty(&req->crq_layers));
         LINVRNT(equi(req->crq_nrobjs > 0, req->crq_o != NULL));
         ENTRY;
 
@@ -1402,7 +1405,7 @@ static int cl_req_init(const struct lu_env *env, struct cl_req *req,
         result = 0;
         page = cl_page_top(page);
         do {
-                list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
+                cfs_list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
                         dev = lu2cl_dev(slice->cpl_obj->co_lu.lo_dev);
                         if (dev->cd_ops->cdo_req_init != NULL) {
                                 result = dev->cd_ops->cdo_req_init(env,
@@ -1428,10 +1431,10 @@ void cl_req_completion(const struct lu_env *env, struct cl_req *req, int rc)
         /*
          * for the lack of list_for_each_entry_reverse_safe()...
          */
-        while (!list_empty(&req->crq_layers)) {
-                slice = list_entry(req->crq_layers.prev,
-                                   struct cl_req_slice, crs_linkage);
-                list_del_init(&slice->crs_linkage);
+        while (!cfs_list_empty(&req->crq_layers)) {
+                slice = cfs_list_entry(req->crq_layers.prev,
+                                       struct cl_req_slice, crs_linkage);
+                cfs_list_del_init(&slice->crs_linkage);
                 if (slice->crs_ops->cro_completion != NULL)
                         slice->crs_ops->cro_completion(env, slice, rc);
         }
@@ -1488,10 +1491,10 @@ void cl_req_page_add(const struct lu_env *env,
         page = cl_page_top(page);
 
         LINVRNT(cl_page_is_vmlocked(env, page));
-        LASSERT(list_empty(&page->cp_flight));
+        LASSERT(cfs_list_empty(&page->cp_flight));
         LASSERT(page->cp_req == NULL);
 
-        list_add_tail(&page->cp_flight, &req->crq_pages);
+        cfs_list_add_tail(&page->cp_flight, &req->crq_pages);
         ++req->crq_nrpages;
         page->cp_req = req;
         obj = cl_object_top(page->cp_obj);
@@ -1520,10 +1523,10 @@ void cl_req_page_done(const struct lu_env *env, struct cl_page *page)
         page = cl_page_top(page);
 
         LINVRNT(cl_page_is_vmlocked(env, page));
-        LASSERT(!list_empty(&page->cp_flight));
+        LASSERT(!cfs_list_empty(&page->cp_flight));
         LASSERT(req->crq_nrpages > 0);
 
-        list_del_init(&page->cp_flight);
+        cfs_list_del_init(&page->cp_flight);
         --req->crq_nrpages;
         page->cp_req = NULL;
         EXIT;
@@ -1549,7 +1552,7 @@ int cl_req_prep(const struct lu_env *env, struct cl_req *req)
                 LASSERT(req->crq_o[i].ro_obj != NULL);
 
         result = 0;
-        list_for_each_entry(slice, &req->crq_layers, crs_linkage) {
+        cfs_list_for_each_entry(slice, &req->crq_layers, crs_linkage) {
                 if (slice->crs_ops->cro_prep != NULL) {
                         result = slice->crs_ops->cro_prep(env, slice);
                         if (result != 0)
@@ -1572,14 +1575,14 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_req *req,
         struct cl_page            *page;
         int i;
 
-        LASSERT(!list_empty(&req->crq_pages));
+        LASSERT(!cfs_list_empty(&req->crq_pages));
         ENTRY;
 
         /* Take any page to use as a model. */
-        page = list_entry(req->crq_pages.next, struct cl_page, cp_flight);
+        page = cfs_list_entry(req->crq_pages.next, struct cl_page, cp_flight);
 
         for (i = 0; i < req->crq_nrobjs; ++i) {
-                list_for_each_entry(slice, &req->crq_layers, crs_linkage) {
+                cfs_list_for_each_entry(slice, &req->crq_layers, crs_linkage) {
                         const struct cl_page_slice *scan;
                         const struct cl_object     *obj;
 
@@ -1611,7 +1614,7 @@ void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages)
 {
         ENTRY;
         cfs_waitq_init(&anchor->csi_waitq);
-        atomic_set(&anchor->csi_sync_nr, nrpages);
+        cfs_atomic_set(&anchor->csi_sync_nr, nrpages);
         anchor->csi_sync_rc  = 0;
         EXIT;
 }
@@ -1633,23 +1636,23 @@ int cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
         LASSERT(timeout >= 0);
 
         rc = l_wait_event(anchor->csi_waitq,
-                          atomic_read(&anchor->csi_sync_nr) == 0,
+                          cfs_atomic_read(&anchor->csi_sync_nr) == 0,
                           &lwi);
         if (rc < 0) {
                 CERROR("SYNC IO failed with error: %d, try to cancel "
                        "%d remaining pages\n",
-                       rc, atomic_read(&anchor->csi_sync_nr));
+                       rc, cfs_atomic_read(&anchor->csi_sync_nr));
 
                 (void)cl_io_cancel(env, io, queue);
 
                 lwi = (struct l_wait_info) { 0 };
                 (void)l_wait_event(anchor->csi_waitq,
-                                   atomic_read(&anchor->csi_sync_nr) == 0,
+                                   cfs_atomic_read(&anchor->csi_sync_nr) == 0,
                                    &lwi);
         } else {
                 rc = anchor->csi_sync_rc;
         }
-        LASSERT(atomic_read(&anchor->csi_sync_nr) == 0);
+        LASSERT(cfs_atomic_read(&anchor->csi_sync_nr) == 0);
         cl_page_list_assume(env, io, queue);
         POISON(anchor, 0x5a, sizeof *anchor);
         RETURN(rc);
@@ -1669,8 +1672,8 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret)
          * ->{prepare,commit}_write(). Completion is used to signal the end of
          * IO.
          */
-        LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
-        if (atomic_dec_and_test(&anchor->csi_sync_nr))
+        LASSERT(cfs_atomic_read(&anchor->csi_sync_nr) > 0);
+        if (cfs_atomic_dec_and_test(&anchor->csi_sync_nr))
                 cfs_waitq_broadcast(&anchor->csi_waitq);
         EXIT;
 }

@@ -48,24 +48,25 @@
 #include <lustre_lib.h>
 
 #if !defined(HAVE_RCU) || !defined(__KERNEL__)
-# define list_add_rcu            list_add
-# define list_del_rcu            list_del
-# define list_for_each_rcu       list_for_each
-# define list_for_each_safe_rcu  list_for_each_safe
-# define rcu_read_lock()         spin_lock(&bucket->lock)
-# define rcu_read_unlock()       spin_unlock(&bucket->lock)
+# define list_add_rcu            cfs_list_add
+# define list_del_rcu            cfs_list_del
+# define list_for_each_rcu       cfs_list_for_each
+# define list_for_each_safe_rcu  cfs_list_for_each_safe
+# define list_for_each_entry_rcu cfs_list_for_each_entry
+# define rcu_read_lock()         cfs_spin_lock(&bucket->lock)
+# define rcu_read_unlock()       cfs_spin_unlock(&bucket->lock)
 #endif /* ifndef HAVE_RCU */
 
 static __u64 handle_base;
 #define HANDLE_INCR 7
-static spinlock_t handle_base_lock;
+static cfs_spinlock_t handle_base_lock;
 
 static struct handle_bucket {
-        spinlock_t lock;
-        struct list_head head;
+        cfs_spinlock_t lock;
+        cfs_list_t head;
 } *handle_hash;
 
-static atomic_t handle_count = ATOMIC_INIT(0);
+static cfs_atomic_t handle_count = CFS_ATOMIC_INIT(0);
 
 #ifdef __arch_um__
 /* For unknown reason, UML uses kmalloc rather than vmalloc to allocate
@@ -89,13 +90,13 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
         ENTRY;
 
         LASSERT(h != NULL);
-        LASSERT(list_empty(&h->h_link));
+        LASSERT(cfs_list_empty(&h->h_link));
 
         /*
          * This is fast, but simplistic cookie generation algorithm, it will
          * need a re-do at some point in the future for security.
          */
-        spin_lock(&handle_base_lock);
+        cfs_spin_lock(&handle_base_lock);
         handle_base += HANDLE_INCR;
 
         h->h_cookie = handle_base;
@@ -108,17 +109,17 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
                 CWARN("The universe has been exhausted: cookie wrap-around.\n");
                 handle_base += HANDLE_INCR;
         }
-        spin_unlock(&handle_base_lock);
+        cfs_spin_unlock(&handle_base_lock);
  
-        atomic_inc(&handle_count);
+        cfs_atomic_inc(&handle_count);
         h->h_addref = cb;
-        spin_lock_init(&h->h_lock);
+        cfs_spin_lock_init(&h->h_lock);
 
         bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
-        spin_lock(&bucket->lock);
+        cfs_spin_lock(&bucket->lock);
         list_add_rcu(&h->h_link, &bucket->head);
         h->h_in = 1;
-        spin_unlock(&bucket->lock);
+        cfs_spin_unlock(&bucket->lock);
 
         CDEBUG(D_INFO, "added object %p with handle "LPX64" to hash\n",
                h, h->h_cookie);
@@ -127,7 +128,7 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
 
 static void class_handle_unhash_nolock(struct portals_handle *h)
 {
-        if (list_empty(&h->h_link)) {
+        if (cfs_list_empty(&h->h_link)) {
                 CERROR("removing an already-removed handle ("LPX64")\n",
                        h->h_cookie);
                 return;
@@ -136,13 +137,13 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
         CDEBUG(D_INFO, "removing object %p with handle "LPX64" from hash\n",
                h, h->h_cookie);
 
-        spin_lock(&h->h_lock);
+        cfs_spin_lock(&h->h_lock);
         if (h->h_in == 0) {
-                spin_unlock(&h->h_lock);
+                cfs_spin_unlock(&h->h_lock);
                 return;
         }
         h->h_in = 0;
-        spin_unlock(&h->h_lock);
+        cfs_spin_unlock(&h->h_lock);
         list_del_rcu(&h->h_link);
 }
 
@@ -151,11 +152,11 @@ void class_handle_unhash(struct portals_handle *h)
         struct handle_bucket *bucket;
         bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
 
-        spin_lock(&bucket->lock);
+        cfs_spin_lock(&bucket->lock);
         class_handle_unhash_nolock(h);
-        spin_unlock(&bucket->lock);
+        cfs_spin_unlock(&bucket->lock);
 
-        atomic_dec(&handle_count);
+        cfs_atomic_dec(&handle_count);
 }
 
 void class_handle_hash_back(struct portals_handle *h)
@@ -165,11 +166,11 @@ void class_handle_hash_back(struct portals_handle *h)
 
         bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
 
-        atomic_inc(&handle_count);
-        spin_lock(&bucket->lock);
+        cfs_atomic_inc(&handle_count);
+        cfs_spin_lock(&bucket->lock);
         list_add_rcu(&h->h_link, &bucket->head);
         h->h_in = 1;
-        spin_unlock(&bucket->lock);
+        cfs_spin_unlock(&bucket->lock);
 
         EXIT;
 }
@@ -192,12 +193,12 @@ void *class_handle2object(__u64 cookie)
                 if (h->h_cookie != cookie)
                         continue;
 
-                spin_lock(&h->h_lock);
+                cfs_spin_lock(&h->h_lock);
                 if (likely(h->h_in != 0)) {
                         h->h_addref(h);
                         retval = h;
                 }
-                spin_unlock(&h->h_lock);
+                cfs_spin_unlock(&h->h_lock);
                 break;
         }
         rcu_read_unlock();
@@ -205,7 +206,7 @@ void *class_handle2object(__u64 cookie)
         RETURN(retval);
 }
 
-void class_handle_free_cb(struct rcu_head *rcu)
+void class_handle_free_cb(cfs_rcu_head_t *rcu)
 {
         struct portals_handle *h = RCU2HANDLE(rcu);
         if (h->h_free_cb) {
@@ -229,16 +230,16 @@ int class_handle_init(void)
         if (handle_hash == NULL)
                 return -ENOMEM;
 
-        spin_lock_init(&handle_base_lock);
+        cfs_spin_lock_init(&handle_base_lock);
         for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
              bucket--) {
                 CFS_INIT_LIST_HEAD(&bucket->head);
-                spin_lock_init(&bucket->lock);
+                cfs_spin_lock_init(&bucket->lock);
         }
 
         /** bug 21430: add randomness to the initial base */
         ll_get_random_bytes(seed, sizeof(seed));
-        do_gettimeofday(&tv);
+        cfs_gettimeofday(&tv);
         ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
         ll_get_random_bytes(&handle_base, sizeof(handle_base));
@@ -254,14 +255,14 @@ static void cleanup_all_handles(void)
         for (i = 0; i < HANDLE_HASH_SIZE; i++) {
                 struct portals_handle *h;
 
-                spin_lock(&handle_hash[i].lock);
+                cfs_spin_lock(&handle_hash[i].lock);
                 list_for_each_entry_rcu(h, &(handle_hash[i].head), h_link) {
                         CERROR("force clean handle "LPX64" addr %p addref %p\n",
                                h->h_cookie, h, h->h_addref);
 
                         class_handle_unhash_nolock(h);
                 }
-                spin_unlock(&handle_hash[i].lock);
+                cfs_spin_unlock(&handle_hash[i].lock);
         }
 }
 
@@ -270,7 +271,7 @@ void class_handle_cleanup(void)
         int count;
         LASSERT(handle_hash != NULL);
 
-        count = atomic_read(&handle_count);
+        count = cfs_atomic_read(&handle_count);
         if (count != 0) {
                 CERROR("handle_count at cleanup: %d\n", count);
                 cleanup_all_handles();
@@ -279,6 +280,6 @@ void class_handle_cleanup(void)
         OBD_VFREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         handle_hash = NULL;
 
-        if (atomic_read(&handle_count))
-                CERROR("leaked %d handles\n", atomic_read(&handle_count));
+        if (cfs_atomic_read(&handle_count))
+                CERROR("leaked %d handles\n", cfs_atomic_read(&handle_count));
 }

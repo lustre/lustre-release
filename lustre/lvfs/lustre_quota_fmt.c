@@ -271,7 +271,7 @@ ssize_t write_blk(struct file *filp, uint blk, dqbuf_t buf)
 
 void lustre_mark_info_dirty(struct lustre_mem_dqinfo *info)
 {
-        set_bit(DQF_INFO_DIRTY_B, &info->dqi_flags);
+        cfs_set_bit(DQF_INFO_DIRTY_B, &info->dqi_flags);
 }
 
 /**
@@ -837,7 +837,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                                "VFS: Can't read quota structure for id %u.\n",
                                dquot->dq_id);
                 dquot->dq_off = 0;
-                set_bit(DQ_FAKE_B, &dquot->dq_flags);
+                cfs_set_bit(DQ_FAKE_B, &dquot->dq_flags);
                 memset(&dquot->dq_dqb, 0, sizeof(struct lustre_mem_dqblk));
                 ret = offset;
         } else {
@@ -877,12 +877,12 @@ int lustre_commit_dquot(struct lustre_dquot *dquot)
         struct inode *inode = dquot->dq_info->qi_files[dquot->dq_type]->f_dentry->d_inode;
 
         /* always clear the flag so we don't loop on an IO error... */
-        clear_bit(DQ_MOD_B, &dquot->dq_flags);
+        cfs_clear_bit(DQ_MOD_B, &dquot->dq_flags);
 
         /* The block/inode usage in admin quotafile isn't the real usage
          * over all cluster, so keep the fake dquot entry on disk is
          * meaningless, just remove it */
-        if (test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
+        if (cfs_test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
                 handle = lustre_quota_journal_start(inode, 1);
                 rc = lustre_delete_dquot(dquot, version);
                 lustre_quota_journal_stop(handle);
@@ -956,7 +956,7 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type)
 }
 
 static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
-                              uint blk, struct list_head *list)
+                              uint blk, cfs_list_t *list)
 {
         dqbuf_t buf = getdqbuf();
         loff_t ret = 0;
@@ -964,7 +964,7 @@ static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
             (struct lustre_disk_dqdbheader *)buf;
         struct dqblk *blk_item;
         struct dqblk *pos;
-        struct list_head *tmp;
+        cfs_list_t *tmp;
 
         if (!buf)
                 return -ENOMEM;
@@ -977,12 +977,12 @@ static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
         if (!le32_to_cpu(dqhead->dqdh_entries))
                 goto out_buf;
 
-        if (list_empty(list)) {
+        if (cfs_list_empty(list)) {
                 tmp = list;
                 goto done;
         }
 
-        list_for_each_entry(pos, list, link) {
+        cfs_list_for_each_entry(pos, list, link) {
                 if (blk == pos->blk)    /* we got this blk already */
                         goto out_buf;
                 if (blk > pos->blk)
@@ -997,9 +997,9 @@ done:
                 goto out_buf;
         }
         blk_item->blk = blk;
-        INIT_LIST_HEAD(&blk_item->link);
+        CFS_INIT_LIST_HEAD(&blk_item->link);
 
-        list_add_tail(&blk_item->link, tmp);
+        cfs_list_add_tail(&blk_item->link, tmp);
 
 out_buf:
         freedqbuf(buf);
@@ -1007,7 +1007,7 @@ out_buf:
 }
 
 int walk_tree_dqentry(struct file *filp, struct inode *inode, int type, 
-                      uint blk, int depth, struct list_head *list)
+                      uint blk, int depth, cfs_list_t *list)
 {
         dqbuf_t buf = getdqbuf();
         loff_t ret = 0;
@@ -1042,9 +1042,9 @@ out_buf:
  * Walk through the quota file (v2 format) to get all ids with quota limit
  */
 int lustre_get_qids(struct file *fp, struct inode *inode, int type,
-                    struct list_head *list)
+                    cfs_list_t *list)
 {
-        struct list_head blk_list;
+        cfs_list_t blk_list;
         struct dqblk *blk_item, *tmp;
         dqbuf_t buf = NULL;
         struct lustre_disk_dqblk_v2 *ddquot;
@@ -1062,18 +1062,18 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                 RETURN(-EINVAL);
         }
 
-        if (!list_empty(list)) {
+        if (!cfs_list_empty(list)) {
                 CDEBUG(D_ERROR, "not empty list\n");
                 RETURN(-EINVAL);
         }
 
-        INIT_LIST_HEAD(&blk_list);
+        CFS_INIT_LIST_HEAD(&blk_list);
         rc = walk_tree_dqentry(fp, inode, type, LUSTRE_DQTREEOFF, 0, &blk_list);
         if (rc) {
                 CDEBUG(D_ERROR, "walk through quota file failed!(%d)\n", rc);
                 GOTO(out_free, rc);
         }
-        if (list_empty(&blk_list))
+        if (cfs_list_empty(&blk_list))
                 RETURN(0);
 
         buf = getdqbuf();
@@ -1081,7 +1081,7 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                 RETURN(-ENOMEM);
         ddquot = (struct lustre_disk_dqblk_v2 *)GETENTRIES(buf, version);
 
-        list_for_each_entry(blk_item, &blk_list, link) {
+        cfs_list_for_each_entry(blk_item, &blk_list, link) {
                 loff_t ret = 0;
                 int i, dqblk_sz = lustre_disk_dqblk_sz[version];
 
@@ -1109,14 +1109,14 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                         dqid->di_flag |= le64_to_cpu(ddquot[i].dqb_bhardlimit) ?
                                          QB_SET : 0;
 
-                        INIT_LIST_HEAD(&dqid->di_link);
-                        list_add(&dqid->di_link, list);
+                        CFS_INIT_LIST_HEAD(&dqid->di_link);
+                        cfs_list_add(&dqid->di_link, list);
                 }
         }
 
 out_free:
-        list_for_each_entry_safe(blk_item, tmp, &blk_list, link) {
-                list_del_init(&blk_item->link);
+        cfs_list_for_each_entry_safe(blk_item, tmp, &blk_list, link) {
+                cfs_list_del_init(&blk_item->link);
                 kfree(blk_item);
         }
         if (buf)

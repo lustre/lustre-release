@@ -128,12 +128,14 @@
 #endif
 
 #ifndef HAVE_CPU_ONLINE
-#define cpu_online(cpu) ((1<<cpu) & (cpu_online_map))
+#define cfs_cpu_online(cpu) ((1<<cpu) & (cpu_online_map))
+#else
+#define cfs_cpu_online(cpu) cpu_online(cpu)
 #endif
 #ifndef HAVE_CPUMASK_T
-typedef unsigned long cpumask_t;
-#define cpu_set(cpu, map) set_bit(cpu, &(map))
-#define cpus_clear(map) memset(&(map), 0, sizeof(cpumask_t))
+typedef unsigned long cfs_cpumask_t;
+#define cfs_cpu_set(cpu, map) set_bit(cpu, &(map))
+#define cpus_clear(map) memset(&(map), 0, sizeof(cfs_cpumask_t))
 #endif
 
 #ifndef __user
@@ -141,7 +143,9 @@ typedef unsigned long cpumask_t;
 #endif
 
 #ifndef __fls
-#define __fls fls
+#define __cfs_fls fls
+#else
+#define __cfs_fls __fls
 #endif
 
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \

@@ -54,12 +54,12 @@
 
 #ifndef __KERNEL__
 /* liblustre workaround */
-atomic_t libcfs_kmemory = {0};
+cfs_atomic_t libcfs_kmemory = {0};
 #endif
 
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
-struct list_head obd_types;
-spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
+cfs_list_t obd_types;
+cfs_spinlock_t obd_dev_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 #ifndef __KERNEL__
 __u64 obd_max_pages = 0;
@@ -82,8 +82,8 @@ unsigned int at_history = 600;
 int at_early_margin = 5;
 int at_extra = 30;
 
-atomic_t obd_dirty_pages;
-atomic_t obd_dirty_transit_pages;
+cfs_atomic_t obd_dirty_pages;
+cfs_atomic_t obd_dirty_transit_pages;
 
 cfs_waitq_t obd_race_waitq;
 int obd_race_state;
@@ -191,7 +191,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 if (lcfg == NULL)
                         GOTO(out, err = -ENOMEM);
-                err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
+                err = cfs_copy_from_user(lcfg, data->ioc_pbuf1,
+                                         data->ioc_plen1);
                 if (!err)
                         err = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
                 if (!err)
@@ -307,7 +308,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
-                         atomic_read(&obd->obd_refcount));
+                         cfs_atomic_read(&obd->obd_refcount));
                 err = obd_ioctl_popdata((void *)arg, data, len);
 
                 GOTO(out, err = 0);
@@ -536,7 +537,7 @@ int obd_init_checks(void)
 #define obd_init_checks() do {} while(0)
 #endif
 
-extern spinlock_t obd_types_lock;
+extern cfs_spinlock_t obd_types_lock;
 extern int class_procfs_init(void);
 extern int class_procfs_clean(void);
 
@@ -558,7 +559,7 @@ int init_obdclass(void)
         LCONSOLE_INFO("        Lustre Version: "LUSTRE_VERSION_STRING"\n");
         LCONSOLE_INFO("        Build Version: "BUILD_VERSION"\n");
 
-        spin_lock_init(&obd_types_lock);
+        cfs_spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
 #ifdef LPROCFS
@@ -585,7 +586,7 @@ int init_obdclass(void)
         if (err)
                 return err;
 
-        spin_lock_init(&obd_dev_lock);
+        cfs_spin_lock_init(&obd_dev_lock);
         CFS_INIT_LIST_HEAD(&obd_types);
 
         err = cfs_psdev_register(&obd_psdev);
@@ -601,10 +602,10 @@ int init_obdclass(void)
         /* Default the dirty page cache cap to 1/2 of system memory.
          * For clients with less memory, a larger fraction is needed
          * for other purposes (mostly for BGL). */
-        if (num_physpages <= 512 << (20 - CFS_PAGE_SHIFT))
-                obd_max_dirty_pages = num_physpages / 4;
+        if (cfs_num_physpages <= 512 << (20 - CFS_PAGE_SHIFT))
+                obd_max_dirty_pages = cfs_num_physpages / 4;
         else
-                obd_max_dirty_pages = num_physpages / 2;
+                obd_max_dirty_pages = cfs_num_physpages / 2;
 
         err = obd_init_caches();
         if (err)

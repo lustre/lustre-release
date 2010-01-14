@@ -57,7 +57,8 @@
 
 static inline int lustre_msg_hdr_size_v2(int count)
 {
-        return size_round(offsetof(struct lustre_msg_v2, lm_buflens[count]));
+        return cfs_size_round(offsetof(struct lustre_msg_v2,
+                                       lm_buflens[count]));
 }
 
 int lustre_msg_hdr_size(__u32 magic, int count)
@@ -130,7 +131,7 @@ int lustre_msg_size_v2(int count, __u32 *lengths)
 
         size = lustre_msg_hdr_size_v2(count);
         for (i = 0; i < count; i++)
-                size += size_round(lengths[i]);
+                size += cfs_size_round(lengths[i]);
 
         return size;
 }
@@ -245,20 +246,20 @@ int lustre_pack_request(struct ptlrpc_request *req, __u32 magic, int count,
 
 #if RS_DEBUG
 CFS_LIST_HEAD(ptlrpc_rs_debug_lru);
-spinlock_t ptlrpc_rs_debug_lock;
+cfs_spinlock_t ptlrpc_rs_debug_lock;
 
 #define PTLRPC_RS_DEBUG_LRU_ADD(rs)                                     \
 do {                                                                    \
-        spin_lock(&ptlrpc_rs_debug_lock);                               \
-        list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);      \
-        spin_unlock(&ptlrpc_rs_debug_lock);                             \
+        cfs_spin_lock(&ptlrpc_rs_debug_lock);                           \
+        cfs_list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);  \
+        cfs_spin_unlock(&ptlrpc_rs_debug_lock);                         \
 } while (0)
 
 #define PTLRPC_RS_DEBUG_LRU_DEL(rs)             \
 do {                                            \
-        spin_lock(&ptlrpc_rs_debug_lock);       \
-        list_del(&(rs)->rs_debug_list);         \
-        spin_unlock(&ptlrpc_rs_debug_lock);     \
+        cfs_spin_lock(&ptlrpc_rs_debug_lock);   \
+        cfs_list_del(&(rs)->rs_debug_list);     \
+        cfs_spin_unlock(&ptlrpc_rs_debug_lock); \
 } while (0)
 #else
 # define PTLRPC_RS_DEBUG_LRU_ADD(rs) do {} while(0)
@@ -269,26 +270,27 @@ struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc)
 {
         struct ptlrpc_reply_state *rs = NULL;
 
-        spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
         /* See if we have anything in a pool, and wait if nothing */
-        while (list_empty(&svc->srv_free_rs_list)) {
+        while (cfs_list_empty(&svc->srv_free_rs_list)) {
                 struct l_wait_info lwi;
                 int rc;
-                spin_unlock(&svc->srv_lock);
+                cfs_spin_unlock(&svc->srv_lock);
                 /* If we cannot get anything for some long time, we better
                    bail out instead of waiting infinitely */
                 lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
                 rc = l_wait_event(svc->srv_free_rs_waitq,
-                                  !list_empty(&svc->srv_free_rs_list), &lwi);
+                                  !cfs_list_empty(&svc->srv_free_rs_list),
+                                  &lwi);
                 if (rc)
                         goto out;
-                spin_lock(&svc->srv_lock);
+                cfs_spin_lock(&svc->srv_lock);
         }
 
-        rs = list_entry(svc->srv_free_rs_list.next, struct ptlrpc_reply_state,
-                        rs_list);
-        list_del(&rs->rs_list);
-        spin_unlock(&svc->srv_lock);
+        rs = cfs_list_entry(svc->srv_free_rs_list.next,
+                            struct ptlrpc_reply_state, rs_list);
+        cfs_list_del(&rs->rs_list);
+        cfs_spin_unlock(&svc->srv_lock);
         LASSERT(rs);
         memset(rs, 0, svc->srv_max_reply_size);
         rs->rs_service = svc;
@@ -303,9 +305,9 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 
         LASSERT(svc);
 
-        spin_lock(&svc->srv_lock);
-        list_add(&rs->rs_list, &svc->srv_free_rs_list);
-        spin_unlock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
+        cfs_list_add(&rs->rs_list, &svc->srv_free_rs_list);
+        cfs_spin_unlock(&svc->srv_lock);
         cfs_waitq_signal(&svc->srv_free_rs_waitq);
 }
 
@@ -327,14 +329,14 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
                 RETURN(rc);
 
         rs = req->rq_reply_state;
-        atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
+        cfs_atomic_set(&rs->rs_refcount, 1);    /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
         rs->rs_service = req->rq_rqbd->rqbd_service;
         CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
         CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
         CFS_INIT_LIST_HEAD(&rs->rs_list);
-        spin_lock_init(&rs->rs_lock);
+        cfs_spin_lock_init(&rs->rs_lock);
 
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
@@ -408,7 +410,7 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size)
 
         offset = lustre_msg_hdr_size_v2(bufcount);
         for (i = 0; i < n; i++)
-                offset += size_round(m->lm_buflens[i]);
+                offset += cfs_size_round(m->lm_buflens[i]);
 
         return (char *)m + offset;
 }
@@ -440,7 +442,7 @@ int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
         if (move_data && msg->lm_bufcount > segment + 1) {
                 tail = lustre_msg_buf_v2(msg, segment + 1, 0);
                 for (n = segment + 1; n < msg->lm_bufcount; n++)
-                        tail_len += size_round(msg->lm_buflens[n]);
+                        tail_len += cfs_size_round(msg->lm_buflens[n]);
         }
 
         msg->lm_buflens[segment] = newlen;
@@ -486,14 +488,14 @@ void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
 {
         PTLRPC_RS_DEBUG_LRU_DEL(rs);
 
-        LASSERT (atomic_read(&rs->rs_refcount) == 0);
+        LASSERT (cfs_atomic_read(&rs->rs_refcount) == 0);
         LASSERT (!rs->rs_difficult || rs->rs_handled);
         LASSERT (!rs->rs_on_net);
         LASSERT (!rs->rs_scheduled);
         LASSERT (rs->rs_export == NULL);
         LASSERT (rs->rs_nlocks == 0);
-        LASSERT (list_empty(&rs->rs_exp_list));
-        LASSERT (list_empty(&rs->rs_obd_list));
+        LASSERT (cfs_list_empty(&rs->rs_exp_list));
+        LASSERT (cfs_list_empty(&rs->rs_obd_list));
 
         sptlrpc_svc_free_rs(rs);
 }
@@ -534,7 +536,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
         for (i = 0; i < m->lm_bufcount; i++) {
                 if (swabbed)
                         __swab32s(&m->lm_buflens[i]);
-                required_len += size_round(m->lm_buflens[i]);
+                required_len += cfs_size_round(m->lm_buflens[i]);
         }
 
         if (len < required_len) {
@@ -2161,8 +2163,10 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                            (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
                            req->rq_request_portal, req->rq_reply_portal,
                            req->rq_reqlen, req->rq_replen,
-                           req->rq_early_count, req->rq_timedout, req->rq_deadline,
-                           atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
+                           req->rq_early_count, req->rq_timedout,
+                           req->rq_deadline,
+                           cfs_atomic_read(&req->rq_refcount),
+                           DEBUG_REQ_FLAGS(req),
                            req->rq_reqmsg && req_ptlrpc_body_swabbed(req) ?
                            lustre_msg_get_flags(req->rq_reqmsg) : -1,
                            req->rq_repmsg && rep_ptlrpc_body_swabbed(req) ?

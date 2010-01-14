@@ -222,7 +222,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* Internal mgs setup */
         mgs_init_fsdb_list(obd);
-        sema_init(&mgs->mgs_sem, 1);
+        cfs_sema_init(&mgs->mgs_sem, 1);
 
         /* Setup proc */
         lprocfs_mgs_init_vars(&lvars);
@@ -564,7 +564,7 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                 if (rc)
                         return rc;
 
-                down(&fsdb->fsdb_sem);
+                cfs_down(&fsdb->fsdb_sem);
                 if (sptlrpc_rule_set_choose(&fsdb->fsdb_srpc_gen,
                                             LUSTRE_SP_MGC, LUSTRE_SP_MGS,
                                             req->rq_peer.nid,
@@ -572,9 +572,9 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                         /* by defualt allow any flavors */
                         flvr.sf_rpc = SPTLRPC_FLVR_ANY;
                 }
-                up(&fsdb->fsdb_sem);
+                cfs_up(&fsdb->fsdb_sem);
 
-                spin_lock(&exp->exp_lock);
+                cfs_spin_lock(&exp->exp_lock);
 
                 exp->exp_sp_peer = req->rq_sp_from;
                 exp->exp_flvr = flvr;
@@ -587,7 +587,7 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                         rc = -EACCES;
                 }
 
-                spin_unlock(&exp->exp_lock);
+                cfs_spin_unlock(&exp->exp_lock);
         } else {
                 if (exp->exp_sp_peer != req->rq_sp_from) {
                         CERROR("RPC source %s doesn't match %s\n",
@@ -756,9 +756,9 @@ out:
 
 static inline int mgs_init_export(struct obd_export *exp)
 {
-        spin_lock(&exp->exp_lock);
+        cfs_spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
-        spin_unlock(&exp->exp_lock);
+        cfs_spin_unlock(&exp->exp_lock);
 
         return ldlm_init_export(exp);
 }
@@ -831,7 +831,7 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
         if (lcfg == NULL)
                 GOTO(out_pool, rc = -ENOMEM);
 
-        if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+        if (cfs_copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
                 GOTO(out_pool, rc = -EFAULT);
 
         if (lcfg->lcfg_bufcount < 2) {
@@ -931,7 +931,7 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 if (lcfg == NULL)
                         RETURN(-ENOMEM);
-                if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+                if (cfs_copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
                         GOTO(out_free, rc = -EFAULT);
 
                 if (lcfg->lcfg_bufcount < 1)

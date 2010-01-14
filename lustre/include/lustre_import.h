@@ -47,13 +47,13 @@
 #define AT_FLG_NOHIST 0x1          /* use last reported value only */
 
 struct adaptive_timeout {
-        time_t       at_binstart;         /* bin start time */
-        unsigned int at_hist[AT_BINS];    /* timeout history bins */
-        unsigned int at_flags;
-        unsigned int at_current;          /* current timeout value */
-        unsigned int at_worst_ever;       /* worst-ever timeout value */
-        time_t       at_worst_time;       /* worst-ever timeout timestamp */
-        spinlock_t   at_lock;
+        time_t           at_binstart;         /* bin start time */
+        unsigned int     at_hist[AT_BINS];    /* timeout history bins */
+        unsigned int     at_flags;
+        unsigned int     at_current;          /* current timeout value */
+        unsigned int     at_worst_ever;       /* worst-ever timeout value */
+        time_t           at_worst_time;       /* worst-ever timeout timestamp */
+        cfs_spinlock_t   at_lock;
 };
 
 enum lustre_imp_state {
@@ -70,11 +70,11 @@ enum lustre_imp_state {
 };
 
 struct ptlrpc_at_array {
-        struct list_head *paa_reqs_array; /* array to hold requests */
+        cfs_list_t       *paa_reqs_array; /* array to hold requests */
         __u32             paa_size;       /* the size of array */
         __u32             paa_count;      /* the total count of reqs */
-        time_t            paa_deadline;   /* the earliest deadline of reqs */
-        __u32            *paa_reqs_count; /* the count of reqs in each entry */
+        time_t            paa_deadline;   /* earliest deadline of reqs */
+        __u32            *paa_reqs_count; /* count of reqs in each entry */
 };
 
 static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
@@ -98,7 +98,7 @@ enum obd_import_event {
 };
 
 struct obd_import_conn {
-        struct list_head          oic_item;
+        cfs_list_t                oic_item;
         struct ptlrpc_connection *oic_conn;
         struct obd_uuid           oic_uuid;
         __u64                     oic_last_attempt; /* jiffies, 64-bit */
@@ -120,31 +120,31 @@ struct import_state_hist {
 
 struct obd_import {
         struct portals_handle     imp_handle;
-        atomic_t                  imp_refcount;
+        cfs_atomic_t              imp_refcount;
         struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
         struct ptlrpc_connection *imp_connection;
         struct ptlrpc_client     *imp_client;
-        struct list_head          imp_pinger_chain;
-        struct list_head          imp_zombie_chain; /* queue for destruction */
+        cfs_list_t                imp_pinger_chain;
+        cfs_list_t                imp_zombie_chain; /* queue for destruction */
 
         /* Lists of requests that are retained for replay, waiting for a reply,
          * or waiting for recovery to complete, respectively.
          */
-        struct list_head          imp_replay_list;
-        struct list_head          imp_sending_list;
-        struct list_head          imp_delayed_list;
+        cfs_list_t                imp_replay_list;
+        cfs_list_t                imp_sending_list;
+        cfs_list_t                imp_delayed_list;
 
         struct obd_device        *imp_obd;
         struct ptlrpc_sec        *imp_sec;
-        struct semaphore          imp_sec_mutex;
+        cfs_semaphore_t           imp_sec_mutex;
         cfs_time_t                imp_sec_expire;
         cfs_waitq_t               imp_recovery_waitq;
 
-        atomic_t                  imp_inflight;
-        atomic_t                  imp_unregistering;
-        atomic_t                  imp_replay_inflight;
-        atomic_t                  imp_inval_count;  /* in-progress invalidations */
-        atomic_t                  imp_timeouts;
+        cfs_atomic_t              imp_inflight;
+        cfs_atomic_t              imp_unregistering;
+        cfs_atomic_t              imp_replay_inflight;
+        cfs_atomic_t              imp_inval_count;  /* in-progress invalidations */
+        cfs_atomic_t              imp_timeouts;
         enum lustre_imp_state     imp_state;
         struct import_state_hist  imp_state_hist[IMP_STATE_HIST_LEN];
         int                       imp_state_hist_idx;
@@ -159,11 +159,11 @@ struct obd_import {
         __u64                     imp_last_success_conn;   /* jiffies, 64-bit */
 
         /* all available obd_import_conn linked here */
-        struct list_head          imp_conn_list;
+        cfs_list_t                imp_conn_list;
         struct obd_import_conn   *imp_conn_current;
 
         /* Protects flags, level, generation, conn_cnt, *_list */
-        spinlock_t                imp_lock;
+        cfs_spinlock_t            imp_lock;
 
         /* flags */
         unsigned long             imp_no_timeout:1,       /* timeouts are disabled */
@@ -201,7 +201,7 @@ typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,
                                     int event, void *event_arg, void *cb_data);
 
 struct obd_import_observer {
-        struct list_head     oio_chain;
+        cfs_list_t           oio_chain;
         obd_import_callback  oio_cb;
         void                *oio_cb_data;
 };
@@ -233,7 +233,7 @@ static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
         at->at_worst_ever = val;
         at->at_worst_time = cfs_time_current_sec();
         at->at_flags = flags;
-        spin_lock_init(&at->at_lock);
+        cfs_spin_lock_init(&at->at_lock);
 }
 static inline int at_get(struct adaptive_timeout *at) {
         return at->at_current;

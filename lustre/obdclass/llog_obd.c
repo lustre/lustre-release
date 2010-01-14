@@ -59,7 +59,7 @@ static struct llog_ctxt* llog_new_ctxt(struct obd_device *obd)
                 return NULL;
 
         ctxt->loc_obd = obd;
-        atomic_set(&ctxt->loc_refcount, 1);
+        cfs_atomic_set(&ctxt->loc_refcount, 1);
 
         return ctxt;
 }
@@ -84,20 +84,21 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
         struct obd_device *obd;
         int rc = 0;
 
-        spin_lock(&olg->olg_lock);
-        if (!atomic_dec_and_test(&ctxt->loc_refcount)) {
-                spin_unlock(&olg->olg_lock);
+        cfs_spin_lock(&olg->olg_lock);
+        if (!cfs_atomic_dec_and_test(&ctxt->loc_refcount)) {
+                cfs_spin_unlock(&olg->olg_lock);
                 return rc;
         }
         olg->olg_ctxts[ctxt->loc_idx] = NULL;
-        spin_unlock(&olg->olg_lock);
+        cfs_spin_unlock(&olg->olg_lock);
 
         if (ctxt->loc_lcm)
                 lcm_put(ctxt->loc_lcm);
 
         obd = ctxt->loc_obd;
-        spin_lock(&obd->obd_dev_lock);
-        spin_unlock(&obd->obd_dev_lock); /* sync with llog ctxt user thread */
+        cfs_spin_lock(&obd->obd_dev_lock);
+        /* sync with llog ctxt user thread */
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
         /* obd->obd_starting is needed for the case of cleanup
          * in error case while obd is starting up. */
@@ -111,7 +112,7 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
                 rc = CTXTP(ctxt, cleanup)(ctxt);
 
         llog_ctxt_destroy(ctxt);
-        wake_up(&olg->olg_waitq);
+        cfs_waitq_signal(&olg->olg_waitq);
         return rc;
 }
 EXPORT_SYMBOL(__llog_ctxt_put);
@@ -135,8 +136,8 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         /* 
          * Banlance the ctxt get when calling llog_cleanup()
          */
-        LASSERT(atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
-        LASSERT(atomic_read(&ctxt->loc_refcount) > 1);
+        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
+        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) > 1);
         llog_ctxt_put(ctxt);
 
         /* 
@@ -176,7 +177,7 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
         ctxt->loc_olg = olg;
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
-        sema_init(&ctxt->loc_sem, 1);
+        cfs_sema_init(&ctxt->loc_sem, 1);
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
 
@@ -402,9 +403,9 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
 
         cathandle = ctxt->loc_handle;
         if (cathandle) {
-                list_for_each_entry_safe(loghandle, n,
-                                         &cathandle->u.chd.chd_head,
-                                         u.phd.phd_entry) {
+                cfs_list_for_each_entry_safe(loghandle, n,
+                                             &cathandle->u.chd.chd_head,
+                                             u.phd.phd_entry) {
                         llh = loghandle->lgh_hdr;
                         if ((llh->llh_flags &
                                 LLOG_F_ZAP_WHEN_EMPTY) &&

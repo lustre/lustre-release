@@ -54,12 +54,12 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res = NULL;
 
-        spin_lock(&lock->l_lock);
+        cfs_spin_lock(&lock->l_lock);
         res = lock->l_resource;
 
         if (ns_is_server(res->lr_namespace))
                 /* on server-side resource of lock doesn't change */
-                spin_unlock(&lock->l_lock);
+                cfs_spin_unlock(&lock->l_lock);
 
         lock_res(res);
         return res;
@@ -76,5 +76,5 @@ void unlock_res_and_lock(struct ldlm_lock *lock)
         }
 
         unlock_res(res);
-        spin_unlock(&lock->l_lock);
+        cfs_spin_unlock(&lock->l_lock);
 }

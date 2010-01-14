@@ -591,7 +591,7 @@ int sock_create_lite(int family, int type, int protocol, struct socket **res)
         struct socket *sock;
 
         sock = sock_alloc();
-        if (sock == NULL) 
+        if (sock == NULL)
                 return -ENOMEM;
 
         sock->type = type;

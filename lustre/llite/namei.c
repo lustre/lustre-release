@@ -268,7 +268,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 __u32 ll_i2suppgid(struct inode *i)
 {
-        if (in_group_p(i->i_gid))
+        if (cfs_curproc_is_in_groups(i->i_gid))
                 return (__u32)i->i_gid;
         else
                 return (__u32)(-1);

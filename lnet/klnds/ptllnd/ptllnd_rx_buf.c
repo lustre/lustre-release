@@ -44,8 +44,8 @@ void
 kptllnd_rx_buffer_pool_init(kptl_rx_buffer_pool_t *rxbp)
 {
         memset(rxbp, 0, sizeof(*rxbp));
-        spin_lock_init(&rxbp->rxbp_lock);
-        INIT_LIST_HEAD(&rxbp->rxbp_list);
+        cfs_spin_lock_init(&rxbp->rxbp_lock);
+        CFS_INIT_LIST_HEAD(&rxbp->rxbp_list);
 }
 
 void
@@ -58,7 +58,7 @@ kptllnd_rx_buffer_destroy(kptl_rx_buffer_t *rxb)
         LASSERT(!rxb->rxb_posted);
         LASSERT(rxb->rxb_idle);
 
-        list_del(&rxb->rxb_list);
+        cfs_list_del(&rxb->rxb_list);
         rxbp->rxbp_count--;
 
         LIBCFS_FREE(rxb->rxb_buffer, kptllnd_rx_buffer_size());
@@ -80,7 +80,7 @@ kptllnd_rx_buffer_pool_reserve(kptl_rx_buffer_pool_t *rxbp, int count)
 
         CDEBUG(D_NET, "kptllnd_rx_buffer_pool_reserve(%d)\n", count);
 
-        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
         for (;;) {
                 if (rxbp->rxbp_shutdown) {
@@ -94,7 +94,7 @@ kptllnd_rx_buffer_pool_reserve(kptl_rx_buffer_pool_t *rxbp, int count)
                         break;
                 }
                 
-                spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
                 
                 LIBCFS_ALLOC(rxb, sizeof(*rxb));
                 LIBCFS_ALLOC(buffer, bufsize);
@@ -107,7 +107,7 @@ kptllnd_rx_buffer_pool_reserve(kptl_rx_buffer_pool_t *rxbp, int count)
                         if (buffer != NULL)
                                 LIBCFS_FREE(buffer, bufsize);
                         
-                        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
                         rc = -ENOMEM;
                         break;
                 }
@@ -122,33 +122,33 @@ kptllnd_rx_buffer_pool_reserve(kptl_rx_buffer_pool_t *rxbp, int count)
                 rxb->rxb_buffer = buffer;
                 rxb->rxb_mdh = PTL_INVALID_HANDLE;
 
-                spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
                 
                 if (rxbp->rxbp_shutdown) {
-                        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
                         
                         LIBCFS_FREE(rxb, sizeof(*rxb));
                         LIBCFS_FREE(buffer, bufsize);
 
-                        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
                         rc = -ESHUTDOWN;
                         break;
                 }
                 
-                list_add_tail(&rxb->rxb_list, &rxbp->rxbp_list);
+                cfs_list_add_tail(&rxb->rxb_list, &rxbp->rxbp_list);
                 rxbp->rxbp_count++;
 
-                spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
                 
                 kptllnd_rx_buffer_post(rxb);
 
-                spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
         }
 
         if (rc == 0)
                 rxbp->rxbp_reserved += count;
 
-        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 
         return rc;
 }
@@ -159,12 +159,12 @@ kptllnd_rx_buffer_pool_unreserve(kptl_rx_buffer_pool_t *rxbp,
 {
         unsigned long flags;
 
-        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
         CDEBUG(D_NET, "kptllnd_rx_buffer_pool_unreserve(%d)\n", count);
         rxbp->rxbp_reserved -= count;
 
-        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 }
 
 void
@@ -174,11 +174,11 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
         int                     rc;
         int                     i;
         unsigned long           flags;
-        struct list_head       *tmp;
-        struct list_head       *nxt;
+        cfs_list_t             *tmp;
+        cfs_list_t             *nxt;
         ptl_handle_md_t         mdh;
 
-        /* CAVEAT EMPTOR: I'm racing with everything here!!!  
+        /* CAVEAT EMPTOR: I'm racing with everything here!!!
          *
          * Buffers can still be posted after I set rxbp_shutdown because I
          * can't hold rxbp_lock while I'm posting them.
@@ -189,20 +189,20 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
          * different MD) from when the MD is actually unlinked, to when the
          * event callback tells me it has been unlinked. */
 
-        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
         rxbp->rxbp_shutdown = 1;
 
         for (i = 9;; i++) {
-                list_for_each_safe(tmp, nxt, &rxbp->rxbp_list) {
-                        rxb = list_entry (tmp, kptl_rx_buffer_t, rxb_list);
-                
+                cfs_list_for_each_safe(tmp, nxt, &rxbp->rxbp_list) {
+                        rxb = cfs_list_entry (tmp, kptl_rx_buffer_t, rxb_list);
+
                         if (rxb->rxb_idle) {
-                                spin_unlock_irqrestore(&rxbp->rxbp_lock, 
-                                                       flags);
+                                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock,
+                                                           flags);
                                 kptllnd_rx_buffer_destroy(rxb);
-                                spin_lock_irqsave(&rxbp->rxbp_lock, 
-                                                  flags);
+                                cfs_spin_lock_irqsave(&rxbp->rxbp_lock,
+                                                      flags);
                                 continue;
                         }
 
@@ -210,11 +210,11 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
                         if (PtlHandleIsEqual(mdh, PTL_INVALID_HANDLE))
                                 continue;
                         
-                        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 
                         rc = PtlMDUnlink(mdh);
 
-                        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
                         
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
                         /* callback clears rxb_mdh and drops net's ref
@@ -230,10 +230,10 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
 #endif
                 }
 
-                if (list_empty(&rxbp->rxbp_list))
+                if (cfs_list_empty(&rxbp->rxbp_list))
                         break;
 
-                spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 
                 /* Wait a bit for references to be dropped */
                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
@@ -242,10 +242,10 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
 
                 cfs_pause(cfs_time_seconds(1));
 
-                spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
         }
 
-        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 }
 
 void
@@ -259,7 +259,7 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
         kptl_rx_buffer_pool_t  *rxbp = rxb->rxb_pool;
         unsigned long           flags;
 
-        LASSERT (!in_interrupt());
+        LASSERT (!cfs_in_interrupt());
         LASSERT (rxb->rxb_refcount == 0);
         LASSERT (!rxb->rxb_idle);
         LASSERT (!rxb->rxb_posted);
@@ -268,18 +268,18 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
         any.nid = PTL_NID_ANY;
         any.pid = PTL_PID_ANY;
 
-        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
         if (rxbp->rxbp_shutdown) {
                 rxb->rxb_idle = 1;
-                spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
                 return;
         }
 
         rxb->rxb_refcount = 1;                  /* net's ref */
         rxb->rxb_posted = 1;                    /* I'm posting */
         
-        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 
         rc = PtlMEAttach(kptllnd_data.kptl_nih,
                          *kptllnd_tunables.kptl_portal,
@@ -312,10 +312,10 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
 
         rc = PtlMDAttach(meh, md, PTL_UNLINK, &mdh);
         if (rc == PTL_OK) {
-                spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
                 if (rxb->rxb_posted)            /* Not auto-unlinked yet!!! */
                         rxb->rxb_mdh = mdh;
-                spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
                 return;
         }
         
@@ -325,11 +325,11 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
         LASSERT(rc == PTL_OK);
 
  failed:
-        spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+        cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
         rxb->rxb_posted = 0;
         /* XXX this will just try again immediately */
         kptllnd_rx_buffer_decref_locked(rxb);
-        spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+        cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 }
 
 kptl_rx_t *
@@ -369,7 +369,7 @@ kptllnd_rx_done(kptl_rx_t *rx, int post_credit)
 
         if (peer != NULL) {
                 /* Update credits (after I've decref-ed the buffer) */
-                spin_lock_irqsave(&peer->peer_lock, flags);
+                cfs_spin_lock_irqsave(&peer->peer_lock, flags);
 
                 if (post_credit == PTLLND_POSTRX_PEER_CREDIT)
                         peer->peer_outstanding_credits++;
@@ -383,7 +383,7 @@ kptllnd_rx_done(kptl_rx_t *rx, int post_credit)
                        peer->peer_outstanding_credits, peer->peer_sent_credits,
                        rx);
 
-                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 /* I might have to send back credits */
                 kptllnd_peer_check_sends(peer);
@@ -410,16 +410,16 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
 #endif
 
         CDEBUG(D_NET, "%s: %s(%d) rxb=%p fail=%s(%d) unlink=%d\n",
-               kptllnd_ptlid2str(ev->initiator), 
-               kptllnd_evtype2str(ev->type), ev->type, rxb, 
+               kptllnd_ptlid2str(ev->initiator),
+               kptllnd_evtype2str(ev->type), ev->type, rxb,
                kptllnd_errtype2str(ev->ni_fail_type), ev->ni_fail_type,
                unlinked);
 
         LASSERT (!rxb->rxb_idle);
         LASSERT (ev->md.start == rxb->rxb_buffer);
-        LASSERT (ev->offset + ev->mlength <= 
+        LASSERT (ev->offset + ev->mlength <=
                  PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages);
-        LASSERT (ev->type == PTL_EVENT_PUT_END || 
+        LASSERT (ev->type == PTL_EVENT_PUT_END ||
                  ev->type == PTL_EVENT_UNLINK);
         LASSERT (ev->type == PTL_EVENT_UNLINK ||
                  ev->match_bits == LNET_MSG_MATCHBITS);
@@ -463,7 +463,7 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                                 /* Portals can't force alignment - copy into
                                  * rx_space (avoiding overflow) to fix */
                                 int maxlen = *kptllnd_tunables.kptl_max_msg_size;
-                                
+
                                 rx->rx_rxb = NULL;
                                 rx->rx_nob = MIN(maxlen, ev->mlength);
                                 rx->rx_msg = (kptl_msg_t *)rx->rx_space;
@@ -481,26 +481,26 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                         rx->rx_uid = ev->uid;
 #endif
                         /* Queue for attention */
-                        spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, 
-                                          flags);
+                        cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
+                                              flags);
 
-                        list_add_tail(&rx->rx_list, 
-                                      &kptllnd_data.kptl_sched_rxq);
-                        wake_up(&kptllnd_data.kptl_sched_waitq);
+                        cfs_list_add_tail(&rx->rx_list,
+                                          &kptllnd_data.kptl_sched_rxq);
+                        cfs_waitq_signal(&kptllnd_data.kptl_sched_waitq);
 
-                        spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock, 
-                                               flags);
+                        cfs_spin_unlock_irqrestore(&kptllnd_data. \
+                                                   kptl_sched_lock, flags);
                 }
         }
 
         if (unlinked) {
-                spin_lock_irqsave(&rxbp->rxbp_lock, flags);
+                cfs_spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
                 rxb->rxb_posted = 0;
                 rxb->rxb_mdh = PTL_INVALID_HANDLE;
                 kptllnd_rx_buffer_decref_locked(rxb);
 
-                spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
+                cfs_spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
         }
 }
 
@@ -542,17 +542,17 @@ kptllnd_find_net (lnet_nid_t nid)
 {
         kptl_net_t *net;
 
-        read_lock(&kptllnd_data.kptl_net_rw_lock);
-        list_for_each_entry (net, &kptllnd_data.kptl_nets, net_list) {
+        cfs_read_lock(&kptllnd_data.kptl_net_rw_lock);
+        cfs_list_for_each_entry (net, &kptllnd_data.kptl_nets, net_list) {
                 LASSERT (!net->net_shutdown);
 
                 if (net->net_ni->ni_nid == nid) {
                         kptllnd_net_addref(net);
-                        read_unlock(&kptllnd_data.kptl_net_rw_lock);
+                        cfs_read_unlock(&kptllnd_data.kptl_net_rw_lock);
                         return net;
                 }
         }
-        read_unlock(&kptllnd_data.kptl_net_rw_lock);
+        cfs_read_unlock(&kptllnd_data.kptl_net_rw_lock);
 
         return NULL;
 }
@@ -565,14 +565,14 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
         kptl_net_t             *net = NULL;
         kptl_peer_t            *peer;
-        struct list_head        txs;
+        cfs_list_t              txs;
         unsigned long           flags;
         lnet_process_id_t       srcid;
 
-        LASSERT (!in_interrupt());
+        LASSERT (!cfs_in_interrupt());
         LASSERT (rx->rx_peer == NULL);
 
-        INIT_LIST_HEAD(&txs);
+        CFS_INIT_LIST_HEAD(&txs);
 
         if ((rx->rx_nob >= 4 &&
              (msg->ptlm_magic == LNET_PROTO_MAGIC ||
@@ -691,9 +691,9 @@ kptllnd_rx_parse(kptl_rx_t *rx)
 
                 if (peer->peer_state == PEER_STATE_WAITING_HELLO) {
                         /* recoverable error - restart txs */
-                        spin_lock_irqsave(&peer->peer_lock, flags);
+                        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
                         kptllnd_cancel_txlist(&peer->peer_sendq, &txs);
-                        spin_unlock_irqrestore(&peer->peer_lock, flags);
+                        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                         CWARN("NAK %s: Unexpected %s message\n",
                               libcfs_id2str(srcid),
@@ -721,7 +721,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         LASSERTF (msg->ptlm_srcpid == peer->peer_id.pid, "m %u p %u\n",
                   msg->ptlm_srcpid, peer->peer_id.pid);
 
-        spin_lock_irqsave(&peer->peer_lock, flags);
+        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
 
         /* Check peer only sends when I've sent her credits */
         if (peer->peer_sent_credits == 0) {
@@ -729,7 +729,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 int oc = peer->peer_outstanding_credits;
                 int sc = peer->peer_sent_credits;
 
-                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 CERROR("%s: buffer overrun [%d/%d+%d]\n",
                        libcfs_id2str(peer->peer_id), c, sc, oc);
@@ -748,7 +748,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 post_credit = PTLLND_POSTRX_NO_CREDIT;
         }
 
-        spin_unlock_irqrestore(&peer->peer_lock, flags);
+        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         /* See if something can go out now that credits have come in */
         if (msg->ptlm_credits != 0)
@@ -795,14 +795,14 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                          PTL_RESERVED_MATCHBITS);
 
                 /* Update last match bits seen */
-                spin_lock_irqsave(&peer->peer_lock, flags);
+                cfs_spin_lock_irqsave(&peer->peer_lock, flags);
 
                 if (msg->ptlm_u.rdma.kptlrm_matchbits >
                     rx->rx_peer->peer_last_matchbits_seen)
                         rx->rx_peer->peer_last_matchbits_seen =
                                 msg->ptlm_u.rdma.kptlrm_matchbits;
 
-                spin_unlock_irqrestore(&rx->rx_peer->peer_lock, flags);
+                cfs_spin_unlock_irqrestore(&rx->rx_peer->peer_lock, flags);
 
                 rc = lnet_parse(net->net_ni,
                                 &msg->ptlm_u.rdma.kptlrm_hdr,
@@ -820,7 +820,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         kptllnd_peer_close(peer, rc);
         if (rx->rx_peer == NULL)                /* drop ref on peer */
                 kptllnd_peer_decref(peer);      /* unless rx_done will */
-        if (!list_empty(&txs)) {
+        if (!cfs_list_empty(&txs)) {
                 LASSERT (net != NULL);
                 kptllnd_restart_txs(net, srcid, &txs);
         }

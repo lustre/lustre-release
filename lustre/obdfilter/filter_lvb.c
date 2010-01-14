@@ -131,7 +131,7 @@ static int filter_lvbo_update(struct ldlm_resource *res,
 
         LASSERT(res);
 
-        down(&res->lr_lvb_sem);
+        cfs_down(&res->lr_lvb_sem);
         lvb = res->lr_lvb_data;
         if (lvb == NULL) {
                 CERROR("No lvb when running lvbo_update!\n");
@@ -224,7 +224,7 @@ out_dentry:
         f_dput(dentry);
 
 out:
-        up(&res->lr_lvb_sem);
+        cfs_up(&res->lr_lvb_sem);
         return rc;
 }
 

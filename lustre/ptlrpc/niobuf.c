@@ -169,7 +169,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
         struct l_wait_info       lwi;
         int                      rc;
 
-        LASSERT(!in_interrupt());               /* might sleep */
+        LASSERT(!cfs_in_interrupt());           /* might sleep */
 
         if (!ptlrpc_server_bulk_active(desc))   /* completed or */
                 return;                         /* never started */
@@ -284,7 +284,7 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
         int                      rc;
         ENTRY;
 
-        LASSERT(!in_interrupt());     /* might sleep */
+        LASSERT(!cfs_in_interrupt());     /* might sleep */
 
         /* Let's setup deadline for reply unlink. */
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
@@ -435,7 +435,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
                 CERROR("not replying on NULL connection\n"); /* bug 9635 */
                 return -ENOTCONN;
         }
-        atomic_inc (&svc->srv_outstanding_replies);
+        cfs_atomic_inc (&svc->srv_outstanding_replies);
         ptlrpc_rs_addref(rs);                   /* +1 ref for the network */
 
         rc = sptlrpc_svc_wrap_reply(req);
@@ -451,7 +451,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
                            req->rq_xid, req->rq_reply_off);
 out:
         if (unlikely(rc != 0)) {
-                atomic_dec (&svc->srv_outstanding_replies);
+                cfs_atomic_dec (&svc->srv_outstanding_replies);
                 ptlrpc_req_drop_rs(req);
         }
         ptlrpc_connection_put(conn);
@@ -574,7 +574,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 }
         }
 
-        spin_lock(&request->rq_lock);
+        cfs_spin_lock(&request->rq_lock);
         /* If the MD attach succeeds, there _will_ be a reply_in callback */
         request->rq_receiving_reply = !noreply;
         /* We are responsible for unlinking the reply buffer */
@@ -587,7 +587,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_resend = 0;
         request->rq_restart = 0;
         request->rq_reply_truncate = 0;
-        spin_unlock(&request->rq_lock);
+        cfs_spin_unlock(&request->rq_lock);
 
         if (!noreply) {
                 reply_md.start     = request->rq_repbuf;
@@ -608,10 +608,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 if (rc != 0) {
                         CERROR("LNetMDAttach failed: %d\n", rc);
                         LASSERT (rc == -ENOMEM);
-                        spin_lock(&request->rq_lock);
+                        cfs_spin_lock(&request->rq_lock);
                         /* ...but the MD attach didn't succeed... */
                         request->rq_receiving_reply = 0;
-                        spin_unlock(&request->rq_lock);
+                        cfs_spin_unlock(&request->rq_lock);
                         GOTO(cleanup_me, rc = -ENOMEM);
                 }
 
@@ -625,11 +625,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         ptlrpc_request_addref(request);
         if (obd->obd_svc_stats != NULL)
                 lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQACTIVE_CNTR,
-                                atomic_read(&request->rq_import->imp_inflight));
+                        cfs_atomic_read(&request->rq_import->imp_inflight));
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
-        do_gettimeofday(&request->rq_arrival_time);
+        cfs_gettimeofday(&request->rq_arrival_time);
         request->rq_sent = cfs_time_current_sec();
         /* We give the server rq_timeout secs to process the req, and
            add the network latency for our local timeout. */

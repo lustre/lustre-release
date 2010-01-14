@@ -65,8 +65,8 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
 
         conn->c_peer = peer;
         conn->c_self = self;
-        INIT_HLIST_NODE(&conn->c_hash);
-        atomic_set(&conn->c_refcount, 1);
+        CFS_INIT_HLIST_NODE(&conn->c_hash);
+        cfs_atomic_set(&conn->c_refcount, 1);
         if (uuid)
                 obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
 
@@ -84,7 +84,7 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
         EXIT;
 out:
         CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
-               conn, atomic_read(&conn->c_refcount),
+               conn, cfs_atomic_read(&conn->c_refcount),
                libcfs_nid2str(conn->c_peer.nid));
         return conn;
 }
@@ -97,7 +97,7 @@ int ptlrpc_connection_put(struct ptlrpc_connection *conn)
         if (!conn)
                 RETURN(rc);
 
-        LASSERT(!hlist_unhashed(&conn->c_hash));
+        LASSERT(!cfs_hlist_unhashed(&conn->c_hash));
 
         /*
          * We do not remove connection from hashtable and
@@ -115,11 +115,11 @@ int ptlrpc_connection_put(struct ptlrpc_connection *conn)
          * when ptlrpc_connection_fini()->lh_exit->conn_exit()
          * path is called.
          */
-        if (atomic_dec_return(&conn->c_refcount) == 1)
+        if (cfs_atomic_dec_return(&conn->c_refcount) == 1)
                 rc = 1;
 
         CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
-               conn, atomic_read(&conn->c_refcount),
+               conn, cfs_atomic_read(&conn->c_refcount),
                libcfs_nid2str(conn->c_peer.nid));
 
         RETURN(rc);
@@ -130,9 +130,9 @@ ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 {
         ENTRY;
 
-        atomic_inc(&conn->c_refcount);
+        cfs_atomic_inc(&conn->c_refcount);
         CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
-               conn, atomic_read(&conn->c_refcount),
+               conn, cfs_atomic_read(&conn->c_refcount),
                libcfs_nid2str(conn->c_peer.nid));
 
         RETURN(conn);
@@ -168,63 +168,63 @@ conn_hashfn(cfs_hash_t *hs,  void *key, unsigned mask)
 }
 
 static int
-conn_compare(void *key, struct hlist_node *hnode)
+conn_compare(void *key, cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
         lnet_process_id_t *conn_key;
 
         LASSERT(key != NULL);
         conn_key = (lnet_process_id_t*)key;
-        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 
         return conn_key->nid == conn->c_peer.nid &&
                conn_key->pid == conn->c_peer.pid;
 }
 
 static void *
-conn_key(struct hlist_node *hnode)
+conn_key(cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
-        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
         return &conn->c_peer;
 }
 
 static void *
-conn_get(struct hlist_node *hnode)
+conn_get(cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 
-        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        atomic_inc(&conn->c_refcount);
+        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        cfs_atomic_inc(&conn->c_refcount);
 
         return conn;
 }
 
 static void *
-conn_put(struct hlist_node *hnode)
+conn_put(cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 
-        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        atomic_dec(&conn->c_refcount);
+        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        cfs_atomic_dec(&conn->c_refcount);
 
         return conn;
 }
 
 static void
-conn_exit(struct hlist_node *hnode)
+conn_exit(cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 
-        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
         /*
          * Nothing should be left. Connection user put it and
          * connection also was deleted from table by this time
          * so we should have 0 refs.
          */
-        LASSERTF(atomic_read(&conn->c_refcount) == 0,
+        LASSERTF(cfs_atomic_read(&conn->c_refcount) == 0,
                  "Busy connection with %d refs\n",
-                 atomic_read(&conn->c_refcount));
+                 cfs_atomic_read(&conn->c_refcount));
         OBD_FREE_PTR(conn);
 }
 

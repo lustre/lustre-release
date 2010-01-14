@@ -313,7 +313,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                    int lmm_size, struct thandle *handle, int set_stripe)
 {
         struct lu_buf *buf;
-        umode_t mode;
+        cfs_umode_t mode;
         int rc = 0;
         ENTRY;
 

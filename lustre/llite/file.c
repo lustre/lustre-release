@@ -200,15 +200,15 @@ int ll_md_real_close(struct inode *inode, int flags)
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        down(&lli->lli_och_sem);
+        cfs_down(&lli->lli_och_sem);
         if (*och_usecount) { /* There are still users of this handle, so
                                 skip freeing it. */
-                up(&lli->lli_och_sem);
+                cfs_up(&lli->lli_och_sem);
                 RETURN(0);
         }
         och=*och_p;
         *och_p = NULL;
-        up(&lli->lli_och_sem);
+        cfs_up(&lli->lli_och_sem);
 
         if (och) { /* There might be a race and somebody have freed this och
                       already */
@@ -240,7 +240,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct inode *inode = file->f_dentry->d_inode;
                 ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_OPEN}};
 
-                down(&lli->lli_och_sem);
+                cfs_down(&lli->lli_och_sem);
                 if (fd->fd_omode & FMODE_WRITE) {
                         lockmode = LCK_CW;
                         LASSERT(lli->lli_open_fd_write_count);
@@ -254,7 +254,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                         LASSERT(lli->lli_open_fd_read_count);
                         lli->lli_open_fd_read_count--;
                 }
-                up(&lli->lli_och_sem);
+                cfs_up(&lli->lli_och_sem);
 
                 if (!md_lock_match(md_exp, flags, ll_inode2fid(inode),
                                    LDLM_IBITS, &policy, lockmode,
@@ -514,14 +514,14 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
-                spin_lock(&lli->lli_lock);
+                cfs_spin_lock(&lli->lli_lock);
                 if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0) {
                         LASSERT(lli->lli_sai == NULL);
                         lli->lli_opendir_key = fd;
                         lli->lli_opendir_pid = cfs_curproc_pid();
                         opendir_set = 1;
                 }
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
         }
 
         if (inode->i_sb->s_root == file->f_dentry) {
@@ -571,14 +571,14 @@ restart:
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        down(&lli->lli_och_sem);
+        cfs_down(&lli->lli_och_sem);
         if (*och_p) { /* Open handle is present */
                 if (it_disposition(it, DISP_OPEN_OPEN)) {
                         /* Well, there's extra open request that we do not need,
                            let's close it somehow. This will decref request. */
                         rc = it_open_error(DISP_OPEN_OPEN, it);
                         if (rc) {
-                                up(&lli->lli_och_sem);
+                                cfs_up(&lli->lli_och_sem);
                                 ll_file_data_put(fd);
                                 GOTO(out_openerr, rc);
                         }
@@ -591,7 +591,7 @@ restart:
                 rc = ll_local_open(file, it, fd, NULL);
                 if (rc) {
                         (*och_usecount)--;
-                        up(&lli->lli_och_sem);
+                        cfs_up(&lli->lli_och_sem);
                         ll_file_data_put(fd);
                         GOTO(out_openerr, rc);
                 }
@@ -603,7 +603,7 @@ restart:
                            could be cancelled, and since blocking ast handler
                            would attempt to grab och_sem as well, that would
                            result in a deadlock */
-                        up(&lli->lli_och_sem);
+                        cfs_up(&lli->lli_och_sem);
                         it->it_create_mode |= M_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
                         it->it_create_mode &= ~M_CHECK_STALE;
@@ -645,7 +645,7 @@ restart:
                         GOTO(out_och_free, rc);
                 }
         }
-        up(&lli->lli_och_sem);
+        cfs_up(&lli->lli_och_sem);
 
         /* Must do this outside lli_och_sem lock to prevent deadlock where
            different kind of OPEN lock for this same inode gets cancelled
@@ -676,7 +676,7 @@ out_och_free:
                         *och_p = NULL; /* OBD_FREE writes some magic there */
                         (*och_usecount)--;
                 }
-                up(&lli->lli_och_sem);
+                cfs_up(&lli->lli_och_sem);
 out_openerr:
                 if (opendir_set != 0)
                         ll_stop_statahead(inode, lli->lli_opendir_key);
@@ -845,7 +845,7 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
 #endif
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                                down(&lli->lli_write_sem);
+                                cfs_down(&lli->lli_write_sem);
                                 write_sem_locked = 1;
                         }
                         break;
@@ -863,7 +863,7 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
                 }
                 result = cl_io_loop(env, io);
                 if (write_sem_locked)
-                        up(&lli->lli_write_sem);
+                        cfs_up(&lli->lli_write_sem);
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
@@ -1202,8 +1202,8 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
-        if (copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
-                           sizeof(struct ll_recreate_obj)))
+        if (cfs_copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
+                               sizeof(struct ll_recreate_obj)))
                 RETURN(-EFAULT);
 
         OBDO_ALLOC(oa);
@@ -1369,7 +1369,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
         if (lump == NULL) {
                 RETURN(-ENOMEM);
         }
-        if (copy_from_user(lump, (struct lov_user_md  *)arg, lum_size)) {
+        if (cfs_copy_from_user(lump, (struct lov_user_md  *)arg, lum_size)) {
                 OBD_FREE(lump, lum_size);
                 RETURN(-EFAULT);
         }
@@ -1394,12 +1394,12 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 
         /* first try with v1 which is smaller than v3 */
         lum_size = sizeof(struct lov_user_md_v1);
-        if (copy_from_user(lumv1, lumv1p, lum_size))
+        if (cfs_copy_from_user(lumv1, lumv1p, lum_size))
                 RETURN(-EFAULT);
 
         if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
                 lum_size = sizeof(struct lov_user_md_v3);
-                if (copy_from_user(&lumv3, lumv3p, lum_size))
+                if (cfs_copy_from_user(&lumv3, lumv3p, lum_size))
                         RETURN(-EFAULT);
         }
 
@@ -1435,24 +1435,24 @@ int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         if (ll_file_nolock(file))
                 RETURN(-EOPNOTSUPP);
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 CWARN("group lock already existed with gid %lu\n",
                        fd->fd_grouplock.cg_gid);
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 RETURN(-EINVAL);
         }
         LASSERT(fd->fd_grouplock.cg_lock == NULL);
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 
         rc = cl_get_grouplock(cl_i2info(inode)->lli_clob,
                               arg, (file->f_flags & O_NONBLOCK), &grouplock);
         if (rc)
                 RETURN(rc);
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 CERROR("another thread just won the race\n");
                 cl_put_grouplock(&grouplock);
                 RETURN(-EINVAL);
@@ -1460,7 +1460,7 @@ int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 
         fd->fd_flags |= LL_FILE_GROUP_LOCKED;
         fd->fd_grouplock = grouplock;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 
         CDEBUG(D_INFO, "group lock %lu obtained\n", arg);
         RETURN(0);
@@ -1473,9 +1473,9 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         struct ccc_grouplock    grouplock;
         ENTRY;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 CWARN("no group lock held\n");
                 RETURN(-EINVAL);
         }
@@ -1484,14 +1484,14 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         if (fd->fd_grouplock.cg_gid != arg) {
                 CWARN("group lock %lu doesn't match current id %lu\n",
                        arg, fd->fd_grouplock.cg_gid);
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 RETURN(-EINVAL);
         }
 
         grouplock = fd->fd_grouplock;
         memset(&fd->fd_grouplock, 0, sizeof(fd->fd_grouplock));
         fd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 
         cl_put_grouplock(&grouplock);
         CDEBUG(D_INFO, "group lock %lu released\n", arg);
@@ -1596,7 +1596,7 @@ int ll_fid2path(struct obd_export *exp, void *arg)
         OBD_ALLOC_PTR(gfin);
         if (gfin == NULL)
                 RETURN(-ENOMEM);
-        if (copy_from_user(gfin, arg, sizeof(*gfin))) {
+        if (cfs_copy_from_user(gfin, arg, sizeof(*gfin))) {
                 OBD_FREE_PTR(gfin);
                 RETURN(-EFAULT);
         }
@@ -1614,7 +1614,7 @@ int ll_fid2path(struct obd_export *exp, void *arg)
         rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
         if (rc)
                 GOTO(gf_free, rc);
-        if (copy_to_user(arg, gfout, outsize))
+        if (cfs_copy_to_user(arg, gfout, outsize))
                 rc = -EFAULT;
 
 gf_free:
@@ -1688,15 +1688,16 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 if (fiemap_s == NULL)
                         RETURN(-ENOMEM);
 
-                if (copy_from_user(fiemap_s,(struct ll_user_fiemap __user *)arg,
-                                   sizeof(*fiemap_s)))
+                if (cfs_copy_from_user(fiemap_s,
+                                       (struct ll_user_fiemap __user *)arg,
+                                       sizeof(*fiemap_s)))
                         GOTO(error, rc = -EFAULT);
 
                 if (fiemap_s->fm_flags & ~LUSTRE_FIEMAP_FLAGS_COMPAT) {
                         fiemap_s->fm_flags = fiemap_s->fm_flags &
                                                     ~LUSTRE_FIEMAP_FLAGS_COMPAT;
-                        if (copy_to_user((char *)arg, fiemap_s,
-                                         sizeof(*fiemap_s)))
+                        if (cfs_copy_to_user((char *)arg, fiemap_s,
+                                             sizeof(*fiemap_s)))
                                 GOTO(error, rc = -EFAULT);
 
                         GOTO(error, rc = -EBADR);
@@ -1706,7 +1707,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                  * it is used to calculate end_offset and device from previous
                  * fiemap call. */
                 if (extent_count) {
-                        if (copy_from_user(&fiemap_s->fm_extents[0],
+                        if (cfs_copy_from_user(&fiemap_s->fm_extents[0],
                             (char __user *)arg + sizeof(*fiemap_s),
                             sizeof(struct ll_fiemap_extent)))
                                 GOTO(error, rc = -EFAULT);
@@ -1730,7 +1731,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                         ret_bytes += (fiemap_s->fm_mapped_extents *
                                          sizeof(struct ll_fiemap_extent));
 
-                if (copy_to_user((void *)arg, fiemap_s, ret_bytes))
+                if (cfs_copy_to_user((void *)arg, fiemap_s, ret_bytes))
                         rc = -EFAULT;
 
 error:
@@ -1759,8 +1760,8 @@ error:
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
         case LL_IOC_PATH2FID: {
-                if (copy_to_user((void *)arg, ll_inode2fid(inode),
-                                 sizeof(struct lu_fid)))
+                if (cfs_copy_to_user((void *)arg, ll_inode2fid(inode),
+                                     sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
 
                 RETURN(0);
@@ -2245,9 +2246,9 @@ int lustre_check_acl(struct inode *inode, int mask)
         int rc;
         ENTRY;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         acl = posix_acl_dup(lli->lli_posix_acl);
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 
         if (!acl)
                 RETURN(-EAGAIN);
@@ -2326,7 +2327,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
                 return rc;
         } else {
 check_groups:
-                if (in_group_p(inode->i_gid))
+                if (cfs_curproc_is_in_groups(inode->i_gid))
                         mode >>= 3;
         }
         if ((mode & mask & S_IRWXO) == mask)
@@ -2444,8 +2445,8 @@ struct inode_operations ll_file_inode_operations = {
 
 /* dynamic ioctl number support routins */
 static struct llioc_ctl_data {
-        struct rw_semaphore ioc_sem;
-        struct list_head    ioc_head;
+        cfs_rw_semaphore_t      ioc_sem;
+        cfs_list_t              ioc_head;
 } llioc = {
         __RWSEM_INITIALIZER(llioc.ioc_sem),
         CFS_LIST_HEAD_INIT(llioc.ioc_head)
@@ -2453,7 +2454,7 @@ static struct llioc_ctl_data {
 
 
 struct llioc_data {
-        struct list_head        iocd_list;
+        cfs_list_t              iocd_list;
         unsigned int            iocd_size;
         llioc_callback_t        iocd_cb;
         unsigned int            iocd_count;
@@ -2481,9 +2482,9 @@ void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd)
         in_data->iocd_count = count;
         memcpy(in_data->iocd_cmd, cmd, sizeof(unsigned int) * count);
 
-        down_write(&llioc.ioc_sem);
-        list_add_tail(&in_data->iocd_list, &llioc.ioc_head);
-        up_write(&llioc.ioc_sem);
+        cfs_down_write(&llioc.ioc_sem);
+        cfs_list_add_tail(&in_data->iocd_list, &llioc.ioc_head);
+        cfs_up_write(&llioc.ioc_sem);
 
         RETURN(in_data);
 }
@@ -2495,19 +2496,19 @@ void ll_iocontrol_unregister(void *magic)
         if (magic == NULL)
                 return;
 
-        down_write(&llioc.ioc_sem);
-        list_for_each_entry(tmp, &llioc.ioc_head, iocd_list) {
+        cfs_down_write(&llioc.ioc_sem);
+        cfs_list_for_each_entry(tmp, &llioc.ioc_head, iocd_list) {
                 if (tmp == magic) {
                         unsigned int size = tmp->iocd_size;
 
-                        list_del(&tmp->iocd_list);
-                        up_write(&llioc.ioc_sem);
+                        cfs_list_del(&tmp->iocd_list);
+                        cfs_up_write(&llioc.ioc_sem);
 
                         OBD_FREE(tmp, size);
                         return;
                 }
         }
-        up_write(&llioc.ioc_sem);
+        cfs_up_write(&llioc.ioc_sem);
 
         CWARN("didn't find iocontrol register block with magic: %p\n", magic);
 }
@@ -2522,8 +2523,8 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
         struct llioc_data *data;
         int rc = -EINVAL, i;
 
-        down_read(&llioc.ioc_sem);
-        list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
+        cfs_down_read(&llioc.ioc_sem);
+        cfs_list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
                 for (i = 0; i < data->iocd_count; i++) {
                         if (cmd != data->iocd_cmd[i])
                                 continue;
@@ -2535,7 +2536,7 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
                 if (ret == LLIOC_STOP)
                         break;
         }
-        up_read(&llioc.ioc_sem);
+        cfs_up_read(&llioc.ioc_sem);
 
         if (rcp)
                 *rcp = rc;

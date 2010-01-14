@@ -70,15 +70,15 @@ struct md_identity {
         struct upcall_cache_entry *mi_uc_entry;
         uid_t                      mi_uid;
         gid_t                      mi_gid;
-        struct group_info         *mi_ginfo;
+        cfs_group_info_t          *mi_ginfo;
         int                        mi_nperms;
         struct md_perm            *mi_perms;
 };
 
 struct upcall_cache_entry {
-        struct list_head        ue_hash;
+        cfs_list_t              ue_hash;
         __u64                   ue_key;
-        atomic_t                ue_refcount;
+        cfs_atomic_t            ue_refcount;
         int                     ue_flags;
         cfs_waitq_t             ue_waitq;
         cfs_time_t              ue_acquire_expire;
@@ -111,9 +111,9 @@ struct upcall_cache_ops {
 };
 
 struct upcall_cache {
-        struct list_head        uc_hashtable[UC_CACHE_HASH_SIZE];
-        spinlock_t              uc_lock;
-        rwlock_t                uc_upcall_rwlock;
+        cfs_list_t              uc_hashtable[UC_CACHE_HASH_SIZE];
+        cfs_spinlock_t          uc_lock;
+        cfs_rwlock_t            uc_upcall_rwlock;
 
         char                    uc_name[40];            /* for upcall */
         char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];

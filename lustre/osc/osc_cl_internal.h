@@ -73,7 +73,7 @@ struct osc_io {
         struct obdo        oi_oa;
         struct osc_punch_cbargs {
                 int               opc_rc;
-                struct completion opc_sync;
+                cfs_completion_t  opc_sync;
         } oi_punch_cbarg;
 };
 
@@ -114,17 +114,17 @@ struct osc_object {
          */
         struct cl_io       oo_debug_io;
         /** Serialization object for osc_object::oo_debug_io. */
-        struct mutex       oo_debug_mutex;
+        cfs_mutex_t        oo_debug_mutex;
 #endif
         /**
          * List of pages in transfer.
          */
-        struct list_head   oo_inflight[CRT_NR];
+        cfs_list_t         oo_inflight[CRT_NR];
         /**
          * Lock, protecting ccc_object::cob_inflight, because a seat-belt is
          * locked during take-off and landing.
          */
-        spinlock_t         oo_seatbelt;
+        cfs_spinlock_t     oo_seatbelt;
 };
 
 /*
@@ -290,7 +290,7 @@ struct osc_page {
          * Linkage into a per-osc_object list of pages in flight. For
          * debugging.
          */
-        struct list_head      ops_inflight;
+        cfs_list_t            ops_inflight;
         /**
          * Thread that submitted this page for transfer. For debugging.
          */

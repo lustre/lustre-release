@@ -131,7 +131,7 @@ static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (copy_from_user(kernbuf, buffer, count))
+        if (cfs_copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -184,7 +184,7 @@ static int lprocfs_wr_changelog_mask(struct file *file, const char *buffer,
         OBD_ALLOC(kernbuf, CFS_PAGE_SIZE);
         if (kernbuf == NULL)
                 RETURN(-ENOMEM);
-        if (copy_from_user(kernbuf, buffer, count))
+        if (cfs_copy_from_user(kernbuf, buffer, count))
                 GOTO(out, rc = -EFAULT);
         kernbuf[count] = 0;
 
@@ -237,9 +237,9 @@ static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
                 return -ENXIO;
         LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
-        spin_lock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         cur = mdd->mdd_cl.mc_index;
-        spin_unlock(&mdd->mdd_cl.mc_lock);
+        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
 
         cucb.count = count;
         cucb.page = page;

@@ -50,7 +50,7 @@
 #include "llite_internal.h"
 
 struct ll_sai_entry {
-        struct list_head        se_list;
+        cfs_list_t              se_list;
         unsigned int            se_index;
         int                     se_stat;
         struct ptlrpc_request  *se_req;
@@ -63,7 +63,7 @@ enum {
 };
 
 static unsigned int sai_generation = 0;
-static spinlock_t sai_generation_lock = SPIN_LOCK_UNLOCKED;
+static cfs_spinlock_t sai_generation_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 /**
  * Check whether first entry was stated already or not.
@@ -76,9 +76,9 @@ static int ll_sai_entry_stated(struct ll_statahead_info *sai)
         struct ll_sai_entry  *entry;
         int                   rc = 0;
 
-        if (!list_empty(&sai->sai_entries_stated)) {
-                entry = list_entry(sai->sai_entries_stated.next,
-                                   struct ll_sai_entry, se_list);
+        if (!cfs_list_empty(&sai->sai_entries_stated)) {
+                entry = cfs_list_entry(sai->sai_entries_stated.next,
+                                       struct ll_sai_entry, se_list);
                 if (entry->se_index == sai->sai_index_next)
                         rc = 1;
         }
@@ -87,7 +87,7 @@ static int ll_sai_entry_stated(struct ll_statahead_info *sai)
 
 static inline int sa_received_empty(struct ll_statahead_info *sai)
 {
-        return list_empty(&sai->sai_entries_received);
+        return cfs_list_empty(&sai->sai_entries_received);
 }
 
 static inline int sa_not_full(struct ll_statahead_info *sai)
@@ -146,7 +146,7 @@ static void ll_sai_entry_cleanup(struct ll_sai_entry *entry, int free)
                 ptlrpc_req_finished(req);
         }
         if (free) {
-                LASSERT(list_empty(&entry->se_list));
+                LASSERT(cfs_list_empty(&entry->se_list));
                 OBD_FREE_PTR(entry);
         }
 
@@ -161,12 +161,12 @@ static struct ll_statahead_info *ll_sai_alloc(void)
         if (!sai)
                 return NULL;
 
-        spin_lock(&sai_generation_lock);
+        cfs_spin_lock(&sai_generation_lock);
         sai->sai_generation = ++sai_generation;
         if (unlikely(sai_generation == 0))
                 sai->sai_generation = ++sai_generation;
-        spin_unlock(&sai_generation_lock);
-        atomic_set(&sai->sai_refcount, 1);
+        cfs_spin_unlock(&sai_generation_lock);
+        cfs_atomic_set(&sai->sai_refcount, 1);
         sai->sai_max = LL_SA_RPC_MIN;
         cfs_waitq_init(&sai->sai_waitq);
         cfs_waitq_init(&sai->sai_thread.t_ctl_waitq);
@@ -180,7 +180,7 @@ static inline
 struct ll_statahead_info *ll_sai_get(struct ll_statahead_info *sai)
 {
         LASSERT(sai);
-        atomic_inc(&sai->sai_refcount);
+        cfs_atomic_inc(&sai->sai_refcount);
         return sai;
 }
 
@@ -194,14 +194,14 @@ static void ll_sai_put(struct ll_statahead_info *sai)
         lli = ll_i2info(inode);
         LASSERT(lli->lli_sai == sai);
 
-        if (atomic_dec_and_test(&sai->sai_refcount)) {
+        if (cfs_atomic_dec_and_test(&sai->sai_refcount)) {
                 struct ll_sai_entry *entry, *next;
 
-                spin_lock(&lli->lli_lock);
-                if (unlikely(atomic_read(&sai->sai_refcount) > 0)) {
+                cfs_spin_lock(&lli->lli_lock);
+                if (unlikely(cfs_atomic_read(&sai->sai_refcount) > 0)) {
                         /* It is race case, the interpret callback just hold
                          * a reference count */
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                         EXIT;
                         return;
                 }
@@ -209,7 +209,7 @@ static void ll_sai_put(struct ll_statahead_info *sai)
                 LASSERT(lli->lli_opendir_key == NULL);
                 lli->lli_sai = NULL;
                 lli->lli_opendir_pid = 0;
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
 
                 LASSERT(sa_is_stopped(sai));
 
@@ -219,19 +219,21 @@ static void ll_sai_put(struct ll_statahead_info *sai)
                               PFID(&lli->lli_fid),
                               sai->sai_sent, sai->sai_replied);
 
-                list_for_each_entry_safe(entry, next, &sai->sai_entries_sent,
-                                         se_list) {
-                        list_del_init(&entry->se_list);
+                cfs_list_for_each_entry_safe(entry, next,
+                                             &sai->sai_entries_sent, se_list) {
+                        cfs_list_del_init(&entry->se_list);
                         ll_sai_entry_cleanup(entry, 1);
                 }
-                list_for_each_entry_safe(entry, next, &sai->sai_entries_received,
-                                         se_list) {
-                        list_del_init(&entry->se_list);
+                cfs_list_for_each_entry_safe(entry, next,
+                                             &sai->sai_entries_received,
+                                             se_list) {
+                        cfs_list_del_init(&entry->se_list);
                         ll_sai_entry_cleanup(entry, 1);
                 }
-                list_for_each_entry_safe(entry, next, &sai->sai_entries_stated,
-                                         se_list) {
-                        list_del_init(&entry->se_list);
+                cfs_list_for_each_entry_safe(entry, next,
+                                             &sai->sai_entries_stated,
+                                             se_list) {
+                        cfs_list_del_init(&entry->se_list);
                         ll_sai_entry_cleanup(entry, 1);
                 }
                 iput(inode);
@@ -259,9 +261,9 @@ ll_sai_entry_init(struct ll_statahead_info *sai, unsigned int index)
         entry->se_index = index;
         entry->se_stat = SA_ENTRY_UNSTATED;
 
-        spin_lock(&lli->lli_lock);
-        list_add_tail(&entry->se_list, &sai->sai_entries_sent);
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
+        cfs_list_add_tail(&entry->se_list, &sai->sai_entries_sent);
+        cfs_spin_unlock(&lli->lli_lock);
 
         RETURN(entry);
 }
@@ -277,20 +279,20 @@ static int ll_sai_entry_fini(struct ll_statahead_info *sai)
         int rc = 0;
         ENTRY;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         sai->sai_index_next++;
-        if (likely(!list_empty(&sai->sai_entries_stated))) {
-                entry = list_entry(sai->sai_entries_stated.next,
-                                   struct ll_sai_entry, se_list);
+        if (likely(!cfs_list_empty(&sai->sai_entries_stated))) {
+                entry = cfs_list_entry(sai->sai_entries_stated.next,
+                                       struct ll_sai_entry, se_list);
                 if (entry->se_index < sai->sai_index_next) {
-                        list_del(&entry->se_list);
+                        cfs_list_del(&entry->se_list);
                         rc = entry->se_stat;
                         OBD_FREE_PTR(entry);
                 }
         } else {
                 LASSERT(sa_is_stopped(sai));
         }
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 
         RETURN(rc);
 }
@@ -307,8 +309,9 @@ ll_sai_entry_set(struct ll_statahead_info *sai, unsigned int index, int stat,
         struct ll_sai_entry *entry;
         ENTRY;
 
-        if (!list_empty(&sai->sai_entries_sent)) {
-                list_for_each_entry(entry, &sai->sai_entries_sent, se_list) {
+        if (!cfs_list_empty(&sai->sai_entries_sent)) {
+                cfs_list_for_each_entry(entry, &sai->sai_entries_sent,
+                                        se_list) {
                         if (entry->se_index == index) {
                                 entry->se_stat = stat;
                                 entry->se_req = ptlrpc_request_addref(req);
@@ -330,9 +333,9 @@ ll_sai_entry_set(struct ll_statahead_info *sai, unsigned int index, int stat,
 static inline void
 ll_sai_entry_to_received(struct ll_statahead_info *sai, struct ll_sai_entry *entry)
 {
-        if (!list_empty(&entry->se_list))
-                list_del_init(&entry->se_list);
-        list_add_tail(&entry->se_list, &sai->sai_entries_received);
+        if (!cfs_list_empty(&entry->se_list))
+                cfs_list_del_init(&entry->se_list);
+        cfs_list_add_tail(&entry->se_list, &sai->sai_entries_received);
 }
 
 /**
@@ -348,20 +351,20 @@ ll_sai_entry_to_stated(struct ll_statahead_info *sai, struct ll_sai_entry *entry
 
         ll_sai_entry_cleanup(entry, 0);
 
-        spin_lock(&lli->lli_lock);
-        if (!list_empty(&entry->se_list))
-                list_del_init(&entry->se_list);
+        cfs_spin_lock(&lli->lli_lock);
+        if (!cfs_list_empty(&entry->se_list))
+                cfs_list_del_init(&entry->se_list);
 
         if (unlikely(entry->se_index < sai->sai_index_next)) {
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 OBD_FREE_PTR(entry);
                 RETURN(0);
         }
 
-        list_for_each_entry_reverse(se, &sai->sai_entries_stated, se_list) {
+        cfs_list_for_each_entry_reverse(se, &sai->sai_entries_stated, se_list) {
                 if (se->se_index < entry->se_index) {
-                        list_add(&entry->se_list, &se->se_list);
-                        spin_unlock(&lli->lli_lock);
+                        cfs_list_add(&entry->se_list, &se->se_list);
+                        cfs_spin_unlock(&lli->lli_lock);
                         RETURN(1);
                 }
         }
@@ -369,8 +372,8 @@ ll_sai_entry_to_stated(struct ll_statahead_info *sai, struct ll_sai_entry *entry
         /*
          * I am the first entry.
          */
-        list_add(&entry->se_list, &sai->sai_entries_stated);
-        spin_unlock(&lli->lli_lock);
+        cfs_list_add(&entry->se_list, &sai->sai_entries_stated);
+        cfs_spin_unlock(&lli->lli_lock);
         RETURN(1);
 }
 
@@ -389,12 +392,12 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
         struct mdt_body        *body;
         ENTRY;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         LASSERT(!sa_received_empty(sai));
-        entry = list_entry(sai->sai_entries_received.next, struct ll_sai_entry,
-                           se_list);
-        list_del_init(&entry->se_list);
-        spin_unlock(&lli->lli_lock);
+        entry = cfs_list_entry(sai->sai_entries_received.next,
+                               struct ll_sai_entry, se_list);
+        cfs_list_del_init(&entry->se_list);
+        cfs_spin_unlock(&lli->lli_lock);
 
         if (unlikely(entry->se_index < sai->sai_index_next)) {
                 CWARN("Found stale entry: [index %u] [next %u]\n",
@@ -501,10 +504,10 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
         CDEBUG(D_READA, "interpret statahead %.*s rc %d\n",
                dentry->d_name.len, dentry->d_name.name, rc);
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         if (unlikely(lli->lli_sai == NULL ||
             lli->lli_sai->sai_generation != minfo->mi_generation)) {
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 ll_intent_release(it);
                 dput(dentry);
                 iput(dir);
@@ -520,13 +523,13 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
                 if (likely(sa_is_running(sai))) {
                         ll_sai_entry_to_received(sai, entry);
                         sai->sai_replied++;
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                         cfs_waitq_signal(&sai->sai_thread.t_ctl_waitq);
                 } else {
-                        if (!list_empty(&entry->se_list))
-                                list_del_init(&entry->se_list);
+                        if (!cfs_list_empty(&entry->se_list))
+                                cfs_list_del_init(&entry->se_list);
                         sai->sai_replied++;
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                         ll_sai_entry_cleanup(entry, 1);
                 }
                 ll_sai_put(sai);
@@ -763,9 +766,9 @@ static int ll_statahead_thread(void *arg)
         }
 
         atomic_inc(&sbi->ll_sa_total);
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         thread->t_flags = SVC_RUNNING;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         cfs_waitq_signal(&thread->t_ctl_waitq);
         CDEBUG(D_READA, "start doing statahead for %s\n", parent->d_name.name);
 
@@ -886,9 +889,9 @@ keep_de:
 
 out:
         ll_dir_chain_fini(&chain);
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         thread->t_flags = SVC_STOPPED;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         cfs_waitq_signal(&sai->sai_waitq);
         cfs_waitq_signal(&thread->t_ctl_waitq);
         ll_sai_put(sai);
@@ -908,9 +911,9 @@ void ll_stop_statahead(struct inode *inode, void *key)
         if (unlikely(key == NULL))
                 return;
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         if (lli->lli_opendir_key != key || lli->lli_opendir_pid == 0) {
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 return;
         }
 
@@ -922,7 +925,7 @@ void ll_stop_statahead(struct inode *inode, void *key)
 
                 if (!sa_is_stopped(lli->lli_sai)) {
                         thread->t_flags = SVC_STOPPING;
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                         cfs_waitq_signal(&thread->t_ctl_waitq);
 
                         CDEBUG(D_READA, "stopping statahead thread, pid %d\n",
@@ -931,7 +934,7 @@ void ll_stop_statahead(struct inode *inode, void *key)
                                      sa_is_stopped(lli->lli_sai),
                                      &lwi);
                 } else {
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                 }
 
                 /*
@@ -942,7 +945,7 @@ void ll_stop_statahead(struct inode *inode, void *key)
                 ll_sai_put(lli->lli_sai);
         } else {
                 lli->lli_opendir_pid = 0;
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
         }
 }
 
@@ -1088,7 +1091,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 
         if (sai) {
                 if (unlikely(sa_is_stopped(sai) &&
-                             list_empty(&sai->sai_entries_stated)))
+                             cfs_list_empty(&sai->sai_entries_stated)))
                         RETURN(-EBADFD);
 
                 if ((*dentryp)->d_name.name[0] == '.') {
@@ -1223,10 +1226,10 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         RETURN(-EEXIST);
 
 out:
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
         lli->lli_opendir_key = NULL;
         lli->lli_opendir_pid = 0;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         return rc;
 }
 
@@ -1273,10 +1276,10 @@ void ll_statahead_exit(struct inode *dir, struct dentry *dentry, int result)
                                PFID(&lli->lli_fid), sai->sai_hit,
                                sai->sai_miss, sai->sai_sent,
                                sai->sai_replied, cfs_curproc_pid());
-                        spin_lock(&lli->lli_lock);
+                        cfs_spin_lock(&lli->lli_lock);
                         if (!sa_is_stopped(sai))
                                 sai->sai_thread.t_flags = SVC_STOPPING;
-                        spin_unlock(&lli->lli_lock);
+                        cfs_spin_unlock(&lli->lli_lock);
                 }
         }
 

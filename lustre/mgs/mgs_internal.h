@@ -50,7 +50,7 @@
 /* mgs_llog.c */
 int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                          struct vfsmount *inmnt,
-                         struct list_head *dentry_list);
+                         cfs_list_t *dentry_list);
 
 #define MGSSELF_NAME    "_mgs"
 
@@ -67,16 +67,16 @@ struct mgs_tgt_srpc_conf {
 
 struct fs_db {
         char              fsdb_name[9];
-        struct list_head  fsdb_list;           /* list of databases */
-        struct semaphore  fsdb_sem;
+        cfs_list_t        fsdb_list;           /* list of databases */
+        cfs_semaphore_t   fsdb_sem;
         void             *fsdb_ost_index_map;  /* bitmap of used indicies */
         void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
         /* COMPAT_146 these items must be recorded out of the old client log */
-        char             *fsdb_clilov;         /* COMPAT_146 client lov name */
+        char             *fsdb_clilov;       /* COMPAT_146 client lov name */
         char             *fsdb_clilmv;
-        char             *fsdb_mdtlov;         /* COMPAT_146 mds lov name */
+        char             *fsdb_mdtlov;       /* COMPAT_146 mds lov name */
         char             *fsdb_mdtlmv;
-        char             *fsdb_mdc;            /* COMPAT_146 mdc name */
+        char             *fsdb_mdc;          /* COMPAT_146 mdc name */
         /* end COMPAT_146 */
         __u32             fsdb_flags;
         __u32             fsdb_gen;

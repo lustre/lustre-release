@@ -45,7 +45,7 @@ static ksock_tx_t *
 ksocknal_queue_tx_msg_v1(ksock_conn_t *conn, ksock_tx_t *tx_msg)
 {
         /* V1.x, just enqueue it */
-        list_add_tail(&tx_msg->tx_list, &conn->ksnc_tx_queue);
+        cfs_list_add_tail(&tx_msg->tx_list, &conn->ksnc_tx_queue);
         return NULL;
 }
 
@@ -55,7 +55,7 @@ ksocknal_next_tx_carrier(ksock_conn_t *conn)
         ksock_tx_t     *tx = conn->ksnc_tx_carrier;
 
         /* Called holding BH lock: conn->ksnc_scheduler->kss_lock */
-        LASSERT (!list_empty(&conn->ksnc_tx_queue));
+        LASSERT (!cfs_list_empty(&conn->ksnc_tx_queue));
         LASSERT (tx != NULL);
 
         /* Next TX that can carry ZC-ACK or LNet message */
@@ -63,7 +63,8 @@ ksocknal_next_tx_carrier(ksock_conn_t *conn)
                 /* no more packets queued */
                 conn->ksnc_tx_carrier = NULL;
         } else {
-                conn->ksnc_tx_carrier = list_entry(tx->tx_list.next, ksock_tx_t, tx_list);
+                conn->ksnc_tx_carrier = cfs_list_entry(tx->tx_list.next,
+                                                       ksock_tx_t, tx_list);
                 LASSERT (conn->ksnc_tx_carrier->tx_msg.ksm_type == tx->tx_msg.ksm_type);
         }
 }
@@ -86,7 +87,8 @@ ksocknal_queue_tx_zcack_v2(ksock_conn_t *conn,
          */
         if (tx == NULL) {
                 if (tx_ack != NULL) {
-                        list_add_tail(&tx_ack->tx_list, &conn->ksnc_tx_queue);
+                        cfs_list_add_tail(&tx_ack->tx_list,
+                                          &conn->ksnc_tx_queue);
                         conn->ksnc_tx_carrier = tx_ack;
                 }
                 return 0;
@@ -95,7 +97,8 @@ ksocknal_queue_tx_zcack_v2(ksock_conn_t *conn,
         if (tx->tx_msg.ksm_type == KSOCK_MSG_NOOP) {
                 /* tx is noop zc-ack, can't piggyback zc-ack cookie */
                 if (tx_ack != NULL)
-                        list_add_tail(&tx_ack->tx_list, &conn->ksnc_tx_queue);
+                        cfs_list_add_tail(&tx_ack->tx_list,
+                                          &conn->ksnc_tx_queue);
                 return 0;
         }
 
@@ -126,13 +129,13 @@ ksocknal_queue_tx_msg_v2(ksock_conn_t *conn, ksock_tx_t *tx_msg)
          *   and replace the NOOP tx, and return the NOOP tx.
          */
         if (tx == NULL) { /* nothing on queue */
-                list_add_tail(&tx_msg->tx_list, &conn->ksnc_tx_queue);
+                cfs_list_add_tail(&tx_msg->tx_list, &conn->ksnc_tx_queue);
                 conn->ksnc_tx_carrier = tx_msg;
                 return NULL;
         }
 
         if (tx->tx_msg.ksm_type == KSOCK_MSG_LNET) { /* nothing to carry */
-                list_add_tail(&tx_msg->tx_list, &conn->ksnc_tx_queue);
+                cfs_list_add_tail(&tx_msg->tx_list, &conn->ksnc_tx_queue);
                 return NULL;
         }
 
@@ -143,8 +146,8 @@ ksocknal_queue_tx_msg_v2(ksock_conn_t *conn, ksock_tx_t *tx_msg)
         ksocknal_next_tx_carrier(conn);
 
         /* use new_tx to replace the noop zc-ack packet */
-        list_add(&tx_msg->tx_list, &tx->tx_list);
-        list_del(&tx->tx_list);
+        cfs_list_add(&tx_msg->tx_list, &tx->tx_list);
+        cfs_list_del(&tx->tx_list);
 
         return tx;
 }
@@ -164,7 +167,8 @@ ksocknal_queue_tx_zcack_v3(ksock_conn_t *conn,
 
         if ((tx = conn->ksnc_tx_carrier) == NULL) {
                 if (tx_ack != NULL) {
-                        list_add_tail(&tx_ack->tx_list, &conn->ksnc_tx_queue);
+                        cfs_list_add_tail(&tx_ack->tx_list,
+                                          &conn->ksnc_tx_queue);
                         conn->ksnc_tx_carrier = tx_ack;
                 }
                 return 0;
@@ -257,7 +261,7 @@ ksocknal_queue_tx_zcack_v3(ksock_conn_t *conn,
 
         /* failed to piggyback ZC-ACK */
         if (tx_ack != NULL) {
-                list_add_tail(&tx_ack->tx_list, &conn->ksnc_tx_queue);
+                cfs_list_add_tail(&tx_ack->tx_list, &conn->ksnc_tx_queue);
                 /* the next tx can piggyback at least 1 ACK */
                 ksocknal_next_tx_carrier(conn);
         }
@@ -376,7 +380,7 @@ ksocknal_handle_zcreq(ksock_conn_t *c, __u64 cookie, int remote)
                 cfs_spin_unlock_bh (&sched->kss_lock);
 
                 if (rc) { /* piggybacked */
-                        read_unlock (&ksocknal_data.ksnd_global_lock);
+                        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
                         return 0;
                 }
         }
@@ -418,14 +422,14 @@ ksocknal_handle_zcack(ksock_conn_t *conn, __u64 cookie1, __u64 cookie2)
 
         cfs_spin_lock(&peer->ksnp_lock);
 
-        list_for_each_entry_safe(tx, tmp,
-                                 &peer->ksnp_zc_req_list, tx_zc_list) {
+        cfs_list_for_each_entry_safe(tx, tmp,
+                                     &peer->ksnp_zc_req_list, tx_zc_list) {
                 __u64 c = tx->tx_msg.ksm_zc_cookies[0];
 
                 if (c == cookie1 || c == cookie2 || (cookie1 < c && c < cookie2)) {
                         tx->tx_msg.ksm_zc_cookies[0] = 0;
-                        list_del(&tx->tx_zc_list);
-                        list_add(&tx->tx_zc_list, &zlist);
+                        cfs_list_del(&tx->tx_zc_list);
+                        cfs_list_add(&tx->tx_zc_list, &zlist);
 
                         if (--count == 0)
                                 break;
@@ -434,9 +438,9 @@ ksocknal_handle_zcack(ksock_conn_t *conn, __u64 cookie1, __u64 cookie2)
 
         cfs_spin_unlock(&peer->ksnp_lock);
 
-        while (!list_empty(&zlist)) {
-                tx = list_entry(zlist.next, ksock_tx_t, tx_zc_list);
-                list_del(&tx->tx_zc_list);
+        while (!cfs_list_empty(&zlist)) {
+                tx = cfs_list_entry(zlist.next, ksock_tx_t, tx_zc_list);
+                cfs_list_del(&tx->tx_zc_list);
                 ksocknal_tx_decref(tx);
         }
 

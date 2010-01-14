@@ -103,9 +103,9 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         if (ioc_data && (ioc_data->ioc_inllen1)) {
                 l = 0;
                 remains = ioc_data->ioc_inllen4 +
-                        size_round(ioc_data->ioc_inllen1) +
-                        size_round(ioc_data->ioc_inllen2) +
-                        size_round(ioc_data->ioc_inllen3);
+                        cfs_size_round(ioc_data->ioc_inllen1) +
+                        cfs_size_round(ioc_data->ioc_inllen2) +
+                        cfs_size_round(ioc_data->ioc_inllen3);
                 from = simple_strtol(ioc_data->ioc_inlbuf2, &endp, 0);
                 if (*endp != '\0')
                         RETURN(-EINVAL);
@@ -193,9 +193,9 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         if (ioc_data->ioc_inllen1) {
                 l = 0;
                 remains = ioc_data->ioc_inllen4 +
-                        size_round(ioc_data->ioc_inllen1) +
-                        size_round(ioc_data->ioc_inllen2) +
-                        size_round(ioc_data->ioc_inllen3);
+                        cfs_size_round(ioc_data->ioc_inllen1) +
+                        cfs_size_round(ioc_data->ioc_inllen2) +
+                        cfs_size_round(ioc_data->ioc_inllen3);
                 from = simple_strtol(ioc_data->ioc_inlbuf2, &endp, 0);
                 if (*endp != '\0')
                         RETURN(-EINVAL);
@@ -244,7 +244,7 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
         int rc, index = 0;
 
         ENTRY;
-        down_write(&cat->lgh_lock);
+        cfs_down_write(&cat->lgh_lock);
         rc = llog_cat_id2handle(cat, &log, logid);
         if (rc) {
                 CDEBUG(D_IOCTL, "cannot find log #"LPX64"#"LPX64"#%08x\n",
@@ -263,7 +263,7 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
         rc = llog_cancel_rec(cat, index);
 out:
         llog_free_handle(log);
-        up_write(&cat->lgh_lock);
+        cfs_up_write(&cat->lgh_lock);
         RETURN(rc);
 
 }
@@ -314,7 +314,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         case OBD_IOC_LLOG_INFO: {
                 int l;
                 int remains = data->ioc_inllen2 +
-                        size_round(data->ioc_inllen1);
+                        cfs_size_round(data->ioc_inllen1);
                 char *out = data->ioc_bulk;
 
                 l = snprintf(out, remains,
@@ -364,9 +364,9 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                         GOTO(out_close, err = -EINVAL);
 
                 if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
-                        down_write(&handle->lgh_lock);
+                        cfs_down_write(&handle->lgh_lock);
                         err = llog_cancel_rec(handle, cookie.lgc_index);
-                        up_write(&handle->lgh_lock);
+                        cfs_up_write(&handle->lgh_lock);
                         GOTO(out_close, err);
                 }
 
@@ -437,7 +437,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         if (!idarray)
                 RETURN(-ENOMEM);
 
-        mutex_down(&obd->obd_olg.olg_cat_processing);
+        cfs_mutex_down(&obd->obd_olg.olg_cat_processing);
         rc = llog_get_cat_list(obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out, rc);
@@ -458,7 +458,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         }
 out:
         /* release semaphore */
-        mutex_up(&obd->obd_olg.olg_cat_processing);
+        cfs_mutex_up(&obd->obd_olg.olg_cat_processing);
 
         OBD_VFREE(idarray, size);
         RETURN(rc);

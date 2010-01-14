@@ -55,16 +55,6 @@ static inline cfs_duration_t cfs_time_sub(cfs_time_t t1, cfs_time_t t2)
         return (cfs_time_t)(t1 - t2);
 }
 
-static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
-{
-        return time_before(t1, t2);
-}
-
-static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
-{
-        return time_before_eq(t1, t2);
-}
-
 static inline int cfs_time_after(cfs_time_t t1, cfs_time_t t2)
 {
         return cfs_time_before(t2, t1);

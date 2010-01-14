@@ -56,8 +56,8 @@ cfs_filp_open (const char *name, int flags, int mode, int *err)
 		int rc;
 
 		rc = PTR_ERR(filp);
-		printk(KERN_ERR "LustreError: can't open %s file: err %d\n",
-				name, rc);
+                printk(KERN_ERR "LustreError: can't open %s file: err %d\n",
+                       name, rc);
 		if (err)
 			*err = rc;
 		filp = NULL;

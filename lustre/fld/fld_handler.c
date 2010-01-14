@@ -135,7 +135,7 @@ int fld_server_create(struct lu_server_fld *fld,
         ENTRY;
 
         info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        mutex_lock(&fld->lsf_lock);
+        cfs_mutex_lock(&fld->lsf_lock);
 
         erange = &info->fti_lrange;
         new = &info->fti_irange;
@@ -229,7 +229,7 @@ out:
         if (rc == 0)
                 fld_cache_insert(fld->lsf_cache, new);
 
-        mutex_unlock(&fld->lsf_lock);
+        cfs_mutex_unlock(&fld->lsf_lock);
 
         CDEBUG((rc != 0 ? D_ERROR : D_INFO),
                "%s: FLD create: given range : "DRANGE
@@ -480,7 +480,7 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         cache_threshold = cache_size *
                 FLD_SERVER_CACHE_THRESHOLD / 100;
 
-        mutex_init(&fld->lsf_lock);
+        cfs_mutex_init(&fld->lsf_lock);
         fld->lsf_cache = fld_cache_init(fld->lsf_name,
                                         cache_size, cache_threshold);
         if (IS_ERR(fld->lsf_cache)) {

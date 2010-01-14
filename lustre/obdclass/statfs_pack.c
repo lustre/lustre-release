@@ -54,7 +54,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 
-void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs)
+void statfs_pack(struct obd_statfs *osfs, cfs_kstatfs_t *sfs)
 {
         memset(osfs, 0, sizeof(*osfs));
         osfs->os_type = sfs->f_type;
@@ -67,7 +67,7 @@ void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs)
         osfs->os_namelen = sfs->f_namelen;
 }
 
-void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs)
+void statfs_unpack(cfs_kstatfs_t *sfs, struct obd_statfs *osfs)
 {
         memset(sfs, 0, sizeof(*sfs));
         sfs->f_type = osfs->os_type;

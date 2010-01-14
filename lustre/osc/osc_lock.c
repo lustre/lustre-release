@@ -135,10 +135,10 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 {
         struct ldlm_lock *dlmlock;
 
-        spin_lock(&osc_ast_guard);
+        cfs_spin_lock(&osc_ast_guard);
         dlmlock = olck->ols_lock;
         if (dlmlock == NULL) {
-                spin_unlock(&osc_ast_guard);
+                cfs_spin_unlock(&osc_ast_guard);
                 return;
         }
 
@@ -147,7 +147,7 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
          * call to osc_lock_detach() */
         dlmlock->l_ast_data = NULL;
         olck->ols_handle.cookie = 0ULL;
-        spin_unlock(&osc_ast_guard);
+        cfs_spin_unlock(&osc_ast_guard);
 
         lock_res_and_lock(dlmlock);
         if (dlmlock->l_granted_mode == dlmlock->l_req_mode) {
@@ -276,14 +276,14 @@ static int osc_enq2ldlm_flags(__u32 enqflags)
  * Global spin-lock protecting consistency of ldlm_lock::l_ast_data
  * pointers. Initialized in osc_init().
  */
-spinlock_t osc_ast_guard;
+cfs_spinlock_t osc_ast_guard;
 
 static struct osc_lock *osc_ast_data_get(struct ldlm_lock *dlm_lock)
 {
         struct osc_lock *olck;
 
         lock_res_and_lock(dlm_lock);
-        spin_lock(&osc_ast_guard);
+        cfs_spin_lock(&osc_ast_guard);
         olck = dlm_lock->l_ast_data;
         if (olck != NULL) {
                 struct cl_lock *lock = olck->ols_cl.cls_lock;
@@ -303,7 +303,7 @@ static struct osc_lock *osc_ast_data_get(struct ldlm_lock *dlm_lock)
                 } else
                         olck = NULL;
         }
-        spin_unlock(&osc_ast_guard);
+        cfs_spin_unlock(&osc_ast_guard);
         unlock_res_and_lock(dlm_lock);
         return olck;
 }
@@ -451,11 +451,11 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
         LASSERT(dlmlock != NULL);
 
         lock_res_and_lock(dlmlock);
-        spin_lock(&osc_ast_guard);
+        cfs_spin_lock(&osc_ast_guard);
         LASSERT(dlmlock->l_ast_data == olck);
         LASSERT(olck->ols_lock == NULL);
         olck->ols_lock = dlmlock;
-        spin_unlock(&osc_ast_guard);
+        cfs_spin_unlock(&osc_ast_guard);
 
         /*
          * Lock might be not yet granted. In this case, completion ast
@@ -515,11 +515,11 @@ static int osc_lock_upcall(void *cookie, int errcode)
                         dlmlock = ldlm_handle2lock(&olck->ols_handle);
                         if (dlmlock != NULL) {
                                 lock_res_and_lock(dlmlock);
-                                spin_lock(&osc_ast_guard);
+                                cfs_spin_lock(&osc_ast_guard);
                                 LASSERT(olck->ols_lock == NULL);
                                 dlmlock->l_ast_data = NULL;
                                 olck->ols_handle.cookie = 0ULL;
-                                spin_unlock(&osc_ast_guard);
+                                cfs_spin_unlock(&osc_ast_guard);
                                 unlock_res_and_lock(dlmlock);
                                 LDLM_LOCK_PUT(dlmlock);
                         }
@@ -890,7 +890,7 @@ static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
         unsigned long            weight;
         ENTRY;
 
-        might_sleep();
+        cfs_might_sleep();
         /*
          * osc_ldlm_weigh_ast has a complex context since it might be called
          * because of lock canceling, or from user's input. We have to make
@@ -1020,13 +1020,6 @@ static int osc_lock_compatible(const struct osc_lock *qing,
         return ((qing_mode == CLM_READ) && (qed_mode == CLM_READ));
 }
 
-#ifndef list_for_each_entry_continue 
-#define list_for_each_entry_continue(pos, head, member)                 \
-        for (pos = list_entry(pos->member.next, typeof(*pos), member);  \
-             prefetch(pos->member.next), &pos->member != (head);        \
-             pos = list_entry(pos->member.next, typeof(*pos), member))
-#endif
-
 /**
  * Cancel all conflicting locks and wait for them to be destroyed.
  *
@@ -1058,8 +1051,8 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
         if (olck->ols_glimpse)
                 return 0;
 
-        spin_lock(&hdr->coh_lock_guard);
-        list_for_each_entry_continue(scan, &hdr->coh_locks, cll_linkage) {
+        cfs_spin_lock(&hdr->coh_lock_guard);
+        cfs_list_for_each_entry_continue(scan, &hdr->coh_locks, cll_linkage) {
                 struct cl_lock_descr *cld = &scan->cll_descr;
                 const struct osc_lock *scan_ols;
 
@@ -1101,7 +1094,7 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
                 conflict = scan;
                 break;
         }
-        spin_unlock(&hdr->coh_lock_guard);
+        cfs_spin_unlock(&hdr->coh_lock_guard);
 
         if (conflict) {
                 CDEBUG(D_DLMTRACE, "lock %p is confliced with %p, will wait\n",
@@ -1154,8 +1147,8 @@ static int osc_deadlock_is_possible(const struct lu_env *env,
         head = cl_object_header(obj);
 
         result = 0;
-        spin_lock(&head->coh_lock_guard);
-        list_for_each_entry(scan, &head->coh_locks, cll_linkage) {
+        cfs_spin_lock(&head->coh_lock_guard);
+        cfs_list_for_each_entry(scan, &head->coh_locks, cll_linkage) {
                 if (scan != lock) {
                         struct osc_lock *oscan;
 
@@ -1167,7 +1160,7 @@ static int osc_deadlock_is_possible(const struct lu_env *env,
                         }
                 }
         }
-        spin_unlock(&head->coh_lock_guard);
+        cfs_spin_unlock(&head->coh_lock_guard);
         RETURN(result);
 }
 
@@ -1413,7 +1406,7 @@ static int osc_lock_has_pages(struct osc_lock *olck)
                 plist = &osc_env_info(env)->oti_plist;
                 cl_page_list_init(plist);
 
-                mutex_lock(&oob->oo_debug_mutex);
+                cfs_mutex_lock(&oob->oo_debug_mutex);
 
                 io->ci_obj = cl_object_top(obj);
                 cl_io_init(env, io, CIT_MISC, io->ci_obj);
@@ -1429,7 +1422,7 @@ static int osc_lock_has_pages(struct osc_lock *olck)
                 cl_page_list_disown(env, io, plist);
                 cl_page_list_fini(env, plist);
                 cl_io_fini(env, io);
-                mutex_unlock(&oob->oo_debug_mutex);
+                cfs_mutex_unlock(&oob->oo_debug_mutex);
                 cl_env_nested_put(&nest, env);
         } else
                 result = 0;

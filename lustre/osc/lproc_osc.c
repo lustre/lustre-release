@@ -187,7 +187,7 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
 
         if (pages_number < 0 ||
             pages_number > OSC_MAX_DIRTY_MB_MAX << (20 - CFS_PAGE_SHIFT) ||
-            pages_number > num_physpages / 4) /* 1/4 of RAM */
+            pages_number > cfs_num_physpages / 4) /* 1/4 of RAM */
                 return -ERANGE;
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -499,7 +499,7 @@ static int osc_wd_checksum_type(struct file *file, const char *buffer,
 
         if (count > sizeof(kernbuf) - 1)
                 return -EINVAL;
-        if (copy_from_user(kernbuf, buffer, count))
+        if (cfs_copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
         if (count > 0 && kernbuf[count - 1] == '\n')
                 kernbuf[count - 1] = '\0';
@@ -522,7 +522,8 @@ static int osc_rd_resend_count(char *page, char **start, off_t off, int count,
 {
         struct obd_device *obd = data;
 
-        return snprintf(page, count, "%u\n", atomic_read(&obd->u.cli.cl_resends));
+        return snprintf(page, count, "%u\n",
+                        cfs_atomic_read(&obd->u.cli.cl_resends));
 }
 
 static int osc_wr_resend_count(struct file *file, const char *buffer,
@@ -538,7 +539,7 @@ static int osc_wr_resend_count(struct file *file, const char *buffer,
         if (val < 0)
                return -EINVAL;
 
-        atomic_set(&obd->u.cli.cl_resends, val);
+        cfs_atomic_set(&obd->u.cli.cl_resends, val);
 
         return count;
 }
@@ -586,7 +587,7 @@ static int osc_rd_destroys_in_flight(char *page, char **start, off_t off,
 {
         struct obd_device *obd = data;
         return snprintf(page, count, "%u\n",
-                        atomic_read(&obd->u.cli.cl_destroy_in_flight));
+                        cfs_atomic_read(&obd->u.cli.cl_destroy_in_flight));
 }
 
 static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
@@ -650,7 +651,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
         int i;
 
-        do_gettimeofday(&now);
+        cfs_gettimeofday(&now);
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
@@ -764,7 +765,7 @@ static int osc_stats_seq_show(struct seq_file *seq, void *v)
         struct obd_device *dev = seq->private;
         struct osc_stats *stats = &obd2osc_dev(dev)->od_stats;
 
-        do_gettimeofday(&now);
+        cfs_gettimeofday(&now);
 
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);

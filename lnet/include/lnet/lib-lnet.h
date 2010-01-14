@@ -89,10 +89,10 @@ static inline int lnet_md_unlinkable (lnet_libmd_t *md)
 }
 
 #ifdef __KERNEL__
-#define LNET_LOCK()        spin_lock(&the_lnet.ln_lock)
-#define LNET_UNLOCK()      spin_unlock(&the_lnet.ln_lock)
-#define LNET_MUTEX_DOWN(m) mutex_down(m)
-#define LNET_MUTEX_UP(m)   mutex_up(m)
+#define LNET_LOCK()        cfs_spin_lock(&the_lnet.ln_lock)
+#define LNET_UNLOCK()      cfs_spin_unlock(&the_lnet.ln_lock)
+#define LNET_MUTEX_DOWN(m) cfs_mutex_down(m)
+#define LNET_MUTEX_UP(m)   cfs_mutex_up(m)
 #else
 # ifndef HAVE_LIBPTHREAD
 #define LNET_SINGLE_THREADED_LOCK(l)            \
@@ -134,11 +134,11 @@ lnet_freelist_alloc (lnet_freelist_t *fl)
         /* ALWAYS called with liblock held */
         lnet_freeobj_t *o;
 
-        if (list_empty (&fl->fl_list))
+        if (cfs_list_empty (&fl->fl_list))
                 return (NULL);
 
-        o = list_entry (fl->fl_list.next, lnet_freeobj_t, fo_list);
-        list_del (&o->fo_list);
+        o = cfs_list_entry (fl->fl_list.next, lnet_freeobj_t, fo_list);
+        cfs_list_del (&o->fo_list);
         return ((void *)&o->fo_contents);
 }
 
@@ -146,9 +146,9 @@ static inline void
 lnet_freelist_free (lnet_freelist_t *fl, void *obj)
 {
         /* ALWAYS called with liblock held */
-        lnet_freeobj_t *o = list_entry (obj, lnet_freeobj_t, fo_contents);
+        lnet_freeobj_t *o = cfs_list_entry (obj, lnet_freeobj_t, fo_contents);
 
-        list_add (&o->fo_list, &fl->fl_list);
+        cfs_list_add (&o->fo_list, &fl->fl_list);
 }
 
 
@@ -474,7 +474,7 @@ lnet_ni_decref_locked(lnet_ni_t *ni)
         LASSERT (ni->ni_refcount > 0);
         ni->ni_refcount--;
         if (ni->ni_refcount == 0)
-                list_add_tail(&ni->ni_list, &the_lnet.ln_zombie_nis);
+                cfs_list_add_tail(&ni->ni_list, &the_lnet.ln_zombie_nis);
 }
 
 static inline void
@@ -485,7 +485,7 @@ lnet_ni_decref(lnet_ni_t *ni)
         LNET_UNLOCK();
 }
 
-static inline struct list_head *
+static inline cfs_list_t *
 lnet_nid2peerhash (lnet_nid_t nid)
 {
         unsigned int idx = LNET_NIDADDR(nid) % LNET_PEER_HASHSIZE;
@@ -686,7 +686,7 @@ int lnet_ping(lnet_process_id_t id, int timeout_ms,
 
 int lnet_parse_ip2nets (char **networksp, char *ip2nets);
 int lnet_parse_routes (char *route_str, int *im_a_router);
-int lnet_parse_networks (struct list_head *nilist, char *networks);
+int lnet_parse_networks (cfs_list_t *nilist, char *networks);
 
 int lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid);
 lnet_peer_t *lnet_find_peer_locked (lnet_nid_t nid);

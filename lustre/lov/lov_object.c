@@ -263,7 +263,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
                 waiter = &lov_env_info(env)->lti_waiter;
                 cfs_waitlink_init(waiter);
                 cfs_waitq_add(&site->ls_marche_funebre, waiter);
-                set_current_state(CFS_TASK_UNINT);
+                cfs_set_current_state(CFS_TASK_UNINT);
 
                 while (r0->lo_sub[idx] == los)
                         /* this wait-queue is signaled at the end of
@@ -448,10 +448,10 @@ const static struct lov_layout_operations lov_dispatch[] = {
                                                                         \
         __lock &= __obj->lo_owner != cfs_current();                     \
         if (__lock)                                                     \
-                down_read(&__obj->lo_type_guard);                       \
+                cfs_down_read(&__obj->lo_type_guard);                   \
         __result = LOV_2DISPATCH_NOLOCK(obj, op, __VA_ARGS__);          \
         if (__lock)                                                     \
-                up_read(&__obj->lo_type_guard);                         \
+                cfs_up_read(&__obj->lo_type_guard);                     \
         __result;                                                       \
 })
 
@@ -467,12 +467,12 @@ do {                                                                    \
         enum lov_layout_type                    __llt;                  \
                                                                         \
         if (__obj->lo_owner != cfs_current())                           \
-                down_read(&__obj->lo_type_guard);                       \
+                cfs_down_read(&__obj->lo_type_guard);                   \
         __llt = __obj->lo_type;                                         \
         LASSERT(0 <= __llt && __llt < ARRAY_SIZE(lov_dispatch));        \
         lov_dispatch[__llt].op(__VA_ARGS__);                            \
         if (__obj->lo_owner != cfs_current())                           \
-                up_read(&__obj->lo_type_guard);                         \
+                cfs_up_read(&__obj->lo_type_guard);                     \
 } while (0)
 
 static int lov_layout_change(const struct lu_env *env,
@@ -509,7 +509,7 @@ static int lov_layout_change(const struct lu_env *env,
                 cl_env_reexit(cookie);
 
                 old_ops->llo_fini(env, obj, &obj->u);
-                LASSERT(list_empty(&hdr->coh_locks));
+                LASSERT(cfs_list_empty(&hdr->coh_locks));
                 LASSERT(hdr->coh_tree.rnode == NULL);
                 LASSERT(hdr->coh_pages == 0);
 
@@ -537,7 +537,7 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
         int result;
 
         ENTRY;
-        init_rwsem(&lov->lo_type_guard);
+        cfs_init_rwsem(&lov->lo_type_guard);
 
         /* no locking is necessary, as object is being created */
         lov->lo_type = cconf->u.coc_md->lsm != NULL ? LLT_RAID0 : LLT_EMPTY;
@@ -561,7 +561,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
          * Currently only LLT_EMPTY -> LLT_RAID0 transition is supported.
          */
         LASSERT(lov->lo_owner != cfs_current());
-        down_write(&lov->lo_type_guard);
+        cfs_down_write(&lov->lo_type_guard);
         LASSERT(lov->lo_owner == NULL);
         lov->lo_owner = cfs_current();
         if (lov->lo_type == LLT_EMPTY && conf->u.coc_md->lsm != NULL)
@@ -569,7 +569,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
         else
                 result = -EOPNOTSUPP;
         lov->lo_owner = NULL;
-        up_write(&lov->lo_type_guard);
+        cfs_up_write(&lov->lo_type_guard);
         RETURN(result);
 }
 

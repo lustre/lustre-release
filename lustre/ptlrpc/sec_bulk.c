@@ -107,7 +107,7 @@ static struct ptlrpc_enc_page_pool {
         /*
          * in-pool pages bookkeeping
          */
-        spinlock_t       epp_lock;        /* protect following fields */
+        cfs_spinlock_t   epp_lock;        /* protect following fields */
         unsigned long    epp_total_pages; /* total pages in pools */
         unsigned long    epp_free_pages;  /* current pages available */
 
@@ -132,8 +132,8 @@ static struct ptlrpc_enc_page_pool {
 /*
  * memory shrinker
  */
-const int pools_shrinker_seeks = DEFAULT_SEEKS;
-static struct shrinker *pools_shrinker = NULL;
+const int pools_shrinker_seeks = CFS_DEFAULT_SEEKS;
+static struct cfs_shrinker *pools_shrinker = NULL;
 
 
 /*
@@ -144,7 +144,7 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
 {
         int     rc;
 
-        spin_lock(&page_pools.epp_lock);
+        cfs_spin_lock(&page_pools.epp_lock);
 
         rc = snprintf(page, count,
                       "physical pages:          %lu\n"
@@ -166,7 +166,7 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       "max waitqueue depth:     %u\n"
                       "max wait time:           "CFS_TIME_T"/%u\n"
                       ,
-                      num_physpages,
+                      cfs_num_physpages,
                       PAGES_PER_POOL,
                       page_pools.epp_max_pages,
                       page_pools.epp_max_pools,
@@ -183,10 +183,10 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       page_pools.epp_st_missings,
                       page_pools.epp_st_lowfree,
                       page_pools.epp_st_max_wqlen,
-                      page_pools.epp_st_max_wait, HZ
+                      page_pools.epp_st_max_wait, CFS_HZ
                      );
 
-        spin_unlock(&page_pools.epp_lock);
+        cfs_spin_unlock(&page_pools.epp_lock);
         return rc;
 }
 
@@ -242,7 +242,7 @@ static void enc_pools_release_free_pages(long npages)
 static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
 {
         if (unlikely(nr_to_scan != 0)) {
-                spin_lock(&page_pools.epp_lock);
+                cfs_spin_lock(&page_pools.epp_lock);
                 nr_to_scan = min(nr_to_scan, (int) page_pools.epp_free_pages -
                                              PTLRPC_MAX_BRW_PAGES);
                 if (nr_to_scan > 0) {
@@ -253,7 +253,7 @@ static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
                         page_pools.epp_st_shrinks++;
                         page_pools.epp_last_shrink = cfs_time_current_sec();
                 }
-                spin_unlock(&page_pools.epp_lock);
+                cfs_spin_unlock(&page_pools.epp_lock);
         }
 
         /*
@@ -262,9 +262,9 @@ static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
          */
         if (unlikely(cfs_time_current_sec() - page_pools.epp_last_access >
                      CACHE_QUIESCENT_PERIOD)) {
-                spin_lock(&page_pools.epp_lock);
+                cfs_spin_lock(&page_pools.epp_lock);
                 page_pools.epp_idle_idx = IDLE_IDX_MAX;
-                spin_unlock(&page_pools.epp_lock);
+                cfs_spin_unlock(&page_pools.epp_lock);
         }
 
         LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
@@ -320,7 +320,7 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
         LASSERT(npages_to_npools(npages) == npools);
         LASSERT(page_pools.epp_growing);
 
-        spin_lock(&page_pools.epp_lock);
+        cfs_spin_lock(&page_pools.epp_lock);
 
         /*
          * (1) fill all the free slots of current pools.
@@ -387,12 +387,12 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
         CDEBUG(D_SEC, "add %d pages to total %lu\n", npages,
                page_pools.epp_total_pages);
 
-        spin_unlock(&page_pools.epp_lock);
+        cfs_spin_unlock(&page_pools.epp_lock);
 }
 
 static int enc_pools_add_pages(int npages)
 {
-        static DECLARE_MUTEX(sem_add_pages);
+        static CFS_DECLARE_MUTEX(sem_add_pages);
         cfs_page_t   ***pools;
         int             npools, alloced = 0;
         int             i, j, rc = -ENOMEM;
@@ -400,7 +400,7 @@ static int enc_pools_add_pages(int npages)
         if (npages < PTLRPC_MAX_BRW_PAGES)
                 npages = PTLRPC_MAX_BRW_PAGES;
 
-        down(&sem_add_pages);
+        cfs_down(&sem_add_pages);
 
         if (npages + page_pools.epp_total_pages > page_pools.epp_max_pages)
                 npages = page_pools.epp_max_pages - page_pools.epp_total_pages;
@@ -442,7 +442,7 @@ out:
                 CERROR("Failed to allocate %d enc pages\n", npages);
         }
 
-        up(&sem_add_pages);
+        cfs_up(&sem_add_pages);
         return rc;
 }
 
@@ -513,7 +513,7 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
         if (desc->bd_enc_iov == NULL)
                 return -ENOMEM;
 
-        spin_lock(&page_pools.epp_lock);
+        cfs_spin_lock(&page_pools.epp_lock);
 
         page_pools.epp_st_access++;
 again:
@@ -529,9 +529,9 @@ again:
                 if (enc_pools_should_grow(desc->bd_iov_count, now)) {
                         page_pools.epp_growing = 1;
 
-                        spin_unlock(&page_pools.epp_lock);
+                        cfs_spin_unlock(&page_pools.epp_lock);
                         enc_pools_add_pages(page_pools.epp_pages_short / 2);
-                        spin_lock(&page_pools.epp_lock);
+                        cfs_spin_lock(&page_pools.epp_lock);
 
                         page_pools.epp_growing = 0;
 
@@ -542,15 +542,15 @@ again:
                                 page_pools.epp_st_max_wqlen =
                                                 page_pools.epp_waitqlen;
 
-                        set_current_state(CFS_TASK_UNINT);
+                        cfs_set_current_state(CFS_TASK_UNINT);
                         cfs_waitlink_init(&waitlink);
                         cfs_waitq_add(&page_pools.epp_waitq, &waitlink);
 
-                        spin_unlock(&page_pools.epp_lock);
+                        cfs_spin_unlock(&page_pools.epp_lock);
                         cfs_waitq_wait(&waitlink, CFS_TASK_UNINT);
                         cfs_waitq_del(&page_pools.epp_waitq, &waitlink);
                         LASSERT(page_pools.epp_waitqlen > 0);
-                        spin_lock(&page_pools.epp_lock);
+                        cfs_spin_lock(&page_pools.epp_lock);
                         page_pools.epp_waitqlen--;
                 }
 
@@ -602,7 +602,7 @@ again:
 
         page_pools.epp_last_access = cfs_time_current_sec();
 
-        spin_unlock(&page_pools.epp_lock);
+        cfs_spin_unlock(&page_pools.epp_lock);
         return 0;
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_get_pages);
@@ -617,7 +617,7 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 
         LASSERT(desc->bd_iov_count > 0);
 
-        spin_lock(&page_pools.epp_lock);
+        cfs_spin_lock(&page_pools.epp_lock);
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
         g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
@@ -644,7 +644,7 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 
         enc_pools_wakeup();
 
-        spin_unlock(&page_pools.epp_lock);
+        cfs_spin_unlock(&page_pools.epp_lock);
 
         OBD_FREE(desc->bd_enc_iov,
                  desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
@@ -661,21 +661,21 @@ int sptlrpc_enc_pool_add_user(void)
 {
         int     need_grow = 0;
 
-        spin_lock(&page_pools.epp_lock);
+        cfs_spin_lock(&page_pools.epp_lock);
         if (page_pools.epp_growing == 0 && page_pools.epp_total_pages == 0) {
                 page_pools.epp_growing = 1;
                 need_grow = 1;
         }
-        spin_unlock(&page_pools.epp_lock);
+        cfs_spin_unlock(&page_pools.epp_lock);
 
         if (need_grow) {
                 enc_pools_add_pages(PTLRPC_MAX_BRW_PAGES +
                                     PTLRPC_MAX_BRW_PAGES);
 
-                spin_lock(&page_pools.epp_lock);
+                cfs_spin_lock(&page_pools.epp_lock);
                 page_pools.epp_growing = 0;
                 enc_pools_wakeup();
-                spin_unlock(&page_pools.epp_lock);
+                cfs_spin_unlock(&page_pools.epp_lock);
         }
         return 0;
 }
@@ -714,7 +714,7 @@ int sptlrpc_enc_pool_init(void)
          * maximum capacity is 1/8 of total physical memory.
          * is the 1/8 a good number?
          */
-        page_pools.epp_max_pages = num_physpages / 8;
+        page_pools.epp_max_pages = cfs_num_physpages / 8;
         page_pools.epp_max_pools = npages_to_npools(page_pools.epp_max_pages);
 
         cfs_waitq_init(&page_pools.epp_waitq);
@@ -727,7 +727,7 @@ int sptlrpc_enc_pool_init(void)
         page_pools.epp_last_shrink = cfs_time_current_sec();
         page_pools.epp_last_access = cfs_time_current_sec();
 
-        spin_lock_init(&page_pools.epp_lock);
+        cfs_spin_lock_init(&page_pools.epp_lock);
         page_pools.epp_total_pages = 0;
         page_pools.epp_free_pages = 0;
 
@@ -745,7 +745,8 @@ int sptlrpc_enc_pool_init(void)
         if (page_pools.epp_pools == NULL)
                 return -ENOMEM;
 
-        pools_shrinker = set_shrinker(pools_shrinker_seeks, enc_pools_shrink);
+        pools_shrinker = cfs_set_shrinker(pools_shrinker_seeks,
+                                          enc_pools_shrink);
         if (pools_shrinker == NULL) {
                 enc_pools_free();
                 return -ENOMEM;
@@ -762,7 +763,7 @@ void sptlrpc_enc_pool_fini(void)
         LASSERT(page_pools.epp_pools);
         LASSERT(page_pools.epp_total_pages == page_pools.epp_free_pages);
 
-        remove_shrinker(pools_shrinker);
+        cfs_remove_shrinker(pools_shrinker);
 
         npools = npages_to_npools(page_pools.epp_total_pages);
         cleaned = enc_pools_cleanup(page_pools.epp_pools, npools);
@@ -778,7 +779,7 @@ void sptlrpc_enc_pool_fini(void)
                       page_pools.epp_st_grow_fails,
                       page_pools.epp_st_shrinks, page_pools.epp_st_access,
                       page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
-                      page_pools.epp_st_max_wait, HZ);
+                      page_pools.epp_st_max_wait, CFS_HZ);
         }
 }
 

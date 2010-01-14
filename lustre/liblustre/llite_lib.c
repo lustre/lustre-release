@@ -57,10 +57,6 @@
 #include <file.h>
 #endif
 
-/* both sys/queue.h (libsysio require it) and portals/lists.h have definition
- * of 'LIST_HEAD'. undef it to suppress warnings
- */
-#undef LIST_HEAD
 #include <liblustre.h>
 #include <lnet/lnetctl.h>     /* needed for parse_dump */
 

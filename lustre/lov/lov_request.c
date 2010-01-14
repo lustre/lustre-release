@@ -58,21 +58,22 @@ static void lov_init_set(struct lov_request_set *set)
         set->set_success = 0;
         set->set_cookies = 0;
         CFS_INIT_LIST_HEAD(&set->set_list);
-        atomic_set(&set->set_refcount, 1);
+        cfs_atomic_set(&set->set_refcount, 1);
         cfs_waitq_init(&set->set_waitq);
-        spin_lock_init(&set->set_lock);
+        cfs_spin_lock_init(&set->set_lock);
 }
 
 void lov_finish_set(struct lov_request_set *set)
 {
-        struct list_head *pos, *n;
+        cfs_list_t *pos, *n;
         ENTRY;
 
         LASSERT(set);
-        list_for_each_safe(pos, n, &set->set_list) {
-                struct lov_request *req = list_entry(pos, struct lov_request,
-                                                     rq_link);
-                list_del_init(&req->rq_link);
+        cfs_list_for_each_safe(pos, n, &set->set_list) {
+                struct lov_request *req = cfs_list_entry(pos,
+                                                         struct lov_request,
+                                                         rq_link);
+                cfs_list_del_init(&req->rq_link);
 
                 if (req->rq_oi.oi_oa)
                         OBDO_FREE(req->rq_oi.oi_oa);
@@ -135,7 +136,7 @@ int lov_update_common_set(struct lov_request_set *set,
 
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set)
 {
-        list_add_tail(&req->rq_link, &set->set_list);
+        cfs_list_add_tail(&req->rq_link, &set->set_list);
         set->set_count++;
         req->rq_rqset = set;
 }
@@ -221,7 +222,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
                 RETURN(0);
 
         /* cancel enqueued/matched locks */
-        list_for_each_entry(req, &set->set_list, rq_link) {
+        cfs_list_for_each_entry(req, &set->set_list, rq_link) {
                 struct lustre_handle *lov_lockhp;
 
                 if (!req->rq_complete || req->rq_rc)
@@ -565,7 +566,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         /* try alloc objects on other osts if osc_create fails for
          * exceptions: RPC failure, ENOSPC, etc */
         if (set->set_count != set->set_success) {
-                list_for_each_entry (req, &set->set_list, rq_link) {
+                cfs_list_for_each_entry (req, &set->set_list, rq_link) {
                         if (req->rq_rc == 0)
                                 continue;
 
@@ -590,7 +591,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         if (ret_oa == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
 
-        list_for_each_entry(req, &set->set_list, rq_link) {
+        cfs_list_for_each_entry(req, &set->set_list, rq_link) {
                 if (!req->rq_complete || req->rq_rc)
                         continue;
                 lov_merge_attrs(ret_oa, req->rq_oi.oi_oa,
@@ -613,7 +614,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         GOTO(done, rc = 0);
 
 cleanup:
-        list_for_each_entry(req, &set->set_list, rq_link) {
+        cfs_list_for_each_entry(req, &set->set_list, rq_link) {
                 struct obd_export *sub_exp;
                 int err = 0;
 
@@ -680,12 +681,12 @@ int lov_update_create_set(struct lov_request_set *set,
                 }
         }
 
-        spin_lock(&set->set_lock);
+        cfs_spin_lock(&set->set_lock);
         req->rq_stripe = set->set_success;
         loi = lsm->lsm_oinfo[req->rq_stripe];
         if (rc) {
                 lov_update_set(set, req, rc);
-                spin_unlock(&set->set_lock);
+                cfs_spin_unlock(&set->set_lock);
                 RETURN(rc);
         }
 
@@ -700,7 +701,7 @@ int lov_update_create_set(struct lov_request_set *set,
                 set->set_cookie_sent++;
 
         lov_update_set(set, req, rc);
-        spin_unlock(&set->set_lock);
+        cfs_spin_unlock(&set->set_lock);
 
         CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
                lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
@@ -755,7 +756,7 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
 
 static int common_attr_done(struct lov_request_set *set)
 {
-        struct list_head *pos;
+        cfs_list_t *pos;
         struct lov_request *req;
         struct obdo *tmp_oa;
         int rc = 0, attrset = 0;
@@ -773,8 +774,8 @@ static int common_attr_done(struct lov_request_set *set)
         if (tmp_oa == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        list_for_each (pos, &set->set_list) {
-                req = list_entry(pos, struct lov_request, rq_link);
+        cfs_list_for_each (pos, &set->set_list) {
+                req = cfs_list_entry(pos, struct lov_request, rq_link);
 
                 if (!req->rq_complete || req->rq_rc)
                         continue;
@@ -809,12 +810,12 @@ static int brw_done(struct lov_request_set *set)
 {
         struct lov_stripe_md *lsm = set->set_oi->oi_md;
         struct lov_oinfo     *loi = NULL;
-        struct list_head *pos;
+        cfs_list_t *pos;
         struct lov_request *req;
         ENTRY;
 
-        list_for_each (pos, &set->set_list) {
-                req = list_entry(pos, struct lov_request, rq_link);
+        cfs_list_for_each (pos, &set->set_list) {
+                req = cfs_list_entry(pos, struct lov_request, rq_link);
 
                 if (!req->rq_complete || req->rq_rc)
                         continue;
@@ -1487,10 +1488,10 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
                 if (osfs->os_ffree != LOV_U64_MAX)
                         do_div(osfs->os_ffree, expected_stripes);
 
-                spin_lock(&obd->obd_osfs_lock);
+                cfs_spin_lock(&obd->obd_osfs_lock);
                 memcpy(&obd->obd_osfs, osfs, sizeof(*osfs));
                 obd->obd_osfs_age = cfs_time_current_64();
-                spin_unlock(&obd->obd_osfs_lock);
+                cfs_spin_unlock(&obd->obd_osfs_lock);
                 RETURN(0);
         }
 
@@ -1605,18 +1606,18 @@ static int cb_statfs_update(void *cookie, int rc)
         lov_update_set(lovreq->rq_rqset, lovreq, rc);
         if (rc)
                 GOTO(out, rc);
- 
+
         obd_getref(lovobd);
         tgt = lov->lov_tgts[lovreq->rq_idx];
         if (!tgt || !tgt->ltd_active)
                 GOTO(out_update, rc);
 
         tgtobd = class_exp2obd(tgt->ltd_exp);
-        spin_lock(&tgtobd->obd_osfs_lock);
+        cfs_spin_lock(&tgtobd->obd_osfs_lock);
         memcpy(&tgtobd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
         if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
                 tgtobd->obd_osfs_age = cfs_time_current_64();
-        spin_unlock(&tgtobd->obd_osfs_lock);
+        cfs_spin_unlock(&tgtobd->obd_osfs_lock);
 
 out_update:
         lov_update_statfs(osfs, lov_sfs, success);

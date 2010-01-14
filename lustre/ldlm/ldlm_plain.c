@@ -52,10 +52,10 @@
 #include "ldlm_internal.h"
 
 static inline int
-ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
-                        struct list_head *work_list)
+ldlm_plain_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
+                        cfs_list_t *work_list)
 {
-        struct list_head *tmp;
+        cfs_list_t *tmp;
         struct ldlm_lock *lock;
         ldlm_mode_t req_mode = req->l_req_mode;
         int compat = 1;
@@ -63,16 +63,16 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
         lockmode_verify(req_mode);
 
-        list_for_each(tmp, queue) {
-                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+        cfs_list_for_each(tmp, queue) {
+                lock = cfs_list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (req == lock)
                         RETURN(compat);
 
                  /* last lock in mode group */
-                 tmp = &list_entry(lock->l_sl_mode.prev,
-                                   struct ldlm_lock,
-                                   l_sl_mode)->l_res_link;
+                 tmp = &cfs_list_entry(lock->l_sl_mode.prev,
+                                       struct ldlm_lock,
+                                       l_sl_mode)->l_res_link;
 
                  if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
@@ -88,10 +88,10 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         ldlm_add_ast_work_item(lock, req, work_list);
 
                 {
-                        struct list_head *head;
+                        cfs_list_t *head;
 
                         head = &lock->l_sl_mode;
-                        list_for_each_entry(lock, head, l_sl_mode)
+                        cfs_list_for_each_entry(lock, head, l_sl_mode)
                                 if (lock->l_blocking_ast)
                                         ldlm_add_ast_work_item(lock, req,
                                                                work_list);
@@ -109,7 +109,7 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
  *   - blocking ASTs have not been sent
  *   - must call this function with the resource lock held */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
-                            ldlm_error_t *err, struct list_head *work_list)
+                            ldlm_error_t *err, cfs_list_t *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
         CFS_LIST_HEAD(rpc_list);
@@ -117,7 +117,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         ENTRY;
 
         check_res_locked(res);
-        LASSERT(list_empty(&res->lr_converting));
+        LASSERT(cfs_list_empty(&res->lr_converting));
 
         if (!first_enq) {
                 LASSERT(work_list != NULL);
@@ -144,7 +144,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                  * bug 2322: we used to unlink and re-add here, which was a
                  * terrible folly -- if we goto restart, we could get
                  * re-ordered!  Causes deadlock, because ASTs aren't sent! */
-                if (list_empty(&lock->l_res_link))
+                if (cfs_list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
                 rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);

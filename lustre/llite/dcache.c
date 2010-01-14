@@ -425,7 +425,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 /* Check for the proper lock. */
                 if (!ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
                         goto do_lock;
-                down(&lli->lli_och_sem);
+                cfs_down(&lli->lli_och_sem);
                 if (*och_p) { /* Everything is open already, do nothing */
                         /*(*och_usecount)++;  Do not let them steal our open
                           handle from under us */
@@ -436,11 +436,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                            hope the lock won't be invalidated in between. But
                            if it would be, we'll reopen the open request to
                            MDS later during file open path */
-                        up(&lli->lli_och_sem);
+                        cfs_up(&lli->lli_och_sem);
                         ll_finish_md_op_data(op_data);
                         RETURN(1);
                 } else {
-                        up(&lli->lli_och_sem);
+                        cfs_up(&lli->lli_och_sem);
                 }
         }
 
@@ -605,36 +605,36 @@ static void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
         ENTRY;
         LASSERT(ldd);
 
-        lock_kernel();
+        cfs_lock_kernel();
         /* Strictly speaking this introduces an additional race: the
          * increments should wait until the rpc has returned.
          * However, given that at present the function is void, this
          * issue is moot. */
         if (flag == 1 && (++ldd->lld_mnt_count) > 1) {
-                unlock_kernel();
+                cfs_unlock_kernel();
                 EXIT;
                 return;
         }
 
         if (flag == 0 && (++ldd->lld_cwd_count) > 1) {
-                unlock_kernel();
+                cfs_unlock_kernel();
                 EXIT;
                 return;
         }
-        unlock_kernel();
+        cfs_unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
         oc = ll_mdscapa_get(inode);
         rc = obd_pin(sbi->ll_md_exp, ll_inode2fid(inode), oc, handle, flag);
         capa_put(oc);
         if (rc) {
-                lock_kernel();
+                cfs_lock_kernel();
                 memset(handle, 0, sizeof(*handle));
                 if (flag == 0)
                         ldd->lld_cwd_count--;
                 else
                         ldd->lld_mnt_count--;
-                unlock_kernel();
+                cfs_unlock_kernel();
         }
 
         EXIT;
@@ -650,7 +650,7 @@ static void ll_unpin(struct dentry *de, struct vfsmount *mnt, int flag)
         ENTRY;
         LASSERT(ldd);
 
-        lock_kernel();
+        cfs_lock_kernel();
         /* Strictly speaking this introduces an additional race: the
          * increments should wait until the rpc has returned.
          * However, given that at present the function is void, this
@@ -658,7 +658,7 @@ static void ll_unpin(struct dentry *de, struct vfsmount *mnt, int flag)
         handle = (flag) ? ldd->lld_mnt_och : ldd->lld_cwd_och;
         if (handle.och_magic != OBD_CLIENT_HANDLE_MAGIC) {
                 /* the "pin" failed */
-                unlock_kernel();
+                cfs_unlock_kernel();
                 EXIT;
                 return;
         }
@@ -667,7 +667,7 @@ static void ll_unpin(struct dentry *de, struct vfsmount *mnt, int flag)
                 count = --ldd->lld_mnt_count;
         else
                 count = --ldd->lld_cwd_count;
-        unlock_kernel();
+        cfs_unlock_kernel();
 
         if (count != 0) {
                 EXIT;

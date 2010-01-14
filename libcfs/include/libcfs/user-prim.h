@@ -59,30 +59,33 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
  * Just present a single processor until will add thread support.
  */
 #ifndef smp_processor_id
-#define smp_processor_id() 0
+#define cfs_smp_processor_id() 0
+#else
+#define cfs_smp_processor_id() smp_processor_id()
 #endif
 #ifndef num_online_cpus
-#define num_online_cpus() 1
+#define cfs_num_online_cpus() 1
+#else
+#define cfs_num_online_cpus() num_online_cpus()
 #endif
 #ifndef num_possible_cpus
-#define num_possible_cpus() 1
+#define cfs_num_possible_cpus() 1
+#else
+#define cfs_num_possible_cpus() num_possible_cpus()
 #endif
 
 /*
- * Wait Queue. 
+ * Wait Queue.
  */
 
 typedef struct cfs_waitlink {
-        struct list_head sleeping;
+        cfs_list_t sleeping;
         void *process;
 } cfs_waitlink_t;
 
 typedef struct cfs_waitq {
-        struct list_head sleepers;
+        cfs_list_t sleepers;
 } cfs_waitq_t;
-
-/* XXX: need to replace wake_up with cfs_waitq_signal() */
-#define wake_up(q) cfs_waitq_signal(q)
 
 /*
  * Task states
@@ -114,14 +117,14 @@ typedef sigset_t                        cfs_sigset_t;
  */
 
 typedef struct {
-        struct list_head tl_list;
+        cfs_list_t tl_list;
         void (*function)(ulong_ptr_t unused);
         ulong_ptr_t data;
         long expires;
 } cfs_timer_t;
 
 
-#define in_interrupt()    (0)
+#define cfs_in_interrupt()    (0)
 
 typedef void cfs_psdev_t;
 
@@ -136,7 +139,7 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 }
 
 #define cfs_lock_kernel()               do {} while (0)
-#define cfs_sigfillset(l) do {}         while (0)
+#define cfs_sigfillset(l)               do {} while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
 #define cfs_kernel_thread(l,m,n)        LBUG()
 #define cfs_kthread_run(fn,d,fmt,...)   LBUG()
@@ -177,6 +180,13 @@ struct cfs_stack_trace {
                 (remainder);            \
         })
 #endif
+
+/*
+ * Groups
+ */
+typedef struct cfs_group_info {
+
+} cfs_group_info_t;
 
 #ifndef min
 # define min(x,y) ((x)<(y) ? (x) : (y))

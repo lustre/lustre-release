@@ -99,11 +99,8 @@ typedef time_t cfs_fs_time_t;
 typedef time_t cfs_time_t;
 typedef time_t cfs_duration_t;
 
-/* looks like linux */
-#define time_after(a, b) ((long)(b) - (long)(a) < 0)
-#define time_before(a, b) time_after(b,a)
-#define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)
-#define time_before_eq(a,b) time_after_eq(b,a)
+#define cfs_time_before(a, b) ((long)(a) - (long)(b) < 0)
+#define cfs_time_beforeq(a, b) ((long)(b) - (long)(a) >= 0)
 
 static inline cfs_time_t cfs_time_current(void)
 {

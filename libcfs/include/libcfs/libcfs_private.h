@@ -138,7 +138,7 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 
 #define LBUG() lbug_with_loc(__FILE__, __FUNCTION__, __LINE__)
 
-extern atomic_t libcfs_kmemory;
+extern cfs_atomic_t libcfs_kmemory;
 /*
  * Memory
  */
@@ -146,11 +146,11 @@ extern atomic_t libcfs_kmemory;
 
 # define libcfs_kmem_inc(ptr, size)             \
 do {                                            \
-        atomic_add(size, &libcfs_kmemory);      \
+        cfs_atomic_add(size, &libcfs_kmemory);  \
 } while (0)
 
 # define libcfs_kmem_dec(ptr, size) do {        \
-        atomic_sub(size, &libcfs_kmemory);      \
+        cfs_atomic_sub(size, &libcfs_kmemory);  \
 } while (0)
 
 #else
@@ -162,7 +162,7 @@ do {                                            \
 
 #define LIBCFS_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
-        LASSERT(!in_interrupt() ||                                        \
+        LASSERT(!cfs_in_interrupt() ||                                    \
                (size <= LIBCFS_VMALLOC_SIZE && mask == CFS_ALLOC_ATOMIC));\
         if (unlikely((size) > LIBCFS_VMALLOC_SIZE))                       \
                 (ptr) = cfs_alloc_large(size);                            \
@@ -172,14 +172,14 @@ do {                                                                      \
                 CERROR("LNET: out of memory at %s:%d (tried to alloc '"   \
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
                 CERROR("LNET: %d total bytes allocated by lnet\n",        \
-                       atomic_read(&libcfs_kmemory));                     \
+                       cfs_atomic_read(&libcfs_kmemory));                 \
                 break;                                                    \
         }                                                                 \
         libcfs_kmem_inc((ptr), (size));                                   \
         if (!((mask) & CFS_ALLOC_ZERO))                                   \
                 memset((ptr), 0, (size));                                 \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
-               (int)(size), (ptr), atomic_read (&libcfs_kmemory));        \
+               (int)(size), (ptr), cfs_atomic_read (&libcfs_kmemory));    \
 } while (0)
 
 #define LIBCFS_ALLOC(ptr, size) \
@@ -198,7 +198,7 @@ do {                                                                    \
         }                                                               \
         libcfs_kmem_dec((ptr), s);                                      \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
-               s, (ptr), atomic_read(&libcfs_kmemory));                 \
+               s, (ptr), cfs_atomic_read(&libcfs_kmemory));             \
         if (unlikely(s > LIBCFS_VMALLOC_SIZE))                          \
                 cfs_free_large(ptr);                                    \
         else                                                            \
@@ -318,9 +318,9 @@ lnet_nid_t  libcfs_str2nid(const char *str);
 int         libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 char       *libcfs_id2str(lnet_process_id_t id);
 int         cfs_iswhite(char c);
-void        cfs_free_nidlist(struct list_head *list);
-int         cfs_parse_nidlist(char *str, int len, struct list_head *list);
-int         cfs_match_nid(lnet_nid_t nid, struct list_head *list);
+void        cfs_free_nidlist(cfs_list_t *list);
+int         cfs_parse_nidlist(char *str, int len, cfs_list_t *list);
+int         cfs_match_nid(lnet_nid_t nid, cfs_list_t *list);
 
 /* how an LNET NID encodes net:address */
 #define LNET_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
@@ -339,8 +339,8 @@ int         cfs_match_nid(lnet_nid_t nid, struct list_head *list);
 /* logical equivalence */
 #define equi(a, b) (!!(a) == !!(b))
 
-#ifndef CURRENT_TIME
-# define CURRENT_TIME time(0)
+#ifndef CFS_CURRENT_TIME
+# define CFS_CURRENT_TIME time(0)
 #endif
 
 /* --------------------------------------------------------------------
@@ -365,50 +365,50 @@ struct libcfs_device_userstate
 
 #define MKSTR(ptr) ((ptr))? (ptr) : ""
 
-static inline int size_round4 (int val)
+static inline int cfs_size_round4 (int val)
 {
         return (val + 3) & (~0x3);
 }
 
-static inline int size_round (int val)
+static inline int cfs_size_round (int val)
 {
         return (val + 7) & (~0x7);
 }
 
-static inline int size_round16(int val)
+static inline int cfs_size_round16(int val)
 {
         return (val + 0xf) & (~0xf);
 }
 
-static inline int size_round32(int val)
+static inline int cfs_size_round32(int val)
 {
         return (val + 0x1f) & (~0x1f);
 }
 
-static inline int size_round0(int val)
+static inline int cfs_size_round0(int val)
 {
         if (!val)
                 return 0;
         return (val + 1 + 7) & (~0x7);
 }
 
-static inline size_t round_strlen(char *fset)
+static inline size_t cfs_round_strlen(char *fset)
 {
-        return (size_t)size_round((int)strlen(fset) + 1);
+        return (size_t)cfs_size_round((int)strlen(fset) + 1);
 }
 
 #define LOGL(var,len,ptr)                                       \
 do {                                                            \
         if (var)                                                \
                 memcpy((char *)ptr, (const char *)var, len);    \
-        ptr += size_round(len);                                 \
+        ptr += cfs_size_round(len);                             \
 } while (0)
 
 #define LOGU(var,len,ptr)                                       \
 do {                                                            \
         if (var)                                                \
                 memcpy((char *)var, (const char *)ptr, len);    \
-        ptr += size_round(len);                                 \
+        ptr += cfs_size_round(len);                             \
 } while (0)
 
 #define LOGL0(var,len,ptr)                              \
@@ -417,7 +417,7 @@ do {                                                    \
                 break;                                  \
         memcpy((char *)ptr, (const char *)var, len);    \
         *((char *)(ptr) + len) = 0;                     \
-        ptr += size_round(len + 1);                     \
+        ptr += cfs_size_round(len + 1);                 \
 } while (0)
 
 /**

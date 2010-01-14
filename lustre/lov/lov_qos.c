@@ -72,9 +72,9 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
                 RETURN(-ENOTCONN);
         }
 
-        down_write(&lov->lov_qos.lq_rw_sem);
-        mutex_down(&lov->lov_lock);
-        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_mutex_down(&lov->lov_lock);
+        cfs_list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 if (obd_uuid_equals(&oss->lqo_uuid,
                                     &exp->exp_connection->c_remote_uuid)) {
                         found++;
@@ -91,7 +91,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
                        sizeof(oss->lqo_uuid));
         } else {
                 /* Assume we have to move this one */
-                list_del(&oss->lqo_oss_list);
+                cfs_list_del(&oss->lqo_oss_list);
         }
 
         oss->lqo_ost_count++;
@@ -99,13 +99,14 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
 
         /* Add sorted by # of OSTs.  Find the first entry that we're
            bigger than... */
-        list_for_each_entry(temposs, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+        cfs_list_for_each_entry(temposs, &lov->lov_qos.lq_oss_list,
+                                lqo_oss_list) {
                 if (oss->lqo_ost_count > temposs->lqo_ost_count)
                         break;
         }
         /* ...and add before it.  If we're the first or smallest, temposs
            points to the list head, and we add to the end. */
-        list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
+        cfs_list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
 
         lov->lov_qos.lq_dirty = 1;
         lov->lov_qos.lq_rr.lqr_dirty = 1;
@@ -116,8 +117,8 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
                oss->lqo_ost_count);
 
 out:
-        mutex_up(&lov->lov_lock);
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_mutex_up(&lov->lov_lock);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
         RETURN(rc);
 }
 
@@ -128,7 +129,7 @@ int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt)
         int rc = 0;
         ENTRY;
 
-        down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
 
         oss = tgt->ltd_qos.ltq_oss;
         if (!oss)
@@ -138,14 +139,14 @@ int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt)
         if (oss->lqo_ost_count == 0) {
                 CDEBUG(D_QOS, "removing OSS %s\n",
                        obd_uuid2str(&oss->lqo_uuid));
-                list_del(&oss->lqo_oss_list);
+                cfs_list_del(&oss->lqo_oss_list);
                 OBD_FREE_PTR(oss);
         }
 
         lov->lov_qos.lq_dirty = 1;
         lov->lov_qos.lq_rr.lqr_dirty = 1;
 out:
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
         RETURN(rc);
 }
 
@@ -169,7 +170,7 @@ static int qos_calc_ppo(struct obd_device *obd)
                 GOTO(out, rc = -EAGAIN);
 
         /* find bavail on each OSS */
-        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+        cfs_list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 oss->lqo_bavail = 0;
         }
         lov->lov_qos.lq_active_oss_count = 0;
@@ -230,7 +231,7 @@ static int qos_calc_ppo(struct obd_device *obd)
         }
 
         /* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
-        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+        cfs_list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 temp = oss->lqo_bavail >> 1;
                 do_div(temp, oss->lqo_ost_count * num_active);
                 oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
@@ -311,7 +312,7 @@ static int qos_used(struct lov_obd *lov, struct ost_pool *osts,
                 lov->lov_qos.lq_active_oss_count;
 
         /* Decrease all OSS penalties */
-        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+        cfs_list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 if (oss->lqo_penalty < oss->lqo_penalty_per_obj)
                         oss->lqo_penalty = 0;
                 else
@@ -372,7 +373,7 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
         }
 
         /* Do actual allocation. */
-        down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
 
         /*
          * Check again. While we were sleeping on @lq_rw_sem something could
@@ -380,7 +381,7 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
          */
         if (!lqr->lqr_dirty) {
                 LASSERT(lqr->lqr_pool.op_size);
-                up_write(&lov->lov_qos.lq_rw_sem);
+                cfs_up_write(&lov->lov_qos.lq_rw_sem);
                 RETURN(0);
         }
 
@@ -393,7 +394,7 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
         lqr->lqr_pool.op_count = real_count;
         rc = lov_ost_pool_extend(&lqr->lqr_pool, real_count);
         if (rc) {
-                up_write(&lov->lov_qos.lq_rw_sem);
+                cfs_up_write(&lov->lov_qos.lq_rw_sem);
                 RETURN(rc);
         }
         for (i = 0; i < lqr->lqr_pool.op_count; i++)
@@ -401,7 +402,7 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
 
         /* Place all the OSTs from 1 OSS at the same time. */
         placed = 0;
-        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+        cfs_list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
                 for (i = 0; i < lqr->lqr_pool.op_count; i++) {
                         if (lov->lov_tgts[src_pool->op_array[i]] &&
@@ -419,7 +420,7 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
         }
 
         lqr->lqr_dirty = 0;
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
 
         if (placed != real_count) {
                 /* This should never happen */
@@ -555,7 +556,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 osts = &(lov->lov_packed);
                 lqr = &(lov->lov_qos.lq_rr);
         } else {
-                down_read(&pool_tgt_rw_sem(pool));
+                cfs_down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
                 lqr = &(pool->pool_rr);
         }
@@ -578,7 +579,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 if (*stripe_cnt > 1 && (osts->op_count % (*stripe_cnt)) != 1)
                         ++lqr->lqr_offset_idx;
         }
-        down_read(&lov->lov_qos.lq_rw_sem);
+        cfs_down_read(&lov->lov_qos.lq_rw_sem);
         ost_start_idx_temp = lqr->lqr_start_idx;
 
 repeat_find:
@@ -628,12 +629,12 @@ repeat_find:
                 goto repeat_find;
         }
 
-        up_read(&lov->lov_qos.lq_rw_sem);
+        cfs_up_read(&lov->lov_qos.lq_rw_sem);
 
         *stripe_cnt = idx_pos - idx_arr;
 out:
         if (pool != NULL) {
-                up_read(&pool_tgt_rw_sem(pool));
+                cfs_up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
                 lov_pool_putref(pool);
         }
@@ -656,7 +657,7 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
         if (pool == NULL) {
                 osts = &(lov->lov_packed);
         } else {
-                down_read(&pool_tgt_rw_sem(pool));
+                cfs_down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
         }
 
@@ -725,7 +726,7 @@ repeat_find:
         rc = -EFBIG;
 out:
         if (pool != NULL) {
-                up_read(&pool_tgt_rw_sem(pool));
+                cfs_up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
                 lov_pool_putref(pool);
         }
@@ -757,7 +758,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 osts = &(lov->lov_packed);
                 lqr = &(lov->lov_qos.lq_rr);
         } else {
-                down_read(&pool_tgt_rw_sem(pool));
+                cfs_down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
                 lqr = &(pool->pool_rr);
         }
@@ -774,7 +775,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 GOTO(out_nolock, rc = -EAGAIN);
 
         /* Do actual allocation, use write lock here. */
-        down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
 
         /*
          * Check again, while we were sleeping on @lq_rw_sem things could
@@ -892,11 +893,11 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         LASSERT(nfound == *stripe_cnt);
 
 out:
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
 
 out_nolock:
         if (pool != NULL) {
-                up_read(&pool_tgt_rw_sem(pool));
+                cfs_up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
                 lov_pool_putref(pool);
         }
@@ -1089,11 +1090,11 @@ void qos_update(struct lov_obd *lov)
 void qos_statfs_done(struct lov_obd *lov)
 {
         LASSERT(lov->lov_qos.lq_statfs_in_progress);
-        down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
         lov->lov_qos.lq_statfs_in_progress = 0;
         /* wake up any threads waiting for the statfs rpcs to complete */
         cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
 }
 
 static int qos_statfs_ready(struct obd_device *obd, __u64 max_age)
@@ -1101,10 +1102,10 @@ static int qos_statfs_ready(struct obd_device *obd, __u64 max_age)
         struct lov_obd         *lov = &obd->u.lov;
         int rc;
         ENTRY;
-        down_read(&lov->lov_qos.lq_rw_sem);
+        cfs_down_read(&lov->lov_qos.lq_rw_sem);
         rc = lov->lov_qos.lq_statfs_in_progress == 0 ||
              cfs_time_beforeq_64(max_age, obd->obd_osfs_age);
-        up_read(&lov->lov_qos.lq_rw_sem);
+        cfs_up_read(&lov->lov_qos.lq_rw_sem);
         RETURN(rc);
 }
 
@@ -1131,14 +1132,14 @@ void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait)
                 /* statfs already in progress */
                 RETURN_EXIT;
 
-        down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
         if (lov->lov_qos.lq_statfs_in_progress) {
-                up_write(&lov->lov_qos.lq_rw_sem);
+                cfs_up_write(&lov->lov_qos.lq_rw_sem);
                 GOTO(out, rc = 0);
         }
         /* no statfs in flight, send rpcs */
         lov->lov_qos.lq_statfs_in_progress = 1;
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
 
         if (wait)
                 CDEBUG(D_QOS, "%s: did not manage to get fresh statfs data "
@@ -1159,7 +1160,7 @@ void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait)
                 GOTO(out_failed, rc = -ENOMEM);
 
         rc = obd_statfs_async(obd, oinfo, max_age, set);
-        if (rc || list_empty(&set->set_requests)) {
+        if (rc || cfs_list_empty(&set->set_requests)) {
                 if (rc)
                         CWARN("statfs failed with %d\n", rc);
                 GOTO(out_failed, rc);
@@ -1170,11 +1171,11 @@ void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait)
         GOTO(out, rc);
 
 out_failed:
-        down_write(&lov->lov_qos.lq_rw_sem);
+        cfs_down_write(&lov->lov_qos.lq_rw_sem);
         lov->lov_qos.lq_statfs_in_progress = 0;
         /* wake up any threads waiting for the statfs rpcs to complete */
         cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
-        up_write(&lov->lov_qos.lq_rw_sem);
+        cfs_up_write(&lov->lov_qos.lq_rw_sem);
         wait = 0;
 out:
         if (set)

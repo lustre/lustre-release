@@ -1265,7 +1265,7 @@ lwt_control(int enable, int clear)
 }
 
 static int
-lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
+lwt_snapshot(cfs_cycles_t *now, int *ncpu, int *totalsize,
              lwt_event_t *events, int size)
 {
         struct libcfs_ioctl_data data;
@@ -1362,7 +1362,8 @@ lwt_put_string(char *ustr)
 }
 
 static int
-lwt_print(FILE *f, cycles_t t0, cycles_t tlast, double mhz, int cpu, lwt_event_t *e)
+lwt_print(FILE *f, cfs_cycles_t t0, cfs_cycles_t tlast, double mhz, int cpu,
+          lwt_event_t *e)
 {
 #ifndef __WORDSIZE
 # error "__WORDSIZE not defined"
@@ -1427,9 +1428,9 @@ jt_ptl_lwt(int argc, char **argv)
         int             rc;
         int             i;
         double          mhz;
-        cycles_t        t0;
-        cycles_t        tlast;
-        cycles_t        tnow;
+        cfs_cycles_t    t0;
+        cfs_cycles_t    tlast;
+        cfs_cycles_t    tnow;
         struct timeval  tvnow;
         int             printed_date = 0;
         int             nlines = 0;
@@ -1569,7 +1570,7 @@ jt_ptl_lwt(int argc, char **argv)
                 if (t0 <= next_event[cpu]->lwte_when) {
                         /* on or after the first event */
                         if (!printed_date) {
-                                cycles_t du = (tnow - t0) / mhz;
+                                cfs_cycles_t du = (tnow - t0) / mhz;
                                 time_t   then = tvnow.tv_sec - du/1000000;
 
                                 if (du % 1000000 > tvnow.tv_usec)

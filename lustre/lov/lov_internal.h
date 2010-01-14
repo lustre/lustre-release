@@ -42,7 +42,7 @@
 
 struct lov_lock_handles {
         struct portals_handle   llh_handle;
-        atomic_t                llh_refcount;
+        cfs_atomic_t            llh_refcount;
         int                     llh_stripe_count;
         struct lustre_handle    llh_handles[0];
 };
@@ -51,7 +51,7 @@ struct lov_request {
         struct obd_info          rq_oi;
         struct lov_request_set  *rq_rqset;
 
-        struct list_head         rq_link;
+        cfs_list_t               rq_link;
 
         int                      rq_idx;        /* index in lov->tgts array */
         int                      rq_stripe;     /* stripe number */
@@ -66,7 +66,7 @@ struct lov_request {
 struct lov_request_set {
         struct ldlm_enqueue_info*set_ei;
         struct obd_info         *set_oi;
-        atomic_t                 set_refcount;
+        cfs_atomic_t             set_refcount;
         struct obd_export       *set_exp;
         /* XXX: There is @set_exp already, however obd_statfs gets obd_device
            only. */
@@ -80,9 +80,9 @@ struct lov_request_set {
         obd_count                set_oabufs;
         struct brw_page         *set_pga;
         struct lov_lock_handles *set_lockh;
-        struct list_head         set_list;
+        cfs_list_t               set_list;
         cfs_waitq_t              set_waitq;
-        spinlock_t               set_lock;
+        cfs_spinlock_t           set_lock;
 };
 
 extern cfs_mem_cache_t *lov_oinfo_slab;
@@ -90,9 +90,9 @@ extern cfs_mem_cache_t *lov_oinfo_slab;
 static inline void lov_llh_addref(void *llhp)
 {
         struct lov_lock_handles *llh = llhp;
-        atomic_inc(&llh->llh_refcount);
+        cfs_atomic_inc(&llh->llh_refcount);
         CDEBUG(D_INFO, "GETting llh %p : new refcount %d\n", llh,
-               atomic_read(&llh->llh_refcount));
+               cfs_atomic_read(&llh->llh_refcount));
 }
 
 static inline struct lov_lock_handles *lov_llh_new(struct lov_stripe_md *lsm)
@@ -103,7 +103,7 @@ static inline struct lov_lock_handles *lov_llh_new(struct lov_stripe_md *lsm)
                   sizeof(*llh->llh_handles) * lsm->lsm_stripe_count);
         if (llh == NULL)
                 return NULL;
-        atomic_set(&llh->llh_refcount, 2);
+        cfs_atomic_set(&llh->llh_refcount, 2);
         llh->llh_stripe_count = lsm->lsm_stripe_count;
         CFS_INIT_LIST_HEAD(&llh->llh_handle.h_link);
         class_handle_hash(&llh->llh_handle, lov_llh_addref);
@@ -115,13 +115,13 @@ void lov_finish_set(struct lov_request_set *set);
 static inline void lov_get_reqset(struct lov_request_set *set)
 {
         LASSERT(set != NULL);
-        LASSERT(atomic_read(&set->set_refcount) > 0);
-        atomic_inc(&set->set_refcount);
+        LASSERT(cfs_atomic_read(&set->set_refcount) > 0);
+        cfs_atomic_inc(&set->set_refcount);
 }
 
 static inline void lov_put_reqset(struct lov_request_set *set)
 {
-        if (atomic_dec_and_test(&set->set_refcount))
+        if (cfs_atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
 }
 
@@ -135,14 +135,14 @@ lov_handle2llh(struct lustre_handle *handle)
 static inline void lov_llh_put(struct lov_lock_handles *llh)
 {
         CDEBUG(D_INFO, "PUTting llh %p : new refcount %d\n", llh,
-               atomic_read(&llh->llh_refcount) - 1);
-        LASSERT(atomic_read(&llh->llh_refcount) > 0 &&
-                atomic_read(&llh->llh_refcount) < 0x5a5a);
-        if (atomic_dec_and_test(&llh->llh_refcount)) {
+               cfs_atomic_read(&llh->llh_refcount) - 1);
+        LASSERT(cfs_atomic_read(&llh->llh_refcount) > 0 &&
+                cfs_atomic_read(&llh->llh_refcount) < 0x5a5a);
+        if (cfs_atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
                 /* The structure may be held by other threads because RCU.
                  *   -jxiong */
-                if (atomic_read(&llh->llh_refcount))
+                if (cfs_atomic_read(&llh->llh_refcount))
                         return;
 
                 OBD_FREE_RCU(llh, sizeof *llh +

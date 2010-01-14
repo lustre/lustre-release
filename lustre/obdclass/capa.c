@@ -71,9 +71,9 @@ cfs_mem_cache_t *capa_cachep = NULL;
 
 #ifdef __KERNEL__
 /* lock for capa hash/capa_list/fo_capa_keys */
-spinlock_t capa_lock = SPIN_LOCK_UNLOCKED;
+cfs_spinlock_t capa_lock = CFS_SPIN_LOCK_UNLOCKED;
 
-struct list_head capa_list[CAPA_SITE_MAX];
+cfs_list_t capa_list[CAPA_SITE_MAX];
 
 static struct capa_hmac_alg capa_hmac_algs[] = {
         DEF_CAPA_HMAC_ALG("sha1", SHA1, 20, 20),
@@ -87,20 +87,20 @@ EXPORT_SYMBOL(capa_list);
 EXPORT_SYMBOL(capa_lock);
 EXPORT_SYMBOL(capa_count);
 
-struct hlist_head *init_capa_hash(void)
+cfs_hlist_head_t *init_capa_hash(void)
 {
-        struct hlist_head *hash;
+        cfs_hlist_head_t *hash;
         int nr_hash, i;
 
         OBD_ALLOC(hash, CFS_PAGE_SIZE);
         if (!hash)
                 return NULL;
 
-        nr_hash = CFS_PAGE_SIZE / sizeof(struct hlist_head);
+        nr_hash = CFS_PAGE_SIZE / sizeof(cfs_hlist_head_t);
         LASSERT(nr_hash > NR_CAPAHASH);
 
         for (i = 0; i < NR_CAPAHASH; i++)
-                INIT_HLIST_HEAD(hash + i);
+                CFS_INIT_HLIST_HEAD(hash + i);
         return hash;
 }
 
@@ -113,25 +113,26 @@ static inline int capa_on_server(struct obd_capa *ocapa)
 static inline void capa_delete(struct obd_capa *ocapa)
 {
         LASSERT(capa_on_server(ocapa));
-        hlist_del_init(&ocapa->u.tgt.c_hash);
-        list_del_init(&ocapa->c_list);
+        cfs_hlist_del_init(&ocapa->u.tgt.c_hash);
+        cfs_list_del_init(&ocapa->c_list);
         capa_count[ocapa->c_site]--;
         /* release the ref when alloc */
         capa_put(ocapa);
 }
 
-void cleanup_capa_hash(struct hlist_head *hash)
+void cleanup_capa_hash(cfs_hlist_head_t *hash)
 {
         int i;
-        struct hlist_node *pos, *next;
+        cfs_hlist_node_t *pos, *next;
         struct obd_capa *oc;
 
-        spin_lock(&capa_lock);
+        cfs_spin_lock(&capa_lock);
         for (i = 0; i < NR_CAPAHASH; i++) {
-                hlist_for_each_entry_safe(oc, pos, next, hash + i, u.tgt.c_hash)
+                cfs_hlist_for_each_entry_safe(oc, pos, next, hash + i,
+                                              u.tgt.c_hash)
                         capa_delete(oc);
         }
-        spin_unlock(&capa_lock);
+        cfs_spin_unlock(&capa_lock);
 
         OBD_FREE(hash, CFS_PAGE_SIZE);
 }
@@ -152,13 +153,13 @@ static inline int capa_is_to_expire(struct obd_capa *oc)
 }
 
 static struct obd_capa *find_capa(struct lustre_capa *capa,
-                                  struct hlist_head *head, int alive)
+                                  cfs_hlist_head_t *head, int alive)
 {
-        struct hlist_node *pos;
+        cfs_hlist_node_t *pos;
         struct obd_capa *ocapa;
         int len = alive ? offsetof(struct lustre_capa, lc_keyid):sizeof(*capa);
 
-        hlist_for_each_entry(ocapa, pos, head, u.tgt.c_hash) {
+        cfs_hlist_for_each_entry(ocapa, pos, head, u.tgt.c_hash) {
                 if (memcmp(&ocapa->c_capa, capa, len))
                         continue;
                 /* don't return one that will expire soon in this case */
@@ -175,17 +176,17 @@ static struct obd_capa *find_capa(struct lustre_capa *capa,
 }
 
 #define LRU_CAPA_DELETE_COUNT 12
-static inline void capa_delete_lru(struct list_head *head)
+static inline void capa_delete_lru(cfs_list_t *head)
 {
         struct obd_capa *ocapa;
-        struct list_head *node = head->next;
+        cfs_list_t *node = head->next;
         int count = 0;
 
         /* free LRU_CAPA_DELETE_COUNT unused capa from head */
         while (count++ < LRU_CAPA_DELETE_COUNT) {
-                ocapa = list_entry(node, struct obd_capa, c_list);
+                ocapa = cfs_list_entry(node, struct obd_capa, c_list);
                 node = node->next;
-                if (atomic_read(&ocapa->c_refc))
+                if (cfs_atomic_read(&ocapa->c_refc))
                         continue;
 
                 DEBUG_CAPA(D_SEC, &ocapa->c_capa, "free lru");
@@ -194,49 +195,50 @@ static inline void capa_delete_lru(struct list_head *head)
 }
 
 /* add or update */
-struct obd_capa *capa_add(struct hlist_head *hash, struct lustre_capa *capa)
+struct obd_capa *capa_add(cfs_hlist_head_t *hash, struct lustre_capa *capa)
 {
-        struct hlist_head *head = hash + capa_hashfn(&capa->lc_fid);
+        cfs_hlist_head_t *head = hash + capa_hashfn(&capa->lc_fid);
         struct obd_capa *ocapa, *old = NULL;
-        struct list_head *list = &capa_list[CAPA_SITE_SERVER];
+        cfs_list_t *list = &capa_list[CAPA_SITE_SERVER];
 
         ocapa = alloc_capa(CAPA_SITE_SERVER);
         if (IS_ERR(ocapa))
                 return NULL;
 
-        spin_lock(&capa_lock);
+        cfs_spin_lock(&capa_lock);
         old = find_capa(capa, head, 0);
         if (!old) {
                 ocapa->c_capa = *capa;
                 set_capa_expiry(ocapa);
-                hlist_add_head(&ocapa->u.tgt.c_hash, head);
-                list_add_tail(&ocapa->c_list, list);
+                cfs_hlist_add_head(&ocapa->u.tgt.c_hash, head);
+                cfs_list_add_tail(&ocapa->c_list, list);
                 capa_get(ocapa);
                 capa_count[CAPA_SITE_SERVER]++;
                 if (capa_count[CAPA_SITE_SERVER] > CAPA_HASH_SIZE)
                         capa_delete_lru(list);
-                spin_unlock(&capa_lock);
+                cfs_spin_unlock(&capa_lock);
                 return ocapa;
         } else {
                 capa_get(old);
-                spin_unlock(&capa_lock);
+                cfs_spin_unlock(&capa_lock);
                 capa_put(ocapa);
                 return old;
         }
 }
 
-struct obd_capa *capa_lookup(struct hlist_head *hash, struct lustre_capa *capa,
+struct obd_capa *capa_lookup(cfs_hlist_head_t *hash, struct lustre_capa *capa,
                              int alive)
 {
         struct obd_capa *ocapa;
 
-        spin_lock(&capa_lock);
+        cfs_spin_lock(&capa_lock);
         ocapa = find_capa(capa, hash + capa_hashfn(&capa->lc_fid), alive);
         if (ocapa) {
-                list_move_tail(&ocapa->c_list, &capa_list[CAPA_SITE_SERVER]);
+                cfs_list_move_tail(&ocapa->c_list,
+                                   &capa_list[CAPA_SITE_SERVER]);
                 capa_get(ocapa);
         }
-        spin_unlock(&capa_lock);
+        cfs_spin_unlock(&capa_lock);
 
         return ocapa;
 }
@@ -381,9 +383,9 @@ out:
 
 void capa_cpy(void *capa, struct obd_capa *ocapa)
 {
-        spin_lock(&ocapa->c_lock);
+        cfs_spin_lock(&ocapa->c_lock);
         *(struct lustre_capa *)capa = ocapa->c_capa;
-        spin_unlock(&ocapa->c_lock);
+        cfs_spin_unlock(&ocapa->c_lock);
 }
 
 EXPORT_SYMBOL(init_capa_hash);

@@ -63,9 +63,9 @@ struct osc_async_page {
         unsigned short          oap_cmd;
         unsigned short          oap_interrupted:1;
 
-        struct list_head        oap_pending_item;
-        struct list_head        oap_urgent_item;
-        struct list_head        oap_rpc_item;
+        cfs_list_t              oap_pending_item;
+        cfs_list_t              oap_urgent_item;
+        cfs_list_t              oap_rpc_item;
 
         obd_off                 oap_obj_off;
         unsigned                oap_page_off;
@@ -79,9 +79,9 @@ struct osc_async_page {
 
         const struct obd_async_page_ops *oap_caller_ops;
         void                    *oap_caller_data;
-        struct list_head         oap_page_list;
+        cfs_list_t               oap_page_list;
         struct ldlm_lock        *oap_ldlm_lock;
-        spinlock_t               oap_lock;
+        cfs_spinlock_t           oap_lock;
 };
 
 #define oap_page        oap_brw_page.pg
@@ -89,9 +89,9 @@ struct osc_async_page {
 #define oap_brw_flags   oap_brw_page.flag
 
 struct osc_cache_waiter {
-        struct list_head        ocw_entry;
+        cfs_list_t              ocw_entry;
         cfs_waitq_t             ocw_waitq;
-        struct osc_async_page   *ocw_oap;
+        struct osc_async_page  *ocw_oap;
         int                     ocw_rc;
 };
 
@@ -168,7 +168,7 @@ int osc_enter_cache_try(const struct lu_env *env,
                         struct osc_async_page *oap, int transient);
 
 struct cl_page *osc_oap2cl_page(struct osc_async_page *oap);
-extern spinlock_t osc_ast_guard;
+extern cfs_spinlock_t osc_ast_guard;
 
 int osc_cleanup(struct obd_device *obd);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -194,8 +194,8 @@ static inline int osc_recoverable_error(int rc)
 /* return 1 if osc should be resend request */
 static inline int osc_should_resend(int resend, struct client_obd *cli)
 {
-        return atomic_read(&cli->cl_resends) ?
-               atomic_read(&cli->cl_resends) > resend : 1;
+        return cfs_atomic_read(&cli->cl_resends) ?
+               cfs_atomic_read(&cli->cl_resends) > resend : 1;
 }
 
 #ifndef min_t

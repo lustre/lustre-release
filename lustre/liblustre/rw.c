@@ -61,8 +61,6 @@
 #include <file.h>
 #endif
 
-#undef LIST_HEAD
-
 #include "llite_lib.h"
 
 typedef ssize_t llu_file_piov_t(const struct iovec *iovec, int iovlen,
@@ -453,7 +451,7 @@ int llu_iop_read(struct inode *ino,
         int ret;
 
         /* BUG: 5972 */
-        st->st_atime = CURRENT_TIME;
+        st->st_atime = CFS_CURRENT_TIME;
 
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))
@@ -477,7 +475,7 @@ int llu_iop_write(struct inode *ino,
         int refcheck;
         int ret;
 
-        st->st_mtime = st->st_ctime = CURRENT_TIME;
+        st->st_mtime = st->st_ctime = CFS_CURRENT_TIME;
 
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))

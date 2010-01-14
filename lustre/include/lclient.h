@@ -167,7 +167,7 @@ struct ccc_object {
          *
          * \see ccc_page::cpg_pending_linkage
          */
-        struct list_head        cob_pending_list;
+        cfs_list_t             cob_pending_list;
 
         /**
          * Access this counter is protected by inode->i_sem. Now that
@@ -180,7 +180,7 @@ struct ccc_object {
          *
          * \see ll_vm_open(), ll_vm_close().
          */
-        atomic_t                cob_mmap_cnt;
+        cfs_atomic_t            cob_mmap_cnt;
 };
 
 /**
@@ -198,7 +198,7 @@ struct ccc_page {
          * that is, never iterated through, only checked for list_empty(), but
          * having a list is useful for debugging.
          */
-        struct list_head     cpg_pending_linkage;
+        cfs_list_t           cpg_pending_linkage;
         /** VM page */
         cfs_page_t          *cpg_page;
 };

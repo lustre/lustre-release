@@ -52,15 +52,15 @@ struct lu_target {
         /** Server last transaction number */
         __u64                    lut_last_transno;
         /** Lock protecting last transaction number */
-        spinlock_t               lut_translock;
+        cfs_spinlock_t           lut_translock;
         /** Lock protecting client bitmap */
-        spinlock_t               lut_client_bitmap_lock;
+        cfs_spinlock_t           lut_client_bitmap_lock;
         /** Bitmap of known clients */
         unsigned long            lut_client_bitmap[LR_CLIENT_BITMAP_SIZE];
         /** Number of mounts */
         __u64                    lut_mount_count;
         __u32                    lut_stale_export_age;
-        spinlock_t               lut_trans_table_lock;
+        cfs_spinlock_t           lut_trans_table_lock;
 };
 
 typedef void (*lut_cb_t)(struct lu_target *lut, __u64 transno,

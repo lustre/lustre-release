@@ -49,7 +49,9 @@
 /*
  * Schedule
  */
-void cfs_schedule_timeout(cfs_task_state_t state, int64_t timeout);
+void cfs_schedule_timeout_and_set_state(cfs_task_state_t state,
+                                        int64_t timeout);
+void cfs_schedule_timeout(int64_t timeout);
 void cfs_schedule(void);
 void cfs_pause(cfs_duration_t ticks);
 int  cfs_need_resched(void);

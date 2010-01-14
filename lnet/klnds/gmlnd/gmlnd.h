@@ -137,13 +137,13 @@ typedef struct netbuf {
 #define GMNAL_NETBUF_LOCAL_NETADDR(nb)  ((void *)((unsigned long)(nb)->nb_netaddr))
 
 typedef struct gmnal_txbuf {
-        struct list_head         txb_list;      /* queue on gmni_idle_ltxbs */
+        cfs_list_t               txb_list;      /* queue on gmni_idle_ltxbs */
         struct gmnal_txbuf      *txb_next;      /* stash on gmni_ltxs */
         gmnal_netbuf_t           txb_buf;       /* space */
 } gmnal_txbuf_t;
 
 typedef struct gmnal_tx {
-        struct list_head         tx_list;       /* queue */
+        cfs_list_t               tx_list;       /* queue */
         int                      tx_credit:1;   /* consumed a credit? */
         int                      tx_large_iskiov:1; /* large is in kiovs? */
         struct gmnal_ni         *tx_gmni;       /* owning NI */
@@ -168,7 +168,7 @@ typedef struct gmnal_tx {
 } gmnal_tx_t;
 
 typedef struct gmnal_rx {
-        struct list_head         rx_list;	/* enqueue on gmni_rxq for handling */
+        cfs_list_t               rx_list;	/* enqueue on gmni_rxq for handling */
         int                      rx_islarge:1;  /* large receive buffer? */
         unsigned int             rx_recv_nob;	/* bytes received */
         __u16                    rx_recv_gmid;	/* sender */
@@ -179,34 +179,34 @@ typedef struct gmnal_rx {
 } gmnal_rx_t;
 
 typedef struct gmnal_ni {
-        lnet_ni_t        *gmni_ni;              /* generic NI */
-        struct gm_port   *gmni_port;            /* GM port */
-        spinlock_t        gmni_gm_lock;         /* serialise GM calls */
-        int               gmni_large_pages;     /* # pages in a large message buffer */
-        int               gmni_large_msgsize;   /* nob in large message buffers */
-        int               gmni_large_gmsize;    /* large message GM bucket */
-        int               gmni_small_msgsize;   /* nob in small message buffers */
-        int               gmni_small_gmsize;    /* small message GM bucket */
-        __u64             gmni_netaddr_base;    /* base of mapped network VM */
-        int               gmni_netaddr_size;    /* # bytes of mapped network VM */
+        lnet_ni_t           *gmni_ni;           /* generic NI */
+        struct gm_port      *gmni_port;         /* GM port */
+        cfs_spinlock_t       gmni_gm_lock;      /* serialise GM calls */
+        int                  gmni_large_pages;  /* # pages in a large message buffer */
+        int                  gmni_large_msgsize;/* nob in large message buffers */
+        int                  gmni_large_gmsize; /* large message GM bucket */
+        int                  gmni_small_msgsize;/* nob in small message buffers */
+        int                  gmni_small_gmsize; /* small message GM bucket */
+        __u64                gmni_netaddr_base; /* base of mapped network VM */
+        int                  gmni_netaddr_size; /* # bytes of mapped network VM */
 
-        gmnal_tx_t       *gmni_txs;             /* all txs */
-        gmnal_rx_t       *gmni_rxs;		/* all rx descs */
-        gmnal_txbuf_t    *gmni_ltxbs;           /* all large tx bufs */
+        gmnal_tx_t          *gmni_txs;          /* all txs */
+        gmnal_rx_t          *gmni_rxs;		/* all rx descs */
+        gmnal_txbuf_t       *gmni_ltxbs;        /* all large tx bufs */
 
-        atomic_t          gmni_nthreads;        /* total # threads */
-        gm_alarm_t        gmni_alarm;           /* alarm to wake caretaker */
-        int               gmni_shutdown;	/* tell all threads to exit */
+        cfs_atomic_t         gmni_nthreads;     /* total # threads */
+        gm_alarm_t           gmni_alarm;        /* alarm to wake caretaker */
+        int                  gmni_shutdown;	/* tell all threads to exit */
 
-        struct list_head  gmni_idle_txs;        /* idle tx's */
-        int               gmni_tx_credits;      /* # transmits still possible */
-        struct list_head  gmni_idle_ltxbs;      /* idle large tx buffers */
-        struct list_head  gmni_buf_txq;         /* tx's waiting for buffers */
-        struct list_head  gmni_cred_txq;        /* tx's waiting for credits */
-        spinlock_t        gmni_tx_lock;         /* serialise */
+        cfs_list_t           gmni_idle_txs;     /* idle tx's */
+        int                  gmni_tx_credits;   /* # transmits still possible */
+        cfs_list_t           gmni_idle_ltxbs;   /* idle large tx buffers */
+        cfs_list_t           gmni_buf_txq;      /* tx's waiting for buffers */
+        cfs_list_t           gmni_cred_txq;     /* tx's waiting for credits */
+        cfs_spinlock_t       gmni_tx_lock;      /* serialise */
 
-        struct gm_hash   *gmni_rx_hash;		/* buffer->rx lookup */
-        struct semaphore  gmni_rx_mutex;        /* serialise blocking on GM */
+        struct gm_hash      *gmni_rx_hash;	/* buffer->rx lookup */
+        cfs_semaphore_t      gmni_rx_mutex;    /* serialise blocking on GM */
 } gmnal_ni_t;
 
 typedef struct {

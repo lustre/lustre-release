@@ -158,7 +158,7 @@ struct lov_device {
          * Serializes access to lov_device::ld_emrg in low-memory
          * conditions.
          */
-        struct mutex              ld_mutex;
+        cfs_mutex_t               ld_mutex;
 };
 
 /**
@@ -196,7 +196,7 @@ struct lov_object {
          *
          * \see lov_object::lo_type
          */
-        struct rw_semaphore    lo_type_guard;
+        cfs_rw_semaphore_t     lo_type_guard;
         /**
          * Type of an object. Protected by lov_object::lo_type_guard.
          */
@@ -366,7 +366,7 @@ struct lov_lock_link {
          * A linkage into per sub-lock list of all corresponding top-locks,
          * hanging off lovsub_lock::lss_parents.
          */
-        struct list_head lll_list;
+        cfs_list_t       lll_list;
 };
 
 /**
@@ -378,7 +378,7 @@ struct lovsub_lock {
          * List of top-locks that have given sub-lock as their part. Protected
          * by cl_lock::cll_guard mutex.
          */
-        struct list_head      lss_parents;
+        cfs_list_t            lss_parents;
         /**
          * Top-lock that initiated current operation on this sub-lock. This is
          * only set during top-to-bottom lock operations like enqueue, and is
@@ -430,7 +430,7 @@ struct lov_io_sub {
          * Linkage into a list (hanging off lov_io::lis_active) of all
          * sub-io's active for the current IO iteration.
          */
-        struct list_head     sub_linkage;
+        cfs_list_t           sub_linkage;
         /**
          * true, iff cl_io_init() was successfully executed against
          * lov_io_sub::sub_io.
@@ -506,7 +506,7 @@ struct lov_io {
         /**
          * List of active sub-io's.
          */
-        struct list_head   lis_active;
+        cfs_list_t         lis_active;
 };
 
 struct lov_session {

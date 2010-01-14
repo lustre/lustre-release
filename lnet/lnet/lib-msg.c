@@ -147,7 +147,7 @@ lnet_complete_msg_locked(lnet_msg_t *msg)
 
         LASSERT (msg->msg_onactivelist);
         msg->msg_onactivelist = 0;
-        list_del (&msg->msg_activelist);
+        cfs_list_del (&msg->msg_activelist);
         the_lnet.ln_counters.msgs_alloc--;
         lnet_msg_free(msg);
 }
@@ -162,7 +162,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 #endif
         lnet_libmd_t      *md;
 
-        LASSERT (!in_interrupt ());
+        LASSERT (!cfs_in_interrupt ());
 
         if (msg == NULL)
                 return;
@@ -210,7 +210,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 msg->msg_md = NULL;
         }
 
-        list_add_tail (&msg->msg_list, &the_lnet.ln_finalizeq);
+        cfs_list_add_tail (&msg->msg_list, &the_lnet.ln_finalizeq);
 
         /* Recursion breaker.  Don't complete the message here if I am (or
          * enough other threads are) already completing messages */
@@ -234,11 +234,11 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
         the_lnet.ln_finalizing = 1;
 #endif
 
-        while (!list_empty(&the_lnet.ln_finalizeq)) {
-                msg = list_entry(the_lnet.ln_finalizeq.next,
-                                 lnet_msg_t, msg_list);
-                
-                list_del(&msg->msg_list);
+        while (!cfs_list_empty(&the_lnet.ln_finalizeq)) {
+                msg = cfs_list_entry(the_lnet.ln_finalizeq.next,
+                                     lnet_msg_t, msg_list);
+
+                cfs_list_del(&msg->msg_list);
 
                 /* NB drops and regains the lnet lock if it actually does
                  * anything, so my finalizing friends can chomp along too */

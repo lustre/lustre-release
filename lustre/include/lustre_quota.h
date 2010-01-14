@@ -174,9 +174,9 @@ struct lustre_mem_dqblk {
 
 struct lustre_dquot {
         /** Hash list in memory, protect by dquot_hash_lock */
-        struct list_head dq_hash;
+        cfs_list_t dq_hash;
         /** Protect the data in lustre_dquot */
-        struct semaphore dq_sem;
+        cfs_semaphore_t dq_sem;
         /** Use count */
         int dq_refcnt;
         /** Pointer of quota info it belongs to */
@@ -196,7 +196,7 @@ struct lustre_dquot {
 };
 
 struct dquot_id {
-        struct list_head        di_link;
+        cfs_list_t              di_link;
         __u32                   di_id;
         __u32                   di_flag;
 };
@@ -221,7 +221,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot);
 int lustre_commit_dquot(struct lustre_dquot *dquot);
 int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *file, struct inode *inode, int type,
-                    struct list_head *list);
+                    cfs_list_t *list);
 int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
 
 typedef int (*dqacq_handler_t) (struct obd_device * obd, struct qunit_data * qd,
@@ -330,7 +330,7 @@ struct lustre_quota_ctxt {
          */
         int           lqc_sync_blk;
         /** guard lqc_imp_valid now */
-        spinlock_t    lqc_lock;
+        cfs_spinlock_t lqc_lock;
         /**
          * when mds isn't connected, threads
          * on osts who send the quota reqs
@@ -341,7 +341,7 @@ struct lustre_quota_ctxt {
         /** lquota statistics */
         struct lprocfs_stats  *lqc_stats;
         /** the number of used hashed lqs */
-        atomic_t      lqc_lqs;
+        cfs_atomic_t  lqc_lqs;
         /** no lqs are in use */
         cfs_waitq_t   lqc_lqs_waitq;
 };
@@ -350,7 +350,7 @@ struct lustre_quota_ctxt {
 #define QUOTA_MASTER_UNREADY(qctxt) (qctxt)->lqc_setup = 0
 
 struct lustre_qunit_size {
-        struct hlist_node lqs_hash; /** the hash entry */
+        cfs_hlist_node_t lqs_hash; /** the hash entry */
         unsigned int lqs_id;        /** id of user/group */
         unsigned long lqs_flags;    /** 31st bit is QB_SET, 30th bit is QI_SET
                                      * other bits are same as LQUOTA_FLAGS_*
@@ -372,10 +372,10 @@ struct lustre_qunit_size {
         long long lqs_ino_rec;
         /** when blocks are allocated/released, this value will record it */
         long long lqs_blk_rec;
-        atomic_t lqs_refcount;
+        cfs_atomic_t lqs_refcount;
         cfs_time_t lqs_last_bshrink;   /** time of last block shrink */
         cfs_time_t lqs_last_ishrink;   /** time of last inode shrink */
-        spinlock_t lqs_lock;
+        cfs_spinlock_t lqs_lock;
         unsigned long long lqs_key;    /** hash key */
         struct lustre_quota_ctxt *lqs_ctxt; /** quota ctxt */
 };
@@ -397,10 +397,10 @@ struct lustre_qunit_size {
 
 static inline void __lqs_getref(struct lustre_qunit_size *lqs)
 {
-        int count = atomic_inc_return(&lqs->lqs_refcount);
+        int count = cfs_atomic_inc_return(&lqs->lqs_refcount);
 
         if (count == 2) /* quota_create_lqs */
-                atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
+                cfs_atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
         CDEBUG(D_INFO, "lqs=%p refcount %d\n", lqs, count);
 }
 
@@ -411,13 +411,13 @@ static inline void lqs_getref(struct lustre_qunit_size *lqs)
 
 static inline void __lqs_putref(struct lustre_qunit_size *lqs)
 {
-        LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
+        LASSERT(cfs_atomic_read(&lqs->lqs_refcount) > 0);
 
-        if (atomic_dec_return(&lqs->lqs_refcount) == 1)
-                if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
+        if (cfs_atomic_dec_return(&lqs->lqs_refcount) == 1)
+                if (cfs_atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
                         cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
         CDEBUG(D_INFO, "lqs=%p refcount %d\n",
-               lqs, atomic_read(&lqs->lqs_refcount));
+               lqs, cfs_atomic_read(&lqs->lqs_refcount));
 }
 
 static inline void lqs_putref(struct lustre_qunit_size *lqs)
@@ -427,7 +427,7 @@ static inline void lqs_putref(struct lustre_qunit_size *lqs)
 
 static inline void lqs_initref(struct lustre_qunit_size *lqs)
 {
-        atomic_set(&lqs->lqs_refcount, 0);
+        cfs_atomic_set(&lqs->lqs_refcount, 0);
 }
 
 #else
@@ -464,7 +464,7 @@ struct quotacheck_thread_args {
         struct obd_device   *qta_obd;   /** obd device */
         struct obd_quotactl  qta_oqctl; /** obd_quotactl args */
         struct super_block  *qta_sb;    /** obd super block */
-        struct semaphore    *qta_sem;   /** obt_quotachecking */
+        cfs_semaphore_t     *qta_sem;   /** obt_quotachecking */
 };
 
 struct obd_trans_info;

@@ -40,15 +40,15 @@
 typedef struct {
         int             size;
         unsigned long   data[0];
-} bitmap_t;
+} cfs_bitmap_t;
 
 #define CFS_BITMAP_SIZE(nbits) \
-     (((nbits/BITS_PER_LONG)+1)*sizeof(long)+sizeof(bitmap_t))
+     (((nbits/BITS_PER_LONG)+1)*sizeof(long)+sizeof(cfs_bitmap_t))
 
 static inline
-bitmap_t *ALLOCATE_BITMAP(int size)
+cfs_bitmap_t *CFS_ALLOCATE_BITMAP(int size)
 {
-        bitmap_t *ptr;
+        cfs_bitmap_t *ptr;
 
         OBD_ALLOC(ptr, CFS_BITMAP_SIZE(size));
         if (ptr == NULL)
@@ -59,42 +59,42 @@ bitmap_t *ALLOCATE_BITMAP(int size)
         RETURN (ptr);
 }
 
-#define FREE_BITMAP(ptr)        OBD_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
+#define CFS_FREE_BITMAP(ptr)        OBD_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
 
 static inline
-void cfs_bitmap_set(bitmap_t *bitmap, int nbit)
+void cfs_bitmap_set(cfs_bitmap_t *bitmap, int nbit)
 {
-        set_bit(nbit, bitmap->data);
+        cfs_set_bit(nbit, bitmap->data);
 }
 
 static inline
-void cfs_bitmap_clear(bitmap_t *bitmap, int nbit)
+void cfs_bitmap_clear(cfs_bitmap_t *bitmap, int nbit)
 {
-        test_and_clear_bit(nbit, bitmap->data);
+        cfs_test_and_clear_bit(nbit, bitmap->data);
 }
 
 static inline
-int cfs_bitmap_check(bitmap_t *bitmap, int nbit)
+int cfs_bitmap_check(cfs_bitmap_t *bitmap, int nbit)
 {
-        return test_bit(nbit, bitmap->data);
+        return cfs_test_bit(nbit, bitmap->data);
 }
 
 static inline
-int cfs_bitmap_test_and_clear(bitmap_t *bitmap, int nbit)
+int cfs_bitmap_test_and_clear(cfs_bitmap_t *bitmap, int nbit)
 {
-        return test_and_clear_bit(nbit, bitmap->data);
+        return cfs_test_and_clear_bit(nbit, bitmap->data);
 }
 
 /* return 0 is bitmap has none set bits */
 static inline
-int cfs_bitmap_check_empty(bitmap_t *bitmap)
+int cfs_bitmap_check_empty(cfs_bitmap_t *bitmap)
 {
-        return find_first_bit(bitmap->data, bitmap->size) == bitmap->size;
+        return cfs_find_first_bit(bitmap->data, bitmap->size) == bitmap->size;
 }
 
 #define cfs_foreach_bit(bitmap, pos) \
-	for((pos)=find_first_bit((bitmap)->data, bitmap->size);   \
+	for((pos)=cfs_find_first_bit((bitmap)->data, bitmap->size);   \
             (pos) < (bitmap)->size;                               \
-            (pos) = find_next_bit((bitmap)->data, (bitmap)->size, (pos)))
+            (pos) = cfs_find_next_bit((bitmap)->data, (bitmap)->size, (pos)))
 
 #endif

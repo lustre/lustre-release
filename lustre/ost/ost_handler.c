@@ -257,7 +257,7 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
-                                    cfs_time_current_64() - HZ, 0);
+                                    cfs_time_current_64() - CFS_HZ, 0);
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -644,10 +644,10 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         /* Check if there is eviction in progress, and if so, wait for it to
          * finish */
-        if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
+        if (unlikely(cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
                 lwi = LWI_INTR(NULL, NULL); // We do not care how long it takes
                 rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-                        !atomic_read(&exp->exp_obd->obd_evict_inprogress),
+                        !cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress),
                         &lwi);
         }
         if (exp->exp_failed)
@@ -772,13 +772,13 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc == 0) {
                 /* Check if there is eviction in progress, and if so, wait for
                  * it to finish */
-                if (unlikely(atomic_read(&exp->exp_obd->
-                                                obd_evict_inprogress))) {
+                if (unlikely(cfs_atomic_read(&exp->exp_obd->
+                                             obd_evict_inprogress))) {
                         lwi = LWI_INTR(NULL, NULL);
                         rc = l_wait_event(exp->exp_obd->
-                                                obd_evict_inprogress_waitq,
-                                          !atomic_read(&exp->exp_obd->
-                                                        obd_evict_inprogress),
+                                          obd_evict_inprogress_waitq,
+                                          !cfs_atomic_read(&exp->exp_obd->
+                                          obd_evict_inprogress),
                                           &lwi);
                 }
                 /* Check if client was evicted or tried to reconnect already */
@@ -916,10 +916,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         /* Check if there is eviction in progress, and if so, wait for it to
          * finish */
-        if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
+        if (unlikely(cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
                 lwi = LWI_INTR(NULL, NULL); // We do not care how long it takes
                 rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-                        !atomic_read(&exp->exp_obd->obd_evict_inprogress),
+                        !cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress),
                         &lwi);
         }
         if (exp->exp_failed)
@@ -1420,9 +1420,9 @@ do {                                                                    \
         reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |          \
                                       OBD_CONNECT_RMT_CLIENT_FORCE |    \
                                       OBD_CONNECT_OSS_CAPA);            \
-        spin_lock(&exp->exp_lock);                                      \
+        cfs_spin_lock(&exp->exp_lock);                                  \
         exp->exp_connect_flags = reply->ocd_connect_flags;              \
-        spin_unlock(&exp->exp_lock);                                    \
+        cfs_spin_unlock(&exp->exp_lock);                                \
 } while (0)
 
 static int ost_init_sec_level(struct ptlrpc_request *req)
@@ -1519,9 +1519,9 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                         if (!filter->fo_fl_oss_capa)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
 
-                        spin_lock(&exp->exp_lock);
+                        cfs_spin_lock(&exp->exp_lock);
                         exp->exp_connect_flags = reply->ocd_connect_flags;
-                        spin_unlock(&exp->exp_lock);
+                        cfs_spin_unlock(&exp->exp_lock);
                 }
                 break;
         default:
@@ -1554,14 +1554,14 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
         }
 
         if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
-                read_lock(&filter->fo_sptlrpc_lock);
+                cfs_read_lock(&filter->fo_sptlrpc_lock);
                 sptlrpc_target_choose_flavor(&filter->fo_sptlrpc_rset,
                                              req->rq_sp_from,
                                              req->rq_peer.nid,
                                              &flvr);
-                read_unlock(&filter->fo_sptlrpc_lock);
+                cfs_read_unlock(&filter->fo_sptlrpc_lock);
 
-                spin_lock(&exp->exp_lock);
+                cfs_spin_lock(&exp->exp_lock);
 
                 exp->exp_sp_peer = req->rq_sp_from;
                 exp->exp_flvr = flvr;
@@ -1575,7 +1575,7 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
                         rc = -EACCES;
                 }
 
-                spin_unlock(&exp->exp_lock);
+                cfs_spin_unlock(&exp->exp_lock);
         } else {
                 if (exp->exp_sp_peer != req->rq_sp_from) {
                         CERROR("RPC source %s doesn't match %s\n",
@@ -2003,9 +2003,9 @@ int ost_handle(struct ptlrpc_request *req)
                 obd = req->rq_export->exp_obd;
 
                 /* Check for aborted recovery. */
-                spin_lock_bh(&obd->obd_processing_task_lock);
+                cfs_spin_lock_bh(&obd->obd_processing_task_lock);
                 recovering = obd->obd_recovering;
-                spin_unlock_bh(&obd->obd_processing_task_lock);
+                cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
                 if (recovering) {
                         rc = ost_filter_recovery_request(req, obd,
                                                          &should_process);
@@ -2310,14 +2310,14 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         int rc;
         ENTRY;
 
-        rc = cleanup_group_info();
+        rc = cfs_cleanup_group_info();
         if (rc)
                 RETURN(rc);
 
         lprocfs_ost_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        sema_init(&ost->ost_health_sem, 1);
+        cfs_sema_init(&ost->ost_health_sem, 1);
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */
@@ -2328,7 +2328,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 oss_max_threads = oss_min_threads = oss_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                oss_min_threads = num_possible_cpus() * CFS_NUM_CACHEPAGES >>
+                oss_min_threads =
+                        cfs_num_possible_cpus() * CFS_NUM_CACHEPAGES >>
                         (27 - CFS_PAGE_SHIFT);
                 if (oss_min_threads < OSS_THREADS_MIN)
                         oss_min_threads = OSS_THREADS_MIN;
@@ -2430,20 +2431,20 @@ static int ost_cleanup(struct obd_device *obd)
 
         ping_evictor_stop();
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
+        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
                 target_cancel_recovery_timer(obd);
                 obd->obd_recovering = 0;
         }
-        spin_unlock_bh(&obd->obd_processing_task_lock);
+        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        down(&ost->ost_health_sem);
+        cfs_down(&ost->ost_health_sem);
         ptlrpc_unregister_service(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_io_service);
         ost->ost_service = NULL;
         ost->ost_create_service = NULL;
-        up(&ost->ost_health_sem);
+        cfs_up(&ost->ost_health_sem);
 
         lprocfs_obd_cleanup(obd);
 
@@ -2455,11 +2456,11 @@ static int ost_health_check(struct obd_device *obd)
         struct ost_obd *ost = &obd->u.ost;
         int rc = 0;
 
-        down(&ost->ost_health_sem);
+        cfs_down(&ost->ost_health_sem);
         rc |= ptlrpc_service_health_check(ost->ost_service);
         rc |= ptlrpc_service_health_check(ost->ost_create_service);
         rc |= ptlrpc_service_health_check(ost->ost_io_service);
-        up(&ost->ost_health_sem);
+        cfs_up(&ost->ost_health_sem);
 
         /*
          * health_check to return 0 on healthy

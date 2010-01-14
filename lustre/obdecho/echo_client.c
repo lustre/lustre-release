@@ -69,9 +69,9 @@ struct echo_object {
         struct cl_object_header eo_hdr;
 
         struct echo_device     *eo_dev;
-        struct list_head        eo_obj_chain;
+        cfs_list_t              eo_obj_chain;
         struct lov_stripe_md   *eo_lsm;
-        atomic_t                eo_npages;
+        cfs_atomic_t            eo_npages;
         int                     eo_deleted;
 };
 
@@ -87,10 +87,10 @@ struct echo_page {
 
 struct echo_lock {
         struct cl_lock_slice   el_cl;
-        struct list_head       el_chain;
+        cfs_list_t             el_chain;
         struct echo_object    *el_object;
         __u64                  el_cookie;
-        atomic_t               el_refcount;
+        cfs_atomic_t           el_refcount;
 };
 
 struct echo_io {
@@ -285,7 +285,7 @@ static void echo_page_fini(const struct lu_env *env,
         cfs_page_t *vmpage      = ep->ep_vmpage;
         ENTRY;
 
-        atomic_dec(&eco->eo_npages);
+        cfs_atomic_dec(&eco->eo_npages);
         page_cache_release(vmpage);
         OBD_SLAB_FREE_PTR(ep, echo_page_kmem);
         EXIT;
@@ -339,7 +339,7 @@ static void echo_lock_fini(const struct lu_env *env,
 {
         struct echo_lock *ecl = cl2echo_lock(slice);
 
-        LASSERT(list_empty(&ecl->el_chain));
+        LASSERT(cfs_list_empty(&ecl->el_chain));
         OBD_SLAB_FREE_PTR(ecl, echo_lock_kmem);
 }
 
@@ -348,7 +348,7 @@ static void echo_lock_delete(const struct lu_env *env,
 {
         struct echo_lock *ecl      = cl2echo_lock(slice);
 
-        LASSERT(list_empty(&ecl->el_chain));
+        LASSERT(cfs_list_empty(&ecl->el_chain));
 }
 
 static int echo_lock_fits_into(const struct lu_env *env,
@@ -386,7 +386,7 @@ static struct cl_page *echo_page_init(const struct lu_env *env,
                 ep->ep_vmpage = vmpage;
                 page_cache_get(vmpage);
                 cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
-                atomic_inc(&eco->eo_npages);
+                cfs_atomic_inc(&eco->eo_npages);
         }
         RETURN(ERR_PTR(ep ? 0 : -ENOMEM));
 }
@@ -409,7 +409,7 @@ static int echo_lock_init(const struct lu_env *env,
                 cl_lock_slice_add(lock, &el->el_cl, obj, &echo_lock_ops);
                 el->el_object = cl2echo_obj(obj);
                 CFS_INIT_LIST_HEAD(&el->el_chain);
-                atomic_set(&el->el_refcount, 0);
+                cfs_atomic_set(&el->el_refcount, 0);
         }
         RETURN(el == NULL ? -ENOMEM : 0);
 }
@@ -459,14 +459,14 @@ static int echo_object_init(const struct lu_env *env, struct lu_object *obj,
         LASSERT(econf->eoc_md);
         eco->eo_lsm = *econf->eoc_md;
         eco->eo_dev = ed;
-        atomic_set(&eco->eo_npages, 0);
+        cfs_atomic_set(&eco->eo_npages, 0);
 
         /* clear the lsm pointer so that it won't get freed. */
         *econf->eoc_md = NULL;
 
-        spin_lock(&ec->ec_lock);
-        list_add_tail(&eco->eo_obj_chain, &ec->ec_objects);
-        spin_unlock(&ec->ec_lock);
+        cfs_spin_lock(&ec->ec_lock);
+        cfs_list_add_tail(&eco->eo_obj_chain, &ec->ec_objects);
+        cfs_spin_unlock(&ec->ec_lock);
 
         RETURN(0);
 }
@@ -478,11 +478,11 @@ static void echo_object_free(const struct lu_env *env, struct lu_object *obj)
         struct lov_stripe_md *lsm  = eco->eo_lsm;
         ENTRY;
 
-        LASSERT(atomic_read(&eco->eo_npages) == 0);
+        LASSERT(cfs_atomic_read(&eco->eo_npages) == 0);
 
-        spin_lock(&ec->ec_lock);
-        list_del_init(&eco->eo_obj_chain);
-        spin_unlock(&ec->ec_lock);
+        cfs_spin_lock(&ec->ec_lock);
+        cfs_list_del_init(&eco->eo_obj_chain);
+        cfs_spin_unlock(&ec->ec_lock);
 
         lu_object_fini(obj);
         lu_object_header_fini(obj->lo_header);
@@ -794,25 +794,26 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
         CDEBUG(D_INFO, "echo device:%p is going to be freed, next = %p\n", ed, next);
 
         /* destroy locks */
-        spin_lock(&ec->ec_lock);
-        while (!list_empty(&ec->ec_locks)) {
-                struct echo_lock *ecl = list_entry(ec->ec_locks.next,
-                                                   struct echo_lock, el_chain);
+        cfs_spin_lock(&ec->ec_lock);
+        while (!cfs_list_empty(&ec->ec_locks)) {
+                struct echo_lock *ecl = cfs_list_entry(ec->ec_locks.next,
+                                                       struct echo_lock,
+                                                       el_chain);
                 int still_used = 0;
 
-                if (atomic_dec_and_test(&ecl->el_refcount))
-                        list_del_init(&ecl->el_chain);
+                if (cfs_atomic_dec_and_test(&ecl->el_refcount))
+                        cfs_list_del_init(&ecl->el_chain);
                 else
                         still_used = 1;
-                spin_unlock(&ec->ec_lock);
+                cfs_spin_unlock(&ec->ec_lock);
 
                 CERROR("echo client: pending lock %p refs %d\n",
-                       ecl, atomic_read(&ecl->el_refcount));
+                       ecl, cfs_atomic_read(&ecl->el_refcount));
 
                 echo_lock_release(env, ecl, still_used);
-                spin_lock(&ec->ec_lock);
+                cfs_spin_lock(&ec->ec_lock);
         }
-        spin_unlock(&ec->ec_lock);
+        cfs_spin_unlock(&ec->ec_lock);
 
         LASSERT(ed->ed_site);
         lu_site_purge(env, &ed->ed_site->cs_lu, -1);
@@ -822,26 +823,28 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
          * all of cached objects. Anyway, probably the echo device is being
          * parallelly accessed.
          */
-        spin_lock(&ec->ec_lock);
-        list_for_each_entry(eco, &ec->ec_objects, eo_obj_chain)
+        cfs_spin_lock(&ec->ec_lock);
+        cfs_list_for_each_entry(eco, &ec->ec_objects, eo_obj_chain)
                 eco->eo_deleted = 1;
-        spin_unlock(&ec->ec_lock);
+        cfs_spin_unlock(&ec->ec_lock);
 
         /* purge again */
         lu_site_purge(env, &ed->ed_site->cs_lu, -1);
 
-        CDEBUG(D_INFO, "Waiting for the reference of echo object to be dropped\n");
+        CDEBUG(D_INFO,
+               "Waiting for the reference of echo object to be dropped\n");
 
         /* Wait for the last reference to be dropped. */
-        spin_lock(&ec->ec_lock);
-        while (!list_empty(&ec->ec_objects)) {
-                spin_unlock(&ec->ec_lock);
+        cfs_spin_lock(&ec->ec_lock);
+        while (!cfs_list_empty(&ec->ec_objects)) {
+                cfs_spin_unlock(&ec->ec_lock);
                 CERROR("echo_client still has objects at cleanup time, "
                        "wait for 1 second\n");
-                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
-                spin_lock(&ec->ec_lock);
+                cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT,
+                                                   cfs_time_seconds(1));
+                cfs_spin_lock(&ec->ec_lock);
         }
-        spin_unlock(&ec->ec_lock);
+        cfs_spin_unlock(&ec->ec_lock);
 
         CDEBUG(D_INFO, "No object exists, exiting...\n");
 
@@ -965,7 +968,7 @@ static int cl_echo_object_put(struct echo_object *eco)
         if (eco->eo_deleted) {
                 struct lu_object_header *loh = obj->co_lu.lo_header;
                 LASSERT(&eco->eo_hdr == luh2coh(loh));
-                set_bit(LU_OBJECT_HEARD_BANSHEE, &loh->loh_flags);
+                cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &loh->loh_flags);
                 cl_object_prune(env, obj);
         }
 
@@ -1006,14 +1009,14 @@ static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
                 rc = cl_wait(env, lck);
                 if (rc == 0) {
                         el = cl2echo_lock(cl_lock_at(lck, &echo_device_type));
-                        spin_lock(&ec->ec_lock);
-                        if (list_empty(&el->el_chain)) {
-                                list_add(&el->el_chain, &ec->ec_locks);
+                        cfs_spin_lock(&ec->ec_lock);
+                        if (cfs_list_empty(&el->el_chain)) {
+                                cfs_list_add(&el->el_chain, &ec->ec_locks);
                                 el->el_cookie = ++ec->ec_unique;
                         }
-                        atomic_inc(&el->el_refcount);
+                        cfs_atomic_inc(&el->el_refcount);
                         *cookie = el->el_cookie;
-                        spin_unlock(&ec->ec_lock);
+                        cfs_spin_unlock(&ec->ec_lock);
                 } else
                         cl_lock_release(env, lck, "ec enqueue", cfs_current());
         }
@@ -1056,25 +1059,25 @@ static int cl_echo_cancel0(struct lu_env *env, struct echo_device *ed,
 {
         struct echo_client_obd *ec = ed->ed_ec;
         struct echo_lock       *ecl = NULL;
-        struct list_head       *el;
+        cfs_list_t             *el;
         int found = 0, still_used = 0;
         ENTRY;
 
         LASSERT(ec != NULL);
-        spin_lock (&ec->ec_lock);
-        list_for_each (el, &ec->ec_locks) {
-                ecl = list_entry (el, struct echo_lock, el_chain);
+        cfs_spin_lock (&ec->ec_lock);
+        cfs_list_for_each (el, &ec->ec_locks) {
+                ecl = cfs_list_entry (el, struct echo_lock, el_chain);
                 CDEBUG(D_INFO, "ecl: %p, cookie: %llx\n", ecl, ecl->el_cookie);
                 found = (ecl->el_cookie == cookie);
                 if (found) {
-                        if (atomic_dec_and_test(&ecl->el_refcount))
-                                list_del_init(&ecl->el_chain);
+                        if (cfs_atomic_dec_and_test(&ecl->el_refcount))
+                                cfs_list_del_init(&ecl->el_chain);
                         else
                                 still_used = 1;
                         break;
                 }
         }
-        spin_unlock (&ec->ec_lock);
+        cfs_spin_unlock (&ec->ec_lock);
 
         if (!found)
                 RETURN(-ENOENT);
@@ -1225,12 +1228,12 @@ echo_copyout_lsm (struct lov_stripe_md *lsm, void *_ulsm, int ulsm_nob)
         if (nob > ulsm_nob)
                 return (-EINVAL);
 
-        if (copy_to_user (ulsm, lsm, sizeof(ulsm)))
+        if (cfs_copy_to_user (ulsm, lsm, sizeof(ulsm)))
                 return (-EFAULT);
 
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                if (copy_to_user (ulsm->lsm_oinfo[i], lsm->lsm_oinfo[i],
-                                  sizeof(lsm->lsm_oinfo[0])))
+                if (cfs_copy_to_user (ulsm->lsm_oinfo[i], lsm->lsm_oinfo[i],
+                                      sizeof(lsm->lsm_oinfo[0])))
                         return (-EFAULT);
         }
         return 0;
@@ -1246,7 +1249,7 @@ echo_copyin_lsm (struct echo_device *ed, struct lov_stripe_md *lsm,
         if (ulsm_nob < sizeof (*lsm))
                 return (-EINVAL);
 
-        if (copy_from_user (lsm, ulsm, sizeof (*lsm)))
+        if (cfs_copy_from_user (lsm, ulsm, sizeof (*lsm)))
                 return (-EFAULT);
 
         if (lsm->lsm_stripe_count > ec->ec_nstripes ||
@@ -1257,9 +1260,10 @@ echo_copyin_lsm (struct echo_device *ed, struct lov_stripe_md *lsm,
 
 
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                if (copy_from_user(lsm->lsm_oinfo[i],
-                                   ((struct lov_stripe_md *)ulsm)->lsm_oinfo[i],
-                                   sizeof(lsm->lsm_oinfo[0])))
+                if (cfs_copy_from_user(lsm->lsm_oinfo[i],
+                                       ((struct lov_stripe_md *)ulsm)-> \
+                                       lsm_oinfo[i],
+                                       sizeof(lsm->lsm_oinfo[0])))
                         return (-EFAULT);
         }
         return (0);
@@ -1789,7 +1793,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         int                     i;
         ENTRY;
 
-        unlock_kernel();
+        cfs_unlock_kernel();
 
         memset(&dummy_oti, 0, sizeof(dummy_oti));
 
@@ -1917,7 +1921,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 ldlm_lock_decref(&ack_lock->lock, ack_lock->mode);
         }
 
-        lock_kernel();
+        cfs_lock_kernel();
 
         return rc;
 }
@@ -1943,7 +1947,7 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        spin_lock_init (&ec->ec_lock);
+        cfs_spin_lock_init (&ec->ec_lock);
         CFS_INIT_LIST_HEAD (&ec->ec_objects);
         CFS_INIT_LIST_HEAD (&ec->ec_locks);
         ec->ec_unique = 0;
@@ -1964,9 +1968,9 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         rc = obd_connect(NULL, &ec->ec_exp, tgt, &echo_uuid, ocd, NULL);
         if (rc == 0) {
                 /* Turn off pinger because it connects to tgt obd directly. */
-                spin_lock(&tgt->obd_dev_lock);
-                list_del_init(&ec->ec_exp->exp_obd_chain_timed);
-                spin_unlock(&tgt->obd_dev_lock);
+                cfs_spin_lock(&tgt->obd_dev_lock);
+                cfs_list_del_init(&ec->ec_exp->exp_obd_chain_timed);
+                cfs_spin_unlock(&tgt->obd_dev_lock);
         }
 
         OBD_FREE(ocd, sizeof(*ocd));
@@ -1986,12 +1990,12 @@ static int echo_client_cleanup(struct obd_device *obddev)
         int rc;
         ENTRY;
 
-        if (!list_empty(&obddev->obd_exports)) {
+        if (!cfs_list_empty(&obddev->obd_exports)) {
                 CERROR("still has clients!\n");
                 RETURN(-EBUSY);
         }
 
-        LASSERT(atomic_read(&ec->ec_exp->exp_refcount) > 0);
+        LASSERT(cfs_atomic_read(&ec->ec_exp->exp_refcount) > 0);
         rc = obd_disconnect(ec->ec_exp);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);
@@ -2034,10 +2038,10 @@ static int echo_client_disconnect(struct obd_export *exp)
         ec = &obd->u.echo_client;
 
         /* no more contention on export's lock list */
-        while (!list_empty (&exp->exp_ec_data.eced_locks)) {
-                ecl = list_entry (exp->exp_ec_data.eced_locks.next,
-                                  struct ec_lock, ecl_exp_chain);
-                list_del (&ecl->ecl_exp_chain);
+        while (!cfs_list_empty (&exp->exp_ec_data.eced_locks)) {
+                ecl = cfs_list_entry (exp->exp_ec_data.eced_locks.next,
+                                      struct ec_lock, ecl_exp_chain);
+                cfs_list_del (&ecl->ecl_exp_chain);
 
                 rc = obd_cancel(ec->ec_exp, ecl->ecl_object->eco_lsm,
                                  ecl->ecl_mode, &ecl->ecl_lock_handle);

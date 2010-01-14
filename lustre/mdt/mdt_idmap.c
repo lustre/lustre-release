@@ -82,9 +82,9 @@ do {                                                                    \
                                       OBD_CONNECT_RMT_CLIENT_FORCE |    \
                                       OBD_CONNECT_MDS_CAPA |            \
                                       OBD_CONNECT_OSS_CAPA);            \
-        spin_lock(&exp->exp_lock);                                      \
+        cfs_spin_lock(&exp->exp_lock);                                  \
         exp->exp_connect_flags = reply->ocd_connect_flags;              \
-        spin_unlock(&exp->exp_lock);                                    \
+        cfs_spin_unlock(&exp->exp_lock);                                \
 } while (0)
 
 int mdt_init_sec_level(struct mdt_thread_info *info)
@@ -190,9 +190,9 @@ int mdt_init_sec_level(struct mdt_thread_info *info)
                         if (!mdt->mdt_opts.mo_oss_capa)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
 
-                        spin_lock(&exp->exp_lock);
+                        cfs_spin_lock(&exp->exp_lock);
                         exp->exp_connect_flags = reply->ocd_connect_flags;
-                        spin_unlock(&exp->exp_lock);
+                        cfs_spin_unlock(&exp->exp_lock);
                 }
                 break;
         default:
@@ -213,10 +213,10 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         ENTRY;
 
         if (exp_connect_rmtclient(exp)) {
-                down(&med->med_idmap_sem);
+                cfs_down(&med->med_idmap_sem);
                 if (!med->med_idmap)
                         med->med_idmap = lustre_idmap_init();
-                up(&med->med_idmap_sem);
+                cfs_up(&med->med_idmap_sem);
 
                 if (IS_ERR(med->med_idmap)) {
                         long err = PTR_ERR(med->med_idmap);
@@ -243,12 +243,12 @@ int mdt_init_idmap(struct mdt_thread_info *info)
 
 void mdt_cleanup_idmap(struct mdt_export_data *med)
 {
-        down(&med->med_idmap_sem);
+        cfs_down(&med->med_idmap_sem);
         if (med->med_idmap != NULL) {
                 lustre_idmap_fini(med->med_idmap);
                 med->med_idmap = NULL;
         }
-        up(&med->med_idmap_sem);
+        cfs_up(&med->med_idmap_sem);
 }
 
 static inline void mdt_revoke_export_locks(struct obd_export *exp)

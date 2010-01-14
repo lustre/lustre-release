@@ -69,12 +69,12 @@ enum lustre_idmap_idx {
 };
 
 struct lustre_idmap_table {
-        spinlock_t       lit_lock;
-        struct list_head lit_idmaps[CFS_IDMAP_N_HASHES][CFS_IDMAP_HASHSIZE];
+        cfs_spinlock_t   lit_lock;
+        cfs_list_t       lit_idmaps[CFS_IDMAP_N_HASHES][CFS_IDMAP_HASHSIZE];
 };
 
-extern void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist);
-extern void lustre_groups_sort(struct group_info *group_info);
+extern void lustre_groups_from_list(cfs_group_info_t *ginfo, gid_t *glist);
+extern void lustre_groups_sort(cfs_group_info_t *group_info);
 extern int lustre_in_group_p(struct md_ucred *mu, gid_t grp);
 
 extern int lustre_idmap_add(struct lustre_idmap_table *t,

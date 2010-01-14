@@ -76,7 +76,7 @@ int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
         int rc = 0;
         ENTRY;
 
-        do_gettimeofday(&work_start);
+        cfs_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
@@ -119,7 +119,7 @@ int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
                 CDEBUG(D_INFO, "mds_quotactl admin quota command %d, id %u, "
                                "type %d, failed: rc = %d\n",
                        oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type, rc);
-        do_gettimeofday(&work_end);
+        cfs_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
         lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
@@ -141,16 +141,16 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         int rc = 0;
         ENTRY;
 
-        do_gettimeofday(&work_start);
+        cfs_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_FINVALIDATE:
         case Q_QUOTAON:
         case Q_QUOTAOFF:
-                down(&obt->obt_quotachecking);
+                cfs_down(&obt->obt_quotachecking);
                 if (oqctl->qc_cmd == Q_FINVALIDATE &&
                     (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))) {
                         CWARN("quota[%u] is on yet\n", oqctl->qc_type);
-                        up(&obt->obt_quotachecking);
+                        cfs_up(&obt->obt_quotachecking);
                         rc = -EBUSY;
                         break;
                 }
@@ -192,7 +192,7 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                                 else if (quota_is_off(qctxt, oqctl))
                                                 rc = -EALREADY;
                         }
-                        up(&obt->obt_quotachecking);
+                        cfs_up(&obt->obt_quotachecking);
                 }
 
                 break;
@@ -287,7 +287,7 @@ adjust:
                        obd->obd_name, oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
-        do_gettimeofday(&work_end);
+        cfs_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
         lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 

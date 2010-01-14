@@ -249,7 +249,7 @@ int class_attach(struct lustre_cfg *lcfg)
         LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0,
                  "%p obd_name %s != %s\n", obd, obd->obd_name, name);
 
-        rwlock_init(&obd->obd_pool_lock);
+        cfs_rwlock_init(&obd->obd_pool_lock);
         obd->obd_pool_limit = 0;
         obd->obd_pool_slv = 0;
 
@@ -258,19 +258,19 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
-        spin_lock_init(&obd->obd_nid_lock);
-        spin_lock_init(&obd->obd_dev_lock);
-        sema_init(&obd->obd_dev_sem, 1);
-        spin_lock_init(&obd->obd_osfs_lock);
+        cfs_spin_lock_init(&obd->obd_nid_lock);
+        cfs_spin_lock_init(&obd->obd_dev_lock);
+        cfs_sema_init(&obd->obd_dev_sem, 1);
+        cfs_spin_lock_init(&obd->obd_osfs_lock);
         /* obd->obd_osfs_age must be set to a value in the distant
          * past to guarantee a fresh statfs is fetched on mount. */
         obd->obd_osfs_age = cfs_time_shift_64(-1000);
 
         /* XXX belongs in setup not attach  */
-        init_rwsem(&obd->obd_observer_link_sem);
+        cfs_init_rwsem(&obd->obd_observer_link_sem);
         /* recovery data */
         cfs_init_timer(&obd->obd_recovery_timer);
-        spin_lock_init(&obd->obd_processing_task_lock);
+        cfs_spin_lock_init(&obd->obd_processing_task_lock);
         cfs_waitq_init(&obd->obd_next_transno_waitq);
         cfs_waitq_init(&obd->obd_evict_inprogress_waitq);
         CFS_INIT_LIST_HEAD(&obd->obd_req_replay_queue);
@@ -296,15 +296,15 @@ int class_attach(struct lustre_cfg *lcfg)
         }
 
         /* Detach drops this */
-        spin_lock(&obd->obd_dev_lock);
-        atomic_set(&obd->obd_refcount, 1);
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
+        cfs_atomic_set(&obd->obd_refcount, 1);
+        cfs_spin_unlock(&obd->obd_dev_lock);
         lu_ref_init(&obd->obd_reference);
         lu_ref_add(&obd->obd_reference, "attach", obd);
 
         obd->obd_attached = 1;
         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
-               obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
+               obd->obd_minor, typename, cfs_atomic_read(&obd->obd_refcount));
         RETURN(0);
  out:
         if (obd != NULL) {
@@ -340,9 +340,9 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         /* is someone else setting us up right now? (attach inits spinlock) */
-        spin_lock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
         if (obd->obd_starting) {
-                spin_unlock(&obd->obd_dev_lock);
+                cfs_spin_unlock(&obd->obd_dev_lock);
                 CERROR("Device %d setup in progress (type %s)\n",
                        obd->obd_minor, obd->obd_type->typ_name);
                 RETURN(-EEXIST);
@@ -353,7 +353,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_uuid_hash = NULL;
         obd->obd_nid_hash = NULL;
         obd->obd_nid_stats_hash = NULL;
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
         obd->obd_uuid_hash = cfs_hash_create("UUID_HASH",
@@ -384,7 +384,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_hash, err = PTR_ERR(exp));
 
         obd->obd_self_export = exp;
-        list_del_init(&exp->exp_obd_chain_timed);
+        cfs_list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
 
         err = obd_setup(obd, lcfg);
@@ -393,10 +393,10 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         obd->obd_set_up = 1;
 
-        spin_lock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
         class_incref(obd, "setup", obd);
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_IOCTL, "finished setup of obd %s (uuid %s)\n",
                obd->obd_name, obd->obd_uuid.uuid);
@@ -434,14 +434,14 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EBUSY);
         }
 
-        spin_lock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
         if (!obd->obd_attached) {
-                spin_unlock(&obd->obd_dev_lock);
+                cfs_spin_unlock(&obd->obd_dev_lock);
                 CERROR("OBD device %d not attached\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
         obd->obd_attached = 0;
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_IOCTL, "detach on obd %s (uuid %s)\n",
                obd->obd_name, obd->obd_uuid.uuid);
@@ -467,15 +467,15 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENODEV);
         }
 
-        spin_lock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
         if (obd->obd_stopping) {
-                spin_unlock(&obd->obd_dev_lock);
+                cfs_spin_unlock(&obd->obd_dev_lock);
                 CERROR("OBD %d already stopping\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
         /* Leave this on forever */
         obd->obd_stopping = 1;
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
         if (lcfg->lcfg_bufcount >= 2 && LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
                 for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
@@ -508,12 +508,12 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* The three references that should be remaining are the
          * obd_self_export and the attach and setup references. */
-        if (atomic_read(&obd->obd_refcount) > 3) {
+        if (cfs_atomic_read(&obd->obd_refcount) > 3) {
                 /* refcounf - 3 might be the number of real exports
                    (excluding self export). But class_incref is called
                    by other things as well, so don't count on it. */
                 CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
-                       obd->obd_name, atomic_read(&obd->obd_refcount) - 3);
+                       obd->obd_name, cfs_atomic_read(&obd->obd_refcount) - 3);
                 dump_exports(obd, 0);
                 class_disconnect_exports(obd);
         }
@@ -550,9 +550,9 @@ struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source)
 {
         lu_ref_add_atomic(&obd->obd_reference, scope, source);
-        atomic_inc(&obd->obd_refcount);
+        cfs_atomic_inc(&obd->obd_refcount);
         CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,
-               atomic_read(&obd->obd_refcount));
+               cfs_atomic_read(&obd->obd_refcount));
 
         return obd;
 }
@@ -562,10 +562,10 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
         int err;
         int refs;
 
-        spin_lock(&obd->obd_dev_lock);
-        atomic_dec(&obd->obd_refcount);
-        refs = atomic_read(&obd->obd_refcount);
-        spin_unlock(&obd->obd_dev_lock);
+        cfs_spin_lock(&obd->obd_dev_lock);
+        cfs_atomic_dec(&obd->obd_refcount);
+        refs = cfs_atomic_read(&obd->obd_refcount);
+        cfs_spin_unlock(&obd->obd_dev_lock);
         lu_ref_del(&obd->obd_reference, scope, source);
 
         CDEBUG(D_INFO, "Decref %s (%p) now %d\n", obd->obd_name, obd, refs);
@@ -574,9 +574,9 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
                 /* All exports have been destroyed; there should
                    be no more in-progress ops by this point.*/
 
-                spin_lock(&obd->obd_self_export->exp_lock);
+                cfs_spin_lock(&obd->obd_self_export->exp_lock);
                 obd->obd_self_export->exp_flags |= exp_flags_from_obd(obd);
-                spin_unlock(&obd->obd_self_export->exp_lock);
+                cfs_spin_unlock(&obd->obd_self_export->exp_lock);
 
                 /* note that we'll recurse into class_decref again */
                 class_unlink_export(obd->obd_self_export);
@@ -671,7 +671,7 @@ struct lustre_profile *class_get_profile(const char * prof)
         struct lustre_profile *lprof;
 
         ENTRY;
-        list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
+        cfs_list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
                 if (!strcmp(lprof->lp_profile, prof)) {
                         RETURN(lprof);
                 }
@@ -713,7 +713,7 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
                 memcpy(lprof->lp_md, mdc, mdclen);
         }
 
-        list_add(&lprof->lp_list, &lustre_profile_list);
+        cfs_list_add(&lprof->lp_list, &lustre_profile_list);
         RETURN(err);
 
 out:
@@ -736,7 +736,7 @@ void class_del_profile(const char *prof)
 
         lprof = class_get_profile(prof);
         if (lprof) {
-                list_del(&lprof->lp_list);
+                cfs_list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
                 OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
                 if (lprof->lp_md)
@@ -752,8 +752,8 @@ void class_del_profiles(void)
         struct lustre_profile *lprof, *n;
         ENTRY;
 
-        list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
-                list_del(&lprof->lp_list);
+        cfs_list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
+                cfs_list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
                 OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
                 if (lprof->lp_md)
@@ -1431,11 +1431,11 @@ uuid_hash(cfs_hash_t *hs,  void *key, unsigned mask)
 }
 
 static void *
-uuid_key(struct hlist_node *hnode)
+uuid_key(cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
-        exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
 
         RETURN(&exp->exp_client_uuid);
 }
@@ -1445,34 +1445,34 @@ uuid_key(struct hlist_node *hnode)
  *       state with this function
  */
 static int
-uuid_compare(void *key, struct hlist_node *hnode)
+uuid_compare(void *key, cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
         LASSERT(key);
-        exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
 
         RETURN(obd_uuid_equals((struct obd_uuid *)key,&exp->exp_client_uuid) &&
                !exp->exp_failed);
 }
 
 static void *
-uuid_export_get(struct hlist_node *hnode)
+uuid_export_get(cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
-        exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
         class_export_get(exp);
 
         RETURN(exp);
 }
 
 static void *
-uuid_export_put(struct hlist_node *hnode)
+uuid_export_put(cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
-        exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
         class_export_put(exp);
 
         RETURN(exp);
@@ -1498,11 +1498,11 @@ nid_hash(cfs_hash_t *hs,  void *key, unsigned mask)
 }
 
 static void *
-nid_key(struct hlist_node *hnode)
+nid_key(cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
-        exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
 
         RETURN(&exp->exp_connection->c_peer.nid);
 }
@@ -1512,34 +1512,34 @@ nid_key(struct hlist_node *hnode)
  *       state with this function
  */
 static int
-nid_compare(void *key, struct hlist_node *hnode)
+nid_compare(void *key, cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
         LASSERT(key);
-        exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
 
         RETURN(exp->exp_connection->c_peer.nid == *(lnet_nid_t *)key &&
                !exp->exp_failed);
 }
 
 static void *
-nid_export_get(struct hlist_node *hnode)
+nid_export_get(cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
-        exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
         class_export_get(exp);
 
         RETURN(exp);
 }
 
 static void *
-nid_export_put(struct hlist_node *hnode)
+nid_export_put(cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
-        exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
+        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
         class_export_put(exp);
 
         RETURN(exp);
@@ -1559,38 +1559,38 @@ static cfs_hash_ops_t nid_hash_ops = {
  */
 
 static void *
-nidstats_key(struct hlist_node *hnode)
+nidstats_key(cfs_hlist_node_t *hnode)
 {
         struct nid_stat *ns;
 
-        ns = hlist_entry(hnode, struct nid_stat, nid_hash);
+        ns = cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
 
         RETURN(&ns->nid);
 }
 
 static int
-nidstats_compare(void *key, struct hlist_node *hnode)
+nidstats_compare(void *key, cfs_hlist_node_t *hnode)
 {
         RETURN(*(lnet_nid_t *)nidstats_key(hnode) == *(lnet_nid_t *)key);
 }
 
 static void *
-nidstats_get(struct hlist_node *hnode)
+nidstats_get(cfs_hlist_node_t *hnode)
 {
         struct nid_stat *ns;
 
-        ns = hlist_entry(hnode, struct nid_stat, nid_hash);
+        ns = cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
         nidstat_getref(ns);
 
         RETURN(ns);
 }
 
 static void *
-nidstats_put(struct hlist_node *hnode)
+nidstats_put(cfs_hlist_node_t *hnode)
 {
         struct nid_stat *ns;
 
-        ns = hlist_entry(hnode, struct nid_stat, nid_hash);
+        ns = cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
         nidstat_putref(ns);
 
         RETURN(ns);

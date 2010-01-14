@@ -308,10 +308,10 @@ static struct cl_object *vvp_pgcache_obj(const struct lu_env *env,
                                          struct lu_device *dev,
                                          struct vvp_pgcache_id *id)
 {
-        struct hlist_head       *bucket;
+        cfs_hlist_head_t        *bucket;
         struct lu_object_header *hdr;
         struct lu_site          *site;
-        struct hlist_node       *scan;
+        cfs_hlist_node_t        *scan;
         struct lu_object_header *found;
         struct cl_object        *clob;
         unsigned                 depth;
@@ -325,18 +325,19 @@ static struct cl_object *vvp_pgcache_obj(const struct lu_env *env,
         clob   = NULL;
 
         /* XXX copy of lu_object.c:htable_lookup() */
-        read_lock(&site->ls_guard);
-        hlist_for_each_entry(hdr, scan, bucket, loh_hash) {
+        cfs_read_lock(&site->ls_guard);
+        cfs_hlist_for_each_entry(hdr, scan, bucket, loh_hash) {
                 if (depth-- == 0) {
                         if (!lu_object_is_dying(hdr)) {
-                                if (atomic_add_return(1, &hdr->loh_ref) == 1)
+                                if (cfs_atomic_add_return(1,
+                                                          &hdr->loh_ref) == 1)
                                         ++ site->ls_busy;
                                 found = hdr;
                         }
                         break;
                 }
         }
-        read_unlock(&site->ls_guard);
+        cfs_read_unlock(&site->ls_guard);
 
         if (found != NULL) {
                 struct lu_object *lu_obj;
@@ -374,7 +375,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
                         /* got an object. Find next page. */
                         hdr = cl_object_header(clob);
 
-                        spin_lock(&hdr->coh_page_guard);
+                        cfs_spin_lock(&hdr->coh_page_guard);
                         nr = radix_tree_gang_lookup(&hdr->coh_tree,
                                                     (void **)&pg,
                                                     id.vpi_index, 1);
@@ -383,7 +384,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
                                 /* Cant support over 16T file */
                                 nr = !(pg->cp_index > 0xffffffff);
                         }
-                        spin_unlock(&hdr->coh_page_guard);
+                        cfs_spin_unlock(&hdr->coh_page_guard);
 
                         lu_object_ref_del(&clob->co_lu, "dump", cfs_current());
                         cl_object_put(env, clob);
@@ -400,7 +401,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
 }
 
 #define seq_page_flag(seq, page, flag, has_flags) do {                  \
-        if (test_bit(PG_##flag, &(page)->flags)) {                      \
+        if (cfs_test_bit(PG_##flag, &(page)->flags)) {                  \
                 seq_printf(seq, "%s"#flag, has_flags ? "|" : "");       \
                 has_flags = 1;                                          \
         }                                                               \
@@ -460,9 +461,9 @@ static int vvp_pgcache_show(struct seq_file *f, void *v)
                 if (clob != NULL) {
                         hdr = cl_object_header(clob);
 
-                        spin_lock(&hdr->coh_page_guard);
+                        cfs_spin_lock(&hdr->coh_page_guard);
                         page = cl_page_lookup(hdr, id.vpi_index);
-                        spin_unlock(&hdr->coh_page_guard);
+                        cfs_spin_unlock(&hdr->coh_page_guard);
 
                         seq_printf(f, "%8x@"DFID": ",
                                    id.vpi_index, PFID(&hdr->coh_lu.loh_fid));

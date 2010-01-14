@@ -65,6 +65,8 @@
 
 #if (defined __linux__ && defined __KERNEL__)
 #include <linux/hash.h>
+
+#define cfs_hash_long(val, bits)    hash_long(val, bits)
 #else
 /* Fast hashing routine for a long.
    (C) 2002 William Lee Irwin III, IBM */
@@ -79,7 +81,7 @@
 #error Define CFS_GOLDEN_RATIO_PRIME for your wordsize.
 #endif
 
-static inline unsigned long hash_long(unsigned long val, unsigned int bits)
+static inline unsigned long cfs_hash_long(unsigned long val, unsigned int bits)
 {
 	unsigned long hash = val;
 
@@ -109,7 +111,7 @@ static inline unsigned long hash_long(unsigned long val, unsigned int bits)
 #if 0
 static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
 {
-	return hash_long((unsigned long)ptr, bits);
+	return cfs_hash_long((unsigned long)ptr, bits);
 }
 #endif
 
@@ -119,9 +121,9 @@ static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
 struct cfs_hash_ops;
 
 typedef struct cfs_hash_bucket {
-        struct hlist_head           hsb_head;       /* entries list */
-        atomic_t                    hsb_count;      /* current entries */
-        rwlock_t                    hsb_rwlock;     /* cfs_hash_bucket */
+        cfs_hlist_head_t            hsb_head;       /* entries list */
+        cfs_atomic_t                hsb_count;      /* current entries */
+        cfs_rwlock_t                hsb_rwlock;     /* cfs_hash_bucket */
 } cfs_hash_bucket_t;
 
 #define CFS_MAX_HASH_NAME 16
@@ -134,21 +136,21 @@ typedef struct cfs_hash {
         int                         hs_min_theta;   /* resize min threshold */
         int                         hs_max_theta;   /* resize max threshold */
         int                         hs_flags;       /* hash flags */
-        atomic_t                    hs_count;       /* current entries */
-        atomic_t                    hs_rehash_count;/* resize count */
+        cfs_atomic_t                hs_count;       /* current entries */
+        cfs_atomic_t                hs_rehash_count;/* resize count */
         struct cfs_hash_bucket    **hs_buckets;     /* hash buckets */
         struct cfs_hash_ops        *hs_ops;         /* hash operations */
-        rwlock_t                    hs_rwlock;      /* cfs_hash */
+        cfs_rwlock_t                hs_rwlock;      /* cfs_hash */
         char                        hs_name[CFS_MAX_HASH_NAME];
 } cfs_hash_t;
 
 typedef struct cfs_hash_ops {
         unsigned (*hs_hash)(cfs_hash_t *hs, void *key, unsigned mask);
-        void *   (*hs_key)(struct hlist_node *hnode);
-        int      (*hs_compare)(void *key, struct hlist_node *hnode);
-        void *   (*hs_get)(struct hlist_node *hnode);
-        void *   (*hs_put)(struct hlist_node *hnode);
-        void     (*hs_exit)(struct hlist_node *hnode);
+        void *   (*hs_key)(cfs_hlist_node_t *hnode);
+        int      (*hs_compare)(void *key, cfs_hlist_node_t *hnode);
+        void *   (*hs_get)(cfs_hlist_node_t *hnode);
+        void *   (*hs_put)(cfs_hlist_node_t *hnode);
+        void     (*hs_exit)(cfs_hlist_node_t *hnode);
 } cfs_hash_ops_t;
 
 #define CFS_HASH_DEBUG          0x0001  /* Enable expensive debug checks */
@@ -168,7 +170,7 @@ cfs_hash_id(cfs_hash_t *hs, void *key, unsigned mask)
 }
 
 static inline void *
-cfs_hash_key(cfs_hash_t *hs, struct hlist_node *hnode)
+cfs_hash_key(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LASSERT(hs);
         LASSERT(hnode);
@@ -190,7 +192,7 @@ cfs_hash_key(cfs_hash_t *hs, struct hlist_node *hnode)
  *      ends up not being the case this would be a nice feature.
  */
 static inline int
-cfs_hash_compare(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
+cfs_hash_compare(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 {
         LASSERT(hs);
         LASSERT(hnode);
@@ -203,7 +205,7 @@ cfs_hash_compare(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
 }
 
 static inline void *
-cfs_hash_get(cfs_hash_t *hs, struct hlist_node *hnode)
+cfs_hash_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LASSERT(hs);
         LASSERT(hnode);
@@ -216,7 +218,7 @@ cfs_hash_get(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static inline void *
-cfs_hash_put(cfs_hash_t *hs, struct hlist_node *hnode)
+cfs_hash_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LASSERT(hs);
         LASSERT(hnode);
@@ -229,7 +231,7 @@ cfs_hash_put(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static inline void
-cfs_hash_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+cfs_hash_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LASSERT(hs);
         LASSERT(hnode);
@@ -242,7 +244,7 @@ cfs_hash_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 /* Validate hnode references the correct key */
 static inline void
 __cfs_hash_key_validate(cfs_hash_t *hs, void *key,
-                        struct hlist_node *hnode)
+                        cfs_hlist_node_t *hnode)
 {
         if (unlikely(hs->hs_flags & CFS_HASH_DEBUG))
                 LASSERT(cfs_hash_compare(hs, key, hnode) > 0);
@@ -251,7 +253,7 @@ __cfs_hash_key_validate(cfs_hash_t *hs, void *key,
 /* Validate hnode is in the correct bucket */
 static inline void
 __cfs_hash_bucket_validate(cfs_hash_t *hs, cfs_hash_bucket_t *hsb,
-                           struct hlist_node *hnode)
+                           cfs_hlist_node_t *hnode)
 {
         unsigned i;
 
@@ -261,13 +263,13 @@ __cfs_hash_bucket_validate(cfs_hash_t *hs, cfs_hash_bucket_t *hsb,
         }
 }
 
-static inline struct hlist_node *
+static inline cfs_hlist_node_t *
 __cfs_hash_bucket_lookup(cfs_hash_t *hs,
                          cfs_hash_bucket_t *hsb, void *key)
 {
-        struct hlist_node *hnode;
+        cfs_hlist_node_t *hnode;
 
-        hlist_for_each(hnode, &hsb->hsb_head)
+        cfs_hlist_for_each(hnode, &hsb->hsb_head)
                 if (cfs_hash_compare(hs, key, hnode) > 0)
                         return hnode;
 
@@ -277,11 +279,11 @@ __cfs_hash_bucket_lookup(cfs_hash_t *hs,
 static inline void *
 __cfs_hash_bucket_add(cfs_hash_t *hs,
                       cfs_hash_bucket_t *hsb,
-                      struct hlist_node *hnode)
+                      cfs_hlist_node_t *hnode)
 {
-        hlist_add_head(hnode, &(hsb->hsb_head));
-        atomic_inc(&hsb->hsb_count);
-        atomic_inc(&hs->hs_count);
+        cfs_hlist_add_head(hnode, &(hsb->hsb_head));
+        cfs_atomic_inc(&hsb->hsb_count);
+        cfs_atomic_inc(&hs->hs_count);
 
         return cfs_hash_get(hs, hnode);
 }
@@ -289,13 +291,13 @@ __cfs_hash_bucket_add(cfs_hash_t *hs,
 static inline void *
 __cfs_hash_bucket_del(cfs_hash_t *hs,
                       cfs_hash_bucket_t *hsb,
-                      struct hlist_node *hnode)
+                      cfs_hlist_node_t *hnode)
 {
-        hlist_del_init(hnode);
-        LASSERT(atomic_read(&hsb->hsb_count) > 0);
-        atomic_dec(&hsb->hsb_count);
-        LASSERT(atomic_read(&hs->hs_count) > 0);
-        atomic_dec(&hs->hs_count);
+        cfs_hlist_del_init(hnode);
+        LASSERT(cfs_atomic_read(&hsb->hsb_count) > 0);
+        cfs_atomic_dec(&hsb->hsb_count);
+        LASSERT(cfs_atomic_read(&hs->hs_count) > 0);
+        cfs_atomic_dec(&hs->hs_count);
 
         return cfs_hash_put(hs, hnode);
 }
@@ -308,14 +310,14 @@ void cfs_hash_destroy(cfs_hash_t *hs);
 
 /* Hash addition functions */
 void cfs_hash_add(cfs_hash_t *hs, void *key,
-                  struct hlist_node *hnode);
+                  cfs_hlist_node_t *hnode);
 int cfs_hash_add_unique(cfs_hash_t *hs, void *key,
-                        struct hlist_node *hnode);
+                        cfs_hlist_node_t *hnode);
 void *cfs_hash_findadd_unique(cfs_hash_t *hs, void *key,
-                              struct hlist_node *hnode);
+                              cfs_hlist_node_t *hnode);
 
 /* Hash deletion functions */
-void *cfs_hash_del(cfs_hash_t *hs, void *key, struct hlist_node *hnode);
+void *cfs_hash_del(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode);
 void *cfs_hash_del_key(cfs_hash_t *hs, void *key);
 
 /* Hash lookup/for_each functions */
@@ -333,7 +335,7 @@ void cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
  */
 int cfs_hash_rehash(cfs_hash_t *hs, int bits);
 void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key,
-                         void *new_key, struct hlist_node *hnode);
+                         void *new_key, cfs_hlist_node_t *hnode);
 
 
 #define CFS_HASH_THETA_BITS  10
@@ -353,7 +355,7 @@ static inline int __cfs_hash_theta_frac(int theta)
 
 static inline int __cfs_hash_theta(cfs_hash_t *hs)
 {
-        return (atomic_read(&hs->hs_count) <<
+        return (cfs_atomic_read(&hs->hs_count) <<
                 CFS_HASH_THETA_BITS) >> hs->hs_cur_bits;
 }
 

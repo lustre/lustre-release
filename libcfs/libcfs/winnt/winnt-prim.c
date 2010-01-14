@@ -148,7 +148,7 @@ int cfs_kernel_thread(int (*func)(void *), void *arg, int flag)
  */
 
 
-static CFS_DECL_RWSEM(cfs_symbol_lock);
+static CFS_DECLARE_RWSEM(cfs_symbol_lock);
 CFS_LIST_HEAD(cfs_symbol_list);
 
 int libcfs_is_mp_system = FALSE;
@@ -171,18 +171,18 @@ int libcfs_is_mp_system = FALSE;
 void *
 cfs_symbol_get(const char *name)
 {
-    struct list_head    *walker;
-    struct cfs_symbol   *sym = NULL;
+    cfs_list_t              *walker;
+    struct cfs_symbol       *sym = NULL;
 
-    down_read(&cfs_symbol_lock);
-    list_for_each(walker, &cfs_symbol_list) {
-        sym = list_entry (walker, struct cfs_symbol, sym_list);
+    cfs_down_read(&cfs_symbol_lock);
+    cfs_list_for_each(walker, &cfs_symbol_list) {
+        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
             sym->ref ++;
             break;
         }
     }
-    up_read(&cfs_symbol_lock);
+    cfs_up_read(&cfs_symbol_lock);
 
     if (sym != NULL)
         return sym->value;
@@ -207,19 +207,19 @@ cfs_symbol_get(const char *name)
 void
 cfs_symbol_put(const char *name)
 {
-    struct list_head    *walker;
-    struct cfs_symbol   *sym = NULL;
+    cfs_list_t              *walker;
+    struct cfs_symbol       *sym = NULL;
 
-    down_read(&cfs_symbol_lock);
-    list_for_each(walker, &cfs_symbol_list) {
-        sym = list_entry (walker, struct cfs_symbol, sym_list);
+    cfs_down_read(&cfs_symbol_lock);
+    cfs_list_for_each(walker, &cfs_symbol_list) {
+        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
             LASSERT(sym->ref > 0);
             sym->ref--;
             break;
         }
     }
-    up_read(&cfs_symbol_lock);
+    cfs_up_read(&cfs_symbol_lock);
 
     LASSERT(sym != NULL);
 }
@@ -244,9 +244,9 @@ cfs_symbol_put(const char *name)
 int
 cfs_symbol_register(const char *name, const void *value)
 {
-    struct list_head    *walker;
-    struct cfs_symbol   *sym = NULL;
-    struct cfs_symbol   *new = NULL;
+    cfs_list_t              *walker;
+    struct cfs_symbol       *sym = NULL;
+    struct cfs_symbol       *new = NULL;
 
     new = cfs_alloc(sizeof(struct cfs_symbol), CFS_ALLOC_ZERO);
     if (!new) {
@@ -257,17 +257,17 @@ cfs_symbol_register(const char *name, const void *value)
     new->ref = 0;
     CFS_INIT_LIST_HEAD(&new->sym_list);
 
-    down_write(&cfs_symbol_lock);
-    list_for_each(walker, &cfs_symbol_list) {
-        sym = list_entry (walker, struct cfs_symbol, sym_list);
+    cfs_down_write(&cfs_symbol_lock);
+    cfs_list_for_each(walker, &cfs_symbol_list) {
+        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
-            up_write(&cfs_symbol_lock);
+            cfs_up_write(&cfs_symbol_lock);
             cfs_free(new);
             return 0; // alreay registerred
         }
     }
-    list_add_tail(&new->sym_list, &cfs_symbol_list);
-    up_write(&cfs_symbol_lock);
+    cfs_list_add_tail(&new->sym_list, &cfs_symbol_list);
+    cfs_up_write(&cfs_symbol_lock);
 
     return 0;
 }
@@ -289,21 +289,21 @@ cfs_symbol_register(const char *name, const void *value)
 void
 cfs_symbol_unregister(const char *name)
 {
-    struct list_head    *walker;
-    struct list_head    *nxt;
-    struct cfs_symbol   *sym = NULL;
+    cfs_list_t              *walker;
+    cfs_list_t              *nxt;
+    struct cfs_symbol       *sym = NULL;
 
-    down_write(&cfs_symbol_lock);
-    list_for_each_safe(walker, nxt, &cfs_symbol_list) {
-        sym = list_entry (walker, struct cfs_symbol, sym_list);
+    cfs_down_write(&cfs_symbol_lock);
+    cfs_list_for_each_safe(walker, nxt, &cfs_symbol_list) {
+        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
             LASSERT(sym->ref == 0);
-            list_del (&sym->sym_list);
+            cfs_list_del (&sym->sym_list);
             cfs_free(sym);
             break;
         }
     }
-    up_write(&cfs_symbol_lock);
+    cfs_up_write(&cfs_symbol_lock);
 }
 
 /*
@@ -323,17 +323,17 @@ cfs_symbol_unregister(const char *name)
 void
 cfs_symbol_clean()
 {
-    struct list_head    *walker;
+    cfs_list_t          *walker;
     struct cfs_symbol   *sym = NULL;
 
-    down_write(&cfs_symbol_lock);
-    list_for_each(walker, &cfs_symbol_list) {
-        sym = list_entry (walker, struct cfs_symbol, sym_list);
+    cfs_down_write(&cfs_symbol_lock);
+    cfs_list_for_each(walker, &cfs_symbol_list) {
+        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         LASSERT(sym->ref == 0);
-        list_del (&sym->sym_list);
+        cfs_list_del (&sym->sym_list);
         cfs_free(sym);
     }
-    up_write(&cfs_symbol_lock);
+    cfs_up_write(&cfs_symbol_lock);
     return;
 }
 
@@ -444,7 +444,7 @@ void cfs_timer_arm(cfs_timer_t *timer, cfs_time_t deadline)
     KeAcquireSpinLock(&(timer->Lock), &Irql);
     if (!cfs_is_flag_set(timer->Flags, CFS_TIMER_FLAG_TIMERED)){
 
-        timeout.QuadPart = (LONGLONG)-1*1000*1000*10/HZ*deadline;
+        timeout.QuadPart = (LONGLONG)-1*1000*1000*10/CFS_HZ*deadline;
 
         if (KeSetTimer(&timer->Timer, timeout, &timer->Dpc)) {
             cfs_set_flag(timer->Flags, CFS_TIMER_FLAG_TIMERED);
@@ -770,14 +770,14 @@ libcfs_arch_init(void)
 {
     int         rc;
 
-    spinlock_t  lock;
+    cfs_spinlock_t  lock;
     /* Workground to check the system is MP build or UP build */
-    spin_lock_init(&lock);
-    spin_lock(&lock);
+    cfs_spin_lock_init(&lock);
+    cfs_spin_lock(&lock);
     libcfs_is_mp_system = (int)lock.lock;
     /* MP build system: it's a real spin, for UP build system, it
        only raises the IRQL to DISPATCH_LEVEL */
-    spin_unlock(&lock);
+    cfs_spin_unlock(&lock);
 
     /* initialize libc routines (confliction between libcnptr.lib
        and kernel ntoskrnl.lib) */

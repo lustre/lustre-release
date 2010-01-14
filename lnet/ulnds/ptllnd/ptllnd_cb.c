@@ -58,7 +58,7 @@ ptllnd_post_tx(ptllnd_tx_t *tx)
         LASSERT (tx->tx_type != PTLLND_MSG_TYPE_NOOP);
 
         ptllnd_set_tx_deadline(tx);
-        list_add_tail(&tx->tx_list, &peer->plp_txq);
+        cfs_list_add_tail(&tx->tx_list, &peer->plp_txq);
         ptllnd_check_sends(peer);
 }
 
@@ -89,22 +89,22 @@ ptllnd_destroy_peer(ptllnd_peer_t *peer)
 
         LASSERT (peer->plp_closing);
         LASSERT (plni->plni_npeers > 0);
-        LASSERT (list_empty(&peer->plp_txq));
-        LASSERT (list_empty(&peer->plp_noopq));
-        LASSERT (list_empty(&peer->plp_activeq));
+        LASSERT (cfs_list_empty(&peer->plp_txq));
+        LASSERT (cfs_list_empty(&peer->plp_noopq));
+        LASSERT (cfs_list_empty(&peer->plp_activeq));
         plni->plni_npeers--;
         LIBCFS_FREE(peer, sizeof(*peer));
 }
 
 void
-ptllnd_abort_txs(ptllnd_ni_t *plni, struct list_head *q)
+ptllnd_abort_txs(ptllnd_ni_t *plni, cfs_list_t *q)
 {
-        while (!list_empty(q)) {
-                ptllnd_tx_t *tx = list_entry(q->next, ptllnd_tx_t, tx_list);
+        while (!cfs_list_empty(q)) {
+                ptllnd_tx_t *tx = cfs_list_entry(q->next, ptllnd_tx_t, tx_list);
 
                 tx->tx_status = -ESHUTDOWN;
-                list_del(&tx->tx_list);
-                list_add_tail(&tx->tx_list, &plni->plni_zombie_txs);
+                cfs_list_del(&tx->tx_list);
+                cfs_list_add_tail(&tx->tx_list, &plni->plni_zombie_txs);
         }
 }
 
@@ -119,9 +119,9 @@ ptllnd_close_peer(ptllnd_peer_t *peer, int error)
 
         peer->plp_closing = 1;
 
-        if (!list_empty(&peer->plp_txq) ||
-            !list_empty(&peer->plp_noopq) ||
-            !list_empty(&peer->plp_activeq) ||
+        if (!cfs_list_empty(&peer->plp_txq) ||
+            !cfs_list_empty(&peer->plp_noopq) ||
+            !cfs_list_empty(&peer->plp_activeq) ||
             error != 0) {
                 CWARN("Closing %s: %d\n", libcfs_id2str(peer->plp_id), error);
                 if (plni->plni_debug)
@@ -132,7 +132,7 @@ ptllnd_close_peer(ptllnd_peer_t *peer, int error)
         ptllnd_abort_txs(plni, &peer->plp_noopq);
         ptllnd_abort_txs(plni, &peer->plp_activeq);
 
-        list_del(&peer->plp_list);
+        cfs_list_del(&peer->plp_list);
         ptllnd_peer_decref(peer);
 }
 
@@ -147,7 +147,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
 
         LASSERT (LNET_NIDNET(id.nid) == LNET_NIDNET(ni->ni_nid));
 
-        list_for_each_entry (plp, &plni->plni_peer_hash[hash], plp_list) {
+        cfs_list_for_each_entry (plp, &plni->plni_peer_hash[hash], plp_list) {
                 if (plp->plp_id.nid == id.nid &&
                     plp->plp_id.pid == id.pid) {
                         ptllnd_peer_addref(plp);
@@ -196,7 +196,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
         CFS_INIT_LIST_HEAD(&plp->plp_activeq);
 
         ptllnd_peer_addref(plp);
-        list_add_tail(&plp->plp_list, &plni->plni_peer_hash[hash]);
+        cfs_list_add_tail(&plp->plp_list, &plni->plni_peer_hash[hash]);
 
         tx = ptllnd_new_tx(plp, PTLLND_MSG_TYPE_HELLO, 0);
         if (tx == NULL) {
@@ -221,12 +221,12 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_process_id_t id, int create)
 }
 
 int
-ptllnd_count_q(struct list_head *q)
+ptllnd_count_q(cfs_list_t *q)
 {
-        struct list_head *e;
-        int               n = 0;
+        cfs_list_t *e;
+        int         n = 0;
 
-        list_for_each(e, q) {
+        cfs_list_for_each(e, q) {
                 n++;
         }
 
@@ -303,29 +303,29 @@ ptllnd_debug_peer(lnet_ni_t *ni, lnet_process_id_t id)
               plni->plni_peer_credits + plp->plp_lazy_credits);
 
         CDEBUG(D_WARNING, "txq:\n");
-        list_for_each_entry (tx, &plp->plp_txq, tx_list) {
+        cfs_list_for_each_entry (tx, &plp->plp_txq, tx_list) {
                 ptllnd_debug_tx(tx);
         }
 
         CDEBUG(D_WARNING, "noopq:\n");
-        list_for_each_entry (tx, &plp->plp_noopq, tx_list) {
+        cfs_list_for_each_entry (tx, &plp->plp_noopq, tx_list) {
                 ptllnd_debug_tx(tx);
         }
 
         CDEBUG(D_WARNING, "activeq:\n");
-        list_for_each_entry (tx, &plp->plp_activeq, tx_list) {
+        cfs_list_for_each_entry (tx, &plp->plp_activeq, tx_list) {
                 ptllnd_debug_tx(tx);
         }
 
         CDEBUG(D_WARNING, "zombies:\n");
-        list_for_each_entry (tx, &plni->plni_zombie_txs, tx_list) {
+        cfs_list_for_each_entry (tx, &plni->plni_zombie_txs, tx_list) {
                 if (tx->tx_peer->plp_id.nid == id.nid &&
                     tx->tx_peer->plp_id.pid == id.pid)
                         ptllnd_debug_tx(tx);
         }
 
         CDEBUG(D_WARNING, "history:\n");
-        list_for_each_entry (tx, &plni->plni_tx_history, tx_list) {
+        cfs_list_for_each_entry (tx, &plni->plni_tx_history, tx_list) {
                 if (tx->tx_peer->plp_id.nid == id.nid &&
                     tx->tx_peer->plp_id.pid == id.pid)
                         ptllnd_debug_tx(tx);
@@ -523,9 +523,9 @@ ptllnd_cull_tx_history(ptllnd_ni_t *plni)
         int max = plni->plni_max_tx_history;
 
         while (plni->plni_ntx_history > max) {
-                ptllnd_tx_t *tx = list_entry(plni->plni_tx_history.next, 
-                                             ptllnd_tx_t, tx_list);
-                list_del(&tx->tx_list);
+                ptllnd_tx_t *tx = cfs_list_entry(plni->plni_tx_history.next,
+                                                 ptllnd_tx_t, tx_list);
+                cfs_list_del(&tx->tx_list);
 
                 ptllnd_peer_decref(tx->tx_peer);
 
@@ -553,8 +553,8 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
 
         tx->tx_completing = 1;
 
-        if (!list_empty(&tx->tx_list))
-                list_del_init(&tx->tx_list);
+        if (!cfs_list_empty(&tx->tx_list))
+                cfs_list_del_init(&tx->tx_list);
 
         if (tx->tx_status != 0) {
                 if (plni->plni_debug) {
@@ -585,7 +585,7 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
         }
 
         plni->plni_ntx_history++;
-        list_add_tail(&tx->tx_list, &plni->plni_tx_history);
+        cfs_list_add_tail(&tx->tx_list, &plni->plni_tx_history);
 
         ptllnd_cull_tx_history(plni);
 }
@@ -733,12 +733,12 @@ ptllnd_peer_send_noop (ptllnd_peer_t *peer)
 
         if (!peer->plp_sent_hello ||
             peer->plp_credits == 0 ||
-            !list_empty(&peer->plp_noopq) ||
+            !cfs_list_empty(&peer->plp_noopq) ||
             peer->plp_outstanding_credits < PTLLND_CREDIT_HIGHWATER(plni))
                 return 0;
 
         /* No tx to piggyback NOOP onto or no credit to send a tx */
-        return (list_empty(&peer->plp_txq) || peer->plp_credits == 1);
+        return (cfs_list_empty(&peer->plp_txq) || peer->plp_credits == 1);
 }
 
 void
@@ -763,18 +763,18 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                                libcfs_id2str(peer->plp_id));
                 } else {
                         ptllnd_set_tx_deadline(tx);
-                        list_add_tail(&tx->tx_list, &peer->plp_noopq);
+                        cfs_list_add_tail(&tx->tx_list, &peer->plp_noopq);
                 }
         }
 
         for (;;) {
-                if (!list_empty(&peer->plp_noopq)) {
+                if (!cfs_list_empty(&peer->plp_noopq)) {
                         LASSERT (peer->plp_sent_hello);
-                        tx = list_entry(peer->plp_noopq.next,
-                                        ptllnd_tx_t, tx_list);
-                } else if (!list_empty(&peer->plp_txq)) {
-                        tx = list_entry(peer->plp_txq.next,
-                                        ptllnd_tx_t, tx_list);
+                        tx = cfs_list_entry(peer->plp_noopq.next,
+                                            ptllnd_tx_t, tx_list);
+                } else if (!cfs_list_empty(&peer->plp_txq)) {
+                        tx = cfs_list_entry(peer->plp_txq.next,
+                                            ptllnd_tx_t, tx_list);
                 } else {
                         /* nothing to send right now */
                         break;
@@ -790,7 +790,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
 
                 /* say HELLO first */
                 if (!peer->plp_sent_hello) {
-                        LASSERT (list_empty(&peer->plp_noopq));
+                        LASSERT (cfs_list_empty(&peer->plp_noopq));
                         LASSERT (tx->tx_type == PTLLND_MSG_TYPE_HELLO);
 
                         peer->plp_sent_hello = 1;
@@ -821,8 +821,8 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                         break;
                 }
 
-                list_del(&tx->tx_list);
-                list_add_tail(&tx->tx_list, &peer->plp_activeq);
+                cfs_list_del(&tx->tx_list);
+                cfs_list_add_tail(&tx->tx_list, &peer->plp_activeq);
 
                 CDEBUG(D_NET, "Sending at TX=%p type=%s (%d)\n",tx,
                        ptllnd_msgtype2str(tx->tx_type),tx->tx_type);
@@ -1100,7 +1100,7 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
         tx->tx_lnetmsg = msg;
 
         ptllnd_set_tx_deadline(tx);
-        list_add_tail(&tx->tx_list, &peer->plp_activeq);
+        cfs_list_add_tail(&tx->tx_list, &peer->plp_activeq);
         gettimeofday(&tx->tx_bulk_posted, NULL);
 
         if (type == PTLLND_RDMA_READ)
@@ -1734,8 +1734,8 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
              PtlHandleIsEqual(tx->tx_reqmdh, PTL_INVALID_HANDLE))) {
                 if (error)
                         tx->tx_status = -EIO;
-                list_del(&tx->tx_list);
-                list_add_tail(&tx->tx_list, &plni->plni_zombie_txs);
+                cfs_list_del(&tx->tx_list);
+                cfs_list_add_tail(&tx->tx_list, &plni->plni_zombie_txs);
         }
 }
 
@@ -1745,17 +1745,17 @@ ptllnd_find_timed_out_tx(ptllnd_peer_t *peer)
         time_t            now = cfs_time_current_sec();
         ptllnd_tx_t *tx;
 
-        list_for_each_entry (tx, &peer->plp_txq, tx_list) {
+        cfs_list_for_each_entry (tx, &peer->plp_txq, tx_list) {
                 if (tx->tx_deadline < now)
                         return tx;
         }
 
-        list_for_each_entry (tx, &peer->plp_noopq, tx_list) {
+        cfs_list_for_each_entry (tx, &peer->plp_noopq, tx_list) {
                 if (tx->tx_deadline < now)
                         return tx;
         }
 
-        list_for_each_entry (tx, &peer->plp_activeq, tx_list) {
+        cfs_list_for_each_entry (tx, &peer->plp_activeq, tx_list) {
                 if (tx->tx_deadline < now)
                         return tx;
         }
@@ -1789,11 +1789,11 @@ ptllnd_watchdog (lnet_ni_t *ni, time_t now)
         int               chunk = plni->plni_peer_hash_size;
         int               interval = now - (plni->plni_watchdog_nextt - p);
         int               i;
-        struct list_head *hashlist;
-        struct list_head *tmp;
-        struct list_head *nxt;
+        cfs_list_t       *hashlist;
+        cfs_list_t       *tmp;
+        cfs_list_t       *nxt;
 
-        /* Time to check for RDMA timeouts on a few more peers: 
+        /* Time to check for RDMA timeouts on a few more peers:
          * I try to do checks every 'p' seconds on a proportion of the peer
          * table and I need to check every connection 'n' times within a
          * timeout interval, to ensure I detect a timeout on any connection
@@ -1810,8 +1810,9 @@ ptllnd_watchdog (lnet_ni_t *ni, time_t now)
         for (i = 0; i < chunk; i++) {
                 hashlist = &plni->plni_peer_hash[plni->plni_watchdog_peeridx];
 
-                list_for_each_safe(tmp, nxt, hashlist) {
-                        ptllnd_check_peer(list_entry(tmp, ptllnd_peer_t, plp_list));
+                cfs_list_for_each_safe(tmp, nxt, hashlist) {
+                        ptllnd_check_peer(cfs_list_entry(tmp, ptllnd_peer_t,
+                                          plp_list));
                 }
 
                 plni->plni_watchdog_peeridx = (plni->plni_watchdog_peeridx + 1) %
@@ -1923,10 +1924,10 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                 }
         }
 
-        while (!list_empty(&plni->plni_zombie_txs)) {
-                tx = list_entry(plni->plni_zombie_txs.next,
+        while (!cfs_list_empty(&plni->plni_zombie_txs)) {
+                tx = cfs_list_entry(plni->plni_zombie_txs.next,
                                 ptllnd_tx_t, tx_list);
-                list_del_init(&tx->tx_list);
+                cfs_list_del_init(&tx->tx_list);
                 ptllnd_tx_done(tx);
         }
 

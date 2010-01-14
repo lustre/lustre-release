@@ -67,7 +67,7 @@ static int osc_page_is_dlocked(const struct lu_env *env,
         ldlm_mode_t             dlmmode;
         int                     flags;
 
-        might_sleep();
+        cfs_might_sleep();
 
         info = osc_env_info(env);
         resname = &info->oti_resname;
@@ -121,8 +121,8 @@ static int osc_page_protected(const struct lu_env *env,
                 descr->cld_mode = mode;
                 descr->cld_start = page->cp_index;
                 descr->cld_end   = page->cp_index;
-                spin_lock(&hdr->coh_lock_guard);
-                list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
+                cfs_spin_lock(&hdr->coh_lock_guard);
+                cfs_list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
                         /*
                          * Lock-less sub-lock has to be either in HELD state
                          * (when io is actively going on), or in CACHED state,
@@ -139,7 +139,7 @@ static int osc_page_protected(const struct lu_env *env,
                                 break;
                         }
                 }
-                spin_unlock(&hdr->coh_lock_guard);
+                cfs_spin_unlock(&hdr->coh_lock_guard);
         }
         return result;
 }
@@ -200,10 +200,10 @@ static void osc_page_transfer_add(const struct lu_env *env,
         LINVRNT(cl_page_is_vmlocked(env, opg->ops_cl.cpl_page));
 
         obj = cl2osc(opg->ops_cl.cpl_obj);
-        spin_lock(&obj->oo_seatbelt);
-        list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
+        cfs_spin_lock(&obj->oo_seatbelt);
+        cfs_list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
         opg->ops_submitter = cfs_current();
-        spin_unlock(&obj->oo_seatbelt);
+        cfs_spin_unlock(&obj->oo_seatbelt);
 }
 
 static int osc_page_cache_add(const struct lu_env *env,
@@ -276,9 +276,9 @@ static int osc_page_fail(const struct lu_env *env,
 }
 
 
-static const char *osc_list(struct list_head *head)
+static const char *osc_list(cfs_list_t *head)
 {
-        return list_empty(head) ? "-" : "+";
+        return cfs_list_empty(head) ? "-" : "+";
 }
 
 static inline cfs_time_t osc_submit_duration(struct osc_page *opg)
@@ -363,9 +363,9 @@ static void osc_page_delete(const struct lu_env *env,
                               "Trying to teardown failed: %d\n", rc);
                 LASSERT(0);
         }
-        spin_lock(&obj->oo_seatbelt);
-        list_del_init(&opg->ops_inflight);
-        spin_unlock(&obj->oo_seatbelt);
+        cfs_spin_lock(&obj->oo_seatbelt);
+        cfs_list_del_init(&opg->ops_inflight);
+        cfs_spin_unlock(&obj->oo_seatbelt);
         EXIT;
 }
 
@@ -379,9 +379,9 @@ void osc_page_clip(const struct lu_env *env, const struct cl_page_slice *slice,
 
         opg->ops_from = from;
         opg->ops_to   = to;
-        spin_lock(&oap->oap_lock);
+        cfs_spin_lock(&oap->oap_lock);
         oap->oap_async_flags |= ASYNC_COUNT_STABLE;
-        spin_unlock(&oap->oap_lock);
+        cfs_spin_unlock(&oap->oap_lock);
 }
 
 static int osc_page_cancel(const struct lu_env *env,
@@ -499,19 +499,19 @@ static int osc_completion(const struct lu_env *env,
         LASSERT(page->cp_req == NULL);
 
         /* As the transfer for this page is being done, clear the flags */
-        spin_lock(&oap->oap_lock);
+        cfs_spin_lock(&oap->oap_lock);
         oap->oap_async_flags = 0;
-        spin_unlock(&oap->oap_lock);
+        cfs_spin_unlock(&oap->oap_lock);
 
         crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
         /* Clear opg->ops_transfer_pinned before VM lock is released. */
         opg->ops_transfer_pinned = 0;
 
-        spin_lock(&obj->oo_seatbelt);
+        cfs_spin_lock(&obj->oo_seatbelt);
         LASSERT(opg->ops_submitter != NULL);
-        LASSERT(!list_empty(&opg->ops_inflight));
-        list_del_init(&opg->ops_inflight);
-        spin_unlock(&obj->oo_seatbelt);
+        LASSERT(!cfs_list_empty(&opg->ops_inflight));
+        cfs_list_del_init(&opg->ops_inflight);
+        cfs_spin_unlock(&obj->oo_seatbelt);
 
         opg->ops_submit_time = 0;
 
@@ -625,9 +625,9 @@ void osc_io_submit_page(const struct lu_env *env,
         else if (!(oap->oap_brw_page.flag & OBD_BRW_FROM_GRANT))
                 osc_enter_cache_try(env, cli, oap->oap_loi, oap, 1);
 
-        spin_lock(&oap->oap_lock);
+        cfs_spin_lock(&oap->oap_lock);
         oap->oap_async_flags |= OSC_FLAGS | flags;
-        spin_unlock(&oap->oap_lock);
+        cfs_spin_unlock(&oap->oap_lock);
 
         osc_oap_to_pending(oap);
         osc_page_transfer_get(opg, "transfer\0imm");

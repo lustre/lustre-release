@@ -152,7 +152,7 @@ static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,
 
         *eof = 1;
         return snprintf(page, count, "%lu\n",
-                        mdt->mdt_identity_cache->uc_entry_expire / HZ);
+                        mdt->mdt_identity_cache->uc_entry_expire / CFS_HZ);
 }
 
 static int lprocfs_wr_identity_expire(struct file *file, const char *buffer,
@@ -166,7 +166,7 @@ static int lprocfs_wr_identity_expire(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        mdt->mdt_identity_cache->uc_entry_expire = val * HZ;
+        mdt->mdt_identity_cache->uc_entry_expire = val * CFS_HZ;
         return count;
 }
 
@@ -179,7 +179,7 @@ static int lprocfs_rd_identity_acquire_expire(char *page, char **start,
 
         *eof = 1;
         return snprintf(page, count, "%lu\n",
-                        mdt->mdt_identity_cache->uc_acquire_expire / HZ);
+                        mdt->mdt_identity_cache->uc_acquire_expire / CFS_HZ);
 }
 
 static int lprocfs_wr_identity_acquire_expire(struct file *file,
@@ -195,7 +195,7 @@ static int lprocfs_wr_identity_acquire_expire(struct file *file,
         if (rc)
                 return rc;
 
-        mdt->mdt_identity_cache->uc_acquire_expire = val * HZ;
+        mdt->mdt_identity_cache->uc_acquire_expire = val * CFS_HZ;
         return count;
 }
 
@@ -208,9 +208,9 @@ static int lprocfs_rd_identity_upcall(char *page, char **start, off_t off,
         int len;
 
         *eof = 1;
-        read_lock(&hash->uc_upcall_rwlock);
+        cfs_read_lock(&hash->uc_upcall_rwlock);
         len = snprintf(page, count, "%s\n", hash->uc_upcall);
-        read_unlock(&hash->uc_upcall_rwlock);
+        cfs_read_unlock(&hash->uc_upcall_rwlock);
         return len;
 }
 
@@ -227,14 +227,15 @@ static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
                 return -EINVAL;
         }
 
-        if (copy_from_user(kernbuf, buffer, min_t(unsigned long, count,
-                                                  UC_CACHE_UPCALL_MAXPATH - 1)))
+        if (cfs_copy_from_user(kernbuf, buffer,
+                               min_t(unsigned long, count,
+                                     UC_CACHE_UPCALL_MAXPATH - 1)))
                 return -EFAULT;
 
         /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
-        write_lock(&hash->uc_upcall_rwlock);
+        cfs_write_lock(&hash->uc_upcall_rwlock);
         sscanf(kernbuf, "%s", hash->uc_upcall);
-        write_unlock(&hash->uc_upcall_rwlock);
+        cfs_write_unlock(&hash->uc_upcall_rwlock);
 
         if (strcmp(hash->uc_name, obd->obd_name) != 0)
                 CWARN("%s: write to upcall name %s\n",
@@ -276,7 +277,7 @@ static int lprocfs_wr_identity_info(struct file *file, const char *buffer,
                 return count;
         }
 
-        if (copy_from_user(&sparam, buffer, sizeof(sparam))) {
+        if (cfs_copy_from_user(&sparam, buffer, sizeof(sparam))) {
                 CERROR("%s: bad identity data\n", obd->obd_name);
                 GOTO(out, rc = -EFAULT);
         }
@@ -308,7 +309,7 @@ static int lprocfs_wr_identity_info(struct file *file, const char *buffer,
                                sparam.idd_uid, sparam.idd_ngroups);
                         param = &sparam;
                         param->idd_ngroups = 0;
-                } else if (copy_from_user(param, buffer, size)) {
+                } else if (cfs_copy_from_user(param, buffer, size)) {
                         CERROR("%s: uid %u bad supplementary group data\n",
                                obd->obd_name, sparam.idd_uid);
                         OBD_FREE(param, size);
@@ -557,7 +558,7 @@ static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
                 errmsg = "string too long";
                 GOTO(failed, rc = -EINVAL);
         }
-        if (copy_from_user(kernbuf, buffer, count)) {
+        if (cfs_copy_from_user(kernbuf, buffer, count)) {
                 errmsg = "bad address";
                 GOTO(failed, rc = -EFAULT);
         }
@@ -618,7 +619,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         int rc;
         char *kernbuf, *errmsg;
-        struct list_head tmp;
+        cfs_list_t tmp;
         ENTRY;
 
         OBD_ALLOC(kernbuf, count + 1);
@@ -626,7 +627,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                 errmsg = "no memory";
                 GOTO(failed, rc = -ENOMEM);
         }
-        if (copy_from_user(kernbuf, buffer, count)) {
+        if (cfs_copy_from_user(kernbuf, buffer, count)) {
                 errmsg = "bad address";
                 GOTO(failed, rc = -EFAULT);
         }
@@ -634,15 +635,15 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
 
         if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
                 /* empty string is special case */
-                down_write(&mdt->mdt_squash_sem);
-                if (!list_empty(&mdt->mdt_nosquash_nids)) {
+                cfs_down_write(&mdt->mdt_squash_sem);
+                if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
                         cfs_free_nidlist(&mdt->mdt_nosquash_nids);
                         OBD_FREE(mdt->mdt_nosquash_str,
                                  mdt->mdt_nosquash_strlen);
                         mdt->mdt_nosquash_str = NULL;
                         mdt->mdt_nosquash_strlen = 0;
                 }
-                up_write(&mdt->mdt_squash_sem);
+                cfs_up_write(&mdt->mdt_squash_sem);
                 LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
                               obd->obd_name);
                 OBD_FREE(kernbuf, count + 1);
@@ -655,18 +656,18 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                 GOTO(failed, rc = -EINVAL);
         }
 
-        down_write(&mdt->mdt_squash_sem);
-        if (!list_empty(&mdt->mdt_nosquash_nids)) {
+        cfs_down_write(&mdt->mdt_squash_sem);
+        if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
                 cfs_free_nidlist(&mdt->mdt_nosquash_nids);
                 OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
         }
         mdt->mdt_nosquash_str = kernbuf;
         mdt->mdt_nosquash_strlen = count + 1;
-        list_splice(&tmp, &mdt->mdt_nosquash_nids);
+        cfs_list_splice(&tmp, &mdt->mdt_nosquash_nids);
 
         LCONSOLE_INFO("%s: nosquash_nids is set to %s\n",
                       obd->obd_name, kernbuf);
-        up_write(&mdt->mdt_squash_sem);
+        cfs_up_write(&mdt->mdt_squash_sem);
         RETURN(count);
 
  failed:
@@ -720,7 +721,7 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (copy_from_user(kernbuf, buffer, count))
+        if (cfs_copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -740,7 +741,7 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         }
 
         /* 1 stands for self export. */
-        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+        cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
                 if (exp == obd->obd_self_export)
                         continue;
                 if (exp->exp_connect_flags & OBD_CONNECT_MDS_MDS)

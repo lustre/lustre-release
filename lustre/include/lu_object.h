@@ -257,7 +257,7 @@ struct lu_device {
          *
          * \todo XXX which means that atomic_t is probably too small.
          */
-        atomic_t                           ld_ref;
+        cfs_atomic_t                       ld_ref;
         /**
          * Pointer to device type. Never modified once set.
          */
@@ -328,7 +328,7 @@ struct lu_device_type {
          *
          * \see lu_device_types.
          */
-        struct list_head                        ldt_linkage;
+        cfs_list_t                              ldt_linkage;
 };
 
 /**
@@ -466,7 +466,7 @@ struct lu_object {
         /**
          * Linkage into list of all layers.
          */
-        struct list_head                   lo_linkage;
+        cfs_list_t                         lo_linkage;
         /**
          * Depth. Top level layer depth is 0.
          */
@@ -516,37 +516,37 @@ struct lu_object_header {
          * Object flags from enum lu_object_header_flags. Set and checked
          * atomically.
          */
-        unsigned long       loh_flags;
+        unsigned long          loh_flags;
         /**
          * Object reference count. Protected by lu_site::ls_guard.
          */
-        atomic_t            loh_ref;
+        cfs_atomic_t           loh_ref;
         /**
          * Fid, uniquely identifying this object.
          */
-        struct lu_fid       loh_fid;
+        struct lu_fid          loh_fid;
         /**
          * Common object attributes, cached for efficiency. From enum
          * lu_object_header_attr.
          */
-        __u32               loh_attr;
+        __u32                  loh_attr;
         /**
          * Linkage into per-site hash table. Protected by lu_site::ls_guard.
          */
-        struct hlist_node   loh_hash;
+        cfs_hlist_node_t       loh_hash;
         /**
          * Linkage into per-site LRU list. Protected by lu_site::ls_guard.
          */
-        struct list_head    loh_lru;
+        cfs_list_t             loh_lru;
         /**
          * Linkage into list of layers. Never modified once set (except lately
          * during object destruction). No locking is necessary.
          */
-        struct list_head    loh_layers;
+        cfs_list_t             loh_layers;
         /**
          * A list of references to this object, for debugging.
          */
-        struct lu_ref       loh_reference;
+        struct lu_ref          loh_reference;
 };
 
 struct fld;
@@ -576,23 +576,23 @@ struct lu_site {
          *
          * yes, it's heavy.
          */
-        rwlock_t              ls_guard;
+        cfs_rwlock_t              ls_guard;
         /**
          * Hash-table where objects are indexed by fid.
          */
-        struct hlist_head    *ls_hash;
+        cfs_hlist_head_t         *ls_hash;
         /**
          * Bit-mask for hash-table size.
          */
-        int                   ls_hash_mask;
+        int                       ls_hash_mask;
         /**
          * Order of hash-table.
          */
-        int                   ls_hash_bits;
+        int                       ls_hash_bits;
         /**
          * Number of buckets in the hash-table.
          */
-        int                   ls_hash_size;
+        int                       ls_hash_size;
 
         /**
          * LRU list, updated on each access to object. Protected by
@@ -602,22 +602,22 @@ struct lu_site {
          * moved to the lu_site::ls_lru.prev (this is due to the non-existence
          * of list_for_each_entry_safe_reverse()).
          */
-        struct list_head      ls_lru;
+        cfs_list_t                ls_lru;
         /**
          * Total number of objects in this site. Protected by
          * lu_site::ls_guard.
          */
-        unsigned              ls_total;
+        unsigned                  ls_total;
         /**
          * Total number of objects in this site with reference counter greater
          * than 0. Protected by lu_site::ls_guard.
          */
-        unsigned              ls_busy;
+        unsigned                  ls_busy;
 
         /**
          * Top-level device for this stack.
          */
-        struct lu_device     *ls_top_dev;
+        struct lu_device         *ls_top_dev;
 
         /**
          * Wait-queue signaled when an object in this site is ultimately
@@ -630,7 +630,7 @@ struct lu_site {
          *
          * \see htable_lookup().
          */
-        cfs_waitq_t           ls_marche_funebre;
+        cfs_waitq_t               ls_marche_funebre;
 
         /** statistical counters. Protected by nothing, races are accepted. */
         struct {
@@ -660,8 +660,8 @@ struct lu_site {
         /**
          * Linkage into global list of sites.
          */
-        struct list_head      ls_linkage;
-        struct lprocfs_stats *ls_time_stats;
+        cfs_list_t                ls_linkage;
+        struct lprocfs_stats     *ls_time_stats;
 };
 
 /** \name ctors
@@ -707,8 +707,8 @@ void lu_types_stop(void);
  */
 static inline void lu_object_get(struct lu_object *o)
 {
-        LASSERT(atomic_read(&o->lo_header->loh_ref) > 0);
-        atomic_inc(&o->lo_header->loh_ref);
+        LASSERT(cfs_atomic_read(&o->lo_header->loh_ref) > 0);
+        cfs_atomic_inc(&o->lo_header->loh_ref);
 }
 
 /**
@@ -717,7 +717,7 @@ static inline void lu_object_get(struct lu_object *o)
  */
 static inline int lu_object_is_dying(const struct lu_object_header *h)
 {
-        return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
+        return cfs_test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
 }
 
 void lu_object_put(const struct lu_env *env, struct lu_object *o);
@@ -749,7 +749,7 @@ struct lu_object *lu_object_find_slice(const struct lu_env *env,
  */
 static inline struct lu_object *lu_object_top(struct lu_object_header *h)
 {
-        LASSERT(!list_empty(&h->loh_layers));
+        LASSERT(!cfs_list_empty(&h->loh_layers));
         return container_of0(h->loh_layers.next, struct lu_object, lo_linkage);
 }
 
@@ -815,7 +815,7 @@ int lu_cdebug_printer(const struct lu_env *env,
 do {                                                                    \
         static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
                 lu_object_print(env, &__info, lu_cdebug_printer, object); \
                 CDEBUG(mask, format , ## __VA_ARGS__);                  \
         }                                                               \
@@ -828,7 +828,7 @@ do {                                                                    \
 do {                                                                    \
         static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
-        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
                 lu_object_header_print(env, &__info, lu_cdebug_printer, \
                                        (object)->lo_header);            \
                 lu_cdebug_printer(env, &__info, "\n");                  \
@@ -985,7 +985,7 @@ struct lu_context {
          * `non-transient' contexts, i.e., ones created for service threads
          * are placed here.
          */
-        struct list_head       lc_remember;
+        cfs_list_t             lc_remember;
         /**
          * Version counter used to skip calls to lu_context_refill() when no
          * keys were registered.
@@ -1119,11 +1119,11 @@ struct lu_context_key {
          * Internal implementation detail: number of values created for this
          * key.
          */
-        atomic_t lct_used;
+        cfs_atomic_t lct_used;
         /**
          * Internal implementation detail: module for this key.
          */
-        struct module *lct_owner;
+        cfs_module_t *lct_owner;
         /**
          * References to this key. For debugging.
          */

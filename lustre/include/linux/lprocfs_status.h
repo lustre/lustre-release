@@ -59,8 +59,8 @@
 #include <libcfs/libcfs.h>
 #include <linux/statfs.h>
 
-#else 
-#  define kstatfs statfs
+#else
+typedef struct statfs cfs_kstatfs_t;
 #endif
 
 #endif /* LPROCFS_SNMP_H */

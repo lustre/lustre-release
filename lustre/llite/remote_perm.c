@@ -65,7 +65,7 @@ static inline struct ll_remote_perm *alloc_ll_remote_perm(void)
 
         OBD_SLAB_ALLOC_PTR_GFP(lrp, ll_remote_perm_cachep, GFP_KERNEL);
         if (lrp)
-                INIT_HLIST_NODE(&lrp->lrp_list);
+                CFS_INIT_HLIST_NODE(&lrp->lrp_list);
         return lrp;
 }
 
@@ -74,14 +74,14 @@ static inline void free_ll_remote_perm(struct ll_remote_perm *lrp)
         if (!lrp)
                 return;
 
-        if (!hlist_unhashed(&lrp->lrp_list))
-                hlist_del(&lrp->lrp_list);
+        if (!cfs_hlist_unhashed(&lrp->lrp_list))
+                cfs_hlist_del(&lrp->lrp_list);
         OBD_SLAB_FREE(lrp, ll_remote_perm_cachep, sizeof(*lrp));
 }
 
-struct hlist_head *alloc_rmtperm_hash(void)
+cfs_hlist_head_t *alloc_rmtperm_hash(void)
 {
-        struct hlist_head *hash;
+        cfs_hlist_head_t *hash;
         int i;
 
         OBD_SLAB_ALLOC(hash, ll_rmtperm_hash_cachep, GFP_KERNEL,
@@ -91,22 +91,23 @@ struct hlist_head *alloc_rmtperm_hash(void)
                 return NULL;
 
         for (i = 0; i < REMOTE_PERM_HASHSIZE; i++)
-                INIT_HLIST_HEAD(hash + i);
+                CFS_INIT_HLIST_HEAD(hash + i);
 
         return hash;
 }
 
-void free_rmtperm_hash(struct hlist_head *hash)
+void free_rmtperm_hash(cfs_hlist_head_t *hash)
 {
         int i;
         struct ll_remote_perm *lrp;
-        struct hlist_node *node, *next;
+        cfs_hlist_node_t *node, *next;
 
         if(!hash)
                 return;
 
         for (i = 0; i < REMOTE_PERM_HASHSIZE; i++)
-                hlist_for_each_entry_safe(lrp, node, next, hash + i, lrp_list)
+                cfs_hlist_for_each_entry_safe(lrp, node, next, hash + i,
+                                              lrp_list)
                         free_ll_remote_perm(lrp);
         OBD_SLAB_FREE(hash, ll_rmtperm_hash_cachep,
                       REMOTE_PERM_HASHSIZE * sizeof(*hash));
@@ -121,9 +122,9 @@ static inline int remote_perm_hashfunc(uid_t uid)
  * MDT when client get remote permission. */
 static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
 {
-        struct hlist_head *head;
+        cfs_hlist_head_t *head;
         struct ll_remote_perm *lrp;
-        struct hlist_node *node;
+        cfs_hlist_node_t *node;
         int found = 0, rc;
         ENTRY;
 
@@ -132,8 +133,8 @@ static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
 
         head = lli->lli_remote_perms + remote_perm_hashfunc(current->uid);
 
-        spin_lock(&lli->lli_lock);
-        hlist_for_each_entry(lrp, node, head, lrp_list) {
+        cfs_spin_lock(&lli->lli_lock);
+        cfs_hlist_for_each_entry(lrp, node, head, lrp_list) {
                 if (lrp->lrp_uid != current->uid)
                         continue;
                 if (lrp->lrp_gid != current->gid)
@@ -155,7 +156,7 @@ static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
         rc = ((lrp->lrp_access_perm & mask) == mask) ? 0 : -EACCES;
 
 out:
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
         return rc;
 }
 
@@ -163,8 +164,8 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_remote_perm *lrp = NULL, *tmp = NULL;
-        struct hlist_head *head, *perm_hash = NULL;
-        struct hlist_node *node;
+        cfs_hlist_head_t *head, *perm_hash = NULL;
+        cfs_hlist_node_t *node;
         ENTRY;
 
         LASSERT(ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT);
@@ -192,7 +193,7 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
                 }
         }
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
 
         if (!lli->lli_remote_perms)
                 lli->lli_remote_perms = perm_hash;
@@ -202,7 +203,7 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
         head = lli->lli_remote_perms + remote_perm_hashfunc(perm->rp_uid);
 
 again:
-        hlist_for_each_entry(tmp, node, head, lrp_list) {
+        cfs_hlist_for_each_entry(tmp, node, head, lrp_list) {
                 if (tmp->lrp_uid != perm->rp_uid)
                         continue;
                 if (tmp->lrp_gid != perm->rp_gid)
@@ -218,13 +219,13 @@ again:
         }
 
         if (!lrp) {
-                spin_unlock(&lli->lli_lock);
+                cfs_spin_unlock(&lli->lli_lock);
                 lrp = alloc_ll_remote_perm();
                 if (!lrp) {
                         CERROR("alloc memory for ll_remote_perm failed!\n");
                         RETURN(-ENOMEM);
                 }
-                spin_lock(&lli->lli_lock);
+                cfs_spin_lock(&lli->lli_lock);
                 goto again;
         }
 
@@ -234,10 +235,10 @@ again:
                 lrp->lrp_gid         = perm->rp_gid;
                 lrp->lrp_fsuid       = perm->rp_fsuid;
                 lrp->lrp_fsgid       = perm->rp_fsgid;
-                hlist_add_head(&lrp->lrp_list, head);
+                cfs_hlist_add_head(&lrp->lrp_list, head);
         }
         lli->lli_rmtperm_utime = jiffies;
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 
         CDEBUG(D_SEC, "new remote perm@%p: %u/%u/%u/%u - %#x\n",
                lrp, lrp->lrp_uid, lrp->lrp_gid, lrp->lrp_fsuid, lrp->lrp_fsgid,
@@ -263,14 +264,14 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
                 if (!rc || (rc != -ENOENT && i))
                         break;
 
-                might_sleep();
+                cfs_might_sleep();
 
-                down(&lli->lli_rmtperm_sem);
+                cfs_down(&lli->lli_rmtperm_sem);
                 /* check again */
                 if (utime != lli->lli_rmtperm_utime) {
                         rc = do_check_remote_perm(lli, mask);
                         if (!rc || (rc != -ENOENT && i)) {
-                                up(&lli->lli_rmtperm_sem);
+                                cfs_up(&lli->lli_rmtperm_sem);
                                 break;
                         }
                 }
@@ -285,20 +286,20 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
                                         ll_i2suppgid(inode), &req);
                 capa_put(oc);
                 if (rc) {
-                        up(&lli->lli_rmtperm_sem);
+                        cfs_up(&lli->lli_rmtperm_sem);
                         break;
                 }
 
                 perm = req_capsule_server_swab_get(&req->rq_pill, &RMF_ACL,
                                                    lustre_swab_mdt_remote_perm);
                 if (unlikely(perm == NULL)) {
-                        up(&lli->lli_rmtperm_sem);
+                        cfs_up(&lli->lli_rmtperm_sem);
                         rc = -EPROTO;
                         break;
                 }
 
                 rc = ll_update_remote_perm(inode, perm);
-                up(&lli->lli_rmtperm_sem);
+                cfs_up(&lli->lli_rmtperm_sem);
                 if (rc == -ENOMEM)
                         break;
 
@@ -315,20 +316,21 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
 void ll_free_remote_perms(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct hlist_head *hash = lli->lli_remote_perms;
+        cfs_hlist_head_t *hash = lli->lli_remote_perms;
         struct ll_remote_perm *lrp;
-        struct hlist_node *node, *next;
+        cfs_hlist_node_t *node, *next;
         int i;
 
         LASSERT(hash);
 
-        spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_lock);
 
         for (i = 0; i < REMOTE_PERM_HASHSIZE; i++) {
-                hlist_for_each_entry_safe(lrp, node, next, hash + i, lrp_list)
+                cfs_hlist_for_each_entry_safe(lrp, node, next, hash + i,
+                                              lrp_list)
                         free_ll_remote_perm(lrp);
         }
 
-        spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_lock);
 }
 #endif

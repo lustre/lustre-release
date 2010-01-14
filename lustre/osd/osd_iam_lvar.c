@@ -291,7 +291,7 @@ void n_print(const struct iam_leaf *l)
 {
         struct lvar_leaf_entry *scan;
 
-        printk(KERN_EMERG "used: %d\n", h_used(n_head(l)));
+        printk(CFS_KERN_EMERG "used: %d\n", h_used(n_head(l)));
         for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
                 e_print(scan);
 }

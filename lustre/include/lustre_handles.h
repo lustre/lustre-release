@@ -47,6 +47,8 @@
 #error Unsupported operating system.
 #endif
 
+#include <libcfs/libcfs.h>
+
 typedef void (*portals_handle_addref_cb)(void *object);
 
 /* These handles are most easily used by having them appear at the very top of
@@ -62,15 +64,15 @@ typedef void (*portals_handle_addref_cb)(void *object);
  * uses some offsetof() magic. */
 
 struct portals_handle {
-        struct list_head h_link;
+        cfs_list_t h_link;
         __u64 h_cookie;
         portals_handle_addref_cb h_addref;
 
         /* newly added fields to handle the RCU issue. -jxiong */
-        spinlock_t h_lock;
+        cfs_spinlock_t h_lock;
         void *h_ptr;
         void (*h_free_cb)(void *, size_t);
-        struct rcu_head h_rcu;
+        cfs_rcu_head_t h_rcu;
         unsigned int h_size;
         __u8 h_in:1;
         __u8 h_unused[3];
@@ -84,7 +86,7 @@ void class_handle_hash(struct portals_handle *, portals_handle_addref_cb);
 void class_handle_unhash(struct portals_handle *);
 void class_handle_hash_back(struct portals_handle *);
 void *class_handle2object(__u64 cookie);
-void class_handle_free_cb(struct rcu_head *);
+void class_handle_free_cb(cfs_rcu_head_t *);
 int class_handle_init(void);
 void class_handle_cleanup(void);
 

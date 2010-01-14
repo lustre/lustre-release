@@ -110,16 +110,16 @@ CFS_MODULE_PARM(libcfs_panic_on_lbug, "i", uint, 0644,
                 "Lustre kernel panic on LBUG");
 EXPORT_SYMBOL(libcfs_panic_on_lbug);
 
-atomic_t libcfs_kmemory = ATOMIC_INIT(0);
+cfs_atomic_t libcfs_kmemory = CFS_ATOMIC_INIT(0);
 EXPORT_SYMBOL(libcfs_kmemory);
 
 static cfs_waitq_t debug_ctlwq;
 
-char debug_file_path_arr[1024] = DEBUG_FILE_PATH_DEFAULT;
+char libcfs_debug_file_path_arr[1024] = LIBCFS_DEBUG_FILE_PATH_DEFAULT;
 
 /* We need to pass a pointer here, but elsewhere this must be a const */
-char *debug_file_path = &debug_file_path_arr[0];
-CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
+char *libcfs_debug_file_path = &libcfs_debug_file_path_arr[0];
+CFS_MODULE_PARM(libcfs_debug_file_path, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
 
@@ -333,13 +333,13 @@ void libcfs_debug_dumplog_internal(void *arg)
 
         CFS_PUSH_JOURNAL;
 
-        if (strncmp(debug_file_path_arr, "NONE", 4) != 0) {
+        if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0) {
                 snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-                         "%s.%ld." LPLD, debug_file_path_arr,
+                         "%s.%ld." LPLD, libcfs_debug_file_path_arr,
                          cfs_time_current_sec(), (long_ptr_t)arg);
-                printk(KERN_ALERT "LustreError: dumping log to %s\n",
+                printk(CFS_KERN_ALERT "LustreError: dumping log to %s\n",
                        debug_file_name);
-                tracefile_dump_all_pages(debug_file_name);
+                cfs_tracefile_dump_all_pages(debug_file_name);
                 libcfs_run_debug_log_upcall(debug_file_name);
         }
         CFS_POP_JOURNAL;
@@ -362,21 +362,21 @@ void libcfs_debug_dumplog(void)
          * able to set our state to running as it exits before we
          * get to schedule() */
         cfs_waitlink_init(&wait);
-        set_current_state(TASK_INTERRUPTIBLE);
+        cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
         cfs_waitq_add(&debug_ctlwq, &wait);
 
         dumper = cfs_kthread_run(libcfs_debug_dumplog_thread,
                                  (void*)(long)cfs_curproc_pid(),
                                  "libcfs_debug_dumper");
         if (IS_ERR(dumper))
-                printk(KERN_ERR "LustreError: cannot start log dump thread: "
-                       "%ld\n", PTR_ERR(dumper));
+                printk(CFS_KERN_ERR "LustreError: cannot start log dump thread:"
+                       " %ld\n", PTR_ERR(dumper));
         else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
 
-        /* be sure to teardown if kernel_thread() failed */
+        /* be sure to teardown if cfs_kernel_thread() failed */
         cfs_waitq_del(&debug_ctlwq, &wait);
-        set_current_state(TASK_RUNNING);
+        cfs_set_current_state(CFS_TASK_RUNNING);
 }
 
 int libcfs_debug_init(unsigned long bufsize)
@@ -395,13 +395,13 @@ int libcfs_debug_init(unsigned long bufsize)
 
         /* If libcfs_debug_mb is set to an invalid value or uninitialized
          * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
-        if (max > trace_max_debug_mb() || max < num_possible_cpus()) {
+        if (max > cfs_trace_max_debug_mb() || max < cfs_num_possible_cpus()) {
                 max = TCD_MAX_PAGES;
         } else {
-                max = (max / num_possible_cpus());
+                max = (max / cfs_num_possible_cpus());
                 max = (max << (20 - CFS_PAGE_SHIFT));
         }
-        rc = tracefile_init(max);
+        rc = cfs_tracefile_init(max);
 
         if (rc == 0)
                 libcfs_register_panic_notifier();
@@ -412,13 +412,13 @@ int libcfs_debug_init(unsigned long bufsize)
 int libcfs_debug_cleanup(void)
 {
         libcfs_unregister_panic_notifier();
-        tracefile_exit();
+        cfs_tracefile_exit();
         return 0;
 }
 
 int libcfs_debug_clear_buffer(void)
 {
-        trace_flush_pages();
+        cfs_trace_flush_pages();
         return 0;
 }
 
@@ -439,7 +439,7 @@ int libcfs_debug_mark_buffer(const char *text)
 
 void libcfs_debug_set_level(unsigned int debug_level)
 {
-        printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
+        printk(CFS_KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
                debug_level);
         libcfs_debug = debug_level;
 }

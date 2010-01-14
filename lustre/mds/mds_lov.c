@@ -100,7 +100,8 @@ int mds_lov_init_objids(struct obd_device *obd)
 
         CLASSERT(((MDS_LOV_ALLOC_SIZE % sizeof(obd_id)) == 0));
 
-        mds->mds_lov_page_dirty = ALLOCATE_BITMAP(MDS_LOV_OBJID_PAGES_COUNT);
+        mds->mds_lov_page_dirty =
+                CFS_ALLOCATE_BITMAP(MDS_LOV_OBJID_PAGES_COUNT);
         if (mds->mds_lov_page_dirty == NULL)
                 RETURN(-ENOMEM);
 
@@ -130,7 +131,7 @@ err_open:
 err_free:
         OBD_FREE(mds->mds_lov_page_array, size);
 err_free_bitmap:
-        FREE_BITMAP(mds->mds_lov_page_dirty);
+        CFS_FREE_BITMAP(mds->mds_lov_page_dirty);
 
         RETURN(rc);
 }
@@ -158,7 +159,7 @@ void mds_lov_destroy_objids(struct obd_device *obd)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
         }
 
-        FREE_BITMAP(mds->mds_lov_page_dirty);
+        CFS_FREE_BITMAP(mds->mds_lov_page_dirty);
         EXIT;
 }
 
@@ -242,7 +243,7 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
         }
 
 
-        mutex_down(&obd->obd_dev_sem);
+        cfs_mutex_down(&obd->obd_dev_sem);
         for (j = 0; j < count; j++) {
                 __u32 i = le32_to_cpu(data[j].l_ost_idx);
                 if (mds_lov_update_max_ost(&obd->u.mds, i)) {
@@ -250,7 +251,7 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                         break;
                 }
         }
-        mutex_up(&obd->obd_dev_sem);
+        cfs_mutex_up(&obd->obd_dev_sem);
 
         RETURN(rc);
 }
@@ -582,9 +583,9 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d - idx %d / uuid %s\n",
                mds->mds_lov_desc.ld_tgt_count, idx, uuid->uuid);
 
-        mutex_down(&obd->obd_dev_sem);
+        cfs_mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_update_max_ost(mds, idx);
-        mutex_up(&obd->obd_dev_sem);
+        cfs_mutex_up(&obd->obd_dev_sem);
         if (rc != 0)
                 GOTO(out, rc );
 
@@ -683,9 +684,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOTCONN);
         }
 
-        mutex_down(&obd->obd_dev_sem);
+        cfs_mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_read_objids(obd);
-        mutex_up(&obd->obd_dev_sem);
+        cfs_mutex_up(&obd->obd_dev_sem);
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
                 GOTO(err_exit, rc);
@@ -833,7 +834,7 @@ static int __mds_lov_synchronize(void *data)
         uuid = &watched->u.cli.cl_target_uuid;
         LASSERT(uuid);
 
-        down_read(&mds->mds_notify_lock);
+        cfs_down_read(&mds->mds_notify_lock);
         if (obd->obd_stopping || obd->obd_fail)
                 GOTO(out, rc = -ENODEV);
 
@@ -890,7 +891,7 @@ static int __mds_lov_synchronize(void *data)
 #endif
         EXIT;
 out:
-        up_read(&mds->mds_notify_lock);
+        cfs_up_read(&mds->mds_notify_lock);
         if (rc) {
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),

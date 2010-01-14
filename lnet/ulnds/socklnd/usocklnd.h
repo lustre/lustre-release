@@ -46,7 +46,7 @@
 #include <lnet/socklnd.h>
 
 typedef struct {
-        struct list_head tx_list;    /* neccessary to form tx list */
+        cfs_list_t       tx_list;    /* neccessary to form tx list */
         lnet_msg_t      *tx_lnetmsg; /* lnet message for lnet_finalize() */
         ksock_msg_t      tx_msg;     /* buffer for wire header of ksock msg */
         int              tx_resid;   /* # of residual bytes */
@@ -73,7 +73,7 @@ typedef struct {
         struct usock_preq_s  *uc_preq;       /* preallocated request */
         __u32                 uc_peer_ip;    /* IP address of the peer */
         __u16                 uc_peer_port;  /* port of the peer */
-        struct list_head      uc_stale_list; /* orphaned connections */
+        cfs_list_t            uc_stale_list; /* orphaned connections */
 
         /* Receive state */
         int                uc_rx_state;      /* message or hello state */
@@ -89,14 +89,14 @@ typedef struct {
         ksock_msg_t        uc_rx_msg;        /* message buffer */
 
         /* Send state */
-        struct list_head   uc_tx_list;       /* pending txs */
-        struct list_head   uc_zcack_list;    /* pending zc_acks */
+        cfs_list_t         uc_tx_list;       /* pending txs */
+        cfs_list_t         uc_zcack_list;    /* pending zc_acks */
         cfs_time_t         uc_tx_deadline;   /* when to time out */
         int                uc_tx_flag;       /* deadline valid? */
         int                uc_sending;       /* send op is in progress */
         usock_tx_t        *uc_tx_hello;      /* fake tx with hello */
 
-        cfs_atomic_t       uc_refcount;      /* # of users */
+        cfs_mt_atomic_t    uc_refcount;      /* # of users */
         pthread_mutex_t    uc_lock;          /* serialize */
         int                uc_errored;       /* a flag for lnet_notify() */
 } usock_conn_t;
@@ -123,39 +123,39 @@ typedef struct {
 #define N_CONN_TYPES 3 /* CONTROL, BULK_IN and BULK_OUT */
 
 typedef struct usock_peer_s {
-        struct list_head  up_list;         /* neccessary to form peer list */
-        lnet_process_id_t up_peerid;       /* id of remote peer */
+        cfs_list_t        up_list;        /* neccessary to form peer list */
+        lnet_process_id_t up_peerid;      /* id of remote peer */
         usock_conn_t     *up_conns[N_CONN_TYPES]; /* conns that connect us
-                                                   * us with the peer */
-        lnet_ni_t        *up_ni;           /* pointer to parent NI */
-        __u64             up_incarnation;  /* peer's incarnation */
-        int               up_incrn_is_set; /* 0 if peer's incarnation
-                                            * hasn't been set so far */
-        cfs_atomic_t      up_refcount;     /* # of users */
-        pthread_mutex_t   up_lock;         /* serialize */
-        int               up_errored;      /* a flag for lnet_notify() */
-        cfs_time_t        up_last_alive;   /* when the peer was last alive */
+                                                       * us with the peer */
+        lnet_ni_t        *up_ni;          /* pointer to parent NI */
+        __u64             up_incarnation; /* peer's incarnation */
+        int               up_incrn_is_set;/* 0 if peer's incarnation
+                                               * hasn't been set so far */
+        cfs_mt_atomic_t   up_refcount;    /* # of users */
+        pthread_mutex_t   up_lock;        /* serialize */
+        int               up_errored;     /* a flag for lnet_notify() */
+        cfs_time_t        up_last_alive;  /* when the peer was last alive */
 } usock_peer_t;
 
 typedef struct {
-        cfs_socket_t     *upt_notifier[2];       /* notifier sockets: 1st for
-                                                  writing, 2nd for reading */
-        struct pollfd    *upt_pollfd;            /* poll fds */
-        int               upt_nfds;              /* active poll fds */
-        int               upt_npollfd;           /* allocated poll fds */
-        usock_conn_t    **upt_idx2conn;          /* conns corresponding to
-                                                  * upt_pollfd[idx] */
-        int              *upt_skip;              /* skip chain */
-        int              *upt_fd2idx;            /* index into upt_pollfd[]
-                                                  * by fd */
-        int               upt_nfd2idx;           /* # of allocated elements
-                                                  * of upt_fd2idx[] */
-        struct list_head  upt_stale_list;        /* list of orphaned conns */
-        struct list_head  upt_pollrequests;      /* list of poll requests */
-        pthread_mutex_t   upt_pollrequests_lock; /* serialize */
-        int               upt_errno;             /* non-zero if errored */
-        struct cfs_completion upt_completion;    /* wait/signal facility for
-                                                  * syncronizing shutdown */
+        cfs_socket_t       *upt_notifier[2];    /* notifier sockets: 1st for
+                                                 * writing, 2nd for reading */
+        struct pollfd      *upt_pollfd;         /* poll fds */
+        int                 upt_nfds;           /* active poll fds */
+        int                 upt_npollfd;        /* allocated poll fds */
+        usock_conn_t      **upt_idx2conn;       /* conns corresponding to
+                                                 * upt_pollfd[idx] */
+        int                *upt_skip;           /* skip chain */
+        int                *upt_fd2idx;         /* index into upt_pollfd[]
+                                                 * by fd */
+        int                 upt_nfd2idx;        /* # of allocated elements
+                                                 * of upt_fd2idx[] */
+        cfs_list_t          upt_stale_list;     /* list of orphaned conns */
+        cfs_list_t          upt_pollrequests;   /* list of poll requests */
+        pthread_mutex_t     upt_pollrequests_lock; /* serialize */
+        int                 upt_errno;         /* non-zero if errored */
+        cfs_mt_completion_t upt_completion;    /* wait/signal facility for
+                                                * syncronizing shutdown */
 } usock_pollthread_t;
 
 /* Number of elements in upt_pollfd[], upt_idx2conn[] and upt_fd2idx[]
@@ -171,7 +171,7 @@ typedef struct {
         usock_pollthread_t *ud_pollthreads;    /* their state */
         int                 ud_shutdown;       /* shutdown flag */
         int                 ud_nets_count;     /* # of instances */
-        struct list_head    ud_peers[UD_PEER_HASH_SIZE]; /* peer hash table */
+        cfs_list_t          ud_peers[UD_PEER_HASH_SIZE]; /* peer hash table */
         pthread_rwlock_t    ud_peers_lock;     /* serialize */
 } usock_data_t;
 
@@ -205,11 +205,11 @@ typedef struct {
 extern usock_tunables_t usock_tuns;
 
 typedef struct usock_preq_s {
-        int              upr_type;  /* type of requested action */
+        int              upr_type;   /* type of requested action */
         short            upr_value; /* bitmask of POLLIN and POLLOUT bits */
         usock_conn_t *   upr_conn;  /* a conn for the sake of which
                                      * action will be performed */
-        struct list_head upr_list;  /* neccessary to form list */
+        cfs_list_t       upr_list;  /* neccessary to form list */
 } usock_pollrequest_t;
 
 /* Allowable poll request types are: */
@@ -220,15 +220,15 @@ typedef struct usock_preq_s {
 #define POLL_SET_REQUEST 5
 
 typedef struct {
-        struct list_head zc_list;   /* neccessary to form zc_ack list */
+        cfs_list_t       zc_list;   /* neccessary to form zc_ack list */
         __u64            zc_cookie; /* zero-copy cookie */
 } usock_zc_ack_t;
 
 static inline void
 usocklnd_conn_addref(usock_conn_t *conn)
 {
-        LASSERT (cfs_atomic_read(&conn->uc_refcount) > 0);
-        cfs_atomic_inc(&conn->uc_refcount);
+        LASSERT (cfs_mt_atomic_read(&conn->uc_refcount) > 0);
+        cfs_mt_atomic_inc(&conn->uc_refcount);
 }
 
 void usocklnd_destroy_conn(usock_conn_t *conn);
@@ -236,16 +236,16 @@ void usocklnd_destroy_conn(usock_conn_t *conn);
 static inline void
 usocklnd_conn_decref(usock_conn_t *conn)
 {
-        LASSERT (cfs_atomic_read(&conn->uc_refcount) > 0);
-        if (cfs_atomic_dec_and_test(&conn->uc_refcount))
+        LASSERT (cfs_mt_atomic_read(&conn->uc_refcount) > 0);
+        if (cfs_mt_atomic_dec_and_test(&conn->uc_refcount))
                 usocklnd_destroy_conn(conn);
 }
 
 static inline void
 usocklnd_peer_addref(usock_peer_t *peer)
 {
-        LASSERT (cfs_atomic_read(&peer->up_refcount) > 0);
-        cfs_atomic_inc(&peer->up_refcount);
+        LASSERT (cfs_mt_atomic_read(&peer->up_refcount) > 0);
+        cfs_mt_atomic_inc(&peer->up_refcount);
 }
 
 void usocklnd_destroy_peer(usock_peer_t *peer);
@@ -253,8 +253,8 @@ void usocklnd_destroy_peer(usock_peer_t *peer);
 static inline void
 usocklnd_peer_decref(usock_peer_t *peer)
 {
-        LASSERT (cfs_atomic_read(&peer->up_refcount) > 0);
-        if (cfs_atomic_dec_and_test(&peer->up_refcount))
+        LASSERT (cfs_mt_atomic_read(&peer->up_refcount) > 0);
+        if (cfs_mt_atomic_dec_and_test(&peer->up_refcount))
                 usocklnd_destroy_peer(peer);
 }
 
@@ -263,7 +263,7 @@ usocklnd_ip2pt_idx(__u32 ip) {
         return ip % usock_data.ud_npollthreads;
 }
 
-static inline struct list_head *
+static inline cfs_list_t *
 usocklnd_nid2peerlist(lnet_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % UD_PEER_HASH_SIZE;
@@ -297,8 +297,8 @@ int usocklnd_read_hello(usock_conn_t *conn, int *cont_flag);
 int usocklnd_activeconn_hellorecv(usock_conn_t *conn);
 int usocklnd_passiveconn_hellorecv(usock_conn_t *conn);
 int usocklnd_write_handler(usock_conn_t *conn);
-usock_tx_t * usocklnd_try_piggyback(struct list_head *tx_list_p,
-                                    struct list_head *zcack_list_p);
+usock_tx_t * usocklnd_try_piggyback(cfs_list_t *tx_list_p,
+                                    cfs_list_t *zcack_list_p);
 int usocklnd_activeconn_hellosent(usock_conn_t *conn);
 int usocklnd_passiveconn_hellosent(usock_conn_t *conn);
 int usocklnd_send_tx(usock_conn_t *conn, usock_tx_t *tx);
@@ -337,8 +337,8 @@ usock_tx_t *usocklnd_create_hello_tx(lnet_ni_t *ni,
 usock_tx_t *usocklnd_create_cr_hello_tx(lnet_ni_t *ni,
                                         int type, lnet_nid_t peer_nid);
 void usocklnd_destroy_tx(lnet_ni_t *ni, usock_tx_t *tx);
-void usocklnd_destroy_txlist(lnet_ni_t *ni, struct list_head *txlist);
-void usocklnd_destroy_zcack_list(struct list_head *zcack_list);
+void usocklnd_destroy_txlist(lnet_ni_t *ni, cfs_list_t *txlist);
+void usocklnd_destroy_zcack_list(cfs_list_t *zcack_list);
 void usocklnd_destroy_peer (usock_peer_t *peer);
 int usocklnd_get_conn_type(lnet_msg_t *lntmsg);
 int usocklnd_type2idx(int type);

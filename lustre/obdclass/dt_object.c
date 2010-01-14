@@ -78,13 +78,13 @@ static struct lu_context_key dt_key = {
  */
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb)
 {
-        list_add(&cb->dtc_linkage, &dev->dd_txn_callbacks);
+        cfs_list_add(&cb->dtc_linkage, &dev->dd_txn_callbacks);
 }
 EXPORT_SYMBOL(dt_txn_callback_add);
 
 void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 {
-        list_del_init(&cb->dtc_linkage);
+        cfs_list_del_init(&cb->dtc_linkage);
 }
 EXPORT_SYMBOL(dt_txn_callback_del);
 
@@ -95,7 +95,7 @@ int dt_txn_hook_start(const struct lu_env *env,
         struct dt_txn_callback *cb;
 
         result = 0;
-        list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+        cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_start == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
@@ -114,7 +114,7 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
         int                     result;
 
         result = 0;
-        list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+        cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_stop == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
@@ -133,7 +133,7 @@ int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn)
         int                     result;
 
         result = 0;
-        list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+        cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_commit == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;

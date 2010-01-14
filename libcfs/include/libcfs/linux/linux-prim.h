@@ -69,6 +69,41 @@
 
 #include <libcfs/linux/linux-time.h>
 
+#define CFS_KERN_EMERG   KERN_EMERG
+#define CFS_KERN_ALERT   KERN_ALERT
+#define CFS_KERN_CRIT    KERN_CRIT
+#define CFS_KERN_ERR     KERN_ERR
+#define CFS_KERN_WARNING KERN_WARNING
+#define CFS_KERN_NOTICE  KERN_NOTICE
+#define CFS_KERN_INFO    KERN_INFO
+#define CFS_KERN_DEBUG   KERN_DEBUG
+
+/*
+ * CPU
+ */
+#ifdef for_each_possible_cpu
+#define cfs_for_each_possible_cpu(cpu) for_each_possible_cpu(cpu)
+#elif defined(for_each_cpu)
+#define cfs_for_each_possible_cpu(cpu) for_each_cpu(cpu)
+#endif
+
+#ifdef NR_CPUS
+#define CFS_NR_CPUS     NR_CPUS
+#else
+#define CFS_NR_CPUS     1
+#endif
+
+#define cfs_set_cpus_allowed(t, mask)  set_cpus_allowed(t, mask)
+/*
+ * cache
+ */
+#define CFS_L1_CACHE_ALIGN(x)           L1_CACHE_ALIGN(x)
+
+/*
+ * IRQs
+ */
+#define CFS_NR_IRQS                     NR_IRQS
+
 #define CFS_EXPORT_SYMBOL(s)            EXPORT_SYMBOL(s)
 
 /*
@@ -111,15 +146,19 @@ LL_PROC_PROTO(name)                                     \
 #define cfs_symbol_get(s)               inter_module_get(s)
 #define cfs_symbol_put(s)               inter_module_put(s)
 #define cfs_module_get()                MOD_INC_USE_COUNT
-#define cfs_module_put()                MOD_DEC_USE_COUNT
 #else
 #define cfs_symbol_register(s, p)       do {} while(0)
 #define cfs_symbol_unregister(s)        do {} while(0)
 #define cfs_symbol_get(s)               symbol_get(s)
 #define cfs_symbol_put(s)               symbol_put(s)
 #define cfs_module_get()                try_module_get(THIS_MODULE)
-#define cfs_module_put()                module_put(THIS_MODULE)
+#define cfs_try_module_get(m)           try_module_get(m)
+#define __cfs_module_get(m)             __module_get(m)
+#define cfs_module_put(m)               module_put(m)
+#define cfs_module_refcount(m)          module_refcount(m)
 #endif
+
+typedef struct module cfs_module_t;
 
 /*
  * Proc file system APIs
@@ -138,7 +177,8 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 #define CFS_TASK_UNINT                  TASK_UNINTERRUPTIBLE
 #define CFS_TASK_RUNNING                TASK_RUNNING
 
-#define cfs_set_current_state(state) set_current_state(state)
+#define cfs_set_current_state(state)    set_current_state(state)
+#define cfs_wait_event(wq, cond)        wait_event(wq, cond)
 
 typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
@@ -180,8 +220,9 @@ typedef struct task_struct              cfs_task_t;
 
 /* Module interfaces */
 #define cfs_module(name, version, init, fini) \
-module_init(init);                            \
-module_exit(fini)
+        module_init(init);                    \
+        module_exit(fini)
+#define cfs_request_module              request_module
 
 /*
  * Signal
@@ -236,7 +277,7 @@ do {                                                                 \
 #endif
 
 #ifndef wait_event_interruptible_timeout /* Only for RHEL3 2.4.21 kernel */
-#define __wait_event_interruptible_timeout(wq, condition, timeout, ret)   \
+#define __wait_event_interruptible_timeout(wq, condition, timeout, ret)  \
 do {                                                           \
 	int __ret = 0;                                         \
 	if (!(condition)) {                                    \
@@ -276,7 +317,7 @@ do {                                                              \
 	ret = 0;                                                  \
 	if (!(condition))                                         \
 		__wait_event_interruptible_timeout(wq, condition, \
-						timeout, ret);     \
+                                                   timeout, ret); \
 } while (0)
 #else
 #define cfs_waitq_wait_event_interruptible_timeout(wq, c, timeout, ret) \
@@ -289,13 +330,22 @@ do {                                                              \
 
 typedef atomic_t cfs_atomic_t;
 
-#define cfs_atomic_read(atom)         atomic_read(atom)
-#define cfs_atomic_inc(atom)          atomic_inc(atom)
-#define cfs_atomic_dec(atom)          atomic_dec(atom)
-#define cfs_atomic_dec_and_test(atom) atomic_dec_and_test(atom)
-#define cfs_atomic_set(atom, value)   atomic_set(atom, value)
-#define cfs_atomic_add(value, atom)   atomic_add(value, atom)
-#define cfs_atomic_sub(value, atom)   atomic_sub(value, atom)
+#define cfs_atomic_read(atom)                atomic_read(atom)
+#define cfs_atomic_inc(atom)                 atomic_inc(atom)
+#define cfs_atomic_inc_and_test(atom)        atomic_inc_and_test(atom)
+#define cfs_atomic_inc_return(atom)          atomic_inc_return(atom)
+#define cfs_atomic_inc_not_zero(atom)        atomic_inc_not_zero(atom)
+#define cfs_atomic_dec(atom)                 atomic_dec(atom)
+#define cfs_atomic_dec_and_test(atom)        atomic_dec_and_test(atom)
+#define cfs_atomic_dec_and_lock(atom, lock)  atomic_dec_and_lock(atom, lock)
+#define cfs_atomic_dec_return(atom)          atomic_dec_return(atom)
+#define cfs_atomic_set(atom, value)          atomic_set(atom, value)
+#define cfs_atomic_add(value, atom)          atomic_add(value, atom)
+#define cfs_atomic_add_return(value, atom)   atomic_add_return(value, atom)
+#define cfs_atomic_sub(value, atom)          atomic_sub(value, atom)
+#define cfs_atomic_sub_and_test(value, atom) atomic_sub_and_test(value, atom)
+#define cfs_atomic_sub_return(value, atom)   atomic_sub_return(value, atom)
+#define CFS_ATOMIC_INIT(i)                   ATOMIC_INIT(i)
 
 /*
  * membar
@@ -309,4 +359,24 @@ typedef atomic_t cfs_atomic_t;
 
 #define cfs_in_interrupt() in_interrupt()
 
+/*
+ * might_sleep
+ */
+#define cfs_might_sleep() might_sleep()
+
+/*
+ * group_info
+ */
+typedef struct group_info cfs_group_info_t;
+
+#define cfs_get_group_info(group_info)     get_group_info(group_info)
+#define cfs_put_group_info(group_info)     put_group_info(group_info)
+#define cfs_set_current_groups(group_info) set_current_groups(group_info)
+#define cfs_groups_free(group_info)        groups_free(group_info)
+#define cfs_groups_alloc(gidsetsize)       groups_alloc(gidsetsize)
+
+/*
+ * Random bytes
+ */
+#define cfs_get_random_bytes(buf, nbytes)  get_random_bytes(buf, nbytes)
 #endif

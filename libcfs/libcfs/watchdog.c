@@ -44,15 +44,15 @@
 #include "tracefile.h"
 
 struct lc_watchdog {
-        cfs_timer_t       lcw_timer; /* kernel timer */
-        struct list_head  lcw_list;
-        cfs_time_t        lcw_last_touched;
-        cfs_task_t       *lcw_task;
+        cfs_timer_t           lcw_timer; /* kernel timer */
+        cfs_list_t            lcw_list;
+        cfs_time_t            lcw_last_touched;
+        cfs_task_t           *lcw_task;
 
-        void            (*lcw_callback)(pid_t, void *);
-        void             *lcw_data;
+        void                (*lcw_callback)(pid_t, void *);
+        void                 *lcw_data;
 
-        pid_t             lcw_pid;
+        pid_t                 lcw_pid;
 
         enum {
                 LC_WATCHDOG_DISABLED,
@@ -67,8 +67,8 @@ struct lc_watchdog {
  * and lcw_stop_completion when it exits.
  * Wake lcw_event_waitq to signal timer callback dispatches.
  */
-static struct completion lcw_start_completion;
-static struct completion lcw_stop_completion;
+static cfs_completion_t lcw_start_completion;
+static cfs_completion_t  lcw_stop_completion;
 static cfs_waitq_t lcw_event_waitq;
 
 /*
@@ -85,27 +85,28 @@ static unsigned long lcw_flags = 0;
  * When it hits 0, we stop the distpatcher.
  */
 static __u32         lcw_refcount = 0;
-static DECLARE_MUTEX(lcw_refcount_sem);
+static CFS_DECLARE_MUTEX(lcw_refcount_sem);
 
 /*
  * List of timers that have fired that need their callbacks run by the
  * dispatcher.
  */
-static spinlock_t lcw_pending_timers_lock = SPIN_LOCK_UNLOCKED; /* BH lock! */
-static struct list_head lcw_pending_timers = \
+/* BH lock! */
+static cfs_spinlock_t lcw_pending_timers_lock = CFS_SPIN_LOCK_UNLOCKED;
+static cfs_list_t lcw_pending_timers = \
         CFS_LIST_HEAD_INIT(lcw_pending_timers);
 
 /* Last time a watchdog expired */
 static cfs_time_t lcw_last_watchdog_time;
 static int lcw_recent_watchdog_count;
-static spinlock_t lcw_last_watchdog_lock = SPIN_LOCK_UNLOCKED;
+static cfs_spinlock_t lcw_last_watchdog_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 static void
 lcw_dump(struct lc_watchdog *lcw)
 {
         ENTRY;
 #if defined(HAVE_TASKLIST_LOCK)
-        read_lock(&tasklist_lock);
+        cfs_read_lock(&tasklist_lock);
 #elif defined(HAVE_TASK_RCU)
         rcu_read_lock();
 #else
@@ -121,7 +122,7 @@ lcw_dump(struct lc_watchdog *lcw)
         }
 
 #if defined(HAVE_TASKLIST_LOCK)
-        read_unlock(&tasklist_lock);
+        cfs_read_unlock(&tasklist_lock);
 #elif defined(HAVE_TASK_RCU)
         rcu_read_unlock();
 #endif
@@ -153,7 +154,7 @@ static void lcw_cb(ulong_ptr_t data)
          * Normally we would not hold the spin lock over the CWARN but in
          * this case we hold it to ensure non ratelimited lcw_dumps are not
          * interleaved on the console making them hard to read. */
-        spin_lock_bh(&lcw_last_watchdog_lock);
+        cfs_spin_lock_bh(&lcw_last_watchdog_lock);
         delta_time = cfs_duration_sec(cfs_time_sub(current_time,
                                                    lcw_last_watchdog_time));
 
@@ -188,15 +189,15 @@ static void lcw_cb(ulong_ptr_t data)
                 lcw_dump(lcw);
 	}
 
-        spin_unlock_bh(&lcw_last_watchdog_lock);
-        spin_lock_bh(&lcw_pending_timers_lock);
+        cfs_spin_unlock_bh(&lcw_last_watchdog_lock);
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
 
-        if (list_empty(&lcw->lcw_list)) {
-                list_add(&lcw->lcw_list, &lcw_pending_timers);
+        if (cfs_list_empty(&lcw->lcw_list)) {
+                cfs_list_add(&lcw->lcw_list, &lcw_pending_timers);
                 cfs_waitq_signal(&lcw_event_waitq);
         }
 
-        spin_unlock_bh(&lcw_pending_timers_lock);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
 
         EXIT;
 }
@@ -205,12 +206,12 @@ static int is_watchdog_fired(void)
 {
         int rc;
 
-        if (test_bit(LCW_FLAG_STOP, &lcw_flags))
+        if (cfs_test_bit(LCW_FLAG_STOP, &lcw_flags))
                 return 1;
 
-        spin_lock_bh(&lcw_pending_timers_lock);
-        rc = !list_empty(&lcw_pending_timers);
-        spin_unlock_bh(&lcw_pending_timers_lock);
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+        rc = !cfs_list_empty(&lcw_pending_timers);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
         return rc;
 }
 
@@ -229,17 +230,18 @@ static int lcw_dispatch_main(void *data)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        complete(&lcw_start_completion);
+        cfs_complete(&lcw_start_completion);
 
         while (1) {
-                cfs_wait_event_interruptible(lcw_event_waitq, is_watchdog_fired(), rc);
+                cfs_wait_event_interruptible(lcw_event_waitq,
+                                             is_watchdog_fired(), rc);
                 CDEBUG(D_INFO, "Watchdog got woken up...\n");
-                if (test_bit(LCW_FLAG_STOP, &lcw_flags)) {
+                if (cfs_test_bit(LCW_FLAG_STOP, &lcw_flags)) {
                         CDEBUG(D_INFO, "LCW_FLAG_STOP was set, shutting down...\n");
 
-                        spin_lock_bh(&lcw_pending_timers_lock);
-                        rc = !list_empty(&lcw_pending_timers);
-                        spin_unlock_bh(&lcw_pending_timers_lock);
+                        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+                        rc = !cfs_list_empty(&lcw_pending_timers);
+                        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
                         if (rc) {
                                 CERROR("pending timers list was not empty at "
                                        "time of watchdog dispatch shutdown\n");
@@ -247,26 +249,26 @@ static int lcw_dispatch_main(void *data)
                         break;
                 }
 
-                spin_lock_bh(&lcw_pending_timers_lock);
-                while (!list_empty(&lcw_pending_timers)) {
+                cfs_spin_lock_bh(&lcw_pending_timers_lock);
+                while (!cfs_list_empty(&lcw_pending_timers)) {
 
-                        lcw = list_entry(lcw_pending_timers.next,
+                        lcw = cfs_list_entry(lcw_pending_timers.next,
                                          struct lc_watchdog,
                                          lcw_list);
-                        list_del_init(&lcw->lcw_list);
-                        spin_unlock_bh(&lcw_pending_timers_lock);
+                        cfs_list_del_init(&lcw->lcw_list);
+                        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
 
                         CDEBUG(D_INFO, "found lcw for pid " LPPID "\n", lcw->lcw_pid);
 
                         if (lcw->lcw_state != LC_WATCHDOG_DISABLED)
                                 lcw->lcw_callback(lcw->lcw_pid, lcw->lcw_data);
 
-                        spin_lock_bh(&lcw_pending_timers_lock);
+                        cfs_spin_lock_bh(&lcw_pending_timers_lock);
                 }
-                spin_unlock_bh(&lcw_pending_timers_lock);
+                cfs_spin_unlock_bh(&lcw_pending_timers_lock);
         }
 
-        complete(&lcw_stop_completion);
+        cfs_complete(&lcw_stop_completion);
 
         RETURN(rc);
 }
@@ -278,18 +280,18 @@ static void lcw_dispatch_start(void)
         ENTRY;
         LASSERT(lcw_refcount == 1);
 
-        init_completion(&lcw_stop_completion);
-        init_completion(&lcw_start_completion);
+        cfs_init_completion(&lcw_stop_completion);
+        cfs_init_completion(&lcw_start_completion);
         cfs_waitq_init(&lcw_event_waitq);
 
         CDEBUG(D_INFO, "starting dispatch thread\n");
-        rc = kernel_thread(lcw_dispatch_main, NULL, 0);
+        rc = cfs_kernel_thread(lcw_dispatch_main, NULL, 0);
         if (rc < 0) {
                 CERROR("error spawning watchdog dispatch thread: %d\n", rc);
                 EXIT;
                 return;
         }
-        wait_for_completion(&lcw_start_completion);
+        cfs_wait_for_completion(&lcw_start_completion);
         CDEBUG(D_INFO, "watchdog dispatcher initialization complete.\n");
 
         EXIT;
@@ -302,10 +304,10 @@ static void lcw_dispatch_stop(void)
 
         CDEBUG(D_INFO, "trying to stop watchdog dispatcher.\n");
 
-        set_bit(LCW_FLAG_STOP, &lcw_flags);
+        cfs_set_bit(LCW_FLAG_STOP, &lcw_flags);
         cfs_waitq_signal(&lcw_event_waitq);
 
-        wait_for_completion(&lcw_stop_completion);
+        cfs_wait_for_completion(&lcw_stop_completion);
 
         CDEBUG(D_INFO, "watchdog dispatcher has shut down.\n");
 
@@ -334,10 +336,10 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
         CFS_INIT_LIST_HEAD(&lcw->lcw_list);
         cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);
 
-        down(&lcw_refcount_sem);
+        cfs_down(&lcw_refcount_sem);
         if (++lcw_refcount == 1)
                 lcw_dispatch_start();
-        up(&lcw_refcount_sem);
+        cfs_up(&lcw_refcount_sem);
 
         /* Keep this working in case we enable them by default */
         if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
@@ -377,9 +379,9 @@ void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
         ENTRY;
         LASSERT(lcw != NULL);
 
-        spin_lock_bh(&lcw_pending_timers_lock);
-        list_del_init(&lcw->lcw_list);
-        spin_unlock_bh(&lcw_pending_timers_lock);
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+        cfs_list_del_init(&lcw->lcw_list);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
 
         lcw_update_time(lcw, "resumed");
         lcw->lcw_state = LC_WATCHDOG_ENABLED;
@@ -396,10 +398,10 @@ void lc_watchdog_disable(struct lc_watchdog *lcw)
         ENTRY;
         LASSERT(lcw != NULL);
 
-        spin_lock_bh(&lcw_pending_timers_lock);
-        if (!list_empty(&lcw->lcw_list))
-                list_del_init(&lcw->lcw_list);
-        spin_unlock_bh(&lcw_pending_timers_lock);
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+        if (!cfs_list_empty(&lcw->lcw_list))
+                cfs_list_del_init(&lcw->lcw_list);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
 
         lcw_update_time(lcw, "completed");
         lcw->lcw_state = LC_WATCHDOG_DISABLED;
@@ -417,15 +419,15 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 
         lcw_update_time(lcw, "stopped");
 
-        spin_lock_bh(&lcw_pending_timers_lock);
-        if (!list_empty(&lcw->lcw_list))
-                list_del_init(&lcw->lcw_list);
-        spin_unlock_bh(&lcw_pending_timers_lock);
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+        if (!cfs_list_empty(&lcw->lcw_list))
+                cfs_list_del_init(&lcw->lcw_list);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
 
-        down(&lcw_refcount_sem);
+        cfs_down(&lcw_refcount_sem);
         if (--lcw_refcount == 0)
                 lcw_dispatch_stop();
-        up(&lcw_refcount_sem);
+        cfs_up(&lcw_refcount_sem);
 
         LIBCFS_FREE(lcw, sizeof(*lcw));
 

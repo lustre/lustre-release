@@ -102,7 +102,7 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
 
         lqs->lqs_key = lqs_key;
 
-        spin_lock_init(&lqs->lqs_lock);
+        cfs_spin_lock_init(&lqs->lqs_lock);
         lqs->lqs_bwrite_pending = 0;
         lqs->lqs_iwrite_pending = 0;
         lqs->lqs_ino_rec = 0;
@@ -120,13 +120,13 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
         }
         lqs_initref(lqs);
 
-        spin_lock(&qctxt->lqc_lock);
+        cfs_spin_lock(&qctxt->lqc_lock);
         if (!qctxt->lqc_valid)
                 rc = -EBUSY;
         else
                 rc = cfs_hash_add_unique(qctxt->lqc_lqs_hash,
                                          &lqs->lqs_key, &lqs->lqs_hash);
-        spin_unlock(&qctxt->lqc_lock);
+        cfs_spin_unlock(&qctxt->lqc_lock);
 
         if (!rc)
                 lqs_getref(lqs);
@@ -202,7 +202,7 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
 
         CDEBUG(D_QUOTA, "before: bunit: %lu, iunit: %lu.\n",
                lqs->lqs_bunit_sz, lqs->lqs_iunit_sz);
-        spin_lock(&lqs->lqs_lock);
+        cfs_spin_lock(&lqs->lqs_lock);
         for (i = 0; i < 2; i++) {
                 if (i == 0 && !QAQ_IS_ADJBLK(oqaq))
                         continue;
@@ -248,7 +248,7 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
                 if (tmp < 0)
                         rc |= i ? LQS_INO_INCREASE : LQS_BLK_INCREASE;
         }
-        spin_unlock(&lqs->lqs_lock);
+        cfs_spin_unlock(&lqs->lqs_lock);
         CDEBUG(D_QUOTA, "after: bunit: %lu, iunit: %lu.\n",
                lqs->lqs_bunit_sz, lqs->lqs_iunit_sz);
 

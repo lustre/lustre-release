@@ -57,7 +57,7 @@
 #endif
 
 typedef struct {
-        spinlock_t          lock;
+        cfs_spinlock_t          lock;
 
 #ifdef CLIENT_OBD_LIST_LOCK_DEBUG
         unsigned long       time;
@@ -75,7 +75,7 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
 {
         unsigned long cur = jiffies;
         while (1) {
-                if (spin_trylock(&lock->lock)) {
+                if (cfs_spin_trylock(&lock->lock)) {
                         LASSERT(lock->task == NULL);
                         lock->task = current;
                         lock->func = func;
@@ -84,8 +84,8 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
                         break;
                 }
 
-                if ((jiffies - cur > 5 * HZ) &&
-                    (jiffies - lock->time > 5 * HZ)) {
+                if ((jiffies - cur > 5 * CFS_HZ) &&
+                    (jiffies - lock->time > 5 * CFS_HZ)) {
                         LCONSOLE_WARN("LOCK UP! the lock %p was acquired"
                                       " by <%s:%d:%s:%d> %lu time, I'm %s:%d\n",
                                       lock, lock->task->comm, lock->task->pid,
@@ -98,7 +98,7 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
                         LCONSOLE_WARN("====== for current process =====\n");
                         libcfs_debug_dumpstack(NULL);
                         LCONSOLE_WARN("====== end =======\n");
-                        cfs_pause(1000* HZ);
+                        cfs_pause(1000 * CFS_HZ);
                 }
         }
 }
@@ -111,25 +111,25 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
         LASSERT(lock->task != NULL);
         lock->task = NULL;
         lock->time = jiffies;
-        spin_unlock(&lock->lock);
+        cfs_spin_unlock(&lock->lock);
 }
 
 #else /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
 static inline void client_obd_list_lock(client_obd_lock_t *lock)
 {
-	spin_lock(&lock->lock);
+	cfs_spin_lock(&lock->lock);
 }
 
 static inline void client_obd_list_unlock(client_obd_lock_t *lock)
 {
-        spin_unlock(&lock->lock);
+        cfs_spin_unlock(&lock->lock);
 }
 
 #endif /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
 
 static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 {
-        spin_lock_init(&lock->lock);
+        cfs_spin_lock_init(&lock->lock);
 }
 
 static inline void client_obd_list_lock_done(client_obd_lock_t *lock)

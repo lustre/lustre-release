@@ -77,12 +77,12 @@ typedef struct percpu_counter lcounter_t;
 #define lcounter_destroy(counter)       percpu_counter_destroy(counter)
 
 #else
-typedef struct { atomic_t count; } lcounter_t;
+typedef struct { cfs_atomic_t count; } lcounter_t;
 
-#define lcounter_read(counter)          atomic_read(&counter->count)
-#define lcounter_inc(counter)           atomic_inc(&counter->count)
-#define lcounter_dec(counter)           atomic_dec(&counter->count)
-#define lcounter_init(counter)          atomic_set(&counter->count, 0)
+#define lcounter_read(counter)          cfs_atomic_read(&counter->count)
+#define lcounter_inc(counter)           cfs_atomic_inc(&counter->count)
+#define lcounter_dec(counter)           cfs_atomic_dec(&counter->count)
+#define lcounter_init(counter)          cfs_atomic_set(&counter->count, 0)
 #define lcounter_destroy(counter)       
 
 #endif /* if defined HAVE_PERCPU_COUNTER */

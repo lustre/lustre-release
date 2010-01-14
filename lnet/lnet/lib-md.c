@@ -77,8 +77,8 @@ lnet_md_unlink(lnet_libmd_t *md)
                 LASSERT (md->md_eq->eq_refcount >= 0);
         }
 
-        LASSERT (!list_empty(&md->md_list));
-        list_del_init (&md->md_list);
+        LASSERT (!cfs_list_empty(&md->md_list));
+        cfs_list_del_init (&md->md_list);
         lnet_md_free(md);
 }
 
@@ -187,8 +187,8 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 
         /* It's good; let handle2md succeed and add to active mds */
         lnet_initialise_handle (&lmd->md_lh, LNET_COOKIE_TYPE_MD);
-        LASSERT (list_empty(&lmd->md_list));
-        list_add (&lmd->md_list, &the_lnet.ln_active_mds);
+        LASSERT (cfs_list_empty(&lmd->md_list));
+        cfs_list_add (&lmd->md_list, &the_lnet.ln_active_mds);
 
         return 0;
 }

@@ -58,14 +58,14 @@
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)
 struct filter_iobuf {
-        atomic_t          dr_numreqs;  /* number of reqs being processed */
-        wait_queue_head_t dr_wait;
-        int               dr_max_pages;
-        int               dr_npages;
-        int               dr_error;
-        struct page     **dr_pages;
-        unsigned long    *dr_blocks;
-        unsigned int      dr_ignore_quota:1;
+        cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
+        cfs_waitq_t        dr_wait;
+        int                dr_max_pages;
+        int                dr_npages;
+        int                dr_error;
+        struct page      **dr_pages;
+        unsigned long     *dr_blocks;
+        unsigned int       dr_ignore_quota:1;
         struct filter_obd *dr_filter;
 };
 
@@ -74,34 +74,36 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
 {
         struct filter_obd *filter = iobuf->dr_filter;
 
-        atomic_inc(&iobuf->dr_numreqs);
+        cfs_atomic_inc(&iobuf->dr_numreqs);
 
         if (rw == OBD_BRW_READ) {
-                atomic_inc(&filter->fo_r_in_flight);
+                cfs_atomic_inc(&filter->fo_r_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_RPC_HIST],
-                                 atomic_read(&filter->fo_r_in_flight));
+                                 cfs_atomic_read(&filter->fo_r_in_flight));
                 lprocfs_oh_tally_log2(&filter->
                                        fo_filter_stats.hist[BRW_R_DISK_IOSIZE],
                                       size);
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
                         lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
-                                          hist[BRW_R_RPC_HIST],
-                                         atomic_read(&filter->fo_r_in_flight));
+                                         hist[BRW_R_RPC_HIST],
+                                         cfs_atomic_read(&filter-> \
+                                         fo_r_in_flight));
                         lprocfs_oh_tally_log2(&exp->exp_nid_stats->
                                          nid_brw_stats->hist[BRW_R_DISK_IOSIZE],
                                               size);
                 }
         } else {
-                atomic_inc(&filter->fo_w_in_flight);
+                cfs_atomic_inc(&filter->fo_w_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_RPC_HIST],
-                                 atomic_read(&filter->fo_w_in_flight));
+                                 cfs_atomic_read(&filter->fo_w_in_flight));
                 lprocfs_oh_tally_log2(&filter->
                                        fo_filter_stats.hist[BRW_W_DISK_IOSIZE],
                                       size);
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
                         lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
                                           hist[BRW_W_RPC_HIST],
-                                         atomic_read(&filter->fo_r_in_flight));
+                                         cfs_atomic_read(&filter-> \
+                                         fo_r_in_flight));
                         lprocfs_oh_tally_log2(&exp->exp_nid_stats->
                                         nid_brw_stats->hist[BRW_W_DISK_IOSIZE],
                                               size);
@@ -117,12 +119,12 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
          * DO NOT record procfs stats here!!! */
 
         if (rw == OBD_BRW_READ)
-                atomic_dec(&filter->fo_r_in_flight);
+                cfs_atomic_dec(&filter->fo_r_in_flight);
         else
-                atomic_dec(&filter->fo_w_in_flight);
+                cfs_atomic_dec(&filter->fo_w_in_flight);
 
-        if (atomic_dec_and_test(&iobuf->dr_numreqs))
-                wake_up(&iobuf->dr_wait);
+        if (cfs_atomic_dec_and_test(&iobuf->dr_numreqs))
+                cfs_waitq_signal(&iobuf->dr_wait);
 }
 
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
@@ -150,13 +152,13 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
                        "bi_private: %p\n", bio->bi_next, bio->bi_flags,
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
-                       bio->bi_end_io, atomic_read(&bio->bi_cnt),
+                       bio->bi_end_io, cfs_atomic_read(&bio->bi_cnt),
                        bio->bi_private);
                 return 0;
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
-        if (!test_bit(BIO_RW, &bio->bi_rw)) {
+        if (!cfs_test_bit(BIO_RW, &bio->bi_rw)) {
                 bio_for_each_segment(bvl, bio, i) {
                         if (likely(error == 0))
                                 SetPageUptodate(bvl->bv_page);
@@ -218,8 +220,8 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
                 goto failed_2;
 
         iobuf->dr_filter = filter;
-        init_waitqueue_head(&iobuf->dr_wait);
-        atomic_set(&iobuf->dr_numreqs, 0);
+        cfs_waitq_init(&iobuf->dr_wait);
+        cfs_atomic_set(&iobuf->dr_numreqs, 0);
         iobuf->dr_max_pages = num_pages;
         iobuf->dr_npages = 0;
         iobuf->dr_error = 0;
@@ -239,7 +241,7 @@ static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 {
         iobuf->dr_npages = 0;
         iobuf->dr_error = 0;
-        atomic_set(&iobuf->dr_numreqs, 0);
+        cfs_atomic_set(&iobuf->dr_numreqs, 0);
 }
 
 void filter_free_iobuf(struct filter_iobuf *iobuf)
@@ -414,7 +416,8 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
         }
 
  out:
-        wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
+        cfs_wait_event(iobuf->dr_wait,
+                       cfs_atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rw == OBD_BRW_READ) {
                 lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.
@@ -461,7 +464,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
         int rc, rc2, create;
-        struct semaphore *sem;
+        cfs_semaphore_t *sem;
         ENTRY;
 
         LASSERTF(iobuf->dr_npages <= iobuf->dr_max_pages, "%d,%d\n",

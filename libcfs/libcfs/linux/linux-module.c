@@ -84,7 +84,7 @@ int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 
         if (data->ioc_inllen2)
                 data->ioc_inlbuf2 = &data->ioc_bulk[0] +
-                        size_round(data->ioc_inllen1);
+                        cfs_size_round(data->ioc_inllen1);
 
         RETURN(0);
 }

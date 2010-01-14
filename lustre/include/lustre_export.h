@@ -48,7 +48,7 @@ struct mdt_idmap_table;
 
 struct lu_export_data {
         /** Protects led_lcd below */
-        struct semaphore        led_lcd_lock;
+        cfs_semaphore_t         led_lcd_lock;
         /** Per-client data for each export */
         struct lsd_client_data *led_lcd;
         /** Offset of record in last_rcvd file */
@@ -59,10 +59,10 @@ struct lu_export_data {
 
 struct mdt_export_data {
         struct lu_export_data   med_led;
-        struct list_head        med_open_head;
-        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
+        cfs_list_t              med_open_head;
+        cfs_spinlock_t          med_open_lock; /* lock med_open_head, mfd_list*/
         __u64                   med_ibits_known;
-        struct semaphore           med_idmap_sem;
+        cfs_semaphore_t         med_idmap_sem;
         struct lustre_idmap_table *med_idmap;
 };
 
@@ -72,9 +72,9 @@ struct mdt_export_data {
 #define med_lr_idx      med_led.led_lr_idx
 
 struct osc_creator {
-        spinlock_t              oscc_lock;
-        struct list_head        oscc_wait_create_list;
-        struct obd_device       *oscc_obd;
+        cfs_spinlock_t          oscc_lock;
+        cfs_list_t              oscc_wait_create_list;
+        struct obd_device      *oscc_obd;
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
         int                     oscc_grow_count;
@@ -88,16 +88,16 @@ struct osc_creator {
 };
 
 struct ec_export_data { /* echo client */
-        struct list_head eced_locks;
+        cfs_list_t eced_locks;
 };
 
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         struct lu_export_data      fed_led;
-        spinlock_t                 fed_lock;     /**< protects fed_mod_list */
+        cfs_spinlock_t             fed_lock;     /**< protects fed_mod_list */
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
-        struct list_head           fed_mod_list; /* files being modified */
+        cfs_list_t                 fed_mod_list; /* files being modified */
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
         __u32                      fed_group;
@@ -110,26 +110,26 @@ struct filter_export_data {
 
 typedef struct nid_stat {
         lnet_nid_t               nid;
-        struct hlist_node        nid_hash;
-        struct list_head         nid_list;
+        cfs_hlist_node_t         nid_hash;
+        cfs_list_t               nid_list;
         struct obd_device       *nid_obd;
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
         struct lprocfs_stats    *nid_ldlm_stats;
         struct brw_stats        *nid_brw_stats;
-        atomic_t                 nid_exp_ref_count; /* for obd_nid_stats_hash
+        cfs_atomic_t             nid_exp_ref_count; /* for obd_nid_stats_hash
                                                            exp_nid_stats */
 }nid_stat_t;
 
 #define nidstat_getref(nidstat)                                                \
 do {                                                                           \
-        atomic_inc(&(nidstat)->nid_exp_ref_count);                             \
+        cfs_atomic_inc(&(nidstat)->nid_exp_ref_count);                         \
 } while(0)
 
 #define nidstat_putref(nidstat)                                                \
 do {                                                                           \
-        atomic_dec(&(nidstat)->nid_exp_ref_count);                             \
-        LASSERTF(atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,              \
+        cfs_atomic_dec(&(nidstat)->nid_exp_ref_count);                         \
+        LASSERTF(cfs_atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,          \
                  "stat %p nid_exp_ref_count < 0\n", nidstat);                  \
 } while(0)
 
@@ -141,27 +141,27 @@ enum obd_option {
 
 struct obd_export {
         struct portals_handle     exp_handle;
-        atomic_t                  exp_refcount;
+        cfs_atomic_t              exp_refcount;
         /**
          * Set of counters below is to track where export references are
          * kept. The exp_rpc_count is used for reconnect handling also,
          * the cb_count and locks_count are for debug purposes only for now.
          * The sum of them should be less than exp_refcount by 3
          */
-        atomic_t                  exp_rpc_count; /** RPC references */
-        atomic_t                  exp_cb_count; /** Commit callback references */
-        atomic_t                  exp_locks_count; /** Lock references */
+        cfs_atomic_t              exp_rpc_count; /* RPC references */
+        cfs_atomic_t              exp_cb_count; /* Commit callback references */
+        cfs_atomic_t              exp_locks_count; /** Lock references */
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
-        struct list_head          exp_locks_list;
-        spinlock_t                exp_locks_list_guard;
+        cfs_list_t                exp_locks_list;
+        cfs_spinlock_t            exp_locks_list_guard;
 #endif
-        atomic_t                  exp_replay_count;
+        cfs_atomic_t              exp_replay_count;
         struct obd_uuid           exp_client_uuid;
-        struct list_head          exp_obd_chain;
-        struct hlist_node         exp_uuid_hash; /* uuid-export hash*/
-        struct hlist_node         exp_nid_hash; /* nid-export hash */
+        cfs_list_t                exp_obd_chain;
+        cfs_hlist_node_t          exp_uuid_hash; /* uuid-export hash*/
+        cfs_hlist_node_t          exp_nid_hash; /* nid-export hash */
         /* exp_obd_chain_timed fo ping evictor, protected by obd_dev_lock */
-        struct list_head          exp_obd_chain_timed;
+        cfs_list_t                exp_obd_chain_timed;
         struct obd_device        *exp_obd;
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct nid_stat          *exp_nid_stats;
@@ -169,14 +169,14 @@ struct obd_export {
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
         cfs_hash_t               *exp_lock_hash; /* existing lock hash */
-        spinlock_t                exp_lock_hash_lock;
-        struct list_head          exp_outstanding_replies;
-        struct list_head          exp_uncommitted_replies;
-        spinlock_t                exp_uncommitted_replies_lock;
+        cfs_spinlock_t            exp_lock_hash_lock;
+        cfs_list_t                exp_outstanding_replies;
+        cfs_list_t                exp_uncommitted_replies;
+        cfs_spinlock_t            exp_uncommitted_replies_lock;
         __u64                     exp_last_committed;
         cfs_time_t                exp_last_request_time;
-        struct list_head          exp_req_replay_queue;
-        spinlock_t                exp_lock; /* protects flags int below */
+        cfs_list_t                exp_req_replay_queue;
+        cfs_spinlock_t            exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;
         enum obd_option           exp_flags;
@@ -197,7 +197,7 @@ struct obd_export {
                                   /* client timed out and tried to reconnect,
                                    * but couldn't because of active rpcs */
                                   exp_abort_active_req:1;
-        struct list_head          exp_queued_rpc;  /* RPC to be handled */
+        cfs_list_t                exp_queued_rpc;  /* RPC to be handled */
         /* also protected by exp_lock */
         enum lustre_sec_part      exp_sp_peer;
         struct sptlrpc_flavor     exp_flvr;             /* current */

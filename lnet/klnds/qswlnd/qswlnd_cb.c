@@ -357,12 +357,12 @@ kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
         kqswnal_unmap_tx (ktx);                 /* release temporary mappings */
         ktx->ktx_state = KTX_IDLE;
 
-        spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+        cfs_spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
-        list_del (&ktx->ktx_list);              /* take off active list */
-        list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
+        cfs_list_del (&ktx->ktx_list);              /* take off active list */
+        cfs_list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 
-        spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+        cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 }
 
 kqswnal_tx_t *
@@ -371,23 +371,25 @@ kqswnal_get_idle_tx (void)
         unsigned long  flags;
         kqswnal_tx_t  *ktx;
 
-        spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+        cfs_spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
         if (kqswnal_data.kqn_shuttingdown ||
-            list_empty (&kqswnal_data.kqn_idletxds)) {
-                spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+            cfs_list_empty (&kqswnal_data.kqn_idletxds)) {
+                cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock,
+                                            flags);
 
                 return NULL;
         }
 
-        ktx = list_entry (kqswnal_data.kqn_idletxds.next, kqswnal_tx_t, ktx_list);
-        list_del (&ktx->ktx_list);
+        ktx = cfs_list_entry (kqswnal_data.kqn_idletxds.next, kqswnal_tx_t,
+                              ktx_list);
+        cfs_list_del (&ktx->ktx_list);
 
-        list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
+        cfs_list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
         ktx->ktx_launcher = current->pid;
-        atomic_inc(&kqswnal_data.kqn_pending_txs);
+        cfs_atomic_inc(&kqswnal_data.kqn_pending_txs);
 
-        spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+        cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 
         /* Idle descs can't have any mapped (as opposed to pre-mapped) pages */
         LASSERT (ktx->ktx_nmappedpages == 0);
@@ -402,9 +404,9 @@ kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
         int            status0  = 0;
         int            status1  = 0;
         kqswnal_rx_t  *krx;
-        
-        LASSERT (!in_interrupt());
-        
+
+        LASSERT (!cfs_in_interrupt());
+
         if (ktx->ktx_status == -EHOSTDOWN)
                 kqswnal_notify_peer_down(ktx);
 
@@ -507,19 +509,19 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int status)
 
         ktx->ktx_status = status;
 
-        if (!in_interrupt()) {
+        if (!cfs_in_interrupt()) {
                 kqswnal_tx_done_in_thread_context(ktx);
                 return;
         }
 
         /* Complete the send in thread context */
-        spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
-        
-        list_add_tail(&ktx->ktx_schedlist, 
-                      &kqswnal_data.kqn_donetxds);
-        wake_up(&kqswnal_data.kqn_sched_waitq);
-        
-        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
+        cfs_spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
+
+        cfs_list_add_tail(&ktx->ktx_schedlist,
+                          &kqswnal_data.kqn_donetxds);
+        cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
+
+        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
 }
 
 static void
@@ -602,7 +604,7 @@ int
 kqswnal_launch (kqswnal_tx_t *ktx)
 {
         /* Don't block for transmit descriptor if we're in interrupt context */
-        int   attr = in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
+        int   attr = cfs_in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
         int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
         unsigned long flags;
         int   rc;
@@ -652,7 +654,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                                          kqswnal_txhandler, ktx,
                                          NULL, ktx->ktx_frags, ktx->ktx_nfrag);
                 break;
-                
+
         default:
                 LBUG();
                 rc = -EINVAL;                   /* no compiler warning please */
@@ -664,16 +666,19 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                 return (0);
 
         case EP_ENOMEM: /* can't allocate ep txd => queue for later */
-                spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+                cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
-                list_add_tail (&ktx->ktx_schedlist, &kqswnal_data.kqn_delayedtxds);
-                wake_up (&kqswnal_data.kqn_sched_waitq);
+                cfs_list_add_tail (&ktx->ktx_schedlist,
+                                   &kqswnal_data.kqn_delayedtxds);
+                cfs_waitq_signal (&kqswnal_data.kqn_sched_waitq);
 
-                spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
+                cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock,
+                                            flags);
                 return (0);
 
         default: /* fatal error */
-                CDEBUG (D_NETERROR, "Tx to %s failed: %d\n", libcfs_nid2str(ktx->ktx_nid), rc);
+                CDEBUG (D_NETERROR, "Tx to %s failed: %d\n",
+                        libcfs_nid2str(ktx->ktx_nid), rc);
                 kqswnal_notify_peer_down(ktx);
                 return (-EHOSTUNREACH);
         }
@@ -895,9 +900,9 @@ kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg,
         ktx->ktx_args[0] = krx;
         ktx->ktx_args[1] = lntmsg;
 
-        LASSERT (atomic_read(&krx->krx_refcount) > 0);
+        LASSERT (cfs_atomic_read(&krx->krx_refcount) > 0);
         /* Take an extra ref for the completion callback */
-        atomic_inc(&krx->krx_refcount);
+        cfs_atomic_inc(&krx->krx_refcount);
 
         /* Map on the rail the RPC prefers */
         ktx->ktx_rail = ep_rcvr_prefrail(krx->krx_eprx,
@@ -974,7 +979,7 @@ kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg,
                 kqswnal_put_idle_tx (ktx);
         }
 
-        atomic_dec(&kqswnal_data.kqn_pending_txs);
+        cfs_atomic_dec(&kqswnal_data.kqn_pending_txs);
         return (rc);
 }
 
@@ -1005,7 +1010,7 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (payload_niov <= LNET_MAX_IOV);
 
         /* It must be OK to kmap() if required */
-        LASSERT (payload_kiov == NULL || !in_interrupt ());
+        LASSERT (payload_kiov == NULL || !cfs_in_interrupt ());
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
@@ -1250,14 +1255,14 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 
         }
         
-        atomic_dec(&kqswnal_data.kqn_pending_txs);
+        cfs_atomic_dec(&kqswnal_data.kqn_pending_txs);
         return (rc == 0 ? 0 : -EIO);
 }
 
 void
 kqswnal_requeue_rx (kqswnal_rx_t *krx)
 {
-        LASSERT (atomic_read(&krx->krx_refcount) == 0);
+        LASSERT (cfs_atomic_read(&krx->krx_refcount) == 0);
         LASSERT (!krx->krx_rpc_reply_needed);
 
         krx->krx_state = KRX_POSTED;
@@ -1294,14 +1299,14 @@ kqswnal_rx_done (kqswnal_rx_t *krx)
 {
         int           rc;
 
-        LASSERT (atomic_read(&krx->krx_refcount) == 0);
+        LASSERT (cfs_atomic_read(&krx->krx_refcount) == 0);
 
         if (krx->krx_rpc_reply_needed) {
                 /* We've not completed the peer's RPC yet... */
                 krx->krx_rpc_reply.msg.magic   = LNET_PROTO_QSW_MAGIC;
                 krx->krx_rpc_reply.msg.version = QSWLND_PROTO_VERSION;
 
-                LASSERT (!in_interrupt());
+                LASSERT (!cfs_in_interrupt());
 
                 rc = ep_complete_rpc(krx->krx_rxd, 
                                      kqswnal_rpc_complete, krx,
@@ -1329,7 +1334,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
         int             nob;
         int             rc;
 
-        LASSERT (atomic_read(&krx->krx_refcount) == 1);
+        LASSERT (cfs_atomic_read(&krx->krx_refcount) == 1);
 
         if (krx->krx_nob < offsetof(kqswnal_msg_t, kqm_u)) {
                 CERROR("Short message %d received from %s\n",
@@ -1517,7 +1522,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
 
         /* Default to failure if an RPC reply is requested but not handled */
         krx->krx_rpc_reply.msg.status = -EPROTO;
-        atomic_set (&krx->krx_refcount, 1);
+        cfs_atomic_set (&krx->krx_refcount, 1);
 
         if (status != EP_SUCCESS) {
                 /* receives complete with failure when receiver is removed */
@@ -1530,17 +1535,17 @@ kqswnal_rxhandler(EP_RXD *rxd)
                 return;
         }
 
-        if (!in_interrupt()) {
+        if (!cfs_in_interrupt()) {
                 kqswnal_parse(krx);
                 return;
         }
 
-        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
-        list_add_tail (&krx->krx_list, &kqswnal_data.kqn_readyrxds);
-        wake_up (&kqswnal_data.kqn_sched_waitq);
+        cfs_list_add_tail (&krx->krx_list, &kqswnal_data.kqn_readyrxds);
+        cfs_waitq_signal (&kqswnal_data.kqn_sched_waitq);
 
-        spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
+        cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
 }
 
 int
@@ -1563,7 +1568,7 @@ kqswnal_recv (lnet_ni_t     *ni,
         int                 msg_offset;
         int                 rc;
 
-        LASSERT (!in_interrupt ());             /* OK to map */
+        LASSERT (!cfs_in_interrupt ());             /* OK to map */
         /* Either all pages or all vaddrs */
         LASSERT (!(kiov != NULL && iov != NULL));
 
@@ -1653,19 +1658,19 @@ kqswnal_recv (lnet_ni_t     *ni,
 int
 kqswnal_thread_start (int (*fn)(void *arg), void *arg)
 {
-        long    pid = kernel_thread (fn, arg, 0);
+        long    pid = cfs_kernel_thread (fn, arg, 0);
 
         if (pid < 0)
                 return ((int)pid);
 
-        atomic_inc (&kqswnal_data.kqn_nthreads);
+        cfs_atomic_inc (&kqswnal_data.kqn_nthreads);
         return (0);
 }
 
 void
 kqswnal_thread_fini (void)
 {
-        atomic_dec (&kqswnal_data.kqn_nthreads);
+        cfs_atomic_dec (&kqswnal_data.kqn_nthreads);
 }
 
 int
@@ -1680,49 +1685,51 @@ kqswnal_scheduler (void *arg)
 
         cfs_daemonize ("kqswnal_sched");
         cfs_block_allsigs ();
-        
-        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+
+        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
         for (;;)
         {
                 did_something = 0;
 
-                if (!list_empty (&kqswnal_data.kqn_readyrxds))
+                if (!cfs_list_empty (&kqswnal_data.kqn_readyrxds))
                 {
-                        krx = list_entry(kqswnal_data.kqn_readyrxds.next,
-                                         kqswnal_rx_t, krx_list);
-                        list_del (&krx->krx_list);
-                        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
-                                               flags);
+                        krx = cfs_list_entry(kqswnal_data.kqn_readyrxds.next,
+                                             kqswnal_rx_t, krx_list);
+                        cfs_list_del (&krx->krx_list);
+                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+                                                   flags);
 
                         LASSERT (krx->krx_state == KRX_PARSE);
                         kqswnal_parse (krx);
 
                         did_something = 1;
-                        spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
+                        cfs_spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
+                                              flags);
                 }
 
-                if (!list_empty (&kqswnal_data.kqn_donetxds))
+                if (!cfs_list_empty (&kqswnal_data.kqn_donetxds))
                 {
-                        ktx = list_entry(kqswnal_data.kqn_donetxds.next,
-                                         kqswnal_tx_t, ktx_schedlist);
-                        list_del_init (&ktx->ktx_schedlist);
-                        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
-                                               flags);
+                        ktx = cfs_list_entry(kqswnal_data.kqn_donetxds.next,
+                                             kqswnal_tx_t, ktx_schedlist);
+                        cfs_list_del_init (&ktx->ktx_schedlist);
+                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+                                                   flags);
 
                         kqswnal_tx_done_in_thread_context(ktx);
 
                         did_something = 1;
-                        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+                        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock,
+                                               flags);
                 }
 
-                if (!list_empty (&kqswnal_data.kqn_delayedtxds))
+                if (!cfs_list_empty (&kqswnal_data.kqn_delayedtxds))
                 {
-                        ktx = list_entry(kqswnal_data.kqn_delayedtxds.next,
-                                         kqswnal_tx_t, ktx_schedlist);
-                        list_del_init (&ktx->ktx_schedlist);
-                        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
-                                               flags);
+                        ktx = cfs_list_entry(kqswnal_data.kqn_delayedtxds.next,
+                                             kqswnal_tx_t, ktx_schedlist);
+                        cfs_list_del_init (&ktx->ktx_schedlist);
+                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+                                                   flags);
 
                         rc = kqswnal_launch (ktx);
                         if (rc != 0) {
@@ -1730,36 +1737,41 @@ kqswnal_scheduler (void *arg)
                                        libcfs_nid2str(ktx->ktx_nid), rc);
                                 kqswnal_tx_done (ktx, rc);
                         }
-                        atomic_dec (&kqswnal_data.kqn_pending_txs);
+                        cfs_atomic_dec (&kqswnal_data.kqn_pending_txs);
 
                         did_something = 1;
-                        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+                        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock,
+                                               flags);
                 }
 
                 /* nothing to do or hogging CPU */
                 if (!did_something || counter++ == KQSW_RESCHED) {
-                        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
-                                               flags);
+                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+                                                   flags);
 
                         counter = 0;
 
                         if (!did_something) {
                                 if (kqswnal_data.kqn_shuttingdown == 2) {
-                                        /* We only exit in stage 2 of shutdown when 
-                                         * there's nothing left to do */
+                                        /* We only exit in stage 2 of shutdown
+                                         * when there's nothing left to do */
                                         break;
                                 }
-                                rc = wait_event_interruptible_exclusive (
+                                cfs_wait_event_interruptible_exclusive (
                                         kqswnal_data.kqn_sched_waitq,
                                         kqswnal_data.kqn_shuttingdown == 2 ||
-                                        !list_empty(&kqswnal_data.kqn_readyrxds) ||
-                                        !list_empty(&kqswnal_data.kqn_donetxds) ||
-                                        !list_empty(&kqswnal_data.kqn_delayedtxds));
+                                        !cfs_list_empty(&kqswnal_data. \
+                                                        kqn_readyrxds) ||
+                                        !cfs_list_empty(&kqswnal_data. \
+                                                        kqn_donetxds) ||
+                                        !cfs_list_empty(&kqswnal_data. \
+                                                        kqn_delayedtxds, rc));
                                 LASSERT (rc == 0);
                         } else if (need_resched())
-                                schedule ();
+                                cfs_schedule ();
 
-                        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+                        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock,
+                                               flags);
                 }
         }
 

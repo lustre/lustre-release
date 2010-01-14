@@ -122,8 +122,8 @@ static void cl_page_get_trust(struct cl_page *page)
         /*
          * Checkless version for trusted users.
          */
-        if (atomic_inc_return(&page->cp_ref) == 1)
-                atomic_inc(&cl_object_site(page->cp_obj)->cs_pages.cs_busy);
+        if (cfs_atomic_inc_return(&page->cp_ref) == 1)
+                cfs_atomic_inc(&cl_object_site(page->cp_obj)->cs_pages.cs_busy);
 }
 
 /**
@@ -141,14 +141,14 @@ cl_page_at_trusted(const struct cl_page *page,
 #ifdef INVARIANT_CHECK
         struct cl_object_header *ch = cl_object_header(page->cp_obj);
 
-        if (!atomic_read(&page->cp_ref))
+        if (!cfs_atomic_read(&page->cp_ref))
                 LASSERT_SPIN_LOCKED(&ch->coh_page_guard);
 #endif
         ENTRY;
 
         page = cl_page_top_trusted((struct cl_page *)page);
         do {
-                list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
+                cfs_list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
                         if (slice->cpl_obj->co_lu.lo_dev->ld_type == dtype)
                                 RETURN(slice);
                 }
@@ -208,7 +208,7 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
         hdr = cl_object_header(obj);
         pvec = cl_env_info(env)->clt_pvec;
         dtype = cl_object_top(obj)->co_lu.lo_dev->ld_type;
-        spin_lock(&hdr->coh_page_guard);
+        cfs_spin_lock(&hdr->coh_page_guard);
         while ((nr = radix_tree_gang_lookup(&hdr->coh_tree, (void **)pvec,
                                             idx, CLT_PVEC_SIZE)) > 0) {
                 idx = pvec[nr - 1]->cp_index + 1;
@@ -254,7 +254,7 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                  * check that pages weren't truncated (cl_page_own() returns
                  * error in the latter case).
                  */
-                spin_unlock(&hdr->coh_page_guard);
+                cfs_spin_unlock(&hdr->coh_page_guard);
                 for (i = 0; i < j; ++i) {
                         page = pvec[i];
                         if (page_own(env, io, page) == 0)
@@ -263,11 +263,11 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                                    "page_list", cfs_current());
                         cl_page_put(env, page);
                 }
-                spin_lock(&hdr->coh_page_guard);
+                cfs_spin_lock(&hdr->coh_page_guard);
                 if (nr < CLT_PVEC_SIZE)
                         break;
         }
-        spin_unlock(&hdr->coh_page_guard);
+        cfs_spin_unlock(&hdr->coh_page_guard);
         EXIT;
 }
 EXPORT_SYMBOL(cl_page_gang_lookup);
@@ -278,24 +278,24 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
         struct cl_site   *site = cl_object_site(obj);
 
         PASSERT(env, page, cl_is_page(page));
-        PASSERT(env, page, list_empty(&page->cp_batch));
+        PASSERT(env, page, cfs_list_empty(&page->cp_batch));
         PASSERT(env, page, page->cp_owner == NULL);
         PASSERT(env, page, page->cp_req == NULL);
         PASSERT(env, page, page->cp_parent == NULL);
         PASSERT(env, page, page->cp_state == CPS_FREEING);
 
         ENTRY;
-        might_sleep();
-        while (!list_empty(&page->cp_layers)) {
+        cfs_might_sleep();
+        while (!cfs_list_empty(&page->cp_layers)) {
                 struct cl_page_slice *slice;
 
-                slice = list_entry(page->cp_layers.next, struct cl_page_slice,
-                                   cpl_linkage);
-                list_del_init(page->cp_layers.next);
+                slice = cfs_list_entry(page->cp_layers.next,
+                                       struct cl_page_slice, cpl_linkage);
+                cfs_list_del_init(page->cp_layers.next);
                 slice->cpl_ops->cpo_fini(env, slice);
         }
-        atomic_dec(&site->cs_pages.cs_total);
-        atomic_dec(&site->cs_pages_state[page->cp_state]);
+        cfs_atomic_dec(&site->cs_pages.cs_total);
+        cfs_atomic_dec(&site->cs_pages_state[page->cp_state]);
         lu_object_ref_del_at(&obj->co_lu, page->cp_obj_ref, "cl_page", page);
         cl_object_put(env, obj);
         lu_ref_fini(&page->cp_reference);
@@ -328,7 +328,7 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
         result = +1;
         OBD_SLAB_ALLOC_PTR_GFP(page, cl_page_kmem, CFS_ALLOC_IO);
         if (page != NULL) {
-                atomic_set(&page->cp_ref, 1);
+                cfs_atomic_set(&page->cp_ref, 1);
                 page->cp_obj = o;
                 cl_object_get(o);
                 page->cp_obj_ref = lu_object_ref_add(&o->co_lu,
@@ -339,10 +339,11 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
                 CFS_INIT_LIST_HEAD(&page->cp_layers);
                 CFS_INIT_LIST_HEAD(&page->cp_batch);
                 CFS_INIT_LIST_HEAD(&page->cp_flight);
-                mutex_init(&page->cp_mutex);
+                cfs_mutex_init(&page->cp_mutex);
                 lu_ref_init(&page->cp_reference);
                 head = o->co_lu.lo_header;
-                list_for_each_entry(o, &head->loh_layers, co_lu.lo_linkage) {
+                cfs_list_for_each_entry(o, &head->loh_layers,
+                                        co_lu.lo_linkage) {
                         if (o->co_ops->coo_page_init != NULL) {
                                 err = o->co_ops->coo_page_init(env, o,
                                                                page, vmpage);
@@ -356,10 +357,10 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
                         }
                 }
                 if (err == NULL) {
-                        atomic_inc(&site->cs_pages.cs_busy);
-                        atomic_inc(&site->cs_pages.cs_total);
-                        atomic_inc(&site->cs_pages_state[CPS_CACHED]);
-                        atomic_inc(&site->cs_pages.cs_created);
+                        cfs_atomic_inc(&site->cs_pages.cs_busy);
+                        cfs_atomic_inc(&site->cs_pages.cs_total);
+                        cfs_atomic_inc(&site->cs_pages_state[CPS_CACHED]);
+                        cfs_atomic_inc(&site->cs_pages.cs_created);
                         result = 0;
                 }
         } else
@@ -392,12 +393,12 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         int err;
 
         LINVRNT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
-        might_sleep();
+        cfs_might_sleep();
 
         ENTRY;
 
         hdr = cl_object_header(o);
-        atomic_inc(&site->cs_pages.cs_lookup);
+        cfs_atomic_inc(&site->cs_pages.cs_lookup);
 
         CDEBUG(D_PAGE, "%lu@"DFID" %p %lu %i\n",
                idx, PFID(&hdr->coh_lu.loh_fid), vmpage, vmpage->private, type);
@@ -419,12 +420,12 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
                              (void *)radix_tree_lookup(&hdr->coh_tree,
                                                        idx) == page));
         } else {
-                spin_lock(&hdr->coh_page_guard);
+                cfs_spin_lock(&hdr->coh_page_guard);
                 page = cl_page_lookup(hdr, idx);
-                spin_unlock(&hdr->coh_page_guard);
+                cfs_spin_unlock(&hdr->coh_page_guard);
         }
         if (page != NULL) {
-                atomic_inc(&site->cs_pages.cs_hit);
+                cfs_atomic_inc(&site->cs_pages.cs_hit);
                 RETURN(page);
         }
 
@@ -436,7 +437,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
          * XXX optimization: use radix_tree_preload() here, and change tree
          * gfp mask to GFP_KERNEL in cl_object_header_init().
          */
-        spin_lock(&hdr->coh_page_guard);
+        cfs_spin_lock(&hdr->coh_page_guard);
         err = radix_tree_insert(&hdr->coh_tree, idx, page);
         if (err != 0) {
                 ghost = page;
@@ -469,9 +470,9 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
                                  * transient pages, so it is impossible to
                                  * have conflicting transient pages.
                                  */
-                                spin_unlock(&hdr->coh_page_guard);
+                                cfs_spin_unlock(&hdr->coh_page_guard);
                                 cl_page_put(env, page);
-                                spin_lock(&hdr->coh_page_guard);
+                                cfs_spin_lock(&hdr->coh_page_guard);
                                 page = ERR_PTR(-EBUSY);
                         }
                 }
@@ -483,10 +484,10 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
                 }
                 hdr->coh_pages++;
         }
-        spin_unlock(&hdr->coh_page_guard);
+        cfs_spin_unlock(&hdr->coh_page_guard);
 
         if (unlikely(ghost != NULL)) {
-                atomic_dec(&site->cs_pages.cs_busy);
+                cfs_atomic_dec(&site->cs_pages.cs_busy);
                 cl_page_delete0(env, ghost, 0);
                 cl_page_free(env, ghost);
         }
@@ -528,7 +529,7 @@ static inline int cl_page_invariant(const struct cl_page *pg)
         child  = pg->cp_child;
         owner  = pg->cp_owner;
 
-        return atomic_read(&pg->cp_ref) > 0 &&
+        return cfs_atomic_read(&pg->cp_ref) > 0 &&
                 ergo(parent != NULL, parent->cp_child == pg) &&
                 ergo(child != NULL, child->cp_parent == pg) &&
                 ergo(child != NULL, pg->cp_obj != child->cp_obj) &&
@@ -604,8 +605,8 @@ static void cl_page_state_set0(const struct lu_env *env,
                 PASSERT(env, page,
                         equi(state == CPS_OWNED, page->cp_owner != NULL));
 
-                atomic_dec(&site->cs_pages_state[page->cp_state]);
-                atomic_inc(&site->cs_pages_state[state]);
+                cfs_atomic_dec(&site->cs_pages_state[page->cp_state]);
+                cfs_atomic_inc(&site->cs_pages_state[state]);
                 cl_page_state_set_trust(page, state);
         }
         EXIT;
@@ -649,14 +650,15 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
         struct cl_object_header *hdr;
         struct cl_site *site = cl_object_site(page->cp_obj);
 
-        PASSERT(env, page, atomic_read(&page->cp_ref) > !!page->cp_parent);
+        PASSERT(env, page, cfs_atomic_read(&page->cp_ref) > !!page->cp_parent);
 
         ENTRY;
-        CL_PAGE_HEADER(D_TRACE, env, page, "%i\n", atomic_read(&page->cp_ref));
+        CL_PAGE_HEADER(D_TRACE, env, page, "%i\n",
+                       cfs_atomic_read(&page->cp_ref));
 
         hdr = cl_object_header(cl_object_top(page->cp_obj));
-        if (atomic_dec_and_lock(&page->cp_ref, &hdr->coh_page_guard)) {
-                atomic_dec(&site->cs_pages.cs_busy);
+        if (cfs_atomic_dec_and_lock(&page->cp_ref, &hdr->coh_page_guard)) {
+                cfs_atomic_dec(&site->cs_pages.cs_busy);
                 /* We're going to access the page w/o a reference, but it's
                  * ok because we have grabbed the lock coh_page_guard, which
                  * means nobody is able to free this page behind us.
@@ -666,11 +668,11 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                          * inside the coh_page_guard. So that if it gets here,
                          * it is the REALLY last reference to this page.
                          */
-                        spin_unlock(&hdr->coh_page_guard);
+                        cfs_spin_unlock(&hdr->coh_page_guard);
 
-                        LASSERT(atomic_read(&page->cp_ref) == 0);
+                        LASSERT(cfs_atomic_read(&page->cp_ref) == 0);
                         PASSERT(env, page, page->cp_owner == NULL);
-                        PASSERT(env, page, list_empty(&page->cp_batch));
+                        PASSERT(env, page, cfs_list_empty(&page->cp_batch));
                         /*
                          * Page is no longer reachable by other threads. Tear
                          * it down.
@@ -680,7 +682,7 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                         EXIT;
                         return;
                 }
-                spin_unlock(&hdr->coh_page_guard);
+                cfs_spin_unlock(&hdr->coh_page_guard);
         }
 
         EXIT;
@@ -700,7 +702,7 @@ cfs_page_t *cl_page_vmpage(const struct lu_env *env, struct cl_page *page)
          */
         page = cl_page_top(page);
         do {
-                list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
+                cfs_list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
                         if (slice->cpl_ops->cpo_vmpage != NULL)
                                 RETURN(slice->cpl_ops->cpo_vmpage(env, slice));
                 }
@@ -732,7 +734,7 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
          * can be rectified easily.
          */
         hdr = cl_object_header(cl_object_top(obj));
-        spin_lock(&hdr->coh_page_guard);
+        cfs_spin_lock(&hdr->coh_page_guard);
         for (page = (void *)vmpage->private;
              page != NULL; page = page->cp_child) {
                 if (cl_object_same(page->cp_obj, obj)) {
@@ -740,7 +742,7 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
                         break;
                 }
         }
-        spin_unlock(&hdr->coh_page_guard);
+        cfs_spin_unlock(&hdr->coh_page_guard);
         LASSERT(ergo(page, cl_is_page(page) && page->cp_type == CPT_CACHEABLE));
         RETURN(page);
 }
@@ -792,8 +794,8 @@ EXPORT_SYMBOL(cl_page_at);
         __result = 0;                                                   \
         __page = cl_page_top(__page);                                   \
         do {                                                            \
-                list_for_each_entry(__scan, &__page->cp_layers,         \
-                                    cpl_linkage) {                      \
+                cfs_list_for_each_entry(__scan, &__page->cp_layers,     \
+                                        cpl_linkage) {                  \
                         __method = *(void **)((char *)__scan->cpl_ops + \
                                               __op);                    \
                         if (__method != NULL) {                         \
@@ -820,8 +822,8 @@ do {                                                                    \
                                                                         \
         __page = cl_page_top(__page);                                   \
         do {                                                            \
-                list_for_each_entry(__scan, &__page->cp_layers,         \
-                                    cpl_linkage) {                      \
+                cfs_list_for_each_entry(__scan, &__page->cp_layers,     \
+                                        cpl_linkage) {                  \
                         __method = *(void **)((char *)__scan->cpl_ops + \
                                               __op);                    \
                         if (__method != NULL)                           \
@@ -832,28 +834,28 @@ do {                                                                    \
         } while (__page != NULL);                                       \
 } while (0)
 
-#define CL_PAGE_INVOID_REVERSE(_env, _page, _op, _proto, ...)           \
-do {                                                                    \
-        const struct lu_env        *__env  = (_env);                    \
-        struct cl_page             *__page = (_page);                   \
-        const struct cl_page_slice *__scan;                             \
-        ptrdiff_t                   __op   = (_op);                     \
-        void                      (*__method)_proto;                    \
-                                                                        \
-        /* get to the bottom page. */                                   \
-        while (__page->cp_child != NULL)                                \
-                __page = __page->cp_child;                              \
-        do {                                                            \
-                list_for_each_entry_reverse(__scan, &__page->cp_layers, \
-                                            cpl_linkage) {              \
-                        __method = *(void **)((char *)__scan->cpl_ops + \
-                                              __op);                    \
-                        if (__method != NULL)                           \
-                                (*__method)(__env, __scan,              \
-                                            ## __VA_ARGS__);            \
-                }                                                       \
-                __page = __page->cp_parent;                             \
-        } while (__page != NULL);                                       \
+#define CL_PAGE_INVOID_REVERSE(_env, _page, _op, _proto, ...)               \
+do {                                                                        \
+        const struct lu_env        *__env  = (_env);                        \
+        struct cl_page             *__page = (_page);                       \
+        const struct cl_page_slice *__scan;                                 \
+        ptrdiff_t                   __op   = (_op);                         \
+        void                      (*__method)_proto;                        \
+                                                                            \
+        /* get to the bottom page. */                                       \
+        while (__page->cp_child != NULL)                                    \
+                __page = __page->cp_child;                                  \
+        do {                                                                \
+                cfs_list_for_each_entry_reverse(__scan, &__page->cp_layers, \
+                                                cpl_linkage) {              \
+                        __method = *(void **)((char *)__scan->cpl_ops +     \
+                                              __op);                        \
+                        if (__method != NULL)                               \
+                                (*__method)(__env, __scan,                  \
+                                            ## __VA_ARGS__);                \
+                }                                                           \
+                __page = __page->cp_parent;                                 \
+        } while (__page != NULL);                                           \
 } while (0)
 
 static int cl_page_invoke(const struct lu_env *env,
@@ -1167,12 +1169,12 @@ static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg,
                 struct cl_object_header *hdr;
 
                 hdr = cl_object_header(tmp->cp_obj);
-                spin_lock(&hdr->coh_page_guard);
+                cfs_spin_lock(&hdr->coh_page_guard);
                 value = radix_tree_delete(&hdr->coh_tree, tmp->cp_index);
                 PASSERT(env, tmp, value == tmp);
                 PASSERT(env, tmp, hdr->coh_pages > 0);
                 hdr->coh_pages--;
-                spin_unlock(&hdr->coh_page_guard);
+                cfs_spin_unlock(&hdr->coh_page_guard);
         }
 
         CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_delete),
@@ -1535,7 +1537,7 @@ void cl_page_header_print(const struct lu_env *env, void *cookie,
 {
         (*printer)(env, cookie,
                    "page@%p[%d %p:%lu ^%p_%p %d %d %d %p %p %#x]\n",
-                   pg, atomic_read(&pg->cp_ref), pg->cp_obj,
+                   pg, cfs_atomic_read(&pg->cp_ref), pg->cp_obj,
                    pg->cp_index, pg->cp_parent, pg->cp_child,
                    pg->cp_state, pg->cp_error, pg->cp_type,
                    pg->cp_owner, pg->cp_req, pg->cp_flags);
@@ -1616,7 +1618,7 @@ void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,
                        const struct cl_page_operations *ops)
 {
         ENTRY;
-        list_add_tail(&slice->cpl_linkage, &page->cp_layers);
+        cfs_list_add_tail(&slice->cpl_linkage, &page->cp_layers);
         slice->cpl_obj  = obj;
         slice->cpl_ops  = ops;
         slice->cpl_page = page;

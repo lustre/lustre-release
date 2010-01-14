@@ -112,68 +112,68 @@ typedef struct
 
 typedef struct
 {
-        RAP_PVOID               rad_handle;     /* device handle */
-        RAP_PVOID               rad_fma_cqh;    /* FMA completion queue handle */
-        RAP_PVOID               rad_rdma_cqh;   /* rdma completion queue handle */
-        int                     rad_id;         /* device id */
-        int                     rad_idx;        /* index in kra_devices */
-        int                     rad_ready;      /* set by device callback */
-        struct list_head        rad_ready_conns;/* connections ready to tx/rx */
-        struct list_head        rad_new_conns;  /* new connections to complete */
-        wait_queue_head_t       rad_waitq;      /* scheduler waits here */
-        spinlock_t              rad_lock;       /* serialise */
-        void                   *rad_scheduler;  /* scheduling thread */
-        unsigned int            rad_nphysmap;   /* # phys mappings */
-        unsigned int            rad_nppphysmap; /* # phys pages mapped */
-        unsigned int            rad_nvirtmap;   /* # virt mappings */
-        unsigned long           rad_nobvirtmap; /* # virt bytes mapped */
+        RAP_PVOID              rad_handle;    /* device handle */
+        RAP_PVOID              rad_fma_cqh;   /* FMA completion queue handle */
+        RAP_PVOID              rad_rdma_cqh;  /* rdma completion queue handle */
+        int                    rad_id;        /* device id */
+        int                    rad_idx;       /* index in kra_devices */
+        int                    rad_ready;     /* set by device callback */
+        cfs_list_t             rad_ready_conns;/* connections ready to tx/rx */
+        cfs_list_t             rad_new_conns; /* new connections to complete */
+        cfs_waitq_t            rad_waitq;     /* scheduler waits here */
+        cfs_spinlock_t         rad_lock;      /* serialise */
+        void                  *rad_scheduler; /* scheduling thread */
+        unsigned int           rad_nphysmap;  /* # phys mappings */
+        unsigned int           rad_nppphysmap;/* # phys pages mapped */
+        unsigned int           rad_nvirtmap;  /* # virt mappings */
+        unsigned long          rad_nobvirtmap;/* # virt bytes mapped */
 } kra_device_t;
 
 typedef struct
 {
-        int               kra_init;             /* initialisation state */
-        int               kra_shutdown;         /* shut down? */
-        atomic_t          kra_nthreads;         /* # live threads */
-        lnet_ni_t        *kra_ni;               /* _the_ nal instance */
-        
-        kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq etc */
-        int               kra_ndevs;            /* # devices */
+        int               kra_init;            /* initialisation state */
+        int               kra_shutdown;        /* shut down? */
+        cfs_atomic_t      kra_nthreads;        /* # live threads */
+        lnet_ni_t        *kra_ni;              /* _the_ nal instance */
 
-        rwlock_t          kra_global_lock;      /* stabilize peer/conn ops */
+        kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq */
+        int               kra_ndevs;           /* # devices */
 
-        struct list_head *kra_peers;            /* hash table of all my known peers */
-        int               kra_peer_hash_size;   /* size of kra_peers */
-        atomic_t          kra_npeers;           /* # peers extant */
-        int               kra_nonewpeers;       /* prevent new peers */
+        cfs_rwlock_t      kra_global_lock;     /* stabilize peer/conn ops */
 
-        struct list_head *kra_conns;            /* conns hashed by cqid */
-        int               kra_conn_hash_size;   /* size of kra_conns */
-        __u64             kra_peerstamp;        /* when I started up */
-        __u64             kra_connstamp;        /* conn stamp generator */
-        int               kra_next_cqid;        /* cqid generator */
-        atomic_t          kra_nconns;           /* # connections extant */
+        cfs_list_t       *kra_peers;           /* hash table of all my known peers */
+        int               kra_peer_hash_size;  /* size of kra_peers */
+        cfs_atomic_t      kra_npeers;          /* # peers extant */
+        int               kra_nonewpeers;      /* prevent new peers */
 
-        long              kra_new_min_timeout;  /* minimum timeout on any new conn */
-        wait_queue_head_t kra_reaper_waitq;     /* reaper sleeps here */
-        spinlock_t        kra_reaper_lock;      /* serialise */
+        cfs_list_t       *kra_conns;           /* conns hashed by cqid */
+        int               kra_conn_hash_size;  /* size of kra_conns */
+        __u64             kra_peerstamp;       /* when I started up */
+        __u64             kra_connstamp;       /* conn stamp generator */
+        int               kra_next_cqid;       /* cqid generator */
+        cfs_atomic_t      kra_nconns;          /* # connections extant */
 
-        struct list_head  kra_connd_peers;      /* peers waiting for a connection */
-        struct list_head  kra_connd_acceptq;    /* accepted sockets to handshake */
-        wait_queue_head_t kra_connd_waitq;      /* connection daemons sleep here */
-        spinlock_t        kra_connd_lock;       /* serialise */
+        long              kra_new_min_timeout; /* minimum timeout on any new conn */
+        cfs_waitq_t       kra_reaper_waitq;    /* reaper sleeps here */
+        cfs_spinlock_t    kra_reaper_lock;     /* serialise */
 
-        struct list_head  kra_idle_txs;         /* idle tx descriptors */
-        __u64             kra_next_tx_cookie;   /* RDMA completion cookie */
-        spinlock_t        kra_tx_lock;          /* serialise */
+        cfs_list_t        kra_connd_peers;     /* peers waiting for a connection */
+        cfs_list_t        kra_connd_acceptq;   /* accepted sockets to handshake */
+        cfs_waitq_t       kra_connd_waitq;     /* connection daemons sleep here */
+        cfs_spinlock_t    kra_connd_lock;      /* serialise */
+
+        cfs_list_t        kra_idle_txs;        /* idle tx descriptors */
+        __u64             kra_next_tx_cookie;  /* RDMA completion cookie */
+        cfs_spinlock_t    kra_tx_lock;         /* serialise */
 } kra_data_t;
 
 #define RANAL_INIT_NOTHING         0
 #define RANAL_INIT_DATA            1
 #define RANAL_INIT_ALL             2
 
-typedef struct kra_acceptsock                   /* accepted socket queued for connd */
+typedef struct kra_acceptsock             /* accepted socket queued for connd */
 {
-        struct list_head     ras_list;          /* queue for attention */
+        cfs_list_t           ras_list;          /* queue for attention */
         struct socket       *ras_sock;          /* the accepted socket */
 } kra_acceptsock_t;
 
@@ -271,20 +271,20 @@ typedef struct                                  /* NB must fit in FMA "Prefix" *
 
 typedef struct kra_tx                           /* message descriptor */
 {
-        struct list_head          tx_list;      /* queue on idle_txs/rac_sendq/rac_waitq */
-        struct kra_conn          *tx_conn;      /* owning conn */
-        lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
-        unsigned long             tx_qtime;     /* when tx started to wait for something (jiffies) */
-        int                       tx_nob;       /* # bytes of payload */
-        int                       tx_buftype;   /* payload buffer type */
-        void                     *tx_buffer;    /* source/sink buffer */
-        int                       tx_phys_offset; /* first page offset (if phys) */
-        int                       tx_phys_npages; /* # physical pages */
-        RAP_PHYS_REGION          *tx_phys;      /* page descriptors */
-        RAP_MEM_KEY               tx_map_key;   /* mapping key */
-        RAP_RDMA_DESCRIPTOR       tx_rdma_desc; /* rdma descriptor */
-        __u64                     tx_cookie;    /* identify this tx to peer */
-        kra_msg_t                 tx_msg;       /* FMA message buffer */
+        cfs_list_t            tx_list;      /* queue on idle_txs/rac_sendq/rac_waitq */
+        struct kra_conn      *tx_conn;      /* owning conn */
+        lnet_msg_t           *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
+        unsigned long         tx_qtime;     /* when tx started to wait for something (jiffies) */
+        int                   tx_nob;       /* # bytes of payload */
+        int                   tx_buftype;   /* payload buffer type */
+        void                 *tx_buffer;    /* source/sink buffer */
+        int                   tx_phys_offset; /* first page offset (if phys) */
+        int                   tx_phys_npages; /* # physical pages */
+        RAP_PHYS_REGION      *tx_phys;      /* page descriptors */
+        RAP_MEM_KEY           tx_map_key;   /* mapping key */
+        RAP_RDMA_DESCRIPTOR   tx_rdma_desc; /* rdma descriptor */
+        __u64                 tx_cookie;    /* identify this tx to peer */
+        kra_msg_t             tx_msg;       /* FMA message buffer */
 } kra_tx_t;
 
 #define RANAL_BUF_NONE           0              /* buffer type not set */
@@ -297,32 +297,32 @@ typedef struct kra_tx                           /* message descriptor */
 typedef struct kra_conn
 {
         struct kra_peer    *rac_peer;           /* owning peer */
-        struct list_head    rac_list;           /* stash on peer's conn list */
-        struct list_head    rac_hashlist;       /* stash in connection hash table */
-        struct list_head    rac_schedlist;      /* schedule (on rad_???_conns) for attention */
-        struct list_head    rac_fmaq;           /* txs queued for FMA */
-        struct list_head    rac_rdmaq;          /* txs awaiting RDMA completion */
-        struct list_head    rac_replyq;         /* txs awaiting replies */
-        __u64               rac_peerstamp;      /* peer's unique stamp */
-        __u64               rac_peer_connstamp; /* peer's unique connection stamp */
-        __u64               rac_my_connstamp;   /* my unique connection stamp */
-        unsigned long       rac_last_tx;        /* when I last sent an FMA message (jiffies) */
-        unsigned long       rac_last_rx;        /* when I last received an FMA messages (jiffies) */
-        long                rac_keepalive;      /* keepalive interval (seconds) */
-        long                rac_timeout;        /* infer peer death if no rx for this many seconds */
-        __u32               rac_cqid;           /* my completion callback id (non-unique) */
-        __u32               rac_tx_seq;         /* tx msg sequence number */
-        __u32               rac_rx_seq;         /* rx msg sequence number */
-        atomic_t            rac_refcount;       /* # users */
-        unsigned int        rac_close_sent;     /* I've sent CLOSE */
-        unsigned int        rac_close_recvd;    /* I've received CLOSE */
-        unsigned int        rac_state;          /* connection state */
-        unsigned int        rac_scheduled;      /* being attented to */
-        spinlock_t          rac_lock;           /* serialise */
-        kra_device_t       *rac_device;         /* which device */
-        RAP_PVOID           rac_rihandle;       /* RA endpoint */
-        kra_msg_t          *rac_rxmsg;          /* incoming message (FMA prefix) */
-        kra_msg_t           rac_msg;            /* keepalive/CLOSE message buffer */
+        cfs_list_t          rac_list;          /* stash on peer's conn list */
+        cfs_list_t          rac_hashlist;      /* stash in connection hash table */
+        cfs_list_t          rac_schedlist;     /* schedule (on rad_???_conns) for attention */
+        cfs_list_t          rac_fmaq;          /* txs queued for FMA */
+        cfs_list_t          rac_rdmaq;         /* txs awaiting RDMA completion */
+        cfs_list_t          rac_replyq;        /* txs awaiting replies */
+        __u64               rac_peerstamp;     /* peer's unique stamp */
+        __u64               rac_peer_connstamp;/* peer's unique connection stamp */
+        __u64               rac_my_connstamp;  /* my unique connection stamp */
+        unsigned long       rac_last_tx;       /* when I last sent an FMA message (jiffies) */
+        unsigned long       rac_last_rx;       /* when I last received an FMA messages (jiffies) */
+        long                rac_keepalive;     /* keepalive interval (seconds) */
+        long                rac_timeout;       /* infer peer death if no rx for this many seconds */
+        __u32               rac_cqid;          /* my completion callback id (non-unique) */
+        __u32               rac_tx_seq;        /* tx msg sequence number */
+        __u32               rac_rx_seq;        /* rx msg sequence number */
+        cfs_atomic_t        rac_refcount;      /* # users */
+        unsigned int        rac_close_sent;    /* I've sent CLOSE */
+        unsigned int        rac_close_recvd;   /* I've received CLOSE */
+        unsigned int        rac_state;         /* connection state */
+        unsigned int        rac_scheduled;     /* being attented to */
+        cfs_spinlock_t      rac_lock;          /* serialise */
+        kra_device_t       *rac_device;        /* which device */
+        RAP_PVOID           rac_rihandle;      /* RA endpoint */
+        kra_msg_t          *rac_rxmsg;         /* incoming message (FMA prefix) */
+        kra_msg_t           rac_msg;           /* keepalive/CLOSE message buffer */
 } kra_conn_t;
 
 #define RANAL_CONN_ESTABLISHED     0
@@ -331,16 +331,16 @@ typedef struct kra_conn
 
 typedef struct kra_peer
 {
-        struct list_head    rap_list;           /* stash on global peer list */
-        struct list_head    rap_connd_list;     /* schedule on kra_connd_peers */
-        struct list_head    rap_conns;          /* all active connections */
-        struct list_head    rap_tx_queue;       /* msgs waiting for a conn */
-        lnet_nid_t           rap_nid;            /* who's on the other end(s) */
-        __u32               rap_ip;             /* IP address of peer */
-        int                 rap_port;           /* port on which peer listens */
-        atomic_t            rap_refcount;       /* # users */
-        int                 rap_persistence;    /* "known" peer refs */
-        int                 rap_connecting;     /* connection forming */
+        cfs_list_t          rap_list;         /* stash on global peer list */
+        cfs_list_t          rap_connd_list;   /* schedule on kra_connd_peers */
+        cfs_list_t          rap_conns;        /* all active connections */
+        cfs_list_t          rap_tx_queue;     /* msgs waiting for a conn */
+        lnet_nid_t          rap_nid;          /* who's on the other end(s) */
+        __u32               rap_ip;           /* IP address of peer */
+        int                 rap_port;         /* port on which peer listens */
+        cfs_atomic_t        rap_refcount;     /* # users */
+        int                 rap_persistence;  /* "known" peer refs */
+        int                 rap_connecting;   /* connection forming */
         unsigned long       rap_reconnect_time; /* CURRENT_SECONDS when reconnect OK */
         unsigned long       rap_reconnect_interval; /* exponential backoff */
 } kra_peer_t;
@@ -355,20 +355,20 @@ static inline void
 kranal_peer_addref(kra_peer_t *peer)
 {
         CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
-        LASSERT(atomic_read(&peer->rap_refcount) > 0);
-        atomic_inc(&peer->rap_refcount);
+        LASSERT(cfs_atomic_read(&peer->rap_refcount) > 0);
+        cfs_atomic_inc(&peer->rap_refcount);
 }
 
 static inline void
 kranal_peer_decref(kra_peer_t *peer)
 {
         CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
-        LASSERT(atomic_read(&peer->rap_refcount) > 0);
-        if (atomic_dec_and_test(&peer->rap_refcount))
+        LASSERT(cfs_atomic_read(&peer->rap_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&peer->rap_refcount))
                 kranal_destroy_peer(peer);
 }
 
-static inline struct list_head *
+static inline cfs_list_t *
 kranal_nid2peerlist (lnet_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kranal_data.kra_peer_hash_size;
@@ -380,7 +380,7 @@ static inline int
 kranal_peer_active(kra_peer_t *peer)
 {
         /* Am I in the peer hash table? */
-        return (!list_empty(&peer->rap_list));
+        return (!cfs_list_empty(&peer->rap_list));
 }
 
 static inline void
@@ -388,8 +388,8 @@ kranal_conn_addref(kra_conn_t *conn)
 {
         CDEBUG(D_NET, "%p->%s\n", conn, 
                libcfs_nid2str(conn->rac_peer->rap_nid));
-        LASSERT(atomic_read(&conn->rac_refcount) > 0);
-        atomic_inc(&conn->rac_refcount);
+        LASSERT(cfs_atomic_read(&conn->rac_refcount) > 0);
+        cfs_atomic_inc(&conn->rac_refcount);
 }
 
 static inline void
@@ -397,12 +397,12 @@ kranal_conn_decref(kra_conn_t *conn)
 {
         CDEBUG(D_NET, "%p->%s\n", conn,
                libcfs_nid2str(conn->rac_peer->rap_nid));
-        LASSERT(atomic_read(&conn->rac_refcount) > 0);
-        if (atomic_dec_and_test(&conn->rac_refcount))
+        LASSERT(cfs_atomic_read(&conn->rac_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&conn->rac_refcount))
                 kranal_destroy_conn(conn);
 }
 
-static inline struct list_head *
+static inline cfs_list_t *
 kranal_cqid2connlist (__u32 cqid)
 {
         unsigned int hash = cqid % kranal_data.kra_conn_hash_size;
@@ -413,12 +413,12 @@ kranal_cqid2connlist (__u32 cqid)
 static inline kra_conn_t *
 kranal_cqid2conn_locked (__u32 cqid)
 {
-        struct list_head *conns = kranal_cqid2connlist(cqid);
-        struct list_head *tmp;
+        cfs_list_t       *conns = kranal_cqid2connlist(cqid);
+        cfs_list_t       *tmp;
         kra_conn_t       *conn;
 
-        list_for_each(tmp, conns) {
-                conn = list_entry(tmp, kra_conn_t, rac_hashlist);
+        cfs_list_for_each(tmp, conns) {
+                conn = cfs_list_entry(tmp, kra_conn_t, rac_hashlist);
 
                 if (conn->rac_cqid == cqid)
                         return conn;
@@ -438,10 +438,10 @@ int kranal_startup (lnet_ni_t *ni);
 void kranal_shutdown (lnet_ni_t *ni);
 int kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
 int kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
-int kranal_eager_recv(lnet_ni_t *ni, void *private, 
-                        lnet_msg_t *lntmsg, void **new_private);
-int kranal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, 
-                int delayed, unsigned int niov, 
+int kranal_eager_recv(lnet_ni_t *ni, void *private,
+                      lnet_msg_t *lntmsg, void **new_private);
+int kranal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+                int delayed, unsigned int niov,
                 struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
 int kranal_accept(lnet_ni_t *ni, struct socket *sock);

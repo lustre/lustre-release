@@ -279,7 +279,7 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 break;
         case OBD_CLEANUP_EXPORTS:
                 mds_lov_early_clean(obd);
-                down_write(&mds->mds_notify_lock);
+                cfs_down_write(&mds->mds_notify_lock);
                 mds_lov_disconnect(obd);
                 mds_lov_clean(obd);
                 ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
@@ -290,7 +290,7 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         llog_cleanup(ctxt);
                 rc = obd_llog_finish(obd, 0);
                 mds->mds_osc_exp = NULL;
-                up_write(&mds->mds_notify_lock);
+                cfs_up_write(&mds->mds_notify_lock);
                 break;
         }
         RETURN(rc);
@@ -360,9 +360,9 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
          * we need only lmi here but not get mount
          * OSD did mount already, so put mount back
          */
-        atomic_dec(&lsi->lsi_mounts);
+        cfs_atomic_dec(&lsi->lsi_mounts);
         mntput(mnt);
-        init_rwsem(&mds->mds_notify_lock);
+        cfs_init_rwsem(&mds->mds_notify_lock);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         mds_init_ctxt(obd, mnt);
@@ -485,7 +485,7 @@ static int __init mds_cmd_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        request_module("%s", "lquota");
+        cfs_request_module("%s", "lquota");
         mds_quota_interface_ref = PORTAL_SYMBOL_GET(mds_quota_interface);
         rc = lquota_init(mds_quota_interface_ref);
         if (rc) {

@@ -57,19 +57,19 @@ int
 kqswnal_get_tx_desc (struct libcfs_ioctl_data *data)
 {
 	unsigned long      flags;
-	struct list_head  *tmp;
+	cfs_list_t        *tmp;
 	kqswnal_tx_t      *ktx;
 	lnet_hdr_t        *hdr;
 	int                index = data->ioc_count;
 	int                rc = -ENOENT;
 
-	spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+	cfs_spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
-	list_for_each (tmp, &kqswnal_data.kqn_activetxds) {
+	cfs_list_for_each (tmp, &kqswnal_data.kqn_activetxds) {
 		if (index-- != 0)
 			continue;
 
-		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
+		ktx = cfs_list_entry (tmp, kqswnal_tx_t, ktx_list);
 		hdr = (lnet_hdr_t *)ktx->ktx_buffer;
 
 		data->ioc_count  = le32_to_cpu(hdr->payload_length);
@@ -77,13 +77,14 @@ kqswnal_get_tx_desc (struct libcfs_ioctl_data *data)
 		data->ioc_u64[0] = ktx->ktx_nid;
 		data->ioc_u32[0] = le32_to_cpu(hdr->type);
 		data->ioc_u32[1] = ktx->ktx_launcher;
-		data->ioc_flags  = (list_empty (&ktx->ktx_schedlist) ? 0 : 1) |
-				   (ktx->ktx_state << 2);
+		data->ioc_flags  =
+                        (cfs_list_empty (&ktx->ktx_schedlist) ? 0 : 1) |
+				         (ktx->ktx_state << 2);
 		rc = 0;
 		break;
 	}
-	
-	spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+
+	cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 	return (rc);
 }
 
@@ -101,14 +102,14 @@ kqswnal_ctl (lnet_ni_t *ni, unsigned int cmd, void *arg)
 	case IOC_LIBCFS_REGISTER_MYNID:
 		if (data->ioc_nid == ni->ni_nid)
 			return 0;
-		
+
 		LASSERT (LNET_NIDNET(data->ioc_nid) == LNET_NIDNET(ni->ni_nid));
 
 		CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID for %s(%s)\n",
 		       libcfs_nid2str(data->ioc_nid),
 		       libcfs_nid2str(ni->ni_nid));
 		return 0;
-		
+
 	default:
 		return (-EINVAL);
 	}
@@ -137,15 +138,15 @@ kqswnal_shutdown(lnet_ni_t *ni)
 
 	/**********************************************************************/
 	/* Signal the start of shutdown... */
-	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
+	cfs_spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
 	kqswnal_data.kqn_shuttingdown = 1;
-	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
+	cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 
 	/**********************************************************************/
 	/* wait for sends that have allocated a tx desc to launch or give up */
-	while (atomic_read (&kqswnal_data.kqn_pending_txs) != 0) {
+	while (cfs_atomic_read (&kqswnal_data.kqn_pending_txs) != 0) {
 		CDEBUG(D_NET, "waiting for %d pending sends\n",
-		       atomic_read (&kqswnal_data.kqn_pending_txs));
+		       cfs_atomic_read (&kqswnal_data.kqn_pending_txs));
 		cfs_pause(cfs_time_seconds(1));
 	}
 
@@ -168,16 +169,16 @@ kqswnal_shutdown(lnet_ni_t *ni)
 
 	/* NB ep_free_xmtr() returns only after all outstanding transmits
 	 * have called their callback... */
-	LASSERT(list_empty(&kqswnal_data.kqn_activetxds));
+	LASSERT(cfs_list_empty(&kqswnal_data.kqn_activetxds));
 
 	/**********************************************************************/
 	/* flag threads to terminate, wake them and wait for them to die */
 	kqswnal_data.kqn_shuttingdown = 2;
-	wake_up_all (&kqswnal_data.kqn_sched_waitq);
+	cfs_waitq_broadcast (&kqswnal_data.kqn_sched_waitq);
 
-	while (atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
+	while (cfs_atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
 		CDEBUG(D_NET, "waiting for %d threads to terminate\n",
-		       atomic_read (&kqswnal_data.kqn_nthreads));
+		       cfs_atomic_read (&kqswnal_data.kqn_nthreads));
 		cfs_pause(cfs_time_seconds(1));
 	}
 
@@ -186,9 +187,9 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	 * I control the horizontals and the verticals...
 	 */
 
-	LASSERT (list_empty (&kqswnal_data.kqn_readyrxds));
-	LASSERT (list_empty (&kqswnal_data.kqn_donetxds));
-	LASSERT (list_empty (&kqswnal_data.kqn_delayedtxds));
+	LASSERT (cfs_list_empty (&kqswnal_data.kqn_readyrxds));
+	LASSERT (cfs_list_empty (&kqswnal_data.kqn_donetxds));
+	LASSERT (cfs_list_empty (&kqswnal_data.kqn_delayedtxds));
 
 	/**********************************************************************/
 	/* Unmap message buffers and free all descriptors and buffers
@@ -251,7 +252,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	/* resets flags, pointers to NULL etc */
 	memset(&kqswnal_data, 0, sizeof (kqswnal_data));
 
-	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&libcfs_kmemory));
+	CDEBUG (D_MALLOC, "done kmem %d\n", cfs_atomic_read(&libcfs_kmemory));
 
 	PORTAL_MODULE_UNUSE;
 }
@@ -287,7 +288,7 @@ kqswnal_startup (lnet_ni_t *ni)
 				   *kqswnal_tunables.kqn_credits);
 	}
         
-	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&libcfs_kmemory));
+	CDEBUG (D_MALLOC, "start kmem %d\n", cfs_atomic_read(&libcfs_kmemory));
 	
 	/* ensure all pointers NULL etc */
 	memset (&kqswnal_data, 0, sizeof (kqswnal_data));
@@ -297,16 +298,16 @@ kqswnal_startup (lnet_ni_t *ni)
 	ni->ni_peertxcredits = *kqswnal_tunables.kqn_peercredits;
 	ni->ni_maxtxcredits = *kqswnal_tunables.kqn_credits;
 
-	INIT_LIST_HEAD (&kqswnal_data.kqn_idletxds);
-	INIT_LIST_HEAD (&kqswnal_data.kqn_activetxds);
-	spin_lock_init (&kqswnal_data.kqn_idletxd_lock);
+	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_idletxds);
+	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_activetxds);
+	cfs_spin_lock_init (&kqswnal_data.kqn_idletxd_lock);
 
-	INIT_LIST_HEAD (&kqswnal_data.kqn_delayedtxds);
-	INIT_LIST_HEAD (&kqswnal_data.kqn_donetxds);
-	INIT_LIST_HEAD (&kqswnal_data.kqn_readyrxds);
+	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_delayedtxds);
+	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_donetxds);
+	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_readyrxds);
 
-	spin_lock_init (&kqswnal_data.kqn_sched_lock);
-	init_waitqueue_head (&kqswnal_data.kqn_sched_waitq);
+	cfs_spin_lock_init (&kqswnal_data.kqn_sched_lock);
+	cfs_waitq_init (&kqswnal_data.kqn_sched_waitq);
 
 	/* pointers/lists/locks initialised */
 	kqswnal_data.kqn_init = KQN_INIT_DATA;
@@ -432,12 +433,12 @@ kqswnal_startup (lnet_ni_t *ni)
 		ktx->ktx_basepage = basepage + premapped_pages; /* message mapping starts here */
 		ktx->ktx_npages = KQSW_NTXMSGPAGES - premapped_pages; /* for this many pages */
 
-		INIT_LIST_HEAD (&ktx->ktx_schedlist);
+		CFS_INIT_LIST_HEAD (&ktx->ktx_schedlist);
 
 		ktx->ktx_state = KTX_IDLE;
 		ktx->ktx_rail = -1;		/* unset rail */
 
-		list_add_tail (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
+		cfs_list_add_tail (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 	}
 
 	/**********************************************************************/
@@ -524,7 +525,7 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	/**********************************************************************/
 	/* Spawn scheduling threads */
-	for (i = 0; i < num_online_cpus(); i++) {
+	for (i = 0; i < cfs_num_online_cpus(); i++) {
 		rc = kqswnal_thread_start (kqswnal_scheduler, NULL);
 		if (rc != 0)
 		{

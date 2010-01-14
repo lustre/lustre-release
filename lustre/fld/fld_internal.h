@@ -71,8 +71,8 @@ struct lu_fld_hash {
 };
 
 struct fld_cache_entry {
-        struct list_head         fce_lru;
-        struct list_head         fce_list;
+        cfs_list_t               fce_lru;
+        cfs_list_t               fce_list;
         /**
          * fld cache entries are sorted on range->lsr_start field. */
         struct lu_seq_range      fce_range;
@@ -83,7 +83,7 @@ struct fld_cache {
          * Cache guard, protects fci_hash mostly because others immutable after
          * init is finished.
          */
-        spinlock_t               fci_lock;
+        cfs_spinlock_t           fci_lock;
 
         /**
          * Cache shrink threshold */
@@ -99,11 +99,11 @@ struct fld_cache {
 
         /**
          * LRU list fld entries. */
-        struct list_head         fci_lru;
+        cfs_list_t               fci_lru;
 
         /**
          * sorted fld entries. */
-        struct list_head         fci_entries_head;
+        cfs_list_t               fci_entries_head;
 
         /**
          * Cache statistics. */

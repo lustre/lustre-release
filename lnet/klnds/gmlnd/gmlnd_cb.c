@@ -166,12 +166,12 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT(tx->tx_lntmsg == NULL);
         tx->tx_lntmsg = lntmsg;
 
-        spin_lock(&gmni->gmni_tx_lock);
+        cfs_spin_lock(&gmni->gmni_tx_lock);
 
-        list_add_tail(&tx->tx_list, &gmni->gmni_buf_txq);
+        cfs_list_add_tail(&tx->tx_list, &gmni->gmni_buf_txq);
         gmnal_check_txqueues_locked(gmni);
 
-        spin_unlock(&gmni->gmni_tx_lock);
+        cfs_spin_unlock(&gmni->gmni_tx_lock);
 
         return 0;
 }

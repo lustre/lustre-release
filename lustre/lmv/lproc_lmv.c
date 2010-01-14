@@ -106,7 +106,7 @@ static int lmv_wr_placement(struct file *file, const char *buffer,
         placement_policy_t       policy;
         struct lmv_obd          *lmv;
 
-        if (copy_from_user(dummy, buffer, MAX_POLICY_STRING_SIZE))
+        if (cfs_copy_from_user(dummy, buffer, MAX_POLICY_STRING_SIZE))
                 return -EFAULT;
 
         LASSERT(dev != NULL);
@@ -121,9 +121,9 @@ static int lmv_wr_placement(struct file *file, const char *buffer,
 
         policy = placement_name2policy(dummy, len);
         if (policy != PLACEMENT_INVAL_POLICY) {
-                spin_lock(&lmv->lmv_lock);
+                cfs_spin_lock(&lmv->lmv_lock);
                 lmv->lmv_placement = policy;
-                spin_unlock(&lmv->lmv_lock);
+                cfs_spin_unlock(&lmv->lmv_lock);
         } else {
                 CERROR("Invalid placement policy \"%s\"!\n", dummy);
                 return -EINVAL;

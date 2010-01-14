@@ -70,11 +70,11 @@
 static cfs_mem_cache_t *cl_env_kmem;
 
 /** Lock class of cl_object_header::coh_page_guard */
-static struct lock_class_key cl_page_guard_class;
+static cfs_lock_class_key_t cl_page_guard_class;
 /** Lock class of cl_object_header::coh_lock_guard */
-static struct lock_class_key cl_lock_guard_class;
+static cfs_lock_class_key_t cl_lock_guard_class;
 /** Lock class of cl_object_header::coh_attr_guard */
-static struct lock_class_key cl_attr_guard_class;
+static cfs_lock_class_key_t cl_attr_guard_class;
 
 /**
  * Initialize cl_object_header.
@@ -86,12 +86,12 @@ int cl_object_header_init(struct cl_object_header *h)
         ENTRY;
         result = lu_object_header_init(&h->coh_lu);
         if (result == 0) {
-                spin_lock_init(&h->coh_page_guard);
-                spin_lock_init(&h->coh_lock_guard);
-                spin_lock_init(&h->coh_attr_guard);
-                lockdep_set_class(&h->coh_attr_guard, &cl_page_guard_class);
-                lockdep_set_class(&h->coh_attr_guard, &cl_lock_guard_class);
-                lockdep_set_class(&h->coh_attr_guard, &cl_attr_guard_class);
+                cfs_spin_lock_init(&h->coh_page_guard);
+                cfs_spin_lock_init(&h->coh_lock_guard);
+                cfs_spin_lock_init(&h->coh_attr_guard);
+                cfs_lockdep_set_class(&h->coh_attr_guard, &cl_page_guard_class);
+                cfs_lockdep_set_class(&h->coh_attr_guard, &cl_lock_guard_class);
+                cfs_lockdep_set_class(&h->coh_attr_guard, &cl_attr_guard_class);
                 h->coh_pages = 0;
                 /* XXX hard coded GFP_* mask. */
                 INIT_RADIX_TREE(&h->coh_tree, GFP_ATOMIC);
@@ -106,7 +106,7 @@ EXPORT_SYMBOL(cl_object_header_init);
  */
 void cl_object_header_fini(struct cl_object_header *h)
 {
-        LASSERT(list_empty(&h->coh_locks));
+        LASSERT(cfs_list_empty(&h->coh_locks));
         lu_object_header_fini(&h->coh_lu);
 }
 EXPORT_SYMBOL(cl_object_header_fini);
@@ -123,7 +123,7 @@ struct cl_object *cl_object_find(const struct lu_env *env,
                                  struct cl_device *cd, const struct lu_fid *fid,
                                  const struct cl_object_conf *c)
 {
-        might_sleep();
+        cfs_might_sleep();
         return lu2cl(lu_object_find_slice(env, cl2lu_dev(cd), fid, &c->coc_lu));
 }
 EXPORT_SYMBOL(cl_object_find);
@@ -184,7 +184,7 @@ EXPORT_SYMBOL(cl_object_top);
  *
  * \see cl_attr, cl_object_attr_lock(), cl_object_operations::coo_attr_get().
  */
-static spinlock_t *cl_object_attr_guard(struct cl_object *o)
+static cfs_spinlock_t *cl_object_attr_guard(struct cl_object *o)
 {
         return &cl_object_header(cl_object_top(o))->coh_attr_guard;
 }
@@ -198,7 +198,7 @@ static spinlock_t *cl_object_attr_guard(struct cl_object *o)
  */
 void cl_object_attr_lock(struct cl_object *o)
 {
-        spin_lock(cl_object_attr_guard(o));
+        cfs_spin_lock(cl_object_attr_guard(o));
 }
 EXPORT_SYMBOL(cl_object_attr_lock);
 
@@ -207,7 +207,7 @@ EXPORT_SYMBOL(cl_object_attr_lock);
  */
 void cl_object_attr_unlock(struct cl_object *o)
 {
-        spin_unlock(cl_object_attr_guard(o));
+        cfs_spin_unlock(cl_object_attr_guard(o));
 }
 EXPORT_SYMBOL(cl_object_attr_unlock);
 
@@ -229,7 +229,7 @@ int cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
 
         top = obj->co_lu.lo_header;
         result = 0;
-        list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+        cfs_list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
                 if (obj->co_ops->coo_attr_get != NULL) {
                         result = obj->co_ops->coo_attr_get(env, obj, attr);
                         if (result != 0) {
@@ -261,7 +261,8 @@ int cl_object_attr_set(const struct lu_env *env, struct cl_object *obj,
 
         top = obj->co_lu.lo_header;
         result = 0;
-        list_for_each_entry_reverse(obj, &top->loh_layers, co_lu.lo_linkage) {
+        cfs_list_for_each_entry_reverse(obj, &top->loh_layers,
+                                        co_lu.lo_linkage) {
                 if (obj->co_ops->coo_attr_set != NULL) {
                         result = obj->co_ops->coo_attr_set(env, obj, attr, v);
                         if (result != 0) {
@@ -292,7 +293,8 @@ int cl_object_glimpse(const struct lu_env *env, struct cl_object *obj,
         ENTRY;
         top = obj->co_lu.lo_header;
         result = 0;
-        list_for_each_entry_reverse(obj, &top->loh_layers, co_lu.lo_linkage) {
+        cfs_list_for_each_entry_reverse(obj, &top->loh_layers,
+                                        co_lu.lo_linkage) {
                 if (obj->co_ops->coo_glimpse != NULL) {
                         result = obj->co_ops->coo_glimpse(env, obj, lvb);
                         if (result != 0)
@@ -320,7 +322,7 @@ int cl_conf_set(const struct lu_env *env, struct cl_object *obj,
         ENTRY;
         top = obj->co_lu.lo_header;
         result = 0;
-        list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+        cfs_list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
                 if (obj->co_ops->coo_conf_set != NULL) {
                         result = obj->co_ops->coo_conf_set(env, obj, conf);
                         if (result != 0)
@@ -346,7 +348,7 @@ void cl_object_kill(const struct lu_env *env, struct cl_object *obj)
         LASSERT(hdr->coh_tree.rnode == NULL);
         LASSERT(hdr->coh_pages == 0);
 
-        set_bit(LU_OBJECT_HEARD_BANSHEE, &hdr->coh_lu.loh_flags);
+        cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &hdr->coh_lu.loh_flags);
         /*
          * Destroy all locks. Object destruction (including cl_inode_fini())
          * cannot cancel the locks, because in the case of a local client,
@@ -378,9 +380,9 @@ int cl_object_has_locks(struct cl_object *obj)
         struct cl_object_header *head = cl_object_header(obj);
         int has;
 
-        spin_lock(&head->coh_lock_guard);
-        has = list_empty(&head->coh_locks);
-        spin_unlock(&head->coh_lock_guard);
+        cfs_spin_lock(&head->coh_lock_guard);
+        has = cfs_list_empty(&head->coh_locks);
+        cfs_spin_unlock(&head->coh_lock_guard);
 
         return (has == 0);
 }
@@ -389,10 +391,10 @@ EXPORT_SYMBOL(cl_object_has_locks);
 void cache_stats_init(struct cache_stats *cs, const char *name)
 {
         cs->cs_name = name;
-        atomic_set(&cs->cs_lookup, 0);
-        atomic_set(&cs->cs_hit,    0);
-        atomic_set(&cs->cs_total,  0);
-        atomic_set(&cs->cs_busy,   0);
+        cfs_atomic_set(&cs->cs_lookup, 0);
+        cfs_atomic_set(&cs->cs_hit,    0);
+        cfs_atomic_set(&cs->cs_total,  0);
+        cfs_atomic_set(&cs->cs_busy,   0);
 }
 
 int cache_stats_print(const struct cache_stats *cs,
@@ -410,11 +412,11 @@ int cache_stats_print(const struct cache_stats *cs,
         nob += snprintf(page + nob, count - nob,
                         "%5.5s: %6u %6u %6u %6u %6u",
                         cs->cs_name,
-                        atomic_read(&cs->cs_lookup),
-                        atomic_read(&cs->cs_hit),
-                        atomic_read(&cs->cs_total),
-                        atomic_read(&cs->cs_busy),
-                        atomic_read(&cs->cs_created));
+                        cfs_atomic_read(&cs->cs_lookup),
+                        cfs_atomic_read(&cs->cs_hit),
+                        cfs_atomic_read(&cs->cs_total),
+                        cfs_atomic_read(&cs->cs_busy),
+                        cfs_atomic_read(&cs->cs_created));
         return nob;
 }
 
@@ -434,9 +436,9 @@ int cl_site_init(struct cl_site *s, struct cl_device *d)
                 cache_stats_init(&s->cs_pages, "pages");
                 cache_stats_init(&s->cs_locks, "locks");
                 for (i = 0; i < ARRAY_SIZE(s->cs_pages_state); ++i)
-                        atomic_set(&s->cs_pages_state[0], 0);
+                        cfs_atomic_set(&s->cs_pages_state[0], 0);
                 for (i = 0; i < ARRAY_SIZE(s->cs_locks_state); ++i)
-                        atomic_set(&s->cs_locks_state[i], 0);
+                        cfs_atomic_set(&s->cs_locks_state[i], 0);
         }
         return result;
 }
@@ -453,11 +455,11 @@ EXPORT_SYMBOL(cl_site_fini);
 
 static struct cache_stats cl_env_stats = {
         .cs_name    = "envs",
-        .cs_created = ATOMIC_INIT(0),
-        .cs_lookup  = ATOMIC_INIT(0),
-        .cs_hit     = ATOMIC_INIT(0),
-        .cs_total   = ATOMIC_INIT(0),
-        .cs_busy    = ATOMIC_INIT(0)
+        .cs_created = CFS_ATOMIC_INIT(0),
+        .cs_lookup  = CFS_ATOMIC_INIT(0),
+        .cs_hit     = CFS_ATOMIC_INIT(0),
+        .cs_total   = CFS_ATOMIC_INIT(0),
+        .cs_busy    = CFS_ATOMIC_INIT(0)
 };
 
 /**
@@ -496,14 +498,14 @@ locks: ...... ...... ...... ...... ...... [...... ...... ...... ...... ......]
         for (i = 0; i < ARRAY_SIZE(site->cs_pages_state); ++i)
                 nob += snprintf(page + nob, count - nob, "%s: %u ",
                                 pstate[i],
-                                atomic_read(&site->cs_pages_state[i]));
+                                cfs_atomic_read(&site->cs_pages_state[i]));
         nob += snprintf(page + nob, count - nob, "]\n");
         nob += cache_stats_print(&site->cs_locks, page + nob, count - nob, 0);
         nob += snprintf(page + nob, count - nob, " [");
         for (i = 0; i < ARRAY_SIZE(site->cs_locks_state); ++i)
                 nob += snprintf(page + nob, count - nob, "%s: %u ",
                                 lstate[i],
-                                atomic_read(&site->cs_locks_state[i]));
+                                cfs_atomic_read(&site->cs_locks_state[i]));
         nob += snprintf(page + nob, count - nob, "]\n");
         nob += cache_stats_print(&cl_env_stats, page + nob, count - nob, 0);
         nob += snprintf(page + nob, count - nob, "\n");
@@ -521,7 +523,7 @@ static CFS_LIST_HEAD(cl_envs);
 static unsigned cl_envs_cached_nr  = 0;
 static unsigned cl_envs_cached_max = 128; /* XXX: prototype: arbitrary limit
                                            * for now. */
-static spinlock_t cl_envs_guard = SPIN_LOCK_UNLOCKED;
+static cfs_spinlock_t cl_envs_guard = CFS_SPIN_LOCK_UNLOCKED;
 
 struct cl_env {
         void             *ce_magic;
@@ -531,7 +533,7 @@ struct cl_env {
          * This allows cl_env to be entered into cl_env_hash which implements
          * the current thread -> client environment lookup.
          */
-        struct hlist_node ce_node;
+        cfs_hlist_node_t  ce_node;
         /**
          * Owner for the current cl_env, the key for cfs_hash.
          * Now current thread pointer is stored.
@@ -541,7 +543,7 @@ struct cl_env {
          * Linkage into global list of all client environments. Used for
          * garbage collection.
          */
-        struct list_head  ce_linkage;
+        cfs_list_t        ce_linkage;
         /*
          *
          */
@@ -553,12 +555,12 @@ struct cl_env {
         void             *ce_debug;
 };
 
-#define CL_ENV_INC(counter) atomic_inc(&cl_env_stats.counter)
+#define CL_ENV_INC(counter) cfs_atomic_inc(&cl_env_stats.counter)
 
 #define CL_ENV_DEC(counter)                                             \
         do {                                                            \
-                LASSERT(atomic_read(&cl_env_stats.counter) > 0);        \
-                atomic_dec(&cl_env_stats.counter);                      \
+                LASSERT(cfs_atomic_read(&cl_env_stats.counter) > 0);    \
+                cfs_atomic_dec(&cl_env_stats.counter);                  \
         } while (0)
 
 /*****************************************************************************
@@ -579,14 +581,14 @@ static unsigned cl_env_hops_hash(cfs_hash_t *lh, void *key, unsigned mask)
 #endif
 }
 
-static void *cl_env_hops_obj(struct hlist_node *hn)
+static void *cl_env_hops_obj(cfs_hlist_node_t *hn)
 {
-        struct cl_env *cle = hlist_entry(hn, struct cl_env, ce_node);
+        struct cl_env *cle = cfs_hlist_entry(hn, struct cl_env, ce_node);
         LASSERT(cle->ce_magic == &cl_env_init0);
         return (void *)cle;
 }
 
-static int cl_env_hops_compare(void *key, struct hlist_node *hn)
+static int cl_env_hops_compare(void *key, cfs_hlist_node_t *hn)
 {
         struct cl_env *cle = cl_env_hops_obj(hn);
 
@@ -697,15 +699,15 @@ static struct lu_env *cl_env_obtain(void *debug)
         struct lu_env *env;
 
         ENTRY;
-        spin_lock(&cl_envs_guard);
-        LASSERT(equi(cl_envs_cached_nr == 0, list_empty(&cl_envs)));
+        cfs_spin_lock(&cl_envs_guard);
+        LASSERT(equi(cl_envs_cached_nr == 0, cfs_list_empty(&cl_envs)));
         if (cl_envs_cached_nr > 0) {
                 int rc;
 
                 cle = container_of(cl_envs.next, struct cl_env, ce_linkage);
-                list_del_init(&cle->ce_linkage);
+                cfs_list_del_init(&cle->ce_linkage);
                 cl_envs_cached_nr--;
-                spin_unlock(&cl_envs_guard);
+                cfs_spin_unlock(&cl_envs_guard);
 
                 env = &cle->ce_lu;
                 rc = lu_env_refill(env);
@@ -718,7 +720,7 @@ static struct lu_env *cl_env_obtain(void *debug)
                         env = ERR_PTR(rc);
                 }
         } else {
-                spin_unlock(&cl_envs_guard);
+                cfs_spin_unlock(&cl_envs_guard);
                 env = cl_env_new(0, debug);
         }
         RETURN(env);
@@ -823,19 +825,19 @@ unsigned cl_env_cache_purge(unsigned nr)
         struct cl_env *cle;
 
         ENTRY;
-        spin_lock(&cl_envs_guard);
-        for (; !list_empty(&cl_envs) && nr > 0; --nr) {
+        cfs_spin_lock(&cl_envs_guard);
+        for (; !cfs_list_empty(&cl_envs) && nr > 0; --nr) {
                 cle = container_of(cl_envs.next, struct cl_env, ce_linkage);
-                list_del_init(&cle->ce_linkage);
+                cfs_list_del_init(&cle->ce_linkage);
                 LASSERT(cl_envs_cached_nr > 0);
                 cl_envs_cached_nr--;
-                spin_unlock(&cl_envs_guard);
+                cfs_spin_unlock(&cl_envs_guard);
 
                 cl_env_fini(cle);
-                spin_lock(&cl_envs_guard);
+                cfs_spin_lock(&cl_envs_guard);
         }
-        LASSERT(equi(cl_envs_cached_nr == 0, list_empty(&cl_envs)));
-        spin_unlock(&cl_envs_guard);
+        LASSERT(equi(cl_envs_cached_nr == 0, cfs_list_empty(&cl_envs)));
+        cfs_spin_unlock(&cl_envs_guard);
         RETURN(nr);
 }
 EXPORT_SYMBOL(cl_env_cache_purge);
@@ -871,10 +873,10 @@ void cl_env_put(struct lu_env *env, int *refcheck)
                 if (cl_envs_cached_nr < cl_envs_cached_max &&
                     (env->le_ctx.lc_tags & ~LCT_HAS_EXIT) == LCT_CL_THREAD &&
                     (env->le_ses->lc_tags & ~LCT_HAS_EXIT) == LCT_SESSION) {
-                        spin_lock(&cl_envs_guard);
-                        list_add(&cle->ce_linkage, &cl_envs);
+                        cfs_spin_lock(&cl_envs_guard);
+                        cfs_list_add(&cle->ce_linkage, &cl_envs);
                         cl_envs_cached_nr++;
-                        spin_unlock(&cl_envs_guard);
+                        cfs_spin_unlock(&cl_envs_guard);
                 } else
                         cl_env_fini(cle);
         }

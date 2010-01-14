@@ -61,28 +61,28 @@ static void
 cfs_hash_rlock(cfs_hash_t *hs)
 {
         if ((hs->hs_flags & CFS_HASH_REHASH) != 0)
-                read_lock(&hs->hs_rwlock);
+                cfs_read_lock(&hs->hs_rwlock);
 }
 
 static void
 cfs_hash_runlock(cfs_hash_t *hs)
 {
         if ((hs->hs_flags & CFS_HASH_REHASH) != 0)
-                read_unlock(&hs->hs_rwlock);
+                cfs_read_unlock(&hs->hs_rwlock);
 }
 
 static void
 cfs_hash_wlock(cfs_hash_t *hs)
 {
         if ((hs->hs_flags & CFS_HASH_REHASH) != 0)
-                write_lock(&hs->hs_rwlock);
+                cfs_write_lock(&hs->hs_rwlock);
 }
 
 static void
 cfs_hash_wunlock(cfs_hash_t *hs)
 {
         if ((hs->hs_flags & CFS_HASH_REHASH) != 0)
-                write_unlock(&hs->hs_rwlock);
+                cfs_write_unlock(&hs->hs_rwlock);
 }
 
 /**
@@ -116,9 +116,9 @@ cfs_hash_create(char *name, unsigned int cur_bits,
 
         strncpy(hs->hs_name, name, sizeof(hs->hs_name));
         hs->hs_name[sizeof(hs->hs_name) - 1] = '\0';
-        atomic_set(&hs->hs_rehash_count, 0);
-        atomic_set(&hs->hs_count, 0);
-        rwlock_init(&hs->hs_rwlock);
+        cfs_atomic_set(&hs->hs_rehash_count, 0);
+        cfs_atomic_set(&hs->hs_count, 0);
+        cfs_rwlock_init(&hs->hs_rwlock);
         hs->hs_cur_bits = cur_bits;
         hs->hs_cur_mask = (1 << cur_bits) - 1;
         hs->hs_min_bits = cur_bits;
@@ -148,8 +148,8 @@ cfs_hash_create(char *name, unsigned int cur_bits,
                 }
 
                 CFS_INIT_HLIST_HEAD(&hs->hs_buckets[i]->hsb_head);
-                rwlock_init(&hs->hs_buckets[i]->hsb_rwlock);
-                atomic_set(&hs->hs_buckets[i]->hsb_count, 0);
+                cfs_rwlock_init(&hs->hs_buckets[i]->hsb_rwlock);
+                cfs_atomic_set(&hs->hs_buckets[i]->hsb_count, 0);
         }
 
         return hs;
@@ -163,8 +163,8 @@ void
 cfs_hash_destroy(cfs_hash_t *hs)
 {
         cfs_hash_bucket_t    *hsb;
-        struct hlist_node    *hnode;
-        struct hlist_node    *pos;
+        cfs_hlist_node_t     *hnode;
+        cfs_hlist_node_t     *pos;
         int                   i;
         ENTRY;
 
@@ -176,20 +176,20 @@ cfs_hash_destroy(cfs_hash_t *hs)
                 if (hsb == NULL)
                         continue;
 
-                write_lock(&hsb->hsb_rwlock);
-                hlist_for_each_safe(hnode, pos, &(hsb->hsb_head)) {
+                cfs_write_lock(&hsb->hsb_rwlock);
+                cfs_hlist_for_each_safe(hnode, pos, &(hsb->hsb_head)) {
                         __cfs_hash_bucket_validate(hs, hsb, hnode);
                         __cfs_hash_bucket_del(hs, hsb, hnode);
                         cfs_hash_exit(hs, hnode);
                 }
 
-                LASSERT(hlist_empty(&(hsb->hsb_head)));
-                LASSERT(atomic_read(&hsb->hsb_count) == 0);
-                write_unlock(&hsb->hsb_rwlock);
+                LASSERT(cfs_hlist_empty(&(hsb->hsb_head)));
+                LASSERT(cfs_atomic_read(&hsb->hsb_count) == 0);
+                cfs_write_unlock(&hsb->hsb_rwlock);
                 CFS_FREE_PTR(hsb);
         }
 
-        LASSERT(atomic_read(&hs->hs_count) == 0);
+        LASSERT(cfs_atomic_read(&hs->hs_count) == 0);
         cfs_hash_wunlock(hs);
 
         LIBCFS_FREE(hs->hs_buckets,
@@ -223,7 +223,7 @@ cfs_hash_rehash_bits(cfs_hash_t *hs)
  * ops->hs_get function will be called when the item is added.
  */
 void
-cfs_hash_add(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
+cfs_hash_add(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 {
         cfs_hash_bucket_t    *hsb;
         int                   bits;
@@ -236,11 +236,11 @@ cfs_hash_add(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
         i = cfs_hash_id(hs, key, hs->hs_cur_mask);
         hsb = hs->hs_buckets[i];
         LASSERT(i <= hs->hs_cur_mask);
-        LASSERT(hlist_unhashed(hnode));
+        LASSERT(cfs_hlist_unhashed(hnode));
 
-        write_lock(&hsb->hsb_rwlock);
+        cfs_write_lock(&hsb->hsb_rwlock);
         __cfs_hash_bucket_add(hs, hsb, hnode);
-        write_unlock(&hsb->hsb_rwlock);
+        cfs_write_unlock(&hsb->hsb_rwlock);
 
         bits = cfs_hash_rehash_bits(hs);
         cfs_hash_runlock(hs);
@@ -251,12 +251,12 @@ cfs_hash_add(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
 }
 CFS_EXPORT_SYMBOL(cfs_hash_add);
 
-static struct hlist_node *
+static cfs_hlist_node_t *
 cfs_hash_findadd_unique_hnode(cfs_hash_t *hs, void *key,
-                              struct hlist_node *hnode)
+                              cfs_hlist_node_t *hnode)
 {
         int                   bits = 0;
-        struct hlist_node    *ehnode;
+        cfs_hlist_node_t     *ehnode;
         cfs_hash_bucket_t    *hsb;
         unsigned              i;
         ENTRY;
@@ -267,9 +267,9 @@ cfs_hash_findadd_unique_hnode(cfs_hash_t *hs, void *key,
         i = cfs_hash_id(hs, key, hs->hs_cur_mask);
         hsb = hs->hs_buckets[i];
         LASSERT(i <= hs->hs_cur_mask);
-        LASSERT(hlist_unhashed(hnode));
+        LASSERT(cfs_hlist_unhashed(hnode));
 
-        write_lock(&hsb->hsb_rwlock);
+        cfs_write_lock(&hsb->hsb_rwlock);
         ehnode = __cfs_hash_bucket_lookup(hs, hsb, key);
         if (ehnode) {
                 cfs_hash_get(hs, ehnode);
@@ -278,7 +278,7 @@ cfs_hash_findadd_unique_hnode(cfs_hash_t *hs, void *key,
                 ehnode = hnode;
                 bits = cfs_hash_rehash_bits(hs);
         }
-        write_unlock(&hsb->hsb_rwlock);
+        cfs_write_unlock(&hsb->hsb_rwlock);
         cfs_hash_runlock(hs);
         if (bits)
                 cfs_hash_rehash(hs, bits);
@@ -292,9 +292,9 @@ cfs_hash_findadd_unique_hnode(cfs_hash_t *hs, void *key,
  * Returns 0 on success or -EALREADY on key collisions.
  */
 int
-cfs_hash_add_unique(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
+cfs_hash_add_unique(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 {
-        struct hlist_node    *ehnode;
+        cfs_hlist_node_t    *ehnode;
         ENTRY;
 
         ehnode = cfs_hash_findadd_unique_hnode(hs, key, hnode);
@@ -314,9 +314,9 @@ CFS_EXPORT_SYMBOL(cfs_hash_add_unique);
  */
 void *
 cfs_hash_findadd_unique(cfs_hash_t *hs, void *key,
-                        struct hlist_node *hnode)
+                        cfs_hlist_node_t *hnode)
 {
-        struct hlist_node    *ehnode;
+        cfs_hlist_node_t     *ehnode;
         void                 *obj;
         ENTRY;
 
@@ -335,7 +335,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_findadd_unique);
  * on the removed object.
  */
 void *
-cfs_hash_del(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
+cfs_hash_del(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 {
         cfs_hash_bucket_t    *hsb;
         void                 *obj;
@@ -348,11 +348,11 @@ cfs_hash_del(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
         i = cfs_hash_id(hs, key, hs->hs_cur_mask);
         hsb = hs->hs_buckets[i];
         LASSERT(i <= hs->hs_cur_mask);
-        LASSERT(!hlist_unhashed(hnode));
+        LASSERT(!cfs_hlist_unhashed(hnode));
 
-        write_lock(&hsb->hsb_rwlock);
+        cfs_write_lock(&hsb->hsb_rwlock);
         obj = __cfs_hash_bucket_del(hs, hsb, hnode);
-        write_unlock(&hsb->hsb_rwlock);
+        cfs_write_unlock(&hsb->hsb_rwlock);
         cfs_hash_runlock(hs);
 
         RETURN(obj);
@@ -369,7 +369,7 @@ void *
 cfs_hash_del_key(cfs_hash_t *hs, void *key)
 {
         void                 *obj = NULL;
-        struct hlist_node    *hnode;
+        cfs_hlist_node_t     *hnode;
         cfs_hash_bucket_t    *hsb;
         unsigned              i;
         ENTRY;
@@ -379,12 +379,12 @@ cfs_hash_del_key(cfs_hash_t *hs, void *key)
         hsb = hs->hs_buckets[i];
         LASSERT(i <= hs->hs_cur_mask);
 
-        write_lock(&hsb->hsb_rwlock);
+        cfs_write_lock(&hsb->hsb_rwlock);
         hnode = __cfs_hash_bucket_lookup(hs, hsb, key);
         if (hnode)
                 obj = __cfs_hash_bucket_del(hs, hsb, hnode);
 
-        write_unlock(&hsb->hsb_rwlock);
+        cfs_write_unlock(&hsb->hsb_rwlock);
         cfs_hash_runlock(hs);
 
         RETURN(obj);
@@ -403,7 +403,7 @@ void *
 cfs_hash_lookup(cfs_hash_t *hs, void *key)
 {
         void                 *obj = NULL;
-        struct hlist_node    *hnode;
+        cfs_hlist_node_t     *hnode;
         cfs_hash_bucket_t    *hsb;
         unsigned              i;
         ENTRY;
@@ -413,12 +413,12 @@ cfs_hash_lookup(cfs_hash_t *hs, void *key)
         hsb = hs->hs_buckets[i];
         LASSERT(i <= hs->hs_cur_mask);
 
-        read_lock(&hsb->hsb_rwlock);
+        cfs_read_lock(&hsb->hsb_rwlock);
         hnode = __cfs_hash_bucket_lookup(hs, hsb, key);
         if (hnode)
                 obj = cfs_hash_get(hs, hnode);
 
-        read_unlock(&hsb->hsb_rwlock);
+        cfs_read_unlock(&hsb->hsb_rwlock);
         cfs_hash_runlock(hs);
 
         RETURN(obj);
@@ -436,7 +436,7 @@ void
 cfs_hash_for_each(cfs_hash_t *hs,
                   cfs_hash_for_each_cb_t func, void *data)
 {
-        struct hlist_node    *hnode;
+        cfs_hlist_node_t     *hnode;
         cfs_hash_bucket_t    *hsb;
         void                 *obj;
         int                   i;
@@ -444,14 +444,14 @@ cfs_hash_for_each(cfs_hash_t *hs,
 
         cfs_hash_rlock(hs);
         cfs_hash_for_each_bucket(hs, hsb, i) {
-                read_lock(&hsb->hsb_rwlock);
-                hlist_for_each(hnode, &(hsb->hsb_head)) {
+                cfs_read_lock(&hsb->hsb_rwlock);
+                cfs_hlist_for_each(hnode, &(hsb->hsb_head)) {
                         __cfs_hash_bucket_validate(hs, hsb, hnode);
                         obj = cfs_hash_get(hs, hnode);
                         func(obj, data);
                         (void)cfs_hash_put(hs, hnode);
                 }
-                read_unlock(&hsb->hsb_rwlock);
+                cfs_read_unlock(&hsb->hsb_rwlock);
         }
         cfs_hash_runlock(hs);
 
@@ -473,8 +473,8 @@ void
 cfs_hash_for_each_safe(cfs_hash_t *hs,
                        cfs_hash_for_each_cb_t func, void *data)
 {
-        struct hlist_node    *hnode;
-        struct hlist_node    *pos;
+        cfs_hlist_node_t     *hnode;
+        cfs_hlist_node_t     *pos;
         cfs_hash_bucket_t    *hsb;
         void                 *obj;
         int                   i;
@@ -482,16 +482,16 @@ cfs_hash_for_each_safe(cfs_hash_t *hs,
 
         cfs_hash_rlock(hs);
         cfs_hash_for_each_bucket(hs, hsb, i) {
-                read_lock(&hsb->hsb_rwlock);
-                hlist_for_each_safe(hnode, pos, &(hsb->hsb_head)) {
+                cfs_read_lock(&hsb->hsb_rwlock);
+                cfs_hlist_for_each_safe(hnode, pos, &(hsb->hsb_head)) {
                         __cfs_hash_bucket_validate(hs, hsb, hnode);
                         obj = cfs_hash_get(hs, hnode);
-                        read_unlock(&hsb->hsb_rwlock);
+                        cfs_read_unlock(&hsb->hsb_rwlock);
                         func(obj, data);
-                        read_lock(&hsb->hsb_rwlock);
+                        cfs_read_lock(&hsb->hsb_rwlock);
                         (void)cfs_hash_put(hs, hnode);
                 }
-                read_unlock(&hsb->hsb_rwlock);
+                cfs_read_unlock(&hsb->hsb_rwlock);
         }
         cfs_hash_runlock(hs);
         EXIT;
@@ -513,7 +513,7 @@ void
 cfs_hash_for_each_empty(cfs_hash_t *hs,
                         cfs_hash_for_each_cb_t func, void *data)
 {
-        struct hlist_node    *hnode;
+        cfs_hlist_node_t     *hnode;
         cfs_hash_bucket_t    *hsb;
         void                 *obj;
         int                   i;
@@ -522,18 +522,18 @@ cfs_hash_for_each_empty(cfs_hash_t *hs,
 restart:
         cfs_hash_rlock(hs);
         cfs_hash_for_each_bucket(hs, hsb, i) {
-                write_lock(&hsb->hsb_rwlock);
-                while (!hlist_empty(&hsb->hsb_head)) {
+                cfs_write_lock(&hsb->hsb_rwlock);
+                while (!cfs_hlist_empty(&hsb->hsb_head)) {
                         hnode =  hsb->hsb_head.first;
                         __cfs_hash_bucket_validate(hs, hsb, hnode);
                         obj = cfs_hash_get(hs, hnode);
-                        write_unlock(&hsb->hsb_rwlock);
+                        cfs_write_unlock(&hsb->hsb_rwlock);
                         cfs_hash_runlock(hs);
                         func(obj, data);
                         (void)cfs_hash_put(hs, hnode);
                         goto restart;
                 }
-                write_unlock(&hsb->hsb_rwlock);
+                cfs_write_unlock(&hsb->hsb_rwlock);
         }
         cfs_hash_runlock(hs);
         EXIT;
@@ -552,7 +552,7 @@ void
 cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
                       cfs_hash_for_each_cb_t func, void *data)
 {
-        struct hlist_node    *hnode;
+        cfs_hlist_node_t     *hnode;
         cfs_hash_bucket_t    *hsb;
         unsigned              i;
         ENTRY;
@@ -562,8 +562,8 @@ cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
         hsb = hs->hs_buckets[i];
         LASSERT(i <= hs->hs_cur_mask);
 
-        read_lock(&hsb->hsb_rwlock);
-        hlist_for_each(hnode, &(hsb->hsb_head)) {
+        cfs_read_lock(&hsb->hsb_rwlock);
+        cfs_hlist_for_each(hnode, &(hsb->hsb_head)) {
                 __cfs_hash_bucket_validate(hs, hsb, hnode);
 
                 if (!cfs_hash_compare(hs, key, hnode))
@@ -573,7 +573,7 @@ cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
                 (void)cfs_hash_put(hs, hnode);
         }
 
-        read_unlock(&hsb->hsb_rwlock);
+        cfs_read_unlock(&hsb->hsb_rwlock);
         cfs_hash_runlock(hs);
 
         EXIT;
@@ -594,8 +594,8 @@ CFS_EXPORT_SYMBOL(cfs_hash_for_each_key);
 int
 cfs_hash_rehash(cfs_hash_t *hs, int bits)
 {
-        struct hlist_node     *hnode;
-        struct hlist_node     *pos;
+        cfs_hlist_node_t      *hnode;
+        cfs_hlist_node_t      *pos;
         cfs_hash_bucket_t    **old_buckets;
         cfs_hash_bucket_t    **rehash_buckets;
         cfs_hash_bucket_t     *hs_hsb;
@@ -609,7 +609,7 @@ cfs_hash_rehash(cfs_hash_t *hs, int bits)
         void                  *key;
         ENTRY;
 
-        LASSERT(!in_interrupt());
+        LASSERT(!cfs_in_interrupt());
         LASSERT(new_mask > 0);
         LASSERT((hs->hs_flags & CFS_HASH_REHASH) != 0);
 
@@ -623,8 +623,8 @@ cfs_hash_rehash(cfs_hash_t *hs, int bits)
                         GOTO(free, rc = -ENOMEM);
 
                 CFS_INIT_HLIST_HEAD(&rehash_buckets[i]->hsb_head);
-                rwlock_init(&rehash_buckets[i]->hsb_rwlock);
-                atomic_set(&rehash_buckets[i]->hsb_count, 0);
+                cfs_rwlock_init(&rehash_buckets[i]->hsb_rwlock);
+                cfs_atomic_set(&rehash_buckets[i]->hsb_count, 0);
         }
 
         cfs_hash_wlock(hs);
@@ -646,13 +646,13 @@ cfs_hash_rehash(cfs_hash_t *hs, int bits)
         hs->hs_cur_bits = bits;
         hs->hs_cur_mask = (1 << bits) - 1;
         hs->hs_buckets = rehash_buckets;
-        atomic_inc(&hs->hs_rehash_count);
+        cfs_atomic_inc(&hs->hs_rehash_count);
 
         for (i = 0; i <= old_mask; i++) {
                 hs_hsb = old_buckets[i];
 
-                write_lock(&hs_hsb->hsb_rwlock);
-                hlist_for_each_safe(hnode, pos, &(hs_hsb->hsb_head)) {
+                cfs_write_lock(&hs_hsb->hsb_rwlock);
+                cfs_hlist_for_each_safe(hnode, pos, &(hs_hsb->hsb_head)) {
                         key = cfs_hash_key(hs, hnode);
                         LASSERT(key);
 
@@ -665,22 +665,22 @@ cfs_hash_rehash(cfs_hash_t *hs, int bits)
                         /*
                          * Delete from old hash bucket.
                          */
-                        hlist_del(hnode);
-                        LASSERT(atomic_read(&hs_hsb->hsb_count) > 0);
-                        atomic_dec(&hs_hsb->hsb_count);
+                        cfs_hlist_del(hnode);
+                        LASSERT(cfs_atomic_read(&hs_hsb->hsb_count) > 0);
+                        cfs_atomic_dec(&hs_hsb->hsb_count);
 
                         /*
                          * Add to rehash bucket, ops->hs_key must be defined.
                          */
                         rehash_hsb = rehash_buckets[cfs_hash_id(hs, key,
                                                                 new_mask)];
-                        hlist_add_head(hnode, &(rehash_hsb->hsb_head));
-                        atomic_inc(&rehash_hsb->hsb_count);
+                        cfs_hlist_add_head(hnode, &(rehash_hsb->hsb_head));
+                        cfs_atomic_inc(&rehash_hsb->hsb_count);
                 }
 
-                LASSERT(hlist_empty(&(hs_hsb->hsb_head)));
-                LASSERT(atomic_read(&hs_hsb->hsb_count) == 0);
-                write_unlock(&hs_hsb->hsb_rwlock);
+                LASSERT(cfs_hlist_empty(&(hs_hsb->hsb_head)));
+                LASSERT(cfs_atomic_read(&hs_hsb->hsb_count) == 0);
+                cfs_write_unlock(&hs_hsb->hsb_rwlock);
         }
 
         cfs_hash_wunlock(hs);
@@ -706,7 +706,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_rehash);
  * not be called.
  */
 void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key, void *new_key,
-                         struct hlist_node *hnode)
+                         cfs_hlist_node_t *hnode)
 {
         cfs_hash_bucket_t     *old_hsb;
         cfs_hash_bucket_t     *new_hsb;
@@ -715,7 +715,7 @@ void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key, void *new_key,
         ENTRY;
 
         __cfs_hash_key_validate(hs, new_key, hnode);
-        LASSERT(!hlist_unhashed(hnode));
+        LASSERT(!cfs_hlist_unhashed(hnode));
 
         cfs_hash_rlock(hs);
 
@@ -728,13 +728,13 @@ void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key, void *new_key,
         LASSERT(j <= hs->hs_cur_mask);
 
         if (i < j) { /* write_lock ordering */
-                write_lock(&old_hsb->hsb_rwlock);
-                write_lock(&new_hsb->hsb_rwlock);
+                cfs_write_lock(&old_hsb->hsb_rwlock);
+                cfs_write_lock(&new_hsb->hsb_rwlock);
         } else if (i > j) {
-                write_lock(&new_hsb->hsb_rwlock);
-                write_lock(&old_hsb->hsb_rwlock);
+                cfs_write_lock(&new_hsb->hsb_rwlock);
+                cfs_write_lock(&old_hsb->hsb_rwlock);
         } else { /* do nothing */
-                read_unlock(&hs->hs_rwlock);
+                cfs_read_unlock(&hs->hs_rwlock);
                 EXIT;
                 return;
         }
@@ -743,14 +743,14 @@ void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key, void *new_key,
          * Migrate item between hash buckets without calling
          * the cfs_hash_get() and cfs_hash_put() callback functions.
          */
-        hlist_del(hnode);
-        LASSERT(atomic_read(&old_hsb->hsb_count) > 0);
-        atomic_dec(&old_hsb->hsb_count);
-        hlist_add_head(hnode, &(new_hsb->hsb_head));
-        atomic_inc(&new_hsb->hsb_count);
+        cfs_hlist_del(hnode);
+        LASSERT(cfs_atomic_read(&old_hsb->hsb_count) > 0);
+        cfs_atomic_dec(&old_hsb->hsb_count);
+        cfs_hlist_add_head(hnode, &(new_hsb->hsb_head));
+        cfs_atomic_inc(&new_hsb->hsb_count);
 
-        write_unlock(&new_hsb->hsb_rwlock);
-        write_unlock(&old_hsb->hsb_rwlock);
+        cfs_write_unlock(&new_hsb->hsb_rwlock);
+        cfs_write_unlock(&old_hsb->hsb_rwlock);
         cfs_hash_runlock(hs);
 
         EXIT;
@@ -796,9 +796,9 @@ int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
                       __cfs_hash_theta_frac(hs->hs_max_theta));
         c += snprintf(str + c, size - c, " 0x%02x ", hs->hs_flags);
         c += snprintf(str + c, size - c, "%6d ",
-                      atomic_read(&hs->hs_rehash_count));
+                      cfs_atomic_read(&hs->hs_rehash_count));
         c += snprintf(str + c, size - c, "%5d ",
-                      atomic_read(&hs->hs_count));
+                      cfs_atomic_read(&hs->hs_count));
 
         /*
          * The distribution is a summary of the chained hash depth in
@@ -814,7 +814,7 @@ int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
          * Non-Uniform hash distribution:  128/125/0/0/0/0/2/1
          */
         cfs_hash_for_each_bucket(hs, hsb, i)
-                dist[min(__fls(atomic_read(&hsb->hsb_count)/max(theta,1)),7)]++;
+                dist[min(__cfs_fls(cfs_atomic_read(&hsb->hsb_count)/max(theta,1)),7)]++;
 
         for (i = 0; i < 8; i++)
                 c += snprintf(str + c, size - c, "%d%c",  dist[i],

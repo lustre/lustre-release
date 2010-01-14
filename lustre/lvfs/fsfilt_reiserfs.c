@@ -97,7 +97,7 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
         struct inode *inode = dentry->d_inode;
         int rc;
 
-        lock_kernel();
+        cfs_lock_kernel();
 
         /* A _really_ horrible hack to avoid removing the data stored
          * in the block pointers; this is really the "small" stripe MD data.
@@ -131,7 +131,7 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
                         rc = inode_setattr(inode, iattr);
         }
 
-        unlock_kernel();
+        cfs_unlock_kernel();
 
         return rc;
 }
@@ -167,9 +167,9 @@ static int fsfilt_reiserfs_add_journal_cb(struct obd_device *obd,
 {
         static unsigned long next = 0;
 
-        if (time_after(jiffies, next)) {
+        if (cfs_time_after(jiffies, next)) {
                 CERROR("no journal callback kernel patch, faking it...\n");
-                next = jiffies + 300 * HZ;
+                next = jiffies + 300 * CFS_HZ;
         }
 
         cb_func(obd, last_rcvd, cb_data, 0);

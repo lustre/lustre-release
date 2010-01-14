@@ -149,7 +149,7 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
                 }
 
                 /* we cannot finilize txs right now (bug #18844) */
-                list_splice_init(&conn->uc_tx_list, &zombie_txs);
+                cfs_list_splice_init(&conn->uc_tx_list, &zombie_txs);
 
                 peer->up_conns[idx] = NULL;
                 conn->uc_peer = NULL;
@@ -198,12 +198,12 @@ usocklnd_check_peer_stale(lnet_ni_t *ni, lnet_process_id_t id)
                 return;
         }
 
-        if (cfs_atomic_read(&peer->up_refcount) == 2) {
+        if (cfs_mt_atomic_read(&peer->up_refcount) == 2) {
                 int i;
                 for (i = 0; i < N_CONN_TYPES; i++)
                         LASSERT (peer->up_conns[i] == NULL);
 
-                list_del(&peer->up_list);
+                cfs_list_del(&peer->up_list);
 
                 if (peer->up_errored &&
                     (peer->up_peerid.pid & LNET_PID_USERFLAG) == 0)
@@ -252,7 +252,7 @@ usocklnd_create_passive_conn(lnet_ni_t *ni,
         CFS_INIT_LIST_HEAD (&conn->uc_tx_list);
         CFS_INIT_LIST_HEAD (&conn->uc_zcack_list);
         pthread_mutex_init(&conn->uc_lock, NULL);
-        cfs_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
+        cfs_mt_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
 
         *connp = conn;
         return 0;
@@ -309,7 +309,7 @@ usocklnd_create_active_conn(usock_peer_t *peer, int type,
         CFS_INIT_LIST_HEAD (&conn->uc_tx_list);
         CFS_INIT_LIST_HEAD (&conn->uc_zcack_list);
         pthread_mutex_init(&conn->uc_lock, NULL);
-        cfs_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
+        cfs_mt_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
 
         *connp = conn;
         return 0;
@@ -564,26 +564,27 @@ usocklnd_destroy_tx(lnet_ni_t *ni, usock_tx_t *tx)
 }
 
 void
-usocklnd_destroy_txlist(lnet_ni_t *ni, struct list_head *txlist)
+usocklnd_destroy_txlist(lnet_ni_t *ni, cfs_list_t *txlist)
 {
         usock_tx_t *tx;
 
-        while (!list_empty(txlist)) {
-                tx = list_entry(txlist->next, usock_tx_t, tx_list);
-                list_del(&tx->tx_list);
+        while (!cfs_list_empty(txlist)) {
+                tx = cfs_list_entry(txlist->next, usock_tx_t, tx_list);
+                cfs_list_del(&tx->tx_list);
 
                 usocklnd_destroy_tx(ni, tx);
         }
 }
 
 void
-usocklnd_destroy_zcack_list(struct list_head *zcack_list)
+usocklnd_destroy_zcack_list(cfs_list_t *zcack_list)
 {
         usock_zc_ack_t *zcack;
 
-        while (!list_empty(zcack_list)) {
-                zcack = list_entry(zcack_list->next, usock_zc_ack_t, zc_list);
-                list_del(&zcack->zc_list);
+        while (!cfs_list_empty(zcack_list)) {
+                zcack = cfs_list_entry(zcack_list->next, usock_zc_ack_t,
+                                       zc_list);
+                cfs_list_del(&zcack->zc_list);
 
                 LIBCFS_FREE (zcack, sizeof(*zcack));
         }
@@ -616,7 +617,7 @@ usocklnd_destroy_conn(usock_conn_t *conn)
                 lnet_finalize(conn->uc_peer->up_ni, conn->uc_rx_lnetmsg, -EIO);
         }
 
-        if (!list_empty(&conn->uc_tx_list)) {
+        if (!cfs_list_empty(&conn->uc_tx_list)) {
                 LASSERT (conn->uc_peer != NULL);
                 usocklnd_destroy_txlist(conn->uc_peer->up_ni, &conn->uc_tx_list);
         }
@@ -669,13 +670,13 @@ int usocklnd_type2idx(int type)
 usock_peer_t *
 usocklnd_find_peer_locked(lnet_ni_t *ni, lnet_process_id_t id)
 {
-        struct list_head *peer_list = usocklnd_nid2peerlist(id.nid);
-        struct list_head *tmp;
+        cfs_list_t       *peer_list = usocklnd_nid2peerlist(id.nid);
+        cfs_list_t       *tmp;
         usock_peer_t     *peer;
 
-        list_for_each (tmp, peer_list) {
+        cfs_list_for_each (tmp, peer_list) {
 
-                peer = list_entry (tmp, usock_peer_t, up_list);
+                peer = cfs_list_entry (tmp, usock_peer_t, up_list);
 
                 if (peer->up_ni != ni)
                         continue;
@@ -710,7 +711,7 @@ usocklnd_create_peer(lnet_ni_t *ni, lnet_process_id_t id,
         peer->up_incrn_is_set = 0;
         peer->up_errored      = 0;
         peer->up_last_alive   = 0;
-        cfs_atomic_set (&peer->up_refcount, 1); /* 1 ref for caller */
+        cfs_mt_atomic_set (&peer->up_refcount, 1); /* 1 ref for caller */
         pthread_mutex_init(&peer->up_lock, NULL);
 
         pthread_mutex_lock(&net->un_lock);
@@ -755,8 +756,8 @@ usocklnd_find_or_create_peer(lnet_ni_t *ni, lnet_process_id_t id,
 
                 /* peer table will take 1 of my refs on peer */
                 usocklnd_peer_addref(peer);
-                list_add_tail (&peer->up_list,
-                               usocklnd_nid2peerlist(id.nid));
+                cfs_list_add_tail (&peer->up_list,
+                                   usocklnd_nid2peerlist(id.nid));
         } else {
                 usocklnd_peer_decref(peer); /* should destroy peer */
                 peer = peer2;
@@ -773,8 +774,8 @@ static int
 usocklnd_enqueue_zcack(usock_conn_t *conn, usock_zc_ack_t *zc_ack)
 {
         if (conn->uc_state == UC_READY &&
-            list_empty(&conn->uc_tx_list) &&
-            list_empty(&conn->uc_zcack_list) &&
+            cfs_list_empty(&conn->uc_tx_list) &&
+            cfs_list_empty(&conn->uc_zcack_list) &&
             !conn->uc_sending) {
                 int rc = usocklnd_add_pollrequest(conn, POLL_TX_SET_REQUEST,
                                                   POLLOUT);
@@ -782,7 +783,7 @@ usocklnd_enqueue_zcack(usock_conn_t *conn, usock_zc_ack_t *zc_ack)
                         return rc;
         }
 
-        list_add_tail(&zc_ack->zc_list, &conn->uc_zcack_list);
+        cfs_list_add_tail(&zc_ack->zc_list, &conn->uc_zcack_list);
         return 0;
 }
 
@@ -794,8 +795,8 @@ usocklnd_enqueue_tx(usock_conn_t *conn, usock_tx_t *tx,
                     int *send_immediately)
 {
         if (conn->uc_state == UC_READY &&
-            list_empty(&conn->uc_tx_list) &&
-            list_empty(&conn->uc_zcack_list) &&
+            cfs_list_empty(&conn->uc_tx_list) &&
+            cfs_list_empty(&conn->uc_zcack_list) &&
             !conn->uc_sending) {
                 conn->uc_sending = 1;
                 *send_immediately = 1;
@@ -803,7 +804,7 @@ usocklnd_enqueue_tx(usock_conn_t *conn, usock_tx_t *tx,
         }
 
         *send_immediately = 0;
-        list_add_tail(&tx->tx_list, &conn->uc_tx_list);
+        cfs_list_add_tail(&tx->tx_list, &conn->uc_tx_list);
 }
 
 /* Safely create new conn if needed. Save result in *connp.

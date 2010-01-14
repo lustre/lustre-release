@@ -153,7 +153,7 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
         sub->sub_borrowed = 0;
 
         if (lio->lis_mem_frozen) {
-                LASSERT(mutex_is_locked(&ld->ld_mutex));
+                LASSERT(cfs_mutex_is_locked(&ld->ld_mutex));
                 sub->sub_io  = &ld->ld_emrg[stripe]->emrg_subio;
                 sub->sub_env = ld->ld_emrg[stripe]->emrg_env;
                 sub->sub_borrowed = 1;
@@ -402,7 +402,7 @@ static int lov_io_iter_init(const struct lu_env *env,
                         rc = PTR_ERR(sub);
 
                 if (!rc)
-                        list_add_tail(&sub->sub_linkage, &lio->lis_active);
+                        cfs_list_add_tail(&sub->sub_linkage, &lio->lis_active);
                 else
                         break;
         }
@@ -453,7 +453,7 @@ static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
         int rc = 0;
 
         ENTRY;
-        list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+        cfs_list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
                 lov_sub_enter(sub);
                 rc = iofunc(sub->sub_env, sub->sub_io);
                 lov_sub_exit(sub);
@@ -519,8 +519,8 @@ static void lov_io_iter_fini(const struct lu_env *env,
         ENTRY;
         rc = lov_io_call(env, lio, lov_io_iter_fini_wrapper);
         LASSERT(rc == 0);
-        while (!list_empty(&lio->lis_active))
-                list_del_init(lio->lis_active.next);
+        while (!cfs_list_empty(&lio->lis_active))
+                cfs_list_del_init(lio->lis_active.next);
         EXIT;
 }
 
@@ -612,7 +612,7 @@ static int lov_io_submit(const struct lu_env *env,
                  * In order to not make things worse, even don't try to
                  * allocate the memory with __GFP_NOWARN. -jay
                  */
-                mutex_lock(&ld->ld_mutex);
+                cfs_mutex_lock(&ld->ld_mutex);
                 lio->lis_mem_frozen = 1;
         }
 
@@ -626,7 +626,7 @@ static int lov_io_submit(const struct lu_env *env,
                 struct lov_io_sub   *sub;
                 struct cl_page_list *sub_qin = QIN(stripe);
 
-                if (list_empty(&sub_qin->pl_pages))
+                if (cfs_list_empty(&sub_qin->pl_pages))
                         continue;
 
                 cl_page_list_splice(sub_qin, &cl2q->c2_qin);
@@ -646,7 +646,7 @@ static int lov_io_submit(const struct lu_env *env,
         for (stripe = 0; stripe < lio->lis_nr_subios; stripe++) {
                 struct cl_page_list *sub_qin = QIN(stripe);
 
-                if (list_empty(&sub_qin->pl_pages))
+                if (cfs_list_empty(&sub_qin->pl_pages))
                         continue;
 
                 cl_page_list_splice(sub_qin, qin);
@@ -665,7 +665,7 @@ static int lov_io_submit(const struct lu_env *env,
                                 lov_io_sub_fini(env, lio, &lio->lis_subs[i]);
                 }
                 lio->lis_mem_frozen = 0;
-                mutex_unlock(&ld->ld_mutex);
+                cfs_mutex_unlock(&ld->ld_mutex);
         }
 
         RETURN(rc);

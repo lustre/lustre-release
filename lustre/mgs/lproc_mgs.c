@@ -61,7 +61,7 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
         struct mgs_obd *mgs = &obd->u.mgs;
-        struct list_head dentry_list;
+        cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
         int rc, len;
         ENTRY;
@@ -73,8 +73,8 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
                 CERROR("Can't read config dir\n");
                 RETURN(rc);
         }
-        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                list_del(&dirent->lld_list);
+        cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
+                cfs_list_del(&dirent->lld_list);
                 len = strlen(dirent->lld_name);
                 if ((len > 7) && (strncmp(dirent->lld_name + len - 7, "-client",
                                           len) == 0)) {
@@ -128,9 +128,9 @@ static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
         if (rc)
                 return rc;
 
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
         seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
         return 0;
 }
 
@@ -193,16 +193,16 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
         struct mgs_tgt_srpc_conf *srpc_tgt;
         int i;
 
-        down(&fsdb->fsdb_sem);
+        cfs_down(&fsdb->fsdb_sem);
 
         seq_printf(seq, "fsname: %s\n", fsdb->fsdb_name);
         seq_printf(seq, "flags: %#x     gen: %d\n",
                    fsdb->fsdb_flags, fsdb->fsdb_gen);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-                 if (test_bit(i, fsdb->fsdb_mdt_index_map))
+                 if (cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
                          seq_printf(seq, "%s-MDT%04x\n", fsdb->fsdb_name, i);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-                 if (test_bit(i, fsdb->fsdb_ost_index_map))
+                 if (cfs_test_bit(i, fsdb->fsdb_ost_index_map))
                          seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
 
         seq_printf(seq, "\nSecure RPC Config Rules:\n");
@@ -217,7 +217,7 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
         }
         seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
 
-        up(&fsdb->fsdb_sem);
+        cfs_up(&fsdb->fsdb_sem);
         return 0;
 }
 

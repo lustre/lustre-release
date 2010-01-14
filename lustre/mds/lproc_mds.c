@@ -141,7 +141,7 @@ static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (copy_from_user(kernbuf, buffer, count))
+        if (cfs_copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';

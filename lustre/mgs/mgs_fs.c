@@ -149,7 +149,8 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs,
                 /* we didn't find the right inode.. */
                 CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
                        "count: %d, generation %u/%u\n", inode->i_ino,
-                       (unsigned long)inode->i_nlink, atomic_read(&inode->i_count),
+                       (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count),
                        inode->i_generation, gen);
                 l_dput(result);
                 RETURN(ERR_PTR(-ENOENT));
@@ -178,7 +179,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         ENTRY;
 
         /* FIXME what's this?  Do I need it? */
-        rc = cleanup_group_info();
+        rc = cfs_cleanup_group_info();
         if (rc)
                 RETURN(rc);
 

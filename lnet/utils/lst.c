@@ -391,20 +391,20 @@ lst_print_error(char *sub, const char *def_format, ...)
 }
 
 void
-lst_free_rpcent(struct list_head *head)
+lst_free_rpcent(cfs_list_t *head)
 {
         lstcon_rpc_ent_t *ent;
 
-        while (!list_empty(head)) {
-                ent = list_entry(head->next, lstcon_rpc_ent_t, rpe_link);
+        while (!cfs_list_empty(head)) {
+                ent = cfs_list_entry(head->next, lstcon_rpc_ent_t, rpe_link);
 
-                list_del(&ent->rpe_link);
+                cfs_list_del(&ent->rpe_link);
                 free(ent);
         }
 }
 
 void
-lst_reset_rpcent(struct list_head *head)
+lst_reset_rpcent(cfs_list_t *head)
 {
         lstcon_rpc_ent_t *ent;
 
@@ -417,7 +417,7 @@ lst_reset_rpcent(struct list_head *head)
 }
 
 int
-lst_alloc_rpcent(struct list_head *head, int count, int offset)
+lst_alloc_rpcent(cfs_list_t *head, int count, int offset)
 {
         lstcon_rpc_ent_t *ent;
         int               i;
@@ -434,14 +434,14 @@ lst_alloc_rpcent(struct list_head *head, int count, int offset)
                 ent->rpe_sid      = LST_INVALID_SID;
                 ent->rpe_peer.nid = LNET_NID_ANY;
                 ent->rpe_peer.pid = LNET_PID_ANY;
-                list_add(&ent->rpe_link, head);
+                cfs_list_add(&ent->rpe_link, head);
         }
 
         return 0;
 }
 
 void
-lst_print_transerr(struct list_head *head, char *optstr)
+lst_print_transerr(cfs_list_t *head, char *optstr)
 {
         lstcon_rpc_ent_t  *ent;
 
@@ -470,7 +470,7 @@ int lst_info_group_ioctl(char *name, lstcon_ndlist_ent_t *gent,
                          int *idx, int *count, lstcon_node_ent_t *dents);
 
 int lst_query_batch_ioctl(char *batch, int test, int server,
-                          int timeout, struct list_head *head);
+                          int timeout, cfs_list_t *head);
 
 int
 lst_ioctl(unsigned int opc, void *buf, int len)
@@ -704,7 +704,7 @@ jt_lst_end_session(int argc, char **argv)
 
 int
 lst_ping_ioctl(char *str, int type, int timeout,
-               int count, lnet_process_id_t *ids, struct list_head *head)
+               int count, lnet_process_id_t *ids, cfs_list_t *head)
 {
         lstio_debug_args_t args = {0};
 
@@ -765,7 +765,7 @@ lst_get_node_count(int type, char *str, int *countp, lnet_process_id_t **idspp)
 int
 jt_lst_ping(int argc,  char **argv)
 {
-        struct list_head   head;
+        cfs_list_t         head;
         lnet_process_id_t *ids = NULL;
         lstcon_rpc_ent_t  *ent = NULL;
         char              *str = NULL;
@@ -898,7 +898,7 @@ out:
 
 int
 lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
-                     struct list_head *resultp)
+                     cfs_list_t *resultp)
 {
         lstio_group_nodes_args_t args = {0};
 
@@ -927,7 +927,7 @@ lst_add_group_ioctl (char *name)
 int
 jt_lst_add_group(int argc, char **argv)
 {
-        struct list_head   head;
+        cfs_list_t         head;
         lnet_process_id_t *ids;
         char              *name;
         int                count;
@@ -1063,7 +1063,7 @@ jt_lst_del_group(int argc, char **argv)
 
 int
 lst_update_group_ioctl(int opc, char *name, int clean, int count,
-                       lnet_process_id_t *ids, struct list_head *resultp)
+                       lnet_process_id_t *ids, cfs_list_t *resultp)
 {
         lstio_group_update_args_t args = {0};
 
@@ -1082,7 +1082,7 @@ lst_update_group_ioctl(int opc, char *name, int clean, int count,
 int
 jt_lst_update_group(int argc, char **argv)
 {
-        struct list_head   head;
+        cfs_list_t         head;
         lnet_process_id_t *ids = NULL;
         char              *str = NULL;
         char              *grp = NULL;
@@ -1413,7 +1413,7 @@ jt_lst_list_group(int argc, char **argv)
 
 int
 lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
-                int timeout, struct list_head *resultp)
+                int timeout, cfs_list_t *resultp)
 {
         lstio_stat_args_t args = {0};
 
@@ -1429,11 +1429,11 @@ lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
 }
 
 typedef struct {
-        struct list_head        srp_link;
+        cfs_list_t              srp_link;
         int                     srp_count;
         char                   *srp_name;
         lnet_process_id_t      *srp_ids;
-        struct list_head        srp_result[2];
+        cfs_list_t              srp_result[2];
 } lst_stat_req_param_t;
 
 static void
@@ -1691,10 +1691,10 @@ lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
 }
 
 void
-lst_print_stat(char *name, struct list_head *resultp,
+lst_print_stat(char *name, cfs_list_t *resultp,
                int idx, int lnet, int bwrt, int rdwr, int type)
 {
-        struct list_head  tmp[2];
+        cfs_list_t        tmp[2];
         lstcon_rpc_ent_t *new;
         lstcon_rpc_ent_t *old;
         sfw_counters_t   *sfwk_new;
@@ -1712,14 +1712,16 @@ lst_print_stat(char *name, struct list_head *resultp,
 
         memset(&lnet_stat_result, 0, sizeof(lnet_stat_result));
 
-        while (!list_empty(&resultp[idx])) {
-                if (list_empty(&resultp[1 - idx])) {
+        while (!cfs_list_empty(&resultp[idx])) {
+                if (cfs_list_empty(&resultp[1 - idx])) {
                         fprintf(stderr, "Group is changed, re-run stat\n");
                         break;
                 }
 
-                new = list_entry(resultp[idx].next, lstcon_rpc_ent_t, rpe_link);
-                old = list_entry(resultp[1 - idx].next, lstcon_rpc_ent_t, rpe_link);
+                new = cfs_list_entry(resultp[idx].next, lstcon_rpc_ent_t,
+                                     rpe_link);
+                old = cfs_list_entry(resultp[1 - idx].next, lstcon_rpc_ent_t,
+                                     rpe_link);
 
                 /* first time get stats result, can't calculate diff */
                 if (new->rpe_peer.nid == LNET_NID_ANY)
@@ -1731,11 +1733,11 @@ lst_print_stat(char *name, struct list_head *resultp,
                         break;
                 }
 
-                list_del(&new->rpe_link);
-                list_add_tail(&new->rpe_link, &tmp[idx]);
+                cfs_list_del(&new->rpe_link);
+                cfs_list_add_tail(&new->rpe_link, &tmp[idx]);
 
-                list_del(&old->rpe_link);
-                list_add_tail(&old->rpe_link, &tmp[1 - idx]);
+                cfs_list_del(&old->rpe_link);
+                cfs_list_add_tail(&old->rpe_link, &tmp[1 - idx]);
 
                 if (new->rpe_rpc_errno != 0 || new->rpe_fwk_errno != 0 ||
                     old->rpe_rpc_errno != 0 || old->rpe_fwk_errno != 0) {
@@ -1762,8 +1764,8 @@ lst_print_stat(char *name, struct list_head *resultp,
                 lst_cal_lnet_stat(delta, lnet_new, lnet_old);
         }
 
-        list_splice(&tmp[idx], &resultp[idx]);
-        list_splice(&tmp[1 - idx], &resultp[1 - idx]);
+        cfs_list_splice(&tmp[idx], &resultp[idx]);
+        cfs_list_splice(&tmp[1 - idx], &resultp[1 - idx]);
 
         if (errcount > 0)
                 fprintf(stdout, "Failed to stat on %d nodes\n", errcount);
@@ -1777,7 +1779,7 @@ lst_print_stat(char *name, struct list_head *resultp,
 int
 jt_lst_stat(int argc, char **argv)
 {
-        struct list_head      head;
+        cfs_list_t            head;
         lst_stat_req_param_t *srp;
         time_t                last    = 0;
         int                   optidx  = 0;
@@ -1888,7 +1890,7 @@ jt_lst_stat(int argc, char **argv)
                 if (rc != 0)
                         goto out;
 
-                list_add_tail(&srp->srp_link, &head);
+                cfs_list_add_tail(&srp->srp_link, &head);
         }
 
         while (1) {
@@ -1922,10 +1924,10 @@ jt_lst_stat(int argc, char **argv)
         }
 
 out:
-        while (!list_empty(&head)) {
-                srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
+        while (!cfs_list_empty(&head)) {
+                srp = cfs_list_entry(head.next, lst_stat_req_param_t, srp_link);
 
-                list_del(&srp->srp_link);
+                cfs_list_del(&srp->srp_link);
                 lst_stat_req_param_free(srp);
         }
 
@@ -1935,7 +1937,7 @@ out:
 int
 jt_lst_show_error(int argc, char **argv)
 {
-        struct list_head      head;
+        cfs_list_t            head;
         lst_stat_req_param_t *srp;
         lstcon_rpc_ent_t     *ent;
         sfw_counters_t       *sfwk;
@@ -1988,7 +1990,7 @@ jt_lst_show_error(int argc, char **argv)
                 if (rc != 0)
                         goto out;
 
-                list_add_tail(&srp->srp_link, &head);
+                cfs_list_add_tail(&srp->srp_link, &head);
         }
 
         cfs_list_for_each_entry_typed(srp, &head, lst_stat_req_param_t,
@@ -2051,10 +2053,10 @@ jt_lst_show_error(int argc, char **argv)
                 fprintf(stdout, "Total %d error nodes in %s\n", ecount, srp->srp_name);
         }
 out:
-        while (!list_empty(&head)) {
-                srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
+        while (!cfs_list_empty(&head)) {
+                srp = cfs_list_entry(head.next, lst_stat_req_param_t, srp_link);
 
-                list_del(&srp->srp_link);
+                cfs_list_del(&srp->srp_link);
                 lst_stat_req_param_free(srp);
         }
 
@@ -2108,7 +2110,7 @@ jt_lst_add_batch(int argc, char **argv)
 }
 
 int
-lst_start_batch_ioctl (char *name, int timeout, struct list_head *resultp)
+lst_start_batch_ioctl (char *name, int timeout, cfs_list_t *resultp)
 {
         lstio_batch_run_args_t args = {0};
 
@@ -2124,7 +2126,7 @@ lst_start_batch_ioctl (char *name, int timeout, struct list_head *resultp)
 int
 jt_lst_start_batch(int argc, char **argv)
 {
-        struct list_head  head;
+        cfs_list_t        head;
         char             *batch;
         int               optidx  = 0;
         int               timeout = 0;
@@ -2211,7 +2213,7 @@ jt_lst_start_batch(int argc, char **argv)
 }
 
 int
-lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
+lst_stop_batch_ioctl(char *name, int force, cfs_list_t *resultp)
 {
         lstio_batch_stop_args_t args = {0};
 
@@ -2227,7 +2229,7 @@ lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
 int
 jt_lst_stop_batch(int argc, char **argv)
 {
-        struct list_head  head;
+        cfs_list_t        head;
         char             *batch;
         int               force = 0;
         int               optidx;
@@ -2580,7 +2582,7 @@ loop:
 
 int
 lst_query_batch_ioctl(char *batch, int test, int server,
-                      int timeout, struct list_head *head)
+                      int timeout, cfs_list_t *head)
 {
         lstio_batch_query_args_t args = {0};
 
@@ -2596,7 +2598,7 @@ lst_query_batch_ioctl(char *batch, int test, int server,
 }
 
 void
-lst_print_tsb_verbose(struct list_head *head,
+lst_print_tsb_verbose(cfs_list_t *head,
                       int active, int idle, int error)
 {
         lstcon_rpc_ent_t *ent;
@@ -2624,23 +2626,23 @@ int
 jt_lst_query_batch(int argc, char **argv)
 {
         lstcon_test_batch_ent_t ent;
-        struct list_head     head;
-        char                *batch   = NULL;
-        time_t               last    = 0;
-        int                  optidx  = 0;
-        int                  verbose = 0;
-        int                  server  = 0;
-        int                  timeout = 5; /* default 5 seconds */
-        int                  delay   = 5; /* default 5 seconds */
-        int                  loop    = 1; /* default 1 loop */
-        int                  active  = 0;
-        int                  error   = 0;
-        int                  idle    = 0;
-        int                  count   = 0;
-        int                  test    = 0;
-        int                  rc      = 0;
-        int                  c       = 0;
-        int                  i;
+        cfs_list_t              head;
+        char                   *batch   = NULL;
+        time_t                  last    = 0;
+        int                     optidx  = 0;
+        int                     verbose = 0;
+        int                     server  = 0;
+        int                     timeout = 5; /* default 5 seconds */
+        int                     delay   = 5; /* default 5 seconds */
+        int                     loop    = 1; /* default 1 loop */
+        int                     active  = 0;
+        int                     error   = 0;
+        int                     idle    = 0;
+        int                     count   = 0;
+        int                     test    = 0;
+        int                     rc      = 0;
+        int                     c       = 0;
+        int                     i;
 
         static struct option query_batch_opts[] =
         {
@@ -2936,7 +2938,7 @@ lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 int
 lst_add_test_ioctl(char *batch, int type, int loop, int concur,
                    int dist, int span, char *sgrp, char *dgrp,
-                   void *param, int plen, int *retp, struct list_head *resultp)
+                   void *param, int plen, int *retp, cfs_list_t *resultp)
 {
         lstio_test_args_t args = {0};
 
@@ -2964,25 +2966,25 @@ lst_add_test_ioctl(char *batch, int type, int loop, int concur,
 int
 jt_lst_add_test(int argc, char **argv)
 {
-        struct list_head  head;
-        char             *batch  = NULL;
-        char             *test   = NULL;
-        char             *dstr   = NULL;
-        char             *from   = NULL;
-        char             *to     = NULL;
-        void             *param  = NULL;
-        int               optidx = 0;
-        int               concur = 1;
-        int               loop   = -1;
-        int               dist   = 1;
-        int               span   = 1;
-        int               plen   = 0;
-        int               fcount = 0;
-        int               tcount = 0;
-        int               ret    = 0;
-        int               type;
-        int               rc;
-        int               c;
+        cfs_list_t    head;
+        char         *batch  = NULL;
+        char         *test   = NULL;
+        char         *dstr   = NULL;
+        char         *from   = NULL;
+        char         *to     = NULL;
+        void         *param  = NULL;
+        int           optidx = 0;
+        int           concur = 1;
+        int           loop   = -1;
+        int           dist   = 1;
+        int           span   = 1;
+        int           plen   = 0;
+        int           fcount = 0;
+        int           tcount = 0;
+        int           ret    = 0;
+        int           type;
+        int           rc;
+        int           c;
 
         static struct option add_test_opts[] =
         {

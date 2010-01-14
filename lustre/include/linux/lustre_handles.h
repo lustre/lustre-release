@@ -52,8 +52,9 @@
 
 # ifdef HAVE_RCU
 #  include <linux/rcupdate.h> /* for rcu_head{} */
+typedef struct rcu_head cfs_rcu_head_t;
 # else
-struct rcu_head { };
+typedef struct cfs_rcu_head { } cfs_rcu_head_t;
 # endif
 
 #endif /* ifdef __KERNEL__ */

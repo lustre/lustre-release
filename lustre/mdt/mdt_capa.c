@@ -49,7 +49,7 @@
 
 static inline void set_capa_key_expiry(struct mdt_device *mdt)
 {
-        mdt->mdt_ck_expiry = jiffies + mdt->mdt_ck_timeout * HZ;
+        mdt->mdt_ck_expiry = jiffies + mdt->mdt_ck_timeout * CFS_HZ;
 }
 
 static void make_capa_key(struct lustre_capa_key *key,
@@ -249,17 +249,17 @@ static int mdt_ck_thread_main(void *args)
                 next = mdt->mdt_child;
                 rc = next->md_ops->mdo_update_capa_key(&env, next, tmp);
                 if (!rc) {
-                        spin_lock(&capa_lock);
+                        cfs_spin_lock(&capa_lock);
                         *bkey = *rkey;
                         *rkey = *tmp;
-                        spin_unlock(&capa_lock);
+                        cfs_spin_unlock(&capa_lock);
 
                         rc = write_capa_keys(&env, mdt, mdt->mdt_capa_keys);
                         if (rc) {
-                                spin_lock(&capa_lock);
+                                cfs_spin_lock(&capa_lock);
                                 *rkey = *bkey;
                                 memset(bkey, 0, sizeof(*bkey));
-                                spin_unlock(&capa_lock);
+                                cfs_spin_unlock(&capa_lock);
                         } else {
                                 set_capa_key_expiry(mdt);
                                 DEBUG_CAPA_KEY(D_SEC, rkey, "new");
@@ -268,7 +268,7 @@ static int mdt_ck_thread_main(void *args)
                 if (rc) {
                         DEBUG_CAPA_KEY(D_ERROR, rkey, "update failed for");
                         /* next retry is in 300 sec */
-                        mdt->mdt_ck_expiry = jiffies + 300 * HZ;
+                        mdt->mdt_ck_expiry = jiffies + 300 * CFS_HZ;
                 }
 
                 cfs_timer_arm(&mdt->mdt_ck_timer, mdt->mdt_ck_expiry);
@@ -288,13 +288,13 @@ int mdt_ck_thread_start(struct mdt_device *mdt)
 
         cfs_waitq_init(&thread->t_ctl_waitq);
         rc = cfs_kernel_thread(mdt_ck_thread_main, mdt,
-                           (CLONE_VM | CLONE_FILES));
+                               (CLONE_VM | CLONE_FILES));
         if (rc < 0) {
                 CERROR("cannot start mdt_ck thread, rc = %d\n", rc);
                 return rc;
         }
 
-        cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
+        l_cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
         return 0;
 }
 
@@ -307,5 +307,5 @@ void mdt_ck_thread_stop(struct mdt_device *mdt)
 
         thread->t_flags = SVC_STOPPING;
         cfs_waitq_signal(&thread->t_ctl_waitq);
-        cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+        l_cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 }

@@ -73,9 +73,11 @@ LNetMEAttach(unsigned int portal,
         lnet_initialise_handle (&me->me_lh, LNET_COOKIE_TYPE_ME);
 
         if (pos == LNET_INS_AFTER)
-                list_add_tail(&me->me_list, &(the_lnet.ln_portals[portal].ptl_ml));
+                cfs_list_add_tail(&me->me_list,
+                                  &(the_lnet.ln_portals[portal].ptl_ml));
         else
-                list_add(&me->me_list, &(the_lnet.ln_portals[portal].ptl_ml));
+                cfs_list_add(&me->me_list,
+                             &(the_lnet.ln_portals[portal].ptl_ml));
 
         lnet_me2handle(handle, me);
 
@@ -121,9 +123,9 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         lnet_initialise_handle (&new_me->me_lh, LNET_COOKIE_TYPE_ME);
 
         if (pos == LNET_INS_AFTER)
-                list_add(&new_me->me_list, &current_me->me_list);
+                cfs_list_add(&new_me->me_list, &current_me->me_list);
         else
-                list_add_tail(&new_me->me_list, &current_me->me_list);
+                cfs_list_add_tail(&new_me->me_list, &current_me->me_list);
 
         lnet_me2handle(handle, new_me);
 
@@ -168,7 +170,7 @@ LNetMEUnlink(lnet_handle_me_t meh)
 void
 lnet_me_unlink(lnet_me_t *me)
 {
-        list_del (&me->me_list);
+        cfs_list_del (&me->me_list);
 
         if (me->me_md != NULL) {
                 me->me_md->md_me = NULL;
@@ -191,8 +193,8 @@ lib_me_dump(lnet_me_t *me)
 
         CWARN("\tMD\t= %p\n", me->md);
         CWARN("\tprev\t= %p\n",
-              list_entry(me->me_list.prev, lnet_me_t, me_list));
+              cfs_list_entry(me->me_list.prev, lnet_me_t, me_list));
         CWARN("\tnext\t= %p\n",
-              list_entry(me->me_list.next, lnet_me_t, me_list));
+              cfs_list_entry(me->me_list.next, lnet_me_t, me_list));
 }
 #endif

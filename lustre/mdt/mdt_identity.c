@@ -87,7 +87,7 @@ static void mdt_identity_entry_free(struct upcall_cache *cache,
         struct md_identity *identity = &entry->u.identity;
 
         if (identity->mi_ginfo) {
-                put_group_info(identity->mi_ginfo);
+                cfs_put_group_info(identity->mi_ginfo);
                 identity->mi_ginfo = NULL;
         }
 
@@ -125,9 +125,9 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
         if (unlikely(!upcall))
                 RETURN(-ENOMEM);
 
-        read_lock(&cache->uc_upcall_rwlock);
+        cfs_read_lock(&cache->uc_upcall_rwlock);
         memcpy(upcall, cache->uc_upcall, size - 1);
-        read_unlock(&cache->uc_upcall_rwlock);
+        cfs_read_unlock(&cache->uc_upcall_rwlock);
         upcall[size - 1] = 0;
         if (unlikely(!strcmp(upcall, "NONE"))) {
                 CERROR("no upcall set\n");
@@ -163,7 +163,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 {
         struct md_identity *identity = &entry->u.identity;
         struct identity_downcall_data *data = args;
-        struct group_info *ginfo;
+        cfs_group_info_t *ginfo;
         struct md_perm *perms = NULL;
         int size, i;
         ENTRY;
@@ -172,7 +172,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
         if (data->idd_ngroups > NGROUPS_MAX)
                 RETURN(-E2BIG);
 
-        ginfo = groups_alloc(data->idd_ngroups);
+        ginfo = cfs_groups_alloc(data->idd_ngroups);
         if (!ginfo) {
                 CERROR("failed to alloc %d groups\n", data->idd_ngroups);
                 RETURN(-ENOMEM);
@@ -187,7 +187,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
                 if (!perms) {
                         CERROR("failed to alloc %d permissions\n",
                                data->idd_nperms);
-                        put_group_info(ginfo);
+                        cfs_put_group_info(ginfo);
                         RETURN(-ENOMEM);
                 }
 
