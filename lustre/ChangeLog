@@ -10,9 +10,7 @@ tbd Sun Microsystems, Inc.
 	  2.6.16 - 2.6.30 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.6.sun1
 	* The async journal commit feature (bug 19128) and the cancel
-	  lock before replay feature (bug 16774) are enabled by default
-	  for testing purpose, but will be disabled in the final 1.8.2
-	  release.
+	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : enhancement
 Bugzilla   : 21511/19848
