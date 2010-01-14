@@ -1087,11 +1087,12 @@ out_ucred:
                         rc = rc2;
                 if (rc != 0)
                         req->rq_status = rc;
+        } else {
+                mds_shrink_body_reply(req, offset, REPLY_REC_OFF);
         }
         mds_exit_ucred(&uc, mds);
 
 cleanup_exit:
-        mds_shrink_body_reply(req, offset, REPLY_REC_OFF);
         return rc;
 }
 

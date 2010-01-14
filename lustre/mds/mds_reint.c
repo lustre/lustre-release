@@ -1804,9 +1804,13 @@ static void mds_shrink_reply(struct ptlrpc_request *req,
         /* LSM and cookie is always placed after mds_body */
         reply_body =  lustre_msg_buf(req->rq_repmsg, reply_mdoff,
                                      sizeof(*reply_body));
+        if (reply_body == NULL)
+                /* if there is no mds_body, no point in shrinking the reply */
+                 return;
+
         reply_mdoff++;
 
-        if (reply_body && (have_md || have_acl)) {
+        if (have_md || have_acl) {
                 if (reply_body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) {
                         md_size = reply_body->eadatasize;
                 } else if (reply_body->valid & OBD_MD_LINKNAME)
