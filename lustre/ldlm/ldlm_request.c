@@ -202,8 +202,8 @@ noreproc:
                    cfs_time_current_sec() - lock->l_last_activity);
 
         /* Update our time estimate */
-        at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
-               cfs_time_current_sec() - lock->l_last_activity);
+        at_measured(&lock->l_resource->lr_namespace->ns_at_estimate,
+                    cfs_time_current_sec() - lock->l_last_activity);
 
         RETURN(0);
 }

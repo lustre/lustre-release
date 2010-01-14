@@ -390,7 +390,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
               (MSG_RESENT | MSG_REPLAY | MSG_LAST_REPLAY))) {
                 /* early replies, errors and recovery requests don't count
                  * toward our service time estimate */
-                int oldse = at_add(&svc->srv_at_estimate, service_time);
+                int oldse = at_measured(&svc->srv_at_estimate, service_time);
                 if (oldse != 0)
                         DEBUG_REQ(D_ADAPTTO, req,
                                   "svc %s changed estimate from %d to %d",

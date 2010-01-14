@@ -215,7 +215,7 @@ static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
 static inline int at_get(struct adaptive_timeout *at) {
         return at->at_current;
 }
-int at_add(struct adaptive_timeout *at, unsigned int val);
+int at_measured(struct adaptive_timeout *at, unsigned int val);
 int import_at_get_index(struct obd_import *imp, int portal);
 extern unsigned int at_max;
 #define AT_OFF (at_max == 0)

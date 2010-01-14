@@ -841,8 +841,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         /* Server-side enqueue wait time estimate, used in
             __ldlm_add_waiting_lock to set future enqueue timers */
         if (total_enqueue_wait < ldlm_get_enq_timeout(lock))
-                at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
-                       total_enqueue_wait);
+                at_measured(&lock->l_resource->lr_namespace->ns_at_estimate,
+                            total_enqueue_wait);
         else
                 /* bz18618. Don't add lock enqueue time we spend waiting for a
                    previous callback to fail. Locks waiting legitimately will

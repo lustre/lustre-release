@@ -230,7 +230,7 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
         idx = import_at_get_index(req->rq_import, req->rq_request_portal);
         /* max service estimates are tracked on the server side,
            so just keep minimal history here */
-        oldse = at_add(&at->iat_service_estimate[idx], serv_est);
+        oldse = at_measured(&at->iat_service_estimate[idx], serv_est);
         if (oldse != 0)
                 CDEBUG(D_ADAPTTO, "The RPC service estimate for %s ptl %d "
                        "has changed from %d to %d\n",
@@ -261,7 +261,7 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
                 CWARN("Reported service time %u > total measured time %ld\n",
                       service_time, now - req->rq_sent);
 
-        oldnl = at_add(&at->iat_net_latency, nl);
+        oldnl = at_measured(&at->iat_net_latency, nl);
         if (oldnl != 0)
                 CDEBUG(D_ADAPTTO, "The network latency for %s (nid %s) "
                        "has changed from %d to %d\n",

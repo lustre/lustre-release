@@ -751,27 +751,34 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
         if (req->rq_export &&
             lustre_msg_get_flags(req->rq_reqmsg) &
             (MSG_REPLAY | MSG_LAST_REPLAY)) {
-                /* Use at_extra as early reply period for recovery requests
-                 * but keep it not longer than recovery time / 4 */
-                at_add(&svc->srv_at_estimate,
-                       min(at_extra,
-                           req->rq_export->exp_obd->obd_recovery_timeout / 4));
-                newdl = cfs_time_current_sec();
+                /* During recovery, we don't want to send too many early
+                 * replies, but on the other hand we want to make sure the
+                 * client has enough time to resend if the rpc is lost. So
+                 * during the recovery period send at least 4 early replies,
+                 * spacing them every at_extra if we can. at_estimate should
+                 * always equal this fixed value during recovery. */
+                at_measured(&svc->srv_at_estimate, min(at_extra,
+                            req->rq_export->exp_obd->obd_recovery_timeout / 4));
         } else {
                 /* Fake our processing time into the future to ask the
                  * clients for some extra amount of time */
-                at_add(&svc->srv_at_estimate, at_extra);
-                newdl = req->rq_arrival_time.tv_sec;
+                at_measured(&svc->srv_at_estimate, at_extra +
+                            cfs_time_current_sec() -
+                            req->rq_arrival_time.tv_sec);
+
+                /* Check to see if we've actually increased the deadline -
+                 * we may be past adaptive_max */
+                if (req->rq_deadline >= req->rq_arrival_time.tv_sec +
+                    at_get(&svc->srv_at_estimate)) {
+                        DEBUG_REQ(D_WARNING, req, "Couldn't add any time "
+                                  "(%ld/%ld), not sending early reply\n",
+                                  olddl, req->rq_arrival_time.tv_sec +
+                                  at_get(&svc->srv_at_estimate) -
+                                  cfs_time_current_sec());
+                        RETURN(-ETIMEDOUT);
+                }
         }
-        newdl += at_get(&svc->srv_at_estimate);
-        if (req->rq_deadline >= newdl) {
-                /* We're not adding any time, no need to send an early reply
-                   (e.g. maybe at adaptive_max) */
-                DEBUG_REQ(D_WARNING, req, "Couldn't add any time "
-                          "(%ld/%ld), not sending early reply\n",
-                          olddl, newdl - cfs_time_current_sec());
-                RETURN(-ETIMEDOUT);
-        }
+        newdl = cfs_time_current_sec() + at_get(&svc->srv_at_estimate);
 
         OBD_ALLOC(reqcopy, sizeof *reqcopy);
         if (reqcopy == NULL)
