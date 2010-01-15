@@ -333,9 +333,8 @@ int LL_PROC_PROTO(proc_console_backoff)
 
 int LL_PROC_PROTO(libcfs_force_lbug)
 {
-
-        LBUG();
-
+        if (write)
+                LBUG();
 }
 
 static cfs_sysctl_table_t lnet_table[] = {
