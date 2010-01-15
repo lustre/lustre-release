@@ -335,6 +335,7 @@ int LL_PROC_PROTO(libcfs_force_lbug)
 {
         if (write)
                 LBUG();
+        return 0;
 }
 
 static cfs_sysctl_table_t lnet_table[] = {
