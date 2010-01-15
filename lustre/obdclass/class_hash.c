@@ -127,8 +127,8 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
         lh->lh_ops = ops;
         lh->lh_flags = flags;
         if (cur_bits != max_bits && (lh->lh_flags & LH_REHASH) == 0)
-                CDEBUG(D_INFO, "Rehash is disabled, ignore max_bits %d\n",
-                               max_bits);
+                CERROR("Rehash is disabled for %s, ignore max_bits %d\n",
+                       name, max_bits);
 
         /* theta * 1000 */
         __lustre_hash_set_theta(lh, 500, 2000);
