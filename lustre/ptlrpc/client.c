@@ -1088,7 +1088,7 @@ static int after_reply(struct ptlrpc_request *req)
                 ptlrpc_free_committed(imp);
 
                 if (req->rq_transno > imp->imp_peer_committed_transno)
-                        ptlrpc_pinger_sending_on_import(imp);
+                        ptlrpc_pinger_commit_expected(imp);
                 spin_unlock(&imp->imp_lock);
         }
 
