@@ -88,7 +88,7 @@ extern unsigned int obd_alloc_fail_rate;
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* a bit more than maximal journal commit time in seconds */
-#define PING_INTERVAL_SHORT 7
+#define PING_INTERVAL_SHORT min(PING_INTERVAL, 7U)
 /* maximum server ping service time excluding network latency */
 #define PING_SVC_TIMEOUT 15
 /* Client may skip 1 ping; we must wait at least 2.5. But for multiple
