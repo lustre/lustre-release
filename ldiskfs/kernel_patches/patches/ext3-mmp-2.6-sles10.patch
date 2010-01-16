@@ -1,7 +1,7 @@
-Index: linux-2.6.16.60-0.37/fs/ext3/super.c
+Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- linux-2.6.16.60-0.37.orig/fs/ext3/super.c
-+++ linux-2.6.16.60-0.37/fs/ext3/super.c
+--- linux-stage.orig/fs/ext3/super.c
++++ linux-stage/fs/ext3/super.c
 @@ -36,6 +36,8 @@
  #include <linux/namei.h>
  #include <linux/quotaops.h>
@@ -11,6 +11,24 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  
  #include <asm/uaccess.h>
  
+@@ -84,7 +86,7 @@ handle_t *ext3_journal_start_sb(struct s
+ 	 * take the FS itself readonly cleanly. */
+ 	journal = EXT3_SB(sb)->s_journal;
+ 	if (is_journal_aborted(journal)) {
+-		ext3_abort(sb, __FUNCTION__,
++		ext3_abort(sb, __func__,
+ 			   "Detected aborted journal");
+ 		return ERR_PTR(-EROFS);
+ 	}
+@@ -305,7 +307,7 @@ void ext3_update_dynamic_rev(struct supe
+ 	if (le32_to_cpu(es->s_rev_level) > EXT3_GOOD_OLD_REV)
+ 		return;
+ 
+-	ext3_warning(sb, __FUNCTION__,
++	ext3_warning(sb, __func__,
+ 		     "updating to rev %d because of new feature flag, "
+ 		     "running e2fsck is recommended",
+ 		     EXT3_DYNAMIC_REV);
 @@ -436,6 +438,8 @@ static void ext3_put_super (struct super
  		invalidate_bdev(sbi->journal_bdev, 0);
  		ext3_blkdev_remove(sbi);
@@ -20,7 +38,34 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  	if (sbi->s_dev_proc) {
  		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
  		sbi->s_dev_proc = NULL;
-@@ -1525,6 +1529,329 @@ static unsigned long descriptor_loc(stru
+@@ -1357,7 +1361,7 @@ static int ext3_check_descriptors (struc
+ 			return 0;
+ 		}
+ 		if (!ext3_group_desc_csum_verify(sbi, i, gdp)) {
+-			ext3_error(sb, __FUNCTION__,
++			ext3_error(sb, __func__,
+ 				   "Checksum for group %d failed (%u!=%u)\n", i,
+ 				   le16_to_cpu(ext3_group_desc_csum(sbi,i,gdp)),
+ 				   le16_to_cpu(gdp->bg_checksum));
+@@ -1446,7 +1450,7 @@ static void ext3_orphan_cleanup (struct 
+ 		if (inode->i_nlink) {
+ 			printk(KERN_DEBUG
+ 				"%s: truncating inode %ld to %Ld bytes\n",
+-				__FUNCTION__, inode->i_ino, inode->i_size);
++				__func__, inode->i_ino, inode->i_size);
+ 			jbd_debug(2, "truncating inode %ld to %Ld bytes\n",
+ 				  inode->i_ino, inode->i_size);
+ 			ext3_truncate(inode);
+@@ -1454,7 +1458,7 @@ static void ext3_orphan_cleanup (struct 
+ 		} else {
+ 			printk(KERN_DEBUG
+ 				"%s: deleting unreferenced inode %ld\n",
+-				__FUNCTION__, inode->i_ino);
++				__func__, inode->i_ino);
+ 			jbd_debug(2, "deleting unreferenced inode %ld\n",
+ 				  inode->i_ino);
+ 			nr_orphans++;
+@@ -1525,6 +1529,346 @@ static unsigned long descriptor_loc(stru
  	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
  }
  
@@ -74,7 +119,7 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +	}
 +#endif
 +	if (!*bh) {
-+		ext3_warning(sb, __FUNCTION__,
++		ext3_warning(sb, __func__,
 +			     "Error while reading MMP block %lu", mmp_block);
 +		return -EIO;
 +	}
@@ -152,21 +197,21 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +		 * (s_mmp_update_interval * 60) seconds.
 +		 */
 +		if (retval && (failed_writes % 60) == 0) {
-+			ext3_error(sb, __FUNCTION__,
++			ext3_error(sb, __func__,
 +				   "Error writing to MMP block");
 +			failed_writes++;
 +		}
 +
 +		if (!(le32_to_cpu(es->s_feature_incompat) &
 +		    EXT3_FEATURE_INCOMPAT_MMP)) {
-+			ext3_warning(sb, __FUNCTION__, "kmmpd being stopped "
++			ext3_warning(sb, __func__, "kmmpd being stopped "
 +				     "since MMP feature has been disabled.");
 +			EXT3_SB(sb)->s_mmp_tsk = 0;
 +			goto failed;
 +		}
 +
 +		if (sb->s_flags & MS_RDONLY) {
-+			ext3_warning(sb, __FUNCTION__, "kmmpd being stopped "
++			ext3_warning(sb, __func__, "kmmpd being stopped "
 +				     "since filesystem has been remounted as "
 +				     "readonly.");
 +			EXT3_SB(sb)->s_mmp_tsk = 0;
@@ -198,7 +243,7 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +			if (mmp->mmp_time != mmp_check->mmp_time ||
 +			    memcmp(mmp->mmp_nodename, mmp_check->mmp_nodename,
 +				   sizeof(mmp->mmp_nodename)))
-+				dump_mmp_msg(sb, mmp_check, __FUNCTION__,
++				dump_mmp_msg(sb, mmp_check, __func__,
 +					     "Error while updating MMP info. "
 +					     "The filesystem seems to have "
 +					     "been multiply mounted.");
@@ -254,11 +299,12 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +	struct mmp_struct *mmp = NULL;
 +	u32 seq;
 +	unsigned int mmp_check_interval = le16_to_cpu(es->s_mmp_update_interval);
++	unsigned int wait_time = 0;
 +	int retval;
 +
 +	if (mmp_block < le32_to_cpu(es->s_first_data_block) ||
 +	    mmp_block >= le32_to_cpu(es->s_blocks_count)) {
-+		ext3_warning(sb, __FUNCTION__,
++		ext3_warning(sb, __func__,
 +			     "Invalid MMP block in superblock");
 +		goto failed;
 +	}
@@ -284,19 +330,31 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +		goto skip;
 +
 +	if (seq == EXT3_MMP_SEQ_FSCK) {
-+		dump_mmp_msg(sb, mmp, __FUNCTION__,
++		dump_mmp_msg(sb, mmp, __func__,
 +			     "fsck is running on the filesystem");
 +		goto failed;
 +	}
 +
-+	schedule_timeout_uninterruptible(HZ * (2 * mmp_check_interval + 1));
++	wait_time = min(mmp_check_interval * 2 + 1,
++		mmp_check_interval + 60);
++
++	/* Print MMP interval if more than 20 secs. */
++	if (wait_time > EXT3_MMP_MIN_CHECK_INTERVAL * 4)
++		ext3_warning(sb, __func__, "MMP interval %u higher than "
++			     "expected, please wait.\n", wait_time * 2);
++
++	if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
++		ext3_warning(sb, __func__, "MMP startup interrupted, failing "
++			     "mount\n");
++		goto failed;
++	}
 +
 +	retval = read_mmp_block(sb, &bh, mmp_block);
 +	if (retval)
 +		goto failed;
 +	mmp = (struct mmp_struct *)(bh->b_data);
 +	if (seq != le32_to_cpu(mmp->mmp_seq)) {
-+		dump_mmp_msg(sb, mmp, __FUNCTION__,
++		dump_mmp_msg(sb, mmp, __func__,
 +			     "Device is already active on another node.");
 +		goto failed;
 +	}
@@ -314,14 +372,18 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +	/*
 +	 * wait for MMP interval and check mmp_seq.
 +	 */
-+	schedule_timeout_uninterruptible(HZ * (2 * mmp_check_interval + 1));
++	if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
++		ext3_warning(sb, __func__, "MMP startup interrupted, failing "
++			     "mount\n");
++		goto failed;
++	}
 +
 +	retval = read_mmp_block(sb, &bh, mmp_block);
 +	if (retval)
 +		goto failed;
 +	mmp = (struct mmp_struct *)(bh->b_data);
 +	if (seq != le32_to_cpu(mmp->mmp_seq)) {
-+		dump_mmp_msg(sb, mmp, __FUNCTION__,
++		dump_mmp_msg(sb, mmp, __func__,
 +			     "Device is already active on another node.");
 +		goto failed;
 +	}
@@ -334,7 +396,7 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +					     MINOR(sb->s_dev));
 +	if (IS_ERR(EXT3_SB(sb)->s_mmp_tsk)) {
 +		EXT3_SB(sb)->s_mmp_tsk = 0;
-+		ext3_warning(sb, __FUNCTION__, "Unable to create kmmpd thread "
++		ext3_warning(sb, __func__, "Unable to create kmmpd thread "
 +			     "for %s.", sb->s_id);
 +		goto failed;
 +	}
@@ -350,7 +412,7 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1849,6 +2176,11 @@ static int ext3_fill_super (struct super
+@@ -1848,6 +2192,11 @@ static int ext3_fill_super (struct super
  			  EXT3_HAS_INCOMPAT_FEATURE(sb,
  				    EXT3_FEATURE_INCOMPAT_RECOVER));
  
@@ -362,7 +424,7 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -1993,6 +2325,8 @@ cantfind_ext3:
+@@ -1992,6 +2341,8 @@ cantfind_ext3:
  failed_mount3:
  	journal_destroy(sbi->s_journal);
  failed_mount2:
@@ -371,7 +433,19 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
  	kfree(sbi->s_group_desc);
-@@ -2463,7 +2797,7 @@ static int ext3_remount (struct super_bl
+@@ -2357,9 +2708,9 @@ static void ext3_clear_journal_err(struc
+ 		char nbuf[16];
+ 
+ 		errstr = ext3_decode_error(sb, j_errno, nbuf);
+-		ext3_warning(sb, __FUNCTION__, "Filesystem error recorded "
++		ext3_warning(sb, __func__, "Filesystem error recorded "
+ 			     "from previous mount: %s", errstr);
+-		ext3_warning(sb, __FUNCTION__, "Marking fs in need of "
++		ext3_warning(sb, __func__, "Marking fs in need of "
+ 			     "filesystem check.");
+ 
+ 		EXT3_SB(sb)->s_mount_state |= EXT3_ERROR_FS;
+@@ -2462,7 +2813,7 @@ static int ext3_remount (struct super_bl
  	unsigned long n_blocks_count = 0;
  	unsigned long old_sb_flags;
  	struct ext3_mount_options old_opts;
@@ -380,7 +454,16 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -2547,6 +2881,13 @@ static int ext3_remount (struct super_bl
+@@ -2488,7 +2839,7 @@ static int ext3_remount (struct super_bl
+ 	}
+ 
+ 	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
+-		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
++		ext3_abort(sb, __func__, "Abort forced by user");
+ 
+ 	sb->s_flags = (sb->s_flags & ~MS_POSIXACL) |
+ 		((sbi->s_mount_opt & EXT3_MOUNT_POSIX_ACL) ? MS_POSIXACL : 0);
+@@ -2546,6 +2897,13 @@ static int ext3_remount (struct super_bl
  			}
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -394,10 +477,10 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  		}
  	}
  #ifdef CONFIG_QUOTA
-Index: linux-2.6.16.60-0.37/include/linux/ext3_fs.h
+Index: linux-stage/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.60-0.37.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.60-0.37/include/linux/ext3_fs.h
+--- linux-stage.orig/include/linux/ext3_fs.h
++++ linux-stage/include/linux/ext3_fs.h
 @@ -597,13 +597,17 @@ struct ext3_super_block {
  	__le32	s_first_meta_bg;	/* First metablock block group */
  	__le32	s_mkfs_time;		/* When the filesystem was created */
@@ -475,11 +558,11 @@ Index: linux-2.6.16.60-0.37/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.16.60-0.37/include/linux/ext3_fs_sb.h
+Index: linux-stage/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.16.60-0.37.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.16.60-0.37/include/linux/ext3_fs_sb.h
-@@ -147,6 +147,7 @@ struct ext3_sb_info {
+--- linux-stage.orig/include/linux/ext3_fs_sb.h
++++ linux-stage/include/linux/ext3_fs_sb.h
+@@ -145,6 +145,7 @@ struct ext3_sb_info {
  	/* locality groups */
  	struct ext3_locality_group *s_locality_groups;
  
