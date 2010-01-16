@@ -74,7 +74,7 @@ do_check_data () {
     echo "Checking file(s) data ... md5sum : "
     echo "$sums"
 
-    do_nodes --verbose $NODES_TO_USE "echo \\\"$sums\\\" | md5sum --check $sum" || \
+    do_nodes --verbose $NODES_TO_USE "echo \"$sums\" | md5sum --check" || \
         return ${PIPESTATUS[0]}
     return 0
 }
