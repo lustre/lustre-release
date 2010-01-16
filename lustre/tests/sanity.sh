@@ -6432,6 +6432,10 @@ run_test 201c "Remove a pool ============================================"
 cleanup_pools $FSNAME
 
 test_202() {
+        if [ "$NETTYPE" = "o2ib" ]; then
+                skip "unaligned direct I/O is not supported by o2iblnd"
+                return
+        fi
         $LFS setstripe -c 2 -s 1048576 $DIR/$tfile
         multiop $DIR/$tfile oO_WRONLY:O_APPEND:O_DIRECT:b1048548b130c || \
                 error "direct write failed"
