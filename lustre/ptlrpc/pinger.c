@@ -886,6 +886,21 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 #endif
 }
 
+void ptlrpc_pinger_commit_expected(struct obd_import *imp)
+{
+#ifdef ENABLE_PINGER
+        mutex_down(&pinger_sem);
+        ptlrpc_update_next_ping(imp, 1);
+        if (pinger_args.pd_set == NULL &&
+            time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
+                CDEBUG(D_HA, "set next ping to "CFS_TIME_T"(cur "CFS_TIME_T")\n",
+                        imp->imp_next_ping, cfs_time_current());
+                pinger_args.pd_next_ping = imp->imp_next_ping;
+        }
+        mutex_up(&pinger_sem);
+#endif
+}
+
 int ptlrpc_add_timeout_client(int time, enum timeout_event event,
                               timeout_cb_t cb, void *data,
                               struct list_head *obd_list)
