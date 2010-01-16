@@ -224,7 +224,8 @@ Severity   : normal
 Bugzilla   : 19557
 Description: BUG: soft lockup - CPU#1 stuck for 10s! [ll_mdt_07:4523]
 Details    : add cond_resched() calls to avoid hogging the cpu for too long
-	     in the hash code.
+	     in the hash code. Make also lustre_hash_for_each_empty() more
+	     efficient.
 
 Severity   : enhancement
 Bugzilla   : 17682
@@ -239,8 +240,124 @@ Description: (lov_merge.c:74:lov_merge_lvb())
 Details    : Fix a race in the nfs export code by populating inode
 	     info while the new inode is still locked
 
+Severity   : enhancement
+Bugzilla   : 11680
+Description: add a new file in procfs called force_lbug. Writting to this
+	     file triggers a LBUG. Only for test purpose.
+
+Severity   : normal
+Bugzilla   : 18213
+Description: OOM killer causes node hang
+Details    : really interrupt the sleep in osc_enter_cache on signals
+
+Severity   : normal
+Bugzilla   : 18630
+Description: LustreError: 9153:0:(quota_context.c:622:dqacq_completion()) LBUG
+Details    : fix race during quota release on the slave.
+
+Severity   : enhancement
+Bugzilla   : 18690
+Description: smaller hash bucket sizes, cleanups
+Details    : increase hash table sizes and enabled rehashing for pools, quota
+	     uuid, nid & per-nid stats.
+
+Severity   : enhancement
+Bugzilla   : 19673
+Description: Add ldiskfs maxdirsize mount option
+Details    : add max_dir size mount option
+
+Severity   : normal
+Bugzilla   : 20139
+Description: panic in ll_statahead_thread
+Details    : prevent parent thread to be killed before its child 
+
+Severity   : normal
+Frequency  : only with 16TB device
+Bugzilla   : 20301
+Description: unable to perform "mount -t lustre" of 16TB OST device
+Details    : Mounting 16TB LUNs failed due to three bugs in mkfs.lustre. 
+
+Severity   : normal
+Bugzilla   : 20456
+Description: ASSERTION(atomic_read(&imp->imp_inflight) == 0) failed
+Details    : unregistering should be zero if no RPC inflight.
+
+Severity   : normal
+Bugzilla   : 20607
+Description: hyperion: Oops during metabench
+Details    : Correct the refcount of lov_request_set
+
+Severity   : enhancement
+Bugzilla   : 20617
+Description: Add mptlinux and nxge drivers to Lustre builds
+
+Severity   : enhancement
+Bugzilla   : 20722
+Description: Fix watchdog timer message to be more clear
+Details    : Make watchdog timer messages more clear and descriptive.
+
+Severity   : normal
+Bugzilla   : 21396
+Description: LNET soft lockups in socknal_cd thread
+Details    : don't hog CPU for active-connecting if another connd is 
+	     accepting connecting-requst from the same peer
+
+Severity   : normal
+Bugzilla   : 21411
+Description: recovery-small test_17 hang
+Details    : Land several AT improvements & fixes.
+
+Severity   : normal
+Bugzilla   : 21420
+Description: MDS panic and hanging client processes
+Details    : Replace exp_ops_stats with exp_nid_stats->nid_stats
+
+Severity   : normal
+Bugzilla   : 21471
+Description: OSS stuck in recovery.
+Details    : fix race during recovery. class_unlink_export,
+	     class_set_export_delayed and target_queue_last_replay_reply
+	     may race while increasing/decreasing obd_recoverable_clients
+	     and obd_delayed_clients, causing recovery to wait forever.
+
+Severity   : enhancement
+Bugzilla   : 21547
+Description: add cascading_rw.c to lustre/tests
+
+Severity   : normal
+Bugzilla   : 21565
+Description: filter_last_id() NULL deref
+Details    : lprocfs_filter_rd_last_id() should check for the fully 
+	     setup obd device, before proceeding further.
+
+Severity   : enhancement
+Bugzilla   : 21571
+Description: Loadgen improvements
+Details    : stacksize and locking fixes for loadgen
+
+Bugzilla   : 21656
+Description: Quiet CERROR("dirty %d > system dirty_max %d\n"
+Details    : The atomic_read() allowing the atomic_inc() are not covered 
+	     by a lock. Thus they may safely race and trip this CERROR()
+	     unless we add in a small fudge factor (+1).
+
+Severity   : enhancement
+Bugzilla   : 21800
+Description: shrink_slab: nr=-9223362083340912175
+Details    : fix spurious message from shrink_slab reporing negative nr
+
+Bugzilla   : 21681
+Description: Quiet bogus previously committed transno error
+Details    : suppress the "server went back in time" error message which 
+	     is always printed even in the common case after a client eviction
+
+Bugzilla   : 20065
+Description: Parallel statfs() calls result in client eviction
+Details    : cache statfs data for 1s.
+
 
 -------------------------------------------------------------------------------
+
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
 	* Support for kernels:
