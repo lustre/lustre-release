@@ -355,6 +355,11 @@ Bugzilla   : 20065
 Description: Parallel statfs() calls result in client eviction
 Details    : cache statfs data for 1s.
 
+Bugzilla   : 21574
+Description: parallel-scale test_compilebench: @@@@@@ FAIL: compilebench
+	     failed: 1
+Details    : fix serveral issues in pinger code causing clients not to ping
+	     servers for too long, resulting in evictions.
 
 -------------------------------------------------------------------------------
 

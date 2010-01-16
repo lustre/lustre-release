@@ -49,6 +49,12 @@
 #include <lustre_net.h>
 #include "ptlrpc_internal.h"
 
+#ifdef __KERNEL__
+/* What time pinger is supposed to wake up next.
+ * pd_next_ping is the equivalent for liblustre. */
+cfs_time_t pinger_next_wake;
+#endif
+
 struct semaphore pinger_sem;
 static struct list_head pinger_imports = CFS_LIST_HEAD_INIT(pinger_imports);
 static struct list_head timeout_list = CFS_LIST_HEAD_INIT(timeout_list);
@@ -145,8 +151,26 @@ static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
                                          PING_INTERVAL);
                 dtime = delay - (ctime % delay);
         }
+
+        dtime = cfs_time_add(ctime, dtime);
+
+        if (soon && cfs_time_after(imp->imp_next_ping, ctime) &&
+            cfs_time_after(dtime, imp->imp_next_ping)) {
+                /* if the next ping is due to be sent before the
+                 * new deadline, don't delay it */
+                 return;
+        }
+
         /* May harmlessly race with ptlrpc_update_next_ping() */
-        imp->imp_next_ping = cfs_time_add(ctime, dtime);
+        imp->imp_next_ping = dtime;
+
+#ifdef __KERNEL__
+        if (pinger_next_wake != 0 && cfs_time_after(pinger_next_wake, dtime))
+                /* pinger is supposed to sleep until after the new ping
+                 * deadline, wake it up to take into account our update.
+                 * no needed for liblustre which updates pd_next_ping. */
+                ptlrpc_pinger_wake_up();
+#endif
 
         CDEBUG(D_INFO, "Setting %s next ping to "CFS_TIME_T" ("CFS_TIME_T")\n",
                obd2cli_tgt(imp->imp_obd), imp->imp_next_ping, dtime);
@@ -206,7 +230,6 @@ static int ptlrpc_pinger_main(void *arg)
                 struct timeout_item *item;
                 struct list_head *iter;
 
-                time_to_next_wake = cfs_time_seconds(PING_INTERVAL);
                 time_of_next_wake = cfs_time_shift(PING_INTERVAL);
 
                 mutex_down(&pinger_sem);
@@ -272,16 +295,17 @@ static int ptlrpc_pinger_main(void *arg)
 
                         /* Wait time until next ping, or until we stopped. */
                         if (cfs_time_before(imp->imp_next_ping,
-                                            time_of_next_wake)) {
+                                            time_of_next_wake))
                                 time_of_next_wake = imp->imp_next_ping;
-                                time_to_next_wake = max_t(cfs_duration_t,
-                                        cfs_time_seconds(1),
-                                        cfs_time_sub(time_of_next_wake,
-                                                     cfs_time_current()));
-                        }
                 }
+                pinger_next_wake = time_of_next_wake;
                 mutex_up(&pinger_sem);
                 obd_update_maxusage();
+
+                time_to_next_wake = max_t(cfs_duration_t,
+                                          cfs_time_seconds(1),
+                                          cfs_time_sub(time_of_next_wake,
+                                                       cfs_time_current()));
                 CDEBUG(D_INFO, "next ping in "CFS_DURATION_T" ("CFS_TIME_T")\n",
                                time_to_next_wake, time_of_next_wake);
 

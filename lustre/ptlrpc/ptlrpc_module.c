@@ -55,6 +55,9 @@ extern spinlock_t ptlrpc_rs_debug_lock;
 extern spinlock_t ptlrpc_all_services_lock;
 extern struct semaphore pinger_sem;
 extern struct semaphore ptlrpcd_sem;
+#ifdef __KERNEL__
+extern cfs_time_t pinger_next_wake;
+#endif
 
 __init int ptlrpc_init(void)
 {
@@ -67,6 +70,10 @@ __init int ptlrpc_init(void)
         init_mutex(&pinger_sem);
         init_mutex(&ptlrpcd_sem);
         ptlrpc_init_xid();
+
+#ifdef __KERNEL__
+        pinger_next_wake = 0;
+#endif
 
         rc = ptlrpc_init_portals();
         if (rc)
