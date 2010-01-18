@@ -5,7 +5,7 @@ export-ext3-2.6-rhel4.patch
 ext3-include-fixes-2.6-rhel4.patch
 ext3-extents-2.6.16-sles10.patch
 ext3-extents-fixes-2.6.9-rhel4.patch 
-ext3-extents-multiblock-directio-2.6.9-rhel4.patch
+ext3-extents-multiblock-directio-sles10.patch
 ext3-extents-search-2.6.9-rhel4.patch
 ext3-extents-sanity-checks.patch
 ext3-mballoc3-core.patch 

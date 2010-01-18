@@ -2342,14 +2342,14 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/inode.c
  }
  
 @@ -844,7 +855,7 @@ ext3_direct_io_get_blocks(struct inode *
+		}
+	}
  
- get_block:
- 	if (ret == 0)
--		ret = ext3_get_block_handle(handle, inode, iblock,
-+		ret = ext3_get_block_wrap(handle, inode, iblock,
+-	ret = ext3_get_block_handle(handle, inode, iblock,
++	ret = ext3_get_block_wrap(handle, inode, iblock,
  					bh_result, create, 0);
  	bh_result->b_size = (1 << inode->i_blkbits);
- 	return ret;
+ 
 @@ -864,7 +875,7 @@ struct buffer_head *ext3_getblk(handle_t
  	dummy.b_state = 0;
  	dummy.b_blocknr = -1000;
