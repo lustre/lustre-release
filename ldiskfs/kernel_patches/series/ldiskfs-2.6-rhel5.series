@@ -34,3 +34,4 @@ ext3-dynlocks-2.6-rhel5.patch
 ext3-hash-indexed-dir-dotdot-update.patch
 ext3-corrupted-orphans-2.6.patch
 ext3-kill-dx_root.patch
+ext3-fiemap-2.6-rhel5.patch
