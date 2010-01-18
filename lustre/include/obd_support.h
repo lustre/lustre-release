@@ -228,6 +228,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_OPEN_WAIT_CREATE    0x144
 #define OBD_FAIL_MDS_PDO_LOCK            0x145
 #define OBD_FAIL_MDS_PDO_LOCK2           0x146
+#define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180

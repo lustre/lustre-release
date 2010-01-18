@@ -509,10 +509,10 @@ struct mds_obd {
         cfs_dentry_t                    *mds_logs_dir;
         cfs_dentry_t                    *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
-        struct obd_device               *mds_osc_obd; /* XXX lov_obd */
+        struct obd_device               *mds_lov_obd;
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
-        struct obd_export               *mds_osc_exp; /* XXX lov_exp */
+        struct obd_export               *mds_lov_exp;
         struct lov_desc                  mds_lov_desc;
         __u32                            mds_id;
 
@@ -1134,6 +1134,7 @@ enum obd_cleanup_stage {
 #define KEY_SET_FS              "set_fs"
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
+#define KEY_CONNECT_FLAG        "connect_flags"
 
 
 struct lu_context;

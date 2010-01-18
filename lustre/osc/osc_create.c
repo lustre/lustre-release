@@ -647,6 +647,18 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         break;
                 }
 
+                /**
+                 * If this is DELORPHAN process, no need create object here,
+                 * otherwise this will create a gap of object id, and MDS
+                 * might create some orphan log (mds_lov_update_objids), then
+                 * remove objects wrongly on OST. Bug 21379.
+                 */
+                if (oa->o_valid & OBD_MD_FLFLAGS &&
+                        oa->o_flags == OBD_FL_DELORPHAN) {
+                        cfs_spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
                 if (oscc_has_objects_nolock(oscc, 1)) {
                         memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
                         oa->o_id = oscc->oscc_next_id;

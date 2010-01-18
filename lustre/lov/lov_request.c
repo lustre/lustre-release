@@ -103,7 +103,6 @@ int lov_finished_set(struct lov_request_set *set)
         return set->set_completes == set->set_count;
 }
 
-
 void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc)
 {
@@ -550,6 +549,56 @@ out_set:
         RETURN(rc);
 }
 
+static int lov_update_create_set(struct lov_request_set *set,
+                                 struct lov_request *req, int rc)
+{
+        struct obd_trans_info *oti = set->set_oti;
+        struct lov_stripe_md *lsm = set->set_oi->oi_md;
+        struct lov_oinfo *loi;
+        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
+        ENTRY;
+
+        if (rc && lov->lov_tgts[req->rq_idx] &&
+            lov->lov_tgts[req->rq_idx]->ltd_active) {
+                CERROR("error creating fid "LPX64" sub-object"
+                       " on OST idx %d/%d: rc = %d\n",
+                       set->set_oi->oi_oa->o_id, req->rq_idx,
+                       lsm->lsm_stripe_count, rc);
+                if (rc > 0) {
+                        CERROR("obd_create returned invalid err %d\n", rc);
+                        rc = -EIO;
+                }
+        }
+
+        cfs_spin_lock(&set->set_lock);
+        req->rq_stripe = set->set_success;
+        loi = lsm->lsm_oinfo[req->rq_stripe];
+
+
+        if (rc) {
+                lov_update_set(set, req, rc);
+                cfs_spin_unlock(&set->set_lock);
+                RETURN(rc);
+        }
+
+        loi->loi_id = req->rq_oi.oi_oa->o_id;
+        loi->loi_seq = req->rq_oi.oi_oa->o_seq;
+        loi->loi_ost_idx = req->rq_idx;
+        loi_init(loi);
+
+        if (oti && set->set_cookies)
+                ++oti->oti_logcookies;
+        if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLCOOKIE)
+                set->set_cookie_sent++;
+
+        lov_update_set(set, req, rc);
+        cfs_spin_unlock(&set->set_lock);
+
+        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
+               lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
+        RETURN(rc);
+}
+
 static int create_done(struct obd_export *exp, struct lov_request_set *set,
                        struct lov_stripe_md **lsmp)
 {
@@ -660,66 +709,22 @@ int lov_fini_create_set(struct lov_request_set *set,struct lov_stripe_md **lsmp)
         RETURN(rc);
 }
 
-int lov_update_create_set(struct lov_request_set *set,
-                          struct lov_request *req, int rc)
-{
-        struct obd_trans_info *oti = set->set_oti;
-        struct lov_stripe_md *lsm = set->set_oi->oi_md;
-        struct lov_oinfo *loi;
-        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
-        ENTRY;
-
-        if (rc && lov->lov_tgts[req->rq_idx] &&
-            lov->lov_tgts[req->rq_idx]->ltd_active) {
-                CERROR("error creating fid "LPX64" sub-object"
-                       " on OST idx %d/%d: rc = %d\n",
-                       set->set_oi->oi_oa->o_id, req->rq_idx,
-                       lsm->lsm_stripe_count, rc);
-                if (rc > 0) {
-                        CERROR("obd_create returned invalid err %d\n", rc);
-                        rc = -EIO;
-                }
-        }
-
-        cfs_spin_lock(&set->set_lock);
-        req->rq_stripe = set->set_success;
-        loi = lsm->lsm_oinfo[req->rq_stripe];
-        if (rc) {
-                lov_update_set(set, req, rc);
-                cfs_spin_unlock(&set->set_lock);
-                RETURN(rc);
-        }
-
-        loi->loi_id = req->rq_oi.oi_oa->o_id;
-        loi->loi_seq = req->rq_oi.oi_oa->o_seq;
-        loi->loi_ost_idx = req->rq_idx;
-        loi_init(loi);
-
-        if (oti && set->set_cookies)
-                ++oti->oti_logcookies;
-        if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLCOOKIE)
-                set->set_cookie_sent++;
-
-        lov_update_set(set, req, rc);
-        cfs_spin_unlock(&set->set_lock);
-
-        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
-               lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
-        RETURN(rc);
-}
-
 int cb_create_update(void *cookie, int rc)
 {
         struct obd_info *oinfo = cookie;
         struct lov_request *lovreq;
 
         lovreq = container_of(oinfo, struct lov_request, rq_oi);
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL))
+                if (lovreq->rq_idx == obd_fail_val)
+                        rc = -ENOTCONN;
+
         rc= lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
         if (lov_finished_set(lovreq->rq_rqset))
                 lov_put_reqset(lovreq->rq_rqset);
         return rc;
 }
-
 
 int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
                         struct lov_stripe_md **lsmp, struct obdo *src_oa,

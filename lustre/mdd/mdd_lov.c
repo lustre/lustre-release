@@ -239,7 +239,7 @@ static int mdd_lov_set_stripe_md(const struct lu_env *env,
 {
         struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
         struct obd_device       *obd = mdd2obd_dev(mdd);
-        struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
+        struct obd_export       *lov_exp = obd->u.mds.mds_lov_exp;
         struct lov_stripe_md    *lsm = NULL;
         int rc;
         ENTRY;
@@ -380,7 +380,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    const struct md_op_spec *spec, struct lu_attr *la)
 {
         struct obd_device     *obd = mdd2obd_dev(mdd);
-        struct obd_export     *lov_exp = obd->u.mds.mds_osc_exp;
+        struct obd_export     *lov_exp = obd->u.mds.mds_lov_exp;
         struct lu_site        *site = mdd2lu_dev(mdd)->ld_site;
         struct obdo           *oa;
         struct lov_stripe_md  *lsm = NULL;
@@ -555,7 +555,7 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
                       int log_unlink)
 {
         struct obd_device     *obd = mdd2obd_dev(mdd);
-        struct obd_export     *lov_exp = obd->u.mds.mds_osc_exp;
+        struct obd_export     *lov_exp = obd->u.mds.mds_lov_exp;
         struct lov_stripe_md  *lsm = NULL;
         struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
         struct obdo           *oa = &mdd_env_info(env)->mti_oa;
@@ -678,10 +678,10 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
         int rc;
         ENTRY;
 
-        if (IS_ERR(mds->mds_osc_obd))
-                RETURN(PTR_ERR(mds->mds_osc_obd));
+        if (IS_ERR(mds->mds_lov_obd))
+                RETURN(PTR_ERR(mds->mds_lov_obd));
 
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_lov_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
 
@@ -704,7 +704,7 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
 
         OBD_FREE(lsr, sizeof(*lsr));
  out:
-        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        obd_free_memmd(mds->mds_lov_exp, &lsm);
         RETURN(rc);
 }
 
@@ -749,7 +749,7 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
 
         LASSERT(lmm);
 
-        rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_lov_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p for obj "DFID"\n", lmm,
                         PFID(parent));
@@ -772,13 +772,13 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
         oinfo.oi_capa = oc;
 
         /* do async setattr from mds to ost not waiting for responses. */
-        rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
+        rc = obd_setattr_async(mds->mds_lov_exp, &oinfo, &oti, NULL);
         if (rc)
                 CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
                        " on ost error %d\n", oinfo.oi_md->lsm_object_id, rc);
 out:
         if (oinfo.oi_md)
-                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
+                obd_free_memmd(mds->mds_lov_exp, &oinfo.oi_md);
         OBDO_FREE(oinfo.oi_oa);
         RETURN(rc);
 }

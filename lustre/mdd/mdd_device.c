@@ -1010,7 +1010,7 @@ static int mdd_lov_set_nextid(const struct lu_env *env,
         ENTRY;
 
         LASSERT(mds->mds_lov_objids != NULL);
-        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_NEXT_ID),
+        rc = obd_set_info_async(mds->mds_lov_exp, strlen(KEY_NEXT_ID),
                                 KEY_NEXT_ID, mds->mds_lov_desc.ld_tgt_count,
                                 mds->mds_lov_objids, NULL);
 
@@ -1054,7 +1054,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
         }
 #endif
         /* Call that with obd_recovering = 1 just to update objids */
-        obd_notify(obd->u.mds.mds_osc_obd, NULL, (obd->obd_async_recov ?
+        obd_notify(obd->u.mds.mds_lov_obd, NULL, (obd->obd_async_recov ?
                     OBD_NOTIFY_SYNC_NONBLOCK : OBD_NOTIFY_SYNC), NULL);
 
         /* Drop obd_recovering to 0 and call o_postrecov to recover mds_lov */
@@ -1181,7 +1181,7 @@ static int mdd_update_capa_key(const struct lu_env *env,
 {
         struct mds_capa_info info = { .uuid = NULL, .capa = key };
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_osc_exp;
+        struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_lov_exp;
         int rc;
         ENTRY;
 

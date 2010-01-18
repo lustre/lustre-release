@@ -1323,25 +1323,64 @@ test_25() {
         wait_osc_import_state mds ost FULL
         clients_up
 
+        wait_mds_ost_sync 
         # Veriy that the pool got created and is usable
         df $POOL_ROOT > /dev/null
-		sleep 5
-		# Make sure OST0 can be striped on
-		$SETSTRIPE -o 0 -c 1 $POOL_ROOT/$tfile
-		STR=$($GETSTRIPE $POOL_ROOT/$tfile | grep 0x | cut -f2 | tr -d " ")
-		rm $POOL_ROOT/$tfile
-		if [[ "$STR" == "0" ]]; then
-			echo "Creating a file in pool$i"
-			create_file $POOL_ROOT/file$i pool$i || break
-			check_file_in_pool $POOL_ROOT/file$i pool$i || break
-		else
-			echo "OST 0 seems to be unavailable.  Try later."
-		fi
+        sleep 5
+        # Make sure OST0 can be striped on
+        $SETSTRIPE -o 0 -c 1 $POOL_ROOT/$tfile
+        STR=$($GETSTRIPE $POOL_ROOT/$tfile | grep 0x | cut -f2 | tr -d " ")
+        rm $POOL_ROOT/$tfile
+        if [[ "$STR" == "0" ]]; then
+                echo "Creating a file in pool$i"
+                create_file $POOL_ROOT/file$i pool$i || break
+                check_file_in_pool $POOL_ROOT/file$i pool$i || break
+        else
+                echo "OST 0 seems to be unavailable.  Try later."
+        fi
     done
 
     rm -rf $POOL_ROOT
 }
 run_test 25 "Create new pool and restart MDS ======================="
+
+test_26() {
+    local OSTCOUNT=`lctl get_param -n lov.$LOVNAME.*clilov*.numobd`
+    [[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+    set_cleanup_trap
+    local dev=$(mdsdevname ${SINGLEMDS//mds/})
+    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+
+    mkdir -p $POOL_ROOT
+
+    create_pool_nofail $POOL 
+ 
+    do_facet $SINGLEMDS "lctl pool_add $FSNAME.pool1 OST0000; sync"
+    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.pool1 | \
+    sort -u | grep $FSNAME-OST0000_UUID " "$FSNAME-OST0000_UUID" || \
+    error "pool_add failed: $1; $2"
+  
+    do_facet $SINGLEMDS "lctl pool_add $FSNAME.pool1 OST0002; sync"
+    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.pool1 | \
+    sort -u | grep $FSNAME-OST0002_UUID" "$FSNAME-OST0002_UUID" || \
+    error "pool_add failed: $1; $2"
+  
+    # Veriy that the pool got created and is usable
+    df $POOL_ROOT
+    echo "Creating files in $POOL"
+
+    for ((i=0;i<10;i++)); do
+        #OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147  
+        #Fail OST0000 to make sure the objects create on the other ost in the pool 
+        do_facet $SINGLEMDS lctl set_param fail_loc=0x147
+        do_facet $SINGLEMDS lctl set_param fail_val=0
+        create_file $POOL_ROOT/file$i $POOL 1 -1 || break
+        do_facet $SINGLEMDS lctl set_param fail_loc=0
+        check_file_in_pool $POOL_ROOT/file$i $POOL || break
+    done
+    rm -rf $POOL_ROOT
+}
+run_test 26 "Choose other OSTs in the pool first in the creation remedy"
 
 log "cleanup: ======================================================"
 cd $ORIG_PWD

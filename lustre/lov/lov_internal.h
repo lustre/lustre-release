@@ -200,8 +200,6 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oifo,
                         struct obd_trans_info *oti,
                         struct lov_request_set **reqset);
 int cb_create_update(void *cookie, int rc);
-int lov_update_create_set(struct lov_request_set *set,
-                          struct lov_request *req, int rc);
 int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea);
 int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                      obd_count oa_bufs, struct brw_page *pga,

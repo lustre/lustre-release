@@ -494,37 +494,80 @@ void qos_shrink_lsm(struct lov_request_set *set)
         }
 }
 
+/**
+ * Check whether we can create the object on the OST(refered by ost_idx)
+ * \retval:
+ *          0: create the object.
+ *          other value: did not create the object.
+ */
+static int lov_check_and_create_object(struct lov_obd *lov, int ost_idx,
+                                       struct lov_stripe_md *lsm,
+                                       struct lov_request *req,
+                                       struct obd_trans_info *oti)
+{
+        int stripe;
+        int rc = -EIO;
+        ENTRY;
+
+        CDEBUG(D_QOS, "Check and create on idx %d \n", ost_idx);
+        if (!lov->lov_tgts[ost_idx] ||
+            !lov->lov_tgts[ost_idx]->ltd_active)
+                RETURN(rc);
+
+        /* check if objects has been created on this ost */
+        for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
+                /* already have object at this stripe */
+                if (ost_idx == lsm->lsm_oinfo[stripe]->loi_ost_idx)
+                        break;
+        }
+
+        if (stripe >= lsm->lsm_stripe_count) {
+                req->rq_idx = ost_idx;
+                rc = obd_create(lov->lov_tgts[ost_idx]->ltd_exp,
+                                req->rq_oi.oi_oa, &req->rq_oi.oi_md,
+                                oti);
+        }
+        RETURN(rc);
+}
+
 int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 {
         struct lov_stripe_md *lsm = set->set_oi->oi_md;
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
-        unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
-        int stripe, i, rc = -EIO;
+        unsigned ost_idx = 0, ost_count;
+        struct pool_desc *pool;
+        struct ost_pool *osts = NULL;
+        int i, rc = -EIO;
         ENTRY;
 
+        /* First check whether we can create the objects on the pool */
+        pool = lov_find_pool(lov, lsm->lsm_pool_name);
+        if (pool != NULL) {
+                cfs_down_read(&pool_tgt_rw_sem(pool));
+                osts = &(pool->pool_obds);
+                ost_count = osts->op_count;
+                for (i = 0; i < ost_count; i++, ost_idx = osts->op_array[i]) {
+                        rc = lov_check_and_create_object(lov, ost_idx, lsm, req,
+                                                         set->set_oti);
+                        if (rc == 0)
+                                break;
+                }
+                cfs_up_read(&pool_tgt_rw_sem(pool));
+                lov_pool_putref(pool);
+                RETURN(rc);
+        }
+
+        ost_count = lov->desc.ld_tgt_count;
+        /* Then check whether we can create the objects on other OSTs */
         ost_idx = (req->rq_idx + lsm->lsm_stripe_count) % ost_count;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
-                if (!lov->lov_tgts[ost_idx] ||
-                    !lov->lov_tgts[ost_idx]->ltd_active)
-                        continue;
-                /* check if objects has been created on this ost */
-                for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
-                        /* we try send create to this ost but he is failed */
-                        if (stripe == req->rq_stripe)
-                                continue;
-                        /* already have object at this stripe */
-                        if (ost_idx == lsm->lsm_oinfo[stripe]->loi_ost_idx)
-                                break;
-                }
-                if (stripe >= lsm->lsm_stripe_count) {
-                        req->rq_idx = ost_idx;
-                        rc = obd_create(lov->lov_tgts[ost_idx]->ltd_exp,
-                                        req->rq_oi.oi_oa, &req->rq_oi.oi_md,
-                                        set->set_oti);
-                        if (!rc)
-                                break;
-                }
+                rc = lov_check_and_create_object(lov, ost_idx, lsm, req,
+                                                 set->set_oti);
+
+                if (rc == 0)
+                        break;
         }
+
         RETURN(rc);
 }
 

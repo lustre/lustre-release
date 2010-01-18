@@ -5,6 +5,9 @@ set -e
 # bug number:  10124
 ALWAYS_EXCEPT="15c   $REPLAY_DUAL_EXCEPT"
 
+LFS=${LFS:-lfs}
+SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
+GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
@@ -254,20 +257,25 @@ run_test 13 "close resend timeout"
 # as test_15a
 
 test_14b() {
+    wait_mds_ost_sync
+    wait_destroy_complete
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     mkdir -p $MOUNT1/$tdir
+    $SETSTRIPE -o 0 $MOUNT1/$tdir
     replay_barrier $SINGLEMDS
-    createmany -o $MOUNT1/$tfile- 5
-    echo "data" > $MOUNT2/$tdir/$tfile-2
-    createmany -o $MOUNT1/$tfile-3- 5
+    createmany -o $MOUNT1/$tdir/$tfile- 5
+
+    $SETSTRIPE -o 0 $MOUNT2/f14b-3
+    echo "data" > $MOUNT2/f14b-3
+    createmany -o $MOUNT1/$tdir/$tfile-3- 5
     umount $MOUNT2
 
     fail $SINGLEMDS
     wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
     # first 25 files should have been replayed
-    unlinkmany $MOUNT1/$tfile- 5 || return 2
-    unlinkmany $MOUNT1/$tfile-3- 5 || return 3
+    unlinkmany $MOUNT1/$tdir/$tfile- 5 || return 2
+    unlinkmany $MOUNT1/$tdir/$tfile-3- 5 || return 3
 
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
 

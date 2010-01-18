@@ -1182,6 +1182,7 @@ wait_mds_ost_sync () {
         local -a sync=($(do_nodes $(comma_list $(osts_nodes)) \
             "$LCTL get_param -n obdfilter.*.mds_sync"))
         local con=1
+        local i
         for ((i=0; i<${#sync[@]}; i++)); do
             [ ${sync[$i]} -eq 0 ] && continue
             # there is a not finished MDS-OST synchronization

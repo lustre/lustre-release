@@ -1381,6 +1381,7 @@ int llapi_ostlist(char *path, struct find_param *param)
 }
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
+                                     struct lov_user_ost_data_v1 *objects,
                                      int is_dir, int verbose, int depth,
                                      char *pool_name)
 {
@@ -1431,7 +1432,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:  ",
                                      prefix);
                 llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                             lum->lmm_objects[0].l_ost_idx, nl);
+                             objects[0].l_ost_idx, nl);
         }
 
         if ((verbose & VERBOSE_POOL) && (pool_name != NULL)) {
@@ -1460,7 +1461,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
         }
 
         if (obdstripe == 1)
-                lov_dump_user_lmm_header(lum, path, is_dir, header, depth,
+                lov_dump_user_lmm_header(lum, path, objects, is_dir, header, depth,
                                          pool_name);
 
         if (!is_dir && (header & VERBOSE_OBJID)) {
