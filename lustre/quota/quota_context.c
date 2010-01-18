@@ -1472,6 +1472,16 @@ lqs_hash(lustre_hash_t *lh, void *key, unsigned mask)
         RETURN(hash & mask);
 }
 
+static void *
+lqs_key(struct hlist_node *hnode)
+{
+        struct lustre_qunit_size *lqs;
+        ENTRY;
+
+        lqs = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+        RETURN(&lqs->lqs_key);
+}
+
 static int
 lqs_compare(void *key, struct hlist_node *hnode)
 {
@@ -1534,6 +1544,7 @@ lqs_exit(struct hlist_node *hnode)
 
 static lustre_hash_ops_t lqs_hash_ops = {
         .lh_hash    = lqs_hash,
+        .lh_key     = lqs_key,
         .lh_compare = lqs_compare,
         .lh_get     = lqs_get,
         .lh_put     = lqs_put,

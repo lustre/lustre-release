@@ -96,11 +96,9 @@ lh_key(lustre_hash_t *lh, struct hlist_node *hnode)
         LASSERT(lh);
         LASSERT(hnode);
         LASSERT(LHO(lh));
+        LASSERT(LHP(lh, key));
 
-        if (LHP(lh, key))
-                return LHP(lh, key)(hnode);
-
-        return NULL;
+        return LHP(lh, key)(hnode);
 }
 
 /* Returns 1 on a match,
