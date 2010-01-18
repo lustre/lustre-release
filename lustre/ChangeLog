@@ -1,7 +1,7 @@
 2010-01-29 Sun Microsystems, Inc.
 	* version 1.8.2
 	* Support for kernels:
-	  2.6.16.60-0.42.4 (SLES 10),
+	  2.6.16.60-0.42.8 (SLES 10),
 	  2.6.27.39-0.3.1 (SLES11),
 	  2.6.18-164.6.1.el5 (RHEL 5)
 	  2.6.18-164.6.1.0.1.el5 (OEL 5)
@@ -14,7 +14,11 @@
 
 Severity   : enhancement
 Bugzilla   : 21511/19848
-Description: Update kernel to SLES11 2.6.27.39-0.3.1.
+Description: Update SLES11 kernel to 2.6.27.39-0.3.1.
+
+Severity   : enhancement
+Bugzilla   : 20758
+Description: Update supported SLES10 kernel to 2.6.16.60-0.42.8.
 
 Severity   : enhancement
 Bugzilla   : 20773
