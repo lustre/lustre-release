@@ -1,80 +1,23 @@
-A large part of this code is from the generic VFS code in fs/ioctl.c in the
-upstream kernel.
-
-Index: linux-2.6.18-128.1.6/fs/ext4/ioctl.c
-===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext4/ioctl.c
-+++ linux-2.6.18-128.1.6/fs/ext4/ioctl.c
-@@ -17,6 +17,162 @@
+diff -rupN linux-2.6.18-164.6.1_1/fs/ext4/ext4.h linux-2.6.18-164.6.1_2/fs/ext4/ext4.h
+--- linux-2.6.18-164.6.1_1/fs/ext4/ext4.h	2009-12-22 13:07:27.000000000 +0530
++++ linux-2.6.18-164.6.1_2/fs/ext4/ext4.h	2009-12-22 13:10:18.000000000 +0530
+@@ -305,6 +305,7 @@ struct ext4_new_group_data {
+ #define EXT4_IOC_GROUP_EXTEND		_IOW('f', 7, unsigned long)
+ #define EXT4_IOC_GROUP_ADD		_IOW('f', 8, struct ext4_new_group_input)
+ #define EXT4_IOC_MIGRATE		_IO('f', 9)
++#define EXT4_IOC_FIEMAP		_IOWR('f', 11, struct fiemap)
+  /* note ioctl 11 reserved for filesystem-independent FIEMAP ioctl */
+ 
+ /*
+diff -rupN linux-2.6.18-164.6.1_1/fs/ext4/ioctl.c linux-2.6.18-164.6.1_2/fs/ext4/ioctl.c
+--- linux-2.6.18-164.6.1_1/fs/ext4/ioctl.c	2009-12-22 13:06:51.000000000 +0530
++++ linux-2.6.18-164.6.1_2/fs/ext4/ioctl.c	2009-12-22 13:09:45.000000000 +0530
+@@ -17,6 +17,71 @@
  #include "ext4_jbd2.h"
  #include "ext4.h"
  
-+#include "fiemap.h"
-+
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
 +#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
-+
-+/**
-+ * fiemap_fill_next_extent - Fiemap helper function
-+ * @fieinfo:   Fiemap context passed into ->fiemap
-+ * @logical:   Extent logical start offset, in bytes
-+ * @phys:      Extent physical start offset, in bytes
-+ * @len:       Extent length, in bytes
-+ * @flags:     FIEMAP_EXTENT flags that describe this extent
-+ * @lun:       LUN on which this extent resides
-+ *
-+ * Called from file system ->fiemap callback. Will populate extent
-+ * info as passed in via arguments and copy to user memory. On
-+ * success, extent count on fieinfo is incremented.
-+ *
-+ * Returns 0 on success, -errno on error, 1 if this was the last
-+ * extent that will fit in user array.
-+ */
-+#define SET_UNKNOWN_FLAGS      (FIEMAP_EXTENT_DELALLOC)
-+#define SET_NO_DIRECT_FLAGS    (FIEMAP_EXTENT_DATA_ENCRYPTED	\
-+				|FIEMAP_EXTENT_NET)
-+#define SET_NO_UNMOUNTED_IO_FLAGS       (FIEMAP_EXTENT_DATA_ENCRYPTED)
-+#define SET_NOT_ALIGNED_FLAGS  (FIEMAP_EXTENT_DATA_TAIL|FIEMAP_EXTENT_DATA_INLINE)
-+int fiemap_fill_next_extent(struct fiemap_extent_info *fieinfo, u64 logical,
-+			    u64 phys, u64 len, u32 flags, dev_t dev)
-+{
-+	struct fiemap_extent extent = { 0 };
-+	struct fiemap_extent *dest = fieinfo->fi_extents_start;
-+
-+	/* only count the extents */
-+	if (fieinfo->fi_extents_max == 0) {
-+		fieinfo->fi_extents_mapped++;
-+		return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
-+	}
-+
-+	if (fieinfo->fi_extents_mapped >= fieinfo->fi_extents_max)
-+		return 1;
-+
-+	if (flags & SET_UNKNOWN_FLAGS)
-+		flags |= FIEMAP_EXTENT_UNKNOWN;
-+	if (flags & SET_NO_DIRECT_FLAGS)
-+		flags |= FIEMAP_EXTENT_NO_DIRECT;
-+	if (flags & SET_NOT_ALIGNED_FLAGS)
-+		flags |= FIEMAP_EXTENT_NOT_ALIGNED;
-+	if (flags & SET_NO_UNMOUNTED_IO_FLAGS)
-+		flags |= FIEMAP_EXTENT_ENCODED;
-+
-+	extent.fe_logical = logical;
-+	extent.fe_physical = phys;
-+	extent.fe_length = len;
-+	extent.fe_flags = flags;
-+	extent.fe_device = new_encode_dev(dev);
-+
-+	dest += fieinfo->fi_extents_mapped;
-+	if (copy_to_user(dest, &extent, sizeof(extent)))
-+		return -EFAULT;
-+
-+	fieinfo->fi_extents_mapped++;
-+	if (fieinfo->fi_extents_mapped == fieinfo->fi_extents_max)
-+		return 1;
-+
-+	return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
-+}
 +
 +static int fiemap_check_ranges(struct super_block *sb,
 +			       u64 start, u64 len, u64 *new_len)
@@ -93,33 +36,6 @@ Index: linux-2.6.18-128.1.6/fs/ext4/ioctl.c
 +	if ((len > sb->s_maxbytes) ||
 +	    (sb->s_maxbytes - len) < start)
 +		*new_len = sb->s_maxbytes - start;
-+
-+	return 0;
-+}
-+
-+/*
-+ * fiemap_check_flags - check validity of requested flags for fiemap
-+ * @fieinfo:   Fiemap context passed into ->fiemap
-+ * @fs_flags:  Set of fiemap flags that the file system understands
-+ *
-+ * Called from file system ->fiemap callback. This will compute the
-+ * intersection of valid fiemap flags and those that the fs supports. That
-+ * value is then compared against the user supplied flags. In case of bad user
-+ * flags, the invalid values will be written into the fieinfo structure, and
-+ * -EBADR is returned, which tells ioctl_fiemap() to return those values to
-+ * userspace. For this reason, a return code of -EBADR should be preserved.
-+ *
-+ * Returns 0 on success, -EBADR on bad flags.
-+ */
-+int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags)
-+{
-+	u32 incompat_flags;
-+
-+	incompat_flags = fieinfo->fi_flags & ~(FIEMAP_FLAGS_COMPAT & fs_flags);
-+	if (incompat_flags) {
-+		fieinfo->fi_flags = incompat_flags;
-+		return -EBADR;
-+	}
 +
 +	return 0;
 +}
@@ -168,135 +84,13 @@ Index: linux-2.6.18-128.1.6/fs/ext4/ioctl.c
  long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  {
  	struct inode *inode = filp->f_dentry->d_inode;
-@@ -257,6 +413,10 @@ flags_err:
- 	case EXT4_IOC_MIGRATE:
- 		return ext4_ext_migrate(inode, filp, cmd, arg);
- 
+@@ -249,6 +314,9 @@ flags_out:
+ 		mutex_unlock(&(inode->i_mutex));
+ 		return err;
+ 	}
 +	case EXT4_IOC_FIEMAP: {
 +		return ioctl_fiemap(inode, filp, arg);
 +	}
-+
+ 
  	default:
  		return -ENOTTY;
- 	}
-Index: linux-2.6.18-128.1.6/fs/ext4/ext4.h
-===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext4/ext4.h
-+++ linux-2.6.18-128.1.6/fs/ext4/ext4.h
-@@ -300,6 +300,7 @@ struct ext4_new_group_data {
- #define EXT4_IOC_GROUP_EXTEND		_IOW('f', 7, unsigned long)
- #define EXT4_IOC_GROUP_ADD		_IOW('f', 8, struct ext4_new_group_input)
- #define EXT4_IOC_MIGRATE		_IO('f', 9)
-+#define EXT4_IOC_FIEMAP			_IOWR('f', 11, struct fiemap)
-  /* note ioctl 11 reserved for filesystem-independent FIEMAP ioctl */
- 
- /*
-@@ -317,6 +318,8 @@ struct ext4_new_group_data {
- #define EXT4_IOC32_GETVERSION_OLD	FS_IOC32_GETVERSION
- #define EXT4_IOC32_SETVERSION_OLD	FS_IOC32_SETVERSION
- 
-+/* FIEMAP flags supported by ext4 */
-+#define EXT4_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
- 
- /*
-  *  Mount options
-@@ -1117,6 +1120,9 @@ extern int ext4_page_mkwrite(struct vm_a
- /* ioctl.c */
- extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
- extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
-+struct fiemap_extent_info;
-+extern int ext4_fiemap(struct inode *, struct fiemap_extent_info *, __u64,
-+		       __u64);
- 
- /* migrate.c */
- extern int ext4_ext_migrate(struct inode *, struct file *, unsigned int,
-Index: linux-2.6.18-128.1.6/fs/ext4/fiemap.h
-===================================================================
---- /dev/null
-+++ linux-2.6.18-128.1.6/fs/ext4/fiemap.h
-@@ -0,0 +1,85 @@
-+/*
-+ * FIEMAP ioctl infrastructure.
-+ *
-+ * Copyright 2008 Sun Microsystems, Inc
-+ *
-+ * Author: Kalpak Shah <kalpak.shah@sun.com>
-+ *	 Andreas Dilger <adilger@sun.com>
-+ */
-+
-+#ifndef _LINUX_EXT4_FIEMAP_H
-+#define _LINUX_EXT4_FIEMAP_H
-+
-+struct fiemap_extent {
-+	__u64 fe_logical;  /* logical offset in bytes for the start of
-+			    * the extent from the beginning of the file */
-+	__u64 fe_physical; /* physical offset in bytes for the start
-+			    * of the extent from the beginning of the disk */
-+	__u64 fe_length;   /* length in bytes for this extent */
-+	__u64 fe_reserved64[2];
-+	__u32 fe_flags;    /* FIEMAP_EXTENT_* flags for this extent */
-+	__u32 fe_device;   /* device number for this extent */
-+	__u32 fe_reserved[2];
-+};
-+
-+struct fiemap {
-+	__u64 fm_start;	 /* logical offset (inclusive) at
-+				 * which to start mapping (in) */
-+	__u64 fm_length;	/* logical length of mapping which
-+				 * userspace wants (in) */
-+	__u32 fm_flags;	 /* FIEMAP_FLAG_* flags for request (in/out) */
-+	__u32 fm_mapped_extents;/* number of extents that were mapped (out) */
-+	__u32 fm_extent_count;  /* size of fm_extents array (in) */
-+	__u32 fm_reserved;
-+	struct fiemap_extent fm_extents[0]; /* array of mapped extents (out) */
-+};
-+
-+/*
-+ * FIEMAP helper definition.
-+ */
-+struct fiemap_extent_info {
-+	unsigned int    fi_flags;		/* Flags as passed from user */
-+	unsigned int    fi_extents_mapped;	/* Number of mapped extents */
-+	unsigned int    fi_extents_max;		/* Size of fiemap_extent array*/
-+	struct fiemap_extent *fi_extents_start; /* Start of fiemap_extent array */
-+};
-+
-+int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags);
-+int fiemap_fill_next_extent(struct fiemap_extent_info *info, u64 logical,
-+			    u64 phys, u64 len, u32 flags, u32 lun);
-+
-+#define	FIEMAP_MAX_OFFSET	(~0ULL)
-+
-+#define	FIEMAP_FLAG_SYNC	0x00000001 /* sync file data before map */
-+#define	FIEMAP_FLAG_XATTR	0x00000002 /* map extended attribute tree */
-+
-+/* ldiskfs only supports FLAG_SYNC flag currently */
-+#define FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR)
-+
-+#define FIEMAP_EXTENT_LAST		0x00000001 /* Last extent in file. */
-+#define FIEMAP_EXTENT_UNKNOWN		0x00000002 /* Data location unknown. */
-+#define FIEMAP_EXTENT_DELALLOC		0x00000004 /* Location still pending.
-+						    * Sets EXTENT_UNKNOWN. */
-+#define FIEMAP_EXTENT_ENCODED		0x00000008 /* Data can not be read
-+						    * while fs is unmounted */
-+#define FIEMAP_EXTENT_DATA_ENCRYPTED	0x00000080 /* Data is encrypted by fs.
-+						    * Sets EXTENT_NO_DIRECT. */
-+#define FIEMAP_EXTENT_NOT_ALIGNED	0x00000100 /* Extent offsets may not be
-+						    * block aligned. */
-+#define FIEMAP_EXTENT_DATA_INLINE	0x00000200 /* Data mixed with metadata.
-+						    * Sets EXTENT_NOT_ALIGNED.*/
-+#define FIEMAP_EXTENT_DATA_TAIL		0x00000400 /* Multiple files in block.
-+						    * Sets EXTENT_NOT_ALIGNED.*/
-+#define FIEMAP_EXTENT_UNWRITTEN		0x00000800 /* Space allocated, but
-+						    * no data (i.e. zero). */
-+#define FIEMAP_EXTENT_MERGED		0x00001000 /* File does not natively
-+						    * support extents. Result
-+						    * merged for efficiency. */
-+
-+/* Lustre specific flags - use a high bit, don't conflict with upstream flag */
-+#define FIEMAP_EXTENT_NO_DIRECT		0x40000000 /* Data mapping undefined */
-+#define FIEMAP_EXTENT_NET		0x80000000 /* Data stored remotely.
-+						    * Sets NO_DIRECT flag */
-+
-+#endif /* _LINUX_EXT4_FIEMAP_H */
-+
