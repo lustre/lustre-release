@@ -944,7 +944,7 @@ test_27m() {
 run_test 27m "create file while OST0 was full =================="
 
 sleep_maxage() {
-        local DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
+        local DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 * 2}')
         sleep $DELAY
 }
 
