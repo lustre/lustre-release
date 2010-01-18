@@ -1257,8 +1257,8 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
 
         qctxt->lqc_lqs_hash = lustre_hash_init("LQS_HASH",
                                                HASH_LQS_CUR_BITS,
-                                               HASH_LQS_MAX_BITS,
-                                               &lqs_hash_ops, LH_REHASH);
+                                               HASH_LQS_CUR_BITS,
+                                               &lqs_hash_ops, 0);
         if (!qctxt->lqc_lqs_hash)
                 CERROR("%s: initialize hash lqs failed\n", obd->obd_name);
 
