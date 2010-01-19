@@ -702,6 +702,14 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(obd, now, "preprw_write setup");
 
+        /* Filter truncate first locks i_mutex then partially truncated
+         * page, filter write code first locks pages then take
+         * i_mutex.  To avoid a deadlock in case of concurrent
+         * punch/write requests from one client, filter writes and
+         * filter truncates are serialized by i_alloc_sem, allowing
+         * multiple writes or single truncate. */
+        down_read(&dentry->d_inode->i_alloc_sem);
+
         /* Don't update inode timestamps if this write is older than a
          * setattr which modifies the timestamps. b=10150 */
         /* XXX when we start having persistent reservations this needs to
@@ -737,17 +745,11 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         cfs_spin_unlock(&obd->obd_osfs_lock);
         filter_fmd_put(exp, fmd);
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK2, (obd_timeout + 1) / 4);
+
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 4;
-
-        /* Filter truncate first locks i_mutex then partally truncated
-         * page, filter write code first locks pages then take
-         * i_mutex.  To avoid a deadlock in case of concurrent
-         * punch/write requests from one client, filter writes and
-         * filter truncates are serialized by i_alloc_sem, allowing
-         * multiple writes or single truncate. */
-        down_read(&dentry->d_inode->i_alloc_sem);
 
         cfs_gettimeofday(&start);
         for (i = 0, lnb = res; i < *npages; i++, lnb++) {
@@ -836,9 +838,11 @@ cleanup:
                                         lnb->page = NULL;
                                 }
                         }
-                        up_read(&dentry->d_inode->i_alloc_sem);
                 }
         case 3:
+                if (rc)
+                        up_read(&dentry->d_inode->i_alloc_sem);
+
                 filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 2:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

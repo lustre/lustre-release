@@ -3432,12 +3432,21 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
+        /*
+         * We need to be atomic against a concurrent write
+         * (which takes the semaphore for reading). fmd_mactime_xid
+         * checks will have no effect if a write request with lower
+         * xid starts just before a setattr and finishes later than
+         * the setattr (see bug 21489, comment 27).
+         */
         if (oa->o_valid &
             (OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME)) {
+                down_write(&dentry->d_inode->i_alloc_sem);
                 fmd = filter_fmd_get(exp, oa->o_id, oa->o_gr);
                 if (fmd && fmd->fmd_mactime_xid < oti->oti_xid)
                         fmd->fmd_mactime_xid = oti->oti_xid;
                 filter_fmd_put(exp, fmd);
+                up_write(&dentry->d_inode->i_alloc_sem);
         }
 
         /* setting objects attributes (including owner/group) */
