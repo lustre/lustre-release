@@ -37,8 +37,8 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
 +		gdp = ext4_get_group_desc (sb, group, NULL);
 +		ext4_error(sb, __FUNCTION__,
 +			"group %lu: %u blocks in bitmap, %u in bb, "
-+			"%u in gd, %lu pa's\n", group, free, grp->bb_free,
-+			ext4_free_blks_count(sb, gdp),
++			"%u in gd, %lu pa's\n", (long unsigned int)group,
++			free, grp->bb_free, ext4_free_blks_count(sb, gdp),
 +			grp->bb_prealloc_nr);
 +		return -EIO;
  	}
@@ -140,8 +140,8 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
  
 -	seq_printf(seq, "#%-5u: %-5u %-5u %-5u [", group, sg.info.bb_free,
 -			sg.info.bb_fragments, sg.info.bb_first_free);
-+	seq_printf(seq, "#%-5lu: %-5u %-5u %-5u %-5u %-5lu [", group,
-+			sg.info.bb_free, free,
++	seq_printf(seq, "#%-5lu: %-5u %-5u %-5u %-5u %-5lu [",
++			(long unsigned int)group, sg.info.bb_free, free,
 +			sg.info.bb_fragments, sg.info.bb_first_free,
 +			sg.info.bb_prealloc_nr);
  	for (i = 0; i <= 13; i++)
