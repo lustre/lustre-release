@@ -17,7 +17,7 @@ Index: linux-2.6.18-92.1.6/fs/ext3/super.c
  	Opt_grpquota,
 -	Opt_extents, Opt_noextents, Opt_extdebug,
 +	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
- 	Opt_mballoc, Opt_nomballoc, Opt_stripe,
+ 	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_maxdirsize
  };
  
 @@ -766,6 +768,7 @@ static match_table_t tokens = {
