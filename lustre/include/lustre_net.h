@@ -105,7 +105,7 @@
  */
 
 #define LDLM_THREADS_AUTO_MIN (2)
-#define LDLM_THREADS_AUTO_MAX min(cfs_num_online_cpus() * \
+#define LDLM_THREADS_AUTO_MAX min_t(unsigned, cfs_num_online_cpus() * \
                                   cfs_num_online_cpus() * 32, 128)
 #define LDLM_BL_THREADS  LDLM_THREADS_AUTO_MIN
 #define LDLM_NBUFS      (64 * cfs_num_online_cpus())
