@@ -1369,7 +1369,6 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
-        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qnids[MAXQUOTAS] = { 0, 0 };
         unsigned int qoids[MAXQUOTAS] = { 0, 0 };
@@ -1411,6 +1410,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 
 #ifdef HAVE_QUOTA_SUPPORT
         if (mds->mds_quota && la_copy->la_valid & (LA_UID | LA_GID)) {
+                struct obd_export *exp = md_quota(env)->mq_exp;
                 struct lu_attr *la_tmp = &mdd_env_info(env)->mti_la;
 
                 rc = mdd_la_get(env, mdd_obj, la_tmp, BYPASS_CAPA);
