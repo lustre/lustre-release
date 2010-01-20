@@ -21,8 +21,8 @@ if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
 fi
 
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 

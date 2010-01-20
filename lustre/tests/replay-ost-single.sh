@@ -8,13 +8,14 @@ CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 # While we do not use OSTCOUNT=1 setup anymore,
 # ost1failover_HOST is used
 #ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 #failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
 
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_ost || exit 0
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     skip_env "$0: Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "

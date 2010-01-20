@@ -6,6 +6,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 #              bug 20670           21255 
 ALWAYS_EXCEPT="parallel_grouplock  statahead $PARALLEL_SCALE_EXCEPT"

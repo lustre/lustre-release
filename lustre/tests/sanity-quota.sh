@@ -48,12 +48,13 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
 [ $MDSCOUNT -gt 1 ] && skip "CMD case" && exit 0
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_mds || exit 0
+require_dsh_ost || exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21"
 

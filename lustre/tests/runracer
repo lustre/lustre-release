@@ -2,16 +2,18 @@
 #set -vx
 set -e
 
+ONLY=${ONLY:-"$*"}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
-racer=`which racer.sh`
+racer=`which racer.sh 2> /dev/null`
+echo racer: $racer
 [ -z "$racer" ] && echo racer is not installed && exit 1
 
 CLIENTS=${CLIENTS:-$HOSTNAME}
-RACERDIRS=$@
 RACERDIRS=${RACERDIRS:-$DIR}
 echo RACERDIRS=$RACERDIRS
 for d in ${RACERDIRS}; do
@@ -21,6 +23,7 @@ for d in ${RACERDIRS}; do
 done
 
 DURATION=${DURATION:-120}
+PIDFILE=$TMP/racer.$$
 
 assert_env CLIENTS
 
@@ -105,7 +108,7 @@ racer_cleanup () {
 		done
 	else
 		echo "Racer completed before DURATION=$DURATION expired. Cleaning up..."
-		kill $TIMERPID
+		kill $TIMERPID || true
 		for dir in $RDIRS; do
 			do_racer_cleanup $dir
 		done
@@ -114,36 +117,47 @@ racer_cleanup () {
 
 racer_timeout () {
 	timeout="timeout"
+	RACERPID=$(cat $PIDFILE)
+	rm -f $PIDFILE
 	racer_cleanup
 	echo "$0: completed $RC"
-	exit $RC
+	return $RC
 }
 
-# run racer
-log "Start racer on clients: $CLIENTS DURATION=$DURATION"
-RC=0
-
+build_test_filter
+check_and_setup_lustre
 trap racer_timeout ALRM
 
-timer_on $((DURATION + 5))
+# run racer
+test_1() {
+    RC=0
 
-RACERPID=""
-for rdir in $RDIRS; do
-	do_nodes $CLIENTS "DURATION=$DURATION $racer $rdir $NUM_RACER_THREADS" &
-	pid=$!
-	RACERPID="$RACERPID $pid"
-done
+    timer_on $((DURATION + 5))
 
-echo RACERPID=$RACERPID
-for rpid in $RACERPID; do
-	wait $rpid
-	rc=$?
-	echo "rpid=$rpid rc=$rc"
-	if [ $rc != 0 ]; then
-		RC=$((RC + 1))
-	fi
-done
+    RACERPID=""
+    for rdir in $RDIRS; do
+        do_nodes $CLIENTS "DURATION=$DURATION $racer $rdir $NUM_RACER_THREADS" &
+        pid=$!
+        RACERPID="$RACERPID $pid"
+    done
 
-racer_cleanup
-echo "$0: completed $RC"
-exit $RC
+    echo RACERPID=$RACERPID
+    echo $RACERPID > $PIDFILE
+    for rpid in $RACERPID; do
+        wait $rpid
+        rc=$?
+        echo "rpid=$rpid rc=$rc"
+        if [ $rc != 0 ]; then
+                RC=$((RC + 1))
+        fi
+    done
+
+    racer_cleanup
+
+    return $RC
+}
+run_test 1 "racer on clients: $CLIENTS DURATION=$DURATION"
+
+equals_msg `basename $0`: test complete, cleaning up
+check_and_cleanup_lustre
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

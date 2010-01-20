@@ -42,6 +42,7 @@ CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 23 33a"
 
@@ -67,6 +68,9 @@ rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
+
+mkdir -p $MOUNT2
+mount_client $MOUNT2
 
 test_1a() {
 	touch $DIR1/f1
@@ -916,6 +920,7 @@ run_test 37 "check i_size is not updated for directory on close (bug 18695) ====
 
 log "cleanup: ======================================================"
 
+[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
 check_and_cleanup_lustre
 
 echo '=========================== finished ==============================='

@@ -6,10 +6,13 @@
 
 set -e
 
+ONLY=${ONLY:-"$*"}
+
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 MAX_THREADS=${MAX_THREADS:-20}
 RAMKB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`

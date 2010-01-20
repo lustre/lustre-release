@@ -11,6 +11,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 [ -x "$MDSRATE" ] || FAIL_ON_ERROR=true error "No mdsrate program. Aborting."
 which mpirun > /dev/null 2>&1 || \

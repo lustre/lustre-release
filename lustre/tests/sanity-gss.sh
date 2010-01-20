@@ -33,8 +33,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+require_dsh_mds || exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="100 101"
 

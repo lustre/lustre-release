@@ -10,6 +10,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     CONFIG_EXCEPTIONS="52"
@@ -18,7 +19,7 @@ if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
 fi
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+require_dsh_mds || exit 0
 
 # also long tests: 19, 21a, 21e, 21f, 23, 27
 #                                   1  2.5  2.5    4    4          (min)"

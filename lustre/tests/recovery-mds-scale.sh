@@ -14,6 +14,7 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug

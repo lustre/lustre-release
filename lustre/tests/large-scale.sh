@@ -15,6 +15,7 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 

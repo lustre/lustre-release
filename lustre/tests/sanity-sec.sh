@@ -22,6 +22,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 RUNAS=${RUNAS:-"$LUSTRE/tests/runas"}
 WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
@@ -31,8 +32,8 @@ PERM_CONF=$CONFDIR/perm.conf
 SANITYSECLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_mds || exit 0
+require_dsh_ost || exit 0
 
 ID0=${ID0:-500}
 ID1=${ID1:-501}

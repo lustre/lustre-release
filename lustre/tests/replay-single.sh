@@ -13,10 +13,11 @@ CLEANUP=${CLEANUP:-}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number:  17466 18857,15962
