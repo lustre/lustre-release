@@ -141,7 +141,9 @@ int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
         rc = ptlrpc_set_add_new_req(pc, req);
         /*
          * XXX disable this for CLIO: environment is needed for interpreter.
+         *     add debug temporary to check rc.
          */
+        LASSERTF(rc == 0, "ptlrpcd_add_req failed (rc = %d)\n", rc);
         if (rc && 0) {
                 /*
                  * Thread is probably in stop now so we need to
@@ -153,6 +155,11 @@ int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
                 ptlrpc_req_interpret(NULL, req, -EBADR);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
+        } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING) {
+                /*
+                 * The request is for recovery, should be sent ASAP.
+                 */
+                cfs_waitq_signal(&pc->pc_set->set_waitq);
         }
 
         return rc;

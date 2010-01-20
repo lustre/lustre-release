@@ -729,7 +729,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_TRANSNO);
 
-        DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
+        DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %d)",
+                  request->rq_timeout);
         ptlrpcd_add_req(request, PSCOPE_OTHER);
         rc = 0;
 out:
