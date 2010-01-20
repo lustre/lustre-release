@@ -47,11 +47,23 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+/* return index of the first byte not matching given byte
+ * or buffer size if all bytes are matching */
+static size_t check_bytes(const char *buf, int byte, size_t len)
+{
+        const char *p;
+
+        for (p = buf; p < buf + len; p++)
+                if (*p != byte)
+                        break;
+        return p - buf;
+}
+
 int main(int argc, char **argv)
 {
 #ifdef O_DIRECT
         int fd;
-        char *wbuf, *fname;
+        char *buf, *fname;
         int blocks, seek_blocks;
         long len;
         off64_t seek;
@@ -106,12 +118,12 @@ int main(int argc, char **argv)
         seek = (off64_t)seek_blocks * (off64_t)st.st_blksize;
         len = blocks * st.st_blksize;
 
-        wbuf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
-        if (wbuf == MAP_FAILED) {
+        buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
+        if (buf == MAP_FAILED) {
                 printf("No memory %s\n", strerror(errno));
                 return 1;
         }
-        memset(wbuf, pad, len);
+        memset(buf, pad, len);
 
         if (action == O_WRONLY || action == O_RDWR) {
                 if (lseek64(fd, seek, SEEK_SET) < 0) {
@@ -119,7 +131,7 @@ int main(int argc, char **argv)
                         return 1;
                 }
 
-                rc = write(fd, wbuf, len);
+                rc = write(fd, buf, len);
                 if (rc != len) {
                         printf("Write error %s (rc = %d, len = %ld)\n",
                                strerror(errno), rc, len);
@@ -128,26 +140,19 @@ int main(int argc, char **argv)
         }
 
         if (action == O_RDONLY || action == O_RDWR) {
-                char *rbuf;
-
                 if (lseek64(fd, seek, SEEK_SET) < 0) {
                         printf("Cannot seek %s\n", strerror(errno));
                         return 1;
                 }
-
-                rbuf =mmap(0,len,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,0,0);
-                if (rbuf == MAP_FAILED) {
-                        printf("No memory %s\n", strerror(errno));
-                        return 1;
-                }
-
-                rc = read(fd, rbuf, len);
+                /* reset all bytes to something nor 0x0 neither 0xab */
+                memset(buf, 0x5e, len);
+                rc = read(fd, buf, len);
                 if (rc != len) {
                         printf("Read error: %s rc = %d\n",strerror(errno),rc);
                         return 1;
                 }
 
-                if (memcmp(wbuf, rbuf, len)) {
+                if (check_bytes(buf, pad, len) != len) {
                         printf("Data mismatch\n");
                         return 1;
                 }
