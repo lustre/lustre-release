@@ -907,6 +907,8 @@ int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
+void ptlrpc_server_active_request_inc(struct ptlrpc_request *req);
+void ptlrpc_server_active_request_dec(struct ptlrpc_request *req);
 void ptlrpc_server_drop_request(struct ptlrpc_request *req);
 
 

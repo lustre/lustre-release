@@ -425,6 +425,32 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
 }
 
 /**
+ * increment the number of active requests consuming service threads.
+ */
+void ptlrpc_server_active_request_inc(struct ptlrpc_request *req)
+{
+        struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
+        struct ptlrpc_service *svc = rqbd->rqbd_service;
+
+        spin_lock(&svc->srv_lock);
+        svc->srv_n_active_reqs++;
+        spin_unlock(&svc->srv_lock);
+}
+
+/**
+ * decrement the number of active requests consuming service threads.
+ */
+void ptlrpc_server_active_request_dec(struct ptlrpc_request *req)
+{
+        struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
+        struct ptlrpc_service *svc = rqbd->rqbd_service;
+
+        spin_lock(&svc->srv_lock);
+        svc->srv_n_active_reqs--;
+        spin_unlock(&svc->srv_lock);
+}
+
+/**
  * drop a reference count of the request. if it reaches 0, we either
  * put it into history list, or free it immediately.
  */
