@@ -673,24 +673,37 @@ out:
 int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct obd_device_target *obt = &obd->u.obt;
         int rc;
         struct lvfs_run_ctxt saved;
+        ENTRY;
 
         if (oqctl->qc_type != USRQUOTA &&
             oqctl->qc_type != GRPQUOTA &&
             oqctl->qc_type != UGQUOTA)
                 RETURN(-EINVAL);
 
+        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                GOTO(out, rc = -EBUSY);
+        }
+
+        if (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))
+                GOTO(out, rc = -EBUSY);
+
         down(&mds->mds_qonoff_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         oqctl->qc_cmd = Q_FINVALIDATE;
-        rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
+        rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
         if (!rc)
                 rc = obd_quotactl(mds->mds_lov_exp, oqctl);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&mds->mds_qonoff_sem);
+        EXIT;
+out:
+        atomic_inc(&obt->obt_quotachecking);
 
         return rc;
 }
