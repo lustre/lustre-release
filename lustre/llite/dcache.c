@@ -51,6 +51,7 @@
 
 #include "llite_internal.h"
 
+cfs_spinlock_t ll_lookup_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static void ll_release(struct dentry *de)
@@ -209,7 +210,9 @@ int ll_drop_dentry(struct dentry *dentry)
                 __d_drop(dentry);
                 unlock_dentry(dentry);
                 spin_unlock(&dcache_lock);
+                cfs_spin_unlock(&ll_lookup_lock);
                 dput(dentry);
+                cfs_spin_lock(&ll_lookup_lock);
                 spin_lock(&dcache_lock);
                 return 1;
         }
@@ -250,6 +253,7 @@ void ll_unhash_aliases(struct inode *inode)
                inode->i_ino, inode->i_generation, inode);
 
         head = &inode->i_dentry;
+        cfs_spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
 restart:
         tmp = head;
@@ -272,6 +276,7 @@ restart:
                           goto restart;
         }
         spin_unlock(&dcache_lock);
+        cfs_spin_unlock(&ll_lookup_lock);
 
         EXIT;
 }
@@ -294,7 +299,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
         RETURN(rc);
 }
 
-void ll_finish_locks(struct lookup_intent *it, struct dentry *dentry)
+void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 {
         LASSERT(it != NULL);
         LASSERT(dentry != NULL);
@@ -496,12 +501,14 @@ revalidate_finish:
 
         /* unfortunately ll_intent_lock may cause a callback and revoke our
          * dentry */
+        cfs_spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
         lock_dentry(de);
         __d_drop(de);
         unlock_dentry(de);
         d_rehash_cond(de, 0);
         spin_unlock(&dcache_lock);
+        cfs_spin_unlock(&ll_lookup_lock);
 
 out:
         /* We do not free request as it may be reused during following lookup
@@ -512,12 +519,14 @@ out:
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);
+                /* done in ll_unhash_aliases()
+                   dentry->d_flags |= DCACHE_LUSTRE_INVALID; */
         } else {
                 CDEBUG(D_DENTRY, "revalidated dentry %.*s (%p) parent %p "
                        "inode %p refc %d\n", de->d_name.len,
                        de->d_name.name, de, de->d_parent, de->d_inode,
                        atomic_read(&de->d_count));
-                ll_finish_locks(it, de);
+                ll_lookup_finish_locks(it, de);
                 lock_dentry(de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
                 unlock_dentry(de);
@@ -544,7 +553,7 @@ do_lookup:
                 /* MDS_INODELOCK_UPDATE needed for IT_GETATTR case. */
                 if (it->it_op == IT_GETATTR)
                         lookup_it.it_op = IT_GETATTR;
-                ll_finish_locks(it, de);
+                ll_lookup_finish_locks(it, de);
                 it = &lookup_it;
         }
 

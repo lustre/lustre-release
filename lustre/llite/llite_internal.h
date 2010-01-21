@@ -389,10 +389,15 @@ struct ll_sb_info {
 
         /* metadata stat-ahead */
         unsigned int              ll_sa_max;     /* max statahead RPCs */
-        cfs_atomic_t              ll_sa_total;   /* statahead thread started
-                                                  * count */
-        cfs_atomic_t              ll_sa_wrong;   /* statahead thread stopped for
+        unsigned int              ll_sa_wrong;   /* statahead thread stopped for
                                                   * low hit ratio */
+        unsigned int              ll_sa_total;   /* statahead thread started
+                                                  * count */
+        unsigned long long        ll_sa_blocked; /* ls count waiting for
+                                                  * statahead */
+        unsigned long long        ll_sa_cached;  /* ls count got in cache */
+        unsigned long long        ll_sa_hit;     /* hit count */
+        unsigned long long        ll_sa_miss;    /* miss count */
 
         dev_t                     ll_sdev_orig; /* save s_dev before assign for
                                                  * clustred nfs */
@@ -581,6 +586,7 @@ struct lookup_intent *ll_convert_intent(struct open_intent *oit,
 #endif
 int ll_lookup_it_finish(struct ptlrpc_request *request,
                         struct lookup_intent *it, void *data);
+void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
@@ -665,6 +671,7 @@ int ll_fid2path(struct obd_export *exp, void *arg);
 /**
  * protect race ll_find_aliases vs ll_revalidate_it vs ll_unhash_aliases
  */
+extern cfs_spinlock_t ll_lookup_lock;
 extern struct dentry_operations ll_d_ops;
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
@@ -673,7 +680,7 @@ extern void ll_set_dd(struct dentry *de);
 int ll_drop_dentry(struct dentry *dentry);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
-void ll_finish_locks(struct lookup_intent *it, struct dentry *dentry);
+void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
 int ll_revalidate_it_finish(struct ptlrpc_request *request,
                             struct lookup_intent *it, struct dentry *de);
