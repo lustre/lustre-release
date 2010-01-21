@@ -259,16 +259,19 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
         oqctl->qc_cmd = Q_QUOTAON;
         oqctl->qc_id = obt->obt_qfmt;
 
-        is_master= !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
-        if (is_master && local) {
+        is_master = !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
+        if (is_master) {
                 down(&obd->u.mds.mds_qonoff_sem);
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                /* turn on cluster wide quota */
-                rc = mds_admin_quota_on(obd, oqctl);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                if (rc && rc != -ENOENT)
-                        CERROR("%s: %s admin quotaon failed. rc=%d\n",
-                               obd->obd_name, global ? "global" : "local", rc);
+                if (local) {
+                        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        /* turn on cluster wide quota */
+                        rc = mds_admin_quota_on(obd, oqctl);
+                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        if (rc && rc != -ENOENT)
+                                CERROR("%s: %s admin quotaon failed. rc=%d\n",
+                                       obd->obd_name, global? "global":"local",
+                                       rc);
+                }
         }
 
         if (rc == 0) {
