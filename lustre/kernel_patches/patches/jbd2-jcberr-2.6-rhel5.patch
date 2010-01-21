@@ -101,12 +101,12 @@ Index: linux-2.6.18-128.1.6/fs/jbd2/checkpoint.c
  
 Index: linux-2.6.18-128.1.6/fs/jbd2/commit.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/jbd2/commit.c	2009-04-15 08:35:28.000000000 +0530
-+++ linux-2.6.18-128.1.6/fs/jbd2/commit.c	2009-05-28 15:12:45.000000000 +0530
-@@ -898,6 +898,30 @@
+--- linux-2.6.18-164.6.1/fs/jbd2/commit.c	2010-01-21 11:24:52.000000000 +0530
++++ linux-2.6.18-164.6.1_new/fs/jbd2/commit.c	2010-01-21 11:26:36.000000000 +0530
+@@ -832,6 +832,29 @@ wait_for_iobuf:
+            processing: any buffers committed as a result of this
             transaction can be removed from any checkpoint list it was on
             before. */
- 
 +	/*
 +	 * Call any callbacks that had been registered for handles in this
 +	 * transaction.  It is up to the callback to free any allocated
@@ -130,10 +130,9 @@ Index: linux-2.6.18-128.1.6/fs/jbd2/commit.c
 +		}
 +	}
 +	spin_unlock(&commit_transaction->t_jcb_lock);
-+
- 	jbd_debug(3, "JBD: commit phase 7\n");
  
- 	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
+ 	jbd_debug(3, "JBD: commit phase 6\n");
+ 
 Index: linux-2.6.18-128.1.6/fs/jbd2/journal.c
 ===================================================================
 --- linux-2.6.18-128.1.6.orig/fs/jbd2/journal.c	2009-04-15 08:35:28.000000000 +0530
