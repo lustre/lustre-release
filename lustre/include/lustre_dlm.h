@@ -795,6 +795,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
+void ldlm_cancel_locks_for_export(struct obd_export *export);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_reprocess_all_ns(struct ldlm_namespace *ns);
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos);

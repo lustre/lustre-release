@@ -2364,6 +2364,7 @@ EXPORT_SYMBOL(ldlm_lock_set_data);
 EXPORT_SYMBOL(ldlm_it2str);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_lock_dump_handle);
+EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(ldlm_reprocess_all_ns);
 EXPORT_SYMBOL(ldlm_lock_allow_match);
 
@@ -2420,7 +2421,6 @@ EXPORT_SYMBOL(client_obd_setup);
 EXPORT_SYMBOL(client_obd_cleanup);
 EXPORT_SYMBOL(client_connect_import);
 EXPORT_SYMBOL(client_disconnect_export);
-EXPORT_SYMBOL(server_disconnect_export);
 EXPORT_SYMBOL(target_abort_recovery);
 EXPORT_SYMBOL(target_cleanup_recovery);
 EXPORT_SYMBOL(target_handle_connect);
