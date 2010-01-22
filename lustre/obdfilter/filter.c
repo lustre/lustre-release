@@ -1564,7 +1564,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
 static void filter_fini_destroy(struct obd_device *obd,
                                 struct lustre_handle *lockh)
 {
-        if (lockh->cookie)
+        if (lustre_handle_is_used(lockh))
                 ldlm_lock_decref(lockh, LCK_PW);
 }
 
@@ -4089,7 +4089,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = -ENOENT);
         }
 
-        filter_prepare_destroy(obd, oa->o_id, oa->o_gr, &lockh);
+        rc = filter_prepare_destroy(obd, oa->o_id, oa->o_gr, &lockh);
+        if (rc)
+                GOTO(cleanup, rc);
 
         /* Our MDC connection is established by the MDS to us */
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
