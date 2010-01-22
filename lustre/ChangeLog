@@ -12,6 +12,27 @@ tbd  Sun Microsystems, Inc.
        * Recommended e2fsprogs version: 1.41.6.sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+
+Severity   : normal
+Bugzilla   : 20057
+Description: New acc-sm script and various test-framework enhancments.
+
+Severity   : normal
+Bugzilla   : 15962
+Description: Previously landed patch was reverted.
+
+Severity   : normal
+Bugzilla   : 20758
+Description: Update SLES10 kernel to 2.6.10.60-0.42.8 (patchless)
+
+Severity   : normal
+Bugzilla   : 19673
+Description: Add ldiskfs maxdirsize mount option.
+
+Severity   : normal
+Bugzilla   : 20301
+Description: Fix mkfs.lustre support for 16TB LUNs.
+
 Severity   : normal
 Bugzilla   : 21547
 Description: Add cascading_rw to lustre mpi tests.
@@ -168,7 +189,7 @@ Severity   : normal
 Bugzilla   : 14951
 Description: Improved cleanup procedure for conf-sanity test_46a.
 
-Severity   : normal 
+Severity   : normal
 Bugzilla   : 18674
 Description: Do not start bulk transfer, if client tried to reconnect.
 Details    : Do not start bulk transfer, if client tried to reconnect,
@@ -185,7 +206,7 @@ Severity   : enhancement
 Bugzilla   : 19955
 Description: provide server to client comms path
 Details    : server to client communications path via new LDLM_SET_INFO rpc
-	
+
 Severity   : normal
 Bugzilla   : 20008
 Description: truncate starts GFP_FS allocation under transaction causing deadlock
