@@ -1385,7 +1385,7 @@ put_conn:
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
                "%s:%s+%d:%d:x"LPU64":%s:%d Request procesed in "
-               "%lds (%lds total) trans "LPU64" rc %d/%d\n",
+               "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
                cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
