@@ -1,6 +1,7 @@
-diff -up linux-2.6.18-164/fs/ext4/ext4.h linux-2.6.18-164/fs/ext4/ext4.h
---- linux-2.6.18-164/fs/ext4/ext4.h	2009-10-16 23:26:25.000000000 +0800
-+++ linux-2.6.18-164/fs/ext4/ext4.h	2009-10-16 23:31:41.000000000 +0800
+Index: linux-2.6.18-164.6.1/fs/ext4/ext4.h
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/ext4/ext4.h
++++ linux-2.6.18-164.6.1/fs/ext4/ext4.h
 @@ -539,6 +539,7 @@ do {									       \
  #define EXT4_MOUNT_QUOTA		0x80000 /* Some quota option set */
  #define EXT4_MOUNT_USRQUOTA		0x100000 /* "old" user quota */
@@ -9,9 +10,10 @@ diff -up linux-2.6.18-164/fs/ext4/ext4.h linux-2.6.18-164/fs/ext4/ext4.h
  #define EXT4_MOUNT_JOURNAL_CHECKSUM	0x800000 /* Journal checksums */
  #define EXT4_MOUNT_JOURNAL_ASYNC_COMMIT	0x1000000 /* Journal Async Commit */
  #define EXT4_MOUNT_I_VERSION            0x2000000 /* i_version support */
-diff -up linux-2.6.18-164/fs/ext4/ext4_jbd2.h linux-2.6.18-164/fs/ext4/ext4_jbd2.h
---- linux-2.6.18-164/fs/ext4/ext4_jbd2.h	2009-10-16 23:26:25.000000000 +0800
-+++ linux-2.6.18-164/fs/ext4/ext4_jbd2.h	2009-10-16 23:32:02.000000000 +0800
+Index: linux-2.6.18-164.6.1/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/ext4/ext4_jbd2.h
++++ linux-2.6.18-164.6.1/fs/ext4/ext4_jbd2.h
 @@ -33,7 +33,7 @@
  
  #define EXT4_SINGLEDATA_TRANS_BLOCKS(sb)				\
@@ -21,9 +23,10 @@ diff -up linux-2.6.18-164/fs/ext4/ext4_jbd2.h linux-2.6.18-164/fs/ext4/ext4_jbd2
  
  /* Indicate that EXT4_SINGLEDATA_TRANS_BLOCKS takes the sb as argument */
  #define EXT4_SINGLEDATA_TRANS_BLOCKS_HAS_SB
-diff -up linux-2.6.18-164/fs/ext4/extents.c linux-2.6.18-164/fs/ext4/extents.c
---- linux-2.6.18-164/fs/ext4/extents.c	2009-10-16 23:26:25.000000000 +0800
-+++ linux-2.6.18-164/fs/ext4/extents.c	2009-10-16 23:33:36.000000000 +0800
+Index: linux-2.6.18-164.6.1/fs/ext4/extents.c
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/ext4/extents.c
++++ linux-2.6.18-164.6.1/fs/ext4/extents.c
 @@ -2313,7 +2313,7 @@ void ext4_ext_init(struct super_block *s
  	 * possible initialization would be here
  	 */
@@ -42,9 +45,10 @@ diff -up linux-2.6.18-164/fs/ext4/extents.c linux-2.6.18-164/fs/ext4/extents.c
  		return;
  
  #ifdef EXTENTS_STATS
-diff -up linux-2.6.18-164/fs/ext4/ialloc.c linux-2.6.18-164/fs/ext4/ialloc.c
---- linux-2.6.18-164/fs/ext4/ialloc.c	2009-10-16 23:26:25.000000000 +0800
-+++ linux-2.6.18-164/fs/ext4/ialloc.c	2009-10-16 23:34:38.000000000 +0800
+Index: linux-2.6.18-164.6.1/fs/ext4/ialloc.c
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/ext4/ialloc.c
++++ linux-2.6.18-164.6.1/fs/ext4/ialloc.c
 @@ -938,7 +938,7 @@ got:
  	if (err)
  		goto fail_free_drop;
@@ -54,9 +58,10 @@ diff -up linux-2.6.18-164/fs/ext4/ialloc.c linux-2.6.18-164/fs/ext4/ialloc.c
  		/* set extent flag only for directory, file and normal symlink*/
  		if (S_ISDIR(mode) || S_ISREG(mode) || S_ISLNK(mode)) {
  			EXT4_I(inode)->i_flags |= EXT4_EXTENTS_FL;
-diff -up linux-2.6.18-164/fs/ext4/migrate.c linux-2.6.18-164/fs/ext4/migrate.c
---- linux-2.6.18-164/fs/ext4/migrate.c	2009-09-28 16:11:26.000000000 +0800
-+++ linux-2.6.18-164/fs/ext4/migrate.c	2009-10-16 23:36:49.000000000 +0800
+Index: linux-2.6.18-164.6.1/fs/ext4/migrate.c
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/ext4/migrate.c
++++ linux-2.6.18-164.6.1/fs/ext4/migrate.c
 @@ -459,13 +459,13 @@ int ext4_ext_migrate(struct inode *inode
  	struct list_blocks_struct lb;
  	unsigned long max_entries;
@@ -78,10 +83,11 @@ diff -up linux-2.6.18-164/fs/ext4/migrate.c linux-2.6.18-164/fs/ext4/migrate.c
  		return -EINVAL;
  
  	if (S_ISLNK(inode->i_mode) && inode->i_blocks == 0)
-diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
---- linux-2.6.18-164/fs/ext4/super.c	2009-10-16 23:26:25.000000000 +0800
-+++ linux-2.6.18-164/fs/ext4/super.c	2009-10-16 23:48:19.000000000 +0800
-@@ -849,6 +849,8 @@ static int ext4_show_options(struct seq_
+Index: linux-2.6.18-164.6.1/fs/ext4/super.c
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/ext4/super.c
++++ linux-2.6.18-164.6.1/fs/ext4/super.c
+@@ -844,6 +844,8 @@ static int ext4_show_options(struct seq_
  		seq_puts(seq, ",journal_async_commit");
  	if (test_opt(sb, NOBH))
  		seq_puts(seq, ",nobh");
@@ -90,24 +96,24 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
  	if (test_opt(sb, I_VERSION))
  		seq_puts(seq, ",i_version");
  	if (!test_opt(sb, DELALLOC))
-@@ -1334,6 +1336,7 @@ enum {
+@@ -1346,6 +1348,7 @@ enum {
+ 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_bigendian_extents,
- 	Opt_force_over_8tb,
 +	Opt_extents, Opt_noextents,
  };
  
  static match_table_t tokens = {
-@@ -1401,6 +1404,8 @@ static match_table_t tokens = {
+@@ -1413,6 +1416,8 @@ static match_table_t tokens = {
+ 	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
  	{Opt_bigendian_extents, "bigendian_extents"},
- 	{Opt_force_over_8tb, "force_over_8tb"},
 +	{Opt_extents, "extents"},
 +	{Opt_noextents, "noextents"},
  	{Opt_err, NULL},
  };
  
-@@ -1441,6 +1446,7 @@ static int parse_options(char *options, 
+@@ -1453,6 +1458,7 @@ static int parse_options(char *options, 
  	int qtype, qfmt;
  	char *qname;
  #endif
@@ -115,9 +121,9 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
  
  	if (!options)
  		return 1;
-@@ -1829,6 +1835,33 @@ set_qf_format:
- 		case Opt_force_over_8tb:
- 			force_over_8tb = 1;
+@@ -1840,6 +1846,33 @@ set_qf_format:
+ 			break;
+ 		case Opt_mballoc:
  			break;
 +		case Opt_extents:
 +			if (!EXT4_HAS_INCOMPAT_FEATURE(sb,
@@ -149,7 +155,7 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
  		default:
  			printk(KERN_ERR
  			       "EXT4-fs: Unrecognized mount option \"%s\" "
-@@ -2501,6 +2534,18 @@ static int ext4_fill_super(struct super_
+@@ -2513,6 +2546,18 @@ static int ext4_fill_super(struct super_
  	set_opt(sbi->s_mount_opt, BARRIER);
  
  	/*
