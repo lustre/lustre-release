@@ -117,7 +117,13 @@ int ptlrpcd_add_req(struct ptlrpc_request *req)
                 ptlrpc_req_interpret(req, -EBADR);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
+        } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING) {
+               /*
+                * The request is for recovery, should be sent ASAP.
+                */
+               cfs_waitq_signal(&pc->pc_set->set_waitq);
         }
+
         return rc;
 }
 
