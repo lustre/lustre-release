@@ -804,8 +804,8 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
         lov->lov_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
-                                                   HASH_POOLS_CUR_BITS,
-                                                   &pool_hash_operations, 0);
+                                                   HASH_POOLS_MAX_BITS,
+                                                   &pool_hash_operations, CFS_HASH_REHASH);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
         rc = lov_ost_pool_init(&lov->lov_packed, 0);

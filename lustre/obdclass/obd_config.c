@@ -358,24 +358,24 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* create an uuid-export lustre hash */
         obd->obd_uuid_hash = cfs_hash_create("UUID_HASH",
                                              HASH_UUID_CUR_BITS,
-                                             HASH_UUID_CUR_BITS,
-                                             &uuid_hash_ops, 0);
+                                             HASH_UUID_MAX_BITS,
+                                             &uuid_hash_ops, CFS_HASH_REHASH);
         if (!obd->obd_uuid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-export lustre hash */
         obd->obd_nid_hash = cfs_hash_create("NID_HASH",
                                             HASH_NID_CUR_BITS,
-                                            HASH_NID_CUR_BITS,
-                                            &nid_hash_ops, 0);
+                                            HASH_NID_MAX_BITS,
+                                            &nid_hash_ops, CFS_HASH_REHASH);
         if (!obd->obd_nid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-stats lustre hash */
         obd->obd_nid_stats_hash = cfs_hash_create("NID_STATS",
                                                   HASH_NID_STATS_CUR_BITS,
-                                                  HASH_NID_STATS_CUR_BITS,
-                                                  &nid_stat_hash_ops, 0);
+                                                  HASH_NID_STATS_MAX_BITS,
+                                                  &nid_stat_hash_ops, CFS_HASH_REHASH);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
