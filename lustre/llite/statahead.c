@@ -1067,7 +1067,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         struct ll_inode_info     *lli;
         struct ll_statahead_info *sai;
         struct dentry            *parent;
-        struct l_wait_info        lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+        struct l_wait_info        lwi = { 0 };
         int                       rc = 0;
         ENTRY;
 
@@ -1118,6 +1118,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                         /*
                          * thread started already, avoid double-stat.
                          */
+                        lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
                         rc = l_wait_event(sai->sai_waitq,
                                           ll_sai_entry_stated(sai) ||
                                           sa_is_stopped(sai),
