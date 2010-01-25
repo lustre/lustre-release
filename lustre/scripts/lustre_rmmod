@@ -19,12 +19,13 @@ fi
 unload_dep_module() {
     # libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
     local MODULE=$1
-    local DEPS=$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')
+    local DEPS="$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')"
     for SUBMOD in $DEPS; do
         unload_dep_module $SUBMOD
     done
-    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug || true
-    $RMMOD $MODULE || true
+    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug >/dev/null || true
+    $RMMOD $MODULE 2>/dev/null || true
+    return 0
 }
 
 lsmod | grep libcfs > /dev/null && $LCTL dl
