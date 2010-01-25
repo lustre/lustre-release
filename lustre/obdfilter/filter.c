@@ -1424,6 +1424,7 @@ obd_id filter_last_id(struct filter_obd *filter, obd_gr group)
         obd_id id;
         LASSERT(filter->fo_fsd != NULL);
         LASSERT(group <= filter->fo_group_count);
+        LASSERT(filter->fo_last_objids != NULL);
 
         /* FIXME: object groups */
         cfs_spin_lock(&filter->fo_objidlock);

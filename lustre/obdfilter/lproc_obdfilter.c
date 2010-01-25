@@ -101,7 +101,7 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
         struct filter_obd *filter = &obd->u.filter;
         int retval = 0, rc, i;
 
-        if (obd == NULL)
+        if (obd == NULL || !obd->obd_set_up || obd->obd_stopping)
                 return 0;
         rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, 0));
         if (rc < 0)
