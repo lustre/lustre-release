@@ -1254,10 +1254,10 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 opc = OST_WRITE;
                 req = ptlrpc_request_alloc_pool(cli->cl_import,
                                                 cli->cl_import->imp_rq_pool,
-                                                &RQF_OST_BRW);
+                                                &RQF_OST_BRW_WRITE);
         } else {
                 opc = OST_READ;
-                req = ptlrpc_request_alloc(cli->cl_import, &RQF_OST_BRW);
+                req = ptlrpc_request_alloc(cli->cl_import, &RQF_OST_BRW_READ);
         }
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -1391,8 +1391,6 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                         body->oa.o_flags |= cksum_type_pack(cli->cl_cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                 }
-                req_capsule_set_size(pill, &RMF_RCS, RCL_SERVER, 0);
-                /* 1 RC for the whole I/O */
         }
         ptlrpc_request_set_replen(req);
 

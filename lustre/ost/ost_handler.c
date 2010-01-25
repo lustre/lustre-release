@@ -681,7 +681,6 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
         }
 
-        req_capsule_set_size(&req->rq_pill, &RMF_RCS, RCL_SERVER, 0);
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 GOTO(out, rc);
@@ -1898,7 +1897,12 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                          * it doesn't change).
                          */
                         req_capsule_init(&req->rq_pill, req, RCL_SERVER);
-                        req_capsule_set(&req->rq_pill, &RQF_OST_BRW);
+                        if (opc == OST_READ)
+                                req_capsule_set(&req->rq_pill,
+                                                &RQF_OST_BRW_READ);
+                        else
+                                req_capsule_set(&req->rq_pill,
+                                                &RQF_OST_BRW_WRITE);
 
                         body = req_capsule_client_get(&req->rq_pill,
                                                       &RMF_OST_BODY);
@@ -2081,7 +2085,7 @@ int ost_handle(struct ptlrpc_request *req)
                 rc = ost_setattr(req->rq_export, req, oti);
                 break;
         case OST_WRITE:
-                req_capsule_set(&req->rq_pill, &RQF_OST_BRW);
+                req_capsule_set(&req->rq_pill, &RQF_OST_BRW_WRITE);
                 CDEBUG(D_INODE, "write\n");
                 /* req->rq_request_portal would be nice, if it was set */
                 if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
@@ -2102,7 +2106,7 @@ int ost_handle(struct ptlrpc_request *req)
                 /* ost_brw_write sends its own replies */
                 RETURN(rc);
         case OST_READ:
-                req_capsule_set(&req->rq_pill, &RQF_OST_BRW);
+                req_capsule_set(&req->rq_pill, &RQF_OST_BRW_READ);
                 CDEBUG(D_INODE, "read\n");
                 /* req->rq_request_portal would be nice, if it was set */
                 if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
