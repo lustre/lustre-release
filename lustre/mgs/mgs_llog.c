@@ -2814,6 +2814,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
         cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
         int rc, len = strlen(fsname);
+        char *suffix;
         ENTRY;
 
         /* Find all the logs in the CONFIGS directory */
@@ -2833,9 +2834,14 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
 
         cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 cfs_list_del(&dirent->lld_list);
-                if (strncmp(fsname, dirent->lld_name, len) == 0) {
-                        CDEBUG(D_MGS, "Removing log %s\n", dirent->lld_name);
-                        mgs_erase_log(obd, dirent->lld_name);
+                suffix = strrchr(dirent->lld_name, '-');
+                if (suffix != NULL) {
+                        if ((len == suffix - dirent->lld_name) &&
+                            (strncmp(fsname, dirent->lld_name, len) == 0)) {
+                                CDEBUG(D_MGS, "Removing log %s\n",
+                                       dirent->lld_name);
+                                mgs_erase_log(obd, dirent->lld_name);
+                        }
                 }
                 OBD_FREE(dirent, sizeof(*dirent));
         }
