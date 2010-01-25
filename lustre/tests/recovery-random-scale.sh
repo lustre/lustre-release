@@ -292,9 +292,11 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     # the value ( SERVER_FAILOVER_PERIOD - MINSLEEP )
     if [ $sleep -lt $MINSLEEP ]; then
         reqfail=$((reqfail +1))
-        log "WARNING: failover, client reintegration and check_client_loads time
-exceeded SERVER_FAILOVER_PERIOD - MINSLEEP !
-Failed to meet interval $reqfail times ( REQFAIL=$REQFAIL ); have sleep=$sleep"
+        log "WARNING: failover, client reintegration and check_client_loads time exceeded SERVER_FAILOVER_PERIOD - MINSLEEP !
+Failed to load the filesystem with I/O for a minimum period of $MINSLEEP $reqfail times ( REQFAIL=$REQFAIL ).
+This iteration, the load was only applied for sleep=$sleep seconds.
+Probably the hardware is taking excessively long to boot.
+Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), bug 20918"
         [ $reqfail -gt $REQFAIL ] && exit 6 
     fi  
 
