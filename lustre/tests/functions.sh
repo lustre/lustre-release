@@ -48,3 +48,53 @@ mpi_run () {
     return $rc
 }
 
+nids_list () {
+   local list
+   for i in ${1//,/ }; do
+       list="$list $i@$NETTYPE"
+   done
+   echo $list
+}
+
+# FIXME: all setup/cleanup can be done without rpc.sh
+lst_end_session () {
+    local verbose=false
+    [ x$1 = x--verbose ] && verbose=true
+
+    export LST_SESSION=`$LST show_session 2>/dev/null | awk -F " " '{print $5}'`
+    [ "$LST_SESSION" == "" ] && return
+
+    if $verbose; then 
+        $LST show_error c s
+    fi
+    $LST stop b
+    $LST end_session
+}
+
+lst_session_cleanup_all () {
+    local list=$(comma_list $(nodes_list))
+    do_rpc_nodes $list lst_end_session
+}
+
+lst_cleanup () {
+    lsmod | grep -q lnet_selftest && rmmod lnet_selftest > /dev/null 2>&1 || true
+}
+
+lst_cleanup_all () {
+   local list=$(comma_list $(nodes_list))
+
+   # lst end_session needs to be executed only locally
+   # i.e. on node where lst new_session was called
+   lst_end_session --verbose 
+   do_rpc_nodes $list lst_cleanup
+}
+
+lst_setup () {
+    load_module lnet_selftest
+}
+
+lst_setup_all () {
+    local list=$(comma_list $(nodes_list))
+    do_rpc_nodes $list lst_setup 
+}
+
