@@ -318,7 +318,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
 
         if (req) {
                 spin_lock(&req->rq_lock);
-                req->rq_replay = 1;
+                req->rq_replay = req->rq_import->imp_replayable;
                 spin_unlock(&req->rq_lock);
 
                 /* pack the intent */
