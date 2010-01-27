@@ -182,13 +182,18 @@ lustre_hash_exit(lustre_hash_t *lh)
                         lh_exit(lh, hnode);
                 }
 
-                LASSERT(hlist_empty(&(lhb->lhb_head)));
-                LASSERT(atomic_read(&lhb->lhb_count) == 0);
+                LASSERTF(hlist_empty(&(lhb->lhb_head)),
+                         "hash bucket %d from %s is not empty\n", i, lh->lh_name);
+                LASSERTF(atomic_read(&lhb->lhb_count) == 0,
+                         "hash bucket %d from %s has #entries > 0 (%d)\n", i,
+                         lh->lh_name, atomic_read(&lhb->lhb_count));
                 write_unlock(&lhb->lhb_rwlock);
                 LIBCFS_FREE_PTR(lhb);
         }
 
-        LASSERT(atomic_read(&lh->lh_count) == 0);
+        LASSERTF(atomic_read(&lh->lh_count) == 0,
+                 "hash %s still has #entries > 0 (%d)\n", lh->lh_name,
+                 atomic_read(&lh->lh_count));
         lh_write_unlock(lh);
 
         LIBCFS_FREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
