@@ -267,7 +267,7 @@ static int filter_export_stats_init(struct obd_device *obd,
 
                 OBD_ALLOC(tmp->nid_brw_stats, sizeof(struct brw_stats));
                 if (tmp->nid_brw_stats == NULL)
-                        RETURN(-ENOMEM);
+                        GOTO(clean, rc = -ENOMEM);
 
                 init_brw_stats(tmp->nid_brw_stats);
                 rc = lprocfs_seq_create(exp->exp_nid_stats->nid_proc, "brw_stats",
@@ -278,27 +278,30 @@ static int filter_export_stats_init(struct obd_device *obd,
 
                 rc = lprocfs_init_rw_stats(obd, &exp->exp_nid_stats->nid_stats);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(clean, rc);
 
                 rc = lprocfs_register_stats(tmp->nid_proc, "stats",
                                             tmp->nid_stats);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(clean, rc);
                 /* Always add in ldlm_stats */
                 tmp->nid_ldlm_stats = 
                         lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
                                             LPROCFS_STATS_FLAG_NOPERCPU);
                 if (tmp->nid_ldlm_stats == NULL)
-                        return -ENOMEM;
+                        GOTO(clean, rc = -ENOMEM);
 
                 lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
                 rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
                                             tmp->nid_ldlm_stats);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(clean, rc);
         }
 
         RETURN(0);
+ clean:
+        lprocfs_exp_cleanup(exp);
+        return rc;
 }
 
 /* Add client data to the FILTER.  We use a bitmap to locate a free space
@@ -2853,6 +2856,7 @@ cleanup:
                         fed->fed_lcd = NULL;
                 }
                 class_disconnect(lexp);
+                lprocfs_exp_cleanup(lexp);
                 *exp = NULL;
         } else {
                 *exp = lexp;

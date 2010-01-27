@@ -63,6 +63,7 @@ static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 {
         lnet_nid_t *client_nid = localdata;
         int rc, newnid;
+        ENTRY;
 
         rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
@@ -70,7 +71,7 @@ static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
                  * /proc entries */
                 if (rc == -EALREADY)
                         rc = 0;
-                return rc;
+                RETURN(rc);
         }
 
         if (newnid) {
@@ -79,12 +80,17 @@ static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
                         lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
                                             LPROCFS_STATS_FLAG_NOPERCPU);
                 if (exp->exp_nid_stats->nid_ldlm_stats == NULL)
-                        return -ENOMEM;
+                        GOTO(clean, rc = -ENOMEM);
                 lprocfs_init_ldlm_stats(exp->exp_nid_stats->nid_ldlm_stats);
                 rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc,
                                             "ldlm_stats",
                                             exp->exp_nid_stats->nid_ldlm_stats);
+                if (rc)
+                        GOTO(clean, rc);
         }
+        RETURN(0);
+clean:
+        lprocfs_exp_cleanup(exp);
         return rc;
 }
 
