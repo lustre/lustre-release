@@ -350,9 +350,9 @@ lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
         i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
-        LASSERT(!hlist_unhashed(hnode));
 
         write_lock(&lhb->lhb_rwlock);
+        LASSERT(!hlist_unhashed(hnode));
         obj = __lustre_hash_bucket_del(lh, lhb, hnode);
         write_unlock(&lhb->lhb_rwlock);
         lh_read_unlock(lh);
