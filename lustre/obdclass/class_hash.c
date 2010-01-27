@@ -740,7 +740,7 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
                 write_lock(&new_lhb->lhb_rwlock);
                 write_lock(&old_lhb->lhb_rwlock);
         } else { /* do nothing */
-                read_unlock(&lh->lh_rwlock);
+                lh_read_unlock(lh);
                 EXIT;
                 return;
         }
