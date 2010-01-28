@@ -152,6 +152,9 @@ int cfs_create_thread(cfs_thread_t func, void *arg);
 #endif
 
 uid_t cfs_curproc_uid(void);
+gid_t cfs_curproc_gid(void);
+uid_t cfs_curproc_fsuid(void);
+gid_t cfs_curproc_fsgid(void);
 
 #define LIBCFS_REALLOC(ptr, size) realloc(ptr, size)
 

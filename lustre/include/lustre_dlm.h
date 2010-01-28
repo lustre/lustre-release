@@ -1058,7 +1058,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
-                     ldlm_policy_data_t *policy, int *flags,
+                     ldlm_policy_data_t const *policy, int *flags,
                      void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
                      int async);
 int ldlm_prep_enqueue_req(struct obd_export *exp,

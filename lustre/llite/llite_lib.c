@@ -1284,7 +1284,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
         if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET)) {
-                if (current->fsuid != inode->i_uid &&
+                if (cfs_curproc_fsuid() != inode->i_uid &&
                     !cfs_capable(CFS_CAP_FOWNER))
                         RETURN(-EPERM);
         }
@@ -1858,7 +1858,7 @@ int ll_flush_ctx(struct inode *inode)
 {
         struct ll_sb_info  *sbi = ll_i2sbi(inode);
 
-        CDEBUG(D_SEC, "flush context for user %d\n", current->uid);
+        CDEBUG(D_SEC, "flush context for user %d\n", cfs_curproc_uid());
 
         obd_set_info_async(sbi->ll_md_exp,
                            sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
@@ -1881,7 +1881,7 @@ void ll_umount_begin(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
-        struct obd_ioctl_data ioc_data = { 0 };
+        struct obd_ioctl_data *ioc_data;
         ENTRY;
 
 #ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
@@ -1905,8 +1905,6 @@ void ll_umount_begin(struct super_block *sb)
                 return;
         }
         obd->obd_force = 1;
-        obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_md_exp, sizeof ioc_data,
-                      &ioc_data, NULL);
 
         obd = class_exp2obd(sbi->ll_dt_exp);
         if (obd == NULL) {
@@ -1915,10 +1913,19 @@ void ll_umount_begin(struct super_block *sb)
                 EXIT;
                 return;
         }
-
         obd->obd_force = 1;
-        obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_dt_exp, sizeof ioc_data,
-                      &ioc_data, NULL);
+
+        OBD_ALLOC_PTR(ioc_data);
+        if (ioc_data) {
+                obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_md_exp,
+                              sizeof ioc_data, ioc_data, NULL);
+
+                obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_dt_exp,
+                              sizeof ioc_data, ioc_data, NULL);
+
+                OBD_FREE_PTR(ioc_data);
+        }
+
 
         /* Really, we'd like to wait until there are no requests outstanding,
          * and then continue.  For now, we just invalidate the requests,
@@ -2117,8 +2124,8 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
         op_data->op_namelen = namelen;
         op_data->op_mode = mode;
         op_data->op_mod_time = cfs_time_current_sec();
-        op_data->op_fsuid = current->fsuid;
-        op_data->op_fsgid = current->fsgid;
+        op_data->op_fsuid = cfs_curproc_fsuid();
+        op_data->op_fsgid = cfs_curproc_fsgid();
         op_data->op_cap = cfs_curproc_cap_pack();
         op_data->op_bias = MDS_CHECK_SPLIT;
         op_data->op_opc = opc;

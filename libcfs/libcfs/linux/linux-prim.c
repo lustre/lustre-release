@@ -40,6 +40,7 @@
 #endif
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/fs_struct.h>
 #include <linux/sched.h>
 
 #include <libcfs/libcfs.h>
@@ -241,18 +242,23 @@ void cfs_daemonize(char *str) {
 }
 
 int cfs_daemonize_ctxt(char *str) {
-        struct task_struct *tsk = current;
-        struct fs_struct *fs = NULL;
 
         cfs_daemonize(str);
+#ifndef HAVE_UNSHARE_FS_STRUCT
+        {
+        struct task_struct *tsk = current;
+        struct fs_struct *fs = NULL;
         fs = copy_fs_struct(tsk->fs);
         if (fs == NULL)
                 return -ENOMEM;
         exit_fs(tsk);
         tsk->fs = fs;
+        }
+#else
+        unshare_fs_struct();
+#endif
         return 0;
 }
-
 
 sigset_t
 cfs_get_blockedsigs(void)

@@ -508,7 +508,7 @@ AC_DEFUN([LIBCFS_NETWORK_NAMESPACE],
 LB_LINUX_TRY_COMPILE([
         #include <net/net_namespace.h>
 ],[
-        struct net *net = &init_ns;
+        struct net *net = &init_net;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_INIT_NET, 1,
@@ -644,6 +644,70 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LIBCFS_CRED_WRAPPERS
+#
+# wrappers for task's credentials are in sles11
+#
+AC_DEFUN([LIBCFS_CRED_WRAPPERS],
+[AC_MSG_CHECKING([if kernel has wrappers for task's credentials])
+LB_LINUX_TRY_COMPILE([
+       #include <linux/sched.h>
+],[
+       uid_t uid;
+
+       uid = current_uid();
+],[
+       AC_MSG_RESULT([yes])
+       AC_DEFINE(HAVE_CRED_WRAPPERS, 1, [task's cred wrappers found])
+],[
+       AC_MSG_RESULT([no])
+])
+])
+
+#
+# LN_STRUCT_CRED_IN_TASK
+#
+# struct cred was introduced in 2.6.29 to streamline credentials in task struct
+#
+AC_DEFUN([LIBCFS_STRUCT_CRED_IN_TASK],
+[AC_MSG_CHECKING([if kernel has struct cred])
+LB_LINUX_TRY_COMPILE([
+       #include <linux/sched.h>
+],[
+       struct task_struct *tsk = NULL;
+       tsk->real_cred = NULL;
+],[
+       AC_MSG_RESULT([yes])
+       AC_DEFINE(HAVE_STRUCT_CRED, 1, [struct cred found])
+],[
+       AC_MSG_RESULT([no])
+])
+])
+
+#
+# LIBCFS_FUNC_UNSHARE_FS_STRUCT
+#
+# unshare_fs_struct was introduced in 2.6.30 to prevent others to directly
+# mess with copy_fs_struct
+#
+AC_DEFUN([LIBCFS_FUNC_UNSHARE_FS_STRUCT],
+[AC_MSG_CHECKING([if kernel defines unshare_fs_struct()])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+       #include <linux/sched.h>
+       #include <linux/fs_struct.h>
+],[
+       unshare_fs_struct();
+],[
+       AC_MSG_RESULT([yes])
+       AC_DEFINE(HAVE_UNSHARE_FS_STRUCT, 1, [unshare_fs_struct found])
+],[
+       AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 #
 # LIBCFS_PROG_LINUX
 #
@@ -687,6 +751,12 @@ LIBCFS_NETLINK_NETNS
 LIBCFS_FUNC_DUMP_TRACE
 # 2.6.26
 LIBCFS_SEM_COUNT
+# 2.6.27
+LIBCFS_CRED_WRAPPERS
+# 2.6.29
+LIBCFS_STRUCT_CRED_IN_TASK
+# 2.6.30
+LIBCFS_FUNC_UNSHARE_FS_STRUCT
 LIBCFS_SOCK_MAP_FD_2ARG
 ])
 

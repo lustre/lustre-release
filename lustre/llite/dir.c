@@ -1080,7 +1080,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                 GOTO(out_quotactl, rc = -EPERM);
                         break;
                 case Q_GETQUOTA:
-                        if (((type == USRQUOTA && current->euid != id) ||
+                        if (((type == USRQUOTA && cfs_curproc_euid() != id) ||
                              (type == GRPQUOTA && !in_egroup_p(id))) &&
                             (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
                              sbi->ll_flags & LL_SBI_RMT_CLIENT))

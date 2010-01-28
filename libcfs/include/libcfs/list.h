@@ -525,6 +525,16 @@ static inline void cfs_hlist_add_after(cfs_hlist_node_t *n,
 	     prefetch(pos->member.next))
 #endif /* cfs_list_for_each_entry */
 
+#ifndef cfs_list_for_each_entry_rcu
+#define cfs_list_for_each_entry_rcu(pos, head, member) \
+       list_for_each_entry(pos, head, member)
+#endif
+
+#ifndef cfs_list_for_each_entry_rcu
+#define cfs_list_for_each_entry_rcu(pos, head, member) \
+       list_for_each_entry(pos, head, member)
+#endif
+
 #ifndef cfs_list_for_each_entry_reverse
 /**
  * Iterate backwards over a list of given type.

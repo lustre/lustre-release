@@ -277,8 +277,8 @@ struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
                         remove_dead = 0;
                 }
         } else {
-                vcred.vc_uid = cfs_current()->uid;
-                vcred.vc_gid = cfs_current()->gid;
+                vcred.vc_uid = cfs_curproc_uid();
+                vcred.vc_gid = cfs_curproc_gid();
         }
 
         return sec->ps_policy->sp_cops->lookup_ctx(sec, &vcred,
@@ -1473,7 +1473,7 @@ void sptlrpc_import_flush_root_ctx(struct obd_import *imp)
 
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp)
 {
-        import_flush_ctx_common(imp, cfs_current()->uid, 1, 1);
+        import_flush_ctx_common(imp, cfs_curproc_uid(), 1, 1);
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_my_ctx);
 
@@ -2290,10 +2290,10 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 
         pud = lustre_msg_buf(msg, offset, 0);
 
-        pud->pud_uid = cfs_current()->uid;
-        pud->pud_gid = cfs_current()->gid;
-        pud->pud_fsuid = cfs_current()->fsuid;
-        pud->pud_fsgid = cfs_current()->fsgid;
+        pud->pud_uid = cfs_curproc_uid();
+        pud->pud_gid = cfs_curproc_gid();
+        pud->pud_fsuid = cfs_curproc_fsuid();
+        pud->pud_fsgid = cfs_curproc_fsgid();
         pud->pud_cap = cfs_curproc_cap_pack();
         pud->pud_ngroups = (msg->lm_buflens[offset] - sizeof(*pud)) / 4;
 
@@ -2301,7 +2301,7 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
         task_lock(current);
         if (pud->pud_ngroups > current_ngroups)
                 pud->pud_ngroups = current_ngroups;
-        memcpy(pud->pud_groups, cfs_current()->group_info->blocks[0],
+        memcpy(pud->pud_groups, current_cred()->group_info->blocks[0],
                pud->pud_ngroups * sizeof(__u32));
         task_unlock(current);
 #endif

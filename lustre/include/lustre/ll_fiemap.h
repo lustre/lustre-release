@@ -122,9 +122,6 @@ static inline unsigned fiemap_size_to_count(size_t array_size)
 #undef FIEMAP_FLAGS_COMPAT
 #endif
 
-#define FIEMAP_FLAGS_COMPAT    (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR | \
-                                FIEMAP_FLAG_DEVICE_ORDER)
-
 /* Lustre specific flags - use a high bit, don't conflict with upstream flag */
 #define FIEMAP_EXTENT_NO_DIRECT         0x40000000 /* Data mapping undefined */
 #define FIEMAP_EXTENT_NET               0x80000000 /* Data stored remotely.

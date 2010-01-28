@@ -131,17 +131,17 @@ static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
         if (!lli->lli_remote_perms)
                 RETURN(-ENOENT);
 
-        head = lli->lli_remote_perms + remote_perm_hashfunc(current->uid);
+        head = lli->lli_remote_perms + remote_perm_hashfunc(cfs_curproc_uid());
 
         cfs_spin_lock(&lli->lli_lock);
         cfs_hlist_for_each_entry(lrp, node, head, lrp_list) {
-                if (lrp->lrp_uid != current->uid)
+                if (lrp->lrp_uid != cfs_curproc_uid())
                         continue;
-                if (lrp->lrp_gid != current->gid)
+                if (lrp->lrp_gid != cfs_curproc_gid())
                         continue;
-                if (lrp->lrp_fsuid != current->fsuid)
+                if (lrp->lrp_fsuid != cfs_curproc_fsuid())
                         continue;
-                if (lrp->lrp_fsgid != current->fsgid)
+                if (lrp->lrp_fsgid != cfs_curproc_fsgid())
                         continue;
                 found = 1;
                 break;

@@ -274,7 +274,7 @@ if test x$RHEL_KERNEL = xyes; then
 else
 	case $LINUXRELEASE in
 	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
-	2.6.2[0-6]*) enable_ext4='no' ;;
+	2.6.2[[0-9]]*) enable_ext4='no' ;;
 	*)  LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
 				[enable_ext4='no']) ;;
 	esac

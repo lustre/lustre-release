@@ -362,8 +362,8 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                  *  cfs_curproc_fs{u,g}id() should replace
                  *  current->fs{u,g}id for portability.
                  */
-                rec->sx_fsuid  = current->fsuid;
-                rec->sx_fsgid  = current->fsgid;
+                rec->sx_fsuid  = cfs_curproc_fsuid();
+                rec->sx_fsgid  = cfs_curproc_fsgid();
                 rec->sx_cap    = cfs_curproc_cap_pack();
                 rec->sx_suppgid1 = suppgid;
                 rec->sx_suppgid2 = -1;
