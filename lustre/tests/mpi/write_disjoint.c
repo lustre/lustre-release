@@ -222,6 +222,7 @@ int main (int argc, char *argv[]) {
                                 rprintf(0, n, "data check error - exiting\n");
                         }
                 }
+                MPI_Barrier(MPI_COMM_WORLD);
         }
 
         printf("Finished after %d loops\n", n);
