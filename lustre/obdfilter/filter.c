@@ -1433,8 +1433,9 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         if (dir_dentry == NULL)
                 filter_parent_unlock(dparent);
         if (IS_ERR(dchild)) {
-                CERROR("%s: child lookup error %ld\n", obd->obd_name,
-                       PTR_ERR(dchild));
+                CERROR("%s: child lookup error for object O/%.*s/%s (%ld)\n",
+                       obd->obd_name, dparent->d_name.len, dparent->d_name.name,
+                       name, PTR_ERR(dchild));
                 RETURN(dchild);
         }
 
@@ -3353,6 +3354,10 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 cleanup_phase = 1;      /* filter_parent_unlock(dparent) */
 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
+                if (IS_ERR(dchild) && PTR_ERR(dchild) == -ESTALE) {
+                        CERROR("parent %p child %p\n", dparent, dchild);
+                        LBUG();
+                }
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
                 cleanup_phase = 2;      /* f_dput(dchild) */

@@ -1,0 +1,13 @@
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -4145,6 +4145,8 @@ struct inode *ext4_iget(struct super_blo
+ 		if (inode->i_mode == 0 ||
+ 		    !(EXT4_SB(inode->i_sb)->s_mount_state & EXT4_ORPHAN_FS)) {
+ 			/* this inode is deleted */
++			printk("ext4_iget() returns ESTALE for inode %lu (%p)"
++			       "\n", ino, inode);
+ 			brelse(bh);
+ 			ret = -ESTALE;
+ 			goto bad_inode;
