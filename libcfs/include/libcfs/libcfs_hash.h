@@ -175,11 +175,9 @@ cfs_hash_key(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         LASSERT(hs);
         LASSERT(hnode);
         LASSERT(CFS_HO(hs));
+        LASSERT(CFS_HOP(hs, key));
 
-        if (CFS_HOP(hs, key))
-                return CFS_HOP(hs, key)(hnode);
-
-        return NULL;
+        return CFS_HOP(hs, key)(hnode);
 }
 
 /* Returns 1 on a match,
