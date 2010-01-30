@@ -1225,6 +1225,9 @@ existing_lock:
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
 
+                if (rc == 0 && obddev->obd_fail)
+                        rc = -ENOTCONN;
+
                 if (rc == 0) {
                         lock_res_and_lock(lock);
                         size[DLM_REPLY_REC_OFF] = lock->l_resource->lr_lvb_len;
