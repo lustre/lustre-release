@@ -108,7 +108,8 @@ int mdt_version_get_check(struct mdt_thread_info *info, int index)
                 RETURN(0);
 
         LASSERT(info->mti_mos[index]);
-        LASSERT(mdt_object_exists(info->mti_mos[index]));
+        if (mdt_object_exists(info->mti_mos[index]) == 0)
+                RETURN(-ESTALE);
         mo = mdt_object_child(info->mti_mos[index]);
 
         curr_version = mo_version_get(info->mti_env, mo);
