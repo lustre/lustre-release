@@ -1129,6 +1129,13 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 repbody->oa.o_gid = o_gid;
         }
 
+        /*
+         * Disable sending mtime back to the client. If the client locked the
+         * whole object, then it has already updated the mtime on its side,
+         * otherwise it will have to glimpse anyway (see bug 21489, comment 32)
+         */
+        repbody->oa.o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLATIME);
+
         if (unlikely(client_cksum != server_cksum && rc == 0)) {
                 int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
                 char *msg;
