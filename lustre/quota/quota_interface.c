@@ -839,7 +839,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 
 
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct osc_quota_info *oqi, *old;
+                struct osc_quota_info *oqi = NULL, *old;
 
                 if (!(valid & ((cnt == USRQUOTA) ?
                     OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA)))
@@ -849,12 +849,16 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
                 noquota = (cnt == USRQUOTA) ?
                     (flags & OBD_FL_NO_USRQUOTA) : (flags & OBD_FL_NO_GRPQUOTA);
 
-                oqi = alloc_qinfo(cli, id, cnt);
-                if (!oqi) {
-                        rc = -ENOMEM;
-                        CDEBUG(D_QUOTA, "setdq for %s %d failed, (rc = %d)\n",
-                               cnt == USRQUOTA ? "user" : "group", id, rc);
-                        break;
+                if (noquota) {
+                        oqi = alloc_qinfo(cli, id, cnt);
+                        if (!oqi) {
+                                rc = -ENOMEM;
+                                CDEBUG(D_QUOTA, "setdq for %s %d failed, "
+                                       "(rc = %d)\n",
+                                       cnt == USRQUOTA ? "user" : "group",
+                                       id, rc);
+                                break;
+                        }
                 }
 
                 cfs_spin_lock(&qinfo_list_lock);
@@ -865,17 +869,19 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
                         insert_qinfo_hash(oqi);
                 cfs_spin_unlock(&qinfo_list_lock);
 
-                if (old || !noquota)
-                        free_qinfo(oqi);
-                if (old && !noquota)
-                        free_qinfo(old);
-
                 if (old && !noquota)
                         CDEBUG(D_QUOTA, "setdq to remove for %s %d\n",
                                cnt == USRQUOTA ? "user" : "group", id);
                 else if (!old && noquota)
                         CDEBUG(D_QUOTA, "setdq to insert for %s %d\n",
                                cnt == USRQUOTA ? "user" : "group", id);
+
+                if (old) {
+                        if (noquota)
+                                free_qinfo(oqi);
+                        else
+                                free_qinfo(old);
+                }
         }
 
         RETURN(rc);

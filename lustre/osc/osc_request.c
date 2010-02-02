@@ -1477,24 +1477,31 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         __u32 client_cksum = 0;
         ENTRY;
 
-        if (rc < 0 && rc != -EDQUOT)
+        if (rc < 0 && rc != -EDQUOT) {
+                DEBUG_REQ(D_INFO, req, "Failed request with rc = %d\n", rc);
                 RETURN(rc);
+        }
 
         LASSERTF(req->rq_repmsg != NULL, "rc = %d\n", rc);
         body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL) {
-                CDEBUG(D_INFO, "Can't unpack body\n");
+                DEBUG_REQ(D_INFO, req, "Can't unpack body\n");
                 RETURN(-EPROTO);
         }
 
+#ifdef HAVE_QUOTA_SUPPORT
         /* set/clear over quota flag for a uid/gid */
         if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE &&
             body->oa.o_valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)) {
                 unsigned int qid[MAXQUOTAS] = { body->oa.o_uid, body->oa.o_gid };
 
+                CDEBUG(D_QUOTA, "setdq for [%u %u] with valid %llx, flags %x\n",
+                       body->oa.o_uid, body->oa.o_gid, body->oa.o_valid,
+                       body->oa.o_flags);
                 lquota_setdq(quota_interface, cli, qid, body->oa.o_valid,
                              body->oa.o_flags);
         }
+#endif
 
         if (rc < 0)
                 RETURN(rc);
