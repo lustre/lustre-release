@@ -1,17 +1,22 @@
 tbd  Sun Microsystems, Inc.
        * version 2.0.0
        * Server support for kernels:
-         2.6.18-164.6.1.el5 (RHEL 5)
-         2.6.18-164.6.1.0.1.el5 (OEL 5)
+         2.6.18-164.11.1.el5 (RHEL 5)
+         2.6.18-164.11.1.0.1.el5 (OEL 5)
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-         2.6.18-164.6.1.el5 (RHEL 5),
-         2.6.18-164.6.1.0.1.el5 (OEL 5)
+         2.6.18-164.11.1.el5 (RHEL 5),
+         2.6.18-164.11.1.0.1.el5 (OEL 5)
          2.6.16.60-0.42.8 (SLES 10),
          2.6.27.19-5 (SLES11)
        * Recommended e2fsprogs version: 1.41.6.sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+
+Severity   : normal
+Bugzilla   : 21632
+Description: Update RHEL5.4 kernel to 2.6.18-164.11.1.el5 and
+	     OEL5.4 kernel to 2.6.18-164.11.1.0.1.el5.
 
 Severity   : normal
 Bugzilla   : 20057
@@ -23,7 +28,7 @@ Description: Previously landed patch was reverted.
 
 Severity   : normal
 Bugzilla   : 20758
-Description: Update SLES10 kernel to 2.6.10.60-0.42.8 (patchless)
+Description: Update SLES10 kernel to 2.6.16.60-0.42.8 (patchless)
 
 Severity   : normal
 Bugzilla   : 19673
