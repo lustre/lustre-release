@@ -65,6 +65,7 @@ extern cfs_spinlock_t obd_dev_lock;
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
 extern struct obd_device *class_exp2obd(struct obd_export *);
+extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 struct lu_device_type;
 
