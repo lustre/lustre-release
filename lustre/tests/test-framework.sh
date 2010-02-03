@@ -2523,7 +2523,10 @@ check_runas_id_ret() {
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
     chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
-    $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=1
+    if ! $myRUNAS touch $DIR/d0_runas_test/f$$ ; then
+        do_nodes --verbose $(comma_list $(nodes_list)) grep -w $myRUNAS_UID /etc/passwd
+        myRC=1
+    fi
     rm -rf $DIR/d0_runas_test
     return $myRC
 }

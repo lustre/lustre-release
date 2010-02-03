@@ -2177,10 +2177,10 @@ test_98()
         local missing_users=""
 
         for user in $SANITY_QUOTA_USERS; do
-                check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" >/dev/null 2>/dev/null || \
+                check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" || \
                        missing_users="$missing_users $user"
         done
-        [ -n "$missing_users" ] && { skip_env "the following users are missing: $missing_users" ; return 0 ; }
+        [ -n "$missing_users" ] && { skip_env "different uid-s on client and servers, or missing users: $missing_users" ; return 0 ; }
 
         cleanupall
         formatall
