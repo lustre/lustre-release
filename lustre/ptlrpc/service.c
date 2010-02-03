@@ -230,6 +230,22 @@ static void rs_batch_init(struct rs_batch *b)
 }
 
 /**
+ * Choose an hr thread to dispatch requests to.
+ */
+static unsigned int get_hr_thread_index(struct ptlrpc_hr_service *hr)
+{
+        unsigned int idx;
+
+        /* Concurrent modification of hr_index w/o any spinlock
+           protection is harmless as long as the result fits
+           [0..(hr_n_threads-1)] range and each thread gets near equal
+           load. */
+        idx = hr->hr_index;
+        hr->hr_index = (idx >= hr->hr_n_threads - 1) ? 0 : idx + 1;
+        return idx;
+}
+
+/**
  * Dispatch all replies accumulated in the batch to one from
  * dedicated reply handling threads.
  *
@@ -241,9 +257,7 @@ static void rs_batch_dispatch(struct rs_batch *b)
                 struct ptlrpc_hr_service *hr = ptlrpc_hr;
                 int idx;
 
-                idx = hr->hr_index++;
-                if (hr->hr_index >= hr->hr_n_threads)
-                        hr->hr_index = 0;
+                idx = get_hr_thread_index(hr);
 
                 cfs_spin_lock(&hr->hr_threads[idx].hrt_lock);
                 cfs_list_splice_init(&b->rsb_replies,
@@ -319,9 +333,7 @@ void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs)
 
         LASSERT(cfs_list_empty(&rs->rs_list));
 
-        idx = hr->hr_index++;
-        if (hr->hr_index >= hr->hr_n_threads)
-                hr->hr_index = 0;
+        idx = get_hr_thread_index(hr);
         cfs_spin_lock(&hr->hr_threads[idx].hrt_lock);
         cfs_list_add_tail(&rs->rs_list, &hr->hr_threads[idx].hrt_queue);
         cfs_spin_unlock(&hr->hr_threads[idx].hrt_lock);
