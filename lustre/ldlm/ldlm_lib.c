@@ -1714,7 +1714,7 @@ static int target_recovery_thread(void *arg)
         int rc = 0;
         ENTRY;
 
-        cfs_daemonize("tgt_recov");
+        cfs_daemonize_ctxt("tgt_recov");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
