@@ -279,7 +279,6 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
                         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                         /* turn on local quota */
                         rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
-                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                         if (rc) {
                                 if (rc != -ENOENT)
                                         CERROR("%s: %s quotaon failed with"
@@ -287,7 +286,11 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
                                                global ? "global" : "local", rc);
                         } else {
                                 obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                                /* when quotaon, create lqs for every
+                                 * quota uid/gid b=18574 */
+                                build_lqs(obd);
                         }
+                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 }
 
                 if (rc == 0 && global && is_master)
@@ -439,15 +442,13 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         if (type != 0) {
                 int rc = auto_quota_on(obd, type - 1);
 
-                if (rc == 0)
-                        build_lqs(obd);
-                else if (rc == -ENOENT)
+                if (rc == -ENOENT)
                         CWARN("%s: quotaon failed because quota files don't "
                               "exist, please run quotacheck firstly\n",
                               obd->obd_name);
                 else if (rc == -EALREADY)
                         CWARN("%s: quota is on already!\n", obd->obd_name);
-                else
+                else if (rc != 0)
                         return rc;
         }
 

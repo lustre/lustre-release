@@ -129,8 +129,6 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 rc = mds_quota_on(obd, oqctl);
-                /* when quotaon, create lqs for every quota uid/gid b=18574 */
-                build_lqs(obd);
                 break;
         case Q_QUOTAOFF:
                 oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
@@ -195,8 +193,6 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         case Q_QUOTAON:
                 oqctl->qc_id = obt->obt_qfmt;
                 rc = generic_quota_on(obd, oqctl, 0);
-                /* when quotaon, create lqs for every quota uid/gid b=18574 */
-                build_lqs(obd);
                 break;
         case Q_FINVALIDATE:
         case Q_QUOTAOFF:
