@@ -63,6 +63,7 @@ extern cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
 extern struct obd_device *class_exp2obd(struct obd_export *);
+extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);

@@ -81,6 +81,7 @@
 #include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <obd_class.h>
+#include <lnet/lnetctl.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
 #include <lustre/lustre_build_version.h>
@@ -178,23 +179,22 @@ int obd_ioctl_popdata(void *arg, void *data, int len)
 EXPORT_SYMBOL(obd_ioctl_getdata);
 EXPORT_SYMBOL(obd_ioctl_popdata);
 
-#define OBD_MINOR 241
-extern struct cfs_psdev_ops          obd_psdev_ops;
-
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
-        if (obd_psdev_ops.p_open != NULL)
-                return obd_psdev_ops.p_open(0, NULL);
-        return -EPERM;
+        ENTRY;
+
+        PORTAL_MODULE_USE;
+        RETURN(0);
 }
 
 /*  closing /dev/obd */
 static int obd_class_release(struct inode * inode, struct file * file)
 {
-        if (obd_psdev_ops.p_close != NULL)
-                return obd_psdev_ops.p_close(0, NULL);
-        return -EPERM;
+        ENTRY;
+
+        PORTAL_MODULE_UNUSE;
+        RETURN(0);
 }
 
 /* to control /dev/obd */
@@ -210,10 +210,7 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);
 
-        if (obd_psdev_ops.p_ioctl != NULL)
-                err = obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);
-        else
-                err = -EPERM;
+        err = class_handle_ioctl(cmd, (unsigned long)arg);
 
         RETURN(err);
 }
@@ -228,8 +225,8 @@ static struct file_operations obd_psdev_fops = {
 
 /* modules setup */
 cfs_psdev_t obd_psdev = {
-        .minor = OBD_MINOR,
-        .name  = "obd_psdev",
+        .minor = OBD_DEV_MINOR,
+        .name  = OBD_DEV_NAME,
         .fops  = &obd_psdev_fops,
 };
 

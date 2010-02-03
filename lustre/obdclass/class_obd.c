@@ -44,6 +44,7 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
+#include <lnet/lnetctl.h>
 #include <lustre_debug.h>
 #include <lprocfs_status.h>
 #include <lustre/lustre_build_version.h>
@@ -92,24 +93,6 @@ unsigned int obd_print_fail_loc(void)
 void obd_set_fail_loc(unsigned int fl)
 {
         obd_fail_loc = fl;
-}
-
-/*  opening /dev/obd */
-static int obd_class_open(unsigned long flags, void *args)
-{
-        ENTRY;
-
-        PORTAL_MODULE_USE;
-        RETURN(0);
-}
-
-/*  closing /dev/obd */
-static int obd_class_release(unsigned long flags, void *args)
-{
-        ENTRY;
-
-        PORTAL_MODULE_UNUSE;
-        RETURN(0);
 }
 #endif
 
@@ -374,24 +357,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
 
 
-#define OBD_MINOR 241
 #ifdef __KERNEL__
-/* to control /dev/obd */
-static int obd_class_ioctl (struct cfs_psdev_file *pfile, unsigned long cmd,
-                            void *arg)
-{
-        return class_handle_ioctl(cmd, (unsigned long)arg);
-}
-
-/* declare character device */
-struct cfs_psdev_ops obd_psdev_ops = {
-        /* .p_open    = */ obd_class_open,      /* open */
-        /* .p_close   = */ obd_class_release,   /* release */
-        /* .p_read    = */ NULL,
-        /* .p_write   = */ NULL,
-        /* .p_ioctl   = */ obd_class_ioctl     /* ioctl */
-};
-
 extern cfs_psdev_t obd_psdev;
 #else
 void *obd_psdev = NULL;
@@ -592,7 +558,7 @@ int init_obdclass(void)
 
         err = cfs_psdev_register(&obd_psdev);
         if (err) {
-                CERROR("cannot register %d err %d\n", OBD_MINOR, err);
+                CERROR("cannot register %d err %d\n", OBD_DEV_MINOR, err);
                 return err;
         }
 

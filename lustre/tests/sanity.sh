@@ -4307,7 +4307,7 @@ test_103 () {
 }
 run_test 103 "acl test ========================================="
 
-test_104() {
+test_104a() {
 	touch $DIR/$tfile
 	lfs df || error "lfs df failed"
 	lfs df -ih || error "lfs df -ih failed"
@@ -4322,7 +4322,18 @@ test_104() {
 	lctl --device %$OSC recover
 	lfs df || error "lfs df with reactivated OSC failed"
 }
-run_test 104 "lfs df [-ih] [path] test ========================="
+run_test 104a "lfs df [-ih] [path] test ========================="
+
+test_104b() {
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	chmod 666 /dev/obd
+	denied_cnt=$((`$RUNAS $LFS check servers 2>&1 | grep "Permission denied" | wc -l`))
+	if [ $denied_cnt -ne 0 ];
+	then
+	            error "lfs check servers test failed"
+	fi
+}
+run_test 104b "$RUNAS lfs check servers test ===================="
 
 test_105a() {
 	# doesn't work on 2.4 kernels

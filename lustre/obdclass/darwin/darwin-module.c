@@ -145,26 +145,22 @@ int obd_ioctl_popdata(void *arg, void *data, int len)
 		return err;
 	}
 }
-/*
- * cfs pseudo device
- */
-extern struct cfs_psdev_ops          obd_psdev_ops;
 
 static int
 obd_class_open(dev_t dev, int flags, int devtype, struct proc *p)
 {
-	if (obd_psdev_ops.p_open != NULL)
-		return -obd_psdev_ops.p_open(0, NULL);
-	return EPERM;
+	ENTRY;
+
+	RETURN(0);
 }
 
 /*  closing /dev/obd */
 static int
 obd_class_release(dev_t dev, int flags, int mode, struct proc *p)
 {
-	if (obd_psdev_ops.p_close != NULL)
-		return -obd_psdev_ops.p_close(0, NULL);
-	return EPERM;
+	ENTRY;
+
+	RETURN(0);
 }
 
 static int
@@ -175,10 +171,8 @@ obd_class_ioctl(dev_t dev, u_long cmd, caddr_t arg, int flag, struct proc *p)
 
 	if (!is_suser())
 		RETURN (EPERM);
-	if (obd_psdev_ops.p_ioctl != NULL)
-		err = -obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);
-	else
-		err = EPERM;
+
+	err = class_handle_ioctl(cmd, (unsigned long)arg);
 
 	RETURN(err);
 }
