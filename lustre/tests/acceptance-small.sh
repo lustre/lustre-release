@@ -2,7 +2,7 @@
 # script which _must_ complete successfully (at minimum) before checkins to
 # the CVS HEAD are allowed.
 #set -vx
-set -eTE
+set -e
 
 export MSKIPPED=0
 export OSKIPPED=0
