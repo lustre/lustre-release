@@ -47,8 +47,8 @@ export LRSYNC="$LRSYNC -v" # -a
 
 # control the time of tests
 DBENCH_TIME=${DBENCH_TIME:-60}  # No of seconds to run dbench
-TGT=/tmp/target
-TGT2=/tmp/target2
+TGT=$TMP/target
+TGT2=$TMP/target2
 MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid | \
     awk '{gsub(/_UUID/,""); print $1}' | head -1)
 
@@ -66,8 +66,9 @@ init_src() {
     rm -rf $TGT2/$tdir $TGT2/d*.lustre_rsync-test 2> /dev/null
     rm -rf ${DIR}/$tdir $DIR/d*.lustre_rsync-test ${DIR}/tgt 2> /dev/null
     rm -f $LREPL_LOG
-    mkdir -p $TGT
-    mkdir -p $TGT2
+    mkdir -p ${DIR}/$tdir
+    mkdir -p ${TGT}/$tdir
+    mkdir -p ${TGT2}/$tdir
     if [ $? -ne 0 ]; then
         error "Failed to create target: " $TGT
     fi
@@ -113,7 +114,6 @@ test_1() {
     local xattr=`check_xattr $TGT/foo`
 
     # Directory create
-    mkdir -p ${DIR}/$tdir
     mkdir $DIR/$tdir/d1
     mkdir $DIR/$tdir/d2
 
@@ -302,7 +302,6 @@ test_3a() {
     init_changelog
 
     local numfiles=1000
-    mkdir -p ${DIR}/$tdir
     createmany -o $DIR/$tdir/$tfile $numfiles || error "createmany failed!"
 
     # Replicate the changes to $TGT
@@ -326,7 +325,6 @@ test_3b() {
 
     local time=60
     local threads=5
-    mkdir -p ${DIR}/$tdir
     writemany -q -a $DIR/$tdir/$tfile $time $threads || error "writemany failed!"
 
     # Replicate the changes to $TGT
@@ -349,7 +347,6 @@ test_3c() {
     init_changelog
 
     local numfiles=1000
-    mkdir -p ${DIR}/$tdir
     createmany -o $DIR/$tdir/$tfile $numfiles || error "createmany failed!"
     unlinkmany $DIR/$tdir/$tfile $numfiles || error "unlinkmany failed!"
 
@@ -377,7 +374,6 @@ test_4() {
     init_src
     init_changelog
 
-    mkdir -p ${DIR}/$tdir
     END_RUN_FILE=${DIR}/$tdir/run LOAD_PID_FILE=${DIR}/$tdir/pid \
         MOUNT=${DIR}/$tdir run_iozone.sh &
     sleep 30
@@ -424,7 +420,6 @@ test_5a() {
     init_changelog
 
     NUMTEST=2000
-    mkdir -p ${DIR}/$tdir
     createmany -o $DIR/$tdir/$tfile $NUMTEST
 
     # Replicate the changes to $TGT
@@ -453,7 +448,6 @@ test_5b() {
     init_changelog
 
     NUMTEST=2000
-    mkdir -p ${DIR}/$tdir
     createmany -o $DIR/$tdir/$tfile $NUMTEST
 
     # Replicate the changes to $TGT
@@ -480,7 +474,6 @@ test_6() {
     init_changelog
 
     local NUMLINKS=128
-    mkdir -p ${DIR}/$tdir
     touch $DIR/$tdir/link0
     local i=1
     while [ $i -lt $NUMLINKS ];
@@ -509,10 +502,10 @@ run_test 6 "lustre_rsync large no of hard links"
 # Test 7 - lustre_rsync stripesize
 test_7() {
     init_src
+    mkdir -p ${DIR}/tgt/$tdir
     init_changelog
 
     local NUMFILES=100
-    mkdir -p ${DIR}/$tdir
     lfs setstripe -c 2 ${DIR}/$tdir
     createmany -o $DIR/$tdir/$tfile $NUMFILES
 
@@ -520,7 +513,6 @@ test_7() {
     # the changes to $DIR/tgt. We can't turn off the changelogs
     # while we are registered, so lustre_rsync better not try to 
     # replicate the replication steps.  It seems ok :)
-    mkdir $DIR/tgt
 
     $LRSYNC -s $DIR -t $DIR/tgt -m $MDT0 -u $CL_USER -l $LREPL_LOG
     check_diff ${DIR}/$tdir $DIR/tgt/$tdir
@@ -544,8 +536,6 @@ run_test 7 "lustre_rsync stripesize"
 test_8() {
     init_src
     init_changelog
-
-    mkdir -p ${DIR}/$tdir
 
     for i in 1 2 3 4 5 6 7 8 9; do
 	mkdir $DIR/$tdir/d$i
