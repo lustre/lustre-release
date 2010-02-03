@@ -514,8 +514,16 @@ test_21b() {
     COS=0
     do_facet mds$num lctl set_param mdt.*.commit_on_sharing=$COS
 
-    test_21b_sub mds$num && error "Not all renames are replayed. COS=$COS" 
-
+    # there is still a window when transactions may be written to disk before
+    # the mds device is set R/O. To avoid such a rare test failure, the check
+    # is repeated several times.
+    local n_attempts=1
+    while true; do
+    test_21b_sub mds$num || break;
+    let n_attempts=n_attempts+1
+    [ $n_attemtps -gt 3] &&
+        error "The test cannot check whether COS works or not: all renames are replied w/o COS"
+    done
     restore_lustre_params < $param_file
     rm -f $param_file
     return 0
