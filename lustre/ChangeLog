@@ -14,6 +14,25 @@ tbd  Sun Microsystems, Inc.
 
 
 Severity   : normal
+Bugzilla   : 21259
+Description: lfs check only allowed for root
+Details    : Code cleanups and added a regresion test of non-root use of
+	     lfs check.
+
+Severity   : normal
+Bugzilla   : 21879
+Description: MDS Oopses in ptlrpc_dispatch_difficult_reply()/__list_add()
+Details    : Fix hr->hr_index overload.
+
+Severity   : normal
+Bugzilla   : 19742
+Description: Fix FIEMAP functionality.
+
+Severity   : normal
+Bugzilla   : 19808
+Description: FC11 patchless client support added
+
+Severity   : normal
 Bugzilla   : 21632
 Description: Update RHEL5.4 kernel to 2.6.18-164.11.1.el5 and
 	     OEL5.4 kernel to 2.6.18-164.11.1.0.1.el5.
