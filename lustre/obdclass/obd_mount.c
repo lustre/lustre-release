@@ -1689,6 +1689,14 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
         if (!dash)
                 return(-EINVAL);
 
+        /* ignore trailing "-mdc" */
+        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
+                dash--;
+                for (; dash > svname && *dash != '-'; dash--);
+                if (dash == svname)
+                        return(-EINVAL);
+        }
+
         if (strncmp(dash + 1, "MDT", 3) == 0)
                 rc = LDD_F_SV_TYPE_MDT;
         else if (strncmp(dash + 1, "OST", 3) == 0)
