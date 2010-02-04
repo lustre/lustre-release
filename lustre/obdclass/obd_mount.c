@@ -1668,11 +1668,6 @@ static int server_fill_super(struct super_block *sb)
         if (rc)
                 GOTO(out_mnt, rc);
 
-        LCONSOLE_WARN("Server %s on device %s has started\n",
-                      ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
-                       (IS_MDT(lsi->lsi_ldd))) ? "MGS" : lsi->lsi_ldd->ldd_svname,
-                      lsi->lsi_lmd->lmd_dev);
-
         RETURN(0);
 out_mnt:
         /* We jump here in case of failure while starting targets or MGS.

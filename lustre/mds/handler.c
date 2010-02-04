@@ -2067,23 +2067,19 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
-        if (obd->obd_recovering) {
-                LCONSOLE_WARN("MDT %s now serving %s (%s%s%s), but will be in "
-                              "recovery for at least %d:%.02d, or until %d "
-                              "client%s reconnect%s. \n",
-                              obd->obd_name, lustre_cfg_string(lcfg, 1),
-                              label ?: "", label ? "/" : "", str,
+        LCONSOLE_INFO("%s: Now serving %s on %s with recovery %s\n",
+                      obd->obd_name, label ?: str, lsi->lsi_lmd->lmd_dev,
+                      obd->obd_replayable ? "enabled" : "disabled");
+
+        if (obd->obd_recovering)
+                LCONSOLE_WARN("%s: Will be in recovery for at least %d:%.02d, "
+                              "or until %d client%s reconnect%s\n",
+                              obd->obd_name,
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
                               obd->obd_recoverable_clients,
-                              (obd->obd_recoverable_clients == 1) ? "":"s",
-                              (obd->obd_recoverable_clients == 1) ? "s":"");
-        } else {
-                LCONSOLE_INFO("MDT %s now serving %s (%s%s%s) with recovery "
-                              "%s\n", obd->obd_name, lustre_cfg_string(lcfg, 1),
-                              label ?: "", label ? "/" : "", str,
-                              obd->obd_replayable ? "enabled" : "disabled");
-        }
+                              obd->obd_recoverable_clients == 1 ? "" : "s",
+                              obd->obd_recoverable_clients == 1 ? "s": "");
 
         /* Reduce the initial timeout on an MDS because it doesn't need such
          * a long timeout as an OST does. Adaptive timeouts will adjust this
