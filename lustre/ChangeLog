@@ -23,6 +23,10 @@ Bugzilla   : 21632
 Description: Update RHEL5.4 kernel to 2.6.18-164.11.1.el5 and
 	     OEL5.4 kernel to 2.6.18-164.11.1.0.1.el5.
 
+Severity   : enhancement
+Bugzilla   : 16909
+Description: Simplify MDT/OST service start message.
+
 -------------------------------------------------------------------------------
 
 2010-01-29 Sun Microsystems, Inc.
