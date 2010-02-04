@@ -807,7 +807,10 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       atomic_read(&imp->imp_inval_count));
 
         lprocfs_stats_collect(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR, &ret);
-        do_div(ret.lc_sum, ret.lc_count);
+        if (ret.lc_count != 0)
+                do_div(ret.lc_sum, ret.lc_count);
+        else
+                ret.lc_sum = 0;
         i += snprintf(page + i, count - i,
                       "    rpcs:\n"
                       "       inflight: %u\n"
@@ -847,7 +850,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                 lprocfs_stats_collect(obd->obd_svc_stats,
                                       PTLRPC_LAST_CNTR + BRW_READ_BYTES + rw,
                                       &ret);
-                if (ret.lc_sum > 0) {
+                if (ret.lc_sum > 0 && ret.lc_count > 0) {
                         do_div(ret.lc_sum, ret.lc_count);
                         i += snprintf(page + i, count - i,
                                       "    %s_data_averages:\n"
@@ -858,7 +861,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                 k = (int)ret.lc_sum;
                 j = opcode_offset(OST_READ + rw) + EXTRA_MAX_OPCODES;
                 lprocfs_stats_collect(obd->obd_svc_stats, j, &ret);
-                if (ret.lc_sum > 0) {
+                if (ret.lc_sum > 0 && ret.lc_count != 0) {
                         do_div(ret.lc_sum, ret.lc_count);
                         i += snprintf(page + i, count - i,
                                       "       %s_per_rpc: "LPU64"\n",
