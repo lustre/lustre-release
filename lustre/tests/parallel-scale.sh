@@ -7,6 +7,9 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+# bug number:
+ALWAYS_EXCEPT="$PARALLEL_SCALE_EXCEPT"
+
 #
 # compilbench
 #
