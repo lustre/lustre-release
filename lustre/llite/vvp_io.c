@@ -932,12 +932,17 @@ static int vvp_io_commit_write(const struct lu_env *env,
 
         size = cl_offset(obj, pg->cp_index) + to;
 
+        ll_inode_size_lock(inode, 0);
         if (result == 0) {
                 if (size > i_size_read(inode))
-                        i_size_write(inode, size);
+                        cl_isize_write_nolock(inode, size);
                 cl_page_export(env, pg, 1);
-        } else if (size > i_size_read(inode))
-                cl_page_discard(env, io, pg);
+        } else {
+                if (size > i_size_read(inode))
+                        cl_page_discard(env, io, pg);
+        }
+        ll_inode_size_unlock(inode, 0);
+        
         RETURN(result);
 }
 

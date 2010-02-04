@@ -770,7 +770,7 @@ int ll_merge_lvb(struct inode *inode)
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
         rc = obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
-        i_size_write(inode, lvb.lvb_size);
+        cl_isize_write_nolock(inode, lvb.lvb_size);
         inode->i_blocks = lvb.lvb_blocks;
 
         LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
@@ -1804,9 +1804,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                 if (rc != 0)
                         RETURN(rc);
 
-                ll_inode_size_lock(inode, 0);
                 offset += i_size_read(inode);
-                ll_inode_size_unlock(inode, 0);
         } else if (origin == 1) { /* SEEK_CUR */
                 offset += file->f_pos;
         }
@@ -2205,10 +2203,8 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
         stat->blksize = 1 << inode->i_blkbits;
 #endif
 
-        ll_inode_size_lock(inode, 0);
         stat->size = i_size_read(inode);
         stat->blocks = inode->i_blocks;
-        ll_inode_size_unlock(inode, 0);
 
         return 0;
 }

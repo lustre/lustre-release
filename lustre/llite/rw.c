@@ -76,57 +76,19 @@
 void ll_truncate(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        loff_t new_size;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
-               inode->i_generation, inode, i_size_read(inode),
-               i_size_read(inode));
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu\n",inode->i_ino,
+               inode->i_generation, inode, i_size_read(inode));
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_TRUNC, 1);
-        if (lli->lli_size_sem_owner != cfs_current()) {
-                EXIT;
-                return;
+        if (lli->lli_size_sem_owner == cfs_current()) {
+                LASSERT_SEM_LOCKED(&lli->lli_size_sem);
+                ll_inode_size_unlock(inode, 0);
         }
-
-        if (!lli->lli_smd) {
-                CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
-                       inode->i_ino);
-                GOTO(out_unlock, 0);
-        }
-        LASSERT_SEM_LOCKED(&lli->lli_size_sem);
-
-        if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
-                     (i_size_read(inode) & ~CFS_PAGE_MASK))) {
-                /* If the truncate leaves a partial page, update its checksum */
-                struct page *page = find_get_page(inode->i_mapping,
-                                                  i_size_read(inode) >>
-                                                  CFS_PAGE_SHIFT);
-                if (page != NULL) {
-#if 0 /* XXX */
-                        struct ll_async_page *llap = llap_cast_private(page);
-                        if (llap != NULL) {
-                                char *kaddr = kmap_atomic(page, KM_USER0);
-                                llap->llap_checksum =
-                                        init_checksum(OSC_DEFAULT_CKSUM);
-                                llap->llap_checksum =
-                                        compute_checksum(llap->llap_checksum,
-                                                         kaddr, CFS_PAGE_SIZE,
-                                                         OSC_DEFAULT_CKSUM);
-                                kunmap_atomic(kaddr, KM_USER0);
-                        }
-                        page_cache_release(page);
-#endif
-                }
-        }
-
-        new_size = i_size_read(inode);
-        ll_inode_size_unlock(inode, 0);
 
         EXIT;
         return;
-
- out_unlock:
-        ll_inode_size_unlock(inode, 0);
 } /* ll_truncate */
 
 /**

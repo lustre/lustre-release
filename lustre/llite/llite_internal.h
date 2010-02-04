@@ -1258,9 +1258,6 @@ void ll_iocontrol_unregister(void *magic);
 #define cl_i2info(info) ll_i2info(info)
 #define cl_inode_mode(inode) ((inode)->i_mode)
 #define cl_i2sbi ll_i2sbi
-#define cl_isize_read(inode) i_size_read(inode)
-#define cl_isize_write(inode,kms) i_size_write(inode, kms)
-#define cl_isize_write_nolock(inode,kms) do {(inode)->i_size=(kms);}while(0)
 
 static inline void cl_isize_lock(struct inode *inode, int lsmlock)
 {
@@ -1271,6 +1268,21 @@ static inline void cl_isize_unlock(struct inode *inode, int lsmlock)
 {
         ll_inode_size_unlock(inode, lsmlock);
 }
+
+static inline void cl_isize_write_nolock(struct inode *inode, loff_t kms)
+{
+        LASSERT_SEM_LOCKED(&ll_i2info(inode)->lli_size_sem);
+        i_size_write(inode, kms);
+}
+
+static inline void cl_isize_write(struct inode *inode, loff_t kms)
+{
+        ll_inode_size_lock(inode, 0);
+        i_size_write(inode, kms);
+        ll_inode_size_unlock(inode, 0);
+}
+
+#define cl_isize_read(inode)             i_size_read(inode)
 
 static inline int cl_merge_lvb(struct inode *inode)
 {

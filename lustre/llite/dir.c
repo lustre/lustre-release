@@ -168,11 +168,8 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 /* Checked by mdc_readpage() */
                 LASSERT(body != NULL);
 
-                if (body->valid & OBD_MD_FLSIZE) {
-                        ll_inode_size_lock(inode, 0);
-                        i_size_write(inode, body->size);
-                        ll_inode_size_unlock(inode, 0);
-                }
+                if (body->valid & OBD_MD_FLSIZE)
+                        cl_isize_write(inode, body->size);
                 SetPageUptodate(page);
         }
         ptlrpc_req_finished(request);
