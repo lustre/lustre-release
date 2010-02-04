@@ -27,6 +27,10 @@ Severity   : enhancement
 Bugzilla   : 16909
 Description: Simplify MDT/OST service start message.
 
+Severity   : normal
+Bugzilla   : 21961/17914
+Description: ignore trailing -mdc when determining index number
+
 -------------------------------------------------------------------------------
 
 2010-01-29 Sun Microsystems, Inc.
