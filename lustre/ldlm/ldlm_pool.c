@@ -200,15 +200,15 @@ static inline struct ldlm_namespace *ldlm_pl2ns(struct ldlm_pool *pl)
 static inline int ldlm_pool_t2gsp(int t)
 {
         /*
-         * This yeilds 1% grant step for anything below LDLM_POOL_GSP_STEP
+         * This yields 1% grant step for anything below LDLM_POOL_GSP_STEP
          * and up to 30% for anything higher than LDLM_POOL_GSP_STEP.
          *
          * How this will affect execution is the following:
          *
-         * - for thread peroid 1s we will have grant_step 1% which good from
+         * - for thread period 1s we will have grant_step 1% which good from
          * pov of taking some load off from server and push it out to clients.
          * This is like that because 1% for grant_step means that server will
-         * not allow clients to get lots of locks inshort period of time and
+         * not allow clients to get lots of locks in short period of time and
          * keep all old locks in their caches. Clients will always have to
          * get some locks back if they want to take some new;
          *
@@ -264,7 +264,7 @@ static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
         /*
          * Find out SLV change factor which is the ratio of grant usage
          * from limit. SLV changes as fast as the ratio of grant plan
-         * consumtion. The more locks from grant plan are not consumed
+         * consumption. The more locks from grant plan are not consumed
          * by clients in last interval (idle time), the faster grows
          * SLV. And the opposite, the more grant plan is over-consumed
          * (load time) the faster drops SLV.
@@ -371,7 +371,7 @@ static int ldlm_srv_pool_recalc(struct ldlm_pool *pl)
 
 /**
  * This function is used on server side as main entry point for memory
- * preasure handling. It decreases SLV on \a pl according to passed
+ * pressure handling. It decreases SLV on \a pl according to passed
  * \a nr and \a gfp_mask.
  *
  * Our goal here is to decrease SLV such a way that clients hold \a nr
@@ -398,10 +398,10 @@ static int ldlm_srv_pool_shrink(struct ldlm_pool *pl,
         spin_lock(&pl->pl_lock);
 
         /*
-         * We want shrinker to possibly cause cancelation of @nr locks from
+         * We want shrinker to possibly cause cancellation of @nr locks from
          * clients or grant approximately @nr locks smaller next intervals.
          *
-         * This is why we decresed SLV by @nr. This effect will only be as
+         * This is why we decreased SLV by @nr. This effect will only be as
          * long as one re-calc interval (1s these days) and this should be
          * enough to pass this decreased SLV to all clients. On next recalc
          * interval pool will either increase SLV if locks load is not high
@@ -456,7 +456,7 @@ static void ldlm_cli_pool_pop_slv(struct ldlm_pool *pl)
         struct obd_device *obd;
 
         /*
-         * Get new SLV and Limit from obd which is updated with comming
+         * Get new SLV and Limit from obd which is updated with coming
          * RPCs.
          */
         obd = ldlm_pl2ns(pl)->ns_obd;
@@ -468,7 +468,7 @@ static void ldlm_cli_pool_pop_slv(struct ldlm_pool *pl)
 }
 
 /**
- * Recalculates client sise pool \a pl according to current SLV and Limit.
+ * Recalculates client size pool \a pl according to current SLV and Limit.
  */
 static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
 {
@@ -512,9 +512,9 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
 }
 
 /**
- * This function is main entry point for memory preasure handling on client side.
- * Main goal of this function is to cancel some number of locks on passed \a pl
- * according to \a nr and \a gfp_mask.
+ * This function is main entry point for memory pressure handling on client
+ * side.  Main goal of this function is to cancel some number of locks on
+ * passed \a pl according to \a nr and \a gfp_mask.
  */
 static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
                                 int nr, unsigned int gfp_mask)
@@ -545,7 +545,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
         }
 #ifdef __KERNEL__
         /*
-         * Retrun the number of potentially reclaimable locks.
+         * Return the number of potentially reclaimable locks.
          */
         return ((unused - canceled) / 100) * sysctl_vfs_cache_pressure;
 #else
