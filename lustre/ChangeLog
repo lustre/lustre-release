@@ -12,6 +12,12 @@ tbd        Oracle, Inc.
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : normal
+Bugzilla   : 21686
+Description: recovery-small 51 hang - MDT can not stop, Mount still busy with
+	     25 refs
+Details    : abort lock enqueue processing sooner when we umount is in progress.
+
 Severity   : enhancement
 Bugzilla   : 21632
 Description: Update RHEL5.4 kernel to 2.6.18-164.11.1.el5 and
