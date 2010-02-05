@@ -704,14 +704,16 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         struct obdo *oa;
         struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
         char *dir;
-        int rc;
+        void *th;
+        struct inode *inode;
+        int rc, rc1;
         ENTRY;
 
         dir = MOUNT_CONFIGS_DIR;
 
         fdentry = handle->lgh_file->f_dentry;
+        inode = fdentry->d_parent->d_inode;
         if (strcmp(fdentry->d_parent->d_name.name, dir) == 0) {
-                struct inode *inode = fdentry->d_parent->d_inode;
                 struct lvfs_run_ctxt saved;
                 struct vfsmount *mnt = mntget(handle->lgh_file->f_vfsmnt);
 
@@ -744,7 +746,17 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
+        th = fsfilt_start_log(obd, inode, FSFILT_OP_UNLINK, NULL, 1);
+        if (IS_ERR(th)) {
+                CERROR("fsfilt_start failed: %ld\n", PTR_ERR(th));
+                GOTO(out, rc = PTR_ERR(th));
+        }
+
         rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL, NULL);
+
+        rc1 = fsfilt_commit(obd, inode, th, 0);
+        if (rc == 0 && rc1 != 0)
+                rc = rc1;
  out:
         OBDO_FREE(oa);
         RETURN(rc);
