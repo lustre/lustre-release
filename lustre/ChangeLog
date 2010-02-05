@@ -58,6 +58,12 @@ Bugzilla   : 20301
 Description: Fix mkfs.lustre support for 16TB LUNs.
 
 Severity   : normal
+Bugzilla   : 21564
+Description: Print mmp_check_interval
+Details    : print mmp_check_interval and make it possible to abort
+	     mount operation in case it takes too long.
+
+Severity   : normal
 Bugzilla   : 21547
 Description: Add cascading_rw to lustre mpi tests.
 

@@ -1,7 +1,7 @@
-Index: linux-2.6.27.21-0.1/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-07-07 14:36:58.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-07-07 14:38:06.000000000 +0530
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
 @@ -39,6 +39,8 @@
  #include <linux/log2.h>
  #include <linux/crc16.h>
@@ -11,7 +11,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  
  #include "ext4.h"
  #include "ext4_jbd2.h"
-@@ -599,6 +601,8 @@
+@@ -600,6 +602,8 @@ static void ext4_put_super(struct super_
  		invalidate_bdev(sbi->journal_bdev);
  		ext4_blkdev_remove(sbi);
  	}
@@ -20,7 +20,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -807,7 +811,6 @@
+@@ -808,7 +812,6 @@ static int ext4_show_options(struct seq_
  	if (!test_opt(sb, DELALLOC))
  		seq_puts(seq, ",nodelalloc");
  
@@ -28,7 +28,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	if (sbi->s_stripe)
  		seq_printf(seq, ",stripe=%lu", sbi->s_stripe);
  	/*
-@@ -830,6 +833,325 @@
+@@ -831,6 +834,340 @@ static int ext4_show_options(struct seq_
  }
  
  
@@ -80,7 +80,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +		}
 +	}
 +	if (!*bh) {
-+		ext4_warning(sb, __FUNCTION__,
++		ext4_warning(sb, __func__,
 +			     "Error while reading MMP block %lu", mmp_block);
 +		return -EIO;
 +	}
@@ -156,21 +156,21 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +		 * (s_mmp_update_interval * 60) seconds.
 +		 */
 +		if (retval && (failed_writes % 60) == 0) {
-+			ext4_error(sb, __FUNCTION__,
++			ext4_error(sb, __func__,
 +				   "Error writing to MMP block");
 +			failed_writes++;
 +		}
 +
 +		if (!(le32_to_cpu(es->s_feature_incompat) &
 +		    EXT4_FEATURE_INCOMPAT_MMP)) {
-+			ext4_warning(sb, __FUNCTION__, "kmmpd being stopped "
++			ext4_warning(sb, __func__, "kmmpd being stopped "
 +				     "since MMP feature has been disabled.");
 +			EXT4_SB(sb)->s_mmp_tsk = 0;
 +			goto failed;
 +		}
 +
 +		if (sb->s_flags & MS_RDONLY) {
-+			ext4_warning(sb, __FUNCTION__, "kmmpd being stopped "
++			ext4_warning(sb, __func__, "kmmpd being stopped "
 +				     "since filesystem has been remounted as "
 +				     "readonly.");
 +			EXT4_SB(sb)->s_mmp_tsk = 0;
@@ -202,7 +202,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +			if (mmp->mmp_time != mmp_check->mmp_time ||
 +			    memcmp(mmp->mmp_nodename, mmp_check->mmp_nodename,
 +				   sizeof(mmp->mmp_nodename)))
-+				dump_mmp_msg(sb, mmp_check, __FUNCTION__,
++				dump_mmp_msg(sb, mmp_check, __func__,
 +					     "Error while updating MMP info. "
 +					     "The filesystem seems to have "
 +					     "been multiply mounted.");
@@ -258,11 +258,12 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +	struct mmp_struct *mmp = NULL;
 +	u32 seq;
 +	unsigned int mmp_check_interval = le16_to_cpu(es->s_mmp_update_interval);
++	unsigned int wait_time = 0;
 +	int retval;
 +
 +	if (mmp_block < le32_to_cpu(es->s_first_data_block) ||
 +	    mmp_block >= ext4_blocks_count(es)) {
-+		ext4_warning(sb, __FUNCTION__,
++		ext4_warning(sb, __func__,
 +			     "Invalid MMP block in superblock");
 +		goto failed;
 +	}
@@ -288,19 +289,30 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +		goto skip;
 +
 +	if (seq == EXT4_MMP_SEQ_FSCK) {
-+		dump_mmp_msg(sb, mmp, __FUNCTION__,
++		dump_mmp_msg(sb, mmp, __func__,
 +			     "fsck is running on the filesystem");
 +		goto failed;
 +	}
 +
-+	schedule_timeout_uninterruptible(HZ * (2 * mmp_check_interval + 1));
++	wait_time = min(mmp_check_interval * 2 + 1,
++			mmp_check_interval + 60);
++
++	/* Print MMP interval if more than 20 secs. */
++	if (wait_time > EXT4_MMP_MIN_CHECK_INTERVAL * 4)
++		ext4_warning(sb, __func__, "MMP interval %u higher than "
++			     "expected, please wait.\n", wait_time * 2);
++
++	if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
++		ext4_warning(sb, __func__, "MMP startup interrupted, failing mount\n");
++		goto failed;
++	}
 +
 +	retval = read_mmp_block(sb, &bh, mmp_block);
 +	if (retval)
 +		goto failed;
 +	mmp = (struct mmp_struct *)(bh->b_data);
 +	if (seq != le32_to_cpu(mmp->mmp_seq)) {
-+		dump_mmp_msg(sb, mmp, __FUNCTION__,
++		dump_mmp_msg(sb, mmp, __func__,
 +			     "Device is already active on another node.");
 +		goto failed;
 +	}
@@ -318,14 +330,17 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +	/*
 +	 * wait for MMP interval and check mmp_seq.
 +	 */
-+	schedule_timeout_uninterruptible(HZ * (2 * mmp_check_interval + 1));
++	if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
++		ext4_warning(sb, __func__, "MMP startup interrupted, failing mount\n");
++		goto failed;
++	}
 +
 +	retval = read_mmp_block(sb, &bh, mmp_block);
 +	if (retval)
 +		goto failed;
 +	mmp = (struct mmp_struct *)(bh->b_data);
 +	if (seq != le32_to_cpu(mmp->mmp_seq)) {
-+		dump_mmp_msg(sb, mmp, __FUNCTION__,
++		dump_mmp_msg(sb, mmp, __func__,
 +			     "Device is already active on another node.");
 +		goto failed;
 +	}
@@ -338,7 +353,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +					     MINOR(sb->s_dev));
 +	if (IS_ERR(EXT4_SB(sb)->s_mmp_tsk)) {
 +		EXT4_SB(sb)->s_mmp_tsk = 0;
-+		ext4_warning(sb, __FUNCTION__, "Unable to create kmmpd thread "
++		ext4_warning(sb, __func__, "Unable to create kmmpd thread "
 +			     "for %s.", sb->s_id);
 +		goto failed;
 +	}
@@ -354,7 +369,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  static struct inode *ext4_nfs_get_inode(struct super_block *sb,
  		u64 ino, u32 generation)
  {
-@@ -2370,6 +2692,11 @@
+@@ -2371,6 +2708,11 @@ static int ext4_fill_super(struct super_
  			  EXT4_HAS_INCOMPAT_FEATURE(sb,
  				    EXT4_FEATURE_INCOMPAT_RECOVER));
  
@@ -366,7 +381,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -2570,6 +2897,8 @@
+@@ -2571,6 +2913,8 @@ failed_mount3:
  	percpu_counter_destroy(&sbi->s_freeinodes_counter);
  	percpu_counter_destroy(&sbi->s_dirs_counter);
  	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
@@ -375,7 +390,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3085,7 +3414,7 @@
+@@ -3086,7 +3430,7 @@ static int ext4_remount(struct super_blo
  	unsigned long old_sb_flags;
  	struct ext4_mount_options old_opts;
  	ext4_group_t g;
@@ -384,7 +399,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -3210,6 +3539,13 @@
+@@ -3211,6 +3555,13 @@ static int ext4_remount(struct super_blo
  				goto restore_opts;
  			if (!ext4_setup_super(sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -398,11 +413,11 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  		}
  	}
  #ifdef CONFIG_QUOTA
-Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-07-07 14:36:00.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-07-07 14:36:58.000000000 +0530
-@@ -660,7 +660,7 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -660,7 +660,7 @@ struct ext4_super_block {
  	__le16	s_want_extra_isize; 	/* New inodes should reserve # bytes */
  	__le32	s_flags;		/* Miscellaneous flags */
  	__le16  s_raid_stride;		/* RAID stride */
@@ -411,7 +426,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  	__le64  s_mmp_block;            /* Block for multi-mount protection */
  	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
  	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
-@@ -777,7 +777,8 @@
+@@ -777,7 +777,8 @@ static inline int ext4_valid_inum(struct
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
@@ -421,7 +436,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -981,6 +982,39 @@
+@@ -981,6 +982,39 @@ do {									\
  #endif
  
  /*
@@ -461,11 +476,11 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
   * Function prototypes
   */
  
-Index: linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h
+Index: linux-stage/fs/ext4/ext4_sb.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_sb.h	2009-07-07 14:36:00.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h	2009-07-07 14:36:58.000000000 +0530
-@@ -149,6 +149,8 @@
+--- linux-stage.orig/fs/ext4/ext4_sb.h
++++ linux-stage/fs/ext4/ext4_sb.h
+@@ -149,6 +149,8 @@ struct ext4_sb_info {
  
  	unsigned int s_log_groups_per_flex;
  	struct flex_groups *s_flex_groups;
