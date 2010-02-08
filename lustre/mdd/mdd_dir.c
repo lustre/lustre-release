@@ -2278,8 +2278,7 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
         rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
         if (rc == -ERANGE) {
                 /* Buf was too small, figure out what we need. */
-                buf->lb_buf = NULL;
-                buf->lb_len = 0;
+                mdd_buf_put(buf);
                 rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
                 if (rc < 0)
                         return ERR_PTR(rc);

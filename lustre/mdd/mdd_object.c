@@ -131,6 +131,7 @@ void mdd_buf_put(struct lu_buf *buf)
         else
                 OBD_FREE(buf->lb_buf, buf->lb_len);
         buf->lb_buf = NULL;
+        buf->lb_len = 0;
 }
 
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
