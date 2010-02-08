@@ -2313,10 +2313,12 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
 static int mdd_lee_pack(struct link_ea_entry *lee, const struct lu_name *lname,
                         const struct lu_fid *pfid)
 {
-        int reclen;
+        struct lu_fid   tmpfid;
+        int             reclen;
 
-        fid_cpu_to_be(&lee->lee_parent_fid, pfid);
-        strncpy(lee->lee_name, lname->ln_name, lname->ln_namelen);
+        fid_cpu_to_be(&tmpfid, pfid);
+        memcpy(&lee->lee_parent_fid, &tmpfid, sizeof(tmpfid));
+        memcpy(lee->lee_name, lname->ln_name, lname->ln_namelen);
         reclen = sizeof(struct link_ea_entry) + lname->ln_namelen;
 
         lee->lee_reclen[0] = (reclen >> 8) & 0xff;
@@ -2328,7 +2330,8 @@ void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
                     struct lu_name *lname, struct lu_fid *pfid)
 {
         *reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
-        fid_be_to_cpu(pfid, &lee->lee_parent_fid);
+        memcpy(pfid, &lee->lee_parent_fid, sizeof(*pfid));
+        fid_be_to_cpu(pfid, pfid);
         lname->ln_name = lee->lee_name;
         lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
 }

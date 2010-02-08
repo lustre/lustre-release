@@ -2669,17 +2669,17 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct link_ea_header *)0)->padding2));
 
         /* Checks for struct link_ea_entry */
-        LASSERTF((int)sizeof(struct link_ea_entry) == 20, " found %lld\n",
+        LASSERTF((int)sizeof(struct link_ea_entry) == 18, " found %lld\n",
                  (long long)(int)sizeof(struct link_ea_entry));
-        LASSERTF((int)offsetof(struct link_ea_entry, lee_reclen) == 16, " found %lld\n",
+        LASSERTF((int)offsetof(struct link_ea_entry, lee_reclen) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct link_ea_entry, lee_reclen));
         LASSERTF((int)sizeof(((struct link_ea_entry *)0)->lee_reclen) == 2, " found %lld\n",
                  (long long)(int)sizeof(((struct link_ea_entry *)0)->lee_reclen));
-        LASSERTF((int)offsetof(struct link_ea_entry, lee_parent_fid) == 0, " found %lld\n",
+        LASSERTF((int)offsetof(struct link_ea_entry, lee_parent_fid) == 2, " found %lld\n",
                  (long long)(int)offsetof(struct link_ea_entry, lee_parent_fid));
         LASSERTF((int)sizeof(((struct link_ea_entry *)0)->lee_parent_fid) == 16, " found %lld\n",
                  (long long)(int)sizeof(((struct link_ea_entry *)0)->lee_parent_fid));
-        LASSERTF((int)offsetof(struct link_ea_entry, lee_name) == 20, " found %lld\n",
+        LASSERTF((int)offsetof(struct link_ea_entry, lee_name) == 18, " found %lld\n",
                  (long long)(int)offsetof(struct link_ea_entry, lee_name));
         LASSERTF((int)sizeof(((struct link_ea_entry *)0)->lee_name) == 0, " found %lld\n",
                  (long long)(int)sizeof(((struct link_ea_entry *)0)->lee_name));

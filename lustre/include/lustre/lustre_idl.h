@@ -2594,10 +2594,9 @@ struct link_ea_header {
  * Stored in this crazy struct for maximum packing and endian-neutrality
  */
 struct link_ea_entry {
-        struct lu_fid      lee_parent_fid;
         /** __u16 stored big-endian, unaligned */
-        char               lee_reclen[2];
-        __u16              lee_padding;
+        unsigned char      lee_reclen[2];
+        unsigned char      lee_parent_fid[sizeof(struct lu_fid)];
         char               lee_name[0];
 }__attribute__((packed));
 
