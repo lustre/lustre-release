@@ -223,8 +223,7 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        /* MDS_BFLAG_EXT_FLAGS: request "new" flags(bug 9486) */
-        mdc_pack_body(req, fid, oc, valid, ea_size, -1, MDS_BFLAG_EXT_FLAGS);
+        mdc_pack_body(req, fid, oc, valid, ea_size, -1, 0);
 
         req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, ea_size);
         if (valid & OBD_MD_FLRMTPERM) {
@@ -266,9 +265,7 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        /* MDS_BFLAG_EXT_FLAGS: request "new" flags(bug 9486) */
-        mdc_pack_body(req, fid, oc, valid, ea_size, suppgid,
-                      MDS_BFLAG_EXT_FLAGS);
+        mdc_pack_body(req, fid, oc, valid, ea_size, suppgid, 0);
 
         if (filename) {
                 char *name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);

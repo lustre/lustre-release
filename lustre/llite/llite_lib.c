@@ -1843,8 +1843,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 EXIT;
 update_cache:
-                inode->i_flags = ll_ext_to_inode_flags(flags |
-                                                       MDS_BFLAG_EXT_FLAGS);
+                inode->i_flags = ll_ext_to_inode_flags(flags);
                 return 0;
         }
         default:

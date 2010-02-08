@@ -447,7 +447,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
                 b->valid |= OBD_MD_FLCKSPLIT;
         if (op_data->op_bias & MDS_CROSS_REF)
                 b->valid |= OBD_MD_FLCROSSREF;
-        b->flags = flags | MDS_BFLAG_EXT_FLAGS;
+        b->flags = flags;
         b->suppgid = op_data->op_suppgids[0];
 
         b->fid1 = op_data->op_fid1;
