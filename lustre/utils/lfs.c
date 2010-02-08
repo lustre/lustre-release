@@ -580,7 +580,7 @@ static int lfs_find(int argc, char **argv)
                                                 "be found.\n", optarg);
                                         return -1;
                                 }
-                        }           
+                        }
                         param.exclude_gid = !!neg_opt;
                         param.check_gid = 1;
                         break;

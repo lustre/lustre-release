@@ -8,16 +8,13 @@ BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
 
 source ${0%/*}/lbuild-sles
 
-# this is what lnxrel really should be, once bug 19336 lands
-real_lnxrel=${lnxrel##${lnxmin#.}-}
-
 edit_specs() {
 
     # edit the SPECs with our changes
     local spec
     for spec in $RPMSMPTYPE source; do
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
-        sed -i -e "s/^\(Release: *\).*$/\1${real_lnxrel}_${buildid}/" \
+        sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
                -e '/^%setup /a\
 cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
@@ -67,10 +64,10 @@ unpack_linux_devel_rpm-sles11() {
     local rpmdir="${callers_rpm%/*}"
 
     local kernelrpm
-    local wanted_kernel="${lnxmaj}${lnxmin}${TARGET_DELIMITER}${lnxrel}"
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
     if $PATCHLESS; then
 # this $PATCHLESS block should go away when bug 19336 lands.
-        wanted_kernel="${lnxmaj}${lnxmin}${TARGET_DELIMITER}${real_lnxrel}"
+        wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
     fi
     # this is a hack that should go away when the modified lustre kernel
     # Provides kernel-default-base                        vvvvvvvvv
