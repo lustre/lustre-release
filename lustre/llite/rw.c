@@ -674,10 +674,10 @@ static int ll_read_ahead_pages(const struct lu_env *env,
                         /* FIXME: This assertion only is valid when it is for
                          * forward read-ahead, it will be fixed when backward
                          * read-ahead is implemented */
-                        LASSERTF(page_idx > ria->ria_stoff, "since %lu in the"
-                                " gap of ra window,it should bigger than stride"
-                                " offset %lu \n", page_idx, ria->ria_stoff);
-
+                        LASSERTF(page_idx > ria->ria_stoff, "Invalid page_idx %lu"
+                                "rs %lu re %lu ro %lu rl %lu rp %lu\n", page_idx,
+                                ria->ria_start, ria->ria_end, ria->ria_stoff,
+                                ria->ria_length, ria->ria_pages);
                         offset = page_idx - ria->ria_stoff;
                         offset = offset % (ria->ria_length);
                         if (offset > ria->ria_pages) {
@@ -1062,8 +1062,16 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         ras->ras_consecutive_pages++;
         ras->ras_last_readpage = index;
         ras_set_start(ras, index);
-        ras->ras_next_readahead = max(ras->ras_window_start,
-                                      ras->ras_next_readahead);
+
+        if (stride_io_mode(ras))
+                /* Since stride readahead is sentivite to the offset
+                 * of read-ahead, so we use original offset here,
+                 * instead of ras_window_start, which is 1M aligned*/
+                ras->ras_next_readahead = max(index,
+                                              ras->ras_next_readahead);
+        else
+                ras->ras_next_readahead = max(ras->ras_window_start,
+                                              ras->ras_next_readahead);
         RAS_CDEBUG(ras);
 
         /* Trigger RA in the mmap case where ras_consecutive_requests
