@@ -2138,24 +2138,21 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         }
 
         label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
+        LCONSOLE_INFO("%s: Now serving %s %s%s with recovery %s\n",
+                      obd->obd_name, label ?: str, lmi ? "on " : "",
+                      lmi ? s2lsi(lmi->lmi_sb)->lsi_lmd->lmd_dev : "",
+                      obd->obd_replayable ? "enabled" : "disabled");
 
-        if (obd->obd_recovering) {
-                LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in "
-                              "recovery for at least %d:%.02d, or until %d "
-                              "client%s reconnect%s.\n",
-                              obd->obd_name, lustre_cfg_string(lcfg, 1),
-                              label ?: "", label ? "/" : "", str,
+        if (obd->obd_recovering)
+                LCONSOLE_WARN("%s: Will be in recovery for at least %d:%.02d, "
+                              "or until %d client%s reconnect%s\n",
+                              obd->obd_name,
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
                               obd->obd_max_recoverable_clients,
-                              (obd->obd_max_recoverable_clients == 1) ? "":"s",
-                              (obd->obd_max_recoverable_clients == 1) ? "s":"");
-        } else {
-                LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
-                              "%s\n", obd->obd_name, lustre_cfg_string(lcfg, 1),
-                              label ?: "", label ? "/" : "", str,
-                              obd->obd_replayable ? "enabled" : "disabled");
-        }
+                              (obd->obd_max_recoverable_clients == 1) ? "" : "s",
+                              (obd->obd_max_recoverable_clients == 1) ? "s": "");
+
 
         RETURN(0);
 
