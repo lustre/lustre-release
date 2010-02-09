@@ -1387,8 +1387,8 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
         if (!new_client && service_time)
                 /* Teach server about old server's estimates, as first guess
                  * at how long new requests will take. */
-                at_add(&req->rq_rqbd->rqbd_service->srv_at_estimate,
-                       service_time);
+                at_measured(&req->rq_rqbd->rqbd_service->srv_at_estimate,
+                            service_time);
 
         check_and_start_recovery_timer(obd);
 

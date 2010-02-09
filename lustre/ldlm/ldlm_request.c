@@ -140,7 +140,8 @@ static int ldlm_completion_tail(struct ldlm_lock *lock)
                            CFS_DURATION_T"s", delay);
 
                 /* Update our time estimate */
-                at_add(&lock->l_resource->lr_namespace->ns_at_estimate, delay);
+                at_measured(&lock->l_resource->lr_namespace->ns_at_estimate,
+                            delay);
                 result = 0;
         }
         return result;

@@ -518,9 +518,9 @@ static int import_select_connection(struct obd_import *imp)
             !imp->imp_recon_bk /* not retrying */) {
                 if (at_get(&imp->imp_at.iat_net_latency) <
                     CONNECTION_SWITCH_MAX) {
-                        at_add(&imp->imp_at.iat_net_latency,
-                               at_get(&imp->imp_at.iat_net_latency) +
-                               CONNECTION_SWITCH_INC);
+                        at_measured(&imp->imp_at.iat_net_latency,
+                                    at_get(&imp->imp_at.iat_net_latency) +
+                                    CONNECTION_SWITCH_INC);
                 }
                 LASSERT(imp_conn->oic_last_attempt);
                 CWARN("%s: tried all connections, increasing latency to %ds\n",
@@ -1487,7 +1487,7 @@ extern unsigned int at_min, at_max, at_history;
    This gives us a max of the last binlimit*AT_BINS secs without the storage,
    but still smoothing out a return to normalcy from a slow response.
    (E.g. remember the maximum latency in each minute of the last 4 minutes.) */
-int at_add(struct adaptive_timeout *at, unsigned int val)
+int at_measured(struct adaptive_timeout *at, unsigned int val)
 {
         unsigned int old = at->at_current;
         time_t now = cfs_time_current_sec();
