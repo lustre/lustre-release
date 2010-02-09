@@ -1313,7 +1313,8 @@ test_25() {
         stop $SINGLEMDS || return 1
         start $SINGLEMDS ${dev} $MDS_MOUNT_OPTS  || \
             { error "Failed to start $SINGLEMDS after stopping" && break; }
-	clients_up
+        wait_osc_import_state mds ost FULL
+        clients_up
 
         # Veriy that the pool got created and is usable
         echo "Creating a file in pool$i"
