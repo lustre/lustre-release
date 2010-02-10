@@ -101,7 +101,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         LASSERT (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->md.start == req->rq_repbuf);
-        LASSERT (ev->mlength <= req->rq_repbuf_len);
+        LASSERT (ev->offset + ev->mlength <= req->rq_repbuf_len);
         /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
            for adaptive timeouts' early reply. */
         LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);

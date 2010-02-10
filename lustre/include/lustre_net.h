@@ -388,8 +388,9 @@ struct ptlrpc_request {
         int rq_request_portal;  /* XXX FIXME bug 249 */
         int rq_reply_portal;    /* XXX FIXME bug 249 */
 
-        int rq_nob_received; /* client-side # reply bytes actually received  */
-
+        int rq_nob_received; /* client-side:
+                              * !rq_truncate : # reply bytes actually received,
+                              *  rq_truncate : required repbuf_len for resend */
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;
 
