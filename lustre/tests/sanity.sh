@@ -1021,7 +1021,7 @@ exhaust_precreations() {
 
 	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
 
-	mkdir -p $DIR/d27/${OST}
+	mkdir -p $DIR/$tdir/${OST}
 	$SETSTRIPE $DIR/$tdir/${OST} -i $OSTIDX -c 1
 #define OBD_FAIL_OST_ENOSPC              0x215
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=$FAILIDX
