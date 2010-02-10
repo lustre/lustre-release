@@ -277,9 +277,9 @@ struct ldlm_pool_ops {
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
 /**
- * 5% margin for modest pools. See ldlm_pool.c for details.
+ * ~6% margin for modest pools. See ldlm_pool.c for details.
  */
-#define LDLM_POOLS_MODEST_MARGIN (5)
+#define LDLM_POOLS_MODEST_MARGIN_SHIFT (4)
 
 /**
  * Default recalc period for server side pools in sec.
