@@ -870,7 +870,7 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
                 pl->pl_server_lock_volume = ldlm_pool_slv_max(LDLM_POOL_HOST_L);
         } else {
                 ldlm_pool_set_limit(pl, 1);
-                pl->pl_server_lock_volume = 1;
+                pl->pl_server_lock_volume = 0;
                 pl->pl_ops = &ldlm_cli_pool_ops;
                 pl->pl_recalc_period = LDLM_POOL_CLI_DEF_RECALC_PERIOD;
         }
