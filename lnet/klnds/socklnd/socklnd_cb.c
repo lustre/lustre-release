@@ -1824,7 +1824,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         return 0;
 }
 
-void
+int
 ksocknal_connect (ksock_route_t *route)
 {
         CFS_LIST_HEAD    (zombies);
@@ -1920,7 +1920,8 @@ ksocknal_connect (ksock_route_t *route)
                 /* re-queue for attention; this frees me up to handle
                  * the peer's incoming connection request */
 
-                if (rc == EALREADY) {
+                if (rc == EALREADY ||
+                    (rc == 0 && peer->ksnp_accepting > 0)) {
                         /* We want to introduce a delay before next
                          * attempt to connect if we lost conn race,
                          * but the race is resolved quickly usually,
@@ -1935,7 +1936,7 @@ ksocknal_connect (ksock_route_t *route)
         }
 
         cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
-        return;
+        return retry_later;
 
  failed:
         cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
@@ -1985,6 +1986,7 @@ ksocknal_connect (ksock_route_t *route)
 
         ksocknal_peer_failed(peer);
         ksocknal_txlist_done(peer->ksnp_ni, &zombies, 1);
+        return 0;
 }
 
 /* Go through connd_routes queue looking for a route that
@@ -2028,6 +2030,8 @@ ksocknal_connd (void *arg)
         ksock_route_t     *route;
         cfs_waitlink_t     wait;
         signed long        timeout;
+        int                nloops = 0;
+        int                cons_retry = 0;
         int                dropped_lock;
 
         snprintf (name, sizeof (name), "socknal_cd%02ld", id);
@@ -2071,15 +2075,33 @@ ksocknal_connd (void *arg)
                         cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
                         dropped_lock = 1;
 
-                        ksocknal_connect (route);
+                        if (ksocknal_connect(route)) {
+                                /* consecutive retry */
+                                if (cons_retry++ > SOCKNAL_INSANITY_RECONN) {
+                                        CWARN("massive consecutive "
+                                              "re-connecting to %u.%u.%u.%u\n",
+                                              HIPQUAD(route->ksnr_ipaddr));
+                                        cons_retry = 0;
+                                }
+                        } else {
+                                cons_retry = 0;
+                        }
+
                         ksocknal_route_decref(route);
 
                         cfs_spin_lock_bh (&ksocknal_data.ksnd_connd_lock);
                         ksocknal_data.ksnd_connd_connecting--;
                 }
 
-                if (dropped_lock)
+                if (dropped_lock) {
+                        if (++nloops < SOCKNAL_RESCHED)
+                                continue;
+                        cfs_spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
+                        nloops = 0;
+                        cfs_cond_resched();
+                        cfs_spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
                         continue;
+                }
 
                 /* Nothing to do for 'timeout'  */
                 cfs_set_current_state (CFS_TASK_INTERRUPTIBLE);
@@ -2087,6 +2109,7 @@ ksocknal_connd (void *arg)
                                          &wait);
                 cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
 
+                nloops = 0;
                 cfs_waitq_timedwait (&wait, CFS_TASK_INTERRUPTIBLE, timeout);
 
                 cfs_set_current_state (CFS_TASK_RUNNING);

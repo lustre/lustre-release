@@ -50,6 +50,7 @@
 
 #define SOCKNAL_PEER_HASH_SIZE  101             /* # peer lists */
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
+#define SOCKNAL_INSANITY_RECONN 5000            /* connd is trying on reconn infinitely */
 #define SOCKNAL_ENOMEM_RETRY    CFS_TICK        /* jiffies between retries */
 
 #define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
