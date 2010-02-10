@@ -188,7 +188,7 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
 fi
 
 pushd $RPM_BUILD_ROOT >/dev/null
-find lib/modules/%{kversion}/kernel -type f | awk "!/($modules_excludes)/ {print \"/\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
+find lib/modules/%{kversion}/kernel -type f | awk "!/($modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
 popd >/dev/null
 
 %files -f lustre.files
