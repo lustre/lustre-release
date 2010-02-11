@@ -60,7 +60,7 @@ unset ENABLE_QUOTA
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21 29"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21"
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 
@@ -2058,7 +2058,6 @@ test_29()
         local newtimeo=10 # the default ptlrpc AT value
         local oldtimeo
         local pid
-        local resends
 
         if at_is_enabled; then
                 oldtimeo=$(at_max_get client)
@@ -2068,16 +2067,14 @@ test_29()
                 lctl set_param timeout=$newtimeo
         fi
 
-        resends=$(lctl get_param -n mdc.${FSNAME}-*.quota_resend_count | head -1)
-
         #define OBD_FAIL_MDS_QUOTACTL_NET 0x12e
         lustre_fail mds 0x12e
 
         $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR & pid=$!
 
         # 1.25 * at_max + 5 + net_latency
-        echo "sleeping for $(((newtimeo * 9 / 4 + 5) * resends)) seconds"
-        sleep $(((newtimeo * 9 / 4 + 5) * resends))
+        echo "sleeping for $((newtimeo * 9 / 4 + 5)) seconds"
+        sleep $((newtimeo * 9 / 4 + 5))
         ps -p $pid && error "lfs hadn't finished by timeout"
         wait $pid && error "succeeded, but should have failed"
 

@@ -473,7 +473,6 @@ extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
-
 struct adaptive_timeout;
 extern int lprocfs_at_hist_helper(char *page, int count, int rc,
                                   struct adaptive_timeout *at);
@@ -485,11 +484,6 @@ extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
-
-extern int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data);
-extern int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
-                                         unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
@@ -506,7 +500,6 @@ extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
-
 
 extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);

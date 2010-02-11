@@ -286,7 +286,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_cksum_type = cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
 #endif
         atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
-        atomic_set(&cli->cl_quota_resends, CLIENT_QUOTA_DEFAULT_RESENDS);
 
         /* This value may be changed at connect time in
            ptlrpc_connect_interpret. */

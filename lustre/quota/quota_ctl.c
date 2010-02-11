@@ -344,7 +344,7 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
-        int ver, opc, rc, resends = 0;
+        int ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -356,8 +356,6 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         } else {
                 RETURN(-EINVAL);
         }
-
-restart_request:
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
         if (!req)
@@ -389,17 +387,40 @@ restart_request:
         EXIT;
 out:
         ptlrpc_req_finished(req);
+        return rc;
+}
 
-        if (client_quota_recoverable_error(rc)) {
-                resends++;
-                if (!client_quota_should_resend(resends, &exp->exp_obd->u.cli)) {
-                        CERROR("too many resend retries, returning error "
-                               "(cmd = %d, id = %u, type = %d)\n",
-                               oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type);
-                        RETURN(-EIO);
+struct lov_getquota_set_arg {
+        __u64 curspace;
+        __u64 bhardlimit;
+};
+
+static int lov_getquota_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
+{
+        struct lov_getquota_set_arg *set_arg = data;
+        struct ptlrpc_request *req;
+        struct list_head *pos;
+        struct obd_quotactl *oqc;
+
+        list_for_each(pos, &rqset->set_requests) {
+                req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
+
+                if (req->rq_status)
+                        continue;
+
+                oqc = NULL;
+                if (req->rq_repmsg)
+                        oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
+                                lustre_swab_obd_quotactl);
+
+                if (oqc == NULL) {
+                        CERROR("Can't unpack obd_quotactl\n");
+                        rc = -EPROTO;
+                        continue;
                 }
 
-                goto restart_request;
+                set_arg->curspace += oqc->qc_dqblk.dqb_curspace;
+                set_arg->bhardlimit += oqc->qc_dqblk.dqb_bhardlimit;
         }
 
         return rc;
@@ -409,9 +430,12 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
-        __u64 curspace = 0;
-        __u64 bhardlimit = 0;
-        int i, rc = 0;
+        int i, rc = 0, rc1;
+        struct lov_getquota_set_arg set_arg = { 0 };
+        struct obd_export *ltd_exp;
+        struct ptlrpc_request_set *rqset;
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
+
         ENTRY;
 
         if (oqctl->qc_cmd != LUSTRE_Q_QUOTAON &&
@@ -421,12 +445,18 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
             oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
             oqctl->qc_cmd != Q_FINVALIDATE) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
-                RETURN(-EFAULT);
+                RETURN(-EINVAL);
         }
 
+        rqset = ptlrpc_prep_set();
+        if (rqset == NULL)
+                RETURN(-ENOMEM);
+
         obd_getref(obd);
+
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
+                struct ptlrpc_request *req;
+                struct obd_quotactl *oqc;
 
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
@@ -438,23 +468,40 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         continue;
                 }
 
-                err = obd_quotactl(lov->lov_tgts[i]->ltd_exp, oqctl);
-                if (err) {
-                        if (lov->lov_tgts[i]->ltd_active && !rc)
-                                rc = err;
-                        continue;
+                ltd_exp = lov->lov_tgts[i]->ltd_exp;
+
+                req = ptlrpc_prep_req(class_exp2cliimp(ltd_exp),
+                                      LUSTRE_OST_VERSION,
+                                      OST_QUOTACTL, 2, size, NULL);
+                if (!req) {
+                        obd_putref(obd);
+                        GOTO(out, rc = -ENOMEM);
                 }
 
-                if (oqctl->qc_cmd == Q_GETOQUOTA) {
-                        curspace += oqctl->qc_dqblk.dqb_curspace;
-                        bhardlimit += oqctl->qc_dqblk.dqb_bhardlimit;
-                }
+                oqc = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*oqctl));
+                *oqc = *oqctl;
+
+                ptlrpc_req_set_repsize(req, 2, size);
+                ptlrpc_at_set_req_timeout(req);
+                req->rq_no_resend = 1;
+                req->rq_no_delay = 1;
+
+                ptlrpc_set_add_req(rqset, req);
         }
+
         obd_putref(obd);
 
         if (oqctl->qc_cmd == Q_GETOQUOTA) {
-                oqctl->qc_dqblk.dqb_curspace = curspace;
-                oqctl->qc_dqblk.dqb_bhardlimit = bhardlimit;
+                rqset->set_interpret = lov_getquota_interpret;
+                rqset->set_arg = &set_arg;
         }
+        rc1 = ptlrpc_set_wait(rqset);
+        rc = rc1 ? rc1 : rc;
+
+out:
+        ptlrpc_set_destroy(rqset);
+        oqctl->qc_dqblk.dqb_curspace = set_arg.curspace;
+        oqctl->qc_dqblk.dqb_bhardlimit = set_arg.bhardlimit;
+
         RETURN(rc);
 }

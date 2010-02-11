@@ -404,7 +404,6 @@ struct filter_obd {
 #define MDC_MAX_RIF_DEFAULT       8
 #define MDC_MAX_RIF_MAX         512
 
-#define CLIENT_QUOTA_DEFAULT_RESENDS 10
 
 struct mdc_rpc_lock;
 struct obd_import;
@@ -545,8 +544,6 @@ struct client_obd {
         struct lu_client_seq    *cl_seq;
 
         atomic_t                 cl_resends; /* resend count */
-        atomic_t                 cl_quota_resends; /* quota related resend count */
-
         /* Cache of triples */
         struct lustre_cache     *cl_cache;
         obd_lock_cancel_cb       cl_ext_lock_cancel_cb;

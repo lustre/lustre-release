@@ -202,18 +202,6 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
 int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
-
-static inline int client_quota_recoverable_error(int rc)
-{
-        return (rc == -ETIMEDOUT || rc == -EAGAIN);
-}
-
-static inline int client_quota_should_resend(int resend, struct client_obd *cli)
-{
-        return atomic_read(&cli->cl_quota_resends) ?
-                atomic_read(&cli->cl_quota_resends) > resend : 1;
-}
-
 int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl,
                      int global);
 #endif
