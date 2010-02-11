@@ -2610,16 +2610,16 @@ reset_fail_loc () {
 }
 
 run_one() {
-    testnum=$1
-    message=$2
+    local testnum=$1
+    local message=$2
+    local start_tm=$3
     tfile=f${testnum}
     export tdir=d0.${TESTSUITE}/d${base}
     export TESTNAME=test_$testnum
     local SAVE_UMASK=`umask`
     umask 0022
 
-    echo
-    log "== test $testnum: $message == `date +%H:%M:%S`"
+    log "== test $testnum: $message == `date +%H:%M:%S` ($start_tm)"
     test_${testnum} || error "test_$testnum failed with $?"
     cd $SAVE_PWD
     reset_fail_loc
@@ -2639,7 +2639,8 @@ run_one_logged() {
     local test_log=$LOGDIR/$name
     rm -rf $LOGDIR/err
 
-    run_one $1 "$2" 2>&1 | tee $test_log
+    echo
+    run_one $1 "$2" $BEFORE 2>&1 | tee $test_log
     local RC=${PIPESTATUS[0]}
 
     [ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \
