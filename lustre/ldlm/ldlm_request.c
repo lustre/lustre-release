@@ -1345,7 +1345,7 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
          * Inform pool about current CLV to see it via proc.
          */
         ldlm_pool_set_clv(pl, lv);
-        return (slv == 1 || lv < slv) ?
+        return (slv == 0 || lv < slv) ?
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
