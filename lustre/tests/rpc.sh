@@ -9,11 +9,12 @@ if [ ! -f $LUSTRE/tests/rpc.sh ]; then
 fi
 
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-cmd=$1
-shift
-$cmd $@
+# Reset the trap on ERR set by the framework.  Noticing this failure is the
+# framework's job.
+trap ERR
 
-exit $?
+# Execute the command
+"$@"

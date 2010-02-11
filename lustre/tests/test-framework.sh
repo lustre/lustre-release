@@ -34,6 +34,9 @@ if [ -f "$EXCEPT_LIST_FILE" ]; then
     . $EXCEPT_LIST_FILE
 fi
 
+[ -z "$MODPROBECONF" -a -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
+[ -z "$MODPROBECONF" -a -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
+
 assert_DIR () {
     local failed=""
     [[ $DIR/ = $MOUNT/* ]] || \
@@ -230,27 +233,64 @@ module_loaded () {
    /sbin/lsmod | grep -q $1
 }
 
+# Load a module on the system where this is running.
+#
+# Synopsis: load_module module_name [module arguments for insmod/modprobe]
+#
+# If module arguments are not given but MODOPTS_<MODULE> is set, then its value
+# will be used as the arguments.  Otherwise arguments will be obtained from
+# /etc/modprobe.conf, from /etc/modprobe.d/Lustre, or else none will be used.
+#
 load_module() {
+    local optvar
     EXT=".ko"
     module=$1
     shift
     BASE=`basename $module $EXT`
 
+    # If no module arguments were passed, get them from $MODOPTS_<MODULE>, else from
+    # modprobe.conf
+    if [ $# -eq 0 ]; then
+        # $MODOPTS_<MODULE>; we could use associative arrays, but that's not in
+        # Bash until 4.x, so we resort to eval.
+        optvar="MODOPTS_$(basename $module | tr a-z A-Z)"
+        eval set -- \$$optvar
+        if [ $# -eq 0 -a -n "$MODPROBECONF" ]; then
+            # Nothing in $MODOPTS_<MODULE>; try modprobe.conf
+            set -- $(grep "^options\\s*\<${module}\>" $MODPROBECONF)
+            # Get rid of "options $module"
+	    (($# > 0)) && shift 2
+
+            # Ensure we have accept=all for lnet
+            if [ $module = lnet ]; then
+                # OK, this is a bit wordy...
+                local arg accept_all_present=false
+                for arg in "$@"; do
+                    [ "$arg" = accept=all ] && accept_all_present=true
+                done
+                $accept_all_present || set -- "$@" accept=all
+            fi
+        fi
+    fi
+
+    [ $# -gt 0 ] && echo "${module} options: '$*'"
+
     module_loaded ${BASE} && return
 
+    # Note that insmod will ignore anything in modprobe.conf, which is why we're
+    # passing options on the command-line.
     if [ "$BASE" == "lnet_selftest" ] && \
             [ -f ${LUSTRE}/../lnet/selftest/${module}${EXT} ]; then
         insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
-
     elif [ -f ${LUSTRE}/${module}${EXT} ]; then
-        insmod ${LUSTRE}/${module}${EXT} $@
+        insmod ${LUSTRE}/${module}${EXT} "$@"
     else
         # must be testing a "make install" or "rpm" installation
         # note failed to load ptlrpc_gss is considered not fatal
         if [ "$BASE" == "ptlrpc_gss" ]; then
-            modprobe $BASE $@ 2>/dev/null || echo "gss/krb5 is not supported"
+            modprobe $BASE "$@" 2>/dev/null || echo "gss/krb5 is not supported"
         else
-            modprobe $BASE $@
+            modprobe $BASE "$@"
         fi
     fi
 }
@@ -258,10 +298,12 @@ load_module() {
 load_modules_local() {
     if [ -n "$MODPROBE" ]; then
         # use modprobe
-    return 0
+        echo "Using modprobe to load modules"
+        return 0
     fi
     if [ "$HAVE_MODULES" = true ]; then
-    # we already loaded
+        # we already loaded
+        echo "Modules already loaded"
         return 0
     fi
     HAVE_MODULES=true
@@ -270,15 +312,7 @@ load_modules_local() {
     load_module ../libcfs/libcfs/libcfs
     [ "$PTLDEBUG" ] && lctl set_param debug="$PTLDEBUG"
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug="${SUBSYSTEM# }"
-    local MODPROBECONF=
-    [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
-    [ ! "$MODPROBECONF" -a -d /etc/modprobe.d ] && MODPROBECONF=/etc/modprobe.d/Lustre
-    [ -z "$LNETOPTS" -a "$MODPROBECONF" ] && \
-        LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
-    echo $LNETOPTS | grep -q "accept=all"  || LNETOPTS="$LNETOPTS accept=all";
-    echo "lnet options: '$LNETOPTS'"
-    # note that insmod will ignore anything in modprobe.conf
-    load_module ../lnet/lnet/lnet $LNETOPTS
+    load_module ../lnet/lnet/lnet
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
     load_module ../lnet/klnds/$LNETLND
     load_module lvfs/lvfs
@@ -1505,6 +1539,17 @@ single_local_node () {
    [ "$1" = "$HOSTNAME" ]
 }
 
+# Outputs environment variable assignments that should be passed to remote nodes
+get_env_vars() {
+    local var
+    local value
+
+    for var in ${!MODOPTS_*}; do
+        value=${!var}
+        echo "${var}=\"$value\""
+    done
+}
+
 do_nodes() {
     local verbose=false
     # do not stripe off hostname if verbose, bug 19215
@@ -1537,9 +1582,9 @@ do_nodes() {
     fi
 
     if $verbose ; then
-        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" sh -c \"$@\")"
+        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) sh -c \"$@\")"
     else
-        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" sh -c \"$@\")" | sed -re "s/\w+:\s//g"
+        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; LUSTRE=\"$RLUSTRE\" $(get_env_vars) sh -c \"$@\")" | sed -re "s/\w+:\s//g"
     fi
     return ${PIPESTATUS[0]}
 }
@@ -2429,15 +2474,11 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
-    if $FAIL_ON_ERROR; then
-        reset_fail_loc
-        exit 1
-    fi
+    exit 1
 }
 
 error_exit() {
-    error_noexit "$@"
-    exit 1
+    error "$@"
 }
 
 # use only if we are ignoring failures for this test, bugno required.

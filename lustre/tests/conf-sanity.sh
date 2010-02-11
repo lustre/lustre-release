@@ -2212,6 +2212,102 @@ test_52() {
 }
 run_test 52 "check recovering objects from lost+found"
 
+# Checks threads_min/max/started for some service
+#
+# Arguments: service name (OST or MDT), facet (e.g., ost1, $SINGLEMDS), and a
+# parameter pattern prefix like 'ost.*.ost'.
+thread_sanity() {
+        local modname=$1
+        local facet=$2
+        local parampat=$3
+        local opts=$4
+        local tmin
+        local tmin2
+        local tmax
+        local tmax2
+        local tstarted
+        local paramp
+        local msg="Insane $modname thread counts"
+        shift 4
+
+        setup
+        check_mount || return 41
+
+        # We need to expand $parampat, but it may match multiple parameters, so
+        # we'll pick the first one
+        if ! paramp=$(do_facet $facet "lctl get_param -N ${parampat}.threads_min"|head -1); then
+                error "Couldn't expand ${parampat}.threads_min parameter name"
+                return 22
+        fi
+
+        # Remove the .threads_min part
+        paramp=${paramp%.threads_min}
+
+        # Check for sanity in defaults
+        tmin=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
+        tmax=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
+        tstarted=$(do_facet $facet "lctl get_param -n ${paramp}.threads_started" || echo 0)
+        lassert 23 "$msg (PDSH problems?)" '(($tstarted && $tmin && $tmax))' || return $?
+        lassert 24 "$msg" '(($tstarted >= $tmin && $tstarted <= tmax ))' || return $?
+
+        # Check that we can lower min/max
+        do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin - 1))"
+        do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmax - 10))"
+        tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
+        tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
+        lassert 25 "$msg" '(($tmin2 == ($tmin - 1) && $tmax2 == ($tmax -10)))' || return $?
+
+        # Check that we can set min/max to the same value
+        do_facet $facet "lctl set_param ${paramp}.threads_min=$tmin"
+        do_facet $facet "lctl set_param ${paramp}.threads_max=$tmin"
+        tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
+        tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
+        lassert 26 "$msg" '(($tmin2 == $tmin && $tmax2 == $tmin))' || return $?
+
+        # Check that we can't set max < min
+        do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmin - 1))"
+        tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
+        tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
+        lassert 27 "$msg" '(($tmin <= $tmax2))' || return $?
+
+        # We need to ensure that we get the module options desired; to do this
+        # we set LOAD_MODULES_REMOTE=true and we call setmodopts below.
+        LOAD_MODULES_REMOTE=true
+        cleanup
+        local oldvalue
+        setmodopts -a $modname "$opts" oldvalue
+
+        load_modules
+        setup
+        check_mount || return 41
+
+        # Restore previous setting of MODOPTS_*
+        setmodopts $modname "$oldvalue"
+
+        # Check that $opts took
+        tmin=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min")
+        tmax=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max")
+        tstarted=$(do_facet $facet "lctl get_param -n ${paramp}.threads_started")
+        lassert 28 "$msg" '(($tstarted == $tmin && $tstarted == $tmax ))' || return $?
+        cleanup
+
+        # Workaround a YALA bug where YALA expects that modules will remain
+        # loaded on the servers
+        LOAD_MODULES_REMOTE=false
+        setup
+        cleanup
+}
+
+test_53a() {
+        thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads=64'
+}
+run_test 53a "check OSS thread count params"
+
+test_53b() {
+        thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads=64'
+}
+run_test 53b "check MDT thread count params"
+
 cleanup_gss
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
