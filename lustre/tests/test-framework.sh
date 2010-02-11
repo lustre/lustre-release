@@ -1875,11 +1875,6 @@ osc_ensure_active () {
     [ $period -lt $timeout ] || log "$count OST are inactive after $timeout seconds, give up"
 }
 
-som_check() {
-    SOM_ENABLED=$(do_facet $SINGLEMDS "$LCTL get_param mdt.*.som" | awk -F= ' {print $2}' | head -n 1)
-    echo $SOM_ENABLED
-}
-
 init_param_vars () {
     if ! remote_ost_nodsh && ! remote_mds_nodsh; then
         export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
@@ -1895,10 +1890,6 @@ init_param_vars () {
     osc_ensure_active $SINGLEMDS M $TIMEOUT
     osc_ensure_active client c $TIMEOUT
 
-    if [ x"$(som_check)" = x"enabled" ]; then
-        ENABLE_QUOTA=""
-        echo "disable quota temporary when SOM enabled"
-    fi
     if [ $QUOTA_AUTO -ne 0 ]; then
         if [ "$ENABLE_QUOTA" ]; then
             echo "enable quota as required"

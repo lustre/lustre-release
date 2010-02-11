@@ -852,13 +852,6 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
 
         cfs_down(&obt->obt_quotachecking);
-        if (obt->obt_qctxt.lqc_immutable) {
-                LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
-                               "(is SOM enabled?)\n");
-                cfs_up(&obt->obt_quotachecking);
-                RETURN(-ECANCELED);
-        }
-
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cfs_down(&mds->mds_qonoff_sem);
         rc2 = mds_admin_quota_on(obd, oqctl);
@@ -916,13 +909,10 @@ int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct obd_device_target *obt = &obd->u.obt;
         struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         struct lvfs_run_ctxt saved;
-        int rc = 0, rc1 = 0, rc2 = 0, imm;
+        int rc = 0, rc1 = 0, rc2 = 0;
         ENTRY;
 
         LASSERT_SEM_LOCKED(&obt->obt_quotachecking);
-
-        imm = oqctl->qc_type & IMMQUOTA;
-        oqctl->qc_type &= ~IMMQUOTA;
 
         if (oqctl->qc_type != USRQUOTA &&
             oqctl->qc_type != GRPQUOTA &&
@@ -940,8 +930,6 @@ int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 
         rc1 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc1) {
-                if (imm)
-                        obt->obt_qctxt.lqc_immutable = 1;
                 obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
         } else if (quota_is_off(qctxt, oqctl)) {
                 CWARN("mds local quota[%d] is off already\n", oqctl->qc_type);
@@ -966,8 +954,6 @@ int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
                         mds_admin_quota_on(obd, oqctl);
                 if (rc1 != -EALREADY) {
                         fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
-                        if (imm)
-                                obt->obt_qctxt.lqc_immutable = 0;
                         qctxt->lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
                 }
                 oqctl->qc_cmd = Q_QUOTAOFF;

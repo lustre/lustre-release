@@ -688,26 +688,6 @@ static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
                         mdt->mdt_som_conf ? "en" : "dis");
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
-static int mdt_quota_off(struct mdt_device *mdt)
-{
-        struct md_device *next = mdt->mdt_child;
-        const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
-        struct lu_env env;
-        int rc;
-
-        lu_env_init(&env, LCT_MD_THREAD);
-        rc = mqo->mqo_off(&env, next, UGQUOTA | IMMQUOTA);
-        lu_env_fini(&env);
-        return rc;
-}
-#else
-static int mdt_quota_off(struct mdt_device *mdt)
-{
-        return 0;
-}
-#endif
-
 static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
                               unsigned long count, void *data)
 {
@@ -716,7 +696,6 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         char kernbuf[16];
         unsigned long val = 0;
-        int rc;
 
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
@@ -751,13 +730,6 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
                               "the next mount\n", exp->exp_client_uuid.uuid,
                               val ? "enabled" : "disabled");
                 return count;
-        }
-
-        if ((rc = mdt_quota_off(mdt))) {
-                if (rc == -EALREADY)
-                        rc = 0;
-                else
-                        return rc;
         }
 
         mdt->mdt_som_conf = val;

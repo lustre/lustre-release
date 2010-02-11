@@ -225,12 +225,6 @@ static int auto_quota_on(struct obd_device *obd, int type,
         if ((obt->obt_qctxt.lqc_flags & id) == id)
                 GOTO(out, rc);
 
-        if (obt->obt_qctxt.lqc_immutable) {
-                LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
-                               "(is SOM enabled?)\n");
-                GOTO(out, rc = -ECANCELED);
-        }
-
         oqctl->qc_type = type;
         oqctl->qc_cmd = Q_QUOTAON;
         oqctl->qc_id = obt->obt_qfmt;
