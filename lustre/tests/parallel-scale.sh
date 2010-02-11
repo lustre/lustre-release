@@ -192,6 +192,11 @@ test_metabench() {
 run_test metabench "metabench"
 
 test_simul() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
     [ x$SIMUL = x ] &&
         { skip_env "simul not found" && return; }
 
@@ -293,8 +298,13 @@ test_ior() {
     mkdir -p $testdir
     # mpi_run uses mpiuser
     chmod 0777 $testdir
-    $LFS setstripe $testdir -c -1
-
+    if [ "$NFSCLIENT" ]; then
+        setstripe_nfsserver $testdir -c -1 || 
+            { error "setstripe on nfsserver failed" && return 1; } 
+    else
+        $LFS setstripe $testdir -c -1 ||
+            { error "setstripe failed" && return 2; }
+    fi
     # 
     # -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
     # -o S  testFileName
@@ -360,6 +370,11 @@ test_cascading_rw() {
 run_test cascading_rw "cascading_rw"
 
 test_write_append_truncate() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
     # location is lustre/tests dir 
     if ! which write_append_truncate > /dev/null 2>&1 ; then
         skip_env "write_append_truncate not found"
@@ -401,6 +416,11 @@ test_write_append_truncate() {
 run_test write_append_truncate "write_append_truncate"
 
 test_write_disjoint() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
     [ x$WRITE_DISJOINT = x ] &&
         { skip_env "write_disjoint not found" && return; }
 
