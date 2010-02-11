@@ -367,8 +367,10 @@ static void print_rec(struct dbg_line ***linevp, int used, int fdout)
                 int bytes;
                 ssize_t bytes_written;
 
-                bytes = sprintf(out, "%08x:%08x:%u:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
-                                hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
+                bytes = sprintf(out, "%08x:%08x:%u.%u%s:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
+                                hdr->ph_subsys, hdr->ph_mask,
+                                hdr->ph_cpu_id, hdr->ph_type,
+                                hdr->ph_flags & PH_FLAG_FIRST_RECORD ? "F" : "",
                                 hdr->ph_sec, (unsigned long long)hdr->ph_usec,
                                 hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
                                 line->file, hdr->ph_line_num, line->fn, line->text);
@@ -415,6 +417,7 @@ static void dump_hdr(unsigned long long offset, struct ptldebug_header *hdr)
         fprintf(stderr, "  subsystem = %x\n", hdr->ph_subsys);
         fprintf(stderr, "  mask = %x\n", hdr->ph_mask);
         fprintf(stderr, "  cpu_id = %u\n", hdr->ph_cpu_id);
+        fprintf(stderr, "  type = %u\n", hdr->ph_type);
         fprintf(stderr, "  seconds = %u\n", hdr->ph_sec);
         fprintf(stderr, "  microseconds = %lu\n", (long)hdr->ph_usec);
         fprintf(stderr, "  stack = %u\n", hdr->ph_stack);
@@ -454,7 +457,7 @@ static int parse_buffer(int fdin, int fdout)
                         goto readhdr;
                 
                 if (hdr->ph_len > 4094 ||       /* is this header bogus? */
-                    hdr->ph_cpu_id > 65536 ||
+                    hdr->ph_type >= CFS_TCD_TYPE_MAX ||
                     hdr->ph_stack > 65536 ||
                     hdr->ph_sec < (1 << 30) ||
                     hdr->ph_usec > 1000000000 ||

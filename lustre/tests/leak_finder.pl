@@ -11,10 +11,48 @@ my $debug_line = 0;
 my $total = 0;
 my $max = 0;
 
-while ($line = <>) {
+my @parsed;
+my %cpu;
+my $start_time = 0;
+
+if (!defined($ARGV[0])) {
+        print "No log file specified\n";
+        exit
+}
+
+open(INFILE, $ARGV[0]);
+while ($line = <INFILE>) {
+    if ($line =~ m/^(.*)\((.*):(\d+):(.*)\(\)\)/) {
+        @parsed = split(":", $1);
+        if (substr ($parsed[2], -1, 1) eq "F") {
+            chop $parsed[2];
+            $cpu{$parsed[2]} = 0;
+        } else {
+            if (!defined($cpu{$parsed[2]})) {
+                $cpu{$parsed[2]} = $parsed[3];
+            }
+        }
+    }
+}
+
+foreach $time (values %cpu) {
+    if ($start_time < $time) {
+        $start_time = $time;
+    }
+}
+
+print "Starting analysis since $start_time\n";
+
+seek(INFILE, 0, 0);
+while ($line = <INFILE>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.*(\.).*\((.*):(\d+):(.*)\(\)\) (k|v|slab-)(.*) '(.*)': (\d+) at ([\da-f]+)/){
+    if ($line =~ m/^(.*)\((.*):(\d+):(.*)\(\)\) (k|v|slab-)(.*) '(.*)': (\d+) at ([\da-f]+)/){
+        @parsed = split(":", $1);
+        if ($parsed[3] <= $start_time) {
+                next;
+        }
+        
         $file = $2;
         $lno  = $3;
         $func = $4;
@@ -69,6 +107,7 @@ while ($line = <>) {
         $total -= $size;
     }
 }
+close(INFILE);
 
 # Sort leak output by allocation time
 my @sorted = sort {

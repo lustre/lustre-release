@@ -245,7 +245,7 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                        const char *format2, ...)
 {
         struct cfs_trace_cpu_data *tcd = NULL;
-        struct ptldebug_header     header;
+        struct ptldebug_header     header = {0};
         struct cfs_trace_page     *tage;
         /* string_buf is used only if tcd != NULL, and is always set then */
         char                      *string_buf = NULL;
@@ -267,6 +267,9 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
         tcd = cfs_trace_get_tcd();
         if (tcd == NULL)                /* arch may not log in IRQ context */
                 goto console;
+
+        if (tcd->tcd_cur_pages == 0)
+                header.ph_flags |= PH_FLAG_FIRST_RECORD;
 
         if (tcd->tcd_shutting_down) {
                 cfs_trace_put_tcd(tcd);
@@ -961,7 +964,6 @@ static int tracefiled(void *arg)
         struct tracefiled_ctl *tctl = arg;
         struct cfs_trace_page *tage;
         struct cfs_trace_page *tmp;
-        struct ptldebug_header *hdr;
         cfs_file_t *filp;
         int last_loop = 0;
         int rc;
@@ -1001,13 +1003,6 @@ static int tracefiled(void *arg)
                 }
 
                 CFS_MMSPACE_OPEN;
-
-                /* mark the first header, so we can sort in chunks */
-                tage = cfs_tage_from_list(pc.pc_pages.next);
-                __LASSERT_TAGE_INVARIANT(tage);
-
-                hdr = cfs_page_address(tage->page);
-                hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
 
                 cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
                                                    struct cfs_trace_page,

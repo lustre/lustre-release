@@ -173,7 +173,8 @@ set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 	do_gettimeofday(&tv);
 	header->ph_subsys = subsys;
 	header->ph_mask = mask;
-	header->ph_cpu_id = smp_processor_id();
+	header->ph_cpu_id = cfs_smp_processor_id();
+	header->ph_type = 0;
 	header->ph_sec = (__u32)tv.tv_sec;
 	header->ph_usec = tv.tv_usec;
 	header->ph_stack = stack;

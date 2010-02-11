@@ -176,6 +176,7 @@ cfs_set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 	header->ph_subsys = subsys;
 	header->ph_mask = mask;
 	header->ph_cpu_id = cfs_smp_processor_id();
+	header->ph_type = cfs_trace_buf_idx_get();
 	header->ph_sec = (__u32)tv.tv_sec;
 	header->ph_usec = tv.tv_usec;
 	header->ph_stack = stack;
