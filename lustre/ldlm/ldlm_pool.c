@@ -130,7 +130,7 @@
  * This controls the speed of reaching LDLM_POOL_MAX_GSP
  * with increasing thread period.
  */
-#define LDLM_POOL_GSP_STEP (4)
+#define LDLM_POOL_GSP_STEP_SHIFT (2)
 
 /*
  * LDLM_POOL_GSP% of all locks is default GP.
@@ -142,18 +142,18 @@
  */
 #define LDLM_POOL_MAX_AGE (36000)
 
+/*
+ * The granularity of SLV calculation.
+ */
+#define LDLM_POOL_SLV_SHIFT (10)
+
 #ifdef __KERNEL__
 extern cfs_proc_dir_entry_t *ldlm_ns_proc_dir;
 #endif
 
-#define avg(src, add) \
-        ((src) = ((src) + (add)) / 2)
-
-static inline __u64 dru(__u64 val, __u32 div)
+static inline __u64 dru(__u64 val, __u32 shift, int round_up)
 {
-        __u64 ret = val + (div - 1);
-        do_div(ret, div);
-        return ret;
+        return (val + (round_up ? (1 << shift) - 1 : 0)) >> shift;
 }
 
 static inline __u64 ldlm_pool_slv_max(__u32 L)
@@ -162,7 +162,7 @@ static inline __u64 ldlm_pool_slv_max(__u32 L)
          * Allow to have all locks for 1 client for 10 hrs.
          * Formula is the following: limit * 10h / 1 client.
          */
-        __u64 lim = L *  LDLM_POOL_MAX_AGE / 1;
+        __u64 lim = (__u64)L *  LDLM_POOL_MAX_AGE / 1;
         return lim;
 }
 
@@ -196,7 +196,7 @@ static inline struct ldlm_namespace *ldlm_pl2ns(struct ldlm_pool *pl)
  * Calculates suggested grant_step in % of available locks for passed
  * \a period. This is later used in grant_plan calculations.
  */
-static inline int ldlm_pool_t2gsp(int t)
+static inline int ldlm_pool_t2gsp(unsigned int t)
 {
         /*
          * This yields 1% grant step for anything below LDLM_POOL_GSP_STEP
@@ -219,8 +219,8 @@ static inline int ldlm_pool_t2gsp(int t)
          * plan is reached.
          */
         return LDLM_POOL_MAX_GSP -
-                (LDLM_POOL_MAX_GSP - LDLM_POOL_MIN_GSP) /
-                (1 << (t / LDLM_POOL_GSP_STEP));
+                ((LDLM_POOL_MAX_GSP - LDLM_POOL_MIN_GSP) >>
+                 (t >> LDLM_POOL_GSP_STEP_SHIFT));
 }
 
 /**
@@ -247,18 +247,21 @@ static inline void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
  */
 static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
 {
-        int grant_usage, granted, grant_plan;
-        __u64 slv, slv_factor;
+        int granted;
+        int grant_plan;
+        int round_up;
+        __u64 slv;
+        __u64 slv_factor;
+        __u64 grant_usage;
         __u32 limit;
 
         slv = pl->pl_server_lock_volume;
         grant_plan = pl->pl_grant_plan;
         limit = ldlm_pool_get_limit(pl);
         granted = cfs_atomic_read(&pl->pl_granted);
+        round_up = granted < limit;
 
-        grant_usage = limit - (granted - grant_plan);
-        if (grant_usage <= 0)
-                grant_usage = 1;
+        grant_usage = max_t(int, limit - (granted - grant_plan), 1);
 
         /*
          * Find out SLV change factor which is the ratio of grant usage
@@ -268,13 +271,14 @@ static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
          * SLV. And the opposite, the more grant plan is over-consumed
          * (load time) the faster drops SLV.
          */
-        slv_factor = (grant_usage * 100) / limit;
+        slv_factor = (grant_usage << LDLM_POOL_SLV_SHIFT);
+        do_div(slv_factor, limit);
         if (2 * abs(granted - limit) > limit) {
                 slv_factor *= slv_factor;
-                slv_factor = dru(slv_factor, 100);
+                slv_factor = dru(slv_factor, LDLM_POOL_SLV_SHIFT, round_up);
         }
         slv = slv * slv_factor;
-        slv = dru(slv, 100);
+        slv = dru(slv, LDLM_POOL_SLV_SHIFT, round_up);
 
         if (slv > ldlm_pool_slv_max(limit)) {
                 slv = ldlm_pool_slv_max(limit);
@@ -1167,9 +1171,9 @@ void ldlm_pools_recalc(ldlm_side_t client)
 
                         /*
                          * Set the modest pools limit equal to their avg granted
-                         * locks + 5%.
+                         * locks + ~6%.
                          */
-                        l += dru(l * LDLM_POOLS_MODEST_MARGIN, 100);
+                        l += dru(l, LDLM_POOLS_MODEST_MARGIN_SHIFT, 0);
                         ldlm_pool_setup(&ns->ns_pool, l);
                         nr_l += l;
                         nr_p++;
