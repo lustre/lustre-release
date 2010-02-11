@@ -1768,6 +1768,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         struct nid_stat *new_stat, *old_stat;
         struct obd_device *obd = NULL;
         cfs_proc_dir_entry_t *entry;
+        char *buffer = NULL;
         int rc = 0;
         ENTRY;
 
@@ -1820,9 +1821,16 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 GOTO(destroy_new, rc = -EALREADY);
         }
         /* not found - create */
-        new_stat->nid_proc = lprocfs_register(libcfs_nid2str(*nid),
+        OBD_ALLOC(buffer, LNET_NIDSTR_SIZE);
+        if (buffer == NULL)
+                GOTO(destroy_new, rc = -ENOMEM);
+
+        memcpy(buffer, libcfs_nid2str(*nid), LNET_NIDSTR_SIZE);
+        new_stat->nid_proc = lprocfs_register(buffer, 
                                               obd->obd_proc_exports_entry,
                                               NULL, NULL);
+        OBD_FREE(buffer, LNET_NIDSTR_SIZE);
+
         if (new_stat->nid_proc == NULL) {
                 CERROR("Error making export directory for nid %s\n",
                        libcfs_nid2str(*nid));
