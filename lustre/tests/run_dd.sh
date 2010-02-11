@@ -28,7 +28,9 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
     echoerr "$(date +'%F %H:%M:%S'): dd run starting"
     mkdir -p $TESTDIR
     cd $TESTDIR
-    dd bs=4k count=1000000 if=/dev/zero of=$TESTDIR/dd-file 1>$LOG &
+    # suppress dd xfer stat to workaround buggy coreutils/gettext
+    # combination in RHEL5 and OEL5, see BZ 21264
+    dd bs=4k count=1000000 status=noxfer if=/dev/zero of=$TESTDIR/dd-file 1>$LOG &
     load_pid=$!
     wait $load_pid
 
