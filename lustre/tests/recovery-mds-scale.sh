@@ -44,6 +44,8 @@ build_test_filter
 check_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
 
+max_recov_time=$(max_recovery_time)
+
 # the test node needs to be insulated from a lustre failure as much as possible,
 # so not even loading the lustre modules is ideal.
 # -- umount lustre
@@ -193,14 +195,15 @@ if ! do_nodes $NODES_TO_USE "set -x; echo \$(hostname): && cat $LOAD_PID_FILE"; 
     fi
 fi
 
-START_TS=$(date +%s)
-CURRENT_TS=$START_TS
-
 MINSLEEP=${MINSLEEP:-120}
 REQFAIL_PERCENT=${REQFAIL_PERCENT:-3}	# bug17839 comment 62
 REQFAIL=${REQFAIL:-$(( DURATION / SERVER_FAILOVER_PERIOD * REQFAIL_PERCENT / 100))}
 reqfail=0
 sleep=0
+
+START_TS=$(date +%s)
+CURRENT_TS=$START_TS
+
 while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
 
     # In order to perform the 
@@ -266,6 +269,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
         log "WARNING: failover and two check_client_loads time exceeded SERVER_FAILOVER_PERIOD - MINSLEEP !
 Failed to load the filesystem with I/O for a minimum period of $MINSLEEP $reqfail times ( REQFAIL=$REQFAIL ).
 This iteration, the load was only applied for sleep=$sleep seconds.
+Estimated max recovery time : $max_recov_time
 Probably the hardware is taking excessively long to boot.
 Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), bug 20918"
         [ $reqfail -gt $REQFAIL ] && exit 6 
