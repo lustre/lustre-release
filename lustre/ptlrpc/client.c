@@ -369,7 +369,7 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
         int i;
         int size = 1;
 
-        while (size < pool->prp_rq_size + SPTLRPC_MAX_PAYLOAD)
+        while (size < pool->prp_rq_size)
                 size <<= 1;
 
         LASSERTF(cfs_list_empty(&pool->prp_req_list) ||
@@ -417,7 +417,7 @@ ptlrpc_init_rq_pool(int num_rq, int msgsize,
 
         cfs_spin_lock_init(&pool->prp_lock);
         CFS_INIT_LIST_HEAD(&pool->prp_req_list);
-        pool->prp_rq_size = msgsize;
+        pool->prp_rq_size = msgsize + SPTLRPC_MAX_PAYLOAD;
         pool->prp_populate = populate_pool;
 
         populate_pool(pool, num_rq);
