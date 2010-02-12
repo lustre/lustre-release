@@ -13,6 +13,12 @@ tbd        Oracle, Inc.
 	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : normal
+Bugzilla   : 21829
+Description: llobdstat fix and enhancement
+Details    : add a counter to set a limit to how many samples will be returned
+	     fix a wildcard in the path to limit to obdfilter stats only
+
+Severity   : normal
 Bugzilla   : 21686
 Description: recovery-small 51 hang - MDT can not stop, Mount still busy with
 	     25 refs
