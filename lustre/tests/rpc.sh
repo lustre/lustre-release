@@ -14,7 +14,7 @@ init_test_env
 
 # Reset the trap on ERR set by the framework.  Noticing this failure is the
 # framework's job.
-trap ERR
+trap - ERR
 
 # Execute the command
 "$@"
