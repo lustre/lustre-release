@@ -1258,19 +1258,18 @@ test_35b() { # bug 18674
 		at_max_set 0 mds client
 	fi
 
-	mkdir -p $MOUNT/testdir
-	touch $MOUNT/testdir/test
+	mkdir -p $MOUNT/$tdir
 
 	log "Injecting EBUSY on MDS"
 	# Setting OBD_FAIL_MDS_RESEND=0x136
 	do_facet mds "$LCTL set_param fail_loc=0x80000136" || return 2
 
-	log "Stat on a test file"
-	stat $MOUNT/testdir/test
+	log "Creating a test file"
+	touch $MOUNT/$tdir/$tfile
 
 	log "Stop injecting EBUSY on MDS"
 	do_facet mds "$LCTL set_param fail_loc=0" || return 3
-	rm -f $MOUNT/testdir/test
+	rm -f $MOUNT/$tdir/$tfile
 
 	log "done"
 	# restore adaptive timeout
