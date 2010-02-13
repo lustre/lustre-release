@@ -783,19 +783,12 @@ int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct file *fp;
 
-                if (!Q_TYPESET(oqctl, i))
+                if (!Q_TYPESET(oqctl, i) || qinfo->qi_files[i] != NULL)
                         continue;
 
                 LASSERT(strlen(quotafile[i])
                         + sizeof(prefix) <= sizeof(name));
                 sprintf(name, "%s%s", prefix, quotafile[i]);
-
-                if (qinfo->qi_files[i] != NULL) {
-                        CWARN("quota[%d] is on already\n", i);
-                        rc1 = -EALREADY;
-                        continue;
-                }
-
                 fp = filp_open(name, O_RDWR, 0);
                 if (IS_ERR(fp) || !S_ISREG(fp->f_dentry->d_inode->i_mode)) {
                         rc = IS_ERR(fp) ? PTR_ERR(fp) : -EINVAL;
@@ -824,6 +817,22 @@ int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         RETURN(rc ? : rc1);
 }
 
+int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
+{
+        int rc;
+        ENTRY;
+
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA &&
+            oqctl->qc_type != UGQUOTA)
+                RETURN(-EINVAL);
+
+        rc = generic_quota_on(obd, oqctl, 1);
+
+        RETURN(rc);
+}
+
+
 int mds_admin_quota_off(struct obd_device *obd,
                         struct obd_quotactl *oqctl)
 {
@@ -837,70 +846,6 @@ int mds_admin_quota_off(struct obd_device *obd,
         RETURN(rc);
 }
 
-int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct obd_device_target *obt = &obd->u.obt;
-        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
-        struct lvfs_run_ctxt saved;
-        int rc = 0, rc1 = 0, rc2 = 0;
-        ENTRY;
-
-        if (oqctl->qc_type != USRQUOTA &&
-            oqctl->qc_type != GRPQUOTA &&
-            oqctl->qc_type != UGQUOTA)
-                RETURN(-EINVAL);
-
-        cfs_down(&obt->obt_quotachecking);
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        cfs_down(&mds->mds_qonoff_sem);
-        rc2 = mds_admin_quota_on(obd, oqctl);
-        if (rc2 && rc2 != -EALREADY) {
-                CWARN("mds quota[%d] is failed to be on for %d\n", oqctl->qc_type, rc2);
-                GOTO(out, rc2);
-        }
-
-        rc1 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
-        if (!rc1) {
-                qctxt->lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
-                /* when quotaon, create lqs for every quota uid/gid b=18574 */
-                build_lqs(obd);
-        } else if (rc1 == -EBUSY && quota_is_on(qctxt, oqctl)) {
-                CWARN("mds local quota[%d] is on already\n", oqctl->qc_type);
-                rc1 = -EALREADY;
-        } else {
-                if (rc2 != -EALREADY) {
-                        CWARN("mds local quota[%d] is failed to be on for %d\n",
-                              oqctl->qc_type, rc1);
-                        oqctl->qc_cmd = Q_QUOTAOFF;
-                        mds_admin_quota_off(obd, oqctl);
-                        oqctl->qc_cmd = Q_QUOTAON;
-                }
-                GOTO(out, rc1);
-        }
-
-        rc = obd_quotactl(mds->mds_osc_exp, oqctl);
-        if (rc && rc != -EALREADY) {
-                CWARN("mds remote quota[%d] is failed to be on for %d\n",
-                      oqctl->qc_type, rc);
-                oqctl->qc_cmd = Q_QUOTAOFF;
-                if (rc2 != -EALREADY)
-                        mds_admin_quota_off(obd, oqctl);
-                if (rc1 != -EALREADY) {
-                        fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
-                        qctxt->lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
-                }
-                oqctl->qc_cmd = Q_QUOTAON;
-        }
-
-        EXIT;
-
-out:
-        cfs_up(&mds->mds_qonoff_sem);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        cfs_up(&obt->obt_quotachecking);
-        return rc ? : (rc1 ? : rc2);
-}
 
 /* with obt->obt_quotachecking held */
 int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)

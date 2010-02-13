@@ -202,15 +202,72 @@ int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
 }
 EXPORT_SYMBOL(lprocfs_quota_rd_type);
 
-static int auto_quota_on(struct obd_device *obd, int type,
-                         struct super_block *sb, int is_master)
+/*
+ * generic_quota_on is very lazy and tolerant about current quota settings
+ * @global means to turn on quotas on each OST additionally to local quotas;
+ * should not be called from filter_quota_ctl on MDS nodes (as it starts
+ * admin quotas on MDS nodes).
+ */
+int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int global)
+{
+        struct obd_device_target *obt = &obd->u.obt;
+        struct lvfs_run_ctxt saved;
+        int id, is_master, rc = 0, local; /* means we need a local quotaon */
+
+        cfs_down(&obt->obt_quotachecking);
+        id = UGQUOTA2LQC(oqctl->qc_type);
+        local = (obt->obt_qctxt.lqc_flags & id) != id;
+
+        oqctl->qc_cmd = Q_QUOTAON;
+        oqctl->qc_id = obt->obt_qfmt;
+
+        is_master = !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
+        if (is_master) {
+                cfs_down(&obd->u.mds.mds_qonoff_sem);
+                if (local) {
+                        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        /* turn on cluster wide quota */
+                        rc = mds_admin_quota_on(obd, oqctl);
+                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        if (rc && rc != -ENOENT)
+                                CERROR("%s: %s admin quotaon failed. rc=%d\n",
+                                       obd->obd_name, global ? "global":"local",
+                                       rc);
+                }
+        }
+
+        if (rc == 0) {
+                if (local) {
+                        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
+                        if (rc) {
+                                if (rc != -ENOENT)
+                                        CERROR("%s: %s quotaon failed with"
+                                               " rc=%d\n", obd->obd_name,
+                                               global ? "global" : "local", rc);
+                        } else {
+                                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                                build_lqs(obd);
+                        }
+                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                }
+
+                if (rc == 0 && global && is_master)
+                        rc = obd_quotactl(obd->u.mds.mds_osc_exp, oqctl);
+        }
+
+        if (is_master)
+                cfs_up(&obd->u.mds.mds_qonoff_sem);
+
+        cfs_up(&obt->obt_quotachecking);
+
+        return rc;
+}
+
+static int auto_quota_on(struct obd_device *obd, int type)
 {
         struct obd_quotactl *oqctl;
-        struct lvfs_run_ctxt saved;
-        int rc = 0, rc1 = 0, id;
-        struct obd_device_target *obt = &obd->u.obt;
-        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
-        struct mds_obd *mds = NULL;
+        int rc;
         ENTRY;
 
         LASSERT(type == USRQUOTA || type == GRPQUOTA || type == UGQUOTA);
@@ -219,67 +276,12 @@ static int auto_quota_on(struct obd_device *obd, int type,
         if (!oqctl)
                 RETURN(-ENOMEM);
 
-        cfs_down(&obt->obt_quotachecking);
-        id = UGQUOTA2LQC(type);
-        /* quota already turned on */
-        if ((obt->obt_qctxt.lqc_flags & id) == id)
-                GOTO(out, rc);
-
         oqctl->qc_type = type;
-        oqctl->qc_cmd = Q_QUOTAON;
-        oqctl->qc_id = obt->obt_qfmt;
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = generic_quota_on(obd, oqctl, 0);
 
-        if (is_master) {
-                mds = &obd->u.mds;
-                cfs_down(&mds->mds_qonoff_sem);
-                /* turn on cluster wide quota */
-                rc1 = mds_admin_quota_on(obd, oqctl);
-                if (rc1 && rc1 != -EALREADY) {
-                        CDEBUG_LIMIT(rc1 == -ENOENT ? D_QUOTA : D_ERROR,
-                                     "%s: auto-enable admin quota failed with "
-                                     "rc=%d\n", obd->obd_name, rc1);
-                        GOTO(out_ctxt, rc1);
-                }
-        }
-
-        /* turn on local quota */
-        rc = fsfilt_quotactl(obd, sb, oqctl);
-        if (!rc) {
-                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
-                build_lqs(obd);
-        } else if (rc == -EBUSY && quota_is_on(qctxt, oqctl)) {
-                CWARN("%s: mds local quota[%d] is on already\n",
-                      obd->obd_name, oqctl->qc_type);
-                rc = -EALREADY;
-        } else {
-                CDEBUG_LIMIT(rc == -ENOENT ? D_QUOTA : D_ERROR,
-                             "%s: auto-enable local quota failed with rc=%d\n",
-                             obd->obd_name, rc);
-                if (rc1 == -EALREADY) {
-                        oqctl->qc_cmd = Q_QUOTAOFF;
-                        mds_admin_quota_off(obd, oqctl);
-                }
-                if (rc == -ENOENT)
-                        CWARN("%s: quotaon failed because quota files don't "
-                              "exist, please run quotacheck firstly\n",
-                              obd->obd_name);
-
-                GOTO(out_ctxt, rc);
-        }
-
-        EXIT;
-
-out_ctxt:
-        if (mds != NULL)
-                cfs_up(&mds->mds_qonoff_sem);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-out:
-        cfs_up(&obt->obt_quotachecking);
         OBD_FREE_PTR(oqctl);
-        return rc;
+        RETURN(rc);
 }
 
 int lprocfs_quota_wr_type(struct file *file, const char *buffer,
@@ -323,7 +325,7 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         }
 
         if (type != 0) {
-                int rc = auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
+                int rc = auto_quota_on(obd, type - 1);
 
                 if (rc && rc != -EALREADY && rc != -ENOENT)
                         return rc;

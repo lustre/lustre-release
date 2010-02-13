@@ -146,6 +146,7 @@ int mds_get_obd_quota(struct obd_device *obd, struct obd_quotactl *oqctl);
 int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt, struct lustre_dquot
                       *dquot, __u32 ost_num, __u32 mdt_num, int type,
                       struct quota_adjust_qunit *oqaq);
+int generic_quota_on(struct obd_device *, struct obd_quotactl *, int);
 #endif
 
 /* quota_ctl.c */
