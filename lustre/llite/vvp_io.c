@@ -293,7 +293,7 @@ static int vvp_io_trunc_lock(const struct lu_env *env,
 {
         struct ccc_io     *vio   = cl2ccc_io(env, ios);
         struct cl_io      *io    = ios->cis_io;
-        size_t new_size          = io->u.ci_truncate.tr_size;
+        loff_t new_size          = io->u.ci_truncate.tr_size;
         __u32 enqflags = new_size == 0 ? CEF_DISCARD_DATA : 0;
         int result;
 
@@ -327,7 +327,7 @@ static int vvp_io_trunc_start(const struct lu_env *env,
         struct cl_io         *io    = ios->cis_io;
         struct inode         *inode = ccc_object_inode(io->ci_obj);
         struct cl_object     *obj   = ios->cis_obj;
-        size_t                size  = io->u.ci_truncate.tr_size;
+        loff_t                size  = io->u.ci_truncate.tr_size;
         pgoff_t               start = cl_index(obj, size);
         int                   result;
 
@@ -375,7 +375,7 @@ static void vvp_io_trunc_end(const struct lu_env *env,
         struct vvp_io        *vio = cl2vvp_io(env, ios);
         struct cl_io         *io    = ios->cis_io;
         struct inode         *inode = ccc_object_inode(io->ci_obj);
-        size_t                size  = io->u.ci_truncate.tr_size;
+        loff_t                size  = io->u.ci_truncate.tr_size;
 
         if (vio->cui_partpage != NULL) {
                 cl_page_disown(env, ios->cis_io, vio->cui_partpage);

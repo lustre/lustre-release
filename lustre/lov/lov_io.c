@@ -100,7 +100,7 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
 
         switch(io->ci_type) {
         case CIT_TRUNC: {
-                size_t new_size = parent->u.ci_truncate.tr_size;
+                loff_t new_size = parent->u.ci_truncate.tr_size;
 
                 new_size = lov_size_to_stripe(lsm, new_size, stripe);
                 io->u.ci_truncate.tr_capa = parent->u.ci_truncate.tr_capa;

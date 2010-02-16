@@ -1785,6 +1785,23 @@ test_34f() { # bug 6242, 6243
 }
 run_test 34f "read from a file with no objects until EOF ======="
 
+test_34g() {
+	dd if=/dev/zero of=$DIR/$tfile bs=1 count=100 seek=$TEST_34_SIZE || error
+	$TRUNCATE $DIR/$tfile $((TEST_34_SIZE / 2))|| error
+	$CHECKSTAT -s $((TEST_34_SIZE / 2)) $DIR/$tfile || error "truncate failed"
+	cancel_lru_locks osc
+	$CHECKSTAT -s $((TEST_34_SIZE / 2)) $DIR/$tfile || \
+		error "wrong size after lock cancel"
+
+	$TRUNCATE $DIR/$tfile $TEST_34_SIZE || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/$tfile || \
+		error "expanding truncate failed"
+	cancel_lru_locks osc
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/$tfile || \
+		error "wrong expanded size after lock cancel"
+}
+run_test 34g "truncate long file ==============================="
+
 test_35a() {
 	cp /bin/sh $DIR/f35a
 	chmod 444 $DIR/f35a

@@ -2272,7 +2272,7 @@ struct cl_io {
                 struct cl_io_rw_common ci_rw;
                 struct cl_truncate_io {
                         /** new size to which file is truncated */
-                        size_t           tr_size;
+                        loff_t           tr_size;
                         struct obd_capa *tr_capa;
                 } ci_truncate;
                 struct cl_fault_io {
