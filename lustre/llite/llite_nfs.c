@@ -59,6 +59,16 @@ __u32 get_uuid2int(const char *name, int len)
 
 #if THREAD_SIZE >= 8192 /* see bug 17630 */
 
+static int ll_nfs_test_inode(struct inode *inode, void *opaque)
+{
+        struct ll_fid *iid = opaque;
+
+        if (inode->i_ino == iid->id && inode->i_generation == iid->generation)
+                return 1;
+
+        return 0;
+}
+
 static struct inode * search_inode_for_lustre(struct super_block *sb,
                                               struct ll_fid *iid)
 {
@@ -69,13 +79,18 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         struct inode *inode = NULL;
         ENTRY;
 
+        inode = ILOOKUP(sb, iid->id, ll_nfs_test_inode, iid);
+
+        if (inode)
+                RETURN(inode);
+
         rc = ll_get_max_mdsize(sbi, &eadatalen);
         if (rc)
                 RETURN(ERR_PTR(rc));
 
         valid |= OBD_MD_FLEASIZE;
 
-        /* mds_fid2dentry ignores f_type */
+        /* mds_fid2dentry is ignore f_type */
         rc = mdc_getattr(sbi->ll_mdc_exp, iid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode "LPU64"\n", rc, iid->id);
