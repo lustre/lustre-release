@@ -1469,13 +1469,14 @@ static void osc_lock_state(const struct lu_env *env,
                            enum cl_lock_state state)
 {
         struct osc_lock *lock = cl2osc_lock(slice);
-        struct osc_io   *oio  = osc_env_io(env);
 
         /*
          * XXX multiple io contexts can use the lock at the same time.
          */
         LINVRNT(osc_lock_invariant(lock));
         if (state == CLS_HELD && slice->cls_lock->cll_state != CLS_HELD) {
+                struct osc_io *oio = osc_env_io(env);
+
                 LASSERT(lock->ols_owner == NULL);
                 lock->ols_owner = oio;
         } else if (state != CLS_HELD)
@@ -1607,10 +1608,11 @@ static void osc_lock_lockless_state(const struct lu_env *env,
                                     enum cl_lock_state state)
 {
         struct osc_lock *lock = cl2osc_lock(slice);
-        struct osc_io   *oio  = osc_env_io(env);
 
         LINVRNT(osc_lock_invariant(lock));
         if (state == CLS_HELD) {
+                struct osc_io *oio  = osc_env_io(env);
+
                 LASSERT(lock->ols_owner == NULL);
                 lock->ols_owner = oio;
 
