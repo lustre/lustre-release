@@ -2763,10 +2763,14 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
                 RETURN(0);
         }
 
-        /* Make sure that there are write rpcs in flight to wait for.  This
-         * is a little silly as this object may not have any pending but
-         * other objects sure might. */
-        if (cli->cl_w_in_flight) {
+        /* It is safe to block as a cache waiter as long as there is grant
+         * space available or the hope of additional grant being returned
+         * when an in flight write completes.  Using the write back cache
+         * if possible is preferable to sending the data synchronously
+         * because write pages can then be merged in to large requests.
+         * The addition of this cache waiter will causing pending write
+         * pages to be sent immediately. */
+        if (cli->cl_w_in_flight || cli->cl_avail_grant >= CFS_PAGE_SIZE) {
                 list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
                 cfs_waitq_init(&ocw.ocw_waitq);
                 ocw.ocw_oap = oap;
