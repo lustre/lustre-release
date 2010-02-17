@@ -926,6 +926,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         if (req == NULL)
                 RETURN(-ENOMEM);
 
+        req->rq_no_resend = 1;
         body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
         body->lock_handle[0] = lock->l_remote_handle;
         ldlm_lock2desc(lock, &body->lock_desc);
