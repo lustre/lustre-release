@@ -1197,9 +1197,6 @@ static int completed_replay_interpret(const struct lu_env *env,
                         CDEBUG(D_WARNING,
                                "%s: version recovery fails, reconnecting\n",
                                req->rq_import->imp_obd->obd_name);
-                        cfs_spin_lock(&req->rq_import->imp_lock);
-                        req->rq_import->imp_vbr_failed = 0;
-                        cfs_spin_unlock(&req->rq_import->imp_lock);
                 } else {
                         CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
                                      "reconnecting\n",
@@ -1289,6 +1286,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
                        obd2cli_tgt(imp->imp_obd),
                        imp->imp_connection->c_remote_uuid.uuid);
+                /* reset vbr_failed flag upon eviction */
+                cfs_spin_lock(&imp->imp_lock);
+                imp->imp_vbr_failed = 0;
+                cfs_spin_unlock(&imp->imp_lock);
 
 #ifdef __KERNEL__
                 /* bug 17802:  XXX client_disconnect_export vs connect request
