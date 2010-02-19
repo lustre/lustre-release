@@ -1000,8 +1000,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         switch (ev) {
         /* We only handle these: */
         case OBD_NOTIFY_CREATE:
-                CWARN("MDS %s: add target %s\n",obd->obd_name,
-                      obd_uuid2str(&watched->u.cli.cl_target_uuid));
+                CDEBUG(D_CONFIG, "%s: add target %s\n", obd->obd_name,
+                       obd_uuid2str(&watched->u.cli.cl_target_uuid));
                 /* We still have to fix the lov descriptor for ost's */
                 LASSERT(data);
                 rc = mds_lov_update_desc(obd, *(__u32 *)data,
@@ -1019,9 +1019,10 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         }
 
         if (obd->obd_recovering) {
-                CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
-                      obd->obd_name,
-                      obd_uuid2str(&watched->u.cli.cl_target_uuid));
+                CDEBUG(D_CONFIG, "%s: Is in recovery, "
+                       "not resetting orphans on %s\n",
+                       obd->obd_name,
+                       obd_uuid2str(&watched->u.cli.cl_target_uuid));
                 /* We still have to fix the lov descriptor for ost's added
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
