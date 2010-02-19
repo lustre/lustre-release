@@ -1033,9 +1033,11 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         } else if (imp->imp_state == LUSTRE_IMP_NEW) {
                 DEBUG_REQ(D_ERROR, req, "Uninitialized import.");
                 *status = -EIO;
-        } else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
-                *status = -EIO;
+	} else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
+		/* pings may safely race with umount */
+		DEBUG_REQ(lustre_msg_get_opc(req->rq_reqmsg) == OBD_PING ?
+			  D_HA : D_ERROR, req, "IMP_CLOSED ");
+		*status = -EIO;
         } else if (ptlrpc_send_limit_expired(req)) {
                 /* probably doesn't need to be a D_ERROR after initial testing */
                 DEBUG_REQ(D_ERROR, req, "send limit expired ");
@@ -1047,11 +1049,11 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                         DEBUG_REQ(D_ERROR, req, "invalidate in flight");
                         *status = -EIO;
                 }
-        } else if (imp->imp_invalid || imp->imp_obd->obd_no_recov) {
-                if (!imp->imp_deactive)
-                          DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
-                *status = -ESHUTDOWN; /* bz 12940 */
-        } else if (req->rq_import_generation != imp->imp_generation) {
+	} else if (imp->imp_invalid || imp->imp_obd->obd_no_recov) {
+		if (!imp->imp_deactive)
+			DEBUG_REQ(D_NET, req, "IMP_INVALID");
+		*status = -ESHUTDOWN; /* bz 12940 */
+	} else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;
         } else if (req->rq_send_state != imp->imp_state) {
@@ -1111,18 +1113,18 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         ENTRY;
 
         err = lustre_msg_get_status(req->rq_repmsg);
-        if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-                struct obd_import *imp = req->rq_import;
-                __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
-                if (ptlrpc_console_allow(req))
-                        LCONSOLE_ERROR_MSG(0x011,"an error occurred while "
-                                           "communicating with %s. The %s "
-                                           "operation failed with %d\n",
-                                           libcfs_nid2str(
-                                           imp->imp_connection->c_peer.nid),
-                                           ll_opcode2str(opc), err);
-                RETURN(err < 0 ? err : -EINVAL);
-        }
+	if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
+		struct obd_import *imp = req->rq_import;
+		__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+		if (ptlrpc_console_allow(req))
+			LCONSOLE_ERROR_MSG(0x011, "%s: Communicating with %s,"
+			                   " operation %s failed with %d.\n",
+			                   imp->imp_obd->obd_name,
+			                   libcfs_nid2str(
+			                   imp->imp_connection->c_peer.nid),
+			                   ll_opcode2str(opc), err);
+		RETURN(err < 0 ? err : -EINVAL);
+	}
 
         if (err < 0) {
                 DEBUG_REQ(D_INFO, req, "status is %d", err);

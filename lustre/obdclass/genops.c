@@ -1448,9 +1448,10 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
                 LASSERTF(doomed_exp != obd->obd_self_export,
                          "self-export is hashed by NID?\n");
                 exports_evicted++;
-                CWARN("%s: evict NID '%s' (%s) #%d at adminstrative request\n",
-                       obd->obd_name, nid, doomed_exp->exp_client_uuid.uuid,
-                       exports_evicted);
+		LCONSOLE_WARN("%s: evicting %s (at %s) by administrative "
+			      "request\n", obd->obd_name,
+			      obd_uuid2str(&doomed_exp->exp_client_uuid),
+			      obd_export_nid2str(doomed_exp));
                 class_fail_export(doomed_exp);
                 class_export_put(doomed_exp);
         } while (1);

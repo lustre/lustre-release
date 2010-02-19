@@ -3012,9 +3012,9 @@ static int mdt_recovery(struct mdt_thread_info *info)
         }
 
         if (unlikely(!class_connected_export(req->rq_export))) {
-                CERROR("operation %d on unconnected MDS from %s\n",
-                       lustre_msg_get_opc(req->rq_reqmsg),
-                       libcfs_id2str(req->rq_peer));
+		CDEBUG(D_HA, "operation %d on unconnected MDS from %s\n",
+		       lustre_msg_get_opc(req->rq_reqmsg),
+		       libcfs_id2str(req->rq_peer));
                 /* FIXME: For CMD cleanup, when mds_B stop, the req from
                  * mds_A will get -ENOTCONN(especially for ping req),
                  * which will cause that mds_A deactive timeout, then when

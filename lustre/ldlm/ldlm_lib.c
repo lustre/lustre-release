@@ -2176,9 +2176,9 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
                 return;
         }
 
-        CWARN("RECOVERY: service %s, %d recoverable clients, "
-              "last_transno "LPU64"\n", obd->obd_name,
-              obd->obd_max_recoverable_clients, obd->obd_last_committed);
+	CDEBUG(D_HA, "RECOVERY: service %s, %d recoverable clients, "
+	       "last_transno "LPU64"\n", obd->obd_name,
+	       obd->obd_max_recoverable_clients, obd->obd_last_committed);
         LASSERT(obd->obd_stopping == 0);
         obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
         obd->obd_recovery_start = 0;

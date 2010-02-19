@@ -1303,12 +1303,12 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         CERROR("writing proc entry %s err %d\n",
                                var->name, rc);
                         rc = 0;
-                } else {
-                        CDEBUG(D_CONFIG, "%s.%.*s: set parameter %.*s=%s\n",
-                                      lustre_cfg_string(lcfg, 0),
-                                      (int)strlen(prefix) - 1, prefix,
-                                      (int)(sval - key - 1), key, sval);
-                }
+		} else {
+			CDEBUG(D_CONFIG, "%s.%.*s: Set parameter %.*s=%s\n",
+					 lustre_cfg_string(lcfg, 0),
+					 (int)strlen(prefix) - 1, prefix,
+					 (int)(sval - key - 1), key, sval);
+		}
         }
 
         if (rc > 0)
