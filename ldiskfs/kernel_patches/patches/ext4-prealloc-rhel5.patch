@@ -58,7 +58,7 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
  int ext4_mb_init(struct super_block *sb, int needs_recovery)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
-@@ -2542,13 +2562,55 @@
+@@ -2542,13 +2562,57 @@
  	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
@@ -68,7 +68,7 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
 -	sbi->s_mb_group_prealloc = MB_DEFAULT_GROUP_PREALLOC;
 +
 +	if (sbi->s_stripe == 0) {
-+		sbi->s_mb_prealloc_table_size = 8;
++		sbi->s_mb_prealloc_table_size = 10;
 +		i = sbi->s_mb_prealloc_table_size * sizeof(unsigned long);
 +		sbi->s_mb_prealloc_table = kmalloc(i, GFP_NOFS);
 +		if (sbi->s_mb_prealloc_table == NULL) {
@@ -86,6 +86,8 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
 +		ext4_mb_prealloc_table_add(sbi, 128);
 +		ext4_mb_prealloc_table_add(sbi, 256);
 +		ext4_mb_prealloc_table_add(sbi, 512);
++		ext4_mb_prealloc_table_add(sbi, 1024);
++		ext4_mb_prealloc_table_add(sbi, 2048);
 +
 +		sbi->s_mb_small_req = 256;
 +		sbi->s_mb_large_req = 1024;
