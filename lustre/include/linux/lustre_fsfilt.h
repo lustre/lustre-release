@@ -182,19 +182,19 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
 #define FSFILT_OP_JOIN          11
 #define FSFILT_OP_NOOP          15
 
-#define __fsfilt_check_slow(obd, start, msg)                            \
-do {                                                                    \
-        if (time_before(jiffies, start + 15 * HZ))                      \
-                break;                                                  \
-        else if (time_before(jiffies, start + 30 * HZ))                 \
-                CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name, \
-                       msg, (jiffies-start) / HZ);                      \
-        else if (time_before(jiffies, start + DISK_TIMEOUT * HZ))       \
-                CWARN("%s: slow %s %lus\n", obd->obd_name, msg,         \
-                      (jiffies - start) / HZ);                          \
-        else                                                            \
-                CERROR("%s: slow %s %lus\n", obd->obd_name, msg,        \
-                       (jiffies - start) / HZ);                         \
+#define __fsfilt_check_slow(obd, start, msg)                                 \
+do {                                                                         \
+        if (time_before(jiffies, start + 15 * HZ))                           \
+                break;                                                       \
+        else if (time_before(jiffies, start + 30 * HZ))                      \
+                CDEBUG(D_VFSTRACE, "%s: slow %s %lus due to heavy IO load\n",\
+                       obd->obd_name, msg, (jiffies-start) / HZ);            \
+        else if (time_before(jiffies, start + DISK_TIMEOUT * HZ))            \
+                LCONSOLE_INFO("%s: slow %s %lus due to heavy IO load\n",     \
+                              obd->obd_name, msg, (jiffies - start) / HZ);   \
+        else                                                                 \
+                LCONSOLE_WARN("%s: slow %s %lus due to heavy IO load\n",     \
+                              obd->obd_name, msg, (jiffies - start) / HZ);   \
 } while (0)
 
 #define fsfilt_check_slow(obd, start, msg)    \
