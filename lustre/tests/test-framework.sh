@@ -2950,6 +2950,17 @@ get_stripe () {
     rm -f $file
 }
 
+setstripe_nfsserver () {
+    local dir=$1
+
+    local nfsserver=$(awk '"'$dir'" ~ $2 && $3 ~ "nfs" && $2 != "/" \
+                { print $1 }' /proc/mounts | cut -f 1 -d : | head -1)
+
+    [ -z $nfsserver ] && echo "$dir is not nfs mounted" && return 1
+
+    do_node --verbose $nfsserver lfs setstripe "$@"
+}
+
 check_runas_id_ret() {
     local myRC=0
     local myRUNAS_UID=$1
