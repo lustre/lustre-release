@@ -320,6 +320,12 @@ typedef struct lock_class_key cfs_lock_class_key_t;
 #else
 #define cfs_down_write_nested(lock, subclass) down_write_nested(lock, subclass)
 #endif
+#else /* CONFIG_DEBUG_LOCK_ALLOC is defined */
+#define cfs_mutex_lock_nested(mutex, subclass) \
+        mutex_lock_nested(mutex, subclass)
+#define cfs_spin_lock_nested(lock, subclass) spin_lock_nested(lock, subclass)
+#define cfs_down_read_nested(lock, subclass) down_read_nested(lock, subclass)
+#define cfs_down_write_nested(lock, subclass) down_write_nested(lock, subclass)
 #endif /* CONFIG_DEBUG_LOCK_ALLOC */
 
 
