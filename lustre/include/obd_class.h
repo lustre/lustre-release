@@ -1741,16 +1741,14 @@ static inline int md_getstatus(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int md_getattr(struct obd_export *exp, const struct lu_fid *fid,
-                             struct obd_capa *oc, obd_valid valid, int ea_size,
+static inline int md_getattr(struct obd_export *exp, struct md_op_data *op_data,
                              struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, getattr);
         EXP_MD_COUNTER_INCREMENT(exp, getattr);
-        rc = MDP(exp->exp_obd, getattr)(exp, fid, oc, valid,
-                                        ea_size, request);
+        rc = MDP(exp->exp_obd, getattr)(exp, op_data, request);
         RETURN(rc);
 }
 
@@ -1823,17 +1821,14 @@ static inline int md_enqueue(struct obd_export *exp,
 }
 
 static inline int md_getattr_name(struct obd_export *exp,
-                                  const struct lu_fid *fid, struct obd_capa *oc,
-                                  const char *name, int namelen,
-                                  obd_valid valid, int ea_size, __u32 suppgid,
+                                  struct md_op_data *op_data,
                                   struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, getattr_name);
         EXP_MD_COUNTER_INCREMENT(exp, getattr_name);
-        rc = MDP(exp->exp_obd, getattr_name)(exp, fid, oc, name, namelen,
-                                             valid, ea_size, suppgid, request);
+        rc = MDP(exp->exp_obd, getattr_name)(exp, op_data, request);
         RETURN(rc);
 }
 

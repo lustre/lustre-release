@@ -478,6 +478,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
+                struct md_op_data op_data = { { 0 } };
                 unsigned long valid = OBD_MD_FLGETATTR;
                 int rc, ealen = 0;
 
@@ -487,8 +488,12 @@ static int llu_inode_revalidate(struct inode *inode)
                         ealen = obd_size_diskmd(sbi->ll_dt_exp, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
-                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                                NULL, valid, ealen, &req);
+
+                llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, ealen,
+                                    LUSTRE_OPC_ANY);
+                op_data.op_valid = valid;
+
+                rc = md_getattr(sbi->ll_md_exp, &op_data, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
                                (long long)llu_i2stat(inode)->st_ino);
@@ -945,6 +950,7 @@ static int llu_readlink_internal(struct inode *inode,
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct mdt_body *body;
         struct intnl_stat *st = llu_i2stat(inode);
+        struct md_op_data op_data = {{ 0 }};
         int rc, symlen = st->st_size + 1;
         ENTRY;
 
@@ -957,8 +963,11 @@ static int llu_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), NULL,
-                        OBD_MD_LINKNAME, symlen, request);
+        llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, symlen,
+                            LUSTRE_OPC_ANY);
+        op_data.op_valid = OBD_MD_LINKNAME;
+
+        rc = md_getattr(sbi->ll_md_exp, &op_data, request);
         if (rc) {
                 CERROR("inode %llu: rc = %d\n", (long long)st->st_ino, rc);
                 RETURN(rc);
@@ -1922,6 +1931,7 @@ llu_fsswop_mount(const char *source,
         char *osc = NULL, *mdc = NULL;
         int async = 1, err = -EINVAL;
         struct obd_connect_data ocd = {0,};
+        struct md_op_data op_data = {{0}};
 
         ENTRY;
 
@@ -2054,9 +2064,10 @@ llu_fsswop_mount(const char *source,
         }
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
+        op_data.op_fid1 = sbi->ll_root_fid;
+        op_data.op_valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS;
         /* fetch attr of root inode */
-        err = md_getattr(sbi->ll_md_exp, &sbi->ll_root_fid, NULL,
-                         OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
+        err = md_getattr(sbi->ll_md_exp, &op_data, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lock_cn_cb, err);

@@ -126,7 +126,8 @@ struct find_param {
                         check_gid:1,
                         check_uid:1,
                         check_pool:1,
-                        exclude_pool:1;
+                        exclude_pool:1,
+                        get_mdt_index:1;
 
         int     verbose;
         int     quiet;
@@ -157,6 +158,7 @@ extern int llapi_uuid_match(char *real_uuid, char *search_uuid);
 extern int llapi_getstripe(char *path, struct find_param *param);
 extern int llapi_find(char *path, struct find_param *param);
 
+extern int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_statfs *stat_buf,
                      struct obd_uuid *uuid_buf);

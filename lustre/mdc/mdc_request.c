@@ -202,8 +202,7 @@ static int mdc_getattr_common(struct obd_export *exp,
         RETURN(0);
 }
 
-int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
-                struct obd_capa *oc, obd_valid valid, int ea_size,
+int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -215,7 +214,7 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_set_capa_size(req, &RMF_CAPA1, oc);
+        mdc_set_capa_size(req, &RMF_CAPA1, op_data->op_capa1);
 
         rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
         if (rc) {
@@ -223,10 +222,12 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        mdc_pack_body(req, fid, oc, valid, ea_size, -1, 0);
+        mdc_pack_body(req, &op_data->op_fid1, op_data->op_capa1,
+                      op_data->op_valid, op_data->op_mode, -1, 0);
 
-        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, ea_size);
-        if (valid & OBD_MD_FLRMTPERM) {
+        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+                             op_data->op_mode);
+        if (op_data->op_valid & OBD_MD_FLRMTPERM) {
                 LASSERT(client_is_remote(exp));
                 req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
                                      sizeof(struct mdt_remote_perm));
@@ -241,9 +242,7 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
-                     struct obd_capa *oc, const char *filename, int namelen,
-                     obd_valid valid, int ea_size, __u32 suppgid,
+int mdc_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
                      struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -256,8 +255,9 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_set_capa_size(req, &RMF_CAPA1, oc);
-        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT, namelen);
+        mdc_set_capa_size(req, &RMF_CAPA1, op_data->op_capa1);
+        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+                             op_data->op_namelen + 1);
 
         rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR_NAME);
         if (rc) {
@@ -265,15 +265,19 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        mdc_pack_body(req, fid, oc, valid, ea_size, suppgid, 0);
+        mdc_pack_body(req, &op_data->op_fid1, op_data->op_capa1,
+                      op_data->op_valid, op_data->op_mode,
+                      op_data->op_suppgids[0], 0);
 
-        if (filename) {
+        if (op_data->op_name) {
                 char *name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-                LASSERT(strnlen(filename, namelen) == namelen - 1);
-                memcpy(name, filename, namelen);
+                LASSERT(strnlen(op_data->op_name, op_data->op_namelen) ==
+                                op_data->op_namelen);
+                memcpy(name, op_data->op_name, op_data->op_namelen);
         }
 
-        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, ea_size);
+        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+                             op_data->op_mode);
         ptlrpc_request_set_replen(req);
 
         rc = mdc_getattr_common(exp, req);

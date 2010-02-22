@@ -1269,8 +1269,7 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
-                       struct obd_capa *oc, obd_valid valid, int ea_size,
+static int lmv_getattr(struct obd_export *exp, struct md_op_data *op_data,
                        struct ptlrpc_request **request)
 {
         struct obd_device       *obd = exp->exp_obd;
@@ -1285,17 +1284,22 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 RETURN(rc);
 
-        tgt = lmv_find_target(lmv, fid);
+        tgt = lmv_find_target(lmv, &op_data->op_fid1);
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        rc = md_getattr(tgt->ltd_exp, fid, oc, valid, ea_size, request);
+        if (op_data->op_valid & OBD_MD_MDTIDX) {
+                op_data->op_mds = tgt->ltd_idx;
+                RETURN(0);
+        }
+
+        rc = md_getattr(tgt->ltd_exp, op_data, request);
         if (rc)
                 RETURN(rc);
 
-        obj = lmv_object_find_lock(obd, fid);
+        obj = lmv_object_find_lock(obd, &op_data->op_fid1);
 
-        CDEBUG(D_INODE, "GETATTR for "DFID" %s\n", PFID(fid),
+        CDEBUG(D_INODE, "GETATTR for "DFID" %s\n", PFID(&op_data->op_fid1),
                obj ? "(split)" : "");
 
         /*
@@ -1399,6 +1403,7 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
         struct lmv_tgt_desc     *tgt;
         struct lmv_object       *obj;
         struct lustre_md         md;
+        struct md_op_data       *op_data;
         int                      mealen;
         int                      rc;
         __u64                    valid;
@@ -1416,7 +1421,17 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
         /*
          * Time to update mea of parent fid.
          */
-        rc = md_getattr(tgt->ltd_exp, fid, NULL, valid, mealen, &req);
+
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL) 
+                RETURN(-ENOMEM);
+
+        op_data->op_fid1 = *fid;
+        op_data->op_mode = mealen;
+        op_data->op_valid = valid;
+
+        rc = md_getattr(tgt->ltd_exp, op_data, &req);
+        OBD_FREE_PTR(op_data);
         if (rc) {
                 CERROR("md_getattr() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -1734,18 +1749,17 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 }
 
 static int
-lmv_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
-                 struct obd_capa *oc, const char *name, int namelen,
-                 obd_valid valid, int ea_size, __u32 suppgid,
+lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
                  struct ptlrpc_request **request)
 {
         struct ptlrpc_request   *req = NULL;
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
-        struct lu_fid            rid = *fid;
+        struct lu_fid            rid = op_data->op_fid1;
         struct lmv_tgt_desc     *tgt;
         struct mdt_body         *body;
         struct lmv_object       *obj;
+        obd_valid                valid = op_data->op_valid;
         int                      rc;
         int                      loop = 0;
         int                      sidx;
@@ -1761,23 +1775,27 @@ repeat:
         obj = lmv_object_find(obd, &rid);
         if (obj) {
                 sidx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                       name, namelen - 1);
+                                    op_data->op_name, op_data->op_namelen);
                 rid = obj->lo_stripes[sidx].ls_fid;
                 tgt = lmv_get_target(lmv, obj->lo_stripes[sidx].ls_mds);
+                op_data->op_mds = obj->lo_stripes[sidx].ls_mds;
                 valid &= ~OBD_MD_FLCKSPLIT;
                 lmv_object_put(obj);
         } else {
                 tgt = lmv_find_target(lmv, &rid);
                 valid |= OBD_MD_FLCKSPLIT;
+                op_data->op_mds = tgt->ltd_idx;
         }
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
         CDEBUG(D_INODE, "GETATTR_NAME for %*s on "DFID" - "DFID" -> mds #%d\n",
-               namelen, name, PFID(fid), PFID(&rid), tgt->ltd_idx);
+               op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
+               PFID(&rid), tgt->ltd_idx);
 
-        rc = md_getattr_name(tgt->ltd_exp, &rid, oc, name, namelen, valid,
-                             ea_size, suppgid, request);
+        op_data->op_valid = valid;
+        op_data->op_fid1 = rid;
+        rc = md_getattr_name(tgt->ltd_exp, op_data, request);
         if (rc == 0) {
                 body = req_capsule_server_get(&(*request)->rq_pill,
                                               &RMF_MDT_BODY);
@@ -1794,9 +1812,11 @@ repeat:
                                 RETURN(PTR_ERR(tgt));
                         }
 
-                        rc = md_getattr_name(tgt->ltd_exp, &rid, NULL, NULL,
-                                             1, valid | OBD_MD_FLCROSSREF,
-                                             ea_size, suppgid, &req);
+                        op_data->op_fid1 = rid;
+                        op_data->op_valid |= OBD_MD_FLCROSSREF;
+                        op_data->op_namelen = 0;
+                        op_data->op_name = NULL;
+                        rc = md_getattr_name(tgt->ltd_exp, op_data, &req);
                         ptlrpc_req_finished(*request);
                         *request = req;
                 }

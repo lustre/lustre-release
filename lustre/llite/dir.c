@@ -633,17 +633,21 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
         struct lov_mds_md *lmm = NULL;
         struct ptlrpc_request *req = NULL;
         int rc, lmmsize;
-        struct obd_capa *oc;
+        struct md_op_data *op_data;
 
         rc = ll_get_max_mdsize(sbi, &lmmsize);
         if (rc)
                 RETURN(rc);
 
-        oc = ll_mdscapa_get(inode);
-        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                        oc, OBD_MD_FLEASIZE | OBD_MD_FLDIREA,
-                        lmmsize, &req);
-        capa_put(oc);
+        op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
+                                     0, lmmsize, LUSTRE_OPC_ANY,
+                                     NULL);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
+        op_data->op_valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+        rc = md_getattr(sbi->ll_md_exp, op_data, &req);
+        ll_finish_md_op_data(op_data);
         if (rc < 0) {
                 CDEBUG(D_INFO, "md_getattr failed on inode "
                        "%lu/%u: rc %d\n", inode->i_ino,
@@ -691,6 +695,32 @@ out:
         return rc;
 }
 
+/*
+ *  Get MDT index for the inode.
+ */
+int ll_get_mdt_idx(struct inode *inode)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct md_op_data *op_data;
+        int rc, mdtidx;
+        ENTRY;
+
+        op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0,
+                                     0, LUSTRE_OPC_ANY, NULL);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
+        op_data->op_valid |= OBD_MD_MDTIDX;
+        rc = md_getattr(sbi->ll_md_exp, op_data, NULL);
+        mdtidx = op_data->op_mds;
+        ll_finish_md_op_data(op_data);
+        if (rc < 0) {
+                CDEBUG(D_INFO, "md_getattr_name: %d\n", rc);
+                RETURN(rc);
+        }
+        return mdtidx;
+}
+
 static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         unsigned int cmd, unsigned long arg)
 {
@@ -719,12 +749,24 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case FSFILT_IOC_SETVERSION_OLD:
         case FSFILT_IOC_SETVERSION:
         */
+        case LL_IOC_GET_MDTIDX: {
+                int mdtidx;
+
+                mdtidx = ll_get_mdt_idx(inode);
+                if (mdtidx < 0)
+                        RETURN(mdtidx);
+
+                if (put_user((int)mdtidx, (int*)arg))
+                        RETURN(-EFAULT);
+
+                return 0;
+        }
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
                 int namelen, rc, len = 0;
                 char *buf = NULL;
                 char *filename;
-                struct obd_capa *oc;
+                struct md_op_data *op_data;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -732,27 +774,28 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 data = (void *)buf;
 
                 filename = data->ioc_inlbuf1;
-                namelen = data->ioc_inllen1;
+                namelen = strlen(filename);
 
                 if (namelen < 1) {
                         CDEBUG(D_INFO, "IOC_MDC_LOOKUP missing filename\n");
-                        GOTO(out, rc = -EINVAL);
+                        GOTO(out_free, rc = -EINVAL);
                 }
 
-                oc = ll_mdscapa_get(inode);
-                rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-                                     filename, namelen, OBD_MD_FLID, 0,
-                                     ll_i2suppgid(inode), &request);
-                capa_put(oc);
+                op_data = ll_prep_md_op_data(NULL, inode, NULL, filename, namelen,
+                                             0, LUSTRE_OPC_ANY, NULL);
+                if (op_data == NULL)
+                        GOTO(out_free, rc = -ENOMEM);
+
+                op_data->op_valid = OBD_MD_FLID;
+                rc = md_getattr_name(sbi->ll_md_exp, op_data, &request);
+                ll_finish_md_op_data(op_data);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr_name: %d\n", rc);
-                        GOTO(out, rc);
+                        GOTO(out_free, rc);
                 }
-
                 ptlrpc_req_finished(request);
-
                 EXIT;
-        out:
+out_free:
                 obd_ioctl_freedata(buf, len);
                 return rc;
         }

@@ -134,7 +134,7 @@ command_t cmdlist[] = {
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
          "                 [--count | -c ] [--size | -s ] [--index | -i ]\n"
          "                 [--offset | -o ] [--pool | -p ] [--directory | -d]\n"
-         "                 [--recursive | -r] <dir|file> ..."},
+         "                 [--mdt | -M] [--recursive | -r] <dir|file> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
          "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
@@ -825,6 +825,7 @@ static int lfs_getstripe(int argc, char **argv)
                 {"pool", 0, 0, 'p'},
                 {"verbose", 0, 0, 'v'},
                 {"directory", 0, 0, 'd'},
+                {"mdt", 0, 0, 'M'},
                 {0, 0, 0, 0}
         };
         int c, rc;
@@ -832,7 +833,7 @@ static int lfs_getstripe(int argc, char **argv)
 
         param.maxdepth = 1;
         optind = 0;
-        while ((c = getopt_long(argc, argv, "cdhioO:pqrsv",
+        while ((c = getopt_long(argc, argv, "cdhiMoO:pqrsv",
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
@@ -877,6 +878,9 @@ static int lfs_getstripe(int argc, char **argv)
                         break;
                 case 'p':
                         param.verbose |= VERBOSE_POOL;
+                        break;
+                case 'M':
+                        param.get_mdt_index = 1;
                         break;
                 case '?':
                         return CMD_HELP;
@@ -1135,7 +1139,7 @@ static int lfs_df(int argc, char **argv)
         };
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "ihp:", long_opts, NULL)) != -1) {
+        while ((c = getopt_long(argc, argv, "hip:", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'i':
                         ishow = 1;
@@ -1644,7 +1648,7 @@ int lfs_setquota_times(int argc, char **argv)
         qctl.qc_type = UGQUOTA;
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "ugb:i:t", long_opts, NULL)) != -1) {
+        while ((c = getopt_long(argc, argv, "b:i:gtu", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
                 case 'g':
@@ -1734,7 +1738,7 @@ int lfs_setquota(int argc, char **argv)
                                  * isn't reinitialized from command line */
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "u:g:b:B:i:I:", long_opts, NULL)) != -1) {
+        while ((c = getopt_long(argc, argv, "b:B:i:I:g:u:", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
                 case 'g':

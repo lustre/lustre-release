@@ -573,6 +573,8 @@ extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                              struct ll_dir_chain *chain);
+
+int ll_get_mdt_idx(struct inode *inode);
 /* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request,
                        struct inode *dir);

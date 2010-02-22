@@ -255,9 +255,13 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
 
-        rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
-                        NULL, OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID |
-                        OBD_MD_FLFLAGS | OBD_MD_FLCROSSREF, 0, &mci->mci_req);
+        memcpy(&mci->mci_opdata.op_fid1, lu_object_fid(&mo->mo_lu),
+               sizeof (struct lu_fid));
+        mci->mci_opdata.op_valid = OBD_MD_FLMODE | OBD_MD_FLUID |
+                                   OBD_MD_FLGID | OBD_MD_FLFLAGS |
+                                   OBD_MD_FLCROSSREF;
+
+        rc = md_getattr(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
                 rc = mdc_req2attr_update(env, ma);

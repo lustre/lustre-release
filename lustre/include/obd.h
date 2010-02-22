@@ -1229,6 +1229,7 @@ struct md_op_data {
         unsigned int            op_attr_flags;
 #endif
 #endif
+        __u64                   op_valid;
         loff_t                  op_attr_blocks;
 
         /* Size-on-MDS epoch and flags. */
@@ -1489,12 +1490,10 @@ struct md_ops {
                          struct lookup_intent *, struct md_op_data *,
                          struct lustre_handle *, void *, int,
                          struct ptlrpc_request **, int);
-        int (*m_getattr)(struct obd_export *, const struct lu_fid *,
-                         struct obd_capa *, obd_valid, int,
+        int (*m_getattr)(struct obd_export *, struct md_op_data *,
                          struct ptlrpc_request **);
-        int (*m_getattr_name)(struct obd_export *, const struct lu_fid *,
-                              struct obd_capa *, const char *, int, obd_valid,
-                              int, __u32, struct ptlrpc_request **);
+        int (*m_getattr_name)(struct obd_export *, struct md_op_data *,
+                              struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
                              void *, int, struct lookup_intent *, int,
                              struct ptlrpc_request **,

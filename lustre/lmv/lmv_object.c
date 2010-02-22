@@ -329,15 +329,16 @@ struct lmv_object *lmv_object_create(struct obd_export *exp,
                PFID(fid));
 
         md.mea = NULL;
-	
+
         if (mea == NULL) {
+                struct md_op_data *op_data;
                 __u64 valid;
 
                 CDEBUG(D_INODE, "Mea isn't passed in, get it now\n");
                 mealen = lmv_get_easize(lmv);
 
-                /* 
-                 * Time to update mea of parent fid. 
+                /*
+                 * Time to update mea of parent fid.
                  */
                 md.mea = NULL;
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
@@ -346,7 +347,15 @@ struct lmv_object *lmv_object_create(struct obd_export *exp,
                 if (IS_ERR(tgt))
                         GOTO(cleanup, obj = (void *)tgt);
 
-                rc = md_getattr(tgt->ltd_exp, fid, NULL, valid, mealen, &req);
+                OBD_ALLOC_PTR(op_data);
+                if (op_data == NULL)
+                        GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
+
+                op_data->op_fid1 = *fid;
+                op_data->op_mode = mealen;
+                op_data->op_valid = valid;
+                rc = md_getattr(tgt->ltd_exp, op_data, &req);
+                OBD_FREE_PTR(op_data);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));
@@ -364,8 +373,8 @@ struct lmv_object *lmv_object_create(struct obd_export *exp,
                 mea = md.mea;
         }
 
-        /* 
-         * Got mea, now create obj for it. 
+        /*
+         * Got mea, now create obj for it.
          */
         obj = __lmv_object_create(obd, fid, mea);
         if (!obj) {

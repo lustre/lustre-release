@@ -170,6 +170,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         struct ptlrpc_request *request = NULL;
         struct obd_connect_data *data = NULL;
         struct obd_uuid *uuid;
+        struct md_op_data *op_data;
         struct lustre_md lmd;
         obd_valid valid;
         int size, err, checksum;
@@ -418,10 +419,19 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         else if (sbi->ll_flags & LL_SBI_ACL)
                 valid |= OBD_MD_FLACL;
 
-        err = md_getattr(sbi->ll_md_exp, &sbi->ll_root_fid, oc, valid, 0,
-                         &request);
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL) 
+                GOTO(out_lock_cn_cb, err = -ENOMEM);
+
+        op_data->op_fid1 = sbi->ll_root_fid;
+        op_data->op_mode = 0;
+        op_data->op_capa1 = oc;
+        op_data->op_valid = valid;
+
+        err = md_getattr(sbi->ll_md_exp, op_data, &request);
         if (oc)
                 capa_put(oc);
+        OBD_FREE_PTR(op_data);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lock_cn_cb, err);
@@ -1770,12 +1780,17 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         switch(cmd) {
         case FSFILT_IOC_GETFLAGS: {
                 struct mdt_body *body;
-                struct obd_capa *oc;
+                struct md_op_data *op_data;
 
-                oc = ll_mdscapa_get(inode);
-                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-                                OBD_MD_FLFLAGS, 0, &req);
-                capa_put(oc);
+                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
+                                             0, 0, LUSTRE_OPC_ANY,
+                                             NULL);
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+
+                op_data->op_valid = OBD_MD_FLFLAGS;
+                rc = md_getattr(sbi->ll_md_exp, op_data, &req);
+                ll_finish_md_op_data(op_data);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));

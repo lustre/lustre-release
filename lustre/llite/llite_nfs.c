@@ -66,9 +66,9 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         struct ll_sb_info     *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *req = NULL;
         struct inode          *inode = NULL;
-        unsigned long         valid = 0;
         int                   eadatalen = 0;
         ino_t                 ino = cl_fid_build_ino(fid);
+        struct  md_op_data    *op_data;
         int                   rc;
         ENTRY;
 
@@ -78,16 +78,24 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         if (rc)
                 RETURN(ERR_PTR(rc));
 
-        valid |= OBD_MD_FLEASIZE;
+        /* Because inode is NULL, ll_prep_md_op_data can not
+         * be used here. So we allocate op_data ourselves */
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                return ERR_PTR(-ENOMEM);
+
+        op_data->op_fid1 = *fid;
+        op_data->op_mode = eadatalen;
+        op_data->op_valid = OBD_MD_FLEASIZE;
 
         /* mds_fid2dentry ignores f_type */
-        rc = md_getattr(sbi->ll_md_exp, fid, NULL, valid, eadatalen, &req);
+        rc = md_getattr(sbi->ll_md_exp, op_data, &req);
+        OBD_FREE_PTR(op_data);
         if (rc) {
                 CERROR("can't get object attrs, fid "DFID", rc %d\n",
                        PFID(fid), rc);
                 RETURN(ERR_PTR(rc));
         }
-
         rc = ll_prep_inode(&inode, req, sb);
         ptlrpc_req_finished(req);
         if (rc)
@@ -228,7 +236,6 @@ static struct dentry *ll_get_dentry(struct super_block *sb, void *data)
         RETURN(entry);
 }
 #endif
-
 static struct dentry *ll_get_parent(struct dentry *dchild)
 {
         struct ptlrpc_request *req = NULL;
@@ -237,6 +244,7 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
         struct dentry         *result = NULL;
         struct mdt_body       *body;
         static char           dotdot[] = "..";
+        struct md_op_data     *op_data;
         int                   rc;
         ENTRY;
 
@@ -244,12 +252,17 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
 
         sbi = ll_s2sbi(dir->i_sb);
 
-        CDEBUG(D_INFO, "getting parent for (%lu,"DFID")\n", 
+        CDEBUG(D_INFO, "getting parent for (%lu,"DFID")\n",
                         dir->i_ino, PFID(ll_inode2fid(dir)));
 
-        rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(dir), NULL,
-                             dotdot, strlen(dotdot) + 1, 0, 0,
-                             ll_i2suppgid(dir), &req);
+        op_data = ll_prep_md_op_data(NULL, dir, NULL, dotdot,
+                                     strlen(dotdot), 0,
+                                     LUSTRE_OPC_ANY, NULL);
+        if (op_data == NULL)
+                RETURN(ERR_PTR(-ENOMEM));
+
+        rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
+        ll_finish_md_op_data(op_data);
         if (rc) {
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
                 RETURN(ERR_PTR(rc));
@@ -257,7 +270,7 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
         body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body->valid & OBD_MD_FLID);
 
-        CDEBUG(D_INFO, "parent for "DFID" is "DFID"\n", 
+        CDEBUG(D_INFO, "parent for "DFID" is "DFID"\n",
                 PFID(ll_inode2fid(dir)), PFID(&body->fid1));
 
         result = ll_iget_for_nfs(dir->i_sb, &body->fid1);
