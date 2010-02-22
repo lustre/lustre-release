@@ -10,7 +10,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764 16410
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u  42a  42b  42c  42d  45   51d   62         68   75    76 $SANITY_EXCEPT"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u  42a  42b  42c  42d  45   51d   62         68   75 $SANITY_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml, maybe elsewhere, FIXME
@@ -3424,9 +3424,7 @@ num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
 }
 
-test_76() { # bug 1443
-	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
-	[ $DETH -eq 0 ] && skip "No _iget." && return 0
+test_76() { # Now for bug 20433, added originally in bug 1443
 	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
 	local COUNT=1000
@@ -3441,7 +3439,7 @@ test_76() { # bug 1443
 		error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
 	true
 }
-run_test 76 "destroy duplicate inodes in client inode cache ===="
+run_test 76 "confirm clients recycle inodes properly ===="
 
 export ORIG_CSUM=""
 set_checksums()

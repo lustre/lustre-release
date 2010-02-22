@@ -1691,6 +1691,7 @@ MODULE_LICENSE("GPL");
 EXPORT_SYMBOL(mdc_req2lustre_md);
 EXPORT_SYMBOL(mdc_free_lustre_md);
 EXPORT_SYMBOL(mdc_change_cbdata);
+EXPORT_SYMBOL(mdc_find_cbdata);
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getattr);
 EXPORT_SYMBOL(mdc_getattr_name);

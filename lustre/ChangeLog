@@ -37,6 +37,12 @@ Severity   : normal
 Bugzilla   : 21961/17914
 Description: ignore trailing -mdc when determining index number
 
+Severity   : normal
+Bugzilla   : 20433
+Description: decrease the usage of memory on clients.
+Details    : 1. On clients, recycle dentries and inodes unused.
+	     2. Delete the code related to ll_deathrow(att 6215 in bug 1443). It
+	        is useless now.
 -------------------------------------------------------------------------------
 
 2010-01-29 Sun Microsystems, Inc.
