@@ -3058,6 +3058,10 @@ inodes_available () {
     echo $IFree
 }
 
+mdsrate_inodes_available () {
+    echo $(($(inodes_available) - 1))
+}
+
 # reset llite stat counters
 clear_llite_stats(){
         lctl set_param -n llite.*.stats 0

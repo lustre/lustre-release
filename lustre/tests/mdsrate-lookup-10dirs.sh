@@ -43,7 +43,7 @@ chmod 0777 $BASEDIR
 $LFS setstripe $BASEDIR -c 1
 get_stripe $BASEDIR
 
-IFree=$(inodes_available)
+IFree=$(($(mdsrate_inodes_available) - NUM_DIRS))
 if [ $IFree -lt $((NUM_FILES * NUM_DIRS)) ]; then
     NUM_FILES=$((IFree / NUM_DIRS))
 fi
