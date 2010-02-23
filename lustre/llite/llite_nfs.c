@@ -60,6 +60,12 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
+static int ll_nfs_test_inode(struct inode *inode, void *opaque)
+{
+        return lu_fid_eq(&ll_i2info(inode)->lli_fid,
+                         (struct lu_fid *)opaque);
+}
+
 static struct inode *search_inode_for_lustre(struct super_block *sb,
                                              const struct lu_fid *fid)
 {
@@ -73,6 +79,10 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         ENTRY;
 
         CDEBUG(D_INFO, "searching inode for:(%lu,"DFID")\n", ino, PFID(fid));
+
+        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, fid);
+        if (inode)
+                RETURN(inode);
 
         rc = ll_get_max_mdsize(sbi, &eadatalen);
         if (rc)
