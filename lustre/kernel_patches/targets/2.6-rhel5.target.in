@@ -1,7 +1,7 @@
 lnxmaj="2.6.18"
 lnxrel="164.11.1.el5"
 
-KERNEL_SRPM=kernel-$lnxmaj-$lnxrel.src.rpm
+KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
 SERIES=2.6-rhel5.series
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 LUSTRE_VERSION=@VERSION@
