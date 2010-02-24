@@ -1409,7 +1409,7 @@ stopall() {
         stop ost$num -f
         rm -f $TMP/ost${num}active
     done
-    if [[ $MDSDEV != $MGSDEV ]]; then
+    if ! combined_mgs_mds ; then
         stop mgs 
     fi
 
@@ -1423,6 +1423,10 @@ cleanupall() {
     unload_modules
 }
 
+combined_mgs_mds () {
+    [[ $MDSDEV = $MGSDEV ]] && [[ $mds_HOST = $mgs_HOST ]]
+}
+
 formatall() {
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
 
@@ -1431,7 +1435,7 @@ formatall() {
     load_modules
     [ "$CLIENTONLY" ] && return
     echo Formatting mgs, mds, osts
-    if [[ $MDSDEV != $MGSDEV ]] || [[ $mds_HOST != $mgs_HOST ]]; then
+    if ! combined_mgs_mds ; then
         add mgs $mgs_MKFS_OPTS $FSTYPE_OPT --reformat $MGSDEV || exit 10
     fi
 
@@ -1489,7 +1493,7 @@ setupall() {
         echo $WRITECONF | grep -q "writeconf" && \
             writeconf_all
 
-        if [[ $mds_HOST != $mgs_HOST ]] || [[ $MDSDEV != $MGSDEV ]]; then
+        if ! combined_mgs_mds ; then
             start mgs $MGSDEV $mgs_MOUNT_OPTS
         fi
 
