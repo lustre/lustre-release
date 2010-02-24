@@ -2537,6 +2537,14 @@ basetest() {
 
 # print a newline if the last test was skipped
 export LAST_SKIPPED=
+#
+# Main entry into test-framework. This is called with the name and
+# description of a test. The name is used to find the function to run
+# the test using "test_$name".
+#
+# This supports a variety of methods of specifying specific test to
+# run or not run.  These need to be documented...
+#
 run_test() {
     assert_DIR
 
@@ -2645,17 +2653,41 @@ reset_fail_loc () {
     echo done.
 }
 
+
+#
+# Log a message (on all nodes) padded with "=" before and after. 
+# Also appends a timestamp and prepends the testsuite name.
+# 
+banner() {
+    msg="== ${TESTSUITE} $*"
+    # pad the message out to 70 with "="
+    last=${msg: -1:1}
+    [[ $last != "=" && $last != " " ]] && msg+=" "
+    for i in $(seq $((68 - ${#msg})) ); do
+	msg+="="
+    done
+    # always include at least == after the message
+    msg+="=="
+
+    log "$msg $(date +"%H:%M:%S (%s)")"
+}
+
+#
+# Run a single test function and cleanup after it.  
+#
+# This function should be run in a subshell so the test func can
+# exit() without stopping the whole script.
+#
 run_one() {
     local testnum=$1
     local message=$2
-    local start_tm=$3
     tfile=f${testnum}
     export tdir=d0.${TESTSUITE}/d${base}
     export TESTNAME=test_$testnum
     local SAVE_UMASK=`umask`
     umask 0022
 
-    log "== test $testnum: $message == `date +%H:%M:%S` ($start_tm)"
+    banner "test $testnum: $message"
     test_${testnum} || error "test_$testnum failed with $?"
     cd $SAVE_PWD
     reset_fail_loc
@@ -2668,6 +2700,12 @@ run_one() {
     return 0
 }
 
+#
+# Wrapper around run_one to ensure:
+#  - test runs in subshell
+#  - output of test is saved to separate log file for error reporting
+#  - test result is saved to data file
+#
 run_one_logged() {
     local BEFORE=`date +%s`
     local TEST_ERROR
@@ -2676,7 +2714,7 @@ run_one_logged() {
     rm -rf $LOGDIR/err
 
     echo
-    run_one $1 "$2" $BEFORE 2>&1 | tee $test_log
+    run_one $1 "$2" 2>&1 | tee $test_log
     local RC=${PIPESTATUS[0]}
 
     [ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \
