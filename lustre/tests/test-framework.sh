@@ -1563,9 +1563,9 @@ do_nodes() {
 
     if single_local_node $rnodes; then
         if $verbose; then
-           do_node --verbose $rnodes $@
+           do_node --verbose $rnodes "$@"
         else
-           do_node $rnodes $@
+           do_node $rnodes "$@"
         fi
         return $?
     fi
