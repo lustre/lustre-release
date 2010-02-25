@@ -54,9 +54,9 @@ writeconf() {
 	stop ${facet} -f
 	rm -f ${facet}active
 	# who knows if/where $TUNEFS is installed?  Better reformat if it fails...
-	do_facet ${facet} "$TUNEFS --writeconf ${!dev}" || echo "tunefs failed, reformatting instead" && reformat
+	do_facet ${facet} "$TUNEFS --writeconf ${!dev}" ||
+		echo "tunefs failed, reformatting instead" && reformat_and_config
 
-	gen_config
 }
 
 gen_config() {
@@ -71,7 +71,15 @@ gen_config() {
 
 reformat_and_config() {
 	reformat
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
 	gen_config
+}
+
+start_mgs () {
+	echo "start mgs"
+	start mgs $MGSDEV $mgs_MOUNT_OPTS
 }
 
 start_mds() {
@@ -148,6 +156,10 @@ setup() {
 }
 
 setup_noconfig() {
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+
 	start_mds
 	start_ost
 	mount_client $MOUNT
@@ -645,7 +657,7 @@ test_23a() {	# was test_23
 	local PID1
 	local PID2
 	local WAIT=0
-	local MAX_WAIT=20
+	local MAX_WAIT=30
 	local sleep=1
 	while [ "$WAIT" -lt "$MAX_WAIT" ]; do
 		sleep $sleep
@@ -657,9 +669,11 @@ test_23a() {	# was test_23
 		echo "waiting for mount to finish ... "
 		WAIT=$(( WAIT + sleep))
 	done
-	[ "$WAIT" -eq "$MAX_WAIT" ] && error "MOUNT_PID $MOUNT_PID and "\
+	if [ "$WAIT" -eq "$MAX_WAIT" ]; then
+		error "MOUNT_PID $MOUNT_PID and "\
 		"MOUNT_LUSTRE_PID $MOUNT_LUSTRE_PID still not killed in $WAIT secs"
-	ps -ef | grep mount
+		ps -ef | grep mount
+	fi
 	stop_mds || error
 	stop_ost || error
 }
@@ -1688,7 +1702,7 @@ cleanup_46a() {
 
 test_46a() {
 	echo "Testing with $OSTCOUNT OSTs"
-	reformat
+	reformat_and_config
 	start_mds || return 1
 	#first client should see only one ost
 	start_ost || return 2
@@ -1811,9 +1825,7 @@ test_49() { # bug 17710
 	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$LOCAL_TIMEOUT $MKFSOPT $OSTOPT"
 
 	reformat
-	start_mds
-	start_ost
-	mount_client $MOUNT
+	setup_noconfig
 	check_mount || return 1
 
 	echo "check ldlm_timout..."
@@ -1836,9 +1848,7 @@ test_49() { # bug 17710
 	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$((LOCAL_TIMEOUT - 1)) $MKFSOPT $OSTOPT"
 
 	reformat
-	start_mds || return 4
-	start_ost || return 5
-	mount_client $MOUNT || return 6
+	setup_noconfig
 	check_mount || return 7
 
 	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
@@ -2060,9 +2070,7 @@ test_51() {
 	local LOCAL_TIMEOUT=20
 
 	reformat
-	start_mds
-	start_ost
-	mount_client $MOUNT
+	setup_noconfig
 	check_mount || return 1
 
 	mkdir $MOUNT/d1
@@ -2307,6 +2315,10 @@ test_53b() {
         thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads=64'
 }
 run_test 53b "check MDT thread count params"
+
+if ! combined_mgs_mds ; then
+	stop mgs
+fi
 
 cleanup_gss
 equals_msg `basename $0`: test complete

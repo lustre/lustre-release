@@ -1653,6 +1653,10 @@ stopall() {
         rm -f $TMP/ost${num}active
     done
 
+    if ! combined_mgs_mds ; then
+        stop mgs
+    fi
+
     return 0
 }
 
@@ -1670,6 +1674,10 @@ mdsmkfsopts()
     test $nr = 1 && echo -n $MDS_MKFS_OPTS || echo -n $MDSn_MKFS_OPTS
 }
 
+combined_mgs_mds () {
+    [[ $MDSDEV1 = $MGSDEV ]] && [[ $mds1_HOST = $mgs_HOST ]]
+}
+
 formatall() {
     if [ "$IAMDIR" == "yes" ]; then
         MDS_MKFS_OPTS="$MDS_MKFS_OPTS --iam-dir"
@@ -1683,7 +1691,7 @@ formatall() {
     load_modules
     [ "$CLIENTONLY" ] && return
     echo Formatting mgs, mds, osts
-    if [[ $MDSDEV1 != $MGSDEV ]] || [[ $mds1_HOST != $mgs_HOST ]]; then
+    if ! combined_mgs_mds ; then
         add mgs $mgs_MKFS_OPTS $FSTYPE_OPT --reformat $MGSDEV || exit 10
     fi
 
@@ -1782,7 +1790,7 @@ setupall() {
         echo Setup mgs, mdt, osts
         echo $WRITECONF | grep -q "writeconf" && \
             writeconf_all
-        if [[ $mds1_HOST != $mgs_HOST ]] || [[ $MDSDEV1 != $MGSDEV ]]; then
+        if ! combined_mgs_mds ; then
             start mgs $MGSDEV $mgs_MOUNT_OPTS
         fi
 
@@ -2403,10 +2411,6 @@ pgcache_empty() {
             return 1
         fi
     done
-    if [[ $MDSDEV1 != $MGSDEV ]]; then
-        stop mgs 
-    fi
-
     return 0
 }
 
