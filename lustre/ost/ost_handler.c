@@ -2001,8 +2001,6 @@ int ost_handle(struct ptlrpc_request *req)
         req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
-                int recovering;
-
                 if (!class_connected_export(req->rq_export)) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
                                lustre_msg_get_opc(req->rq_reqmsg),
@@ -2014,10 +2012,7 @@ int ost_handle(struct ptlrpc_request *req)
                 obd = req->rq_export->exp_obd;
 
                 /* Check for aborted recovery. */
-                cfs_spin_lock_bh(&obd->obd_processing_task_lock);
-                recovering = obd->obd_recovering;
-                cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (recovering) {
+                if (obd->obd_recovering) {
                         rc = ost_filter_recovery_request(req, obd,
                                                          &should_process);
                         if (rc || !should_process)

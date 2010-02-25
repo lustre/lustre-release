@@ -2759,7 +2759,6 @@ static int mdt_filter_recovery_request(struct ptlrpc_request *req,
 static int mdt_recovery(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
-        int recovering;
         struct obd_device *obd;
 
         ENTRY;
@@ -2820,10 +2819,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
         obd = req->rq_export->exp_obd;
 
         /* Check for aborted recovery... */
-        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
-        recovering = obd->obd_recovering;
-        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
-        if (unlikely(recovering)) {
+        if (unlikely(obd->obd_recovering)) {
                 int rc;
                 int should_process;
                 DEBUG_REQ(D_INFO, req, "Got new replay");
