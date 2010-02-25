@@ -33,3 +33,4 @@ ext4-dynlocks-common-sles11.patch
 ext4-dynlocks-2.6-rhel5.patch
 ext4-hash-indexed-dir-dotdot-update.patch
 ext4-disable-write-bar-by-default.patch
+ext4-mballoc-pa_free-mismatch.patch

@@ -11,20 +11,31 @@ Index: linux-2.6.16.i686/block/ll_rw_blk.c
  /**
   * generic_make_request: hand a buffer to its device driver for I/O
   * @bio:  The bio describing the location in memory and on the device.
-@@ -3075,6 +3077,12 @@ end_io:
+@@ -3075,6 +3077,23 @@ end_io:
  
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
-+		/* this is cfs's dev_rdonly check */
-+		if (bio->bi_rw == WRITE &&
-+				dev_check_rdonly(bio->bi_bdev)) {
-+			bio_endio(bio, bio->bi_size, 0);
-+			break;
-+		}
- 
+
++               /* this is cfs's dev_rdonly check */
++               if (bio->bi_rw == WRITE && dev_check_rdonly(bio->bi_bdev)) {
++                       struct block_device *bdev = bio->bi_bdev;
++
++                       printk(KERN_WARNING "Write to readonly device %s (%#x) "
++                              "bi_flags: %lx, bi_vcnt: %d, bi_idx: %d, "
++                              "bi->size: %d, bi_cnt: %d, bi_private: %p\n",
++                              bdev->bd_disk ? bdev->bd_disk->disk_name : "",
++                              bdev->bd_dev, bio->bi_flags, bio->bi_vcnt,
++                              bio->bi_idx, bio->bi_size,
++                              atomic_read(&bio->bi_cnt), bio->bi_private);
++                       set_bit(BIO_RDONLY, &bio->bi_flags);
++                       bio_endio(bio, bio->bi_size, 0);
++                       clear_bit(BIO_RDONLY, &bio->bi_flags);
++                       break;
++               }
++
  		/*
  		 * If this device has partitions, remap block n
-@@ -3697,6 +3705,91 @@ void swap_io_context(struct io_context *
+@@ -3697,6 +3716,91 @@ void swap_io_context(struct io_context *
  	*ioc2 = temp;
  }
  EXPORT_SYMBOL(swap_io_context);
@@ -144,3 +155,15 @@ Index: linux-2.6.16.i686/include/linux/fs.h
  
  #define MODULE_ALIAS_BLOCKDEV(major,minor) \
  	MODULE_ALIAS("block-major-" __stringify(major) "-" __stringify(minor))
+Index: linux-2.6.16.i686/include/linux/bio.h
+===================================================================
+--- linux-2.6.16.i686.orig/include/linux/bio.h
++++ linux-2.6.16.i686/include/linux/bio.h
+@@ -124,6 +124,7 @@ struct bio {
+ #define BIO_BOUNCED	5	/* bio is a bounce bio */
+ #define BIO_USER_MAPPED 6	/* contains user pages */
+ #define BIO_EOPNOTSUPP	7	/* not supported */
++#define BIO_RDONLY	31	/* device is readonly */
+ #define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag)))
+ 
+ /*

@@ -133,6 +133,19 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct bio_vec *bvl;
         int i;
 
+        if (bio->bi_rw == WRITE &&
+            unlikely(test_and_clear_bit(BIO_RDONLY, &bio->bi_flags))) {
+                struct block_device *bdev = bio->bi_bdev;
+
+                CWARN("Write to readonly device %s (%#x) bi_flags: %lx, "
+                      "bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_cnt: %d, "
+                      "bi_private: %p, done: %u, error: %d\n",
+                      bdev->bd_disk ? bdev->bd_disk->disk_name : "",
+                      bdev->bd_dev, bio->bi_flags, bio->bi_vcnt, bio->bi_idx,
+                      bio->bi_size, atomic_read(&bio->bi_cnt), bio->bi_private,
+                      done, error);
+        }
+
         /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
