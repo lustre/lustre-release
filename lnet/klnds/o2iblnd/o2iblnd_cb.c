@@ -871,6 +871,9 @@ kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
 
         if (done)
                 kiblnd_tx_done(peer->ibp_ni, tx);
+
+        spin_lock(&conn->ibc_lock);
+
         return -EIO;
 }
 
@@ -916,6 +919,8 @@ kiblnd_check_sends (kib_conn_t *conn)
                         kiblnd_queue_tx_locked(tx, conn);
         }
 
+        kiblnd_conn_addref(conn); /* 1 ref for me.... (see b21911) */
+
         for (;;) {
                 int credit;
 
@@ -935,6 +940,8 @@ kiblnd_check_sends (kib_conn_t *conn)
         }
 
         spin_unlock(&conn->ibc_lock);
+
+        kiblnd_conn_decref(conn); /* ...until here */
 }
 
 void
