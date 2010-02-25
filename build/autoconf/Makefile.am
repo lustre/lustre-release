@@ -1,4 +1,1 @@
-EXTRA_DIST := lustre-build.m4 lustre-build-linux.m4
-if DARWIN
-EXTRA_DIST += lustre-build-darwin.m4
-endif
+EXTRA_DIST := lustre-build.m4 lustre-build-linux.m4 lustre-build-darwin.m4

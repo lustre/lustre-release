@@ -2,7 +2,7 @@ SUBDIRS := linux
 if DARWIN
 SUBDIRS += darwin
 endif
-DIST_SUBDIRS := $(SUBDIRS)
+DIST_SUBDIRS := linux darwin
 
 if LIBLUSTRE
 
