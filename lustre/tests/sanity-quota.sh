@@ -98,7 +98,7 @@ set_blk_tunesz() {
         # set btune size on all obdfilters
         do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_btune_sz=$btune"
         # set btune size on mds
-        do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_btune_sz=$btune"
+        do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_btune_sz=$btune"
 }
 
 # set_blk_unitsz(bunit_sz)
@@ -107,7 +107,7 @@ set_blk_unitsz() {
         # set bunit size on all obdfilters
         do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_bunit_sz=$bunit"
         # set bunit size on mds
-        do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_bunit_sz=$bunit"
+        do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_bunit_sz=$bunit"
 }
 
 # set_file_tunesz(itune_sz)
@@ -116,7 +116,7 @@ set_file_tunesz() {
         # set itune size on all obdfilters
         do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_itune_sz=$itune"
         # set itune size on mds
-        do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_itune_sz=$itune"
+        do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_itune_sz=$itune"
 }
 
 # set_file_unitsz(iunit_sz)
@@ -125,7 +125,7 @@ set_file_unitsz() {
         # set iunit size on all obdfilters
         do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_iunit_sz=$iunit"
         # set iunit size on mds
-        do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_iunit_sz=$iunit"
+        do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_iunit_sz=$iunit"
 }
 
 lustre_fail() {
@@ -161,14 +161,14 @@ FAIL_ON_ERROR=false
 run_test_with_stat() {
         (($# != 2)) && error "the number of arguments is wrong"
 
-        do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.stats=0" > /dev/null
+        do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.stats=0" > /dev/null || true
         for j in `seq $OSTCOUNT`; do
-            do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.stats=0" > /dev/null
+            do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.stats=0" > /dev/null || true
         done
         run_test "$@"
         if [ ${STAT:-"yes"} != "no" -a -z "$LAST_SKIPPED" ]; then
             echo "statistics info begin ***************************************"
-            do_facet mds  "lctl get_param lquota.${FSNAME}-MDT*.stats"
+            do_facet mds  "lctl get_param lquota.*${FSNAME}-MDT*.stats"
             for j in `seq $OSTCOUNT`; do
                 do_facet ost$j "lctl get_param lquota.${FSNAME}-OST*.stats"
             done
