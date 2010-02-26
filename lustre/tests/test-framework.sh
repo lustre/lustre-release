@@ -965,10 +965,7 @@ wait_recovery_complete () {
     local facet=$1
 
     # Use default policy if $2 is not passed by caller.
-    #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
-    # as we are in process of changing obd_timeout in different ways
-    # let's set MAX longer than that
-    local MAX=${2:-$(( TIMEOUT * 4 ))}
+    local MAX=${2:-$(max_recovery_time)}
 
     local var_svc=${facet}_svc
     local procfile="*.${!var_svc}.recovery_status"
