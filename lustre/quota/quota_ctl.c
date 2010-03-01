@@ -374,16 +374,16 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 GOTO(out, rc);
         }
 
-        oqc = NULL;
-        if (req->rq_repmsg)
+        if (req->rq_repmsg) {
                 oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
                                          lustre_swab_obd_quotactl);
-        if (oqc == NULL) {
-                CERROR ("Can't unpack obd_quotactl\n");
-                GOTO(out, rc = -EPROTO);
+                if (oqc != NULL) {
+                        *oqctl = *oqc;
+                } else {
+                        CERROR ("Can't unpack obd_quotactl\n");
+                        rc = -EPROTO;
+                }
         }
-
-        *oqctl = *oqc;
         EXIT;
 out:
         ptlrpc_req_finished(req);

@@ -13,6 +13,11 @@ tbd        Oracle, Inc.
 	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : normal
+Bugzilla   : 21816
+Description: lfs quota failed when OSTs are down
+Details    : really return approximate block/inode usage when OSTs are down
+
+Severity   : normal
 Bugzilla   : 21829
 Description: llobdstat fix and enhancement
 Details    : add a counter to set a limit to how many samples will be returned

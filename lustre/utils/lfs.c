@@ -2160,7 +2160,7 @@ static int lfs_quota(int argc, char **argv)
                                     .qc_type = UGQUOTA };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
-        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0;
+        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, inacc;
         int pass = 0;
         char *endptr;
 
@@ -2255,6 +2255,9 @@ ug_output:
         if (*obd_uuid)
                 mnt = "";
 
+        inacc = (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) &&
+                ((qctl.qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) != (QIF_LIMITS|QIF_USAGE));
+
         print_quota(mnt, &qctl, GENERAL_QUOTA_INFO);
 
         if (!*obd_uuid && qctl.qc_cmd != LUSTRE_Q_GETINFO && verbose) {
@@ -2262,7 +2265,7 @@ ug_output:
                 rc3 = print_lov_quota(mnt, &qctl);
         }
 
-        if (rc1 || rc2 || rc3)
+        if (rc1 || rc2 || rc3 || inacc)
                 printf("Some errors happened when getting quota info. "
                        "Some devices may be not working or deactivated. "
                        "The data in \"[]\" is inaccurate.\n");
