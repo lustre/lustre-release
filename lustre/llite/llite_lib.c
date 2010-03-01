@@ -1829,6 +1829,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
+                spin_lock(&lli->lli_lock);
                 if (lli->lli_smd == NULL) {
                         if (lsm->lsm_magic != LOV_MAGIC_V1 &&
                             lsm->lsm_magic != LOV_MAGIC_V3 &&
@@ -1842,10 +1843,12 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                          * with lli_smd != NULL or lock_lsm == 0 or we can
                          * race between lock/unlock.  bug 9547 */
                         lli->lli_smd = lsm;
+                        spin_unlock(&lli->lli_lock);
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
+                        spin_unlock(&lli->lli_lock);
                         if ((lli->lli_smd->lsm_magic == lsm->lsm_magic ||
                              (lli->lli_smd->lsm_magic == LOV_MAGIC_V3 &&
                               lsm->lsm_magic == LOV_MAGIC_V1) ||

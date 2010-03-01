@@ -138,7 +138,8 @@ struct ll_inode_info {
         unsigned long           lli_flags;
         cfs_time_t              lli_contention_time;
 
-        /* this lock protects s_d_w and p_w_ll and mmap_cnt */
+        /* this lock protects s_d_w and p_w_ll and mmap_cnt;
+         * atomic check-update of lli_smd */
         spinlock_t              lli_lock;
 #ifdef HAVE_CLOSE_THREAD
         struct list_head        lli_pending_write_llaps;
