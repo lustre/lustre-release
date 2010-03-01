@@ -252,6 +252,8 @@ void *lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
 /* Hash deletion functions */
 void *lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode);
 void *lustre_hash_del_key(lustre_hash_t *lh, void *key);
+typedef int (*lh_cond_opt_cb)(void *obj, void *data);
+void lustre_hash_cond_del(lustre_hash_t *lh, lh_cond_opt_cb, void *data);
 
 /* Hash lookup/for_each functions */
 void *lustre_hash_lookup(lustre_hash_t *lh, void *key);

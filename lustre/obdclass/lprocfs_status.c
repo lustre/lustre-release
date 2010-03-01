@@ -1589,7 +1589,7 @@ int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_read);
 
-void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
+int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
 {
         struct nid_stat *stat = obj;
         int i;
@@ -1598,13 +1598,10 @@ void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
          * add/delete blocked by hash bucket lock */
         CDEBUG(D_INFO,"refcnt %d\n", atomic_read(&stat->nid_exp_ref_count));
         if (atomic_read(&stat->nid_exp_ref_count) == 2) {
-                hlist_del_init(&stat->nid_hash);
-                nidstat_putref(stat);
                 spin_lock(&stat->nid_obd->obd_nid_lock);
                 list_move(&stat->nid_list, data);
                 spin_unlock(&stat->nid_obd->obd_nid_lock);
-                EXIT;
-                return;
+                RETURN(1);
         }
         /* we has reference to object - only clear data*/
         if (stat->nid_stats)
@@ -1614,8 +1611,7 @@ void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
                 for (i = 0; i < BRW_LAST; i++)
                         lprocfs_oh_clear(&stat->nid_brw_stats->hist[i]);
         }
-        EXIT;
-        return;
+        RETURN(0);
 }
 
 int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
@@ -1625,7 +1621,7 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
         struct nid_stat *client_stat;
         CFS_LIST_HEAD(free_list);
 
-        lustre_hash_for_each(obd->obd_nid_stats_hash,
+        lustre_hash_cond_del(obd->obd_nid_stats_hash,
                              lprocfs_nid_stats_clear_write_cb, &free_list);
 
         while (!list_empty(&free_list)) {

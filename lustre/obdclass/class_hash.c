@@ -362,6 +362,42 @@ lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 EXPORT_SYMBOL(lustre_hash_del);
 
 /**
+ * Delete item from the lustre hash @lh when @func return true.
+ * The write lock being hold during loop for each bucket to avoid
+ * any object be reference.
+ */
+void
+lustre_hash_cond_del(lustre_hash_t *lh, lh_cond_opt_cb func, void *data)
+{
+        lustre_hash_bucket_t *lhb;
+        struct hlist_node    *hnode;
+        struct hlist_node    *pos;
+        int                   i;
+        ENTRY;
+
+        LASSERT(lh != NULL);
+
+        lh_write_lock(lh);
+        lh_for_each_bucket(lh, lhb, i) {
+                if (lhb == NULL)
+                        continue;
+
+                write_lock(&lhb->lhb_rwlock);
+                hlist_for_each_safe(hnode, pos, &(lhb->lhb_head)) {
+                        __lustre_hash_bucket_validate(lh, lhb, hnode);
+                        if (func(lh_get(lh, hnode), data))
+                                __lustre_hash_bucket_del(lh, lhb, hnode);
+                        (void)lh_put(lh, hnode);
+                }
+                write_unlock(&lhb->lhb_rwlock);
+        }
+        lh_write_unlock(lh);
+
+        EXIT;
+}
+EXPORT_SYMBOL(lustre_hash_cond_del);
+
+/**
  * Delete item given @key in lustre hash @lh.  The first @key found in
  * the hash will be removed, if the key exists multiple times in the hash
  * @lh this function must be called once per key.  The removed object

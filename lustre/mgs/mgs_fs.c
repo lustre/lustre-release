@@ -88,22 +88,8 @@ int mgs_export_stats_init(struct obd_device *obd,
 
                 lprocfs_init_ops_stats(LPROC_MGS_LAST, tmp->nid_stats);
                 mgs_stats_counter_init(tmp->nid_stats);
-                rc = lprocfs_register_stats(tmp->nid_proc, "stats",
-                                            tmp->nid_stats);
-                if (rc)
-                        return rc;
 
-                /* Always add in ldlm_stats */
-                tmp->nid_ldlm_stats =
-                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
-                                            LPROCFS_STATS_FLAG_NOPERCPU);
-                if (tmp->nid_ldlm_stats == NULL)
-                        return -ENOMEM;
-
-                lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
-
-                rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
-                                            tmp->nid_ldlm_stats);
+                rc = lprocfs_nid_ldlm_stats_init(tmp);
                 if (rc)
                         return rc;
         }
