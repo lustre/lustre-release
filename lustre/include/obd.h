@@ -1371,7 +1371,7 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 
 #define OBD_CALC_STRIPE_RPC_START_ALIGN (OBD_CALC_STRIPE_START | \
                                          OBD_CALC_STRIPE_RPC_ALIGN)
-#define OBD_CALC_STRIPE_RPC_END_ALIGN (OBD_CALC_STRIPE_START | \
+#define OBD_CALC_STRIPE_RPC_END_ALIGN (OBD_CALC_STRIPE_END | \
                                        OBD_CALC_STRIPE_RPC_ALIGN)
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,

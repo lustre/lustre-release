@@ -1658,9 +1658,10 @@ static int ll_read_ahead_pages(struct obd_export *exp,
                         /* FIXME: This assertion only is valid when it is for
                          * forward read-ahead, it will be fixed when backward
                          * read-ahead is implemented */
-                        LASSERTF(page_idx > ria->ria_stoff, "since %lu in the"
-                                " gap of ra window,it should bigger than stride"
-                                " offset %lu \n", page_idx, ria->ria_stoff);
+                        LASSERTF(page_idx > ria->ria_stoff, "Invalid page_idx %lu"
+                                 "rs %lu re %lu ro %lu rl %lu rp %lu\n", page_idx,
+                                 ria->ria_start, ria->ria_end, ria->ria_stoff,
+                                 ria->ria_length, ria->ria_pages);
 
                         offset = page_idx - ria->ria_stoff;
                         offset = offset % (ria->ria_length);
@@ -1842,7 +1843,13 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
 static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
 {
-        ras->ras_window_start = index & (~(INIT_RAS_WINDOW_PAGES - 1));
+        /* Since stride readahead is sentivite to the offset
+         * of read-ahead, so we use original offset here,
+         * instead of ras_window_start, which is 1M aligned*/
+        if (stride_io_mode(ras))
+                ras->ras_window_start = index;
+        else
+                ras->ras_window_start = index & (~(INIT_RAS_WINDOW_PAGES - 1));
 }
 
 /* called with the ras_lock held or from places where it doesn't matter */
@@ -1933,7 +1940,23 @@ stride_page_count(struct ll_readahead_state *ras, unsigned long len)
 }
 
 /* Stride Read-ahead window will be increased inc_len according to
- * stride I/O pattern */
+ * the stride I/O pattern.
+ *
+ *      |------------------------|------------------------|--------------------|
+ * ras_stride_offset      ras_window_start          ras_window_end
+ *                               |<---ras_window_len----->|<---ras_inc_len---->|
+ *
+ * ras_stride_offset: where the stride IO mode started,
+ * Note: stride_page is always in front of stride_gap page, see comments in
+ * ll_readahead_states and stride_pg_count
+ *
+ * This function calculates how much ras_window should increase(ras_inc_len)
+ * according to @Inc_len, Note: in stride read-ahead algorithm, stride_gap is
+ * also acconted in the ras_window_len, so basically,
+ *
+ * ras_inc_len = (inc_len/ stride_page) * (stride_page + stride_gap)
+ *
+ * */
 static void ras_stride_increase_window(struct ll_readahead_state *ras,
                                        struct ll_ra_info *ra,
                                        unsigned long inc_len)
@@ -1944,8 +1967,9 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
         LASSERT(ras->ras_stride_length > 0);
         LASSERTF(ras->ras_window_start + ras->ras_window_len
                  >= ras->ras_stride_offset, "window_start %lu, window_len %lu"
-                 " stride_offset %lu\n", ras->ras_window_start,
-                 ras->ras_window_len, ras->ras_stride_offset);
+                 " stride_offset %lu sp %lu sl %lu\n", ras->ras_window_start,
+                 ras->ras_window_len, ras->ras_stride_offset, ras->ras_stride_pages,
+                 ras->ras_stride_length);
 
         stride_len = ras->ras_window_start + ras->ras_window_len -
                      ras->ras_stride_offset;
@@ -2163,7 +2187,7 @@ int ll_writepage(struct page *page)
                 __u64 offset = ((loff_t)page->index) << CFS_PAGE_SHIFT;
                 lockh = ltd2lockh(ltd, offset, offset + CFS_PAGE_SIZE - 1);
         }
-        
+
         llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_WRITEPAGE, lockh, 0);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
