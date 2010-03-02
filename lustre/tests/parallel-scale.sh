@@ -460,6 +460,11 @@ test_write_disjoint() {
 run_test write_disjoint "write_disjoint"
 
 test_parallel_grouplock() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
     [ x$PARALLEL_GROUPLOCK = x ] &&
         { skip "PARALLEL_GROUPLOCK not found" && return; }
 
