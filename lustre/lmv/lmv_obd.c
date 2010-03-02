@@ -738,8 +738,6 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                 __u32 index;
 
                 memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
-                LASSERT(data->ioc_plen1 == sizeof(struct obd_statfs));
-
                 if ((index >= count))
                         RETURN(-ENODEV);
 

@@ -1066,6 +1066,60 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(0);
 }
 
+static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
+                      __u64 max_age, __u32 flags)
+{
+        struct ptlrpc_request *req;
+        struct obd_statfs     *msfs;
+        struct obd_import     *imp = NULL;
+        int                    rc;
+        ENTRY;
+
+        /*
+         * Since the request might also come from lprocfs, so we need
+         * sync this with client_disconnect_export Bug15684
+         */
+        cfs_down_read(&obd->u.cli.cl_sem);
+        if (obd->u.cli.cl_import)
+                imp = class_import_get(obd->u.cli.cl_import);
+        cfs_up_read(&obd->u.cli.cl_sem);
+        if (!imp)
+                RETURN(-ENODEV);
+
+        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
+                                        LUSTRE_MDS_VERSION, MDS_STATFS);
+        if (req == NULL)
+                GOTO(output, rc = -ENOMEM);
+
+        ptlrpc_request_set_replen(req);
+
+        if (flags & OBD_STATFS_NODELAY) {
+                /* procfs requests not want stay in wait for avoid deadlock */
+                req->rq_no_resend = 1;
+                req->rq_no_delay = 1;
+        }
+
+        rc = ptlrpc_queue_wait(req);
+        if (rc) {
+                /* check connection error first */
+                if (imp->imp_connect_error)
+                        rc = imp->imp_connect_error;
+                GOTO(out, rc);
+        }
+
+        msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
+        if (msfs == NULL)
+                GOTO(out, rc = -EPROTO);
+
+        *osfs = *msfs;
+        EXIT;
+out:
+        ptlrpc_req_finished(req);
+output:
+        class_import_put(imp);
+        return rc;
+}
+
 static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 {
         __u32 keylen, vallen;
@@ -1169,6 +1223,32 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_PING_TARGET:
                 rc = ptlrpc_obd_ping(obd);
                 GOTO(out, rc);
+        /*
+         * Normally IOC_OBD_STATFS iocontrol is handled by LMV instead of MDC.
+         * But when the cluster is upgraded from 1.8, there'd be no LMV layer
+         * thus we might be called here. Eventually this code should be removed.
+         * bz20731.
+         */
+        case IOC_OBD_STATFS: {
+                struct obd_statfs stat_buf = {0};
+
+                if (*((__u32 *) data->ioc_inlbuf2) != 0)
+                        GOTO(out, rc = -ENODEV);
+
+                rc = mdc_statfs(obd, &stat_buf,
+                                cfs_time_current_64() - CFS_HZ, 0);
+                if (rc != 0)
+                        GOTO(out, rc);
+
+                if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,
+                                     data->ioc_plen1))
+                        GOTO(out, rc = -EFAULT);
+                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(obd),
+                                     data->ioc_plen2))
+                        GOTO(out, rc = -EFAULT);
+
+                GOTO(out, rc = 0);
+        }
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
@@ -1400,59 +1480,6 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
         rc = mdc_get_info_rpc(exp, keylen, key, *vallen, val);
 
         RETURN(rc);
-}
-
-static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      __u64 max_age, __u32 flags)
-{
-        struct ptlrpc_request *req;
-        struct obd_statfs     *msfs;
-        struct obd_import     *imp = NULL;
-        int                    rc;
-        ENTRY;
-
-
-        /*Since the request might also come from lprocfs, so we need
-         *sync this with client_disconnect_export Bug15684*/
-        cfs_down_read(&obd->u.cli.cl_sem);
-        if (obd->u.cli.cl_import)
-                imp = class_import_get(obd->u.cli.cl_import);
-        cfs_up_read(&obd->u.cli.cl_sem);
-        if (!imp)
-                RETURN(-ENODEV);
-
-        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
-                                        LUSTRE_MDS_VERSION, MDS_STATFS);
-        if (req == NULL)
-                GOTO(output, rc = -ENOMEM);
-
-        ptlrpc_request_set_replen(req);
-
-        if (flags & OBD_STATFS_NODELAY) {
-                /* procfs requests not want stay in wait for avoid deadlock */
-                req->rq_no_resend = 1;
-                req->rq_no_delay = 1;
-        }
-
-        rc = ptlrpc_queue_wait(req);
-        if (rc) {
-                /* check connection error first */
-                if (imp->imp_connect_error)
-                        rc = imp->imp_connect_error;
-                GOTO(out, rc);
-        }
-
-        msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
-        if (msfs == NULL)
-                GOTO(out, rc = -EPROTO);
-
-        *osfs = *msfs;
-        EXIT;
-out:
-        ptlrpc_req_finished(req);
-output:
-        class_import_put(imp);
-        return rc;
 }
 
 static int mdc_pin(struct obd_export *exp, const struct lu_fid *fid,

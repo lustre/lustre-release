@@ -2059,6 +2059,12 @@ int ll_obd_statfs(struct inode *inode, void *arg)
             !data->ioc_pbuf1 || !data->ioc_pbuf2)
                 GOTO(out_statfs, rc = -EINVAL);
 
+        if (data->ioc_inllen1 != sizeof(__u32) ||
+            data->ioc_inllen2 != sizeof(__u32) ||
+            data->ioc_plen1 != sizeof(struct obd_statfs) ||
+            data->ioc_plen2 != sizeof(struct obd_uuid))
+                GOTO(out_statfs, rc = -EINVAL);
+
         memcpy(&type, data->ioc_inlbuf1, sizeof(__u32));
         if (type == LL_STATFS_MDC)
                 exp = sbi->ll_md_exp;
