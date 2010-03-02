@@ -1154,6 +1154,8 @@ test_27w() { # bug 10997
         $SETSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
         size=`$GETSTRIPE $DIR/$tdir/f0 -s`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
+        gsdir=$($LFS getstripe -d $DIR/$tdir)
+        [ $(echo $gsdir | grep -c stripe_count) -ne 1 ] && error "$LFS getstripe -d $DIR/$tdir failed"
 
         [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
