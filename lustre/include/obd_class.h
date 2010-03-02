@@ -103,7 +103,6 @@ void obd_zombie_impexp_stop(void);
 void obd_zombie_impexp_cull(void);
 void obd_zombie_barrier(void);
 void obd_exports_barrier(struct obd_device *obd);
-
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
@@ -270,6 +269,18 @@ static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
                 (obd->obd_force ? OBD_OPT_FORCE : 0) |
                 (obd->obd_abort_recovery ? OBD_OPT_ABORT_RECOV : 0) |
                 0);
+}
+
+static inline struct lu_target *class_exp2tgt(struct obd_export *exp)
+{
+        LASSERT(exp->exp_obd);
+        return exp->exp_obd->u.obt.obt_lut;
+}
+
+static inline struct lr_server_data *class_server_data(struct obd_device *obd)
+{
+        LASSERT(obd->u.obt.obt_lut);
+        return &obd->u.obt.obt_lut->lut_lsd;
 }
 
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
