@@ -703,15 +703,25 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
                 GOTO(free, rc = PTR_ERR(th));
 
         cfs_mutex_down(&med->med_lcd_lock);
-        memset(lcd->lcd_uuid, 0, sizeof lcd->lcd_uuid);
+        memset(lcd, 0, sizeof *lcd);
         rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
+        med->med_lcd = NULL;
         cfs_mutex_up(&med->med_lcd_lock);
         mdt_trans_stop(env, mdt, th);
 
+        cfs_spin_lock(&mdt->mdt_client_bitmap_lock);
+        cfs_clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap);
+        cfs_spin_unlock(&mdt->mdt_client_bitmap_lock);
+
         CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
                "%s, rc %d\n",  med->med_lr_idx, LAST_RCVD, rc);
+        OBD_FREE_PTR(lcd);
         RETURN(0);
 free:
+        cfs_mutex_down(&med->med_lcd_lock);
+        med->med_lcd = NULL;
+        cfs_mutex_up(&med->med_lcd_lock);
+        OBD_FREE_PTR(lcd);
         return 0;
 }
 

@@ -4498,6 +4498,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         obd = class_name2obd(dev);
         LASSERT(obd != NULL);
 
+        cfs_spin_lock_init(&m->mdt_transno_lock);
+
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
         m->mdt_som_conf = 0;
@@ -4536,6 +4538,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_nosquash_str = NULL;
         m->mdt_nosquash_strlen = 0;
         cfs_init_rwsem(&m->mdt_squash_sem);
+
+        cfs_spin_lock_init(&m->mdt_client_bitmap_lock);
 
         OBD_ALLOC_PTR(mite);
         if (mite == NULL)
@@ -5207,7 +5211,6 @@ static int mdt_destroy_export(struct obd_export *exp)
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
 
-        lut_client_free(exp);
         RETURN(rc);
 }
 
