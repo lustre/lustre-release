@@ -5217,15 +5217,23 @@ static int mdt_destroy_export(struct obd_export *exp)
 static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
 {
         if (flag & CONFIG_LOG)
-                m->mdt_fl_cfglog = 1;
+                cfs_set_bit(MDT_FL_CFGLOG, &m->mdt_state);
 
         /* also notify active event */
         if (flag & CONFIG_SYNC)
-                m->mdt_fl_synced = 1;
+                cfs_set_bit(MDT_FL_SYNCED, &m->mdt_state);
 
-        if (m->mdt_fl_cfglog && m->mdt_fl_synced)
+        if (cfs_test_bit(MDT_FL_CFGLOG, &m->mdt_state) &&
+            cfs_test_bit(MDT_FL_SYNCED, &m->mdt_state)) {
+                struct obd_device *obd = m->mdt_md_dev.md_lu_dev.ld_obd;
+ 
                 /* Open for clients */
-                m->mdt_md_dev.md_lu_dev.ld_obd->obd_no_conn = 0;
+                if (obd->obd_no_conn) {
+                        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
+                        obd->obd_no_conn = 0;
+                        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
+                }
+        }
 }
 
 static int mdt_upcall(const struct lu_env *env, struct md_device *md,
@@ -5255,7 +5263,7 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         break;
                 case MD_LOV_CONFIG:
                         /* Check that MDT is not yet configured */
-                        LASSERT(!m->mdt_fl_cfglog);
+                        LASSERT(!cfs_test_bit(MDT_FL_CFGLOG, &m->mdt_state));
                         break;
 #ifdef HAVE_QUOTA_SUPPORT
                 case MD_LOV_QUOTA:

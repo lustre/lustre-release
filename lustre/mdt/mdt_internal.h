@@ -91,6 +91,10 @@ struct mdt_file_data {
         struct mdt_object    *mfd_object; /* point to opened object */
 };
 
+/* mdt state flag bits */
+#define MDT_FL_CFGLOG 0
+#define MDT_FL_SYNCED 1
+
 struct mdt_device {
         /* super-class */
         struct md_device           mdt_md_dev;
@@ -123,8 +127,7 @@ struct mdt_device {
                                    mo_cos        :1;
         } mdt_opts;
         /* mdt state flags */
-        __u32                      mdt_fl_cfglog:1,
-                                   mdt_fl_synced:1;
+        unsigned long              mdt_state;
         /* lock to protect IOepoch */
         cfs_spinlock_t             mdt_ioepoch_lock;
         __u64                      mdt_ioepoch;
