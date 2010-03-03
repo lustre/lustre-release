@@ -217,8 +217,6 @@ struct lustre_mount_data {
 #define LR_MAX_CLIENTS (CFS_PAGE_SIZE * 8)
 #endif
 
-#define LR_CLIENT_BITMAP_SIZE ((LR_MAX_CLIENTS >> 3) / sizeof(long))
-
 /** COMPAT_146: this is an OST (temporary) */
 #define OBD_COMPAT_OST          0x00000002
 /** COMPAT_146: this is an MDT (temporary) */
