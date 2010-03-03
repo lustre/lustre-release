@@ -49,6 +49,9 @@ CONFIG_FILE=
 RPMBUILD=
 XEN=false
 
+# build the lustre-tests rpm?
+LUSTRE_TESTS=true
+
 canon()
 {
     pushd $1 >/dev/null
@@ -388,7 +391,7 @@ timed_run() {
     #bash -c "$@" &
     ("$@") &
     child_pid=$!
-    
+
     (sleep $SLEEP_TIME
     kill -TERM -$child_pid 2>/dev/null
     sleep 5
@@ -579,11 +582,20 @@ build_lustre()
 	-e s^@VERSION@^${LUSTRE_VERSION}^g \
 	-e s^@LINUXRELEASE@^${FULL_VERSION}^g \
 	-e s^@RELEASE@^${FULL_VERSION//-/_}^g \
-	-e s^@ac_configure_args@^"--with-linux=${PWD}/linux ${CONFIGURE_FLAGS}"^g \
 	< lustre.spec.in \
 	> lustre.spec
+    # convert the $LUSTRE_TESTS boolean to an empty/not-empty boolean
+    # as silly as this seems, it makes the syntax of the rpmbuild command
+    # simpler and not need an eval to deal with the quotes in the quotes
+    # ditto for the lustre-tests boolean
+    local lustre_tests=""
+    if ! $LUSTRE_TESTS; then
+        lustre_tests="no"
+    fi
+
     $RPMBUILD --target ${TARGET_ARCH} -bb lustre.spec \
-        ${PATCHLESS:+--define "lustre_name lustre-client"} \
+        --define "configure_args --with-linux=${PWD}/linux ${CONFIGURE_FLAGS}" \
+        ${lustre_tests:+--define "build_lustre_tests 0"} \
         --define "_tmppath $TMPDIR" \
 	--define "_topdir $(lbuild_topdir)" 2>&1 || \
 	fatal 1 "Error building Lustre rpms."
@@ -742,7 +754,7 @@ save_headers()
 
     KVERREL="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
     # deal with the kernel headers that are version specific
-    
+
     saveddir="$RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/${TARGET_ARCH}/${TARGET_CONFIG:-up}"
     mkdir -p "$saveddir"
     install -m 644 include/linux/autoconf.h "$saveddir/autoconf.h"
@@ -791,7 +803,7 @@ longopts="$longopts,save-headers,target:,target-arch:,target-config:,unpack-kern
 options=$(getopt -o hj: -l "$longopts" -- "$@")
 
 eval set -- "$options"
-    
+
 while [ "$1" ] ; do
     case "$1" in
 	'')
@@ -875,6 +887,11 @@ while [ "$1" ] ; do
             ;;
 	--)
 	    shift
+            # there are actually some lustre configure flags that we need to
+            # handle ourselves (but we still give them to configure)
+            if [[ \ $@\  == *\ --disable-tests\ * ]]; then
+                LUSTRE_TESTS=false
+            fi
 	    CONFIGURE_FLAGS=$@
 	    break
 	    ;; 
