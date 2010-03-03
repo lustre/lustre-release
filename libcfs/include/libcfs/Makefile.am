@@ -2,7 +2,7 @@ SUBDIRS := linux posix util
 if DARWIN
 SUBDIRS += darwin
 endif
-DIST_SUBDIRS := $(SUBDIRS)
+DIST_SUBDIRS := linux posix util darwin
 
 EXTRA_DIST := curproc.h libcfs_private.h libcfs.h list.h lltrace.h \
 		user-lock.h user-prim.h user-time.h user-mem.h \

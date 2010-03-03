@@ -920,13 +920,7 @@ libcfs/libcfs/linux/Makefile
 libcfs/libcfs/ulinux/Makefile
 libcfs/libcfs/posix/Makefile
 libcfs/libcfs/util/Makefile
-])
-case $lb_target_os in
-	darwin)
-		AC_CONFIG_FILES([
 libcfs/include/libcfs/darwin/Makefile
 libcfs/libcfs/darwin/Makefile
 ])
-		;;
-esac
 ])

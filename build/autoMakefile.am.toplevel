@@ -104,6 +104,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/sles8-update_INITRD_MODULES.sh				\
 	build/sles8-update_rcfile_setting.sh build/update_oldconfig	\
 	build/autoconf/lustre-build-linux.m4				\
+	build/autoconf/lustre-build-darwin.m4				\
 	build/autoconf/lustre-build.m4 build/rdac_spec                  \
 	build/mptlinux.spec.patch build/patches
 

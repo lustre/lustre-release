@@ -1128,12 +1128,6 @@ lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile
 lnet/ulnds/ptllnd/Makefile
 lnet/utils/Makefile
-])
-case $lb_target_os in
-	darwin)
-		AC_CONFIG_FILES([
 lnet/include/lnet/darwin/Makefile
 ])
-		;;
-esac
 ])
