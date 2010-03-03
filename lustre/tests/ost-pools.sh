@@ -797,7 +797,7 @@ test_14() {
 
         # echo "Iteration: $i OST: $OST"
         create_file $POOL_ROOT/dir1/file${i} $POOL 1
-        check_file_in_osts $POOL_ROOT/dir1/file${i} $OST
+        check_file_in_pool $POOL_ROOT/dir1/file${i} $POOL
         i=$((i+1))
     done
 
