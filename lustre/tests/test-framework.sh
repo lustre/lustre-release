@@ -3915,3 +3915,17 @@ log_sub_test() {
     yml_log_sub_test $@ >> $YAML_LOG
 }
 
+run_llverdev()
+{
+        local dev=$1
+        local devname=$(basename $1)
+        local size=$(grep "$devname"$ /proc/partitions | awk '{print $3}')
+        size=$(($size / 1024 / 1024)) # Gb
+
+        local partial_arg=""
+        # Run in partial (fast) mode if the size
+        # of a partition > 10 GB
+        [ $size -gt 10 ] && partial_arg="-p"
+
+        llverdev --force $partial_arg $dev
+}

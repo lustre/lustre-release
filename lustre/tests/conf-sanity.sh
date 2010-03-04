@@ -2320,6 +2320,34 @@ if ! combined_mgs_mds ; then
 	stop mgs
 fi
 
+run_llverfs()
+{
+        local dir=$1
+        local partial_arg=""
+        local size=$(df -B G $dir | tail -1 | awk '{print $2}' | sed 's/G//') # Gb
+
+        # Run in partial (fast) mode if the size
+        # of a partition > 10 GB
+        [ $size -gt 10 ] && partial_arg="-p"
+
+        llverfs $partial_arg $dir
+}
+
+test_54a() {
+    do_rpc_nodes $(facet_host ost1) run_llverdev $(ostdevname 1)
+    [ $? -eq 0 ] || error "llverdev failed!"
+    reformat_and_config
+}
+run_test 54a "llverdev"
+
+test_54b() {
+    setup
+    run_llverfs $MOUNT
+    [ $? -eq 0 ] || error "llverfs failed!"
+    cleanup
+}
+run_test 54b "llverfs"
+
 cleanup_gss
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
