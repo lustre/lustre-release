@@ -8,8 +8,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-#              bug 20670           21255 
-ALWAYS_EXCEPT="parallel_grouplock  statahead $PARALLEL_SCALE_EXCEPT"
+#              bug 20670 
+ALWAYS_EXCEPT="parallel_grouplock $PARALLEL_SCALE_EXCEPT"
 
 #
 # compilbench
@@ -171,8 +171,7 @@ test_metabench() {
     # FIXME
     # Need space estimation here.
 
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts METABENCH clients mbench_NFILES mbench_THREADS
 
@@ -213,8 +212,7 @@ test_simul() {
     # FIXME
     # Need space estimation here.
 
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts SIMUL clients simul_REP simul_THREADS
 
@@ -294,8 +292,7 @@ test_ior() {
         echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
     fi
  
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
@@ -348,8 +345,7 @@ test_cascading_rw() {
     # FIXME
     # Need space estimation here.
 
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts CASC_RW clients casc_THREADS casc_REP MACHINEFILE
 
@@ -394,8 +390,7 @@ test_write_append_truncate() {
     # FIXME
     # Need space estimation here.
 
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     local testdir=$DIR/d0.write_append_truncate
     local file=$testdir/f0.wat
@@ -437,8 +432,7 @@ test_write_disjoint() {
     # FIXME
     # Need space estimation here.
 
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP MACHINEFILE
     local testdir=$DIR/d0.write_disjoint
@@ -473,8 +467,7 @@ test_parallel_grouplock() {
 
     local num_clients=$(get_node_count ${clients//,/ })
 
-    generate_machine_file $clients $MACHINEFILE || \
-        error "can not generate machinefile $MACHINEFILE"
+    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
 
@@ -527,14 +520,34 @@ cleanup_statahead () {
 }
 
 test_statahead () {
-   
+    [ x$MDSRATE = x ] &&
+        { skip_env "mdsrate not found" && return; }
+
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
+
+    local num_clients=$(get_node_count ${clients//,/ })
+
+    generate_machine_file $clients $MACHINEFILE || return $?
+
+    print_opts MDSRATE clients statahead_NUMMNTPTS statahead_NUMFILES
+
     # create large dir
 
-    local dir=d0.statahead
-    # FIXME has to use DIR
+    # do not use default "d[0-9]*" dir name
+    # to avoid of rm $statahead_NUMFILES (500k) files in t-f cleanup
+    local dir=dstatahead
     local testdir=$DIR/$dir
 
+    # cleanup only if dir exists
+    # cleanup only $statahead_NUMFILES number of files
+    # ignore the other files created by someone else
+    [ -d $testdir ] &&
+        mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE $statahead_NUMFILES $testdir 'f%%d' --ignore
+
     mkdir -p $testdir
+    # mpi_run uses mpiuser
+    chmod 0777 $testdir
 
     local num_files=$statahead_NUMFILES
 
@@ -545,12 +558,14 @@ test_statahead () {
 
     cancel_lru_locks mdc
 
-    log "createmany -o $testdir/f-%d $num_files"
-    createmany -o $testdir/$f-%d $num_files
+    local cmd="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir --nfiles $num_files --filefmt 'f%%d'"    
+    echo "+ $cmd"
+    
+    mpi_run -np $((num_clients * 32)) -machinefile ${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
-        error "createmany failed to create $rc"
+        error "mdsrate failed to create $rc"
         return $rc
     fi
 
@@ -558,12 +573,9 @@ test_statahead () {
     local mntpt_root=$TMP/mntpt/lustre
     mntopts=${MNTOPTSTATAHEAD:-$MOUNTOPT}
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
     echo "Mounting $num_mntpts lustre clients starts on $clients"
     trap "cleanup_statahead $clients $mntpt_root $num_mntpts" EXIT ERR
-    for i in $(seq 0 $num_mntpts);do
+    for i in $(seq 0 $num_mntpts); do
         zconf_mount_clients $clients ${mntpt_root}$i $mntopts ||
             error_exit "Failed to mount lustre on ${mntpt_root}$i on $clients"
     done
@@ -572,6 +584,12 @@ test_statahead () {
 
     do_rpc_nodes $clients do_ls $mntpt_root $num_mntpts $dir
 
+    mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE $num_files $testdir 'f%%d' --ignore
+
+    # use rm instead of rmdir because of
+    # testdir could contain the files created by someone else,
+    # or by previous run where is num_files prev > num_files current
+    rm -rf $testdir
     cleanup_statahead $clients $mntpt_root $num_mntpts
 }
 

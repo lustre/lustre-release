@@ -2979,9 +2979,10 @@ mixed_mdt_devs () {
 generate_machine_file() {
     local nodes=${1//,/ }
     local machinefile=$2
-    rm -f $machinefile || error "can't rm $machinefile"
+    rm -f $machinefile
     for node in $nodes; do
-        echo $node >>$machinefile
+        echo $node >>$machinefile || \
+            { echo "can not generate machinefile $machinefile" && return 1; }
     done
 }
 
