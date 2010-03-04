@@ -70,7 +70,7 @@ uid_t  cfs_curproc_fsuid(void)
 
 uid_t  cfs_curproc_euid(void)
 {
-        return current_egid();
+        return current_euid();
 }
 
 uid_t  cfs_curproc_egid(void)
