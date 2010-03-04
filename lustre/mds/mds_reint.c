@@ -98,15 +98,17 @@ struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
                 struct inode *inode = dchild->d_inode; 
                 void         *handle;
                 if (inode != NULL) {
+                        LOCK_INODE_MUTEX(inode);
                         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR,
                                               NULL);
                         if (!IS_ERR(handle)) {
-                                LOCK_INODE_MUTEX(inode);
                                 fsfilt_set_md(obd, inode, handle, NULL, 0,
                                               "lma");
                                 /* result is ignored. */
                                 UNLOCK_INODE_MUTEX(inode);
                                 fsfilt_commit(obd, inode, handle, 0);
+                        } else {
+                                UNLOCK_INODE_MUTEX(inode);
                         }
                 }
         }
