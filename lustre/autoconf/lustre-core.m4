@@ -2494,6 +2494,7 @@ lustre/kernel_patches/targets/2.6-patchless.target
 lustre/kernel_patches/targets/2.6-sles10.target
 lustre/kernel_patches/targets/2.6-sles11.target
 lustre/kernel_patches/targets/2.6-oel5.target
+lustre/kernel_patches/targets/2.6-fc11.target
 lustre/ldlm/Makefile
 lustre/fid/Makefile
 lustre/fid/autoMakefile

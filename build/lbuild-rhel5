@@ -200,8 +200,14 @@ rpm_BUILD_kernel_dirname() {
 
 find_linux_devel_paths() {
     local path="$1"
+    local ARCH=$TARGET_ARCH
 
-    LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}-${TARGET_ARCH}
+    # If DEVEL_PATH_ARCH is set, use it. Added for fc11 as it needs i586 string for i686.
+    if [ $DEVEL_PATH_ARCH ];then
+        ARCH=$DEVEL_PATH_ARCH
+    fi
+
+    LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}${ARCH}
     # RHEL doesn't have the -obj tree
     LINUXOBJ=""
     # XXX - i don't think we need this any more
