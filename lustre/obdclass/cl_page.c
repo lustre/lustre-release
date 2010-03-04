@@ -181,12 +181,17 @@ EXPORT_SYMBOL(cl_page_lookup);
 /**
  * Returns a list of pages by a given [start, end] of \a obj.
  *
+ * \param resched If not NULL, then we give up before hogging CPU for too
+ * long and set *resched = 1, in that case caller should implement a retry
+ * logic.
+ *
  * Gang tree lookup (radix_tree_gang_lookup()) optimization is absolutely
  * crucial in the face of [offset, EOF] locks.
  */
 void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                          struct cl_io *io, pgoff_t start, pgoff_t end,
-                         struct cl_page_list *queue, int nonblock)
+                         struct cl_page_list *queue, int nonblock,
+                         int *resched)
 {
         struct cl_object_header *hdr;
         struct cl_page          *page;
@@ -202,6 +207,8 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                                            struct cl_page *pg);
         ENTRY;
 
+        if (resched != NULL)
+                *resched = 0;
         page_own = nonblock ? cl_page_own_try : cl_page_own;
 
         idx = start;
@@ -266,6 +273,10 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                 cfs_spin_lock(&hdr->coh_page_guard);
                 if (nr < CLT_PVEC_SIZE)
                         break;
+                if (resched != NULL && cfs_need_resched()) {
+                        *resched = 1;
+                        break;
+                }
         }
         cfs_spin_unlock(&hdr->coh_page_guard);
         EXIT;
@@ -1477,6 +1488,7 @@ int cl_pages_prune(const struct lu_env *env, struct cl_object *clobj)
         struct cl_object        *obj = cl_object_top(clobj);
         struct cl_io            *io;
         struct cl_page_list     *plist;
+        int                      resched;
         int                      result;
 
         ENTRY;
@@ -1495,16 +1507,22 @@ int cl_pages_prune(const struct lu_env *env, struct cl_object *clobj)
                 RETURN(io->ci_result);
         }
 
-        cl_page_list_init(plist);
-        cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF, plist, 0);
-        /*
-         * Since we're purging the pages of an object, we don't care
-         * the possible outcomes of the following functions.
-         */
-        cl_page_list_unmap(env, io, plist);
-        cl_page_list_discard(env, io, plist);
-        cl_page_list_disown(env, io, plist);
-        cl_page_list_fini(env, plist);
+        do {
+                cl_page_list_init(plist);
+                cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF, plist, 0,
+                                    &resched);
+                /*
+                 * Since we're purging the pages of an object, we don't care
+                 * the possible outcomes of the following functions.
+                 */
+                cl_page_list_unmap(env, io, plist);
+                cl_page_list_discard(env, io, plist);
+                cl_page_list_disown(env, io, plist);
+                cl_page_list_fini(env, plist);
+
+                if (resched)
+                        cfs_cond_resched();
+        } while (resched);
 
         cl_io_fini(env, io);
         RETURN(result);

@@ -1411,7 +1411,8 @@ static int osc_lock_has_pages(struct osc_lock *olck)
                 io->ci_obj = cl_object_top(obj);
                 cl_io_init(env, io, CIT_MISC, io->ci_obj);
                 cl_page_gang_lookup(env, obj, io,
-                                    descr->cld_start, descr->cld_end, plist, 0);
+                                    descr->cld_start, descr->cld_end, plist, 0,
+                                    NULL);
                 cl_lock_page_list_fixup(env, io, lock, plist);
                 if (plist->pl_nr > 0) {
                         CL_LOCK_DEBUG(D_ERROR, env, lock, "still has pages\n");

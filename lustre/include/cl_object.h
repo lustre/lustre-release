@@ -2661,7 +2661,8 @@ void                  cl_page_gang_lookup(const struct lu_env *env,
                                           struct cl_io *io,
                                           pgoff_t start, pgoff_t end,
                                           struct cl_page_list *plist,
-                                          int nonblock);
+                                          int nonblock,
+                                          int *resched);
 struct cl_page *cl_page_find        (const struct lu_env *env,
                                      struct cl_object *obj,
                                      pgoff_t idx, struct page *vmpage,
