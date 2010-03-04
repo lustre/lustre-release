@@ -522,11 +522,6 @@ extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
 
-extern int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data);
-extern int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
-                                         unsigned long count, void *data);
-
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
                               int count, int *eof, void *data);

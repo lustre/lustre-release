@@ -2061,7 +2061,6 @@ test_29()
         local BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
         local timeout
         local pid
-        local origin_resends
 
         if at_is_enabled; then
                 timeout=$(at_max_get client)
@@ -2070,9 +2069,6 @@ test_29()
                 timeout=$(lctl get_param -n timeout)
                 lctl set_param timeout=10
         fi
-
-        origin_resends=$(lctl get_param -n mdc.${FSNAME}-*.quota_resend_count | head -1)
-        lctl set_param -n mdc.${FSNAME}-*.quota_resend_count 0
 
         #define OBD_FAIL_MDS_QUOTACTL_NET 0x12e
         lustre_fail mds 0x12e
@@ -2092,7 +2088,6 @@ test_29()
                 lctl set_param timeout=$timeout
         fi
 
-        lctl set_param -n mdc.${FSNAME}-*.quota_resend_count $origin_resends
         resetquota -u $TSTUSR
 }
 run_test_with_stat 29 "unhandled quotactls must not hang lustre client (19778) ========"

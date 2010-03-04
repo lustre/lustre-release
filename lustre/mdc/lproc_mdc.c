@@ -263,8 +263,6 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "mds_conn_uuid",   lprocfs_rd_conn_uuid,   0, 0 },
         { "max_rpcs_in_flight", mdc_rd_max_rpcs_in_flight,
                                 mdc_wr_max_rpcs_in_flight, 0 },
-        { "quota_resend_count",  lprocfs_rd_quota_resend_count,
-                                 lprocfs_wr_quota_resend_count, 0},
         { "timeouts",        lprocfs_rd_timeouts,    0, 0 },
         { "import",          lprocfs_rd_import,      0, 0 },
         { "state",           lprocfs_rd_state,       0, 0 },

@@ -213,15 +213,4 @@ int lov_quota_check(struct obd_device *unused, struct obd_export *exp,
                     struct obd_quotactl *oqctl);
 int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 
-static inline int client_quota_recoverable_error(int rc)
-{
-        return (rc == -ETIMEDOUT || rc == -EAGAIN);
-}
-
-static inline int client_quota_should_resend(int resend, struct client_obd *cli)
-{
-        return (cfs_atomic_read(&cli->cl_quota_resends) >= 0) ?
-                cfs_atomic_read(&cli->cl_quota_resends) > resend : 1;
-}
-
 #endif
