@@ -1815,6 +1815,39 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [])
 ])
 
+# LC_LOCK_MAP_ACQUIRE
+# after 2.6.27 lock_map_acquire replaces lock_acquire
+AC_DEFUN([LC_LOCK_MAP_ACQUIRE],
+[AC_MSG_CHECKING([if lock_map_acquire is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/lockdep.h>
+],[
+        lock_map_acquire(NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_LOCK_MAP_ACQUIRE, 1,
+                [lock_map_acquire is defined])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# 2.6.31 replaces blk_queue_hardsect_size by blk_queue_logical_block_size function
+AC_DEFUN([LC_BLK_QUEUE_LOG_BLK_SIZE],
+[AC_MSG_CHECKING([if blk_queue_logical_block_size is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkdev.h>
+],[
+        blk_queue_logical_block_size(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_BLK_QUEUE_LOG_BLK_SIZE, 1,
+                  [blk_queue_logical_block_size is defined])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1955,6 +1988,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_QUOTA_ON_5ARGS
          LC_QUOTA_OFF_3ARGS
          LC_VFS_DQ_OFF
+         LC_LOCK_MAP_ACQUIRE
 
          # 2.6.27.15-2 sles11
          LC_BI_HW_SEGMENTS
@@ -1962,6 +1996,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_VFS_SYMLINK_5ARGS
          LC_SB_ANY_QUOTA_ACTIVE
          LC_SB_HAS_QUOTA_ACTIVE
+
+         # 2.6.31
+         LC_BLK_QUEUE_LOG_BLK_SIZE
 ])
 
 #

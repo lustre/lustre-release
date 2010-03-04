@@ -1003,10 +1003,10 @@ lnet_startup_lndnis (void)
                                 CERROR("Can't load LND %s, module %s, rc=%d\n",
                                        libcfs_lnd2str(lnd_type),
                                        libcfs_lnd2modname(lnd_type), rc);
-#ifndef CONFIG_KMOD
+#ifndef HAVE_MODULE_LOADING_SUPPORT
                                 LCONSOLE_ERROR_MSG(0x104, "Your kernel must be "
-                                         "compiled with CONFIG_KMOD set for "
-                                         "automatic module loading.");
+                                         "compiled with kernel module "
+                                         "loading support.");
 #endif
                                 goto failed;
                         }

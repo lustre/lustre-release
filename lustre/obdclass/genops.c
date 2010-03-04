@@ -117,7 +117,7 @@ struct obd_type *class_get_type(const char *name)
 {
         struct obd_type *type = class_search_type(name);
 
-#ifdef CONFIG_KMOD
+#ifdef HAVE_MODULE_LOADING_SUPPORT
         if (!type) {
                 const char *modname = name;
                 if (!cfs_request_module("%s", modname)) {

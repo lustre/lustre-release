@@ -541,7 +541,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         lo->lo_queue->unplug_fn = loop_unplug;
 
         /* queue parameters */
-        blk_queue_hardsect_size(lo->lo_queue, CFS_PAGE_SIZE);
+        blk_queue_logical_block_size(lo->lo_queue, CFS_PAGE_SIZE);
         blk_queue_max_sectors(lo->lo_queue,
                               LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
         blk_queue_max_phys_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);

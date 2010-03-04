@@ -795,5 +795,9 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
                 return -ENOSYS;
 }
 
+#ifndef HAVE_BLK_QUEUE_LOG_BLK_SIZE /* added in 2.6.31 */
+#define blk_queue_logical_block_size(q, sz) blk_queue_hardsect_size(q, sz)
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
