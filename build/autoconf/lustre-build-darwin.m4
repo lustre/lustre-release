@@ -16,7 +16,7 @@ AS_IF([AC_TRY_COMMAND(nm /mach | grep "[$1]" >/dev/null 2>/dev/null)],[
 	AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$ac_func])) $2
 ],[
 	AC_MSG_RESULT([no]) $3
-])dnl
+])
 done
 ])
 
