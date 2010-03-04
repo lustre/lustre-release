@@ -2101,6 +2101,73 @@ test_42d() {
 }
 run_test 42d "test complete truncate of file with cached dirty data"
 
+page_size() {
+	getconf PAGE_SIZE
+}
+
+test_42e() { # bug22074
+	local TDIR=$DIR/${tdir}e
+	local pagesz=$(page_size)
+	local pages=16
+	local files=$((OSTCOUNT * 500))	# hopefully 500 files on each OST
+	local proc_osc0="osc.${FSNAME}-OST0000-osc-[^MDT]*"
+	local max_dirty_mb
+	local warmup_files
+
+	mkdir -p $TDIR
+	$LFS setstripe -c 1 $TDIR
+	createmany -o $TDIR/f $files
+
+	max_dirty_mb=$($LCTL get_param -n $proc_osc0/max_dirty_mb)
+
+	# we assume that with $OSTCOUNT files, at least one of them will
+	# be allocated on OST0.
+	warmup_files=$((OSTCOUNT * max_dirty_mb))
+	createmany -o $TDIR/w $warmup_files
+
+	# write a large amount of data into one file and sync, to get good
+	# avail_grant number from OST.
+	for ((i=0; i<$warmup_files; i++)); do
+		idx=$($LFS getstripe -i $TDIR/w$i)
+		[ $idx -ne 0 ] && continue
+		dd if=/dev/zero of=$TDIR/w$i bs="$max_dirty_mb"M count=1
+		break
+	done
+	[ $i -gt $warmup_files ] && error "OST0 is still cold"
+	sync
+	$LCTL get_param $proc_osc0/cur_dirty_bytes
+	$LCTL get_param $proc_osc0/cur_grant_bytes
+
+	# create as much dirty pages as we can while not to trigger the actual
+	# RPCs directly. but depends on the env, VFS may trigger flush during this
+	# period, hopefully we are good.
+	for ((i=0; i<$warmup_files; i++)); do
+		idx=$($LFS getstripe -i $TDIR/w$i)
+		[ $idx -ne 0 ] && continue
+		dd if=/dev/zero of=$TDIR/w$i bs=1M count=1 2>/dev/null
+	done
+	$LCTL get_param $proc_osc0/cur_dirty_bytes
+	$LCTL get_param $proc_osc0/cur_grant_bytes
+
+	# perform the real test
+	$LCTL set_param $proc_osc0/rpc_stats 0
+	for ((;i<$files; i++)); do
+		[ $($LFS getstripe -i $TDIR/f$i) -eq 0 ] || continue
+		dd if=/dev/zero of=$TDIR/f$i bs=$pagesz count=$pages 2>/dev/null
+	done
+	sync
+	$LCTL get_param $proc_osc0/rpc_stats
+
+	$LCTL get_param $proc_osc0/rpc_stats |
+		while read PPR RRPC RPCT RCUM BAR WRPC WPCT WCUM; do
+			[ "$PPR" != "16:" ] && continue
+			[ $WPCT -lt 85 ] && error "$pages-page write RPCs only $WPCT% < 85%"
+			break # we only want the "pages per rpc" stat
+		done
+	rm -rf $TDIR
+}
+run_test 42e "verify sub-RPC writes are not done synchronously"
+
 test_43() {
 	mkdir -p $DIR/$tdir
 	cp -p /bin/ls $DIR/$tdir/$tfile
@@ -2225,10 +2292,6 @@ test_45() {
 	start_writeback
 }
 run_test 45 "osc io page accounting ============================"
-
-page_size() {
-	getconf PAGE_SIZE
-}
 
 # in a 2 stripe file (lov.sh), page 1023 maps to page 511 in its object.  this
 # test tickles a bug where re-dirtying a page was failing to be mapped to the
