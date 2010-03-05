@@ -6275,6 +6275,25 @@ test_180() {
 }
 run_test 180 "test obdecho ============================================"
 
+test_181() { # bug 22177
+        mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
+        # create enough files to index the directory
+        createmany -o $DIR/$tdir/foobar 4000
+        # print attributes for debug purpose
+        lsattr -d .
+        # open dir
+        multiop_bg_pause $DIR/$tdir D_Sc || return 1
+        MULTIPID=$!
+        # remove the files & current working dir
+        unlinkmany $DIR/$tdir/foobar 4000
+        rmdir $DIR/$tdir
+        kill -USR1 $MULTIPID
+        wait $MULTIPID
+        stat $DIR/$tdir && error "open-unlinked dir was not removed!"
+        return 0
+}
+run_test 181 "Test open-unlinked dir ========================"
+
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
 TGTPOOL_FIRST=1

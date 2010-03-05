@@ -1757,30 +1757,36 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
          * for linking and return real mode back then -bzzz */
         mode = inode->i_mode;
         inode->i_mode = S_IFREG;
-        /* avoid vfs_link upon 0 nlink inode */
-        ++inode->i_nlink;
+        /* avoid vfs_link upon 0 nlink inode, inc by 2 instead of 1 because
+         * ext3_inc_count() can reset i_nlink for indexed directory */
+        inode->i_nlink += 2;
         rc = ll_vfs_link(dentry, mds->mds_vfsmnt, pending_dir, pending_child,
                          mds->mds_vfsmnt);
         if (rc)
-                CERROR("error linking orphan %s to PENDING: rc = %d\n",
+                CERROR("error linking orphan %s %s to PENDING: rc = %d\n",
+                       S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : "other",
                        rec->ur_name, rc);
         else
                 mds_inode_set_orphan(inode);
 
         /* return mode and correct i_nlink if inode is directory */
         inode->i_mode = mode;
-        LASSERTF(inode->i_nlink == 2, "%s nlink == %d\n",
+        LASSERTF(rc || inode->i_nlink == 3, "%s nlink == %d\n",
                  S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : "other",
                  inode->i_nlink);
+
         if (S_ISDIR(mode)) {
                 pending_dir->i_nlink++;
                 if (pending_dir->i_sb->s_op->dirty_inode)
                         pending_dir->i_sb->s_op->dirty_inode(pending_dir);
-        } else {
-                --inode->i_nlink;
-                if (inode->i_sb->s_op->dirty_inode)
-                        inode->i_sb->s_op->dirty_inode(inode);
         }
+
+        inode->i_nlink -= 2;
+        if (inode->i_sb->s_op->dirty_inode)
+                inode->i_sb->s_op->dirty_inode(inode);
+
+        if (rc)
+                GOTO(out_dput, rc);
 
         GOTO(out_dput, rc = 1);
 out_dput:
@@ -2050,11 +2056,18 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         if (rc == 0 && child_inode->i_nlink == 0) {
-                if (mds_orphan_needed(obd, child_inode))
+                if (mds_orphan_needed(obd, child_inode)) {
                         rc = mds_orphan_add_link(rec, obd, dchild);
-
-                if (rc == 1)
-                        GOTO(cleanup, rc = 0);
+                        if (rc == 1)
+                                /* child inode was successfully linked
+                                 * to PENDING */
+                                GOTO(cleanup, rc = 0);
+                        else
+                                /* we failed to move the file to PENDING,
+                                 * really unlink the file as if there were
+                                 * no more openers */
+                                rc = 0;
+                }
 
                 if (!S_ISREG(child_inode->i_mode))
                         GOTO(cleanup, rc);
@@ -2740,11 +2753,18 @@ no_unlink:
         }
 
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
-                if (mds_orphan_needed(obd, new_inode))
+                if (mds_orphan_needed(obd, new_inode)) {
                         rc = mds_orphan_add_link(rec, obd, de_new);
 
-                if (rc == 1)
-                        GOTO(cleanup, rc = 0);
+                        if (rc == 1)
+                                /* inode successfully linked to PENDING */
+                                GOTO(cleanup, rc = 0);
+                        else
+                                /* we failed to move the file to PENDING,
+                                 * really unlink the file as if there were
+                                 * no more openers */
+                                rc = 0;
+                }
 
                 if (!S_ISREG(new_inode->i_mode))
                         GOTO(cleanup, rc);
