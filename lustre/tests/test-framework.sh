@@ -1311,6 +1311,10 @@ do_node() {
     return ${PIPESTATUS[0]}
 }
 
+do_nodev() {
+    do_node --verbose "$@"
+}
+
 single_local_node () {
    [ "$1" = "$HOSTNAME" ]
 }
@@ -1328,7 +1332,7 @@ do_nodes() {
 
     if $(single_local_node $rnodes); then
         if $verbose; then
-           do_node --verbose $rnodes "$@"
+           do_nodev $rnodes "$@"
         else
            do_node $rnodes "$@"
         fi
@@ -1360,6 +1364,10 @@ do_facet() {
     local HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo No host defined for facet ${facet} && exit 1
     do_node $HOST "$@"
+}
+
+do_nodesv() {
+    do_nodes --verbose "$@"
 }
 
 add() {
@@ -2521,7 +2529,7 @@ setstripe_nfsserver () {
 
     [ -z $nfsserver ] && echo "$dir is not nfs mounted" && return 1
 
-    do_node --verbose $nfsserver lfs setstripe "$@"
+    do_nodev $nfsserver lfs setstripe "$@"
 }
 
 check_runas_id_ret() {
@@ -2537,7 +2545,7 @@ check_runas_id_ret() {
     chmod 0755 $DIR
     chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
     if ! $myRUNAS touch $DIR/d0_runas_test/f$$ ; then
-        do_nodes --verbose $(comma_list $(nodes_list)) grep -w $myRUNAS_UID /etc/passwd
+        do_nodesv $(comma_list $(nodes_list)) grep -w $myRUNAS_UID /etc/passwd
         myRC=1
     fi
     rm -rf $DIR/d0_runas_test
@@ -2629,7 +2637,7 @@ calc_osc_kbytes () {
 # generate a stream of formatted strings (<node> <param name>=<param value>)
 save_lustre_params() {
         local s
-        do_nodes --verbose $1 "lctl get_param $2 | while read s; do echo \\\$s; done"
+        do_nodesv $1 "lctl get_param $2 | while read s; do echo \\\$s; done"
 }
 
 # restore lustre parameters from input stream, produces by save_lustre_params
@@ -2866,7 +2874,7 @@ do_rpc_nodes () {
     local list=$1
     shift
 
-    do_nodes --verbose $list "PATH=$LUSTRE/tests/:$PATH sh rpc.sh $@ " 
+    do_nodesv $list "PATH=$LUSTRE/tests/:$PATH sh rpc.sh $@ " 
 }
 
 wait_clients_import_state () {
