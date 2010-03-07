@@ -1372,11 +1372,6 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         RETURN(rc);
 }
 
-static int back_to_sleep(void *unused)
-{
-        return 0;
-}
-
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 {
         struct ptlrpc_request *req;

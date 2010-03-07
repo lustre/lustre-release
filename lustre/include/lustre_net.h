@@ -194,7 +194,7 @@ struct ptlrpc_request_set;
 typedef int (*set_interpreter_func)(struct ptlrpc_request_set *, void *, int);
 
 struct ptlrpc_request_set {
-        int               set_remaining; /* # uncompleted requests */
+        atomic_t          set_remaining; /* # uncompleted requests */
         cfs_waitq_t       set_waitq;
         cfs_waitq_t      *set_wakeup_ptr;
         struct list_head  set_requests;
@@ -326,7 +326,9 @@ struct ptlrpc_request {
                 rq_reply_truncate:1, /* reply is truncated */
                 rq_fake:1,          /* fake request - just for timeout only */
                 /* the request is queued to replay during recovery */
-                rq_copy_queued:1;
+                rq_copy_queued:1,
+                /* whether the "rq_set" is a valid one */
+                rq_invalid_rqset;
         enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
@@ -397,6 +399,7 @@ struct ptlrpc_request {
 
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
+        cfs_waitq_t      rq_set_waitq;
         struct ptlrpc_request_set *rq_set;
         int (*rq_interpret_reply)(struct ptlrpc_request *req, void *data,
                                   int rc); /* async interpret handler */

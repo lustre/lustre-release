@@ -594,6 +594,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         CFS_INIT_LIST_HEAD(&request->rq_history_list);
         CFS_INIT_LIST_HEAD(&request->rq_exp_list);
         cfs_waitq_init(&request->rq_reply_waitq);
+        cfs_waitq_init(&request->rq_set_waitq);
         request->rq_xid = ptlrpc_next_xid();
         atomic_set(&request->rq_refcount, 1);
 
@@ -650,6 +651,7 @@ struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
         CFS_INIT_LIST_HEAD(&request->rq_history_list);
         CFS_INIT_LIST_HEAD(&request->rq_exp_list);
         cfs_waitq_init(&request->rq_reply_waitq);
+        cfs_waitq_init(&request->rq_set_waitq);
 
         request->rq_xid = ptlrpc_next_xid();
         atomic_set(&request->rq_refcount, 1);
@@ -664,7 +666,7 @@ void ptlrpc_fakereq_finished(struct ptlrpc_request *req)
                 struct ptlrpc_request_set *set = req->rq_set;
 
                 if (set)
-                        set->set_remaining --;
+                        atomic_dec(&set->set_remaining);
         }
 
         ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
@@ -682,7 +684,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
                 RETURN(NULL);
         CFS_INIT_LIST_HEAD(&set->set_requests);
         cfs_waitq_init(&set->set_waitq);
-        set->set_remaining = 0;
+        atomic_set(&set->set_remaining, 0);
         spin_lock_init(&set->set_new_req_lock);
         CFS_INIT_LIST_HEAD(&set->set_new_requests);
         CFS_INIT_LIST_HEAD(&set->set_cblist);
@@ -700,7 +702,7 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
         ENTRY;
 
         /* Requests on the set should either all be completed, or all be new */
-        expected_phase = (set->set_remaining == 0) ?
+        expected_phase = (atomic_read(&set->set_remaining) == 0) ?
                          RQ_PHASE_COMPLETE : RQ_PHASE_NEW;
         list_for_each (tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
@@ -710,8 +712,9 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
                 n++;
         }
 
-        LASSERTF(set->set_remaining == 0 || set->set_remaining == n, "%d / %d\n",
-                 set->set_remaining, n);
+        LASSERTF(atomic_read(&set->set_remaining) == 0 || 
+                 atomic_read(&set->set_remaining) == n, "%d / %d\n",
+                 atomic_read(&set->set_remaining), n);
 
         list_for_each_safe(tmp, next, &set->set_requests) {
                 struct ptlrpc_request *req =
@@ -733,14 +736,19 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
                                 interpreter(req, &req->rq_async_args,
                                             req->rq_status);
                         }
-                        set->set_remaining--;
+                        atomic_dec(&set->set_remaining);
                 }
 
+                spin_lock(&req->rq_lock);
                 req->rq_set = NULL;
+                req->rq_invalid_rqset = 0;
+                spin_unlock(&req->rq_lock);
+
+                cfs_waitq_signal(&req->rq_set_waitq);
                 ptlrpc_req_finished (req);
         }
 
-        LASSERT(set->set_remaining == 0);
+        LASSERT(atomic_read(&set->set_remaining) == 0);
 
         OBD_FREE(set, sizeof(*set));
         EXIT;
@@ -767,9 +775,10 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
                         struct ptlrpc_request *req)
 {
         /* The set takes over the caller's request reference */
+        LASSERT(list_empty(&req->rq_set_chain));
         list_add_tail(&req->rq_set_chain, &set->set_requests);
         req->rq_set = set;
-        set->set_remaining++;
+        atomic_inc(&set->set_remaining);
 }
 
 /** 
@@ -792,6 +801,7 @@ int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
         /* 
          * The set takes over the caller's request reference. 
          */
+        LASSERT(list_empty(&req->rq_set_chain));
         list_add_tail(&req->rq_set_chain, &set->set_new_requests);
         req->rq_set = set;
         spin_unlock(&set->set_new_req_lock);
@@ -1164,7 +1174,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
         int force_timer_recalc = 0;
         ENTRY;
 
-        if (set->set_remaining == 0)
+        if (atomic_read(&set->set_remaining) == 0)
                 RETURN(1);
 
         list_for_each(tmp, &set->set_requests) {
@@ -1409,12 +1419,12 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
                 spin_unlock(&imp->imp_lock);
 
-                set->set_remaining--;
+                atomic_dec(&set->set_remaining);
                 cfs_waitq_broadcast(&imp->imp_recovery_waitq);
         }
 
         /* If we hit an error, we want to recover promptly. */
-        RETURN(set->set_remaining == 0 || force_timer_recalc);
+        RETURN(atomic_read(&set->set_remaining) == 0 || force_timer_recalc);
 }
 
 /* Return 1 if we should give up, else 0 */
@@ -1626,9 +1636,18 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                  * EINTR.
                  * I don't really care if we go once more round the loop in
                  * the error cases -eeb. */
-        } while (rc != 0 || set->set_remaining != 0);
+                if (rc == 0 && atomic_read(&set->set_remaining) == 0) {
+                        list_for_each(tmp, &set->set_requests) {
+                                req = list_entry(tmp, struct ptlrpc_request, 
+                                                 rq_set_chain);
+                                spin_lock(&req->rq_lock);
+                                req->rq_invalid_rqset = 1;
+                                spin_unlock(&req->rq_lock);
+                        }
+                }
+        } while (rc != 0 || atomic_read(&set->set_remaining) != 0);
 
-        LASSERT(set->set_remaining == 0);
+        LASSERT(atomic_read(&set->set_remaining) == 0);
 
         rc = 0;
         list_for_each(tmp, &set->set_requests) {

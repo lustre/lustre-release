@@ -595,6 +595,11 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  *
  */
 
+static inline int back_to_sleep(void *arg)
+{
+        return 0;
+}
+
 #define LWI_ON_SIGNAL_NOOP ((void (*)(void *))(-1))
 
 struct l_wait_info {
