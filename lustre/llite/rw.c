@@ -1343,14 +1343,19 @@ static int index_in_window(unsigned long index, unsigned long point,
 
 struct ll_thread_data *ll_td_get()
 {
+#if 0
         struct ll_thread_data *ltd = current->journal_info;
 
         LASSERT(ltd == NULL || ltd->ltd_magic == LTD_MAGIC);
         return ltd;
+#else
+        return NULL;
+#endif
 }
 
 void ll_td_set(struct ll_thread_data *ltd)
 {
+#if 0
         if (ltd == NULL) {
                 ltd = current->journal_info;
                 LASSERT(ltd == NULL || ltd->ltd_magic == LTD_MAGIC);
@@ -1361,6 +1366,7 @@ void ll_td_set(struct ll_thread_data *ltd)
         LASSERT(current->journal_info == NULL);
         LASSERT(ltd->ltd_magic == LTD_MAGIC);
         current->journal_info = ltd;
+#endif
 }
 
 static struct ll_readahead_state *ll_ras_get(struct file *f)
