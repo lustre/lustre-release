@@ -1372,7 +1372,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (!(msg_flags & MSG_REPLAY) && create_flags & MDS_OPEN_LOCK) {
                 ldlm_mode_t lm;
 
-                LASSERT(!created);
                 if (create_flags & FMODE_WRITE)
                         lm = LCK_CW;
                 else if (create_flags & MDS_FMODE_EXEC)
