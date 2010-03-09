@@ -950,6 +950,8 @@ start_client_loads () {
         testnum=$((nodenum % numloads))
         start_client_load ${clients[nodenum]} ${CLIENT_LOADS[testnum]}
     done
+    # bug 22169: wait the background threads to start
+    sleep 2
 }
 
 # only for remote client 
