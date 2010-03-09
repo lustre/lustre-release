@@ -1309,7 +1309,11 @@ test_25() {
 
     for i in $(seq 10); do
         create_pool_nofail pool$i
-	do_facet $SINGLEMDS lctl pool_add $FSNAME.pool$i OST0000
+        do_facet $SINGLEMDS "lctl pool_add $FSNAME.pool$i OST0000; sync"
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.pool$i | \
+            sort -u | tr '\n' ' ' " "$FSNAME-OST0000_UUID " || \
+            error "pool_add failed: $1; $2"
+
         stop $SINGLEMDS || return 1
         start $SINGLEMDS ${dev} $MDS_MOUNT_OPTS  || \
             { error "Failed to start $SINGLEMDS after stopping" && break; }
@@ -1317,6 +1321,7 @@ test_25() {
         clients_up
 
         # Veriy that the pool got created and is usable
+        df $POOL_ROOT
         echo "Creating a file in pool$i"
         create_file $POOL_ROOT/file$i pool$i || break
         check_file_in_pool $POOL_ROOT/file$i pool$i || break
