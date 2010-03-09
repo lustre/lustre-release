@@ -860,7 +860,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
         }
         cfs_put_cpu();
 
-        OBD_SLAB_ALLOC(llap, ll_async_page_slab, CFS_ALLOC_STD,
+        OBD_SLAB_ALLOC(llap, ll_async_page_slab, CFS_ALLOC_IO,
                        ll_async_page_slab_size);
         if (llap == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
