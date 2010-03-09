@@ -75,7 +75,7 @@ do_check_data () {
     echo "Checking file(s) data ... md5sum : "
     echo "$sums"
 
-    do_nodes --verbose $NODES_TO_USE "echo \\\"$sums\\\" | md5sum --check $sum" || \
+    do_nodesv $NODES_TO_USE "echo \\\"$sums\\\" | md5sum --check $sum" || \
         return ${PIPESTATUS[0]}
     return 0
 }
@@ -97,7 +97,7 @@ get_stat () {
 
     echo "Checking file(s) attributes ... "
 
-    do_nodes --verbose $NODES_TO_USE "set $TRACE;
+    do_nodesv $NODES_TO_USE "set $TRACE;
 for HOST in ${NODES_TO_USE//,/ } ; do 
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%u %g %s 0%a\\\" \\\$TESTFILE);
@@ -140,7 +140,7 @@ do_check_timestamps () {
 
     echo "Checking atime, mtime ... "
 
-    do_nodes --verbose $NODES_TO_USE "set $TRACE;
+    do_nodesv $NODES_TO_USE "set $TRACE;
 for HOST in ${NODES_TO_USE//,/ } ; do 
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%X %Y\\\" \\\$TESTFILE);

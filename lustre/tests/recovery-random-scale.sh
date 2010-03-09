@@ -190,12 +190,8 @@ fi
 start_client_loads $NODES_TO_USE
 
 echo clients load pids:
-if ! do_nodes $NODES_TO_USE "set -x; echo \$(hostname): && cat $LOAD_PID_FILE"; then
-    if [ -e $DEBUGLOG ]; then
-        exec 2<&-
-        cat $DEBUGLOG
+if ! do_nodesv $NODES_TO_USE "cat $LOAD_PID_FILE"; then
         exit 3
-    fi
 fi
 
 START_TS=$(date +%s)

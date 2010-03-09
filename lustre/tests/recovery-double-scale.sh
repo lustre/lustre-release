@@ -267,12 +267,8 @@ FAILOVER_PERIOD=${FAILOVER_PERIOD:-$((60*5))} # 5 minutes
 # Start client loads.
 start_client_loads $NODES_TO_USE
 echo clients load pids:
-if ! do_nodes $NODES_TO_USE "set -x; echo \$(hostname): && cat $TMP/client-load.pid"; then
-    if [ -e $DEBUGLOG ]; then
-        exec 2<&-
-        cat $DEBUGLOG
+if ! do_nodesv $NODES_TO_USE "cat $TMP/client-load.pid"; then
         exit 3
-    fi
 fi
 
 # FIXME: Do we want to have an initial sleep period where the clients 

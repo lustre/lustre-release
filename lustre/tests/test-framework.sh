@@ -404,7 +404,7 @@ check_gss_daemon_nodes() {
     local list=$1
     dname=$2
 
-    do_nodes --verbose $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
+    do_nodesv $list "num=\\\$(ps -o cmd -C $dname | grep $dname | wc -l);
 if [ \\\"\\\$num\\\" -ne 1 ]; then
     echo \\\$num instance of $dname;
     exit 1;
@@ -1535,6 +1535,10 @@ do_node() {
     return ${PIPESTATUS[0]}
 }
 
+do_nodev() {
+    do_node --verbose "$@"
+}
+
 single_local_node () {
    [ "$1" = "$HOSTNAME" ]
 }
@@ -1563,7 +1567,7 @@ do_nodes() {
 
     if single_local_node $rnodes; then
         if $verbose; then
-           do_node --verbose $rnodes "$@"
+           do_nodev $rnodes "$@"
         else
            do_node $rnodes "$@"
         fi
@@ -1595,6 +1599,10 @@ do_facet() {
     local HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo No host defined for facet ${facet} && exit 1
     do_node $HOST "$@"
+}
+
+do_nodesv() {
+    do_nodes --verbose "$@"
 }
 
 add() {
@@ -3001,7 +3009,7 @@ setstripe_nfsserver () {
 
     [ -z $nfsserver ] && echo "$dir is not nfs mounted" && return 1
 
-    do_node --verbose $nfsserver lfs setstripe "$@"
+    do_nodev $nfsserver lfs setstripe "$@"
 }
 
 check_runas_id_ret() {
@@ -3153,7 +3161,7 @@ calc_osc_kbytes () {
 # generate a stream of formatted strings (<node> <param name>=<param value>)
 save_lustre_params() {
         local s
-        do_nodes --verbose $1 "lctl get_param $2 | while read s; do echo \\\$s; done"
+        do_nodesv $1 "lctl get_param $2 | while read s; do echo \\\$s; done"
 }
 
 # restore lustre parameters from input stream, produces by save_lustre_params
@@ -3367,7 +3375,7 @@ do_rpc_nodes () {
 
     # Add paths to lustre tests for 32 and 64 bit systems.
     local RPATH="$RLUSTRE/tests:/usr/lib/lustre/tests:/usr/lib64/lustre/tests:$PATH"
-    do_nodes --verbose $list "PATH=$RPATH sh rpc.sh $@ "
+    do_nodesv $list "PATH=$RPATH sh rpc.sh $@ "
 }
 
 wait_clients_import_state () {
@@ -3528,7 +3536,7 @@ gather_logs () {
         return
     fi
 
-    do_nodes --verbose $list \
+    do_nodesv $list \
         "$LCTL dk > ${prefix}.debug_log.\\\$(hostname).${suffix};
          dmesg > ${prefix}.dmesg.\\\$(hostname).${suffix}"
     if [ ! -f $LOGDIR/shared ]; then
