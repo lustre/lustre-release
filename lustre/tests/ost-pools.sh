@@ -801,20 +801,20 @@ test_14() {
         i=$((i+1))
     done
 
-    # Fill OST $TGT_FIRST with 10M files
+    # Fill up OST0 until it is nearly full.
+    # Create 9 files of size OST0_SIZE/10 each.
     create_dir $POOL_ROOT/dir2 $POOL2 1
-    RC=0
-    i=0
-    while [[ $RC -eq 0 ]];
+    $LFS df $POOL_ROOT/dir2
+    echo "Filling up OST0"
+    OST0_SIZE=`$LFS df $POOL_ROOT/dir2 | awk '/\[OST:0\]/ {print $4}'`
+    FILE_SIZE=$((OST0_SIZE/1024/10))
+    i=1
+    while [[ $i -lt 10 ]];
     do
-      dd if=/dev/zero of=$POOL_ROOT/dir2/f${i} bs=1k count=$((1024*10))
-      RC=$?
+      dd if=/dev/zero of=$POOL_ROOT/dir2/f${i} bs=1M count=$FILE_SIZE
       i=$((i+1))
     done
-
-    # Leave some space on the OST
-    rm -f $POOL_ROOT/dir2/f0
-    df -h /mnt/ost?
+    $LFS df $POOL_ROOT/dir2
 
     # OST $TGT_FIRST is no longer favored; but it may still be used.
     create_dir $POOL_ROOT/dir3 $POOL 1
