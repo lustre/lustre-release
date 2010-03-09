@@ -449,8 +449,14 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 }
         }
 
-        if (it->it_op == IT_GETATTR)
+        if (it->it_op == IT_GETATTR) {
                 first = ll_statahead_enter(parent, &de, 0);
+                if (first == 1) {
+                        ll_statahead_exit(parent, de, 1);
+                        ll_finish_md_op_data(op_data);
+                        GOTO(out, rc = 1);
+                }
+        }
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
@@ -526,10 +532,14 @@ out:
                        "inode %p refc %d\n", de->d_name.len,
                        de->d_name.name, de, de->d_parent, de->d_inode,
                        atomic_read(&de->d_count));
-                ll_lookup_finish_locks(it, de);
-                lock_dentry(de);
-                de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                unlock_dentry(de);
+                if (first != 1) {
+                        if (de->d_flags & DCACHE_LUSTRE_INVALID) {
+                                lock_dentry(de);
+                                de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                                unlock_dentry(de);
+                        }
+                        ll_lookup_finish_locks(it, de);
+                }
         }
         RETURN(rc);
 
@@ -593,7 +603,7 @@ out_sa:
          */
         if (it && it->it_op == IT_GETATTR && rc == 1) {
                 first = ll_statahead_enter(parent, &de, 0);
-                if (!first)
+                if (first >= 0)
                         ll_statahead_exit(parent, de, 1);
                 else if (first == -EEXIST)
                         ll_statahead_mark(parent, de);

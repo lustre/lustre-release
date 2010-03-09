@@ -1549,9 +1549,8 @@ struct md_ops {
                                       struct md_enqueue_info *,
                                       struct ldlm_enqueue_info *);
 
-        int (*m_revalidate_lock)(struct obd_export *,
-                                 struct lookup_intent *,
-                                 struct lu_fid *);
+        int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
+                                 struct lu_fid *, __u32 *);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to

@@ -20,7 +20,7 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 require_dsh_mds || exit 0
 
 # Skip these tests
-# bug number:  17466 18857,15962
+# bug number:  17466 18857
 ALWAYS_EXCEPT="61d   33a 33b     $REPLAY_SINGLE_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then

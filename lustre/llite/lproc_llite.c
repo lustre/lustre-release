@@ -563,18 +563,10 @@ static int ll_rd_statahead_stats(char *page, char **start, off_t off,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
         return snprintf(page, count,
-                        "statahead wrong: %u\n"
                         "statahead total: %u\n"
-                        "ls blocked:      %llu\n"
-                        "ls cached:       %llu\n"
-                        "hit count:       %llu\n"
-                        "miss count:      %llu\n",
-                        sbi->ll_sa_wrong,
-                        sbi->ll_sa_total,
-                        sbi->ll_sa_blocked,
-                        sbi->ll_sa_cached,
-                        sbi->ll_sa_hit,
-                        sbi->ll_sa_miss);
+                        "statahead wrong: %u\n",
+                        atomic_read(&sbi->ll_sa_total),
+                        atomic_read(&sbi->ll_sa_wrong));
 }
 
 static int ll_rd_lazystatfs(char *page, char **start, off_t off,
