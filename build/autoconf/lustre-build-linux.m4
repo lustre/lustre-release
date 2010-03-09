@@ -119,6 +119,39 @@ LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
 
 ])
 
+# LB_ARG_REPLACE_PATH(PACKAGE, PATH)
+AC_DEFUN([LB_ARG_REPLACE_PATH],[
+	new_configure_args=
+	eval "set x $ac_configure_args"
+	shift
+	for arg; do
+		case $arg in
+			--with-[$1]=*)
+				arg=--with-[$1]=[$2]
+				;;
+			*\'*)
+				arg=$(printf %s\n ["$arg"] | \
+				      sed "s/'/'\\\\\\\\''/g")
+				;;
+		esac
+		dnl AS_VAR_APPEND([new_configure_args], [" '$arg'"])
+		new_configure_args="$new_configure_args \"$arg\""
+	done
+	ac_configure_args=$new_configure_args
+])
+
+# this is the work-horse of the next function
+AC_DEFUN([__LB_ARG_CANON_PATH], [
+	[$3]=$(readlink -f $with_$2)
+	LB_ARG_REPLACE_PATH([$1], $[$3])
+])
+
+# a front-end for the above function that transforms - and . in the
+# PACKAGE portion of --with-PACKAGE into _ suitable for variable names
+AC_DEFUN([LB_ARG_CANON_PATH], [
+	__LB_ARG_CANON_PATH([$1], m4_translit([$1], [-.], [__]), [$2])
+])
+
 #
 #
 # LB_LINUX_PATH
@@ -130,13 +163,7 @@ AC_DEFUN([LB_LINUX_PATH],
 AC_ARG_WITH([linux],
 	AC_HELP_STRING([--with-linux=path],
 		       [set path to Linux source (default=/usr/src/linux)]),
-	[
-		if ! [[[ $with_linux = /* ]]]; then
-			AC_MSG_ERROR([You must provide an absolute pathname to the --with-linux= option.])
-		else
-			LINUX=$with_linux
-		fi
-	],
+	[LB_ARG_CANON_PATH([linux], [LINUX])],
 	[LINUX=/usr/src/linux])
 AC_MSG_RESULT([$LINUX])
 AC_SUBST(LINUX)
@@ -150,7 +177,7 @@ AC_MSG_CHECKING([for Linux objects dir])
 AC_ARG_WITH([linux-obj],
 	AC_HELP_STRING([--with-linux-obj=path],
 			[set path to Linux objects dir (default=$LINUX)]),
-	[LINUX_OBJ=$with_linux_obj],
+	[LB_ARG_CANON_PATH([linux-obj], [LINUX_OBJ])],
 	[LINUX_OBJ=$LINUX])
 AC_MSG_RESULT([$LINUX_OBJ])
 AC_SUBST(LINUX_OBJ)
@@ -159,7 +186,7 @@ AC_SUBST(LINUX_OBJ)
 AC_ARG_WITH([linux-config],
 	[AC_HELP_STRING([--with-linux-config=path],
 			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
-	[LINUX_CONFIG=$with_linux_config],
+	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
 	[LINUX_CONFIG=$LINUX_OBJ/.config])
 AC_SUBST(LINUX_CONFIG)
 
@@ -171,7 +198,7 @@ LB_CHECK_FILE([/boot/kernel.h],
 AC_ARG_WITH([kernel-source-header],
 	AC_HELP_STRING([--with-kernel-source-header=path],
 			[Use a different kernel version header.  Consult build/README.kernel-source for details.]),
-	[KERNEL_SOURCE_HEADER=$with_kernel_source_header])
+	[LB_ARG_CANON_PATH([kernel-source-header], [KERNEL_SOURCE_HEADER])])
 
 # ------------ .config exists ----------------
 LB_CHECK_FILE([$LINUX_CONFIG],[],
