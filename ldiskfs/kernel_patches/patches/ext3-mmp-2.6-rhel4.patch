@@ -95,8 +95,8 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
 +	ext3_warning(sb, function, msg);
 +	ext3_warning(sb, function, "MMP failure info: last update time: %llu, "
 +		     "last update node: %s, last update device: %s\n",
-+		     le64_to_cpu(mmp->mmp_time), mmp->mmp_nodename,
-+		     mmp->mmp_bdevname);
++		     (long long unsigned int)le64_to_cpu(mmp->mmp_time),
++		     mmp->mmp_nodename, mmp->mmp_bdevname);
 +}
 +
 +/*
