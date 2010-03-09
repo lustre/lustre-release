@@ -2414,9 +2414,14 @@ static int mdd_links_add(const struct lu_env *env,
         rc = __mdd_xattr_set(env, mdd_obj,
                              mdd_buf_get_const(env, buf->lb_buf, leh->leh_len),
                              XATTR_NAME_LINK, 0, handle);
-        if (rc)
-                CERROR("link_ea add failed %d "DFID"\n", rc,
-                       PFID(mdd_object_fid(mdd_obj)));
+        if (rc) {
+                if (rc == -ENOSPC)
+                        CDEBUG(D_INODE, "link_ea add failed %d "DFID"\n", rc,
+                               PFID(mdd_object_fid(mdd_obj)));
+                else
+                        CERROR("link_ea add failed %d "DFID"\n", rc,
+                               PFID(mdd_object_fid(mdd_obj)));
+        }
 
         if (buf->lb_vmalloc)
                 /* if we vmalloced a large buffer drop it */
@@ -2453,8 +2458,12 @@ static int mdd_links_rename(const struct lu_env *env,
         buf = mdd_links_get(env, mdd_obj);
         if (IS_ERR(buf)) {
                 rc = PTR_ERR(buf);
-                CERROR("link_ea read failed %d "DFID"\n",
-                       rc, PFID(mdd_object_fid(mdd_obj)));
+                if (rc == -ENODATA)
+                        CDEBUG(D_INODE, "link_ea read failed %d "DFID"\n",
+                               rc, PFID(mdd_object_fid(mdd_obj)));
+                else
+                        CERROR("link_ea read failed %d "DFID"\n",
+                               rc, PFID(mdd_object_fid(mdd_obj)));
                 RETURN(rc);
         }
         leh = buf->lb_buf;
