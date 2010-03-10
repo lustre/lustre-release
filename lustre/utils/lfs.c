@@ -2071,7 +2071,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
                                 ? LPU64 : "["LPU64"]", dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
-                               numbuf[2], bover > 1 ? timebuf : "");
+                               numbuf[2], bover > 1 ? timebuf : "-");
 
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
@@ -2089,7 +2089,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
                         if (type != OST_QUOTA_INFO)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],
-                                       numbuf[2], iover > 1 ? timebuf : "");
+                                       numbuf[2], iover > 1 ? timebuf : "-");
                         printf("\n");
                 }
         } else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
