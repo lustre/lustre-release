@@ -2376,3 +2376,24 @@ int llapi_path2fid(const char *path, lustre_fid *fid)
         close(fd);
         return rc;
 }
+
+int llapi_server_major_version(const char *mnt)
+{
+        DIR *root;
+        int ver = 0, rc;
+
+        root = opendir(mnt);
+        if (!root) {
+                llapi_err(LLAPI_MSG_ERROR, "open %s failed", mnt);
+                return -1;
+        }
+
+        rc = ioctl(dirfd(root), LL_IOC_SERVER_MAJOR_VERSION, &ver);
+        closedir(root);
+        if (rc < 0) {
+                llapi_err(LLAPI_MSG_ERROR,
+                          "ioctl on %s for server major version failed", mnt);
+                return rc;
+        }
+        return ver;
+}

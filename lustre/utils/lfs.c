@@ -329,7 +329,7 @@ static int lfs_setstripe(int argc, char **argv)
                 st_offset = strtoul(stripe_off_arg, &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
-                                        argv[0], stripe_off_arg);
+                                argv[0], stripe_off_arg);
                         return CMD_HELP;
                 }
         }
@@ -338,7 +338,7 @@ static int lfs_setstripe(int argc, char **argv)
                 st_count = strtoul(stripe_count_arg, &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe count '%s'\n",
-                                        argv[0], stripe_count_arg);
+                                argv[0], stripe_count_arg);
                         return CMD_HELP;
                 }
         }
@@ -532,7 +532,7 @@ static int lfs_find(int argc, char **argv)
                          */
                         if (strcmp(optarg, "!") == 0)
                                 neg_opt = 2;
-                      break;
+                        break;
                 case 'A':
                         xtime = &param.atime;
                         xsign = &param.asign;
@@ -731,7 +731,7 @@ static int lfs_find(int argc, char **argv)
 
         if (pathstart == -1) {
                 fprintf(stderr, "error: %s: no filename|pathname\n",
-                                argv[0]);
+                        argv[0]);
                 return CMD_HELP;
         } else if (pathend == -1) {
                 /* no options */
@@ -1307,8 +1307,7 @@ static int lfs_quotacheck(int argc, char **argv)
         struct if_quotactl qctl;
         char *obd_type = (char *)qchk.obd_type;
         int rc;
-
-        memset(&qchk, 0, sizeof(qchk));
+        int version;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ug")) != -1) {
@@ -1335,16 +1334,22 @@ static int lfs_quotacheck(int argc, char **argv)
                 return CMD_HELP;
 
         mnt = argv[optind];
+        version = llapi_server_major_version(mnt);
+        if (version < 0)
+                return version;
 
-        memset(&qctl, 0, sizeof(qctl));
-        qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
-        qctl.qc_type = check_type;
-        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
-                                    * take this parameter into account */
-        rc = llapi_quotactl(mnt, &qctl);
-        if (rc) {
-                fprintf(stderr, "quota off failed: %s\n", strerror(errno));
-                return rc;
+        /* For b1_8 server */
+        if (version < SERVER_MAJOR_VERSION_V2) {
+                memset(&qctl, 0, sizeof(qctl));
+                qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
+                qctl.qc_type = check_type;
+                qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                            * take this parameter into account */
+                rc = llapi_quotactl(mnt, &qctl);
+                if (rc) {
+                        fprintf(stderr, "quota off failed: %s\n", strerror(errno));
+                        return rc;
+                }
         }
 
         rc = llapi_quotacheck(mnt, check_type);
@@ -1353,6 +1358,7 @@ static int lfs_quotacheck(int argc, char **argv)
                 return rc;
         }
 
+        memset(&qchk, 0, sizeof(qchk));
         rc = llapi_poll_quotacheck(mnt, &qchk);
         if (rc) {
                 if (*obd_type)
@@ -1365,19 +1371,24 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
         qctl.qc_type = check_type;
-        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
-                                    * take this parameter into account */
+        if (version < SERVER_MAJOR_VERSION_V2)
+                qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                            * take this parameter into account */
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", (char *)qctl.obd_type,
-                                obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "%s turn on quota failed: %s\n",
-                        argv[0], strerror(errno));
-                return rc;
+                if (version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) {
+                        /* This is for 2.0 server. */
+                        rc = 0;
+                } else {
+                        if (*obd_type)
+                                fprintf(stderr, "%s %s ", (char *)qctl.obd_type,
+                                        obd_uuid2str(&qctl.obd_uuid));
+                        fprintf(stderr, "%s turn on quota failed: %s\n",
+                                argv[0], strerror(errno));
+                }
         }
 
-        return 0;
+        return rc;
 }
 
 static int lfs_quotaon(int argc, char **argv)
@@ -1387,11 +1398,10 @@ static int lfs_quotaon(int argc, char **argv)
         struct if_quotactl qctl;
         char *obd_type = (char *)qctl.obd_type;
         int rc;
+        int version;
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
-        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
-                                    * take this parameter into account */
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugf")) != -1) {
@@ -1421,22 +1431,34 @@ static int lfs_quotaon(int argc, char **argv)
                 return CMD_HELP;
 
         mnt = argv[optind];
+        version = llapi_server_major_version(mnt);
+        if (version < 0)
+                return version;
+
+        if (version < SERVER_MAJOR_VERSION_V2)
+                qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                            * take this parameter into account */
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type,
-                                obd_uuid2str(&qctl.obd_uuid));
-                if (errno == ENOENT)
+                if (version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) {
+                        /* This is for 2.0 server. */
+                        fprintf(stderr, "\n%s quotas are enabled already.\n",
+                                qctl.qc_type == 0x00 ? "user" : "group");
+                        rc = 0;
+                } else if (errno == ENOENT) {
                         fprintf(stderr, "error: cannot find quota database, "
                                         "make sure you have run quotacheck\n");
-                else
-                        fprintf(stderr, "error: quotaon failed (%s)\n",
+                } else {
+                        if (*obd_type)
+                                fprintf(stderr, "%s %s ", obd_type,
+                                        obd_uuid2str(&qctl.obd_uuid));
+                        fprintf(stderr, "%s failed: %s\n", argv[0],
                                 strerror(errno));
-                return rc;
+                }
         }
 
-        return 0;
+        return rc;
 }
 
 static int lfs_quotaoff(int argc, char **argv)
@@ -1446,6 +1468,7 @@ static int lfs_quotaoff(int argc, char **argv)
         struct if_quotactl qctl;
         char *obd_type = (char *)qctl.obd_type;
         int rc;
+        int version;
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
@@ -1475,22 +1498,27 @@ static int lfs_quotaoff(int argc, char **argv)
                 return CMD_HELP;
 
         mnt = argv[optind];
+        version = llapi_server_major_version(mnt);
+        if (version < 0)
+                return version;
 
         rc = llapi_quotactl(mnt, &qctl);
-        if (rc == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n",
-                        qctl.qc_type == 0x00 ? "user" : "group");
-                return 0;
-        }
         if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type,
-                                obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "quotaoff failed: %s\n", strerror(errno));
-                return rc;
+                if ((version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) ||
+                    (version < SERVER_MAJOR_VERSION_V2 && errno == ESRCH)) {
+                        fprintf(stderr, "\n%s quotas are not enabled.\n",
+                                qctl.qc_type == 0x00 ? "user" : "group");
+                        rc = 0;
+                } else {
+                        if (*obd_type)
+                                fprintf(stderr, "%s %s ", obd_type,
+                                        obd_uuid2str(&qctl.obd_uuid));
+                        fprintf(stderr, "quotaoff failed: %s\n",
+                                strerror(errno));
+                }
         }
 
-        return 0;
+        return rc;
 }
 
 static int lfs_quotainv(int argc, char **argv)
@@ -2163,6 +2191,7 @@ static int lfs_quota(int argc, char **argv)
         int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, inacc;
         int pass = 0;
         char *endptr;
+        int version;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:v")) != -1) {
@@ -2242,12 +2271,18 @@ ug_output:
                 print_quota_title(name, &qctl);
 
         mnt = argv[optind];
+        version = llapi_server_major_version(mnt);
+        if (version < 0)
+                goto out;
 
         rc1 = llapi_quotactl(mnt, &qctl);
-        if (rc1 == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n",
-                        qctl.qc_type == USRQUOTA ? "user" : "group");
-                goto out;
+        if (rc1 == -1) {
+                if ((version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) ||
+                    (version < SERVER_MAJOR_VERSION_V2 && errno == ESRCH)) {
+                        fprintf(stderr, "\n%s quotas are not enabled.\n",
+                                qctl.qc_type == USRQUOTA ? "user" : "group");
+                        goto out;
+                }
         }
         if (rc1 && *obd_type)
                 fprintf(stderr, "%s %s ", obd_type, obd_uuid);

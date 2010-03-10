@@ -1591,6 +1591,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 RETURN(0);
         }
+        case LL_IOC_SERVER_MAJOR_VERSION: {
+                int version = SERVER_MAJOR_VERSION_V1;
+
+                if (sbi->ll_mdc_exp->exp_connect_flags & OBD_CONNECT_FID)
+                        version = SERVER_MAJOR_VERSION_V2;
+                if (copy_to_user((void *)arg, &version, sizeof(int)))
+                        RETURN(-EFAULT);
+                RETURN(0);
+        }
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg));
         }

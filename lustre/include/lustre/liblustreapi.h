@@ -183,3 +183,4 @@ extern int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk);
 extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
 extern int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb);
 #endif
+extern int llapi_server_major_version(const char *mnt);
