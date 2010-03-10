@@ -725,7 +725,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
                 { error "Failed to mount $MOUNT2"; return 2; }
 	sleep 1 # wait connections being established
 
-	local MDS_NEXP=$(do_facet mds lctl get_param -n mds.${mds_svc}.num_exports | cut -d' ' -f2)
+	local dev=$(get_mds_mdt_device_proc_path)
+	local MDS_NEXP=$(do_facet mds lctl get_param -n $dev.${mds_svc}.num_exports | cut -d' ' -f2)
 	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
 
 	echo starting with $OST_NEXP OST and $MDS_NEXP MDS exports

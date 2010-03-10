@@ -875,9 +875,10 @@ test_44a() { # was test_44
         at_max_set 40 mds
     fi
 
+    local dev=$(get_mds_mdt_device_proc_path)
     for i in `seq 1 10`; do
         echo "$i of 10 ($(date +%s))"
-        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+        do_facet mds "lctl get_param -n mdt.*.$dev.timeouts | grep service"
         #define OBD_FAIL_TGT_CONN_RACE     0x701
         do_facet mds "lctl set_param fail_loc=0x80000701"
         # lctl below may fail, it is valid case
@@ -896,9 +897,10 @@ test_44b() {
     [ "$mdcdev" ] || return 2
     [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
 
+    local dev=$(get_mds_mdt_device_proc_path)
     for i in `seq 1 10`; do
         echo "$i of 10 ($(date +%s))"
-        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+        do_facet mds "lctl get_param -n mdt.*.$dev.timeouts | grep service"
         #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
         do_facet mds "lctl set_param fail_loc=0x80000704"
         # lctl below may fail, it is valid case
