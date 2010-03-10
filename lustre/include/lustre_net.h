@@ -328,7 +328,7 @@ struct ptlrpc_request {
                 /* the request is queued to replay during recovery */
                 rq_copy_queued:1,
                 /* whether the "rq_set" is a valid one */
-                rq_invalid_rqset;
+                rq_invalid_rqset:1;
         enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
