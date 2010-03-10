@@ -6494,6 +6494,15 @@ test_900() {
 }
 run_test 900 "umount should not race with any mgc requeue thread"
 
+test_910() {
+        local nid_cp
+
+        umount $MOUNT
+	do_facet mds lctl set_param mds.${FSNAME}-MDT*.exports.clear=0
+        stop mds
+}
+run_test 910 "umount server after clear nid_stats should not hit LBUG"
+
 log "cleanup: ======================================================"
 check_and_cleanup_lustre
 if [ "$I_MOUNTED" != "yes" ]; then
