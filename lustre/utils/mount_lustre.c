@@ -291,18 +291,19 @@ int parse_options(char *orig_options, int *flagp)
                  * manner */
                 arg = opt;
                 val = strchr(opt, '=');
-                if (val != NULL) {
-                        if (strncmp(arg, "md_stripe_cache_size", 20) == 0) {
-                                md_stripe_cache_size = atoi(val + 1);
-                        } else if (strncmp(arg, "retry", 5) == 0) {
-                                retry = atoi(val + 1);
-                                if (retry > MAX_RETRIES)
-                                        retry = MAX_RETRIES;
-                                else if (retry < 0)
-                                        retry = 0;
-                        } else if (strncmp(arg, "mgssec", 6) == 0) {
-                                append_option(options, opt);
-                        }
+                /* please note that some ldiskfs mount options are also in the form
+                 * of param=value. We should pay attention not to remove those
+                 * mount options, see bug 22097. */
+                if (val && strncmp(arg, "md_stripe_cache_size", 20) == 0) {
+                        md_stripe_cache_size = atoi(val + 1);
+                } else if (val && strncmp(arg, "retry", 5) == 0) {
+                        retry = atoi(val + 1);
+                        if (retry > MAX_RETRIES)
+                                retry = MAX_RETRIES;
+                        else if (retry < 0)
+                                retry = 0;
+                } else if (val && strncmp(arg, "mgssec", 6) == 0) {
+                        append_option(options, opt);
                 } else if (strncmp(opt, "force", 5) == 0) {
                         //XXX special check for 'force' option
                         ++force;
