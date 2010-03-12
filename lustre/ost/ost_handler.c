@@ -1397,22 +1397,11 @@ int ost_blocking_ast(struct ldlm_lock *lock,
                 if (!oinfo)
                         RETURN(-ENOMEM);
 
-                OBDO_ALLOC(oinfo->oi_oa);
-                if (!oinfo->oi_oa) {
-                        OBD_FREE_PTR(oinfo);
-                        RETURN(-ENOMEM);
-                }
-
-                oinfo->oi_oa->o_id = lock->l_resource->lr_name.name[0];
-                oinfo->oi_oa->o_valid = OBD_MD_FLID;
-
-                rc = obd_sync_rqset(lock->l_export, oinfo,
-                                    lock->l_policy_data.l_extent.start,
-                                    lock->l_policy_data.l_extent.end);
+                /* force journal commit through fs sync */
+                rc = obd_sync(lock->l_export, oinfo, 0, 0, NULL);
                 if (rc)
                         CERROR("Error %d syncing data on lock cancel\n", rc);
 
-                OBDO_FREE(oinfo->oi_oa);
                 OBD_FREE_PTR(oinfo);
         }
 
