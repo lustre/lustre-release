@@ -2326,7 +2326,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         rc = obd_statfs(client_obd, &stat_buf,
                         cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 1);
         if (rc)
-                GOTO(out_statfs, rc);
+                GOTO(out_uuid, rc);
 
         if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
                 GOTO(out_statfs, rc = -EFAULT);
