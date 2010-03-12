@@ -437,11 +437,18 @@ quota_save_version() {
     local ver=$(tr -c -d "123" <<< $spec)
     local type=$(tr -c -d "ug" <<< $spec)
 
-    $LFS quotaoff -ug $MOUNT # just in case
-    [ -n "$ver" ] && quota_set_version $ver
+    local lustre_version=$(get_lustre_version mds)
+    if [[ $lustre_version = 1.8* ]] ; then
+        $LFS quotaoff -ug $MOUNT # just in case
+        [ -n "$ver" ] && quota_set_version $ver
+    else
+        echo mds running $lustre_version 
+        [ -n "$ver" -a "$ver" != "3" ] && error "wrong quota version specifier"
+    fi
+
     [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
-    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$spec"
+    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.md*.quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
@@ -454,7 +461,7 @@ quota_save_version() {
 quota_type () {
     local fsname=${1:-$FSNAME}
     local rc=0
-    do_facet mgs lctl get_param mds.${fsname}-MDT*.quota_type || rc=$?
+    do_facet mgs lctl get_param md*.${fsname}-MDT*.quota_type || rc=$?
     do_nodes $(comma_list $(osts_nodes)) \
         lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
     return $rc
@@ -479,6 +486,7 @@ setup_quota(){
     # Suppose that quota type the same on mds and ost
     local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
     [ ${PIPESTATUS[0]} -eq 0 ] || error "quota_type failed!"
+    echo "[HOST:$HOSTNAME] [old_quota_type:$quota_type] [new_quota_type:$QUOTA_TYPE]"
     if [ "$quota_type" != "$QUOTA_TYPE" ]; then
         export old_QUOTA_TYPE=$quota_type
         quota_save_version $QUOTA_TYPE
