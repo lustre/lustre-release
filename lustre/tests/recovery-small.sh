@@ -1036,7 +1036,9 @@ run_test 59 "Read cancel race on client eviction"
 
 test_61()
 {
-	local cflags='osc.*-OST0000-osc.connect_flags'
+	
+	local mdtosc=$(get_mdtosc_proc_path ${ost1_svc})
+	local cflags=osc.$mdtosc.connect_flags
 	do_facet mds "lctl get_param -n $cflags |grep -q skip_orphan"
 	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
 
@@ -1046,12 +1048,12 @@ test_61()
 
 	replay_barrier mds
 	createmany -o $DIR/d61/$tfile-%d 10 
-	local oid=`do_facet ost1 "lctl get_param -n obdfilter.*OST0000.last_id"`
+	local oid=`do_facet ost1 "lctl get_param -n obdfilter.${ost1_svc}.last_id"`
 
 	fail_abort mds
 	
 	touch $DIR/d61/$tfile
-	local id=`$LFS getstripe $DIR/d61/$tfile | awk '$2 ~ /^[1-9]+/ {print $2}'`
+	local id=`$LFS getstripe $DIR/d61/$tfile | awk '($1 ~ 0 && $2 ~ /^[1-9]+/) {print $2}'`
 	[ $id -le $oid ] && error "the orphan objid was reused, failed"
 
 	# Cleanup
