@@ -714,6 +714,37 @@ out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
         return rc;
 }
+/**
+ * lock the part of the directory according to the hash of the name
+ * (lh->mlh_pdo_hash) in parallel directory lock.
+ */
+static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
+                       struct mdt_lock_handle *lh,
+                       struct mdt_object *obj, __u64 ibits)
+{
+        struct ldlm_res_id *res_id = &info->mti_res_id;
+        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+        ldlm_policy_data_t *policy = &info->mti_policy;
+        int rc;
+
+        /*
+         * Finish res_id initializing by name hash marking part of
+         * directory which is taking modification.
+         */
+        LASSERT(lh->mlh_pdo_hash != 0);
+        fid_build_pdo_res_name(mdt_object_fid(obj), lh->mlh_pdo_hash, res_id);
+        memset(policy, 0, sizeof(*policy));
+        policy->l_inodebits.bits = ibits;
+        /*
+         * Use LDLM_FL_LOCAL_ONLY for this lock. We do not know yet if it is
+         * going to be sent to client. If it is - mdt_intent_policy() path will
+         * fix it up and turn FL_LOCAL flag off.
+         */
+        rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
+                          res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB,
+                          &info->mti_exp->exp_handle.h_cookie);
+        return rc;
+}
 
 /* partial operation for rename */
 static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
@@ -941,6 +972,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
                 mdt_object_get(info->mti_env, msrcdir);
                 mtgtdir = msrcdir;
+                if (lh_tgtdirp->mlh_pdo_hash != lh_srcdirp->mlh_pdo_hash) {
+                         rc = mdt_pdir_hash_lock(info, lh_tgtdirp, mtgtdir,
+                                                 MDS_INODELOCK_UPDATE);
+                         if (rc)
+                                 GOTO(out_unlock_source, rc);
+                }
         } else {
                 mtgtdir = mdt_object_find(info->mti_env, info->mti_mdt,
                                           rr->rr_fid2);
