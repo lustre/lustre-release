@@ -1994,6 +1994,9 @@ test_73c() {
 run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 
 test_80a() {
+    do_facet ost1 "lctl get_param obdfilter.${ost1_svc}.sync_journal" ||
+        { skip "sync journal is not implemeted" && return; }
+
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
     replay_barrier ost1
@@ -2011,8 +2014,11 @@ test_80a() {
 run_test 80a "write replay"
 
 test_80b() {
-    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
+    do_facet ost1 "lctl get_param obdfilter.${ost1_svc}.sync_journal" ||
+        { skip "sync journal is not implemeted" && return; }
 
+    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
+    
     replay_barrier ost1
     lfs setstripe -i 0 -c 1 $DIR/$tfile
     dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
