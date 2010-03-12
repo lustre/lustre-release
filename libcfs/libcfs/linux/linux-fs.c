@@ -75,11 +75,12 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 
 	fs = get_fs();
 	set_fs(KERNEL_DS);
-	while (count > 0) {
+	while ((ssize_t)count > 0) {
 		size = filp->f_op->write(filp, (char *)buf, count, offset);
 		if (size < 0)
 			break;
 		count -= size;
+                buf += size;
 		size = 0;
 	}
 	set_fs(fs);

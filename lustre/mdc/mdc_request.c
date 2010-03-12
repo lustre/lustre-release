@@ -1165,6 +1165,159 @@ out:
         return rc;
 }
 
+static struct kuc_hdr *changelog_kuc_hdr(char *buf, int len, int flags)
+{
+        struct kuc_hdr *lh = (struct kuc_hdr *)buf;
+
+        LASSERT(len <= CR_MAXSIZE);
+
+        lh->kuc_magic = KUC_MAGIC;
+        lh->kuc_transport = KUC_TRANSPORT_CHANGELOG;
+        lh->kuc_flags = flags;
+        lh->kuc_msgtype = CL_RECORD;
+        lh->kuc_msglen = len;
+        return lh;
+}
+
+#define D_CHANGELOG 0
+
+struct changelog_show {
+        __u64       cs_startrec;
+        __u32       cs_flags;
+        cfs_file_t *cs_fp;
+        char       *cs_buf;
+        struct obd_device *cs_obd;
+};
+
+static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
+                             void *data)
+{
+        struct changelog_show *cs = data;
+        struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
+        struct kuc_hdr *lh;
+        int len, rc;
+        ENTRY;
+
+        if ((rec->cr_hdr.lrh_type != CHANGELOG_REC) ||
+            (rec->cr.cr_type >= CL_LAST)) {
+                CERROR("Not a changelog rec %d/%d\n", rec->cr_hdr.lrh_type,
+                       rec->cr.cr_type);
+                RETURN(-EINVAL);
+        }
+
+        if (rec->cr.cr_index < cs->cs_startrec) {
+                /* Skip entries earlier than what we are interested in */
+                CDEBUG(D_CHANGELOG, "rec="LPU64" start="LPU64"\n",
+                       rec->cr.cr_index, cs->cs_startrec);
+                RETURN(0);
+        }
+
+        CDEBUG(D_CHANGELOG, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID
+               " %.*s\n", rec->cr.cr_index, rec->cr.cr_type,
+               changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
+               rec->cr.cr_flags & CLF_FLAGMASK,
+               PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
+               rec->cr.cr_namelen, rec->cr.cr_name);
+
+        len = sizeof(*lh) + sizeof(rec->cr) + rec->cr.cr_namelen;
+
+        /* Set up the message */
+        lh = changelog_kuc_hdr(cs->cs_buf, len, cs->cs_flags);
+        memcpy(lh + 1, &rec->cr, len - sizeof(*lh));
+
+        rc = libcfs_kkuc_msg_put(cs->cs_fp, lh);
+        CDEBUG(D_CHANGELOG, "kucmsg fp %p len %d rc %d\n", cs->cs_fp, len,rc);
+
+        RETURN(rc);
+}
+
+static int mdc_changelog_send_thread(void *csdata)
+{
+        struct changelog_show *cs = csdata;
+        struct llog_ctxt *ctxt = NULL;
+        struct llog_handle *llh = NULL;
+        struct kuc_hdr *kuch;
+        int rc;
+
+        CDEBUG(D_CHANGELOG, "changelog to fp=%p start "LPU64"\n",
+               cs->cs_fp, cs->cs_startrec);
+
+        OBD_ALLOC(cs->cs_buf, CR_MAXSIZE);
+        if (cs->cs_buf == NULL)
+                GOTO(out, rc = -ENOMEM);
+
+        /* Set up the remote catalog handle */
+        ctxt = llog_get_context(cs->cs_obd, LLOG_CHANGELOG_REPL_CTXT);
+        if (ctxt == NULL)
+                GOTO(out, rc = -ENOENT);
+        rc = llog_create(ctxt, &llh, NULL, CHANGELOG_CATALOG);
+        if (rc) {
+                CERROR("llog_create() failed %d\n", rc);
+                GOTO(out, rc);
+        }
+        rc = llog_init_handle(llh, LLOG_F_IS_CAT, NULL);
+        if (rc) {
+                CERROR("llog_init_handle failed %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        /* We need the pipe fd open, so llog_process can't daemonize */
+        rc = llog_cat_process_flags(llh, changelog_show_cb, cs,
+                                    LLOG_FLAG_NODEAMON, 0, 0);
+
+        /* Send EOF no matter what our result */
+        if ((kuch = changelog_kuc_hdr(cs->cs_buf, sizeof(*kuch),
+                                      cs->cs_flags))) {
+                kuch->kuc_msgtype = CL_EOF;
+                libcfs_kkuc_msg_put(cs->cs_fp, kuch);
+        }
+
+out:
+        cfs_put_file(cs->cs_fp);
+        if (llh)
+                llog_cat_put(llh);
+        if (ctxt)
+                llog_ctxt_put(ctxt);
+        if (cs->cs_buf)
+                OBD_FREE(cs->cs_buf, CR_MAXSIZE);
+        OBD_FREE_PTR(cs);
+        return rc;
+}
+
+static int mdc_ioc_changelog_send(struct obd_device *obd,
+                                  struct ioc_changelog *icc)
+{
+        struct changelog_show *cs;
+        int rc;
+
+        /* Freed in mdc_changelog_send_thread */
+        OBD_ALLOC_PTR(cs);
+        if (!cs)
+                return -ENOMEM;
+
+        cs->cs_obd = obd;
+        cs->cs_startrec = icc->icc_recno;
+        /* matching cfs_put_file in mdc_changelog_send_thread */
+        cs->cs_fp = cfs_get_fd(icc->icc_id);
+        cs->cs_flags = icc->icc_flags;
+
+        /* New thread because we should return to user app before
+           writing into our pipe */
+        rc = cfs_kernel_thread(mdc_changelog_send_thread, cs,
+                               CLONE_VM | CLONE_FILES);
+        if (rc >= 0) {
+                CDEBUG(D_CHANGELOG, "start changelog thread: %d\n", rc);
+                return 0;
+        }
+
+        CERROR("Failed to start changelog thread: %d\n", rc);
+        OBD_FREE_PTR(cs);
+        return rc;
+}
+
+static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
+                                struct lustre_kernelcomm *lk);
+
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -1180,10 +1333,16 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 return -EINVAL;
         }
         switch (cmd) {
+        case LL_IOC_HSM_CT_START:
+                rc = mdc_ioc_hsm_ct_start(exp, karg);
+                GOTO(out, rc);
+        case OBD_IOC_CHANGELOG_SEND:
+                rc = mdc_ioc_changelog_send(obd, karg);
+                GOTO(out, rc);
         case OBD_IOC_CHANGELOG_CLEAR: {
-                struct ioc_changelog_clear *icc = karg;
+                struct ioc_changelog *icc = karg;
                 struct changelog_setinfo cs =
-                        {icc->icc_recno, icc->icc_id};
+                        {.cs_recno = icc->icc_recno, .cs_id = icc->icc_id};
                 rc = obd_set_info_async(exp, strlen(KEY_CHANGELOG_CLEAR),
                                         KEY_CHANGELOG_CLEAR, sizeof(cs), &cs,
                                         NULL);
@@ -1334,14 +1493,43 @@ static void lustre_swab_hal(struct hsm_action_list *h)
         }
 }
 
+static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
+                                struct lustre_kernelcomm *lk)
+{
+        int rc = 0;
+
+        if (lk->lk_group != KUC_GRP_HSM) {
+                CERROR("Bad copytool group %d\n", lk->lk_group);
+                return -EINVAL;
+        }
+
+        CDEBUG(D_HSM, "CT start r%d w%d u%d g%d f%#x\n", lk->lk_rfd, lk->lk_wfd,
+               lk->lk_uid, lk->lk_group, lk->lk_flags);
+
+        if (lk->lk_flags & LK_FLG_STOP)
+                rc = libcfs_kkuc_group_rem(lk->lk_uid,lk->lk_group);
+        else {
+                cfs_file_t *fp = cfs_get_fd(lk->lk_wfd);
+                rc = libcfs_kkuc_group_add(fp, lk->lk_uid,lk->lk_group);
+                if (rc && fp)
+                        cfs_put_file(fp);
+        }
+
+        /* lk_data is archive number mask */
+        /* TODO: register archive num with mdt so coordinator can choose
+           correct agent. */
+
+        return rc;
+}
+
 /**
- * Send a message to any listening copytools, nonblocking
- * @param val LNL message (lnl_hdr + hsm_action_list)
+ * Send a message to any listening copytools
+ * @param val KUC message (kuc_hdr + hsm_action_list)
  * @param len total length of message
  */
 static int mdc_hsm_copytool_send(int len, void *val)
 {
-        struct lnl_hdr *lh = (struct lnl_hdr *)val;
+        struct kuc_hdr *lh = (struct kuc_hdr *)val;
         struct hsm_action_list *hal = (struct hsm_action_list *)(lh + 1);
         int rc;
         ENTRY;
@@ -1351,20 +1539,20 @@ static int mdc_hsm_copytool_send(int len, void *val)
                       (int) (sizeof(*lh) + sizeof(*hal)));
                 RETURN(-EPROTO);
         }
-        if (lh->lnl_magic == __swab16(LNL_MAGIC)) {
-                lustre_swab_lnlh(lh);
+        if (lh->kuc_magic == __swab16(KUC_MAGIC)) {
+                lustre_swab_kuch(lh);
                 lustre_swab_hal(hal);
-        } else if (lh->lnl_magic != LNL_MAGIC) {
-                CERROR("Bad magic %x!=%x\n", lh->lnl_magic, LNL_MAGIC);
+        } else if (lh->kuc_magic != KUC_MAGIC) {
+                CERROR("Bad magic %x!=%x\n", lh->kuc_magic, KUC_MAGIC);
                 RETURN(-EPROTO);
         }
 
-        CDEBUG(D_IOCTL, " Received message mg=%x t=%d m=%d l=%d actions=%d\n",
-               lh->lnl_magic, lh->lnl_transport, lh->lnl_msgtype,
-               lh->lnl_msglen, hal->hal_count);
+        CDEBUG(D_HSM, " Received message mg=%x t=%d m=%d l=%d actions=%d\n",
+               lh->kuc_magic, lh->kuc_transport, lh->kuc_msgtype,
+               lh->kuc_msglen, hal->hal_count);
 
         /* Broadcast to HSM listeners */
-        rc = libcfs_klnl_msg_put(0, LNL_GRP_HSM, lh);
+        rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
 
         RETURN(rc);
 }
@@ -1762,10 +1950,6 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 CERROR("failed to setup llogging subsystems\n");
         }
 
-        /* ignore errors */
-        libcfs_klnl_start(LNL_TRANSPORT_HSM);
-        libcfs_klnl_start(LNL_TRANSPORT_CHANGELOG);
-
         RETURN(rc);
 
 err_close_lock:
@@ -1808,7 +1992,12 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 
         switch (stage) {
         case OBD_CLEANUP_EARLY:
+                break;
         case OBD_CLEANUP_EXPORTS:
+                /* Failsafe, ok if racy */
+                if (obd->obd_type->typ_refcnt <= 1)
+                        libcfs_kkuc_group_rem(0, KUC_GRP_HSM);
+
                 /* If we set up but never connected, the
                    client import will not have been cleaned. */
                 if (obd->u.cli.cl_import) {
@@ -1832,9 +2021,6 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 static int mdc_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
-
-        libcfs_klnl_stop(LNL_TRANSPORT_HSM, LNL_GRP_HSM);
-        libcfs_klnl_stop(LNL_TRANSPORT_CHANGELOG, 0);
 
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));

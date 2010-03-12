@@ -6,6 +6,10 @@ Bugzilla   : 19856
 Description: Add LustreNetLink, a kernel-userspace communcation path.  Add
 	ulinux dir for Linux userspace tools.
 
+Severity   : normal
+Bugzilla   : 20878
+Description: Replace LustreNetLink with kernel_user_comm based on pipes
+
 -------------------------------------------------------------------------------
 
 2008-07-15  Sun Microsystems, Inc.

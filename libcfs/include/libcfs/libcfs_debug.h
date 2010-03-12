@@ -163,6 +163,8 @@ struct ptldebug_header {
 #define D_SEC         0x08000000
 /* keep these in sync with lnet/{utils,libcfs}/debug.c */
 
+#define D_HSM         D_TRACE
+
 #define D_CANTMASK   (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)
 
 #ifndef DEBUG_SUBSYSTEM

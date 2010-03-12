@@ -2196,12 +2196,12 @@ void lustre_swab_lustre_capa_key(struct lustre_capa_key *k)
         __swab32s (&k->lk_padding);
 }
 
-void lustre_swab_lnlh(struct lnl_hdr *l)
+void lustre_swab_kuch(struct kuc_hdr *l)
 {
-        __swab16s(&l->lnl_magic);
-        /* __u8 l->lnl_transport */
-        __swab16s(&l->lnl_msgtype);
-        __swab16s(&l->lnl_msglen);
+        __swab16s(&l->kuc_magic);
+        /* __u8 l->kuc_transport */
+        __swab16s(&l->kuc_msgtype);
+        __swab16s(&l->kuc_msglen);
 }
-EXPORT_SYMBOL(lustre_swab_lnlh);
+EXPORT_SYMBOL(lustre_swab_kuch);
 

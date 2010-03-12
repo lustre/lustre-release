@@ -242,7 +242,8 @@ static int llog_process_thread(void *arg)
                 return 0;
         }
 
-        cfs_daemonize_ctxt("llog_process_thread");
+        if (!(lpi->lpi_flags & LLOG_FLAG_NODEAMON))
+                cfs_daemonize_ctxt("llog_process_thread");
 
         if (cd != NULL) {
                 last_called_index = cd->lpcd_first_idx;
@@ -354,8 +355,8 @@ static int llog_process_thread(void *arg)
         return 0;
 }
 
-int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
-                 void *data, void *catdata)
+int llog_process_flags(struct llog_handle *loghandle, llog_cb_t cb,
+                       void *data, void *catdata, int flags)
 {
         struct llog_process_info *lpi;
         int                      rc;
@@ -370,6 +371,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         lpi->lpi_cb        = cb;
         lpi->lpi_cbdata    = data;
         lpi->lpi_catdata   = catdata;
+        lpi->lpi_flags     = flags;
 
 #ifdef __KERNEL__
         cfs_init_completion(&lpi->lpi_completion);
@@ -386,6 +388,13 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         rc = lpi->lpi_rc;
         OBD_FREE_PTR(lpi);
         RETURN(rc);
+}
+EXPORT_SYMBOL(llog_process_flags);
+
+int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
+                 void *data, void *catdata)
+{
+        return llog_process_flags(loghandle, cb, data, catdata, 0);
 }
 EXPORT_SYMBOL(llog_process);
 

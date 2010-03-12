@@ -302,7 +302,6 @@ int cfs_curproc_is_in_groups(gid_t gid);
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)
-#define cfs_kernel_thread(l,m,n) LBUG()
 
 #define USERMODEHELPER(path, argv, envp) (0)
 #define SIGNAL_MASK_ASSERT()

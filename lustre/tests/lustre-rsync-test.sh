@@ -10,8 +10,9 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$LRSYNC_EXCEPT 5a 5b"
-# bug number for skipped test: -  20878
+[ -n "$ONLY" ] && SLOW=yes
+ALWAYS_EXCEPT="$LRSYNC_EXCEPT"
+# bug number for skipped test:
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \

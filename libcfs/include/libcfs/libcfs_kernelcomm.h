@@ -37,9 +37,7 @@
  *
  * libcfs/include/libcfs/libcfs_kernelcomm.h
  *
- * Kernel <-> userspace communication routines.  We'll use a shorthand term
- * "lnl" (Lustre NetLink) for this interface name for all arches, even though
- * an implemtation may not use NetLink.
+ * Kernel <-> userspace communication routines.
  * The definitions below are used in the kernel and userspace.
  *
  */
@@ -51,67 +49,66 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
-/* LNL message header.
- * All current and future LNL messages should use this header.
+
+/* KUC message header.
+ * All current and future KUC messages should use this header.
  * To avoid having to include Lustre headers from libcfs, define this here.
  */
-struct lnl_hdr {
-        __u16 lnl_magic;
-        __u8  lnl_transport;  /* Each new Lustre feature should use a different
+struct kuc_hdr {
+        __u16 kuc_magic;
+        __u8  kuc_transport;  /* Each new Lustre feature should use a different
                                  transport */
-        __u8  lnl_flags;
-        __u16 lnl_msgtype;    /* Message type or opcode, transport-specific */
-        __u16 lnl_msglen;
+        __u8  kuc_flags;
+        __u16 kuc_msgtype;    /* Message type or opcode, transport-specific */
+        __u16 kuc_msglen;     /* Including header */
 } __attribute__((aligned(sizeof(__u64))));
 
-#define LNL_MAGIC  0x191C /*Lustre9etLinC */
-#define LNL_FL_BLOCK 0x01   /* Wait for send */
+#define KUC_MAGIC  0x191C /*Lustre9etLinC */
+#define KUC_FL_BLOCK 0x01   /* Wait for send */
 
-/* lnl_msgtype values are defined in each transport */
-enum lnl_transport_type {
-        LNL_TRANSPORT_GENERIC   = 1,
-        LNL_TRANSPORT_HSM       = 2,
-        LNL_TRANSPORT_CHANGELOG = 3,
+/* kuc_msgtype values are defined in each transport */
+enum kuc_transport_type {
+        KUC_TRANSPORT_GENERIC   = 1,
+        KUC_TRANSPORT_HSM       = 2,
+        KUC_TRANSPORT_CHANGELOG = 3,
 };
 
-enum lnl_generic_message_type {
-        LNL_MSG_SHUTDOWN = 1,
+enum kuc_generic_message_type {
+        KUC_MSG_SHUTDOWN = 1,
 };
 
-/* LNL Broadcast Groups. This determines which userspace process hears which
+/* KUC Broadcast Groups. This determines which userspace process hears which
  * messages.  Mutliple transports may be used within a group, or multiple
  * groups may use the same transport.  Broadcast
- * groups need not be used if e.g. a PID is specified instead;
+ * groups need not be used if e.g. a UID is specified instead;
  * use group 0 to signify unicast.
  */
-#define LNL_GRP_HSM           0x02
-#define LNL_GRP_CNT              2
+#define KUC_GRP_HSM           0x02
+#define KUC_GRP_MAX           KUC_GRP_HSM
 
+/* Kernel methods */
+extern int libcfs_kkuc_msg_put(cfs_file_t *fp, void *payload);
+extern int libcfs_kkuc_group_put(int group, void *payload);
+extern int libcfs_kkuc_group_add(cfs_file_t *fp, int uid, int group);
+extern int libcfs_kkuc_group_rem(int uid, int group);
 
-#if defined(HAVE_NETLINK) && defined (__KERNEL__)
-extern int libcfs_klnl_start(int transport);
-extern int libcfs_klnl_stop(int transport, int group);
-extern int libcfs_klnl_msg_put(int pid, int group, void *payload);
-#else
-static inline int libcfs_klnl_start(int transport) {
-        return -ENOSYS;
-}
-static inline int libcfs_klnl_stop(int transport, int group) {
-        return 0;
-}
-static inline int libcfs_klnl_msg_put(int pid, int group, void *payload) {
-        return -ENOSYS;
-}
-#endif
+#define LK_FLG_STOP 0x01
 
-/*
- * NetLink socket number, see include/linux/netlink.h
- * All LNL users share a single netlink socket.  This actually is NetLink
- * specific, but is not to be used outside of the Linux implementation
- * (linux-kernelcomm.c and posix-kernelcomm.c).
- */
-#define LNL_SOCKET 26
+/* kernelcomm control structure, passed from userspace to kernel */
+typedef struct lustre_kernelcomm {
+        __u32 lk_wfd;
+        __u32 lk_rfd;
+        __u32 lk_uid;
+        __u32 lk_group;
+        __u32 lk_data;
+        __u32 lk_flags;
+} __attribute__((packed)) lustre_kernelcomm;
 
+/* Userspace methods */
+extern int libcfs_ukuc_start(lustre_kernelcomm *l, int groups);
+extern int libcfs_ukuc_stop(lustre_kernelcomm *l);
+extern int libcfs_ukuc_msg_get(lustre_kernelcomm *l, char *buf, int maxsize,
+                        int transport);
 
 #endif /* __LIBCFS_KERNELCOMM_H__ */
 

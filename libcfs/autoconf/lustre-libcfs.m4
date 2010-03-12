@@ -917,7 +917,6 @@ libcfs/include/libcfs/util/Makefile
 libcfs/libcfs/Makefile
 libcfs/libcfs/autoMakefile
 libcfs/libcfs/linux/Makefile
-libcfs/libcfs/ulinux/Makefile
 libcfs/libcfs/posix/Makefile
 libcfs/libcfs/util/Makefile
 libcfs/include/libcfs/darwin/Makefile

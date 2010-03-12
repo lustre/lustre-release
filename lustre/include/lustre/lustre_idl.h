@@ -2229,12 +2229,6 @@ struct changelog_setinfo {
         __u32 cs_id;
 } __attribute__((packed));
 
-struct changelog_show {
-        __u64 cs_startrec;
-        __u32 cs_pid;
-        __u32 cs_flags;
-} __attribute__((packed));
-
 /** changelog record */
 struct llog_changelog_rec {
         struct llog_rec_hdr  cr_hdr;
@@ -2612,7 +2606,7 @@ struct getinfo_fid2path {
 
 void lustre_swab_fid2path (struct getinfo_fid2path *gf);
 
-extern void lustre_swab_lnlh(struct lnl_hdr *);
+extern void lustre_swab_kuch(struct kuc_hdr *);
 
 
 #endif

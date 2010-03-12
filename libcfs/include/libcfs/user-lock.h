@@ -177,6 +177,7 @@ int cfs_down_write_trylock(cfs_rw_semaphore_t *s);
 void cfs_up_read(cfs_rw_semaphore_t *s);
 void cfs_up_write(cfs_rw_semaphore_t *s);
 void cfs_fini_rwsem(cfs_rw_semaphore_t *s);
+#define CFS_DECLARE_RWSEM(name)  cfs_rw_semaphore_t name = { }
 
 /*
  * read-write lock : Need to be investigated more!!

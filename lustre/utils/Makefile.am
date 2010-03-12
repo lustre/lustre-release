@@ -74,7 +74,7 @@ llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
 llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
 L_IOCTL := $(top_builddir)/libcfs/libcfs/util/l_ioctl.c
-L_KERNELCOMM := $(top_builddir)/libcfs/libcfs/ulinux/ulinux-kernelcomm.c
+L_KERNELCOMM := $(top_builddir)/libcfs/libcfs/kernel_user_comm.c
 liblustreapi_a_SOURCES = liblustreapi.c $(L_IOCTL) $(L_KERNELCOMM)
 
 libiam_a_SOURCES = libiam.c

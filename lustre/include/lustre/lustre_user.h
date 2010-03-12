@@ -136,6 +136,8 @@ struct obd_statfs {
 #define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
 #define LL_IOC_GET_MDTIDX               _IOR ('f', 174, int)
 
+#define LL_IOC_HSM_CT_START             _IOW ('f', 178, struct lustre_kernelcomm *)
+
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
 
@@ -500,10 +502,11 @@ struct changelog_rec {
         char                  cr_name[0];     /**< last element */
 } __attribute__((packed));
 
-struct ioc_changelog_clear {
+struct ioc_changelog {
+        __u64 icc_recno;
         __u32 icc_mdtindex;
         __u32 icc_id;
-        __u64 icc_recno;
+        __u32 icc_flags;
 };
 
 enum changelog_message_type {

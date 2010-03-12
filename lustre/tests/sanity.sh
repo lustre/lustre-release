@@ -6622,15 +6622,16 @@ run_test 162 "path lookup sanity"
 
 test_163() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	copytool --test || { skip "copytool not runnable: $?" && return; }
-	copytool &
+	copytool --test $FSNAME || { skip "copytool not runnable: $?" && return; }
+	copytool $FSNAME &
 	sleep 1
 	local uuid=$($LCTL get_param -n mdc.${FSNAME}-MDT0000-mdc-*.uuid)
 	# this proc file is temporary and linux-only
-	do_facet mds lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid || error "lnl send failed"
-	kill $!
+	do_facet mds lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid ||\
+         error "kernel->userspace send failed"
+	kill -INT $!
 }
-run_test 163 "LustreNetLink kernelcomms"
+run_test 163 "kernel <-> userspace comms"
 
 test_169() {
 	# do directio so as not to populate the page cache

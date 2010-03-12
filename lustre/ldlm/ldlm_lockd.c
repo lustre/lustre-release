@@ -1692,7 +1692,7 @@ static int ldlm_handle_setinfo(struct ptlrpc_request *req)
         int rc = -ENOSYS;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR, req, "%s: handle setinfo\n", obd->obd_name);
+        DEBUG_REQ(D_HSM, req, "%s: handle setinfo\n", obd->obd_name);
 
         req_capsule_set(&req->rq_pill, &RQF_OBD_SET_INFO);
 

@@ -734,11 +734,29 @@ int ll_get_mdt_idx(struct inode *inode)
         return mdtidx;
 }
 
+static int copy_and_ioctl(int cmd, struct obd_export *exp, void *data, int len)
+{
+        void *ptr;
+        int rc;
+
+        OBD_ALLOC(ptr, len);
+        if (ptr == NULL)
+                return -ENOMEM;
+        if (cfs_copy_from_user(ptr, data, len)) {
+                OBD_FREE(ptr, len);
+                return -EFAULT;
+        }
+        rc = obd_iocontrol(cmd, exp, len, data, NULL);
+        OBD_FREE(ptr, len);
+        return rc;
+}
+
 static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         unsigned int cmd, unsigned long arg)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obd_ioctl_data *data;
+        int rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), cmd=%#x\n",
@@ -776,7 +794,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
-                int namelen, rc, len = 0;
+                int namelen, len = 0;
                 char *buf = NULL;
                 char *filename;
                 struct md_op_data *op_data;
@@ -818,7 +836,6 @@ out_free:
                 struct lov_user_md_v1 *lumv1p = (struct lov_user_md_v1 *)arg;
                 struct lov_user_md_v3 *lumv3p = (struct lov_user_md_v3 *)arg;
 
-                int rc = 0;
                 int set_default = 0;
 
                 LASSERT(sizeof(lumv3) == sizeof(*lumv3p));
@@ -852,7 +869,7 @@ out_free:
                 struct lov_mds_md *lmm = NULL;
                 struct mdt_body *body;
                 char *filename = NULL;
-                int rc, lmmsize;
+                int lmmsize;
 
                 if (cmd == IOC_MDC_GETFILEINFO ||
                     cmd == IOC_MDC_GETFILESTRIPE) {
@@ -930,7 +947,6 @@ out_free:
                 struct lov_mds_md *lmm;
                 int lmmsize;
                 lstat_t st;
-                int rc;
 
                 lumd = (struct lov_user_mds_data *)arg;
                 lum = &lumd->lmd_lmm;
@@ -992,7 +1008,6 @@ out_free:
                 char                  *buf = NULL;
                 char                  *str;
                 int                    len = 0;
-                int                    rc;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -1047,7 +1062,7 @@ out_free:
         }
         case OBD_IOC_QUOTACHECK: {
                 struct obd_quotactl *oqctl;
-                int rc, error = 0;
+                int error = 0;
 
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
                     sbi->ll_flags & LL_SBI_RMT_CLIENT)
@@ -1072,7 +1087,6 @@ out_free:
         }
         case OBD_IOC_POLL_QUOTACHECK: {
                 struct if_quotacheck *check;
-                int rc;
 
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
                     sbi->ll_flags & LL_SBI_RMT_CLIENT)
@@ -1107,7 +1121,7 @@ out_free:
         }
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
-                int cmd, type, id, valid, rc = 0;
+                int cmd, type, id, valid;
 
                 OBD_ALLOC_PTR(qctl);
                 if (!qctl)
@@ -1232,7 +1246,6 @@ out_free:
             if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
                 inode == inode->i_sb->s_root->d_inode) {
                 struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-                int rc;
 
                 LASSERT(fd != NULL);
                 rc = rct_add(&sbi->ll_rct, cfs_curproc_pid(), arg);
@@ -1269,24 +1282,17 @@ out_free:
                                      sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
                 RETURN(0);
-        case OBD_IOC_CHANGELOG_CLEAR: {
-                struct ioc_changelog_clear *icc;
-                int rc;
-
-                OBD_ALLOC_PTR(icc);
-                if (icc == NULL)
-                        RETURN(-ENOMEM);
-                if (cfs_copy_from_user(icc, (void *)arg, sizeof(*icc)))
-                        GOTO(icc_free, rc = -EFAULT);
-
-                rc = obd_iocontrol(cmd, sbi->ll_md_exp, sizeof(*icc), icc,NULL);
-
-icc_free:
-                OBD_FREE_PTR(icc);
+        case OBD_IOC_CHANGELOG_SEND:
+        case OBD_IOC_CHANGELOG_CLEAR:
+                rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,
+                                    sizeof(struct ioc_changelog));
                 RETURN(rc);
-        }
         case OBD_IOC_FID2PATH:
                 RETURN(ll_fid2path(ll_i2mdexp(inode), (void *)arg));
+        case LL_IOC_HSM_CT_START:
+                rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,
+                                    sizeof(struct lustre_kernelcomm));
+                RETURN(rc);
 
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));

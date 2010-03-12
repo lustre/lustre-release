@@ -77,151 +77,34 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         return count;
 }
 
-static struct lnl_hdr *changelog_lnl_alloc(int len, int flags)
-{
-        struct lnl_hdr *lh;
-
-        OBD_ALLOC(lh, len);
-        if (lh == NULL)
-                RETURN(NULL);
-
-        lh->lnl_magic = LNL_MAGIC;
-        lh->lnl_transport = LNL_TRANSPORT_CHANGELOG;
-        lh->lnl_flags = flags;
-        lh->lnl_msgtype = CL_RECORD;
-        lh->lnl_msglen = len;
-        return lh;
-}
-
-#define D_CHANGELOG 0
-
-static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
-                             void *data)
-{
-        struct changelog_show *cs = data;
-        struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
-        struct lnl_hdr *lh;
-        int len, rc;
-        ENTRY;
-
-        if ((rec->cr_hdr.lrh_type != CHANGELOG_REC) ||
-            (rec->cr.cr_type >= CL_LAST)) {
-                CERROR("Not a changelog rec %d/%d\n", rec->cr_hdr.lrh_type,
-                       rec->cr.cr_type);
-                RETURN(-EINVAL);
-        }
-
-        if (rec->cr.cr_index < cs->cs_startrec) {
-                /* Skip entries earlier than what we are interested in */
-                CDEBUG(D_CHANGELOG, "rec="LPU64" start="LPU64"\n",
-                       rec->cr.cr_index, cs->cs_startrec);
-                RETURN(0);
-        }
-
-        CDEBUG(D_CHANGELOG, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID
-               " %.*s\n", rec->cr.cr_index, rec->cr.cr_type,
-               changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
-               rec->cr.cr_flags & CLF_FLAGMASK,
-               PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
-               rec->cr.cr_namelen, rec->cr.cr_name);
-
-        len = sizeof(*lh) + sizeof(rec->cr) + rec->cr.cr_namelen;
-
-        /* Set up the netlink message */
-        lh = changelog_lnl_alloc(len, cs->cs_flags);
-        if (lh == NULL)
-                RETURN(-ENOMEM);
-        memcpy(lh + 1, &rec->cr, len - sizeof(*lh));
-
-        rc = libcfs_klnl_msg_put(cs->cs_pid, 0, lh);
-        CDEBUG(D_CHANGELOG, "nlmsg pid %d len %d rc %d\n", cs->cs_pid, len, rc);
-
-        OBD_FREE(lh, len);
-
-        RETURN(rc);
-}
-
-static int lproc_mdc_wr_changelog(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        struct llog_ctxt *ctxt;
-        struct llog_handle *llh;
-        struct lnl_hdr *lnlh;
-        struct changelog_show cs = {};
-        int rc;
-
-        if (count != sizeof(cs))
-                return -EINVAL;
-
-        if (cfs_copy_from_user(&cs, buffer, sizeof(cs)))
-                return -EFAULT;
-
-        CDEBUG(D_CHANGELOG, "changelog to pid=%d start "LPU64"\n",
-               cs.cs_pid, cs.cs_startrec);
-
-        /* Set up the remote catalog handle */
-        ctxt = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);
-        if (ctxt == NULL)
-                RETURN(-ENOENT);
-        rc = llog_create(ctxt, &llh, NULL, CHANGELOG_CATALOG);
-        if (rc) {
-                CERROR("llog_create() failed %d\n", rc);
-                GOTO(out, rc);
-        }
-        rc = llog_init_handle(llh, LLOG_F_IS_CAT, NULL);
-        if (rc) {
-                CERROR("llog_init_handle failed %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        rc = llog_cat_process(llh, changelog_show_cb, &cs, 0, 0);
-
-        /* Send EOF */
-        if ((lnlh = changelog_lnl_alloc(sizeof(*lnlh), cs.cs_flags))) {
-                lnlh->lnl_msgtype = CL_EOF;
-                libcfs_klnl_msg_put(cs.cs_pid, 0, lnlh);
-                OBD_FREE(lnlh, sizeof(*lnlh));
-        }
-
-out:
-        if (llh)
-                llog_cat_put(llh);
-        if (ctxt)
-                llog_ctxt_put(ctxt);
-        if (rc < 0)
-                return rc;
-        return count;
-}
-
 /* temporary for testing */
-static int mdc_wr_netlink(struct file *file, const char *buffer,
-                          unsigned long count, void *data)
+static int mdc_wr_kuc(struct file *file, const char *buffer,
+                      unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        struct lnl_hdr *lh;
+        struct kuc_hdr *lh;
         struct hsm_action_list *hal;
         struct hsm_action_item *hai;
         int len;
-        int pid, rc;
+        int fd, rc;
 
-        rc = lprocfs_write_helper(buffer, count, &pid);
+        rc = lprocfs_write_helper(buffer, count, &fd);
         if (rc)
                 return rc;
 
-        if (pid < 0)
+        if (fd < 0)
                 return -ERANGE;
-        CWARN("message to pid %d\n", pid);
+        CWARN("message to fd %d\n", fd);
 
         len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
                 /* for mockup below */ 2 * cfs_size_round(sizeof(*hai));
 
         OBD_ALLOC(lh, len);
 
-        lh->lnl_magic = LNL_MAGIC;
-        lh->lnl_transport = LNL_TRANSPORT_HSM;
-        lh->lnl_msgtype = HMT_ACTION_LIST;
-        lh->lnl_msglen = len;
+        lh->kuc_magic = KUC_MAGIC;
+        lh->kuc_transport = KUC_TRANSPORT_HSM;
+        lh->kuc_msgtype = HMT_ACTION_LIST;
+        lh->kuc_msglen = len;
 
         hal = (struct hsm_action_list *)(lh + 1);
         hal->hal_version = HAL_VERSION;
@@ -239,9 +122,14 @@ static int mdc_wr_netlink(struct file *file, const char *buffer,
         hai->hai_fid.f_oid = 10;
         hai->hai_len = sizeof(*hai);
 
-        /* This works for either broadcast or unicast to a single pid */
-        rc = libcfs_klnl_msg_put(pid, pid == 0 ? LNL_GRP_HSM : 0, lh);
-
+        /* This works for either broadcast or unicast to a single fd */
+        if (fd == 0) {
+                rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
+        } else {
+                cfs_file_t *fp = cfs_get_fd(fd);
+                rc = libcfs_kkuc_msg_put(fp, lh);
+                cfs_put_file(fp);
+        }
         OBD_FREE(lh, len);
         if (rc < 0)
                 return rc;
@@ -266,8 +154,7 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "timeouts",        lprocfs_rd_timeouts,    0, 0 },
         { "import",          lprocfs_rd_import,      0, 0 },
         { "state",           lprocfs_rd_state,       0, 0 },
-        { "changelog_trigger",0,lproc_mdc_wr_changelog, 0 },
-        { "hsm_nl",          0, mdc_wr_netlink,      0, 0, 0222 },
+        { "hsm_nl",          0, mdc_wr_kuc,          0, 0, 0222 },
         { 0 }
 };
 

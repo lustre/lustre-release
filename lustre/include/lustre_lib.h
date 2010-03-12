@@ -485,6 +485,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
 
+#define OBD_IOC_CHANGELOG_SEND         _IOW ('f', 148, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_FID2PATH               _IOWR ('f', 150, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CHANGELOG_REG          _IOW ('f', 151, OBD_IOC_DATA_TYPE)

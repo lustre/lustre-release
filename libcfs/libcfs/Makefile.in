@@ -4,7 +4,7 @@ libcfs-linux-objs := linux-tracefile.o linux-debug.o
 libcfs-linux-objs += linux-prim.o linux-mem.o
 libcfs-linux-objs += linux-fs.o linux-sync.o linux-tcpip.o
 libcfs-linux-objs += linux-lwt.o linux-proc.o linux-curproc.o
-libcfs-linux-objs += linux-utils.o linux-module.o linux-kernelcomm.o
+libcfs-linux-objs += linux-utils.o linux-module.o
 
 ifeq ($(PATCHLEVEL),6)
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
@@ -25,7 +25,7 @@ sources:
 endif
 
 libcfs-all-objs := debug.o nidstrings.o lwt.o module.o tracefile.o watchdog.o \
-	libcfs_string.o hash.o
+	libcfs_string.o hash.o kernel_user_comm.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 

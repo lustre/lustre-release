@@ -394,18 +394,20 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
 
                 cd.lpcd_first_idx = d->lpd_startidx;
                 cd.lpcd_last_idx = 0;
-                rc = llog_process(llh, d->lpd_cb, d->lpd_data, &cd);
+                rc = llog_process_flags(llh, d->lpd_cb, d->lpd_data, &cd,
+                                        d->lpd_flags);
                 /* Continue processing the next log from idx 0 */
                 d->lpd_startidx = 0;
         } else {
-                rc = llog_process(llh, d->lpd_cb, d->lpd_data, NULL);
+                rc = llog_process_flags(llh, d->lpd_cb, d->lpd_data, NULL,
+                                        d->lpd_flags);
         }
 
         RETURN(rc);
 }
 
-int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
-                     int startcat, int startidx)
+int llog_cat_process_flags(struct llog_handle *cat_llh, llog_cb_t cb,
+                           void *data, int flags, int startcat, int startidx)
 {
         struct llog_process_data d;
         struct llog_log_hdr *llh = cat_llh->lgh_hdr;
@@ -417,6 +419,7 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
         d.lpd_cb = cb;
         d.lpd_startcat = startcat;
         d.lpd_startidx = startidx;
+        d.lpd_flags = flags;
 
         if (llh->llh_cat_idx > cat_llh->lgh_last_idx) {
                 struct llog_process_cat_data cd;
@@ -426,18 +429,28 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
 
                 cd.lpcd_first_idx = llh->llh_cat_idx;
                 cd.lpcd_last_idx = 0;
-                rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
+                rc = llog_process_flags(cat_llh, llog_cat_process_cb, &d, &cd,
+                                        flags);
                 if (rc != 0)
                         RETURN(rc);
 
                 cd.lpcd_first_idx = 0;
                 cd.lpcd_last_idx = cat_llh->lgh_last_idx;
-                rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
+                rc = llog_process_flags(cat_llh, llog_cat_process_cb, &d, &cd,
+                                        flags);
         } else {
-                rc = llog_process(cat_llh, llog_cat_process_cb, &d, NULL);
+                rc = llog_process_flags(cat_llh, llog_cat_process_cb, &d, NULL,
+                                        flags);
         }
 
         RETURN(rc);
+}
+EXPORT_SYMBOL(llog_cat_process_flags);
+
+int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
+                     int startcat, int startidx)
+{
+        return llog_cat_process_flags(cat_llh, cb, data, 0, startcat, startidx);
 }
 EXPORT_SYMBOL(llog_cat_process);
 

@@ -5570,7 +5570,7 @@ int mdt_obd_postrecov(struct obd_device *obd)
  */
 int mdt_hsm_copytool_send(struct obd_export *exp)
 {
-        struct lnl_hdr *lh;
+        struct kuc_hdr *lh;
         struct hsm_action_list *hal;
         struct hsm_action_item *hai;
         int rc, len;
@@ -5585,10 +5585,10 @@ int mdt_hsm_copytool_send(struct obd_export *exp)
         if (lh == NULL)
                 RETURN(-ENOMEM);
 
-        lh->lnl_magic = LNL_MAGIC;
-        lh->lnl_transport = LNL_TRANSPORT_HSM;
-        lh->lnl_msgtype = HMT_ACTION_LIST;
-        lh->lnl_msglen = len;
+        lh->kuc_magic = KUC_MAGIC;
+        lh->kuc_transport = KUC_TRANSPORT_HSM;
+        lh->kuc_msgtype = HMT_ACTION_LIST;
+        lh->kuc_msglen = len;
 
         hal = (struct hsm_action_list *)(lh + 1);
         hal->hal_version = HAL_VERSION;

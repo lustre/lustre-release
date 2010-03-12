@@ -71,6 +71,7 @@ cfs_file_t *cfs_filp_open (const char *name, int flags, int mode, int *err);
 #define cfs_filp_fsync(fp)                  (fp)->f_op->fsync((fp), (fp)->f_dentry, 1)
 
 #define cfs_get_file(f)                     get_file(f)
+#define cfs_get_fd(x)                       fget(x)
 #define cfs_put_file(f)                     fput(f)
 #define cfs_file_count(f)                   file_count(f)
 

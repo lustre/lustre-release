@@ -48,9 +48,22 @@
 
 #include <stdio.h>
 #include <getopt.h>
+#include <signal.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 #include <lustre/liblustreapi.h>
+
+void *ctdata;
+
+void handler(int signal ) {
+        psignal(signal, "exiting");
+        /* If we don't clean up upon interrupt, umount thinks there's a ref
+         * and doesn't remove us from mtab (EINPROGRESS). The lustre client
+         * does successfully unmount and the mount is actually gone, but the
+         * mtab entry remains. So this just makes mtab happier. */
+        llapi_copytool_fini(&ctdata);
+        exit(1);
+}
 
 int main(int argc, char **argv) {
         int c, test = 0;
@@ -58,8 +71,7 @@ int main(int argc, char **argv) {
                 {"test", no_argument, 0, 't'},
                 {0, 0, 0, 0}
         };
-        void *ctdata;
-        int archive_nums[] = {1}; /* which archive numbers we care about */
+        int archives[] = {1}; /* which archives we care about */
         int rc;
 
         optind = 0;
@@ -75,8 +87,13 @@ int main(int argc, char **argv) {
                 }
         }
 
-        rc = llapi_copytool_start(&ctdata, 0, ARRAY_SIZE(archive_nums),
-                                  archive_nums);
+        if (optind != argc - 1) {
+                fprintf(stderr, "Usage: %s <fsname>\n", argv[0]);
+                return -EINVAL;
+        }
+
+        rc = llapi_copytool_start(&ctdata, argv[optind], 0,
+                                  ARRAY_SIZE(archives), archives);
         if (rc < 0) {
                 fprintf(stderr, "Can't start copytool interface: %s\n",
                         strerror(-rc));
@@ -87,6 +104,8 @@ int main(int argc, char **argv) {
                 return -llapi_copytool_fini(&ctdata);
 
         printf("Waiting for message from kernel (pid=%d)\n", getpid());
+
+        signal(SIGINT, handler);
 
         while(1) {
                 struct hsm_action_list *hal;

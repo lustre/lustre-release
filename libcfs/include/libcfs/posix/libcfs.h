@@ -104,7 +104,6 @@
 #include <libcfs/user-tcpip.h>
 #include <libcfs/posix/posix-wordsize.h>
 #include <libcfs/user-bitops.h>
-#include <libcfs/posix/posix-kernelcomm.h>
 
 # define cfs_gettimeofday(tv) gettimeofday(tv, NULL);
 typedef unsigned long long cfs_cycles_t;
@@ -125,6 +124,9 @@ typedef struct dentry cfs_dentry_t;
 #ifdef __linux__
 typedef struct dirent64 cfs_dirent_t;
 #endif
+
+#define cfs_get_fd(x)   NULL
+#define cfs_put_file(f) do {} while (0)
 
 #ifdef __linux__
 /* Userpace byte flipping */
