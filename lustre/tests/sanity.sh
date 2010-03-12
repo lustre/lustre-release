@@ -6253,6 +6253,11 @@ obdecho_create_test() {
 }
 
 test_180() {
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]]; then
+               skip bug22316 mds running $lustre_version
+               return
+        fi
         local rc=0
         local rmmod_local=0
         local rmmod_remote=0
