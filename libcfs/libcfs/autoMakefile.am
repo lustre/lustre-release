@@ -38,7 +38,7 @@ SUBDIRS := linux util posix
 if DARWIN
 SUBDIRS += darwin
 endif
-DIST_SUBDIRS := linux util posix ulinux darwin
+DIST_SUBDIRS := linux util posix darwin
 
 if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
