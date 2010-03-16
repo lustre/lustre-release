@@ -399,8 +399,14 @@ test_9() {
 	do_facet ost1 lctl set_param subsystem_debug=\'mds ost\' || return 1
 
         CHECK_PTLDEBUG="`do_facet ost1 lctl get_param -n debug`"
-        if [ "$CHECK_PTLDEBUG" ] && [ "$CHECK_PTLDEBUG" = "trace inode" ];then
-           echo "lnet.debug success"
+        # interop 1.8 <-> 2.0: "trace inode warning error emerg console"
+        local lustre_version=$(get_lustre_version ost1)
+        echo ost1 running $lustre_version
+        if [ "$CHECK_PTLDEBUG" ] && [ "$CHECK_PTLDEBUG" = "trace inode" ]; then
+            echo "lnet.debug success"
+        elif [[ $lustre_version != 1.8* ]] && \
+                [ "$CHECK_PTLDEBUG" = "trace inode warning error emerg console" ]; then
+            echo "lnet.debug success"
         else
            echo "lnet.debug: want 'trace inode', have '$CHECK_PTLDEBUG'"
            return 1
@@ -429,39 +435,36 @@ test_16() {
 
         [ -f "$MDSDEV" ] && LOOPOPT="-o loop"
 
-        log "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
+        local lustre_version=$(get_lustre_version mds)
+        # interop 1.8 <-> 2.0: 20: no LOGS
+        local files="{OBJECTS,PENDING}"
+        if [[ $lustre_version = 1.8* ]]; then
+                files="{OBJECTS,PENDING,LOGS}"
+        fi
+
+        log "change the mode of $MDSDEV/$files to 555"
         do_facet mds "mkdir -p $TMPMTPT &&
                       mount $LOOPOPT -t $FSTYPE $MDSDEV $TMPMTPT &&
-                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} &&
+                      chmod 555 $TMPMTPT/$files &&
                       umount $TMPMTPT" || return $?
 
-        log "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
+        log "mount Lustre to change the mode of $files, then umount Lustre"
 	setup
         check_mount || return 41
         cleanup || return $?
 
-        log "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
-        EXPECTEDOBJECTSMODE=`do_facet mds "$DEBUGFS -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-        EXPECTEDLOGSMODE=`do_facet mds "$DEBUGFS -R 'stat LOGS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-        EXPECTEDPENDINGMODE=`do_facet mds "$DEBUGFS -R 'stat PENDING' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        log "read the mode of $files and check if they has been changed properly"
+        local file
+        for file in ${files//[\{\},]/ }; do
+            expected=`do_facet mds "$DEBUGFS -R 'stat $file' $MDSDEV 2> /dev/null" | \
+                       grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
 
-        if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
-                log "Success:Lustre change the mode of OBJECTS correctly"
-        else
-                error "Lustre does not change mode of OBJECTS properly"
-        fi
-
-        if [ "$EXPECTEDLOGSMODE" = "0777" ]; then
-                log "Success:Lustre change the mode of LOGS correctly"
-        else
-                error "Lustre does not change mode of LOGS properly"
-        fi
-
-        if [ "$EXPECTEDPENDINGMODE" = "0777" ]; then
-                log "Success:Lustre change the mode of PENDING correctly"
-        else
-                error "Lustre does not change mode of PENDING properly"
-        fi
+            if [ "$expected" = "0777" ]; then
+                log "Success:Lustre change the mode of $file correctly"
+            else
+                error "Lustre does not change mode of $file properly"
+            fi
+        done
 }
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
 
@@ -817,9 +820,16 @@ run_test 27a "Reacquire MGS lock if OST started first"
 
 test_27b() {
         setup
+
+	# interop 1.8 <-> 2.0:
+	# 1.8: group_acquire_expire, 2.0: identity_acquire_expire 
+	local acquire_expire=$(do_facet mds lctl get_param md*.$FSNAME-MDT0000.*acquire_expire | \
+		cut -d= -f1 | cut -d. -f3)
 	facet_failover mds
-	set_and_check mds "lctl get_param -n mds.$FSNAME-MDT0000.group_acquire_expire" "$FSNAME-MDT0000.mdt.group_acquire_expire" || return 3
-	set_and_check client "lctl get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
+	set_and_check mds "lctl get_param -n md*.$FSNAME-MDT0000.$acquire_expire" \
+		"$FSNAME-MDT0000.mdt.$acquire_expire" || return 3
+	set_and_check client "lctl get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" \
+		"$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
 	check_mount
 	cleanup
 }
@@ -871,7 +881,7 @@ test_29() {
 	fi
 
 	# check MDT too
-	local MPROC="osc.$FSNAME-OST0001-osc.active"
+	local MPROC="osc.$(get_mdtosc_proc_path $FSNAME-OST0001).active"
 	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do
@@ -1564,7 +1574,7 @@ test_44() { # 16317
         check_mount || return 2
         UUID=$($LCTL get_param llite.${FSNAME}*.uuid | cut -d= -f2)
         STATS_FOUND=no
-        UUIDS=$(do_facet mds "$LCTL get_param mds.${FSNAME}*.exports.*.uuid")
+        UUIDS=$(do_facet mds "$LCTL get_param $(get_mds_mdt_device_proc_path).${FSNAME}*.exports.*.uuid")
         for VAL in $UUIDS; do
                 NID=$(echo $VAL | cut -d= -f1)
                 CLUUID=$(echo $VAL | cut -d= -f2)
