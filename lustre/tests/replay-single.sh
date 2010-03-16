@@ -2158,8 +2158,9 @@ test_85b() { #bug 16774
 run_test 85b "check the cancellation of unused locks during recovery(EXTENT)"
 
 test_86() {
+	local dev=$(get_mds_mdt_device_proc_path)
         umount $MOUNT
-	do_facet mds lctl set_param mds.${FSNAME}-MDT*.exports.clear=0
+	do_facet mds lctl set_param $dev.${FSNAME}-MDT*.exports.clear=0
 	fail mds
 }
 run_test 86 "umount server after clear nid_stats should not hit LBUG"
