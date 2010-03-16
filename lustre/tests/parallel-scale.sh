@@ -515,6 +515,11 @@ cleanup_statahead () {
 }
 
 test_statahead () {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
     [ x$MDSRATE = x ] &&
         { skip_env "mdsrate not found" && return; }
 
