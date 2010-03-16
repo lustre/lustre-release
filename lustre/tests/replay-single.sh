@@ -2151,6 +2151,13 @@ test_85b() { #bug 16774
 }
 run_test 85b "check the cancellation of unused locks during recovery(EXTENT)"
 
+test_86() {
+        umount $MOUNT
+	do_facet mds lctl set_param mds.${FSNAME}-MDT*.exports.clear=0
+	fail mds
+}
+run_test 86 "umount server after clear nid_stats should not hit LBUG"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
