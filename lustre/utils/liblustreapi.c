@@ -522,6 +522,9 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
                 if (!llapi_is_lustre_mnt(&mnt))
                         continue;
 
+                if ((want & WANT_INDEX) && (idx++ != index))
+                        continue;
+
                 mntlen = strlen(mnt.mnt_dir);
                 ptr = strrchr(mnt.mnt_fsname, '/');
                 if (!ptr && !len) {
@@ -529,9 +532,6 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
                         break;
                 }
                 ptr++;
-
-                if ((want & WANT_INDEX) && (idx++ != index))
-                        continue;
 
                 /* Check the fsname for a match, if given */
                 if (!(want & WANT_FSNAME) && fsname != NULL &&

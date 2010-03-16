@@ -1104,7 +1104,7 @@ static int lfs_df(int argc, char **argv)
         char *mntdir = NULL;
         int ishow = 0, cooked = 0;
         int c, rc = 0;
-        char fsname[PATH_MAX], *pool_name = NULL;
+        char fsname[PATH_MAX] = "", *pool_name = NULL;
         struct option long_opts[] = {
                 {"pool", required_argument, 0, 'p'},
                 {0, 0, 0, 0}
@@ -1159,6 +1159,8 @@ static int lfs_df(int argc, char **argv)
                         if (rc)
                                 break;
                         printf("\n");
+                        fsname[0] = '\0'; /* avoid matching in next loop */
+                        mntdir[0] = '\0'; /* avoid matching in next loop */
                 }
         }
 
