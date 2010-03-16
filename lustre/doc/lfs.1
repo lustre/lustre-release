@@ -32,7 +32,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs poollist <filesystem>[.<pool>] | <pathname>
 .br
-.B lfs quota [-v] [-o obd_uuid] [<-u|-g> <uname>|<uid>|<gname><gid>] <filesystem>
+.B lfs quota [-q] [-v] [-o obd_uuid] [<-u|-g> <uname>|<uid>|<gname><gid>] <filesystem>
 .br
 .B lfs quota -t <-u|-g> <filesystem>
 .br
@@ -148,8 +148,8 @@ To set filesystem quotas for users or groups. Limits can be specified with -b, -
 .B setquota -t <-u|-g> [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
-.B quota [-v] [-o obd_uuid] [ -u|-g <uname|uid|gname|gid> ] <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
+.B quota [-q] [-v] [-o obd_uuid] [ -u|-g <uname|uid|gname|gid> ] <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output. -q disables printing of additional descriptions (including column titles).
 .TP
 .B quota -t <-u|-g> <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas

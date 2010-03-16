@@ -187,9 +187,9 @@ command_t cmdlist[] = {
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
          "       -I can be used instead of --inode-hardlimit"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [-v] [ -o obd_uuid ] [<-u|-g> <uname>|<uid>|<gname>|<gid>]\n"
-         "                <filesystem>\n"
-         "       quota [ -o obd_uuid ] -t <-u|-g> <filesystem>"},
+         "usage: quota [<-u|-g> <uname>|<uid>|<gname>|<gid>]\n"
+         "             [-q] [-v] [-o <obd_uuid>] <filesystem>\n"
+         "       quota [-o <obd_uuid>] -t <-u|-g> <filesystem>"},
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
          "usage: quotainv [-u|-g] <filesystem>"},
 #endif
@@ -2186,13 +2186,13 @@ static int lfs_quota(int argc, char **argv)
                                     .qc_type = UGQUOTA };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
-        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, inacc;
+        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, inacc, quiet = 0;
         int pass = 0;
         char *endptr;
         int version;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ugto:v")) != -1) {
+        while ((c = getopt(argc, argv, "ugto:qv")) != -1) {
                 switch (c) {
                 case 'u':
                         if (qctl.qc_type != UGQUOTA) {
@@ -2216,6 +2216,9 @@ static int lfs_quota(int argc, char **argv)
                         break;
                 case 'v':
                         verbose = 1;
+                        break;
+                case 'q':
+                        quiet = 1;
                         break;
                 default:
                         fprintf(stderr, "error: %s: option '-%c' "
@@ -2294,7 +2297,7 @@ ug_output:
                 }
         }
 
-        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA)
+        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && !quiet)
                 print_quota_title(name, &qctl);
 
         if (rc1 && *obd_type)
