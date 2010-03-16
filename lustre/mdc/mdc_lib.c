@@ -439,6 +439,7 @@ void mdc_setattr_pack_18(struct ptlrpc_request *req, int offset,
                          struct mdc_op_data *data, struct iattr *iattr, void *ea,
                          int ealen, void *ea2, int ea2len)
 {
+        struct lov_user_md     *lum = NULL;
         struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
                                                      sizeof(*rec));
         ENTRY;
@@ -472,7 +473,15 @@ void mdc_setattr_pack_18(struct ptlrpc_request *req, int offset,
                 return;
         }
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 1, ealen), ea, ealen);
+        lum = lustre_msg_buf(req->rq_reqmsg, offset + 1, ealen);
+        if (ea == NULL) { /* Remove LOV EA */
+                lum->lmm_magic = LOV_USER_MAGIC_V1;
+                lum->lmm_stripe_size = 0;
+                lum->lmm_stripe_count = 0;
+                lum->lmm_stripe_offset = (typeof(lum->lmm_stripe_offset))(-1);
+        } else {
+                memcpy(lum, ea, ealen);
+        }
 
         if (ea2len == 0) {
                 EXIT;
@@ -519,7 +528,9 @@ static void mdc_setattr_pack_20(struct ptlrpc_request *req, int offset,
                 EXIT;
                 return;
         }
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ealen), ea, ealen);
+        if (ea)
+                memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ealen),
+                       ea, ealen);
 
         if (ea2len == 0) {
                 EXIT;

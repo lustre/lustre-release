@@ -183,18 +183,16 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                 /* Attributes that are saved via getxattr will always have
                  * the stripe_offset as 0.  Instead, the MDS should be
                  * allowed to pick the starting OST index.   b=17846 */
-                if (lump->lmm_stripe_offset == 0)
+                if (lump != NULL && lump->lmm_stripe_offset == 0)
                         lump->lmm_stripe_offset = -1;
 
-                if (S_ISREG(inode->i_mode)) {
+                if (lump != NULL && S_ISREG(inode->i_mode)) {
                         struct file f;
                         int flags = FMODE_WRITE;
 
                         f.f_dentry = dentry;
-                        rc = ll_lov_setstripe_ea_info(inode, &f, flags,
-                                                      lump, sizeof(*lump));
+                        ll_lov_setstripe_ea_info(inode, &f, flags, lump, size);
                         /* b10667: rc always be 0 here for now */
-                        rc = 0;
                 } else if (S_ISDIR(inode->i_mode)) {
                         rc = ll_dir_setstripe(inode, lump, 0);
                 }

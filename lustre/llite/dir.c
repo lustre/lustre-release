@@ -982,23 +982,27 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
         struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
         struct obd_device *mgc = lsi->lsi_mgc;
         char *fsname = NULL, *param = NULL;
-        int lum_size = sizeof(struct lov_user_md_v1);
-
         struct iattr attr = { 0 };
-        int rc = 0;
+        int lum_size = 0, rc = 0;
 
-        if (lump->lmm_magic == LOV_USER_MAGIC_V3)
-                lum_size = sizeof(struct lov_user_md_v3);
-        /*
-         * This is coming from userspace, so should be in
-         * local endian.  But the MDS would like it in little
-         * endian, so we swab it before we send it.
-         */
-        if ((lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1)) &&
-            (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))) {
-                rc = lustre_swab_lov_user_md(lump);
-                if (rc) 
-                        return rc;
+        if (lump != NULL) {
+                if (lump->lmm_magic == LOV_USER_MAGIC_V3)
+                        lum_size = sizeof(struct lov_user_md_v3);
+                else
+                        lum_size = sizeof(struct lov_user_md_v1);
+                /*
+                 * This is coming from userspace, so should be in
+                 * local endian.  But the MDS would like it in little
+                 * endian, so we swab it before we send it.
+                 */
+                if ((lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1)) &&
+                    (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))) {
+                        rc = lustre_swab_lov_user_md(lump);
+                        if (rc) 
+                                return rc;
+                }
+        } else { /* NULL value means remove LOV EA */
+                lum_size = sizeof(struct lov_user_md_v1);
         }
 
         ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0, NULL);
@@ -1024,21 +1028,22 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                 fsname = ll_get_fsname(inode);
                 /* Set root stripesize */
                 sprintf(param, "%s-MDT0000.lov.stripesize=%u", fsname,
-                        le32_to_cpu(lump->lmm_stripe_size));
+                        lump ? le32_to_cpu(lump->lmm_stripe_size) : 0);
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripecount */
                 sprintf(param, "%s-MDT0000.lov.stripecount=%u", fsname,
-                        le16_to_cpu(lump->lmm_stripe_count));
+                        lump ? le16_to_cpu(lump->lmm_stripe_count) : 0);
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripeoffset */
                 sprintf(param, "%s-MDT0000.lov.stripeoffset=%u", fsname,
-                        le16_to_cpu(lump->lmm_stripe_offset));
+                        lump ? le16_to_cpu(lump->lmm_stripe_offset) :
+                        (typeof(lump->lmm_stripe_offset))(-1));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
