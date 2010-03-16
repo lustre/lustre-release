@@ -42,6 +42,60 @@
 
 #include <lnet/lib-lnet.h>
 
+static int
+lnet_me_match_portal(lnet_portal_t *ptl, lnet_process_id_t id,
+                     __u64 match_bits, __u64 ignore_bits)
+{
+        struct list_head *mhash = NULL;
+        int               unique;
+
+        LASSERT (!(lnet_portal_is_unique(ptl) &&
+                   lnet_portal_is_wildcard(ptl)));
+
+        /* prefer to check w/o any lock */
+        unique = lnet_match_is_unique(id, match_bits, ignore_bits);
+        if (likely(lnet_portal_is_unique(ptl) ||
+                   lnet_portal_is_wildcard(ptl)))
+                goto match;
+
+        /* unset, new portal */
+        if (unique) {
+                mhash = lnet_portal_mhash_alloc();
+                if (mhash == NULL)
+                        return -ENOMEM;
+        }
+
+        LNET_LOCK();
+        if (lnet_portal_is_unique(ptl) ||
+            lnet_portal_is_wildcard(ptl)) {
+                /* someone set it before me */
+                if (mhash != NULL)
+                        lnet_portal_mhash_free(mhash);
+                LNET_UNLOCK();
+                goto match;
+        }
+
+        /* still not set */
+        LASSERT (ptl->ptl_mhash == NULL);
+        if (unique) {
+                ptl->ptl_mhash = mhash;
+                lnet_portal_setopt(ptl, LNET_PTL_MATCH_UNIQUE);
+        } else {
+                lnet_portal_setopt(ptl, LNET_PTL_MATCH_WILDCARD);
+        }
+        LNET_UNLOCK();
+        return 0;
+
+ match:
+        if (lnet_portal_is_unique(ptl) && !unique)
+                return -EPERM;
+
+        if (lnet_portal_is_wildcard(ptl) && unique)
+                return -EPERM;
+
+        return 0;
+}
+
 int
 LNetMEAttach(unsigned int portal,
              lnet_process_id_t match_id,
@@ -49,13 +103,21 @@ LNetMEAttach(unsigned int portal,
              lnet_unlink_t unlink, lnet_ins_pos_t pos,
              lnet_handle_me_t *handle)
 {
-        lnet_me_t     *me;
+        lnet_me_t        *me;
+        lnet_portal_t    *ptl;
+        struct list_head *head;
+        int               rc;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
         if (portal >= the_lnet.ln_nportals)
                 return -EINVAL;
+
+        ptl = &the_lnet.ln_portals[portal];
+        rc = lnet_me_match_portal(ptl, match_id, match_bits, ignore_bits);
+        if (rc != 0)
+                return rc;
 
         me = lnet_me_alloc();
         if (me == NULL)
@@ -72,10 +134,13 @@ LNetMEAttach(unsigned int portal,
 
         lnet_initialise_handle (&me->me_lh, LNET_COOKIE_TYPE_ME);
 
+        head = lnet_portal_me_head(portal, match_id, match_bits);
+        LASSERT (head != NULL);
+
         if (pos == LNET_INS_AFTER)
-                list_add_tail(&me->me_list, &(the_lnet.ln_portals[portal].ptl_ml));
+                list_add_tail(&me->me_list, head);
         else
-                list_add(&me->me_list, &(the_lnet.ln_portals[portal].ptl_ml));
+                list_add(&me->me_list, head);
 
         lnet_me2handle(handle, me);
 
@@ -93,6 +158,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 {
         lnet_me_t     *current_me;
         lnet_me_t     *new_me;
+        lnet_portal_t *ptl;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -109,6 +175,16 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
                 LNET_UNLOCK();
                 return -ENOENT;
+        }
+
+        LASSERT (current_me->me_portal < the_lnet.ln_nportals);
+
+        ptl = &the_lnet.ln_portals[current_me->me_portal];
+        if (lnet_portal_is_unique(ptl)) {
+                /* nosense to insertion on unique portal */
+                lnet_me_free (new_me);
+                LNET_UNLOCK();
+                return -EPERM;
         }
 
         new_me->me_portal = current_me->me_portal;
