@@ -1305,12 +1305,8 @@ static int osd_inode_setattr(const struct lu_env *env,
         if (bits & LA_RDEV)
                 inode->i_rdev   = attr->la_rdev;
 
-        if (bits & LA_FLAGS) {
-                struct ldiskfs_inode_info *li = LDISKFS_I(inode);
-
-                li->i_flags = (li->i_flags & ~LDISKFS_FL_USER_MODIFIABLE) |
-                        (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
-        }
+        if (bits & LA_FLAGS)
+                inode->i_flags = ll_ext_to_inode_flags(attr->la_flags);
         return 0;
 }
 
