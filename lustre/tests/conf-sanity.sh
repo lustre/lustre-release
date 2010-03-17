@@ -423,24 +423,36 @@ test_9() {
 
 run_test 9 "test ptldebug and subsystem for mkfs"
 
-test_16() {
-        local TMPMTPT="${TMP}/conf16"
+is_blkdev () {
+        local facet=$1
+        local dev=$2
+        local size=${3:-""}
 
-        if [ ! -e "$MDSDEV" ]; then
-            log "no $MDSDEV existing, so mount Lustre to create one"
-            setup
-            check_mount || return 41
-            cleanup || return $?
+        local rc=0
+        do_facet $facet "test -b $dev" || rc=1
+        if [[ "$size" ]]; then
+                local in=$(do_facet $facet "dd if=$dev of=/dev/null bs=1k count=1 skip=$size 2>&1" |\
+                        awk '($3 == "in") { print $1 }')
+                [[ $in  = "1+0" ]] || rc=1
         fi
+        return $rc
+}
 
-        [ -f "$MDSDEV" ] && LOOPOPT="-o loop"
-
-        local lustre_version=$(get_lustre_version mds)
+test_16() {
+        setup
         # interop 1.8 <-> 2.0: 20: no LOGS
         local files="{OBJECTS,PENDING}"
+        local lustre_version=$(get_lustre_version mds)
         if [[ $lustre_version = 1.8* ]]; then
                 files="{OBJECTS,PENDING,LOGS}"
         fi
+        
+        check_mount || return 41
+        cleanup || return $?
+
+        local TMPMTPT="${TMP}/conf16"
+
+        is_blkdev mds $MDSDEV || LOOPOPT="-o loop"
 
         log "change the mode of $MDSDEV/$files to 555"
         do_facet mds "mkdir -p $TMPMTPT &&
@@ -449,7 +461,7 @@ test_16() {
                       umount $TMPMTPT" || return $?
 
         log "mount Lustre to change the mode of $files, then umount Lustre"
-	setup
+        setup
         check_mount || return 41
         cleanup || return $?
 
@@ -469,19 +481,24 @@ test_16() {
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
 
 test_17() {
-        if [ ! -e "$MDSDEV" ]; then
-            echo "no $MDSDEV existing, so mount Lustre to create one"
-	    setup
-            check_mount || return 41
-            cleanup || return $?
-        fi
+        setup
+        check_mount || return 41
+        cleanup || return $?
 
         echo "Remove mds config log"
-        do_facet mds "$DEBUGFS -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
+        if ! combined_mgs_mds ; then
+                stop mgs
+        fi
+
+        do_facet mgs "$DEBUGFS -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MGSDEV || return \$?" || return $?
+
+        if ! combined_mgs_mds ; then
+                start_mgs
+        fi
 
         start_ost
-	start_mds && return 42
-	reformat_and_config
+        start_mds && return 42
+        reformat_and_config
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
@@ -501,17 +518,18 @@ test_18() {
                 log "use STORED_MDSSIZE=$STORED_MDSSIZE"
 
         # check if the block device is large enough
-        [ -z "$OK" -a -b $MDSDEV ] && \
-                [ "$(dd if=$MDSDEV of=/dev/null bs=1k count=1 skip=$MIN 2>&1 |
-                     awk '($3 == "in") { print $1 }')" = "1+0" ] && OK=1 && \
+        [ -z "$OK" ] && $(is_blkdev mds $MDSDEV $MIN) && OK=1 &&
                 myMDSSIZE=$MIN && log "use device $MDSDEV with MIN=$MIN"
 
         # check if a loopback device has enough space for fs metadata (5%)
-        [ -z "$OK" ] && [ -f $MDSDEV -o ! -e $MDSDEV ] &&
-                SPACE=$(df -P $(dirname $MDSDEV) |
-                        awk '($1 != "Filesystem") {print $4}') &&
-                [ $SPACE -gt $((MIN / 20)) ] && OK=1 && myMDSSIZE=$MIN && \
+
+        if [ -z "$OK" ]; then
+                local SPACE=$(do_facet mds "[ -f $MDSDEV -o ! -e $MDSDEV ] && df -P \\\$(dirname $MDSDEV)" |
+                        awk '($1 != "Filesystem") {print $4}')
+                ! [ -z "$SPACE" ]  &&  [ $SPACE -gt $((MIN / 20)) ] && \
+                        OK=1 && myMDSSIZE=$MIN && \
                         log "use file $MDSDEV with MIN=$MIN"
+        fi
 
         [ -z "$OK" ] && skip_env "$MDSDEV too small for ${MIN}kB MDS" && return
 
@@ -519,15 +537,21 @@ test_18() {
         echo "mount mds with large journal..."
         local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 
-        MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
+        local opts="--mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT" 
+
+        if combined_mgs_mds ; then
+            MDS_MKFS_OPTS="--mgs $opts"
+        else
+            MDS_MKFS_OPTS="--mgsnode=$MGSNID $opts"
+        fi
 
         reformat_and_config
         echo "mount lustre system..."
-	setup
+        setup
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        local FOUNDSIZE=$(do_facet mds "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}')
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
@@ -708,12 +732,13 @@ cleanup_24a() {
 }
 
 test_24a() {
-	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
-		do_facet mds [ -b "$MDSDEV" ] && \
+		is_blkdev mds $MDSDEV && \
 		skip_env "mixed loopback and real device not working" && return
 	fi
 
+	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
+	
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
 	local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
 
@@ -755,7 +780,7 @@ run_test 24a "Multiple MDTs on a single node"
 
 test_24b() {
 	if [ -z "$fs2mds_DEV" ]; then
-		do_facet mds [ -b "$MDSDEV" ] && \
+		is_blkdev mds $MDSDEV && \
 		skip_env "mixed loopback and real device not working" && return
 	fi
 
@@ -1125,7 +1150,7 @@ test_33a() { # bug 12333, was test_33
         [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
-                do_facet mds [ -b "$MDSDEV" ] && \
+                is_blkdev mds $MDSDEV && \
                 skip_env "mixed loopback and real device not working" && return
         fi
 
@@ -1325,21 +1350,21 @@ test_35b() { # bug 18674
 run_test 35b "Continue reconnection retries, if the active server is busy"
 
 test_36() { # 12743
-        local rc
-        local FSNAME2=test1234
-        local fs3ost_HOST=$ost_HOST
-
-        [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST && fs3ost_HOST=$ost1_HOST
-        rc=0
-
-        if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
-		do_facet mds [ -b "$MDSDEV" ] && \
-		skip_env "mixed loopback and real device not working" && return
-        fi
         [ $OSTCOUNT -lt 2 ] && skip_env "skipping test for single OST" && return
 
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
+
+        local rc=0
+        local FSNAME2=test1234
+        local fs3ost_HOST=$ost_HOST
+
+        [ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST && fs3ost_HOST=$ost1_HOST
+
+        if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
+		is_blkdev mds $MDSDEV && \
+		skip_env "mixed loopback and real device not working" && return
+        fi
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
         local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
