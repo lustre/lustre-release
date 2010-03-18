@@ -450,7 +450,7 @@ test_23() { # Bug 5972
 }
 run_test 23 " others should see updated atime while another read===="
 
-test_24() {
+test_24a() {
 	touch $DIR1/$tfile
 	lfs df || error "lfs df failed"
 	lfs df -ih || error "lfs df -ih failed"
@@ -465,7 +465,14 @@ test_24() {
 	lctl --device %$OSC recover
 	lfs df || error "lfs df with reactivated OSC failed"
 }
-run_test 24 "lfs df [-ih] [path] test ========================="
+run_test 24a "lfs df [-ih] [path] test ========================="
+
+test_24b() {
+	touch $DIR1/$tfile
+	fsnum=`lfs df | grep -c "filesystem summary:"`
+	[ $fsnum -eq 2 ] || error "lfs df shows $fsnum != 2 filesystems."
+}
+run_test 24b "lfs df should show both filesystems ==============="
 
 test_25() {
 	[ `lctl get_param -n mdc.*-mdc-*.connect_flags | grep -c acl` -lt 2 ] && \
