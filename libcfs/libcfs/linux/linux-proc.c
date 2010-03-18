@@ -104,6 +104,7 @@ enum {
         PSDEV_LNET_DEBUG_MB,      /* size of debug buffer */
         PSDEV_LNET_DEBUG_LOG_UPCALL, /* debug log upcall script */
         PSDEV_LNET_WATCHDOG_RATELIMIT,  /* ratelimit watchdog messages  */
+        PSDEV_LNET_FORCE_LBUG,    /* hook to force an LBUG */
 };
 #else
 #define CTL_LNET                        CTL_UNNUMBERED
@@ -331,6 +332,13 @@ int LL_PROC_PROTO(proc_console_backoff)
         return rc;
 }
 
+int LL_PROC_PROTO(libcfs_force_lbug)
+{
+        if (write)
+                LBUG();
+        return 0;
+}
+
 static cfs_sysctl_table_t lnet_table[] = {
         /*
          * NB No .strategy entries have been provided since sysctl(8) prefers
@@ -471,6 +479,13 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dointvec_minmax,
                 .extra1   = &min_watchdog_ratelimit,
                 .extra2   = &max_watchdog_ratelimit,
+        },
+        {       .ctl_name = PSDEV_LNET_FORCE_LBUG,
+                .procname = "force_lbug",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0200,
+                .proc_handler = &libcfs_force_lbug
         },
         {0}
 };
