@@ -841,6 +841,7 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
                 case IO_NORMAL:
                         cio->cui_iov = args->u.normal.via_iov;
                         cio->cui_nrsegs = args->u.normal.via_nrsegs;
+                        cio->cui_tot_nrsegs = cio->cui_nrsegs;
 #ifndef HAVE_FILE_WRITEV
                         cio->cui_iocb = args->u.normal.via_iocb;
 #endif

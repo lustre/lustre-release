@@ -749,11 +749,8 @@ void ccc_io_update_iov(const struct lu_env *env,
         size_t size = io->u.ci_rw.crw_count;
 
         cio->cui_iov_olen = 0;
-        if (!cl_is_normalio(env, io) || size == cio->cui_tot_count)
+        if (!cl_is_normalio(env, io))
                 return;
-
-        if (cio->cui_tot_nrsegs == 0)
-                cio->cui_tot_nrsegs =  cio->cui_nrsegs;
 
         for (i = 0; i < cio->cui_tot_nrsegs; i++) {
                 struct iovec *iv = &cio->cui_iov[i];
