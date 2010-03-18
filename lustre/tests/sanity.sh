@@ -2396,7 +2396,8 @@ test_53() {
 	local ost_last
 	local ostnum
 
-	for VALUE in $(do_facet mds lctl get_param osc.*-osc.prealloc_last_id); do
+	local mdtosc=$(get_mdtosc_proc_path '*')
+	for VALUE in $(do_facet mds lctl get_param osc.$mdtosc.prealloc_last_id); do
 		param=`echo ${VALUE[0]} | cut -d "=" -f1`;
 		ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
 		mds_last=$(do_facet mds lctl get_param -n $param)
@@ -3090,6 +3091,13 @@ run_test 66 "update inode blocks count on client ==============="
 
 test_67a() { # was test_67 bug 3285 - supplementary group fails on MDS, passes on client
 	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+
+	# interop 18 <-> 20
+	local lustre_version=$(get_lustre_version mds)
+	if [[ $lustre_version != 1.8* ]]; then
+		skip mds running $lustre_version, no group_upcall
+		return 0
+	fi
 	check_kernel_version 35 || return 0
 	mkdir -p $DIR/$tdir
 	chmod 771 $DIR/$tdir
@@ -3113,6 +3121,13 @@ cleanup_67b() {
 }
 
 test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
+	# interop 18 <-> 20
+	local lustre_version=$(get_lustre_version mds)
+	if [[ $lustre_version != 1.8* ]]; then
+		skip mds running $lustre_version, no group_upcall
+		return 0
+	fi
+
 	# needs to be in /etc/groups on MDS, gid == uid
 	# Let's use RUNAS_ID
 	T67_UID=${T67_UID:-$RUNAS_ID}
