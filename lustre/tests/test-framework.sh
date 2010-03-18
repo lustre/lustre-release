@@ -2616,13 +2616,8 @@ run_test() {
     return $?
 }
 
-EQUALS="======================================================================"
 equals_msg() {
-    msg="$@"
-
-    local suffixlen=$((${#EQUALS} - ${#msg}))
-    [ $suffixlen -lt 5 ] && suffixlen=5
-    log `echo $(printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS)`
+    banner "$*"
 }
 
 log() {
@@ -2677,18 +2672,15 @@ reset_fail_loc () {
 # Log a message (on all nodes) padded with "=" before and after. 
 # Also appends a timestamp and prepends the testsuite name.
 # 
+
+EQUALS="===================================================================================================="
 banner() {
     msg="== ${TESTSUITE} $*"
-    # pad the message out to 70 with "="
     last=${msg: -1:1}
-    [[ $last != "=" && $last != " " ]] && msg+=" "
-    for i in $(seq $((68 - ${#msg})) ); do
-	msg+="="
-    done
+    [[ $last != "=" && $last != " " ]] && msg="$msg "
+    msg=$(printf '%s%.*s'  "$msg"  $((${#EQUALS} - ${#msg})) $EQUALS )
     # always include at least == after the message
-    msg+="=="
-
-    log "$msg $(date +"%H:%M:%S (%s)")"
+    log "$msg== $(date +"%H:%M:%S (%s)")"
 }
 
 #
