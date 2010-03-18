@@ -998,7 +998,7 @@ static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
         descr->cld_start = cl_index(obj, start);
         descr->cld_end   = cl_index(obj, end);
         descr->cld_mode  = mode == LCK_PW ? CLM_WRITE : CLM_READ;
-        descr->cld_enq_flags = CEF_ASYNC | enqflags;
+        descr->cld_enq_flags = enqflags;
         io->ci_obj = obj;
 
         lck = cl_lock_request(env, io, descr, "ec enqueue", eco);
@@ -1158,7 +1158,7 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
         rc = cl_echo_enqueue0(env, eco, offset,
                               offset + npages * CFS_PAGE_SIZE - 1,
                               rw == READ ? LCK_PW : LCK_PW, &lh.cookie,
-                              CILR_NEVER);
+                              CEF_NEVER);
         if (rc < 0)
                 GOTO(error_lock, rc);
 

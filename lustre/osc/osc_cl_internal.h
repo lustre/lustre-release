@@ -245,9 +245,11 @@ struct osc_lock {
                                  ols_glimpse:1;
         /**
          * IO that owns this lock. This field is used for a dead-lock
-         * avoidance by osc_lock_enqueue().
+         * avoidance by osc_lock_enqueue_wait().
          *
-         * \see osc_deadlock_is_possible()
+         * XXX: unfortunately, the owner of a osc_lock is not unique, 
+         * the lock may have multiple users, if the lock is granted and
+         * then matched.
          */
         struct osc_io           *ols_owner;
 };

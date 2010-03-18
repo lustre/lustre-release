@@ -2093,14 +2093,10 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                 const char *scope, const void *source)
 {
         struct cl_lock       *lock;
-        const struct lu_fid  *fid;
         int                   rc;
-        int                   iter;
         __u32                 enqflags = need->cld_enq_flags;
 
         ENTRY;
-        fid = lu_object_fid(&io->ci_obj->co_lu);
-        iter = 0;
         do {
                 lock = cl_lock_hold_mutex(env, io, need, scope, source);
                 if (!IS_ERR(lock)) {
@@ -2122,7 +2118,6 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                         lock = ERR_PTR(rc);
                 } else
                         rc = PTR_ERR(lock);
-                iter++;
         } while (rc == 0);
         RETURN(lock);
 }

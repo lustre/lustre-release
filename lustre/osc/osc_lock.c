@@ -1108,67 +1108,8 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
 }
 
 /**
- * Deadlock avoidance for osc_lock_enqueue(). Consider following scenario:
- *
- *     - Thread0: obtains PR:[0, 10]. Lock is busy.
- *
- *     - Thread1: enqueues PW:[5, 50]. Blocking ast is sent to
- *       PR:[0, 10], but cancellation of busy lock is postponed.
- *
- *     - Thread0: enqueue PR:[30, 40]. Lock is locally matched to
- *       PW:[5, 50], and thread0 waits for the lock completion never
- *       releasing PR:[0, 10]---deadlock.
- *
- * The second PR lock can be glimpse (it is to deal with that situation that
- * ll_glimpse_size() has second argument, preventing local match of
- * not-yet-granted locks, see bug 10295). Similar situation is possible in the
- * case of memory mapped user level buffer.
- *
- * To prevent this we can detect a situation when current "thread" or "io"
- * already holds a lock on this object and either add LDLM_FL_BLOCK_GRANTED to
- * the ols->ols_flags, or prevent local match with PW locks.
- */
-static int osc_deadlock_is_possible(const struct lu_env *env,
-                                    struct cl_lock *lock)
-{
-        struct cl_object        *obj;
-        struct cl_object_header *head;
-        struct cl_lock          *scan;
-        struct osc_io           *oio;
-
-        int result;
-
-        ENTRY;
-
-        LASSERT(cl_lock_is_mutexed(lock));
-
-        oio  = osc_env_io(env);
-        obj  = lock->cll_descr.cld_obj;
-        head = cl_object_header(obj);
-
-        result = 0;
-        cfs_spin_lock(&head->coh_lock_guard);
-        cfs_list_for_each_entry(scan, &head->coh_locks, cll_linkage) {
-                if (scan != lock) {
-                        struct osc_lock *oscan;
-
-                        oscan = osc_lock_at(scan);
-                        LASSERT(oscan != NULL);
-                        if (oscan->ols_owner == oio) {
-                                result = 1;
-                                break;
-                        }
-                }
-        }
-        cfs_spin_unlock(&head->coh_lock_guard);
-        RETURN(result);
-}
-
-/**
  * Implementation of cl_lock_operations::clo_enqueue() method for osc
  * layer. This initiates ldlm enqueue:
- *
- *     - checks for possible dead-lock conditions (osc_deadlock_is_possible());
  *
  *     - cancels conflicting locks early (osc_lock_enqueue_wait());
  *
@@ -1201,8 +1142,6 @@ static int osc_lock_enqueue(const struct lu_env *env,
         osc_lock_build_res(env, obj, resname);
         osc_lock_build_policy(env, lock, policy);
         ols->ols_flags = osc_enq2ldlm_flags(enqflags);
-        if (osc_deadlock_is_possible(env, lock))
-                ols->ols_flags |= LDLM_FL_BLOCK_GRANTED;
         if (ols->ols_flags & LDLM_FL_HAS_INTENT)
                 ols->ols_glimpse = 1;
         if (!(enqflags & CEF_MUST))
@@ -1239,6 +1178,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
                         }
                 } else {
                         ols->ols_state = OLS_GRANTED;
+                        ols->ols_owner = osc_env_io(env);
                 }
         }
         LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
@@ -1524,20 +1464,17 @@ static int osc_lock_fits_into(const struct lu_env *env,
                  *     will not release sublock1. Bang!
                  */
                 if (ols->ols_state < OLS_GRANTED ||
-                        ols->ols_state > OLS_RELEASED)
+                    ols->ols_state > OLS_RELEASED)
                         return 0;
         } else if (need->cld_enq_flags & CEF_MUST) {
-                 /*
+                /*
                  * If the lock hasn't ever enqueued, it can't be matched
                  * because enqueue process brings in many information
                  * which can be used to determine things such as lockless,
                  * CEF_MUST, etc.
                  */
-                if (ols->ols_state < OLS_GRANTED ||
-                        ols->ols_state > OLS_RELEASED)
-                        return 0;
                 if (ols->ols_state < OLS_UPCALL_RECEIVED &&
-                        ols->ols_locklessable)
+                    ols->ols_locklessable)
                         return 0;
         }
         return 1;
@@ -1614,7 +1551,7 @@ static void osc_lock_lockless_state(const struct lu_env *env,
         if (state == CLS_HELD) {
                 struct osc_io *oio  = osc_env_io(env);
 
-                LASSERT(lock->ols_owner == NULL);
+                LASSERT(ergo(lock->ols_owner, lock->ols_owner == oio));
                 lock->ols_owner = oio;
 
                 /* set the io to be lockless if this lock is for io's
@@ -1630,7 +1567,15 @@ static int osc_lock_lockless_fits_into(const struct lu_env *env,
                                        const struct cl_lock_descr *need,
                                        const struct cl_io *io)
 {
-        return 0;
+        struct osc_lock *lock = cl2osc_lock(slice);
+
+        if (!(need->cld_enq_flags & CEF_NEVER))
+                return 0;
+
+        /* To solve the problem of stacking echo client upon osc directly.
+         * see bug 22147 for details.
+         */
+        return (lock->ols_owner == osc_env_io(env));
 }
 
 static const struct cl_lock_operations osc_lock_lockless_ops = {
