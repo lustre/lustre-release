@@ -759,6 +759,26 @@ test_28() {      # bug 6086 - error adding new clients
 }
 run_test 28 "handle error adding new clients (bug 6086)"
 
+test_29a() { # bug 22273 - error adding new clients
+	#define OBD_FAIL_TGT_CLIENT_ADD 0x711
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000711"
+	# fail abort so client will be new again
+	fail_abort $SINGLEMDS
+	client_up || error "reconnect failed"
+	return 0
+}
+run_test 29a "error adding new clients doesn't cause LBUG (bug 22273)"
+
+test_29b() { # bug 22273 - error adding new clients
+	#define OBD_FAIL_TGT_CLIENT_ADD 0x711
+	do_facet ost1 "lctl set_param fail_loc=0x80000711"
+	# fail abort so client will be new again
+	fail_abort ost1
+	client_up || error "reconnect failed"
+	return 0
+}
+run_test 29b "error adding new clients doesn't cause LBUG (bug 22273)"
+
 test_50() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes

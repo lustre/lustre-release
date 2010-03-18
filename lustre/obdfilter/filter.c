@@ -366,6 +366,9 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
                 CDEBUG(D_INFO, "writing client lcd at idx %u (%llu) (len %u)\n",
                        fed->fed_lr_idx,off,(unsigned int)sizeof(*fed->fed_lcd));
 
+                if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_ADD))
+                        RETURN(-ENOSPC);
+
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 /* Transaction needed to fix bug 1403 */
                 handle = fsfilt_start(obd,
@@ -2820,10 +2823,6 @@ static int filter_connect(const struct lu_env *env,
 
 cleanup:
         if (rc) {
-                if (lcd) {
-                        OBD_FREE_PTR(lcd);
-                        fed->fed_lcd = NULL;
-                }
                 class_disconnect(lexp);
                 lprocfs_exp_cleanup(lexp);
                 *exp = NULL;

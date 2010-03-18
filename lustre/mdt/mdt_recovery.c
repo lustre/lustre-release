@@ -566,6 +566,10 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
 
         /* Write new client data. */
         off = med->med_lr_off;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_ADD))
+                RETURN(-ENOSPC);
+
         mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
 
         th = mdt_trans_start(env, mdt);

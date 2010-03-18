@@ -5024,14 +5024,11 @@ static int mdt_obd_connect(const struct lu_env *env,
                         memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
                         lexp->exp_mdt_data.med_lcd = lcd;
                         rc = mdt_client_new(env, mdt);
-                        if (rc != 0) {
-                                OBD_FREE_PTR(lcd);
-                                lexp->exp_mdt_data.med_lcd = NULL;
-                        } else {
+                        if (rc == 0)
                                 mdt_export_stats_init(obd, lexp, localdata);
-                        }
-                } else
+                } else {
                         rc = -ENOMEM;
+                }
         }
 
 out:
