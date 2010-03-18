@@ -51,7 +51,7 @@ test_dbench() {
 	return
     fi
 
-    DBENCHDIR=$MOUNT/d0.$HOSTNAME
+    local DBENCHDIR=$DIR/d0.$HOSTNAME
     mkdir -p $DBENCHDIR
     local SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
     DB_THREADS=$((SPACE / 50000))
@@ -82,7 +82,7 @@ test_bonnie() {
 	skip_env "No bonnie++ installed"
 	return 0
     fi
-    BONDIR=$MOUNT/d0.bonnie
+    local BONDIR=$DIR/d0.bonnie
     mkdir -p $BONDIR
     $LFS setstripe -c -1 $BONDIR
     sync
@@ -108,7 +108,7 @@ test_iozone() {
 
     export O_DIRECT
     
-    IOZDIR=$MOUNT/d0.iozone
+    local IOZDIR=$DIR/d0.iozone
     mkdir -p $IOZDIR
     $LFS setstripe -c -1 $IOZDIR
     sync
@@ -133,12 +133,12 @@ test_iozone() {
     
     # check if O_DIRECT support is implemented in kernel
     if [ -z "$O_DIRECT" ]; then
-	touch $MOUNT/f.iozone
-	if ! ./directio write $MOUNT/f.iozone 0 1; then
+	touch $DIR/f.iozone
+	if ! ./directio write $DIR/f.iozone 0 1; then
 	    log "SKIP iozone DIRECT IO test"
 	    O_DIRECT=no
 	fi
-	rm -f $MOUNT/f.iozone
+	rm -f $DIR/f.iozone
     fi
     if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 	$DEBUG_OFF
@@ -175,17 +175,18 @@ test_iozone() {
 run_test iozone "iozone"
 
 test_fsx() {
+    local testfile=$DIR/f0.fsxfile
     FSX_SIZE=$SIZE
     FSX_COUNT=1000
     local SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
     [ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
     $DEBUG_OFF
     FSX_SEED=${FSX_SEED:-$RANDOM}
-    rm -f $MOUNT/fsxfile
-    $LFS setstripe -c -1 $MOUNT/fsxfile
+    rm -f $testfile
+    $LFS setstripe -c -1 $testfile
     echo Using FSX_SEED=$FSX_SEED FSX_SIZE=$FSX_SIZE FSX_COUNT=$FSX_COUNT
     fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
-	-N $(($FSX_COUNT * 100)) $MOUNT/fsxfile
+	-N $(($FSX_COUNT * 100)) $DIR/fsxfile
     $DEBUG_ON
 }
 run_test fsx "fsx"
