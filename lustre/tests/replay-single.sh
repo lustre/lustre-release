@@ -2021,8 +2021,8 @@ test_83b() {
 run_test 83b "fail log_add during unlink recovery"
 
 test_84a() {
-#define OBD_FAIL_MDS_OPEN_WAIT_CREATE  0x143
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000143"
+#define OBD_FAIL_MDS_OPEN_WAIT_CREATE  0x144
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000144"
     createmany -o $DIR/$tfile- 1 &
     PID=$!
     mds_evict_client

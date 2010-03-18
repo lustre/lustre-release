@@ -490,7 +490,7 @@ test_17i() { #bug 20018
 	local foo=$DIR/$tdir/$tfile
 	ln -s $foo $foo || error "create symlink failed"
 #define OBD_FAIL_MDS_READLINK_EPROTO     0x143
-	do_facet mds lctl set_param fail_loc=0x80000144
+	do_facet mds lctl set_param fail_loc=0x80000143
 	ls -l $foo && error "error not detected"
 	return 0
 }
