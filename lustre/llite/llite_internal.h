@@ -149,7 +149,9 @@ struct ll_inode_info {
         cfs_list_t              lli_dead_list;
 
         cfs_semaphore_t         lli_och_sem; /* Protects access to och pointers
-                                                and their usage counters */
+                                                and their usage counters, also
+                                                atomicity of check-update of
+                                                lli_smd */
         /* We need all three because every inode may be opened in different
            modes */
         struct obd_client_handle *lli_mds_read_och;
