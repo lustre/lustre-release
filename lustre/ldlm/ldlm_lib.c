@@ -2359,53 +2359,6 @@ out:
 }
 #endif /* HAVE_QUOTA_SUPPORT */
 
-/* Send a remote set_info_async.
- * This may go from client to server or server to client
- */
-int target_set_info_rpc(struct obd_import *imp, int opcode,
-                        obd_count keylen, void *key,
-                        obd_count vallen, void *val,
-                        struct ptlrpc_request_set *set)
-{
-        struct ptlrpc_request *req;
-        char                  *tmp;
-        int                    rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc(imp, &RQF_OBD_SET_INFO);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
-                             RCL_CLIENT, keylen);
-        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
-                             RCL_CLIENT, vallen);
-        rc = ptlrpc_request_pack(req, LUSTRE_OBD_VERSION, opcode);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
-        memcpy(tmp, key, keylen);
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
-        memcpy(tmp, val, vallen);
-
-        ptlrpc_request_set_replen(req);
-
-        if (set) {
-                ptlrpc_set_add_req(set, req);
-                ptlrpc_check_set(NULL, set);
-        } else {
-                rc = ptlrpc_queue_wait(req);
-                ptlrpc_req_finished(req);
-        }
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(target_set_info_rpc);
-
-
 ldlm_mode_t lck_compat_array[] = {
         [LCK_EX] LCK_COMPAT_EX,
         [LCK_PW] LCK_COMPAT_PW,

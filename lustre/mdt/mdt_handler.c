@@ -2842,7 +2842,6 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         switch (lustre_msg_get_opc(msg)) {
         case MDS_CONNECT:
         case MDS_DISCONNECT:
-        case MDS_SET_INFO:
         case OBD_PING:
         case SEC_CTX_INIT:
         case SEC_CTX_INIT_CONT:
@@ -2868,6 +2867,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_SYNC:
         case MDS_GETXATTR:
         case MDS_SETXATTR:
+        case MDS_SET_INFO:
         case MDS_GET_INFO:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
@@ -5606,10 +5606,11 @@ int mdt_hsm_copytool_send(struct obd_export *exp)
 
         /* Uses the ldlm reverse import; this rpc will be seen by
           the ldlm_callback_handler */
-        rc = target_set_info_rpc(exp->exp_imp_reverse, LDLM_SET_INFO,
-                                 sizeof(KEY_HSM_COPYTOOL_SEND),
-                                 KEY_HSM_COPYTOOL_SEND,
-                                 len, lh, NULL);
+        rc = do_set_info_async(exp->exp_imp_reverse,
+                               LDLM_SET_INFO, LUSTRE_OBD_VERSION,
+                               sizeof(KEY_HSM_COPYTOOL_SEND),
+                               KEY_HSM_COPYTOOL_SEND,
+                               len, lh, NULL);
 
         OBD_FREE(lh, len);
 

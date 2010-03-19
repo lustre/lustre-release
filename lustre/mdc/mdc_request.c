@@ -1603,8 +1603,8 @@ int mdc_set_info_async(struct obd_export *exp,
                 }
                 cfs_spin_unlock(&imp->imp_lock);
 
-                rc = target_set_info_rpc(imp, MDS_SET_INFO,
-                                         keylen, key, vallen, val, set);
+                rc = do_set_info_async(imp, MDS_SET_INFO, LUSTRE_MDS_VERSION,
+                                       keylen, key, vallen, val, set);
                 RETURN(rc);
         }
         if (KEY_IS(KEY_SPTLRPC_CONF)) {
@@ -1625,8 +1625,8 @@ int mdc_set_info_async(struct obd_export *exp,
                 RETURN(0);
         }
         if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
-                rc = target_set_info_rpc(imp, MDS_SET_INFO,
-                                         keylen, key, vallen, val, set);
+                rc = do_set_info_async(imp, MDS_SET_INFO, LUSTRE_MDS_VERSION,
+                                       keylen, key, vallen, val, set);
                 RETURN(rc);
         }
         if (KEY_IS(KEY_HSM_COPYTOOL_SEND)) {
