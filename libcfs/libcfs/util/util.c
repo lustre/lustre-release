@@ -26,25 +26,22 @@
  * GPL HEADER END
  */
 /*
- * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Copyright  2010 Sun Microsystems, Inc. All rights reserved
  * Use is subject to license terms.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * libcfs/libcfs/util/util.c
+ *
  */
 
-#ifndef __LIBCFS_LINUX_TRACEFILE_H__
-#define __LIBCFS_LINUX_TRACEFILE_H__
+#include <libcfs/libcfsutil.h>
+#include "../tracefile.h"
 
-/**
- * three types of trace_data in linux
- */
-typedef enum {
-	CFS_TCD_TYPE_PROC = 0,
-	CFS_TCD_TYPE_SOFTIRQ,
-	CFS_TCD_TYPE_IRQ,
-	CFS_TCD_TYPE_MAX
-} cfs_trace_buf_type_t;
-
-#endif
+int
+libcfs_tcd_type_max(void)
+{
+        return CFS_TCD_TYPE_MAX;
+}

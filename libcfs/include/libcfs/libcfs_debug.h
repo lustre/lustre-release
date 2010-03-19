@@ -65,16 +65,6 @@ extern unsigned int libcfs_catastrophe;
 extern unsigned int libcfs_panic_on_lbug;
 
 /**
- * three types of trace_data in linux
- */
-typedef enum {
-	CFS_TCD_TYPE_PROC = 0,
-	CFS_TCD_TYPE_SOFTIRQ,
-	CFS_TCD_TYPE_IRQ,
-	CFS_TCD_TYPE_MAX
-} cfs_trace_buf_type_t;
-
-/**
  * Format for debug message headers
  */
 struct ptldebug_header {

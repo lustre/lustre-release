@@ -457,7 +457,7 @@ static int parse_buffer(int fdin, int fdout)
                         goto readhdr;
                 
                 if (hdr->ph_len > 4094 ||       /* is this header bogus? */
-                    hdr->ph_type >= CFS_TCD_TYPE_MAX ||
+                    hdr->ph_type >= libcfs_tcd_type_max() ||
                     hdr->ph_stack > 65536 ||
                     hdr->ph_sec < (1 << 30) ||
                     hdr->ph_usec > 1000000000 ||

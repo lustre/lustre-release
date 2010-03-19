@@ -52,5 +52,9 @@
 #include <libcfs/util/parser.h>
 #include <libcfs/util/libcfsutil_ioctl.h>
 
+/*
+ * Defined by libcfs/libcfs/util/util.c
+ */
+int libcfs_tcd_type_max(void);
 
 #endif	/* __LIBCFSUTIL_H__ */
