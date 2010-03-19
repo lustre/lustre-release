@@ -396,7 +396,9 @@ test_2_sub() {
         rm -f ${TESTFILE}_xxx
         sync; sleep 1; sync;
 
-        MDS_UUID=`do_facet mds $LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
+        # interop 18 <-> 20
+        local dev=$(get_mds_mdt_device_proc_path)
+        MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
         MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
         echo $MDS_QUOTA_USED
         [ $MDS_QUOTA_USED -ne 0 ] && \
@@ -424,7 +426,7 @@ test_2_sub() {
         rm -f ${TESTFILE}_xxx
         sync; sleep 1; sync;
 
-        MDS_UUID=`do_facet mds $LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
+        MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
         MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
         echo $MDS_QUOTA_USED
         [ $MDS_QUOTA_USED -ne 0 ] && \
@@ -1238,6 +1240,13 @@ test_15(){
 
         resetquota -g $TSTUSR
 
+        # interop 18 <-> 20
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]]; then
+                echo mds running $lustre_version, skip quota v1 testing
+                return 0
+        fi
+
         quota_save_version "ug1"
 
         echo "Testing that >4GB quota limits fail on volume with quota v1"
@@ -1291,6 +1300,14 @@ test_16_tub() {
 
 # test without adjusting qunit
 test_16 () {
+        # interop 18 <-> 20
+        # 2.0 version does not support WITHOUT_CHANGE_QS, so such test is obsolete
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]]; then
+                skip mds running $lustre_version, WITHOUT_CHANGE_QS is not supported
+                return 0
+        fi
+	
         set_blk_tunesz $((BUNIT_SZ * 2))
         set_blk_unitsz $((BUNIT_SZ * 4))
         for i in u g; do
@@ -1871,7 +1888,10 @@ test_25_sub() {
         # set stripe index to 0
         log "setstripe for $DIR/$tdir to 0"
         $LFS setstripe $DIR/$tdir -c 1 -i 0
-        MDS_UUID=`do_facet mds $LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
+
+        # interop 18 <-> 20
+        local dev=$(get_mds_mdt_device_proc_path)
+        MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
         OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
         MDS_QUOTA_USED_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
         OST0_QUOTA_USED_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
