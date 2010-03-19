@@ -433,8 +433,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 }
 
 static void failed_lock_cleanup(struct ldlm_namespace *ns,
-                                struct ldlm_lock *lock,
-                                struct lustre_handle *lockh, int mode)
+                                struct ldlm_lock *lock, int mode)
 {
         int need_cancel = 0;
 
@@ -447,25 +446,31 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
                  * bl_ast and -EINVAL reply is sent to server anyways.
                  * bug 17645 */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED |
-                                 LDLM_FL_ATOMIC_CB;
+                                 LDLM_FL_ATOMIC_CB | LDLM_FL_CBPENDING;
                 need_cancel = 1;
         }
         unlock_res_and_lock(lock);
 
-        if (need_cancel) {
+        if (need_cancel)
                 LDLM_DEBUG(lock,
                            "setting FL_LOCAL_ONLY | LDLM_FL_FAILED | "
-                           "LDLM_FL_ATOMIC_CB");
-                ldlm_lock_decref_and_cancel(lockh, mode);
-        } else {
+                           "LDLM_FL_ATOMIC_CB | LDLM_FL_CBPENDING");
+        else
                 LDLM_DEBUG(lock, "lock was granted or failed in race");
-                ldlm_lock_decref(lockh, mode);
-        }
+
+        ldlm_lock_decref_internal(lock, mode);
 
         /* XXX - HACK because we shouldn't call ldlm_lock_destroy()
          *       from llite/file.c/ll_file_flock(). */
+        /* This code makes for the fact that we do not have blocking handler on
+         * a client for flock locks. As such this is the place where we must
+         * completely kill failed locks. (interrupted and those that
+         * were waiting to be granted when server evicted us. */
         if (lock->l_resource->lr_type == LDLM_FLOCK) {
-                ldlm_lock_destroy(lock);
+                lock_res_and_lock(lock);
+                ldlm_resource_unlink_lock(lock);
+                ldlm_lock_destroy_nolock(lock);
+                unlock_res_and_lock(lock);
         }
 }
 
@@ -614,7 +619,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                         int err = lock->l_completion_ast(lock, *flags, NULL);
                         if (!rc)
                                 rc = err;
-                        if (rc && type != LDLM_FLOCK) /* bug 9425, bug 10250 */
+                        if (rc)
                                 cleanup_phase = 1;
                 }
         }
@@ -629,7 +634,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         EXIT;
 cleanup:
         if (cleanup_phase == 1 && rc)
-                failed_lock_cleanup(ns, lock, lockh, mode);
+                failed_lock_cleanup(ns, lock, mode);
         /* Put lock 2 times, the second reference is held by ldlm_cli_enqueue */
         LDLM_LOCK_PUT(lock);
         LDLM_LOCK_RELEASE(lock);
@@ -816,7 +821,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                                                 LUSTRE_DLM_VERSION,
                                                 LDLM_ENQUEUE);
                 if (req == NULL) {
-                        failed_lock_cleanup(ns, lock, lockh, einfo->ei_mode);
+                        failed_lock_cleanup(ns, lock, einfo->ei_mode);
                         LDLM_LOCK_RELEASE(lock);
                         RETURN(-ENOMEM);
                 }
