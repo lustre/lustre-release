@@ -607,8 +607,19 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 
 int llapi_search_fsname(const char *pathname, char *fsname)
 {
+        char *path = (char*)pathname, buf[PATH_MAX + 1];
+
+        if (pathname[0] != '/') { /* Need a absolute path */
+                memset(buf, '\0', sizeof(buf));
+                if (realpath(pathname, buf) == NULL) {
+                        llapi_err(LLAPI_MSG_ERROR, "pathname '%s' cannot expand",
+                                  pathname);
+                        return -EINVAL;
+                }
+                path = buf;
+        }
         return get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL,
-                             (char *)pathname, -1);
+                             path, -1);
 }
 
 /* return the first file matching this pattern */
