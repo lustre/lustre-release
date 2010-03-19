@@ -224,16 +224,19 @@ ost_pools_init() {
     cleanup_tests
 }
 
+set_cleanup_trap() {
+    trap "cleanup_pools $FSNAME" EXIT
+}
 
 # Initialization
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 ost_pools_init
 
-trap "cleanup_pools $FSNAME" EXIT
 
 # Tests for new commands added
 test_1() {
+    set_cleanup_trap
     echo "Creating a pool with a 1 character pool name"
     create_pool_nofail p
 
@@ -283,6 +286,7 @@ test_1() {
 run_test 1 "Test lctl pool_new  ========================================="
 
 test_2a() {
+    set_cleanup_trap
     destroy_pool $POOL
 
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000 2>/dev/null
@@ -293,6 +297,7 @@ test_2a() {
 run_test 2a "pool_add: non-existant pool"
 
 test_2b() {
+    set_cleanup_trap
     do_facet $SINGLEMDS lctl pool_add $FSNAME.p1234567891234567890 \
         $FSNAME-OST0000 2>/dev/null
     [[ $? -ne 0 ]] || \
@@ -302,6 +307,7 @@ run_test 2b "pool_add: Invalid pool name"
 
 # Testing various combinations of OST name list
 test_2c() {
+    set_cleanup_trap
     local TGT
     local RC
 
@@ -356,6 +362,7 @@ test_2c() {
 run_test 2c "pool_add: OST index combinations ==========================="
 
 test_2d() {
+    set_cleanup_trap
     local TGT
     local RC
 
@@ -375,6 +382,7 @@ test_2d() {
 run_test 2d "pool_add: OSTs that don't exist should be rejected ========"
 
 test_2e() {
+    set_cleanup_trap
     local TGT
     local RC
     local RESULT
@@ -405,6 +413,7 @@ test_2e() {
 run_test 2e "pool_add: OST already in a pool should be rejected ========"
 
 test_3a() {
+    set_cleanup_trap
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
         destroy_pool $POOL
@@ -416,6 +425,7 @@ test_3a() {
 run_test 3a "pool_remove: non-existant pool"
 
 test_3b() {
+    set_cleanup_trap
     do_facet $SINGLEMDS lctl pool_remove ${NON_EXISTANT_FS}.$POOL OST0000 2>/dev/null
     [[ $? -ne 0 ]] || \
         error "pool_remove did not fail even though fsname did not exist."
@@ -423,6 +433,7 @@ test_3b() {
 run_test 3b "pool_remove: non-existant fsname"
 
 test_3c() {
+    set_cleanup_trap
     do_facet $SINGLEMDS lctl pool_remove $FSNAME.p1234567891234567890 \
         $FSNAME-OST0000 2>/dev/null
     [[ $? -ne 0 ]] || \
@@ -432,6 +443,7 @@ run_test 3c "pool_remove: Invalid pool name"
 
 # Testing various combinations of OST name list
 test_3d() {
+    set_cleanup_trap
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
         destroy_pool $POOL
@@ -466,6 +478,7 @@ test_3d() {
 run_test 3d "pool_remove: OST index combinations ==========================="
 
 test_4a() {
+    set_cleanup_trap
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
         destroy_pool $POOL
@@ -477,6 +490,7 @@ test_4a() {
 run_test 4a "pool_destroy: non-existant pool"
 
 test_4b() {
+    set_cleanup_trap
     do_facet $SINGLEMDS lctl pool_destroy ${NON_EXISTANT_FS}.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
         error "pool_destroy did not fail even though the filesystem did not exist."
@@ -484,6 +498,7 @@ test_4b() {
 run_test 4b "pool_destroy: non-existant fs-name"
 
 test_4c() {
+    set_cleanup_trap
     create_pool_nofail $POOL
     add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
 
@@ -546,6 +561,7 @@ sub_test_5() {
 }
 
 test_5() {
+    set_cleanup_trap
     # Issue commands from client
     sub_test_5 $LCTL
     sub_test_5 $LFS
@@ -558,6 +574,7 @@ test_5() {
 run_test 5 "lfs/lctl pool_list"
 
 test_6() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local POOL_DIR=$POOL_ROOT/dir_tst
     local POOL_FILE=$POOL_ROOT/file_tst
@@ -602,12 +619,11 @@ test_6() {
     [[ $? -ne 0 ]] || \
         error "$SETSTRIPE with start index outside the pool did not fail."
 
-    destroy_pool $POOL
-    destroy_pool $POOL2
 }
 run_test 6 "getstripe/setstripe"
 
 test_11() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
@@ -642,14 +658,12 @@ test_11() {
 
     rm -rf $POOL_ROOT/dir?
 
-    destroy_pool $POOL
-    destroy_pool $POOL2
-
     return 0
 }
 run_test 11 "OSTs in overlapping/multiple pools"
 
 test_12() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
     [[ $OSTCOUNT -le 2 ]] && skip_env "Need atleast 3 OSTs" && return
@@ -699,14 +713,12 @@ test_12() {
     check_file_in_pool $POOL_ROOT/file3 $POOL
     check_file_in_pool $POOL_ROOT/file4 $POOL2
 
-    destroy_pool $POOL
-    destroy_pool $POOL2
-
     return 0    
 }
 run_test 12 "OST Pool Membership"
 
 test_13() {
+    set_cleanup_trap
     [[ $OSTCOUNT -le 2 ]] && skip_env "Need atleast 3 OSTs" && return
 
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
@@ -763,13 +775,13 @@ test_13() {
     done
 
     rm -rf create_dir $POOL_ROOT/dir?
-    destroy_pool $POOL
 
     return 0
 }
 run_test 13 "Striping characteristics in a pool"
 
 test_14() {
+    set_cleanup_trap
     [[ $OSTCOUNT -le 2 ]] && skip_env "Need atleast 3 OSTs" && return
 
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
@@ -826,13 +838,12 @@ test_14() {
     done
 
     rm -rf $POOL_ROOT
-    destroy_pool $POOL
-    destroy_pool $POOL2
     return 0
 }
 run_test 14 "Round robin and QOS striping within a pool"
 
 test_15() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=100
     local i=0
@@ -854,18 +865,12 @@ test_15() {
       i=$((i+1))
     done
 
-    i=0
-    while [[ $i -lt $OSTCOUNT ]]
-    do
-      destroy_pool pool${i}
-      i=$((i+1))
-    done
-
     return 0
 }
 run_test 15 "One directory per OST/pool"
 
 test_16() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=10
     local i=0
@@ -891,13 +896,12 @@ test_16() {
 
     rm -rf $POOL_ROOT/$tdir
 
-    destroy_pool $POOL
-
     return 0
 }
 run_test 16 "Inheritance of pool properties"
 
 test_17() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=10
     local i=0
@@ -951,6 +955,7 @@ create_perf() {
 }
 
 test_18() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=10000
     local i=0
@@ -992,6 +997,7 @@ run_test 18 "File create in a directory which references a deleted pool"
 
 
 test_19() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=12
     local dir1=$POOL_ROOT/dir1
@@ -1017,13 +1023,13 @@ test_19() {
     done
 
     rm -rf $dir1 $dir2
-    destroy_pool $POOL
 
     return 0
 }
 run_test 19 "Pools should not come into play when not specified"
 
 test_20() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=12
     local dir1=$POOL_ROOT/dir1
@@ -1064,14 +1070,13 @@ test_20() {
     check_file_not_in_pool $dir2/file4 $POOL2
 
     rm -rf $dir1
-    destroy_pool $POOL
-    destroy_pool $POOL2
 
     return 0
 }
 run_test 20 "Different pools in a directory hierarchy."
 
 test_21() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
@@ -1089,7 +1094,6 @@ test_21() {
     check_file_in_pool $dir/file1 $POOL
 
     rm -rf $dir
-    destroy_pool $POOL
 
     return 0
 }
@@ -1114,6 +1118,7 @@ add_loop() {
 }
 
 test_22() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
 
@@ -1132,14 +1137,12 @@ test_22() {
           error "createmany $POOL_ROOT/${tfile} failed!"
     wait
 
-    destroy_pool $POOL
-    destroy_pool $POOL2
-
     return 0
 }
 run_test 22 "Simultaneous manipulation of a pool"
 
 test_23() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
@@ -1215,13 +1218,13 @@ test_23() {
     df -h
 
     rm -rf $POOL_ROOT
-    destroy_pool $POOL
 
     return 0
 }
 run_test 23 "OST pools and quota"
 
 test_24() {
+    set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
@@ -1295,13 +1298,13 @@ test_24() {
     done
 
     rm -rf $POOL_ROOT
-    destroy_pool $POOL
 
     return 0
 }
 run_test 24 "Independence of pool from other setstripe parameters"
 
 test_25() {
+    set_cleanup_trap
     local dev=$(mdsdevname ${SINGLEMDS//mds/})
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
@@ -1328,9 +1331,6 @@ test_25() {
     done
 
     rm -rf $POOL_ROOT
-    for i in $(seq 10); do
-        destroy_pool pool$i
-    done
 }
 run_test 25 "Create new pool and restart MDS ======================="
 

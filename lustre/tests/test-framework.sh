@@ -2724,7 +2724,7 @@ run_one_logged() {
     rm -rf $LOGDIR/err
 
     echo
-    run_one $1 "$2" 2>&1 | tee $test_log
+    (run_one $1 "$2") 2>&1 | tee $test_log
     local RC=${PIPESTATUS[0]}
 
     [ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \
