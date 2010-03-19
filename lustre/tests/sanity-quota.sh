@@ -1734,6 +1734,11 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]] ; then
+                skip mds running $lustre_version, skip quota v1 testing
+                return
+        fi
         quota_save_version "ug1"
 
         stopall

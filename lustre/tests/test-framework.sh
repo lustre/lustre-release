@@ -448,7 +448,7 @@ quota_save_version() {
 
     [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
-    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.md*.quota_type=$spec"
+    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.$(get_md_name).quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
@@ -2801,6 +2801,16 @@ get_mds_mdt_device_proc_path() {
         echo "mds"
     else
         echo "mdt"
+    fi
+}
+
+get_md_name () {
+    local major=$(get_mds_version_major)
+    local minor=$(get_mds_version_minor)
+    if [ $major -le 1 -a $minor -le 8 ] ; then
+        echo "mdt"
+    else
+        echo "mdd"
     fi
 }
 
