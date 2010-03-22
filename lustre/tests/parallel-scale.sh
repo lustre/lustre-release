@@ -520,6 +520,11 @@ cleanup_statahead () {
 }
 
 test_statahead () {
+    if [[ -n $NFSCLIENT ]]; then
+        skip "Statahead testing is not supported on NFS clients."
+        return 0
+    fi
+
     [ x$MDSRATE = x ] &&
         { skip_env "mdsrate not found" && return; }
 
