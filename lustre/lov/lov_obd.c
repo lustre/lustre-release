@@ -2226,45 +2226,6 @@ static int lov_change_cbdata(struct obd_export *exp,
         RETURN(rc);
 }
 
-/* find any ldlm lock of the inode in lov
- * return 0    not find
- *        1    find one
- *      < 0    error */
-static int lov_find_cbdata(struct obd_export *exp,
-                           struct lov_stripe_md *lsm, ldlm_iterator_t it,
-                           void *data)
-{
-        struct lov_obd *lov;
-        struct lov_oinfo *loi;
-        int rc = 0, i;
-        ENTRY;
-
-        ASSERT_LSM_MAGIC(lsm);
-
-        if (!exp || !exp->exp_obd)
-                RETURN(-ENODEV);
-
-        lov = &exp->exp_obd->u.lov;
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                struct lov_stripe_md submd;
-
-                loi = lsm->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx]) {
-                        CDEBUG(D_HA, "lov idx %d NULL \n", loi->loi_ost_idx);
-                        continue;
-                }
-                submd.lsm_object_id = loi->loi_id;
-                submd.lsm_object_gr = loi->loi_gr;
-                submd.lsm_stripe_count = 0;
-                rc = obd_find_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
-                                     &submd, it, data);
-                if (rc != 0)
-                        RETURN(rc);
-        }
-        RETURN(rc);
-}
-
-
 static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
                       __u32 mode, struct lustre_handle *lockh, int flags,
                       obd_off end)
@@ -3349,7 +3310,6 @@ struct obd_ops lov_obd_ops = {
         .o_enqueue             = lov_enqueue,
         .o_match               = lov_match,
         .o_change_cbdata       = lov_change_cbdata,
-        .o_find_cbdata         = lov_find_cbdata,
         .o_cancel              = lov_cancel,
         .o_cancel_unused       = lov_cancel_unused,
         .o_join_lru            = lov_join_lru,

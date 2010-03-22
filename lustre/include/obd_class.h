@@ -1425,20 +1425,6 @@ static inline int obd_change_cbdata(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_find_cbdata(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm,
-                                  ldlm_iterator_t it, void *data)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_OP(exp, find_cbdata);
-        EXP_COUNTER_INCREMENT(exp, find_cbdata);
-
-        rc = OBP(exp->exp_obd, find_cbdata)(exp, lsm, it, data);
-        RETURN(rc);
-}
-
 static inline int obd_cancel(struct obd_export *exp, struct lov_stripe_md *ea,
                              __u32 mode, struct lustre_handle *lockh, int flags,
                              obd_off end)

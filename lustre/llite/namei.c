@@ -1180,10 +1180,6 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         return rc;
 }
 
-/* ll_unlink_generic() doesn't update the inode with the new link count.
- * Instead, ll_ddelete() and ll_d_iput() will update it based upon if there
- * is any lock existing. They will recycle dentries and inodes based upon locks
- * too. b=20433 */
 static int ll_unlink_generic(struct inode * dir, struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
