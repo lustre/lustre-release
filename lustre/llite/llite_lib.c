@@ -974,11 +974,10 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                         inode = igrab(lock->l_ast_data);
                 } else {
                         inode = lock->l_ast_data;
-                        ldlm_lock_debug(NULL, inode->i_state & I_FREEING ?
-                                                D_INFO : D_WARNING,
-                                        lock, __FILE__, __func__, __LINE__,
-                                        "l_ast_data %p is bogus: magic %08x",
-                                        lock->l_ast_data, lli->lli_inode_magic);
+                        LDLM_DEBUG_LIMIT(inode->i_state & I_FREEING ?  D_INFO :
+                                         D_WARNING, lock, "l_ast_data %p is "
+                                         "bogus: magic %08x", lock->l_ast_data,
+                                         lli->lli_inode_magic);
                         inode = NULL;
                 }
         }
