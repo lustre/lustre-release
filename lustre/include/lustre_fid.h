@@ -92,6 +92,9 @@ enum {
  * used sparingly until ldiskfs-based MDT backends and/or IGIF FIDs 
  * have been completely removed. */
 
+/** fid sequence for distributed fs objects */
+#define FID_SEQ_DISTRIBUTED_START     (FID_SEQ_START + 0x400ULL)
+
 /** special OID for local objects */
 enum {
         /** \see osd_oi_index_create */

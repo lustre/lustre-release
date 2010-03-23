@@ -38,6 +38,7 @@
  * Top-level entry points into osd module
  *
  * Author: Nikita Danilov <nikita@clusterfs.com>
+ *         Pravin Shelar <pravin.shelar@sun.com> : Added fid in dirent
  */
 
 #ifndef EXPORT_SYMTAB
@@ -1723,7 +1724,7 @@ static inline void osd_igif_get(const struct lu_env *env, struct inode  *inode,
 }
 
 /**
- * Helper function to pack the fid
+ * Helper function to pack the fid, ldiskfs stores fid in packed format.
  */
 void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
                   struct lu_fid *befider)
@@ -1731,6 +1732,24 @@ void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
         fid_cpu_to_be(befider, (struct lu_fid *)fid);
         memcpy(pack->fp_area, befider, sizeof(*befider));
         pack->fp_len =  sizeof(*befider) + 1;
+}
+
+/**
+ * ldiskfs supports fid in dirent, it is passed in dentry->d_fsdata.
+ * lustre 1.8 also uses d_fsdata for passing other info to ldiskfs.
+ * To have compatilibility with 1.8 ldiskfs driver we need to have
+ * magic number at start of fid data.
+ * \ldiskfs_dentry_param is used only to pass fid from osd to ldiskfs.
+ * its inmemory API.
+ */
+void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
+                                  const struct dt_rec *fid)
+{
+        param->edp_magic = LDISKFS_LUFID_MAGIC;
+        param->edp_len =  sizeof(struct lu_fid) + 1;
+
+        fid_cpu_to_be((struct lu_fid *)param->edp_data,
+                      (struct lu_fid *)fid);
 }
 
 int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
@@ -1805,7 +1824,6 @@ static int osd_ea_fid_get(const struct lu_env *env, struct osd_object *obj,
                 rc = 0;
         }
         iput(inode);
-
 out:
         RETURN(rc);
 }
@@ -1828,7 +1846,6 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct osd_thread_info *info   = osd_oti_get(env);
         int result;
-        int is_root = 0;
 
         ENTRY;
 
@@ -1839,11 +1856,8 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
 
-        if (hint && hint->dah_parent)
-                is_root = osd_object_is_root(osd_dt_obj(hint->dah_parent));
-
         /* objects under osd root shld have igif fid, so dont add fid EA */
-        if (result == 0 && is_root == 0)
+        if (result == 0 && fid_seq(fid) >= FID_SEQ_DISTRIBUTED_START)
                 result = osd_ea_fid_set(env, dt, fid);
 
         if (result == 0)
@@ -2435,6 +2449,19 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
         RETURN(rc);
 }
 
+static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
+                                          struct dt_rec *fid)
+{
+        struct osd_fid_pack *rec;
+        int rc = -ENODATA;
+
+        if (de->file_type & LDISKFS_DIRENT_LUFID) {
+                rec = (struct osd_fid_pack *) (de->name + de->name_len + 1);
+                rc = osd_fid_unpack((struct lu_fid *)fid, rec);
+        }
+        RETURN(rc);
+}
+
 /**
  * Index delete function for interoperability mode (b11826).
  * It will remove the directory entry added by osd_index_ea_insert().
@@ -2541,7 +2568,7 @@ static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
         rc = iam_it_get(it, (struct iam_key *)key);
         if (rc >= 0) {
                 if (S_ISDIR(obj->oo_inode->i_mode))
-                        iam_rec = (struct iam_rec *)oti->oti_fid_packed;
+                        iam_rec = (struct iam_rec *)oti->oti_ldp;
                 else
                         iam_rec = (struct iam_rec *) rec;
 
@@ -2583,7 +2610,7 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         cfs_cap_t              save = current->cap_effective;
 #endif
         struct osd_thread_info *oti = osd_oti_get(env);
-        struct iam_rec *iam_rec = (struct iam_rec *)oti->oti_fid_packed;
+        struct iam_rec *iam_rec = (struct iam_rec *)oti->oti_ldp;
         int rc;
 
         ENTRY;
@@ -2633,13 +2660,14 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
  */
 static int __osd_ea_add_rec(struct osd_thread_info *info,
                             struct osd_object *pobj,
-                            struct osd_object *cobj,
+                            struct inode  *cinode,
                             const char *name,
+                            const struct dt_rec *fid,
                             struct thandle *th)
 {
+        struct ldiskfs_dentry_param *ldp;
         struct dentry      *child;
         struct osd_thandle *oth;
-        struct inode       *cinode  = cobj->oo_inode;
         int rc;
 
         oth = container_of(th, struct osd_thandle, ot_super);
@@ -2647,6 +2675,14 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
         LASSERT(oth->ot_handle->h_transaction != NULL);
 
         child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
+
+        if (fid_is_igif((struct lu_fid *)fid) ||
+            fid_seq((struct lu_fid *)fid) >= FID_SEQ_DISTRIBUTED_START) {
+                ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
+                osd_get_ldiskfs_dirent_param(ldp, fid);
+                child->d_fsdata = (void*) ldp;
+        } else
+                child->d_fsdata = NULL;
         rc = ldiskfs_add_entry(oth->ot_handle, child, cinode);
 
         RETURN(rc);
@@ -2666,11 +2702,14 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
  */
 static int osd_add_dot_dotdot(struct osd_thread_info *info,
                               struct osd_object *dir,
-                              struct osd_object *obj, const char *name,
+                              struct inode  *parent_dir, const char *name,
+                              const struct dt_rec *dot_fid,
+                              const struct dt_rec *dot_dot_fid,
                               struct thandle *th)
 {
-        struct inode            *parent_dir   = obj->oo_inode;
         struct inode            *inode  = dir->oo_inode;
+        struct ldiskfs_dentry_param *dot_ldp;
+        struct ldiskfs_dentry_param *dot_dot_ldp;
         struct osd_thandle      *oth;
         int result = 0;
 
@@ -2682,17 +2721,31 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
                 if (dir->oo_compat_dot_created) {
                         result = -EEXIST;
                 } else {
-                        LASSERT(obj == dir);
+                        LASSERT(inode == parent_dir);
                         dir->oo_compat_dot_created = 1;
                         result = 0;
                 }
         } else if(strcmp(name, dotdot) == 0) {
+                dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
+                dot_dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp2;
+
                 if (!dir->oo_compat_dot_created)
                         return -EINVAL;
-                if (dir->oo_compat_dotdot_created)
-                        return __osd_ea_add_rec(info, dir, obj, name, th);
+                if (fid_seq((struct lu_fid *) dot_fid) >= FID_SEQ_DISTRIBUTED_START) {
+                        osd_get_ldiskfs_dirent_param(dot_ldp, dot_fid);
+                        osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
+                } else {
+                        dot_ldp = NULL;
+                        dot_dot_ldp = NULL;
+                }
+                /* in case of rename, dotdot is already created */
+                if (dir->oo_compat_dotdot_created) {
+                        return __osd_ea_add_rec(info, dir, parent_dir, name,
+                                                dot_dot_fid, th);
+                }
 
-                result = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir, inode);
+                result = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir, inode,
+                                                dot_ldp, dot_dot_ldp);
                 if (result == 0)
                        dir->oo_compat_dotdot_created = 1;
         }
@@ -2707,8 +2760,9 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
  */
 static int osd_ea_add_rec(const struct lu_env *env,
                           struct osd_object *pobj,
-                          struct osd_object *cobj,
+                          struct inode *cinode,
                           const char *name,
+                          const struct dt_rec *fid,
                           struct thandle *th)
 {
         struct osd_thread_info    *info   = osd_oti_get(env);
@@ -2716,9 +2770,11 @@ static int osd_ea_add_rec(const struct lu_env *env,
 
         if (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' &&
                                                    name[2] =='\0')))
-                rc = osd_add_dot_dotdot(info, pobj, cobj, name, th);
+                rc = osd_add_dot_dotdot(info, pobj, cinode, name,
+                     (struct dt_rec *)lu_object_fid(&pobj->oo_dt.do_lu),
+                                        fid, th);
         else
-                rc = __osd_ea_add_rec(info, pobj, cobj, name, th);
+                rc = __osd_ea_add_rec(info, pobj, cinode, name, fid, th);
 
         return rc;
 }
@@ -2751,8 +2807,12 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
         bh = ll_ldiskfs_find_entry(dir, dentry, &de);
         if (bh) {
                 ino = le32_to_cpu(de->inode);
+                rc = osd_get_fid_from_dentry(de, rec);
+
+                /* done with de, release bh */
                 brelse(bh);
-                rc = osd_ea_fid_get(env, obj, ino, fid);
+                if (rc != 0)
+                        rc = osd_ea_fid_get(env, obj, ino, fid);
         } else
                 rc = -ENOENT;
 
@@ -2866,7 +2926,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                         current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
 #endif
                 cfs_down_write(&obj->oo_ext_idx_sem);
-                rc = osd_ea_add_rec(env, obj, child, name, th);
+                rc = osd_ea_add_rec(env, obj, child->oo_inode, name, rec, th);
                 cfs_up_write(&obj->oo_ext_idx_sem);
 #ifdef HAVE_QUOTA_SUPPORT
                 current->cap_effective = save;
@@ -3238,8 +3298,10 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
                                loff_t offset, __u64 ino,
                                unsigned d_type)
 {
-        struct osd_it_ea        *it = (struct osd_it_ea *)buf;
-        struct osd_it_ea_dirent *ent = it->oie_dirent;
+        struct osd_it_ea        *it   = (struct osd_it_ea *)buf;
+        struct osd_it_ea_dirent *ent  = it->oie_dirent;
+        struct lu_fid           *fid  = &ent->oied_fid;
+        struct osd_fid_pack     *rec;
         ENTRY;
 
         /* this should never happen */
@@ -3251,6 +3313,17 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
         if ((void *) ent - it->oie_buf + sizeof(*ent) + namelen >
             OSD_IT_EA_BUFSIZE)
                 RETURN(1);
+
+        if (d_type & LDISKFS_DIRENT_LUFID) {
+                rec = (struct osd_fid_pack*) (name + namelen + 1);
+
+                if (osd_fid_unpack(fid, rec) != 0)
+                        fid_zero(fid);
+
+                d_type &= ~LDISKFS_DIRENT_LUFID;
+        } else {
+                fid_zero(fid);
+        }
 
         ent->oied_ino     = ino;
         ent->oied_off     = offset;
@@ -3383,13 +3456,13 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 {
         struct osd_it_ea        *it     = (struct osd_it_ea *)di;
         struct osd_object       *obj    = it->oie_obj;
-        struct osd_thread_info  *info   = osd_oti_get(env);
-        struct lu_fid           *fid       = &info->oti_fid;
-        int                      rc;
+        struct lu_fid           *fid    = &it->oie_dirent->oied_fid;
+        int    rc = 0;
 
         ENTRY;
 
-        rc = osd_ea_fid_get(env, obj, it->oie_dirent->oied_ino, fid);
+        if (!fid_is_sane(fid))
+                rc = osd_ea_fid_get(env, obj, it->oie_dirent->oied_ino, fid);
 
         if (rc == 0)
                 osd_it_pack_dirent(lde, fid, it->oie_dirent->oied_off,

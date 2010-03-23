@@ -147,6 +147,7 @@ struct osd_fid_pack {
 };
 
 struct osd_it_ea_dirent {
+        struct lu_fid   oied_fid;
         __u64           oied_ino;
         __u64           oied_off;
         unsigned short  oied_namelen;
@@ -154,7 +155,14 @@ struct osd_it_ea_dirent {
         char            oied_name[0];
 } __attribute__((packed));
 
-#define OSD_IT_EA_BUFSIZE       CFS_PAGE_SIZE
+/**
+ * as osd_it_ea_dirent (in memory dirent struct for osd) is greater
+ * than lu_dirent struct. osd readdir reads less number of dirent than
+ * required for mdd dir page. so buffer size need to be increased so that
+ * there  would be one ext3 readdir for every mdd readdir page.
+ */
+
+#define OSD_IT_EA_BUFSIZE       (CFS_PAGE_SIZE + CFS_PAGE_SIZE/4)
 
 /**
  * This is iterator's in-memory data structure in interoperability
@@ -256,7 +264,8 @@ struct osd_thread_info {
 #endif
         struct lu_env          oti_obj_delete_tx_env;
 #define OSD_FID_REC_SZ 32
-        char                   oti_fid_packed[OSD_FID_REC_SZ];
+        char                   oti_ldp[OSD_FID_REC_SZ];
+        char                   oti_ldp2[OSD_FID_REC_SZ];
 };
 
 #ifdef LPROCFS

@@ -73,7 +73,7 @@
  * FID_SEQ_START + 2 is for .lustre directory and its objects
  */
 const struct lu_seq_range LUSTRE_SEQ_SPACE_RANGE = {
-        FID_SEQ_START + 0x400ULL,
+        FID_SEQ_DISTRIBUTED_START,
         (__u64)~0ULL
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);

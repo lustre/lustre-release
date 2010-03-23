@@ -526,7 +526,13 @@ static void enable_default_backfs_features(struct mkfs_opts *mop)
         int maj_high, maj_low, min;
         int ret;
 
-        strscat(mop->mo_mkfsopts, " -O dir_index,extents", sizeof(mop->mo_mkfsopts));
+        if (IS_MDT(&mop->mo_ldd))
+                strscat(mop->mo_mkfsopts, " -O dir_index,extents,dirdata",
+                                sizeof(mop->mo_mkfsopts));
+        else
+                strscat(mop->mo_mkfsopts, " -O dir_index,extents",
+                                sizeof(mop->mo_mkfsopts));
+
 
         /* Upstream e2fsprogs called our uninit_groups feature uninit_bg,
          * check for both of them when testing e2fsprogs features. */
