@@ -411,7 +411,9 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 iput(inode);
                 return last_discon;
         }
+        lock_dentry(de);
         de->d_flags |= DCACHE_LUSTRE_INVALID;
+        unlock_dentry(de);
         ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);

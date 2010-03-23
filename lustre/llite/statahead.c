@@ -1094,7 +1094,9 @@ static int is_same_dentry(struct dentry *d1, struct dentry *d2)
 {
         if (unlikely(d1 == d2))
                 return 1;
-        if (d1->d_name.len == d2->d_name.len &&
+        if (d1->d_parent == d2->d_parent &&
+            d1->d_name.hash == d2->d_name.hash &&
+            d1->d_name.len == d2->d_name.len &&
             memcmp(d1->d_name.name, d2->d_name.name, d1->d_name.len) == 0)
                 return 1;
         return 0;
