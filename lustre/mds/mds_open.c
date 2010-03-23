@@ -1496,7 +1496,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 CDEBUG(D_INODE, "destroying orphan object %s\n", fidname);
 
                 if ((S_ISREG(inode->i_mode) && inode->i_nlink != 1) ||
-                    (S_ISDIR(inode->i_mode) && inode->i_nlink != 2))
+                    (S_ISDIR(inode->i_mode) && inode->i_nlink > 2))
                         CERROR("found \"orphan\" %s %s with link count %d\n",
                                S_ISREG(inode->i_mode) ? "file" : "dir",
                                fidname, inode->i_nlink);
