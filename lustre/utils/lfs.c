@@ -1411,9 +1411,6 @@ static int lfs_quotaon(int argc, char **argv)
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (errno == EALREADY) {
-                        fprintf(stderr, "\n%s quotas are enabled already.\n",
-                                qctl.qc_type == 0x02 ? "user/group" :
-                                (qctl.qc_type == 0x00 ? "user" : "group"));
                         rc = 0;
                 } else if (errno == ENOENT) {
                         fprintf(stderr, "error: cannot find quota database, "
@@ -1470,9 +1467,6 @@ static int lfs_quotaoff(int argc, char **argv)
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (errno == EALREADY) {
-                        fprintf(stderr, "\n%s quotas are disabled already.\n",
-                                qctl.qc_type == 0x02 ? "user/group" :
-                                (qctl.qc_type == 0x00 ? "user" : "group"));
                         rc = 0;
                 } else {
                         if (*obd_type)
@@ -2144,17 +2138,18 @@ ug_output:
                 return CMD_HELP;
         }
 
-        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA)
-                print_quota_title(name, &qctl);
-
         mnt = argv[optind];
 
         rc1 = llapi_quotactl(mnt, &qctl);
-        if (rc1 == -1 && errno == EALREADY) {
+        if (rc1 == -1 && errno == ESRCH) {
                 fprintf(stderr, "\n%s quotas are not enabled.\n",
                         qctl.qc_type == USRQUOTA ? "user" : "group");
                 goto out;
         }
+
+        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA)
+                print_quota_title(name, &qctl);
+
         if (rc1 && *obd_type)
                 fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
