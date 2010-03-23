@@ -146,7 +146,7 @@ lstjn_join_session(char *ses, char *grp)
                 return -1;
         }
 
-        fprintf(stdout, "Session %s, ID: %s, %Lu\n",
+        fprintf(stdout, "Session %s, ID: %s, "LPU64"\n",
                 ses, libcfs_nid2str(rep->join_sid.ses_nid),
                 rep->join_sid.ses_stamp);
 

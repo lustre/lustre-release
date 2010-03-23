@@ -359,7 +359,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
         if (unlikely(!(valid & OBD_MD_FLCTIME))) {
                 CWARN("client miss to set OBD_MD_FLCTIME when "
-                      "setxattr: [object "DFID"] [valid %llu]\n",
+                      "setxattr: [object "DFID"] [valid "LPU64"]\n",
                       PFID(rr->rr_fid1), valid);
                 attr->la_ctime = cfs_time_current_sec();
         }

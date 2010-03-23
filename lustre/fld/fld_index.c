@@ -244,7 +244,7 @@ int fld_index_lookup(struct lu_server_fld *fld,
                         rc = -ENOENT;
         }
 
-        CDEBUG(D_INFO, "%s: lookup seq = %llx range : "DRANGE" rc = %d\n",
+        CDEBUG(D_INFO, "%s: lookup seq = "LPX64" range : "DRANGE" rc = %d\n",
                fld->lsf_name, seq, PRANGE(range), rc);
 
         RETURN(rc);

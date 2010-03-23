@@ -645,7 +645,7 @@ jt_lst_show_session(int argc, char **argv)
                 return -1;
         }
 
-        fprintf(stdout, "%s ID: %Lu@%s, KEY: %d NODES: %d\n",
+        fprintf(stdout, "%s ID: "LPU64"@%s, KEY: %d NODES: %d\n",
                 name, sid.ses_stamp, libcfs_nid2str(sid.ses_nid),
                 key, ndinfo.nle_nnode);
 

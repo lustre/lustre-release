@@ -189,7 +189,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
 
-        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
+        LDLM_DEBUG(lock, "i_size: "LPU64" -> stripe number %u -> kms "LPU64,
                    (__u64)llu_i2stat(inode)->st_size, stripe,lvb->lvb_size);
  iput:
         I_RELE(inode);
@@ -247,7 +247,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK) || mode == LCK_NL)
                 RETURN(0);
 
-        CDEBUG(D_DLMTRACE, "Locking inode %llu, start "LPU64" end "LPU64"\n",
+        CDEBUG(D_DLMTRACE, "Locking inode "LPU64", start "LPU64" end "LPU64"\n",
                (__u64)st->st_ino, policy->l_extent.start,
                policy->l_extent.end);
 

@@ -350,11 +350,13 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
+# define LPX64i "%Lx"
 # define LPF64 "L"
 #else
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
+# define LPX64i "%lx"
 # define LPF64 "l"
 #endif
 
@@ -372,8 +374,10 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 
 #ifdef HAVE_SIZE_T_LONG
 # define LPSZ  "%lu"
+# define LPSZX "%lx"
 #else
 # define LPSZ  "%u"
+# define LPSZX "%x"
 #endif
 
 #ifdef HAVE_SSIZE_T_LONG

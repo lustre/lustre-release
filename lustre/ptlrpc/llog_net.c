@@ -116,7 +116,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        CDEBUG(D_OTHER, "%s mount_count %llu, connection count %llu\n",
+        CDEBUG(D_OTHER, "%s mount_count "LPU64", connection count "LPU64"\n",
                ctxt->loc_exp->exp_obd->obd_type->typ_name,
                ctxt->loc_gen.mnt_cnt, ctxt->loc_gen.conn_cnt);
 

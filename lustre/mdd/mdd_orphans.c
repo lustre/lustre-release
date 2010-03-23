@@ -70,7 +70,8 @@ static struct dt_key* orph_key_fill(const struct lu_env *env,
         int rc;
 
         LASSERT(key);
-        rc = snprintf(key, NAME_MAX + 1, ORPHAN_FILE_NAME_FORMAT, fid_seq(lf),
+        rc = snprintf(key, NAME_MAX + 1, ORPHAN_FILE_NAME_FORMAT,
+                      (long long unsigned int)fid_seq(lf),
                       fid_oid(lf), fid_ver(lf), op);
         if (rc > 0)
                 return (struct dt_key*) key;
@@ -98,14 +99,15 @@ static int orphan_key_to_fid(char *key, struct lu_fid *lf)
         int rc = 0;
         unsigned int op;
 
-        rc = sscanf(key, ORPHAN_FILE_NAME_FORMAT, &lf->f_seq, &lf->f_oid,
+        rc = sscanf(key, ORPHAN_FILE_NAME_FORMAT,
+                    (long long unsigned int *)&lf->f_seq, &lf->f_oid,
                     &lf->f_ver, &op);
         if (rc == 4)
                 return 0;
 
         /* build igif */
         rc = sscanf(key, ORPHAN_FILE_NAME_FORMAT_18,
-                    &lf->f_seq, &lf->f_oid);
+                    (long long unsigned int *)&lf->f_seq, &lf->f_oid);
         if (rc == 2) {
                 lf->f_ver = 0;
                 return 0;

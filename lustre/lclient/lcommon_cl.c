@@ -683,7 +683,7 @@ void ccc_lock_state(const struct lu_env *env,
                         if (lock->cll_descr.cld_start == 0 &&
                             lock->cll_descr.cld_end == CL_PAGE_EOF) {
                                 cl_isize_write_nolock(inode, attr->cat_kms);
-                                CDEBUG(D_INODE, DFID" updating i_size %llu\n",
+                                CDEBUG(D_INODE, DFID" updating i_size "LPU64"\n",
                                        PFID(lu_object_fid(&obj->co_lu)),
                                        (__u64)cl_isize_read(inode));
                         }

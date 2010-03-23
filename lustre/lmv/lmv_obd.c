@@ -2414,7 +2414,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                                 CDEBUG(D_INODE,
                                        ""DFID" reset end "LPX64" tgt %d\n",
                                        PFID(&rid),
-                                       le64_to_cpu(dp->ldp_hash_end), tgt_idx);
+                                       (__u64)le64_to_cpu(dp->ldp_hash_end), tgt_idx);
                         }
                 }
                 cfs_kunmap(page);

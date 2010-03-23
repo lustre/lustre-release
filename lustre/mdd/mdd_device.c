@@ -1410,7 +1410,7 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
         int rc;
         ENTRY;
 
-        CDEBUG(D_IOCTL, "Purge request: id=%d, endrec="LPD64"\n", id, endrec);
+        CDEBUG(D_IOCTL, "Purge request: id=%d, endrec=%lld\n", id, endrec);
 
         data.mcud_id = id;
         data.mcud_minid = 0;

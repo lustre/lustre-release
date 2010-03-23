@@ -4840,8 +4840,8 @@ static int mdt_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
         struct mdt_object *mdto = mdt_obj((struct lu_object *)o);
-        return (*p)(env, cookie, LUSTRE_MDT_NAME"-object@%p(ioepoch=%llu "
-                    "flags=%llx, epochcount=%d, writecount=%d)",
+        return (*p)(env, cookie, LUSTRE_MDT_NAME"-object@%p(ioepoch="LPU64" "
+                    "flags="LPX64", epochcount=%d, writecount=%d)",
                     mdto, mdto->mot_ioepoch, mdto->mot_flags,
                     mdto->mot_ioepoch_count, mdto->mot_writecount);
 }

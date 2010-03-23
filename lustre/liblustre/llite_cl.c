@@ -661,7 +661,7 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
                 GOTO(out, err);
 
         CDEBUG(D_INODE,
-               "%s ino %lu, %lu bytes, offset %lld, i_size %llu\n",
+               "%s ino %lu, %lu bytes, offset "LPU64", i_size "LPU64"\n",
                write ? "Write" : "Read", (unsigned long)st->st_ino,
                cnt, (__u64)pos, (__u64)st->st_size);
 

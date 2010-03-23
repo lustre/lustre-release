@@ -567,7 +567,7 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
         }
         cfs_spin_unlock(&mdt->mdt_transno_lock);
 
-        CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
+        CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
                         info->mti_transno,
                         req->rq_export->exp_obd->obd_last_committed);
 

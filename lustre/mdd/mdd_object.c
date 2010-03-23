@@ -315,7 +315,7 @@ static int mdd_object_print(const struct lu_env *env, void *cookie,
 {
         struct mdd_object *mdd = lu2mdd_obj((struct lu_object *)o);
         return (*p)(env, cookie, LUSTRE_MDD_NAME"-object@%p(open_count=%d, "
-                    "valid=%x, cltime=%llu, flags=%lx)",
+                    "valid=%x, cltime="LPU64", flags=%lx)",
                     mdd, mdd->mod_count, mdd->mod_valid,
                     mdd->mod_cltime, mdd->mod_flags);
 }

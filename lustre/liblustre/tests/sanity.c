@@ -793,8 +793,8 @@ int t23(char *name)
 {
         char path[MAX_PATH_LENGTH];
         int fd;
-        off_t ret;
-        off_t off;
+        long long ret;
+        loff_t off;
 
         ENTER("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
@@ -843,7 +843,7 @@ int t23(char *name)
         ret = lseek(fd, -buf_size + 2, SEEK_CUR);
         if (ret != off) {
                 printf("relative seek error for %d %llu != %llu\n",
-                       -buf_size + 2, ret, off);
+                       -buf_size + 2, ret, (unsigned long long) off);
                 if (ret == -1)
                         perror("relative seek");
                 return -1;
@@ -869,7 +869,7 @@ int t23(char *name)
         off = 2048ULL * 1024 * 1024, SEEK_SET;
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek 2GB error for %llu != %llu\n", ret, off);
+                printf("seek 2GB error for %llu != %llu\n", ret, (unsigned long long) off);
                 if (ret == -1)
                         perror("seek 2GB");
                 return -1;

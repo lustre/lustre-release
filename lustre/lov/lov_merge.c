@@ -135,7 +135,7 @@ int lov_merge_lvb(struct obd_export *exp,
         rc = lov_merge_lvb_kms(lsm, lvb, &kms);
         if (kms_only)
                 lvb->lvb_size = kms;
-        CDEBUG(D_INODE, "merged: %llu %llu %llu %llu %llu\n",
+        CDEBUG(D_INODE, "merged: "LPU64" "LPU64" "LPU64" "LPU64" "LPU64"\n",
                lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
                lvb->lvb_ctime, lvb->lvb_blocks);
         RETURN(rc);

@@ -1067,7 +1067,7 @@ static int cl_echo_cancel0(struct lu_env *env, struct echo_device *ed,
         cfs_spin_lock (&ec->ec_lock);
         cfs_list_for_each (el, &ec->ec_locks) {
                 ecl = cfs_list_entry (el, struct echo_lock, el_chain);
-                CDEBUG(D_INFO, "ecl: %p, cookie: %llx\n", ecl, ecl->el_cookie);
+                CDEBUG(D_INFO, "ecl: %p, cookie: "LPX64"\n", ecl, ecl->el_cookie);
                 found = (ecl->el_cookie == cookie);
                 if (found) {
                         if (cfs_atomic_dec_and_test(&ecl->el_refcount))
@@ -1757,7 +1757,7 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         rc = cl_echo_enqueue(eco, offset, end, mode, &ulh->cookie);
         if (rc == 0) {
                 oa->o_valid |= OBD_MD_FLHANDLE;
-                CDEBUG(D_INFO, "Cookie is %llx\n", ulh->cookie);
+                CDEBUG(D_INFO, "Cookie is "LPX64"\n", ulh->cookie);
         }
         echo_put_object(eco);
         RETURN(rc);
@@ -1772,7 +1772,7 @@ echo_client_cancel(struct obd_export *exp, struct obdo *oa)
         if ((oa->o_valid & OBD_MD_FLHANDLE) == 0)
                 return -EINVAL;
 
-        CDEBUG(D_INFO, "Cookie is %llx\n", cookie);
+        CDEBUG(D_INFO, "Cookie is "LPX64"\n", cookie);
         return cl_echo_cancel(ed, cookie);
 }
 
