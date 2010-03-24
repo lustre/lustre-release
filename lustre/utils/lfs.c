@@ -1273,6 +1273,21 @@ out:
 }
 
 #ifdef HAVE_SYS_QUOTA_H
+static int quota_is_2_0_server(const char *mnt)
+{
+        __u64 flags;
+        int rc;
+
+        rc = llapi_get_connect_flags(mnt, &flags);
+        if (rc < 0)
+                return rc;
+
+        if (flags & OBD_CONNECT_FID)
+                return 1;
+        else
+                return 0;
+}
+
 static int lfs_quotachown(int argc, char **argv)
 {
 
@@ -1307,7 +1322,7 @@ static int lfs_quotacheck(int argc, char **argv)
         struct if_quotactl qctl;
         char *obd_type = (char *)qchk.obd_type;
         int rc;
-        int version;
+        int v2;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ug")) != -1) {
@@ -1334,12 +1349,12 @@ static int lfs_quotacheck(int argc, char **argv)
                 return CMD_HELP;
 
         mnt = argv[optind];
-        version = llapi_server_major_version(mnt);
-        if (version < 0)
-                return version;
+        v2 = quota_is_2_0_server(mnt);
+        if (v2 < 0)
+                return v2;
 
         /* For b1_8 server */
-        if (version < SERVER_MAJOR_VERSION_V2) {
+        if (v2 == 0) {
                 memset(&qctl, 0, sizeof(qctl));
                 qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
                 qctl.qc_type = check_type;
@@ -1371,12 +1386,12 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
         qctl.qc_type = check_type;
-        if (version < SERVER_MAJOR_VERSION_V2)
+        if (v2 == 0)
                 qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
                                             * take this parameter into account */
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) {
+                if (v2 > 0 && errno == EALREADY) {
                         /* This is for 2.0 server. */
                         rc = 0;
                 } else {
@@ -1398,7 +1413,7 @@ static int lfs_quotaon(int argc, char **argv)
         struct if_quotactl qctl;
         char *obd_type = (char *)qctl.obd_type;
         int rc;
-        int version;
+        int v2;
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
@@ -1431,20 +1446,18 @@ static int lfs_quotaon(int argc, char **argv)
                 return CMD_HELP;
 
         mnt = argv[optind];
-        version = llapi_server_major_version(mnt);
-        if (version < 0)
-                return version;
+        v2 = quota_is_2_0_server(mnt);
+        if (v2 < 0)
+                return v2;
 
-        if (version < SERVER_MAJOR_VERSION_V2)
+        if (v2 == 0)
                 qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
                                             * take this parameter into account */
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) {
+                if (v2 > 0 && errno == EALREADY) {
                         /* This is for 2.0 server. */
-                        fprintf(stderr, "\n%s quotas are enabled already.\n",
-                                qctl.qc_type == 0x00 ? "user" : "group");
                         rc = 0;
                 } else if (errno == ENOENT) {
                         fprintf(stderr, "error: cannot find quota database, "
@@ -1468,7 +1481,7 @@ static int lfs_quotaoff(int argc, char **argv)
         struct if_quotactl qctl;
         char *obd_type = (char *)qctl.obd_type;
         int rc;
-        int version;
+        int v2;
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
@@ -1498,16 +1511,14 @@ static int lfs_quotaoff(int argc, char **argv)
                 return CMD_HELP;
 
         mnt = argv[optind];
-        version = llapi_server_major_version(mnt);
-        if (version < 0)
-                return version;
+        v2 = quota_is_2_0_server(mnt);
+        if (v2 < 0)
+                return v2;
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if ((version >= SERVER_MAJOR_VERSION_V2 && errno == EALREADY) ||
-                    (version < SERVER_MAJOR_VERSION_V2 && errno == ESRCH)) {
-                        fprintf(stderr, "\n%s quotas are not enabled.\n",
-                                qctl.qc_type == 0x00 ? "user" : "group");
+                if ((v2 > 0 && errno == EALREADY) ||
+                    (v2 == 0 && errno == ESRCH)) {
                         rc = 0;
                 } else {
                         if (*obd_type)
@@ -2191,7 +2202,6 @@ static int lfs_quota(int argc, char **argv)
         int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, inacc, quiet = 0;
         int pass = 0;
         char *endptr;
-        int version;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:qv")) != -1) {
@@ -2271,9 +2281,6 @@ ug_output:
         }
 
         mnt = argv[optind];
-        version = llapi_server_major_version(mnt);
-        if (version < 0)
-                goto out;
 
         rc1 = llapi_quotactl(mnt, &qctl);
         if (rc1 == -1) {
@@ -2283,16 +2290,11 @@ ug_output:
                 case ENOENT:
                         /* We already got a "No such file..." message. */
                         goto out;
-                case EALREADY:
-                case ESRCH:
-                        if ((version >= SERVER_MAJOR_VERSION_V2 &&
-                             errno == EALREADY) ||
-                            (version < SERVER_MAJOR_VERSION_V2 &&
-                             errno == ESRCH)) {
-                                fprintf(stderr, "%s quotas are not enabled.\n",
-                                        qctl.qc_type == USRQUOTA?"user":"group");
-                                goto out;
-                        }
+                case ESRCH: {
+                        fprintf(stderr, "%s quotas are not enabled.\n",
+                                qctl.qc_type == USRQUOTA?"user":"group");
+                        goto out;
+                }
                 default:
                         fprintf(stderr, "Unexpected quotactl error: %s\n",
                                 strerror(errno));

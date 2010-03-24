@@ -1596,12 +1596,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 RETURN(0);
         }
-        case LL_IOC_SERVER_MAJOR_VERSION: {
-                int version = SERVER_MAJOR_VERSION_V1;
-
-                if (sbi->ll_mdc_exp->exp_connect_flags & OBD_CONNECT_FID)
-                        version = SERVER_MAJOR_VERSION_V2;
-                if (copy_to_user((void *)arg, &version, sizeof(int)))
+        case LL_IOC_GET_CONNECT_FLAGS: {
+                if (copy_to_user((void *)arg,
+                                 &sbi->ll_mdc_exp->exp_connect_flags,
+                                 sizeof(__u64)))
                         RETURN(-EFAULT);
                 RETURN(0);
         }

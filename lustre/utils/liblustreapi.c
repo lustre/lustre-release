@@ -2400,10 +2400,10 @@ int llapi_path2fid(const char *path, lustre_fid *fid)
         return rc;
 }
 
-int llapi_server_major_version(const char *mnt)
+int llapi_get_connect_flags(const char *mnt, __u64 *flags)
 {
         DIR *root;
-        int ver = 0, rc;
+        int rc;
 
         root = opendir(mnt);
         if (!root) {
@@ -2411,12 +2411,10 @@ int llapi_server_major_version(const char *mnt)
                 return -1;
         }
 
-        rc = ioctl(dirfd(root), LL_IOC_SERVER_MAJOR_VERSION, &ver);
+        rc = ioctl(dirfd(root), LL_IOC_GET_CONNECT_FLAGS, flags);
         closedir(root);
-        if (rc < 0) {
+        if (rc < 0)
                 llapi_err(LLAPI_MSG_ERROR,
-                          "ioctl on %s for server major version failed", mnt);
-                return rc;
-        }
-        return ver;
+                          "ioctl on %s for getting connect flags failed", mnt);
+        return rc;
 }

@@ -130,7 +130,7 @@ struct obd_statfs {
 #define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 169, OBD_IOC_DATA_TYPE)
 
 #define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
-#define LL_IOC_SERVER_MAJOR_VERSION     _IOWR('f', 174, long)
+#define LL_IOC_GET_CONNECT_FLAGS        _IOWR('f', 174, __u64 *)
 
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
@@ -382,9 +382,6 @@ struct if_quotactl {
         char                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
-
-#define SERVER_MAJOR_VERSION_V1 1
-#define SERVER_MAJOR_VERSION_V2 2
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
