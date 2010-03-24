@@ -311,7 +311,7 @@ test_1_sub() {
         rm -f $TESTFILE
         sync; sleep 1; sync;
         OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-        OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED=`$LFS quota -q -o $OST0_UUID -u $TSTUSR $DIR | awk '{ print $1 }'`
         echo $OST0_QUOTA_USED
         [ $OST0_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
@@ -342,7 +342,7 @@ test_1_sub() {
         rm -f $TESTFILE
         sync; sleep 1; sync;
         OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-        OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED=`$LFS quota -q -o $OST0_UUID -g $TSTUSR $DIR | awk '{ print $1 }'`
         echo $OST0_QUOTA_USED
         [ $OST0_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
@@ -399,7 +399,7 @@ test_2_sub() {
         # interop 18 <-> 20
         local dev=$(get_mds_mdt_device_proc_path)
         MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
-        MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
+        MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '{ print $5 }'`
         echo $MDS_QUOTA_USED
         [ $MDS_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
@@ -427,7 +427,7 @@ test_2_sub() {
         sync; sleep 1; sync;
 
         MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
-        MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
+        MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '{ print $5 }'`
         echo $MDS_QUOTA_USED
         [ $MDS_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
@@ -775,7 +775,7 @@ test_6() {
         while [ $((count--)) -gt 0 ]; do
                 sync && sleep 5
 
-                OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                OST0_QUOTA_HOLD=`$LFS quota -q -o $OST0_UUID -u $TSTUSR $DIR | awk '{ print $3 }'`
                 if [ -z $OST0_QUOTA_HOLD ]; then
                         error "System is error when query quota for block (U:$TSTUSR)."
                 else
@@ -791,7 +791,7 @@ test_6() {
         while [ $((count--)) -gt 0 ]; do
                 sync && sleep 5
 
-                OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                OST0_QUOTA_HOLD=`$LFS quota -q -o $OST0_UUID -g $TSTUSR $DIR | awk '{ print $3 }'`
                 if [ -z $OST0_QUOTA_HOLD ]; then
                         error "System is error when query quota for block (G:$TSTUSR)."
                 else
@@ -862,7 +862,7 @@ test_7()
 
         OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
         [ -z "$OST0_UUID" ] && OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
-        OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
+        OST0_LIMIT="`$LFS quota -q -o $OST0_UUID -u $TSTUSR $DIR | awk '{ print $3 }'`"
         [ $OST0_LIMIT -eq $BUNIT_SZ ] || error "high limits not released!"
         echo "  limits on $OST0_UUID = $OST0_LIMIT"
 
@@ -1804,7 +1804,7 @@ test_23_sub() {
         rm -f $TESTFILE
         wait_delete_completed
         OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-        OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED=`$LFS quota -q -o $OST0_UUID -u $TSTUSR $DIR | awk '{ print $1 }'`
         echo $OST0_QUOTA_USED
         [ $OST0_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_USER; quota_error u $TSTUSR "quota deleted isn't released")
@@ -1893,10 +1893,10 @@ test_25_sub() {
         local dev=$(get_mds_mdt_device_proc_path)
         MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
         OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-        MDS_QUOTA_USED_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
-        OST0_QUOTA_USED_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
-        MDS_QUOTA_USED2_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
-        OST0_QUOTA_USED2_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        MDS_QUOTA_USED_OLD=`$LFS quota -q -o $MDS_UUID $1 $TSTUSR $DIR | awk '{ print $5 }'`
+        OST0_QUOTA_USED_OLD=`$LFS quota -q -o $OST0_UUID $1 $TSTUSR $DIR | awk '{ print $1 }'`
+        MDS_QUOTA_USED2_OLD=`$LFS quota -q -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '{ print $5 }'`
+        OST0_QUOTA_USED2_OLD=`$LFS quota -q -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '{ print $1 }'`
 
         # TSTUSR write 4M
         log "$TSTUSR write 4M to $TESTFILE"
@@ -1904,10 +1904,10 @@ test_25_sub() {
         sync
         show_quota $1 $TSTUSR
         show_quota $1 $TSTUSR2
-        MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
+        MDS_QUOTA_USED_NEW=`$LFS quota -q -o $MDS_UUID $1 $TSTUSR $DIR | awk '{ print $5 }'`
         [ $MDS_QUOTA_USED_NEW -ne $((MDS_QUOTA_USED_OLD + 1)) ] && \
                 quota_error a $TSTUSR "$TSTUSR inode quota usage error: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
-        OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED_NEW=`$LFS quota -q -o $OST0_UUID $1 $TSTUSR $DIR | awk '{ print $1 }'`
         OST0_QUOTA_USED_DELTA=$((OST0_QUOTA_USED_NEW - OST0_QUOTA_USED_OLD))
         [ $OST0_QUOTA_USED_DELTA -lt 4096 ] && \
                 quota_error a $TSTUSR "$TSTUSR block quota usage error: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
@@ -1923,19 +1923,19 @@ test_25_sub() {
         sync
         show_quota $1 $TSTUSR
         show_quota $1 $TSTUSR2
-        MDS_QUOTA_USED2_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
+        MDS_QUOTA_USED2_NEW=`$LFS quota -q -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '{ print $5 }'`
         [ $MDS_QUOTA_USED2_NEW -ne $((MDS_QUOTA_USED2_OLD + 1)) ] && \
                 quota_error a $TSTUSR2 "$TSTUSR2 inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED2_OLD|$MDS_QUOTA_USED2_NEW]"
-        OST0_QUOTA_USED2_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED2_NEW=`$LFS quota -q -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '{ print $1 }'`
         # when chown, the quota on ost could be displayed out of quota temporarily. Delete the '*' in this situation. b=20433
         OST0_QUOTA_USED2_NEW=${OST0_QUOTA_USED2_NEW%\*}
         OST0_QUOTA_USED2_DELTA=$((OST0_QUOTA_USED2_NEW - OST0_QUOTA_USED2_OLD))
         [ $OST0_QUOTA_USED2_DELTA -ne $OST0_QUOTA_USED_DELTA ] && \
                 quota_error a $TSTUSR2 "$TSTUSR2 block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED2_OLD|$OST0_QUOTA_USED2_NEW]"
-        MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $5 }'`
+        MDS_QUOTA_USED_NEW=`$LFS quota -q -o $MDS_UUID $1 $TSTUSR $DIR | awk '{ print $5 }'`
         [ $MDS_QUOTA_USED_NEW -ne $MDS_QUOTA_USED_OLD ] && \
                 quota_error a $TSTUSR "$TSTUSR inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
-        OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED_NEW=`$LFS quota -q -o $OST0_UUID $1 $TSTUSR $DIR | awk '{ print $1 }'`
         [ $OST0_QUOTA_USED_NEW -ne $OST0_QUOTA_USED_OLD ] && \
                 quota_error a $TSTUSR "$TSTUSR block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
 
