@@ -2,6 +2,10 @@ SUBDIRS := . ldiskfs
 SOURCES_SUBDIRS := ldiskfs
 DIST_SUBDIRS := ldiskfs
 
+# this is in fact irrelevant in this file but needed to keep
+# autoMakefile.am.toplevel happy
+BUILD_TESTS = false
+
 include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += kernel_patches
