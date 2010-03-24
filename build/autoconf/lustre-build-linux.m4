@@ -539,6 +539,57 @@ else
 fi
 ])
 
+# LC_MODULE_LOADING
+# after 2.6.28 CONFIG_KMOD is removed, and only CONFIG_MODULES remains
+# so we test if request_module is implemented or not
+AC_DEFUN([LC_MODULE_LOADING],
+[AC_MSG_CHECKING([if kernel module loading is possible])
+LB_LINUX_TRY_MAKE([
+        #include <linux/kmod.h>
+],[
+        int myretval=ENOSYS ;
+        return myretval;
+],[
+        $makerule LUSTRE_KERNEL_TEST=conftest.i
+],[
+        grep request_module build/conftest.i | grep -v `grep "int myretval=" build/conftest.i | cut -d= -f2 | cut -d" "  -f1` >/dev/null
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_MODULE_LOADING_SUPPORT, 1,
+                [kernel module loading is possible])
+],[
+        AC_MSG_RESULT(no)
+        AC_MSG_WARN([])
+        AC_MSG_WARN([Kernel module loading support is highly recommended.])
+        AC_MSG_WARN([])
+])
+])
+
+# LC_MODULE_LOADING
+# after 2.6.28 CONFIG_KMOD is removed, and only CONFIG_MODULES remains
+# so we test if request_module is implemented or not
+AC_DEFUN([LC_MODULE_LOADING],
+[AC_MSG_CHECKING([if kernel module loading is possible])
+LB_LINUX_TRY_MAKE([
+        #include <linux/kmod.h>
+],[
+        int myretval=ENOSYS ;
+        return myretval;
+],[
+        $makerule LUSTRE_KERNEL_TEST=conftest.i
+],[
+        grep request_module build/conftest.i | grep -v `grep "int myretval=" build/conftest.i | cut -d= -f2 | cut -d" "  -f1` >/dev/null
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_MODULE_LOADING_SUPPORT, 1,
+                [kernel module loading is possible])
+],[
+        AC_MSG_RESULT(no)
+        AC_MSG_WARN([])
+        AC_MSG_WARN([Kernel module loading support is highly recommended.])
+        AC_MSG_WARN([])
+])
+])
 
 #
 # LB_PROG_LINUX
@@ -563,11 +614,8 @@ if test "x$ARCH_UM" = "x" ; then
 fi
 ])
 
-LB_LINUX_CONFIG([KMOD],[],[
-	AC_MSG_WARN([])
-	AC_MSG_WARN([Kernel module loading support is highly recommended.])
-	AC_MSG_WARN([])
-])
+# 2.6.28
+LC_MODULE_LOADING
 
 #LB_LINUX_CONFIG_BIG_STACK
 
