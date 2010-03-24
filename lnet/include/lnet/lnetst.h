@@ -467,7 +467,7 @@ typedef struct {
         __u32 rpcs_expired;
         __u64 bulk_get;
         __u64 bulk_put;
-} srpc_counters_t;
+} WIRE_ATTR srpc_counters_t;
 
 typedef struct {
         __u32 active_tests;
@@ -475,6 +475,6 @@ typedef struct {
         __u32 zombie_sessions;
         __u32 brw_errors;
         __u32 ping_errors;
-} sfw_counters_t;
+} WIRE_ATTR sfw_counters_t;
 
 #endif

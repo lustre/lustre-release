@@ -58,6 +58,12 @@
 
 #define WIRE_ATTR	__attribute__((packed))
 
+/* Packed version of lnet_process_id_t to transfer via network */
+typedef struct {
+        lnet_nid_t nid;
+        lnet_pid_t pid;   /* node id / process id */
+} WIRE_ATTR lnet_process_id_packed_t;
+
 /* The wire handle's interface cookie only matches one network interface in
  * one epoch (i.e. new cookie when the interface restarts or the node
  * reboots).  The object cookie only matches one object on that interface
@@ -494,7 +500,7 @@ typedef struct {
         __u64        recv_length;
         __u64        route_length;
         __u64        drop_length;
-} lnet_counters_t;
+} WIRE_ATTR lnet_counters_t;
 
 #define LNET_PEER_HASHSIZE   503                /* prime! */
 
