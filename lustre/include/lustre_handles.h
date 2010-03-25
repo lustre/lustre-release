@@ -37,6 +37,11 @@
 #ifndef __LUSTRE_HANDLES_H_
 #define __LUSTRE_HANDLES_H_
 
+/** \defgroup handles handles
+ *
+ * @{
+ */
+
 #if defined(__linux__)
 #include <linux/lustre_handles.h>
 #elif defined(__APPLE__)
@@ -89,5 +94,7 @@ void *class_handle2object(__u64 cookie);
 void class_handle_free_cb(cfs_rcu_head_t *);
 int class_handle_init(void);
 void class_handle_cleanup(void);
+
+/** @} handles */
 
 #endif

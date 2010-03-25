@@ -37,6 +37,11 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
+/** \defgroup export export
+ *
+ * @{
+ */
+
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
@@ -274,5 +279,7 @@ static inline int imp_connect_lru_resize(struct obd_import *imp)
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
+
+/** @} export */
 
 #endif /* __EXPORT_H */

@@ -42,6 +42,11 @@
 #ifndef _LUSTRE_MDC_H
 #define _LUSTRE_MDC_H
 
+/** \defgroup mdc mdc
+ *
+ * @{
+ */
+
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/dcache.h>
@@ -132,4 +137,7 @@ int it_open_error(int phase, struct lookup_intent *it);
 int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
                  const struct page *page, int offset);
 #endif
+
+/** @} mdc */
+
 #endif

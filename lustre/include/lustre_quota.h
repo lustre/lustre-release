@@ -37,6 +37,11 @@
 #ifndef _LUSTRE_QUOTA_H
 #define _LUSTRE_QUOTA_H
 
+/** \defgroup quota quota
+ *
+ * @{
+ */
+
 #if defined(__linux__)
 #include <linux/lustre_quota.h>
 #elif defined(__APPLE__)
@@ -814,5 +819,7 @@ extern quota_interface_t lmv_quota_interface;
         "admin_quotafile_v2.usr",       /** user admin quotafile */\
         "admin_quotafile_v2.grp"        /** group admin quotafile */\
 }
+
+/** @} quota */
 
 #endif /* _LUSTRE_QUOTA_H */

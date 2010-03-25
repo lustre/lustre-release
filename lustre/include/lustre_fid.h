@@ -41,6 +41,11 @@
 #ifndef __LINUX_FID_H
 #define __LINUX_FID_H
 
+/** \defgroup fid fid
+ *
+ * @{
+ */
+
 /*
  * struct lu_fid
  */
@@ -346,5 +351,7 @@ static inline void range_be_to_cpu(struct lu_seq_range *dst, const struct lu_seq
         dst->lsr_end = be64_to_cpu(src->lsr_end);
         dst->lsr_mdt = be32_to_cpu(src->lsr_mdt);
 }
+
+/** @} fid */
 
 #endif /* __LINUX_FID_H */

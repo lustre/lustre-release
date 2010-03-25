@@ -42,6 +42,11 @@
 #ifndef _LUSTRE_EACL_H
 #define _LUSTRE_EACL_H
 
+/** \defgroup eacl eacl
+ *
+ * @{
+ */
+
 #ifdef CONFIG_FS_POSIX_ACL
 
 # ifdef HAVE_XATTR_ACL
@@ -108,5 +113,7 @@ lustre_acl_xattr_merge2ext(posix_acl_xattr_header *posix_header, int size,
                            ext_acl_xattr_header *ext_header);
 
 #endif /* CONFIG_FS_POSIX_ACL */
+
+/** @} eacl */
 
 #endif

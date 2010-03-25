@@ -37,6 +37,11 @@
 #ifndef _LIBLUSTREAPI_H_
 #define _LIBLUSTREAPI_H_
 
+/** \defgroup llapi llapi
+ *
+ * @{
+ */
+
 #include <lustre/lustre_user.h>
 
 /* Initially allocate for these many OSTs, realloc if needed */
@@ -222,6 +227,8 @@ extern int llapi_copytool_fini(void **priv);
 extern int llapi_copytool_recv(void *priv, struct hsm_action_list **hal,
                                int *msgsize);
 extern int llapi_copytool_free(struct hsm_action_list **hal);
+
+/** @} llapi */
 
 #endif
 

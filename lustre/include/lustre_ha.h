@@ -37,6 +37,11 @@
 #ifndef _LUSTRE_HA_H
 #define _LUSTRE_HA_H
 
+/** \defgroup ha ha
+ *
+ * @{
+ */
+
 struct obd_import;
 struct obd_export;
 struct obd_device;
@@ -56,5 +61,7 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt);
 int ptlrpc_check_suspend(void);
 void ptlrpc_activate_timeouts(struct obd_import *imp);
 void ptlrpc_deactivate_timeouts(struct obd_import *imp);
+
+/** @} ha */
 
 #endif

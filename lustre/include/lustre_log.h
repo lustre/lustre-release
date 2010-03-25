@@ -51,6 +51,11 @@
 #ifndef _LUSTRE_LOG_H
 #define _LUSTRE_LOG_H
 
+/** \defgroup log log
+ *
+ * @{
+ */
+
 #if defined(__linux__)
 #include <linux/lustre_log.h>
 #elif defined(__APPLE__)
@@ -687,5 +692,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
 int lustre_end_log(struct super_block *sb, char *logname,
                    struct config_llog_instance *cfg);
+
+/** @} log */
 
 #endif

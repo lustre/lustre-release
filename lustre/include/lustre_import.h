@@ -37,6 +37,11 @@
 #ifndef __IMPORT_H
 #define __IMPORT_H
 
+/** \defgroup export export
+ *
+ * @{
+ */
+
 #include <lustre_handles.h>
 #include <lustre/lustre_idl.h>
 
@@ -247,5 +252,7 @@ extern unsigned int at_max;
 struct obd_export;
 extern struct obd_import *class_exp2cliimp(struct obd_export *);
 extern struct obd_import *class_conn2cliimp(struct lustre_handle *);
+
+/** @} import */
 
 #endif /* __IMPORT_H */

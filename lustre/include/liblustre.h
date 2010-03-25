@@ -41,6 +41,11 @@
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
+/** \defgroup liblustre liblustre
+ *
+ * @{
+ */
+
 #ifdef __KERNEL__
 #error Kernel files should not #include <liblustre.h>
 #endif
@@ -516,5 +521,7 @@ static inline void set_fs(mm_segment_t seg)
 #include <lustre_import.h>
 #include <lustre_export.h>
 #include <lustre_net.h>
+
+/** @} liblustre */
 
 #endif

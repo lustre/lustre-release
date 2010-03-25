@@ -42,6 +42,11 @@
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
+/** \defgroup mds mds
+ *
+ * @{
+ */
+
 #include <lustre_handles.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
@@ -90,5 +95,7 @@ static inline int md_should_create(__u32 flags)
 
 /* these are local flags, used only on the client, private */
 #define M_CHECK_STALE           0200000000
+
+/** @} mds */
 
 #endif

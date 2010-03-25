@@ -41,6 +41,11 @@
 #ifndef _LUSTRE_LIB_H
 #define _LUSTRE_LIB_H
 
+/** \defgroup lib lib
+ *
+ * @{
+ */
+
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_ver.h>
@@ -818,5 +823,7 @@ do {                                                                    \
 #else
 #define LIBLUSTRE_CLIENT (1)
 #endif
+
+/** @} lib */
 
 #endif /* _LUSTRE_LIB_H */

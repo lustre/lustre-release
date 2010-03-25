@@ -37,6 +37,11 @@
 #ifndef __LINUX_MDT_H
 #define __LINUX_MDT_H
 
+/** \defgroup mdt mdt
+ *
+ * @{
+ */
+
 #include <lustre/lustre_idl.h>
 #include <lustre_req_layout.h>
 #include <md_object.h>
@@ -76,5 +81,6 @@ static inline int is_serious(int rc)
         return (rc < 0 && -rc & ESERIOUS);
 }
 
+/** @} mdt */
 
 #endif

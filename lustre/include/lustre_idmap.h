@@ -42,6 +42,11 @@
 #ifndef _LUSTRE_IDMAP_H
 #define _LUSTRE_IDMAP_H
 
+/** \defgroup idmap idmap
+ *
+ * @{
+ */
+
 #include <md_object.h>
 
 #define CFS_NGROUPS_PER_BLOCK   ((int)(CFS_PAGE_SIZE / sizeof(gid_t)))
@@ -91,5 +96,7 @@ extern int lustre_idmap_lookup_gid(struct md_ucred *mu,
                                    int reverse, gid_t gid);
 extern struct lustre_idmap_table *lustre_idmap_init(void);
 extern void lustre_idmap_fini(struct lustre_idmap_table *t);
+
+/** @} idmap */
 
 #endif

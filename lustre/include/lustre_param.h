@@ -43,6 +43,11 @@
 #ifndef _LUSTRE_PARAM_H
 #define _LUSTRE_PARAM_H
 
+/** \defgroup param param
+ *
+ * @{
+ */
+
 /* obd_config.c */
 int class_find_param(char *buf, char *key, char **valp);
 int class_get_next_param(char **params, char *copy);
@@ -90,5 +95,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_SRPC_FLVR            "srpc.flavor."
 #define PARAM_SRPC_UDESC           "srpc.udesc.cli2mdt"
 #define PARAM_SEC                  "security."
+
+/** @} param */
 
 #endif /* _LUSTRE_PARAM_H */

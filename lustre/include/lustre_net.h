@@ -37,6 +37,11 @@
 #ifndef _LUSTRE_NET_H
 #define _LUSTRE_NET_H
 
+/** \defgroup net net
+ *
+ * @{
+ */
+
 #if defined(__linux__)
 #include <linux/lustre_net.h>
 #elif defined(__APPLE__)
@@ -1397,5 +1402,7 @@ int llog_catinfo(struct ptlrpc_request *req);
 
 /* ptlrpc/llog_client.c */
 extern struct llog_operations llog_client_ops;
+
+/** @} net */
 
 #endif

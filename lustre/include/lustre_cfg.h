@@ -37,6 +37,11 @@
 #ifndef _LUSTRE_CFG_H
 #define _LUSTRE_CFG_H
 
+/** \defgroup cfg cfg
+ *
+ * @{
+ */
+
 /*
  * 1cf6
  * lcfG
@@ -286,5 +291,7 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 #include <lustre/lustre_user.h>
 
 #define INVALID_UID     (-1)
+
+/** @} cfg */
 
 #endif // _LUSTRE_CFG_H

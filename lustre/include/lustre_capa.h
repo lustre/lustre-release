@@ -41,6 +41,11 @@
 #ifndef __LINUX_CAPA_H_
 #define __LINUX_CAPA_H_
 
+/** \defgroup capa capa
+ *
+ * @{
+ */
+
 /*
  * capability
  */
@@ -297,4 +302,7 @@ enum {
 };
 
 #define BYPASS_CAPA (struct lustre_capa *)ERR_PTR(-ENOENT)
+
+/** @} capa */
+
 #endif /* __LINUX_CAPA_H_ */

@@ -37,6 +37,11 @@
 #ifndef __LINUX_FLD_H
 #define __LINUX_FLD_H
 
+/** \defgroup fld fld
+ *
+ * @{
+ */
+
 #include <lustre/lustre_idl.h>
 #include <lustre_mdt.h>
 #include <dt_object.h>
@@ -188,5 +193,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
 
 int fld_client_del_target(struct lu_client_fld *fld,
                           __u64 idx);
+
+/** @} fld */
 
 #endif

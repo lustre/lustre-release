@@ -49,6 +49,11 @@
 #ifndef __IAM_ULIB_H__
 #define __IAM_ULIB_H__
 
+/** \defgroup libiam libiam
+ *
+ * @{
+ */
+
 
 #define DX_FMT_NAME_LEN 16
 
@@ -137,5 +142,6 @@ int iam_it_stop(int fd, struct iam_uapi_info *ua,
  */
 int iam_polymorph(char *filename, unsigned long mode);
 
+/** @} libiam */
 
 #endif

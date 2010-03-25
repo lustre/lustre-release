@@ -41,6 +41,11 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 
+/** \defgroup lustreuser lustreuser
+ *
+ * @{
+ */
+
 #include <lustre/ll_fiemap.h>
 #if defined(__linux__)
 #include <linux/lustre_user.h>
@@ -593,5 +598,6 @@ static __inline__ struct hsm_action_item * hai_next(struct hsm_action_item *hai)
                                           cfs_size_round(hai->hai_len));
 }
 
+/** @} lustreuser */
 
 #endif /* _LUSTRE_USER_H */

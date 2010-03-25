@@ -43,6 +43,11 @@
 #ifndef _LUSTRE_DISK_H
 #define _LUSTRE_DISK_H
 
+/** \defgroup disk disk
+ *
+ * @{
+ */
+
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>
 
@@ -471,5 +476,7 @@ int server_mti_print(char *title, struct mgs_target_info *mti);
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id);
 
 #endif
+
+/** @} disk */
 
 #endif // _LUSTRE_DISK_H

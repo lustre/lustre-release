@@ -43,6 +43,11 @@
 #ifndef _LUSTRE_REQ_LAYOUT_H__
 #define _LUSTRE_REQ_LAYOUT_H__
 
+/** \defgroup req_layout req_layout
+ *
+ * @{
+ */
+
 struct req_msg_field;
 struct req_format;
 struct req_capsule;
@@ -277,5 +282,7 @@ extern const struct req_msg_field RMF_NIOBUF_REMOTE;
 extern const struct req_msg_field RMF_RCS;
 extern const struct req_msg_field RMF_FIEMAP_KEY;
 extern const struct req_msg_field RMF_FIEMAP_VAL;
+
+/** @} req_layout */
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */

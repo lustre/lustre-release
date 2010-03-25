@@ -37,6 +37,11 @@
 #ifndef _LL_H
 #define _LL_H
 
+/** \defgroup lite lite
+ *
+ * @{
+ */
+
 #if defined(__linux__)
 #include <linux/lustre_lite.h>
 #elif defined(__APPLE__)
@@ -149,4 +154,7 @@ static inline unsigned long hash_x_index(unsigned long value)
 {
         return ~0UL - value;
 }
+
+/** @} lite */
+
 #endif
