@@ -11,5 +11,7 @@
 /parallel_grouplock
 /write_append_truncate
 /write_disjoint
+/cascading_rw
+/createmany_mpi
 /*.cmd
 /*.log
