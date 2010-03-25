@@ -1423,7 +1423,7 @@ found_child:
                         break;
 
                 l_dput(dparent);
-                if (rc)
+                if (rc || !created)
                         ldlm_lock_decref(&parent_lockh, parent_mode);
                 else
                         ptlrpc_save_lock(req, &parent_lockh, parent_mode);
