@@ -100,7 +100,7 @@ test_0a() {
 run_test 0a "VBR: open and close do not change versions"
 
 test_0b() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
     replay_barrier mds
@@ -118,7 +118,7 @@ test_0b() {
 run_test 0b "VBR: open (O_CREAT) checks version of parent"
 
 test_0c() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tdir/$tfile
 
@@ -149,7 +149,7 @@ test_0d() {
 run_test 0d "VBR: create changes version of parent"
 
 test_0e() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
     replay_barrier mds
@@ -181,7 +181,7 @@ test_0f() {
 run_test 0f "VBR: unlink changes version of parent"
 
 test_0g() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
     do_node $CLIENT1 mcreate $DIR/$tdir/$tfile
 
@@ -232,7 +232,7 @@ run_test 0i "VBR: setattr of GID changes versions"
 test_0j() {
     local file=$DIR/$tfile
 
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mcreate $file
 
     replay_barrier mds
@@ -252,7 +252,7 @@ run_test 0j "VBR: setattr of UID checks versions"
 test_0k() {
     local file=$DIR/$tfile
 
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mcreate $file
 
     replay_barrier mds
@@ -287,7 +287,7 @@ run_test 0l "VBR: setattr of permission changes versions"
 test_0m() {
     local file=$DIR/$tfile
 
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier mds
@@ -336,7 +336,7 @@ test_0o() {
     local file=$DIR/$tfile
     local rc
 
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier mds
@@ -362,8 +362,8 @@ test_0p() {
     local post
     local ad_orig
 
-    ad_orig=$(do_facet mds "$LCTL get_param mds.${mds_svc}.atime_diff")
-    do_facet mds "$LCTL set_param mds.${mds_svc}.atime_diff=0"
+    ad_orig=$(do_facet mds "$LCTL get_param *.${mds_svc}.atime_diff")
+    do_facet mds "$LCTL set_param *.${mds_svc}.atime_diff=0"
     do_node $CLIENT1 mcreate $file
     pre=$(get_version $CLIENT1 $file)
     do_node $CLIENT1 touch $file
@@ -400,8 +400,8 @@ test_0r() {
     local mtime_post
     local mtime
 
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
-    do_facet mds "$LCTL set_param mds.${mds_svc}.atime_diff=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.atime_diff=0"
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier mds
@@ -452,7 +452,7 @@ test_0s() {
 run_test 0s "VBR: link changes versions of source and target parent"
 
 test_0t() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mcreate $DIR/$tfile
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
@@ -471,7 +471,7 @@ test_0t() {
 run_test 0t "VBR: link checks version of target parent"
 
 test_0u() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile
     do_node $CLIENT1 mkdir -p $DIR/$tdir
 
@@ -526,7 +526,7 @@ test_0w() {
 run_test 0w "VBR: rename within same dir changes version of parent"
 
 test_0x() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mcreate $DIR/$tfile
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
@@ -545,7 +545,7 @@ test_0x() {
 run_test 0x "VBR: rename checks version of source parent"
 
 test_0y() {
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     do_node $CLIENT1 mcreate $DIR/$tfile
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
@@ -636,7 +636,7 @@ test_2b() {
     local pre
     local post
 
-    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0"
     zconf_mount $CLIENT1 $MOUNT
     zconf_mount $CLIENT2 $MOUNT2
     zconf_mount $CLIENT2 $MOUNT1
@@ -701,7 +701,7 @@ test_3a() {
     zconf_mount_clients $CLIENT2 $DIR
 
     #make sure the time will change
-    do_facet mds "$LCTL set_param *.*.atime_diff=0" || return
+    do_facet mds "$LCTL set_param *.${mds_svc}.atime_diff=0" || return
     do_node $CLIENT1 touch $DIR/$tfile
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     sleep 1
@@ -733,8 +733,8 @@ test_3b() {
     zconf_mount_clients $CLIENT2 $DIR
 
     #make sure the time will change
-    do_facet mds "$LCTL set_param *.*.atime_diff=0" || return
-    do_facet mds "$LCTL set_param *.*.sync_permission=0" || return
+    do_facet mds "$LCTL set_param *.${mds_svc}.atime_diff=0" || return
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=0" || return
     do_node $CLIENT1 touch $DIR/$tfile
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     sleep 1
@@ -769,7 +769,7 @@ test_3c() {
     zconf_mount_clients $CLIENT2 $DIR
 
     # check that permission changes are synced
-    do_facet mds "$LCTL set_param *.*.sync_permission=1"
+    do_facet mds "$LCTL set_param *.${mds_svc}.sync_permission=1"
 
     do_node $CLIENT1 mkdir -p $DIR/d3c/sub || error
     #chown -R $RUNAS_ID $MOUNT1/d3
