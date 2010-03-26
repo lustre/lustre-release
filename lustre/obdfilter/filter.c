@@ -2275,7 +2275,8 @@ static int filter_cleanup(struct obd_device *obd)
 }
 
 static int filter_connect_internal(struct obd_export *exp,
-                                   struct obd_connect_data *data)
+                                   struct obd_connect_data *data,
+                                   int reconnect)
 {
         if (!data)
                 RETURN(0);
@@ -2303,7 +2304,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 spin_lock(&exp->exp_obd->obd_osfs_lock);
                 left = filter_grant_space_left(exp);
                 want = data->ocd_grant;
-                filter_grant(exp, fed->fed_grant, want, left);
+                filter_grant(exp, fed->fed_grant, want, left, (reconnect == 0));
                 data->ocd_grant = fed->fed_grant;
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
@@ -2390,7 +2391,7 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
 
-        rc = filter_connect_internal(exp, data);
+        rc = filter_connect_internal(exp, data, 1);
         if (rc == 0)
                 filter_export_stats_init(obd, exp, 1, localdata);
 
@@ -2423,7 +2424,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         fed = &exp->exp_filter_data;
 
-        rc = filter_connect_internal(exp, data);
+        rc = filter_connect_internal(exp, data,0);
         if (rc)
                 GOTO(cleanup, rc);
 

@@ -174,7 +174,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           int rc);
 obd_size filter_grant_space_left(struct obd_export *exp);
 long filter_grant(struct obd_export *exp, obd_size current_grant,
-                  obd_size want, obd_size fs_space_left);
+                  obd_size want, obd_size fs_space_left, int conservative);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
 void filter_grant_incoming(struct obd_export *exp, struct obdo *oa);

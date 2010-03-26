@@ -1008,17 +1008,28 @@ static int osc_del_shrink_grant(struct client_obd *client)
 
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
+        /*
+         * ocd_grant is the total grant amount we're expect to hold: if we'v
+         * been evicted, it's the new avail_grant amount, cl_dirty will drop
+         * to 0 as inflight rpcs fail out; otherwise, it's avail_grant + dirty.
+         *
+         * race is tolerable here: if we're evicted, but imp_state already
+         * left EVICTED state, then cl_diry must be 0 already.
+         */
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_avail_grant = ocd->ocd_grant;
+        if (cli->cl_import->imp_state == LUSTRE_IMP_EVICTED)
+                cli->cl_avail_grant = ocd->ocd_grant;
+        else
+                cli->cl_avail_grant = ocd->ocd_grant - cli->cl_dirty;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
-
-        if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
-            list_empty(&cli->cl_grant_shrink_list))
-                osc_add_shrink_grant(cli);
 
         CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld \n",
                cli->cl_avail_grant, cli->cl_lost_grant);
         LASSERT(cli->cl_avail_grant >= 0);
+
+        if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
+            list_empty(&cli->cl_grant_shrink_list))
+                osc_add_shrink_grant(cli);
 }
 
 /* We assume that the reason this OSC got a short read is because it read
@@ -4206,15 +4217,15 @@ static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
                 long lost_grant;
 
                 client_obd_list_lock(&cli->cl_loi_list_lock);
-                data->ocd_grant = cli->cl_avail_grant ?:
+                data->ocd_grant = cli->cl_avail_grant + cli->cl_dirty ?:
                                 2 * cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
                 lost_grant = cli->cl_lost_grant;
                 cli->cl_lost_grant = 0;
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 CDEBUG(D_CACHE, "request ocd_grant: %d cl_avail_grant: %ld "
-                       "cl_lost_grant: %ld\n", data->ocd_grant,
-                       cli->cl_avail_grant, lost_grant);
+                       "cl_dirty: %ld cl_lost_grant: %ld\n", data->ocd_grant,
+                       cli->cl_dirty, cli->cl_avail_grant, lost_grant);
                 CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d"
                        " ocd_grant: %d\n", data->ocd_connect_flags,
                        data->ocd_version, data->ocd_grant);
