@@ -402,6 +402,8 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
 
         rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
+        if (rc < 0)
+                GOTO(out, rc);
 
         if (S_ISREG(inode->i_mode)) {
                 struct ll_inode_info *lli = ll_i2info(inode);

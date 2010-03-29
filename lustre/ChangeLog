@@ -54,6 +54,10 @@ Bugzilla   : 22065
 Description: LNET hang
 Details    : fix deadlock with ko2iblnd failover
 
+Severity   : normal
+Bugzilla   : 22301
+Description: lustre.lov error when backing up symlinks with extended attributes
+
 -------------------------------------------------------------------------------
 
 2009-10-16 Sun Microsystems, Inc.
