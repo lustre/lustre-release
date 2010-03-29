@@ -742,14 +742,10 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
         memset(conn->ibc_connvars, 0, sizeof(*conn->ibc_connvars));
 
         write_lock_irqsave(glock, flags);
-        i = 0;
-        while (dev->ibd_failover) {
+        if (dev->ibd_failover) {
                 write_unlock_irqrestore(glock, flags);
-                /* shouldn't take long time */
-                if (i++ % 50 == 0)
-                        CDEBUG(D_NET, "Wait for dev(%s) failover\n", dev->ibd_ifname);
-                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1) / 50);
-                write_lock_irqsave(glock, flags);
+                CERROR("%s: failover in progress\n", dev->ibd_ifname);
+                goto failed_2;
         }
 
         if (dev->ibd_hdev->ibh_ibdev != cmid->device) {
@@ -2362,7 +2358,7 @@ kiblnd_dev_need_failover(kib_dev_t *dev)
         struct sockaddr_in  dstaddr;
         int                 rc;
 
-        if (dev->ibd_hdev == NULL || /* intializing */
+        if (dev->ibd_hdev == NULL || /* initializing */
             dev->ibd_hdev->ibh_cmid == NULL || /* listener is dead */
             *kiblnd_tunables.kib_dev_failover > 1) /* debugging */
                 return 1;
@@ -2599,7 +2595,7 @@ kiblnd_create_dev(char *ifname)
         dev->ibd_ifip = ip;
         strcpy(&dev->ibd_ifname[0], ifname);
 
-        /* intialize the device */
+        /* initialize the device */
         rc = kiblnd_dev_failover(dev);
         if (rc != 0) {
                 CERROR("Can't initialize device: %d\n", rc);

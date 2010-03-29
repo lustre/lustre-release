@@ -49,6 +49,11 @@ Bugzilla   : 20400
 Description: Downgrade RHEL5 kernel to 2.6.18-128.1.14.el5
 Details    : BoM needs 2.6.18-128.1.14.el5, so revert the patch from bug 20400
 
+Severity   : normal
+Bugzilla   : 22065
+Description: LNET hang
+Details    : fix deadlock with ko2iblnd failover
+
 -------------------------------------------------------------------------------
 
 2009-10-16 Sun Microsystems, Inc.
