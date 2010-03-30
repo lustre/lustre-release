@@ -400,6 +400,8 @@ static void mdt_pack_size2body(struct mdt_thread_info *info,
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid)
 {
+        struct md_attr          *ma  = &info->mti_attr;
+
         /*XXX should pack the reply body according to lu_valid*/
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
                     OBD_MD_FLGID   | OBD_MD_FLTYPE  |
@@ -408,6 +410,10 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 
         if (!S_ISREG(attr->la_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLRDEV;
+
+        /* if no object is allocated on osts, the size on mds is valid. b=22272 */
+        if (ma->ma_lmm_size == 0)
+                b->valid |= OBD_MD_FLSIZE;
 
         b->atime      = attr->la_atime;
         b->mtime      = attr->la_mtime;
