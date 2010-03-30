@@ -45,6 +45,9 @@ SINGLEMDS=${SINGLEMDS:-"mds1"}
 TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-0x33f0404}
 DEBUG_SIZE=${DEBUG_SIZE:-10}
+if [ `grep processor /proc/cpuinfo | wc -l` -gt 5 ]; then
+    DEBUG_SIZE=$((`grep processor /proc/cpuinfo | wc -l` * 2))   # promise 2MB for every cpu
+fi
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
 ENABLE_QUOTA=${ENABLE_QUOTA:-""}
