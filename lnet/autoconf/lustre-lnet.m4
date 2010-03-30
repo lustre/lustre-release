@@ -468,6 +468,11 @@ else
 			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
 			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
 			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
+			if test \( -d ${O2IBPATH}/kernel_patches -a \
+				   -f ${O2IBPATH}/Makefile \); then
+				AC_MSG_RESULT([no])
+				AC_MSG_ERROR([you appear to be trying to use the OFED distribution's source directory (${O2IBPATH}) rather than the "development/headers" directory which is likely in ${O2IBPATH%-*}])
+			fi
 			o2ib_found=true
 			break
  		fi
