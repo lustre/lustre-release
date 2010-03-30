@@ -12,6 +12,11 @@ tbd  Sun Microsystems, Inc.
        * Recommended e2fsprogs version: 1.41.6.sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
+Severity   : normal
+Bugzilla   : 21829
+Description: llobdstat fix and enhancement
+Details    : add a counter to set a limit to how many samples will be returned
+	     fix a wildcard in the path to limit to obdfilter stats only
 
 Severity   : normal
 Bugzilla   : 21259
