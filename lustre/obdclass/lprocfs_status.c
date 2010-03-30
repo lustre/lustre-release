@@ -1415,6 +1415,7 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, commitrw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, enqueue);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, change_cbdata);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, find_cbdata);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel_unused);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_export);
@@ -1511,6 +1512,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
 
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getstatus);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, change_cbdata);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, find_cbdata);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, close);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, create);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, done_writing);

@@ -20,9 +20,6 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 #                                    buffer i/o errs             sock spc runas
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f 101"
 
-# test76 is not valid with FIDs because inode numbers are not reused
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76"
-
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
 2.6*) FSTYPE=${FSTYPE:-ldiskfs} ;;
@@ -3536,10 +3533,9 @@ num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
 }
 
-test_76() { # bug 1443
-	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
-	[ $DETH -eq 0 ] && skip "No _iget." && return 0
-        BEFORE_INODES=`num_inodes`
+test_76() { # Now for bug 20433, added originally in bug 1443
+	cancel_lru_locks osc
+	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
 	local COUNT=1000
 	[ "$SLOW" = "no" ] && COUNT=100
@@ -3547,13 +3543,22 @@ test_76() { # bug 1443
 		touch $DIR/$tfile
 		rm -f $DIR/$tfile
 	done
+	cancel_lru_locks osc
 	AFTER_INODES=`num_inodes`
 	echo "after inodes: $AFTER_INODES"
-	[ $AFTER_INODES -gt $((BEFORE_INODES + 32)) ] && \
-		error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
-	true
+	local wait=0
+	while [ $AFTER_INODES -gt $BEFORE_INODES ]; do
+		sleep 2
+		AFTER_INODES=`num_inodes`
+		wait=$((wait+2))
+		echo "wait $wait seconds inodes: $AFTER_INODES"
+		if [ $wait -gt 30 ]; then
+			error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
+		fi
+	done
 }
-run_test 76 "destroy duplicate inodes in client inode cache ===="
+run_test 76 "confirm clients recycle inodes properly ===="
+
 
 export ORIG_CSUM=""
 set_checksums()

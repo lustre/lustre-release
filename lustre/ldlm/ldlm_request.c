@@ -1916,12 +1916,17 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
         RETURN(rc);
 }
 
-/* non-blocking function to manipulate a lock whose cb_data is being put away.*/
-void ldlm_resource_iterate(struct ldlm_namespace *ns,
-                           const struct ldlm_res_id *res_id,
-                           ldlm_iterator_t iter, void *data)
+/* non-blocking function to manipulate a lock whose cb_data is being put away.
+ * return  0:  find no resource
+ *       > 0:  must be LDLM_ITER_STOP/LDLM_ITER_CONTINUE.
+ *       < 0:  errors
+ */
+int ldlm_resource_iterate(struct ldlm_namespace *ns,
+                          const struct ldlm_res_id *res_id,
+                          ldlm_iterator_t iter, void *data)
 {
         struct ldlm_resource *res;
+        int rc;
         ENTRY;
 
         if (ns == NULL) {
@@ -1930,16 +1935,14 @@ void ldlm_resource_iterate(struct ldlm_namespace *ns,
         }
 
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
-        if (res == NULL) {
-                EXIT;
-                return;
-        }
+        if (res == NULL)
+                RETURN(0);
 
         LDLM_RESOURCE_ADDREF(res);
-        ldlm_resource_foreach(res, iter, data);
+        rc = ldlm_resource_foreach(res, iter, data);
         LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref(res);
-        EXIT;
+        RETURN(rc);
 }
 
 /* Lock replay */

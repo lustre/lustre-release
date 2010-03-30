@@ -114,6 +114,35 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
         RETURN(0);
 }
 
+static inline int return_if_equal(struct ldlm_lock *lock, void *data)
+{
+        return LDLM_ITER_STOP;
+}
+
+/* find any ldlm lock of the inode in mdc and lov
+ * return 0    not find
+ *        1    find one
+ *      < 0    error */
+static int find_cbdata(struct inode *inode)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(inode);
+        rc = md_find_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
+                            return_if_equal, NULL);
+        if (rc != 0)
+                 RETURN(rc);
+
+        if (lli->lli_smd)
+                rc = obd_find_cbdata(sbi->ll_dt_exp, lli->lli_smd,
+                                     return_if_equal, NULL);
+
+        RETURN(rc);
+}
+
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static int ll_ddelete(struct dentry *de)
 {
@@ -125,6 +154,15 @@ static int ll_ddelete(struct dentry *de)
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                d_unhashed(de) ? "" : "hashed,",
                list_empty(&de->d_subdirs) ? "" : "subdirs");
+
+        /* if not ldlm lock for this inode, set i_nlink to 0 so that
+         * this inode can be recycled later b=20433 */
+        LASSERT(atomic_read(&de->d_count) == 0);
+        if (de->d_inode && !find_cbdata(de->d_inode))
+                de->d_inode->i_nlink = 0;
+
+        if (de->d_flags & DCACHE_LUSTRE_INVALID)
+                RETURN(1);
 
         RETURN(0);
 }
@@ -787,10 +825,19 @@ out_it:
 }
 #endif
 
+void ll_d_iput(struct dentry *de, struct inode *inode)
+{
+        LASSERT(inode);
+        if (!find_cbdata(inode))
+                inode->i_nlink = 0;
+        iput(inode);
+}
+
 struct dentry_operations ll_d_ops = {
         .d_revalidate = ll_revalidate_nd,
         .d_release = ll_release,
-        .d_delete = ll_ddelete,
+        .d_delete  = ll_ddelete,
+        .d_iput    = ll_d_iput,
         .d_compare = ll_dcompare,
 #if 0
         .d_pin = ll_pin,

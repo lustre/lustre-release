@@ -439,18 +439,6 @@ AC_MSG_RESULT([no])
 ])
 
 #
-# LC_EXPORT___IGET
-# starting from 2.6.19 linux kernel exports __iget()
-#
-AC_DEFUN([LC_EXPORT___IGET],
-[LB_CHECK_SYMBOL_EXPORT([__iget],
-[fs/inode.c],[
-        AC_DEFINE(HAVE_EXPORT___IGET, 1, [kernel exports __iget])
-],[
-])
-])
-
-#
 # only for Lustre-patched kernels
 #
 AC_DEFUN([LC_LUSTRE_VERSION_H],

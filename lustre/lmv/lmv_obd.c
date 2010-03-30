@@ -1368,6 +1368,36 @@ static int lmv_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(0);
 }
 
+static int lmv_find_cbdata(struct obd_export *exp, const struct lu_fid *fid,
+                           ldlm_iterator_t it, void *data)
+{
+        struct obd_device   *obd = exp->exp_obd;
+        struct lmv_obd      *lmv = &obd->u.lmv;
+        int                  i;
+        int                  rc;
+        ENTRY;
+
+        rc = lmv_check_connect(obd);
+        if (rc)
+                RETURN(rc);
+
+        CDEBUG(D_INODE, "CBDATA for "DFID"\n", PFID(fid));
+
+        /*
+         * With CMD every object can have two locks in different namespaces:
+         * lookup lock in space of mds storing direntry and update/open lock in
+         * space of mds storing inode.
+         */
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                rc = md_find_cbdata(lmv->tgts[i].ltd_exp, fid, it, data);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        RETURN(rc);
+}
+
+
 static int lmv_close(struct obd_export *exp, struct md_op_data *op_data,
                      struct md_open_data *mod, struct ptlrpc_request **request)
 {
@@ -3012,6 +3042,7 @@ struct obd_ops lmv_obd_ops = {
 struct md_ops lmv_md_ops = {
         .m_getstatus            = lmv_getstatus,
         .m_change_cbdata        = lmv_change_cbdata,
+        .m_find_cbdata          = lmv_find_cbdata,
         .m_close                = lmv_close,
         .m_create               = lmv_create,
         .m_done_writing         = lmv_done_writing,

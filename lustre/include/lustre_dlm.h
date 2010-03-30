@@ -857,7 +857,7 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
                                ldlm_res_iterator_t iter, void *closure);
 
 int ldlm_replay_locks(struct obd_import *imp);
-void ldlm_resource_iterate(struct ldlm_namespace *, const struct ldlm_res_id *,
+int ldlm_resource_iterate(struct ldlm_namespace *, const struct ldlm_res_id *,
                            ldlm_iterator_t iter, void *data);
 
 /* ldlm_flock.c */
