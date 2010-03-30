@@ -182,13 +182,12 @@ mpi_run () {
 
     ls -ald $MOUNT
     echo "+ $command"
-    eval $command 2>&1 > $mpilog || true
+    eval $command 2>&1 | tee $mpilog || true
 
     rc=${PIPESTATUS[0]}
     if [ $rc -eq 0 ] && grep -q "p4_error: : [^0]" $mpilog ; then
        rc=1
     fi
-    cat $mpilog
     return $rc
 }
 
