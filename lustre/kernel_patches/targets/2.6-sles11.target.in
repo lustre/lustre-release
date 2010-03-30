@@ -4,6 +4,10 @@ lnxmin=".23"
 #lnxrel="0.37_f594963d"
 # and note that this means we get rid of the EXTRA_VERSION_DELIMITER crap!!
 lnxrel="23-0.1"
+# use this when there is an "RPM fix" which means that the name of the
+# (source) RPM has been updated but the version of the kernel inside the
+# RPM is not also updated
+rpmfix=".1"
 
 # this is the delimeter that goes between $lnxmaj and $lnxrel
 # defaults to "-"
@@ -13,7 +17,7 @@ EXTRA_VERSION_DELIMITER="."
 # defaults to empty
 TARGET_DELIMITER="-"
 
-KERNEL_SRPM=kernel-source-$lnxmaj.$lnxrel.1.src.rpm
+KERNEL_SRPM=kernel-source-$lnxmaj.$lnxrel${rpmfix}.src.rpm
 SERIES=2.6-sles11.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
