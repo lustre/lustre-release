@@ -559,31 +559,36 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
         char *fsname = NULL, *param = NULL;
         int lum_size;
 
-        /*
-         * This is coming from userspace, so should be in
-         * local endian.  But the MDS would like it in little
-         * endian, so we swab it before we send it.
-         */
-        switch (lump->lmm_magic) {
-        case LOV_USER_MAGIC_V1: {
-                if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
-                        lustre_swab_lov_user_md_v1(lump);
+        if (lump != NULL) {
+                /*
+                 * This is coming from userspace, so should be in
+                 * local endian.  But the MDS would like it in little
+                 * endian, so we swab it before we send it.
+                 */
+                switch (lump->lmm_magic) {
+                case LOV_USER_MAGIC_V1: {
+                        if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
+                                lustre_swab_lov_user_md_v1(lump);
+                        lum_size = sizeof(struct lov_user_md_v1);
+                        break;
+                        }
+                case LOV_USER_MAGIC_V3: {
+                        if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
+                                lustre_swab_lov_user_md_v3(
+                                        (struct lov_user_md_v3 *)lump);
+                        lum_size = sizeof(struct lov_user_md_v3);
+                        break;
+                        }
+        	default: {
+                        CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
+                                        " %#08x != %#08x nor %#08x\n",
+                                        lump->lmm_magic, LOV_USER_MAGIC_V1,
+                                        LOV_USER_MAGIC_V3);
+                        RETURN(-EINVAL);
+                        }
+               }
+        } else {
                 lum_size = sizeof(struct lov_user_md_v1);
-                break;
-                }
-        case LOV_USER_MAGIC_V3: {
-                if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lump);
-                lum_size = sizeof(struct lov_user_md_v3);
-                break;
-                }
-        default: {
-                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
-                                " %#08x != %#08x nor %#08x\n",
-                                lump->lmm_magic, LOV_USER_MAGIC_V1,
-                                LOV_USER_MAGIC_V3);
-                RETURN(-EINVAL);
-                }
         }
 
         op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
@@ -611,21 +616,22 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                 fsname = ll_get_fsname(inode);
                 /* Set root stripesize */
                 sprintf(param, "%s-MDT0000.lov.stripesize=%u", fsname,
-                        lump->lmm_stripe_size);
+                        lump ? le32_to_cpu(lump->lmm_stripe_size) : 0);
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripecount */
                 sprintf(param, "%s-MDT0000.lov.stripecount=%hd", fsname,
-                        lump->lmm_stripe_count);
+                        lump ? le16_to_cpu(lump->lmm_stripe_count) : 0);
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripeoffset */
                 sprintf(param, "%s-MDT0000.lov.stripeoffset=%hd", fsname,
-                        lump->lmm_stripe_offset);
+                        lump ? le16_to_cpu(lump->lmm_stripe_offset) :
+                        (typeof(lump->lmm_stripe_offset))(-1));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;

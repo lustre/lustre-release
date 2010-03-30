@@ -4379,6 +4379,28 @@ test_102j() {
 }
 run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
 
+test_102k() {
+        touch $DIR/$tfile
+        # b22187 just check that does not crash for regular file.
+        setfattr -n trusted.lov $DIR/$tfile
+        # b22187 'setfattr -n trusted.lov' should work as remove LOV EA for directories
+        local test_kdir=$DIR/d102k
+        mkdir $test_kdir
+        local default_size=`$GETSTRIPE -s $test_kdir`
+        local default_count=`$GETSTRIPE -c $test_kdir`
+        local default_offset=`$GETSTRIPE -o $test_kdir`
+        $SETSTRIPE -s 65536 -i 1 -c 2 $test_kdir || error 'dir setstripe failed'
+        setfattr -n trusted.lov $test_kdir
+        local stripe_size=`$GETSTRIPE -s $test_kdir`
+        local stripe_count=`$GETSTRIPE -c $test_kdir`
+        local stripe_offset=`$GETSTRIPE -o $test_kdir`
+        [ $stripe_size -eq $default_size ] || error "stripe size $stripe_size != $default_size"
+        [ $stripe_count -eq $default_count ] || error "stripe count $stripe_count != $default_count"
+        [ $stripe_offset -eq $default_offset ] || error "stripe offset $stripe_offset != $default_offset"
+        rm -rf $DIR/$tfile $test_kdir
+}
+run_test 102k "setfattr without parameter of value shouldn't cause a crash"
+
 cleanup_test102
 
 run_acl_subtest()

@@ -320,6 +320,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 {
         struct mdt_rec_setattr *rec;
         struct mdt_ioepoch *epoch;
+        struct lov_user_md *lum = NULL;
         
         CLASSERT(sizeof(struct mdt_rec_reint) ==sizeof(struct mdt_rec_setattr));
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -335,7 +336,15 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         if (ealen == 0)
                 return;
 
-        memcpy(req_capsule_client_get(&req->rq_pill, &RMF_EADATA), ea, ealen);
+        lum = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
+        if (ea == NULL) { /* Remove LOV EA */
+                lum->lmm_magic = LOV_USER_MAGIC_V1;
+                lum->lmm_stripe_size = 0;
+                lum->lmm_stripe_count = 0;
+                lum->lmm_stripe_offset = (typeof(lum->lmm_stripe_offset))(-1);
+        } else {
+                memcpy(lum, ea, ealen);
+        }
 
         if (ea2len == 0)
                 return;
