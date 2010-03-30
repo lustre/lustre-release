@@ -1090,12 +1090,12 @@ test_61()
 
 	replay_barrier $SINGLEMDS
 	createmany -o $DIR/$tdir/$tfile-%d 10 
-	local oid=`do_facet ost1 "lctl get_param -n obdfilter.*OST0000.last_id"`
+	local oid=`do_facet ost1 "lctl get_param -n obdfilter.${ost1_svc}.last_id"`
 
 	fail_abort $SINGLEMDS
 	
 	touch $DIR/$tdir/$tfile
-	local id=`$LFS getstripe $DIR/$tdir/$tfile |awk '$2 ~ /^[1-9]+/ {print $2}'`
+	local id=`$LFS getstripe $DIR/$tdir/$tfile |awk '($1 ~ 0 && $2 ~ /^[1-9]+/) {print $2}'`
 	[ $id -le $oid ] && error "the orphan objid was reused, failed"
 
 	# Cleanup
