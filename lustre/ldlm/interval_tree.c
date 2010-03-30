@@ -545,12 +545,10 @@ void interval_erase(struct interval_node *node,
 
                 if (child)
                         child->in_parent = parent;
-                if (parent == old) {
+                if (parent == old)
                         parent->in_right = child;
-                        parent = node;
-                } else {
+                else
                         parent->in_left = child;
-                }
 
                 node->in_color = old->in_color;
                 node->in_right = old->in_right;
@@ -569,8 +567,10 @@ void interval_erase(struct interval_node *node,
                 old->in_left->in_parent = node;
                 if (old->in_right)
                         old->in_right->in_parent = node;
-                update_maxhigh(child, node->in_max_high);
+                update_maxhigh(child ? : parent, node->in_max_high);
                 update_maxhigh(node, old->in_max_high);
+                if (parent == old)
+                         parent = node;
                 goto color;
         }
         parent = node->in_parent;
@@ -587,7 +587,7 @@ void interval_erase(struct interval_node *node,
                 *root = child;
         }
 
-        update_maxhigh(child, node->in_max_high);
+        update_maxhigh(child ? : parent, node->in_max_high);
 
 color:
         if (color == INTERVAL_BLACK)
