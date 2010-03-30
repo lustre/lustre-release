@@ -3417,6 +3417,7 @@ set_last_id:
                 if (rc)
                         break;
                 if (cfs_time_after(cfs_time_current(), enough_time)) {
+                        i++;
                         CDEBUG(D_RPCTRACE,
                                "%s: precreate slow - want %d got %d \n",
                                obd->obd_name, *num, i);
