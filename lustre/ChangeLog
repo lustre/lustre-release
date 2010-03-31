@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
 
 Severity   : normal
+Bugzilla   : 20433
+Description: decrease the usage of memory on clients.
+Details    : 1. On clients, recycle dentries and inodes unused.
+	     2. Delete the code related to ll_deathrow(att 6215 in bug 1443). It
+	        is useless now.
+
+Severity   : normal
 Bugzilla   : 21829
 Description: llobdstat fix and enhancement
 Details    : add a counter to set a limit to how many samples will be returned
@@ -2423,13 +2430,6 @@ Description: Out or order replies might be lost on replay
 Details    : In ptlrpc_retain_replayable_request if we cannot find retained
              request with tid smaller then one currently being added, add it
 	     to the start, not end of the list.
-
-Severity   : normal
-Bugzilla   : 20433
-Description: decrease the usage of memory on clients.
-Details    : 1. On clients, recycle dentries and inodes unused.
-	     2. Delete the code related to ll_deathrow(att 6215 in bug 1443). It
-	        is useless now.
 
 --------------------------------------------------------------------------------
 
