@@ -399,7 +399,7 @@ test_2_sub() {
         # interop 18 <-> 20
         local dev=$(get_mds_mdt_device_proc_path)
         MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
-        MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '{ print $5 }'`
+        MDS_QUOTA_USED=`$LFS quota -q -o $MDS_UUID -u $TSTUSR $DIR | awk '{ print $5 }'`
         echo $MDS_QUOTA_USED
         [ $MDS_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
@@ -427,7 +427,7 @@ test_2_sub() {
         sync; sleep 1; sync;
 
         MDS_UUID=`do_facet mds $LCTL dl | grep -m1 " $dev " | awk '{print $((NF-1))}'`
-        MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '{ print $5 }'`
+        MDS_QUOTA_USED=`$LFS quota -q -o $MDS_UUID -g $TSTUSR $DIR | awk '{ print $5 }'`
         echo $MDS_QUOTA_USED
         [ $MDS_QUOTA_USED -ne 0 ] && \
             ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
