@@ -3091,7 +3091,7 @@ int jt_get_obj_version(int argc, char **argv)
         }
 
         obd_ioctl_unpack(&data, buf, sizeof rawbuf);
-        printf("0x"LPX64"\n", version);
+        printf(LPX64"\n", version);
         return 0;
 }
 
