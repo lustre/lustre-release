@@ -667,7 +667,9 @@ again:
         }
 
         if (unlikely(cfs_test_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags))) {
+                cfs_spin_lock(&req->rq_lock);
                 req->rq_err = 1;
+                cfs_spin_unlock(&req->rq_lock);
                 req_off_ctx_list(req, ctx);
                 RETURN(-EPERM);
         }
@@ -709,7 +711,9 @@ again:
                  * don't switch ctx if import was deactivated
                  */
                 if (req->rq_import->imp_deactive) {
+                        cfs_spin_lock(&req->rq_lock);
                         req->rq_err = 1;
+                        cfs_spin_unlock(&req->rq_lock);
                         RETURN(-EINTR);
                 }
 
@@ -718,7 +722,9 @@ again:
                         LASSERT(ctx == req->rq_cli_ctx);
                         CERROR("req %p: failed to replace dead ctx %p: %d\n",
                                 req, ctx, rc);
+                        cfs_spin_lock(&req->rq_lock);
                         req->rq_err = 1;
+                        cfs_spin_unlock(&req->rq_lock);
                         RETURN(rc);
                 }
 

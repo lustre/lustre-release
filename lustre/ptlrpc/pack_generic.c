@@ -320,8 +320,11 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 
         LASSERT(req->rq_reply_state == NULL);
 
-        if ((flags & LPRFL_EARLY_REPLY) == 0)
+        if ((flags & LPRFL_EARLY_REPLY) == 0) {
+                cfs_spin_lock(&req->rq_lock);
                 req->rq_packed_final = 1;
+                cfs_spin_unlock(&req->rq_lock);
+        }
 
         msg_len = lustre_msg_size_v2(count, lens);
         rc = sptlrpc_svc_alloc_rs(req, msg_len);

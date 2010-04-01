@@ -1312,7 +1312,9 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                 }
 
                 if (req->rq_err) {
+                        cfs_spin_lock(&req->rq_lock);
                         req->rq_replied = 0;
+                        cfs_spin_unlock(&req->rq_lock);
                         if (req->rq_status == 0)
                                 req->rq_status = -EIO;
                         ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
@@ -1376,12 +1378,16 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                                 cfs_spin_unlock(&imp->imp_lock);
 
+                                cfs_spin_lock(&req->rq_lock);
                                 req->rq_waiting = 0;
+                                cfs_spin_unlock(&req->rq_lock);
 
                                 if (req->rq_timedout||req->rq_resend) {
                                         /* This is re-sending anyways,
                                          * let's mark req as resend. */
+                                        cfs_spin_lock(&req->rq_lock);
                                         req->rq_resend = 1;
+                                        cfs_spin_unlock(&req->rq_lock);
                                         if (req->rq_bulk) {
                                                 __u64 old_xid;
 
@@ -1405,15 +1411,21 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                 if (status) {
                                         if (req->rq_err) {
                                                 req->rq_status = status;
+                                                cfs_spin_lock(&req->rq_lock);
                                                 req->rq_wait_ctx = 0;
+                                                cfs_spin_unlock(&req->rq_lock);
                                                 force_timer_recalc = 1;
                                         } else {
+                                                cfs_spin_lock(&req->rq_lock);
                                                 req->rq_wait_ctx = 1;
+                                                cfs_spin_unlock(&req->rq_lock);
                                         }
 
                                         continue;
                                 } else {
+                                        cfs_spin_lock(&req->rq_lock);
                                         req->rq_wait_ctx = 0;
+                                        cfs_spin_unlock(&req->rq_lock);
                                 }
 
                                 rc = ptl_send_rpc(req, 0);
@@ -1421,7 +1433,9 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                         DEBUG_REQ(D_HA, req, "send failed (%d)",
                                                   rc);
                                         force_timer_recalc = 1;
+                                        cfs_spin_lock(&req->rq_lock);
                                         req->rq_net_err = 1;
+                                        cfs_spin_unlock(&req->rq_lock);
                                 }
                                 /* need to reset the timeout */
                                 force_timer_recalc = 1;
