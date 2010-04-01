@@ -17,7 +17,7 @@ Index: linux-2.6.18.1/block/ll_rw_blk.c
  			goto end_io;
 
 +               /* this is cfs's dev_rdonly check */
-+               if (bio->bi_rw == WRITE && dev_check_rdonly(bio->bi_bdev)) {
++               if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
 +                       struct block_device *bdev = bio->bi_bdev;
 +
 +                       printk(KERN_WARNING "Write to readonly device %s (%#x) "

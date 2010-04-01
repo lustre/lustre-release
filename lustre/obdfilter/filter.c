@@ -3054,7 +3054,8 @@ static int filter_disconnect(struct obd_export *exp)
 
         rc = server_disconnect_export(exp);
 
-        if (exp->exp_obd->obd_replayable)
+        /* Do not erase record for recoverable client. */
+        if (obd->obd_replayable && (!obd->obd_fail || exp->exp_failed))
                 filter_client_del(exp);
         else
                 fsfilt_sync(obd, obd->u.obt.obt_sb);

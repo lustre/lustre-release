@@ -5149,7 +5149,9 @@ out_cookie:
 out_lmm:
         info->mti_mdt = NULL;
         /* cleanup client slot early */
-        mdt_client_del(&env, mdt);
+        /* Do not erase record for recoverable client. */
+        if (!obd->obd_fail || exp->exp_failed)
+                mdt_client_del(&env, mdt);
         lu_env_fini(&env);
 
         RETURN(rc);
