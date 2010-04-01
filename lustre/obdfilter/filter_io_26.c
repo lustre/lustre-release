@@ -628,9 +628,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 LASSERT(PageLocked(lnb->page));
                 LASSERT(!PageWriteback(lnb->page));
 
-                /* preceding filemap_write_and_wait() should have clean pages */
-                if (fo->fo_writethrough_cache)
-                        clear_page_dirty_for_io(lnb->page);
+                /* since write & truncate are serialized by the i_alloc_sem,
+                 * even partial truncate should not leave dirty pages in
+                 * the page cache */
                 LASSERT(!PageDirty(lnb->page));
 
                 SetPageUptodate(lnb->page);
