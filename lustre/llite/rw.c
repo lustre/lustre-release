@@ -2004,19 +2004,7 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
 static void ras_increase_window(struct ll_readahead_state *ras,
                                 struct ll_ra_info *ra, struct inode *inode)
 {
-        __u64 step;
-        __u32 size;
-        int rc;
-
-        step = ((loff_t)(ras->ras_window_start +
-                         ras->ras_window_len)) << CFS_PAGE_SHIFT;
-        size = sizeof(step);
-        /*Get rpc_size for this offset (step) */
-        rc = obd_get_info(ll_i2obdexp(inode), sizeof(KEY_OFF_RPCSIZE),
-                          KEY_OFF_RPCSIZE, &size, &step,
-                          ll_i2info(inode)->lli_smd);
-        if (rc)
-                step = INIT_RAS_WINDOW_PAGES;
+        __u64 step = INIT_RAS_WINDOW_PAGES;
 
         if (stride_io_mode(ras))
                 ras_stride_increase_window(ras, ra, (unsigned long)step);
