@@ -1723,6 +1723,60 @@ test_33b() {
 }
 run_test 33b "test open file with malformed flags (No panic and return error)"
 
+test_33c() {
+        local ostnum
+        local ostname
+        local write_bytes
+        local all_zeros
+
+        all_zeros=:
+        rm -fr $DIR/d33
+        mkdir -p $DIR/d33
+        # Read: 0, Write: 4, create/destroy: 2/0, stat: 1, punch: 0
+
+        sync
+        for ostnum in $(seq $OSTCOUNT); do
+                # test-framework's OST numbering is one-based, while Lustre's
+                # is zero-based
+                ostname=$(printf "lustre-OST%.4d" $((ostnum - 1)))
+                # Parsing llobdstat's output sucks; we could grep the /proc
+                # path, but that's likely to not be as portable as using the
+                # llobdstat utility.  Besides, this way we also test that
+                # utility.
+                write_bytes=$(do_facet ost$ostnum $LLOBDSTAT $ostname |
+                              sed -e 's/^.*, Write: \([0-9][0-9]*\),.*$/\1/' |
+                              grep '^[0-9]*$')
+                if (( ${write_bytes:-0} > 0 ))
+                then
+                        all_zeros=false
+                        break;
+                fi
+        done
+
+        $all_zeros || return 0
+
+        # Write four bytes
+        echo foo > $DIR/d33/bar
+        # Really write them
+        sync
+
+        # Total up write_bytes after writing.  We'd better find non-zeros.
+        for ostnum in $(seq $OSTCOUNT); do
+                ostname=$(printf "lustre-OST%.4d" $ostnum)
+                write_bytes=$(do_facet ost$ostnum $LLOBDSTAT $ostname |
+                              sed -e 's/^.*, Write: \([0-9][0-9]*\),.*$/\1/' |
+                              grep '^[0-9]*$')
+                if (( ${write_bytes:-0} > 0 ))
+                then
+                        all_zeros=false
+                        break;
+                fi
+        done
+
+        $all_zeros && error "OST not keeping write_bytes stats (b22312)"
+}
+run_test 33c "test llobdstat and write_bytes"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34

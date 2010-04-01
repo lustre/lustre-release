@@ -823,6 +823,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(obd, now, "start_page_write");
 
+        lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
+                            tot_bytes);
+
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
                 lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
                                     LPROC_FILTER_WRITE_BYTES, tot_bytes);

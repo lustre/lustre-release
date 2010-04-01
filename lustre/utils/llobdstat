@@ -33,11 +33,10 @@ if (($#ARGV < 0) || ($#ARGV > 2)) {
     } elsif ( -f "$ARGV[0]/$obdstats" ) {
         $statspath = "$ARGV[0]/$obdstats";
     } else {
-        my $st = `ls $defaultpath/obdfilter/$ARGV[0]/$obdstats 2> /dev/null`;
-        chop $st;
-        if ( -f "$st" ) {
-            $statspath = $st;
-        }
+	my $st = "$defaultpath/obdfilter/$ARGV[0]/$obdstats";
+	if ( -f "$st" ) {
+	    $statspath = $st;
+	}
     }
     if ( $statspath =~ /^None$/ ) {
         die "Cannot locate stat file for: $ARGV[0]\n";
