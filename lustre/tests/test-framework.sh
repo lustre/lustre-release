@@ -1402,8 +1402,11 @@ ostdevname() {
     echo -n $DEVPTR
 }
 
-facet_mntpt () {
+facet_mntpt() {
     local facet=$1
+    if combined_mgs_mds && [[ $facet = "mgs" ]]  ; then
+        facet="mds"
+    fi
     local var=${facet}_MOUNT
     eval mntpt=${!var:-${MOUNT%/*}/$facet}
 

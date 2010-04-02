@@ -1477,11 +1477,11 @@ run_test 61c "test race mds llog sync vs llog cleanup"
 
 test_61d() { # bug 16002
 #define OBD_FAIL_OBD_LLOG_SETUP        0x605
-    stop mds
-    do_facet mds "lctl set_param fail_loc=0x80000605"
-    start mds $MDSDEV $MDS_MOUNT_OPTS && error "mds start should have failed"
-    do_facet mds "lctl set_param fail_loc=0"
-    start mds $MDSDEV $MDS_MOUNT_OPTS || error "cannot restart mds"
+    stop mgs
+    do_facet mgs "lctl set_param fail_loc=0x80000605"
+    start mgs $MGSDEV $mgs_MOUNT_OPTS && error "mgs start should have failed"
+    do_facet mgs "lctl set_param fail_loc=0"
+    start mgs $MGSDEV $mgs_MOUNT_OPTS || error "cannot restart mgs"
 }
 run_test 61d "error in llog_setup should cleanup the llog context correctly"
 
