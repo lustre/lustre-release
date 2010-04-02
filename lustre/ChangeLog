@@ -9,8 +9,14 @@ tbd  Sun Microsystems, Inc.
          2.6.18-164.11.1.0.1.el5 (OEL 5)
          2.6.16.60-0.42.8 (SLES 10),
          2.6.27.19-5 (SLES11)
-       * Recommended e2fsprogs version: 1.41.6.sun1
-       * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+	 2.6.29.4-167.fc11 (FC11)
+       * Recommended e2fsprogs version: 1.41.10-sun2
+
+Severity   : normal
+Bugzilla   : 21829, 22312
+Description: Fix llobdstat.
+Details    : 1. Now updating the write_bytes counter
+	     2. Port script fixes from 1.8.
 
 Severity   : normal
 Bugzilla   : 20433
