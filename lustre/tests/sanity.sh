@@ -1762,7 +1762,7 @@ test_33c() {
 
         # Total up write_bytes after writing.  We'd better find non-zeros.
         for ostnum in $(seq $OSTCOUNT); do
-                ostname=$(printf "lustre-OST%.4d" $ostnum)
+                ostname=$(printf "lustre-OST%.4d" $((ostnum - 1)))
                 write_bytes=$(do_facet ost$ostnum $LLOBDSTAT $ostname |
                               sed -e 's/^.*, Write: \([0-9][0-9]*\),.*$/\1/' |
                               grep '^[0-9]*$')
