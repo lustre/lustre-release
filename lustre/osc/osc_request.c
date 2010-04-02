@@ -1495,7 +1495,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
             body->oa.o_valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)) {
                 unsigned int qid[MAXQUOTAS] = { body->oa.o_uid, body->oa.o_gid };
 
-                CDEBUG(D_QUOTA, "setdq for [%u %u] with valid %llx, flags %x\n",
+                CDEBUG(D_QUOTA, "setdq for [%u %u] with valid "LPX64", flags %x\n",
                        body->oa.o_uid, body->oa.o_gid, body->oa.o_valid,
                        body->oa.o_flags);
                 lquota_setdq(quota_interface, cli, qid, body->oa.o_valid,
