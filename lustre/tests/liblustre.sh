@@ -28,6 +28,7 @@ test_1() {
 	skip "$LIBLUSTRETESTS/sanity: not found"
     else
 	mkdir -p $MOUNT2
+	echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 	$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 	if [ "$LIBLUSTRE_EXCEPT" ]; then
 	    LIBLUSTRE_OPT="$LIBLUSTRE_OPT \
@@ -38,3 +39,7 @@ test_1() {
     fi
 }
 run_test 1 "liblustre sanity"
+
+banner "test complete, cleaning up"
+check_and_cleanup_lustre
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

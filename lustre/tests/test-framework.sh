@@ -262,7 +262,7 @@ load_module() {
 	    (($# > 0)) && shift 2
 
             # Ensure we have accept=all for lnet
-            if [ $module = lnet ]; then
+            if [ $(basename $module) = lnet ]; then
                 # OK, this is a bit wordy...
                 local arg accept_all_present=false
                 for arg in "$@"; do

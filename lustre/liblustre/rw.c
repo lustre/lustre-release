@@ -344,6 +344,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 /* XXX this is not right: cio->cui_iov can be modified. */
                 cio->cui_iov = (struct iovec *)iovec;
                 cio->cui_nrsegs = iovlen;
+                cio->cui_tot_nrsegs = iovlen;
                 sio->sio_session = session;
                 err = cl_io_loop(env, io);
         } else {
