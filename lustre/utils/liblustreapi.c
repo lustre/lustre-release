@@ -1195,13 +1195,18 @@ int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
  */
 int llapi_uuid_match(char *real_uuid, char *search_uuid)
 {
-        int cmplen = strlen(real_uuid) - 5;
+        int cmplen = strlen(real_uuid);
+        int searchlen = strlen(search_uuid);
 
-        if ((strlen(search_uuid) > cmplen) && isxdigit(search_uuid[cmplen])) {
-                /* OST00000003 doesn't match OST0000 */
-                llapi_err(LLAPI_MSG_ERROR, "Bad UUID format '%s'", search_uuid);
+        if (cmplen > 5 && strcmp(real_uuid + cmplen - 5, "_UUID") == 0)
+                cmplen -= 5;
+        if (searchlen > 5 && strcmp(search_uuid + searchlen - 5, "_UUID") == 0)
+                searchlen -= 5;
+
+        /* The UUIDs may legitimately be different lengths, if
+         * the system was upgraded from an older version. */
+        if (cmplen != searchlen)
                 return 0;
-        }
 
         return (strncmp(search_uuid, real_uuid, cmplen) == 0);
 }
@@ -1803,13 +1808,19 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                              i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
                                 for (j = 0; j < param->num_obds; j++) {
                                         if (param->obdindexes[j] ==
-                                            lmm_objects[i].l_ost_idx)
+                                            lmm_objects[i].l_ost_idx) {
+                                                if (param->exclude_obd)
+                                                        goto decided;
                                                 goto obd_matches;
+                                        }
                                 }
                         }
 
-                        if (i == param->lmd->lmd_lmm.lmm_stripe_count)
+                        if (i == param->lmd->lmd_lmm.lmm_stripe_count) {
+                                if (param->exclude_obd)
+                                        goto obd_matches;
                                 goto decided;
+                        }
                 }
         }
 
@@ -1867,7 +1878,8 @@ obd_matches:
            The regular stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
         if (!decision && S_ISREG(st->st_mode) &&
-            (param->lmd->lmd_lmm.lmm_stripe_count || param->size)) {
+            param->lmd->lmd_lmm.lmm_stripe_count &&
+            (param->size ||param->atime || param->mtime || param->ctime)) {
                 if (param->obdindex != OBD_NOT_FOUND) {
                         /* Check whether the obd is active or not, if it is
                          * not active, just print the object affected by this

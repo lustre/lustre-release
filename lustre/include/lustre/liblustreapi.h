@@ -125,6 +125,7 @@ struct find_param {
                         obds_printed:1,
                         exclude_pattern:1,
                         exclude_type:1,
+                        exclude_obd:1,
                         have_fileinfo:1,
                         exclude_gid:1,
                         exclude_uid:1,

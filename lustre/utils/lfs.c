@@ -140,10 +140,10 @@ command_t cmdlist[] = {
          "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
-         "usage: find <dir|file> ... \n"
+         "usage: find <directory|filename> ...\n"
          "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
          "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
-         "     [--print|-p] [--obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
+         "     [--print|-p] [[!] --obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
          "     [[!] --type|-t <filetype>] [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
          "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
          "     [[!] --pool <pool>]\n"
@@ -675,6 +675,8 @@ static int lfs_find(int argc, char **argv)
                                 return -ENOMEM;
                         strcpy(buf, (char *)optarg);
 
+                        param.exclude_obd = !!neg_opt;
+
                         if (param.num_alloc_obds == 0) {
                                 param.obduuid = malloc(FIND_MAX_OSTS *
                                                        sizeof(struct obd_uuid));
@@ -944,12 +946,11 @@ static int lfs_osts(int argc, char **argv)
         radix;                                                          \
 })
 #define UUF     "%-20s"
-#define CSF     "%9s"
-#define CDF     "%9llu"
-#define HSF     "%8s"
-#define HDF     "%6.1f"
-#define RSF     "%5s"
-#define RDF     "%4d%%"
+#define CSF     "%11s"
+#define CDF     "%11llu"
+#define HDF     "%8.1f%c"
+#define RSF     "%4s"
+#define RDF     "%3d%%"
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
                   char *uuid, int ishow, int cooked,
@@ -989,21 +990,21 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         cook_val = (double)total;
                         i = COOK(cook_val);
                         if (i > 0)
-                                sprintf(tbuf, HDF"%c", cook_val, suffix[i - 1]);
+                                sprintf(tbuf, HDF, cook_val, suffix[i - 1]);
                         else
                                 sprintf(tbuf, CDF, total);
 
                         cook_val = (double)used;
                         i = COOK(cook_val);
                         if (i > 0)
-                                sprintf(ubuf, HDF"%c", cook_val, suffix[i - 1]);
+                                sprintf(ubuf, HDF, cook_val, suffix[i - 1]);
                         else
                                 sprintf(ubuf, CDF, used);
 
                         cook_val = (double)avail;
                         i = COOK(cook_val);
                         if (i > 0)
-                                sprintf(abuf, HDF"%c", cook_val, suffix[i - 1]);
+                                sprintf(abuf, HDF, cook_val, suffix[i - 1]);
                         else
                                 sprintf(abuf, CDF, avail);
                 } else {
@@ -1032,11 +1033,20 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
         return 0;
 }
 
+struct ll_stat_type {
+        int   st_op;
+        char *st_name;
+};
+
 static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
 {
         struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
         struct obd_uuid uuid_buf;
         char *poolname = NULL;
+        struct ll_stat_type types[] = { { LL_STATFS_MDC, "MDT" },
+                                        { LL_STATFS_LOV, "OST" },
+                                        { 0, NULL } };
+        struct ll_stat_type *tp;
         __u32 index;
         int rc;
 
@@ -1061,62 +1071,50 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
                        "UUID", cooked ? "bytes" : "1K-blocks",
                        "Used", "Available", "Use%", "Mounted on");
 
-        for (index = 0; ; index++) {
-                memset(&stat_buf, 0, sizeof(struct obd_statfs));
-                memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-                rc = llapi_obd_statfs(mntdir, LL_STATFS_MDC, index,
-                                      &stat_buf, &uuid_buf);
-                if (rc == -ENODEV)
-                        break;
+        for (tp = types; tp->st_name != NULL; tp++) {
+                for (index = 0; ; index++) {
+                        memset(&stat_buf, 0, sizeof(struct obd_statfs));
+                        memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+                        rc = llapi_obd_statfs(mntdir, tp->st_op, index,
+                                              &stat_buf, &uuid_buf);
+                        if (rc == -ENODEV)
+                                break;
 
-                if (rc == -EAGAIN)
-                        continue;
+                        if (poolname && tp->st_op == LL_STATFS_LOV &&
+                            llapi_search_ost(fsname, poolname,
+                                             obd_uuid2str(&uuid_buf)) != 1)
+                                continue;
 
-                if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
-                    rc == -ENODATA || rc == 0) {
-                        showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
-                               ishow, cooked, "MDT", index, rc);
-                } else {
-                        fprintf(stderr,
-                                "error: llapi_obd_statfs(%s): %s (%d)\n",
-                                obd_uuid2str(&uuid_buf), strerror(-rc), rc);
-                        return rc;
-                }
-                if (rc == 0) {
-                        sum.os_ffree += stat_buf.os_ffree;
-                        sum.os_files += stat_buf.os_files;
-                }
-        }
+                        /* the llapi_obd_statfs() call may have returned with
+                         * an error, but if it filled in uuid_buf we will at
+                         * lease use that to print out a message for that OBD.
+                         * If we didn't even fill in uuid_buf something is
+                         * definitely incorrect and no point in continuing. */
+                        if (uuid_buf.uuid[0] != '\0') {
+                                showdf(mntdir,&stat_buf,obd_uuid2str(&uuid_buf),
+                                       ishow, cooked, tp->st_name, index, rc);
+                        } else {
+                                char tmp_uuid[12];
 
-        for (index = 0; ; index++) {
-                memset(&stat_buf, 0, sizeof(struct obd_statfs));
-                memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-                rc = llapi_obd_statfs(mntdir, LL_STATFS_LOV, index,
-                                      &stat_buf, &uuid_buf);
-                if (rc == -ENODEV)
-                        break;
-
-                if (rc == -EAGAIN)
-                        continue;
-
-                if (llapi_search_ost(fsname, poolname,
-                                     obd_uuid2str(&uuid_buf)) != 1)
-                        continue;
-
-                if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
-                    rc == -ENODATA || rc == 0) {
-                        showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
-                               ishow, cooked, "OST", index, rc);
-                } else {
-                        fprintf(stderr,
-                                "error: llapi_obd_statfs failed: %s (%d)\n",
-                                strerror(-rc), rc);
-                        return rc;
-                }
-                if (rc == 0) {
-                        sum.os_blocks += stat_buf.os_blocks * stat_buf.os_bsize;
-                        sum.os_bfree  += stat_buf.os_bfree * stat_buf.os_bsize;
-                        sum.os_bavail += stat_buf.os_bavail * stat_buf.os_bsize;
+                                sprintf(tmp_uuid, "%s%04x", tp->st_name, index);
+                                showdf(mntdir, &stat_buf, tmp_uuid,
+                                       ishow, cooked, tp->st_name, index, rc);
+                        }
+                        if (rc == 0) {
+                                if (tp->st_op == LL_STATFS_MDC) {
+                                        sum.os_ffree += stat_buf.os_ffree;
+                                        sum.os_files += stat_buf.os_files;
+                                } else /* if (tp->st_op == LL_STATFS_LOV) */ {
+                                        sum.os_blocks += stat_buf.os_blocks *
+                                                stat_buf.os_bsize;
+                                        sum.os_bfree  += stat_buf.os_bfree *
+                                                stat_buf.os_bsize;
+                                        sum.os_bavail += stat_buf.os_bavail *
+                                                stat_buf.os_bsize;
+                                }
+                        } else if (rc == -EINVAL || rc == -EFAULT) {
+                                break;
+                        }
                 }
         }
 
@@ -1549,8 +1547,8 @@ do {                                                                    \
  *        2. specifiers may be encountered multiple times (2s3s is 5 seconds)
  *        3. empty integer value is interpreted as 0
  */
-
-static unsigned long str2sec(const char* timestr) {
+static unsigned long str2sec(const char* timestr)
+{
         const char spec[] = "smhdw";
         const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
         unsigned long val = 0;
