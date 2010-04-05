@@ -1165,7 +1165,11 @@ static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
         int rc;
         ENTRY;
 
+        /* need barrier for mds_capa_keys access. */
+        cfs_down_write(&mds->mds_notify_lock);
         mds->mds_capa_keys = keys;
+        cfs_up_write(&mds->mds_notify_lock);
+
         rc = mdd_child_ops(mdd)->dt_init_capa_ctxt(env, mdd->mdd_child, mode,
                                                    timeout, alg, keys);
         RETURN(rc);

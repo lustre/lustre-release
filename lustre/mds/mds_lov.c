@@ -791,6 +791,7 @@ static int mds_propagate_capa_keys(struct mds_obd *mds, struct obd_uuid *uuid)
         if (!mds->mds_capa_keys)
                 RETURN(0);
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_SYNC_CAPA_SL, 5);
         for (i = 0; i < 2; i++) {
                 key = &mds->mds_capa_keys[i];
                 DEBUG_CAPA_KEY(D_SEC, key, "propagate");

@@ -805,6 +805,9 @@ test_50() {
 run_test 50 "failover MDS under load"
 
 test_51() {
+	#define OBD_FAIL_MDS_SYNC_CAPA_SL                    0x1310
+	do_facet ost1 lctl set_param fail_loc=0x00001310
+
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes
 	writemany -q $DIR/$tdir/$tfile 0 5 &
