@@ -83,7 +83,7 @@ enum {
          * This is how many sequences may be in one super-sequence allocated to
          * MDTs.
          */
-        LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
+        LUSTRE_SEQ_SUPER_WIDTH = ((1<< 30) * LUSTRE_SEQ_META_WIDTH)
 };
 
 /** special fid seq: used for local object create. */
