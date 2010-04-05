@@ -6404,7 +6404,8 @@ TGTPOOL_MAX=$(($TGT_COUNT - 1))
 TGTPOOL_STEP=2
 TGTPOOL_LIST=`seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`
 POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
-POOL_DIR=$POOL_ROOT/dir_tst
+POOL_DIR_NAME=dir_tst
+POOL_DIR=$POOL_ROOT/$POOL_DIR_NAME
 POOL_FILE=$POOL_ROOT/file_tst
 
 test_pools()
@@ -6463,6 +6464,18 @@ test_200c() {
         mkdir -p $POOL_DIR
         $SETSTRIPE -c 2 -p $POOL $POOL_DIR
         [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
+        # b-19919 test relative path works well
+        mkdir -p $POOL_DIR/$POOL_DIR_NAME
+        cd $POOL_DIR
+        $SETSTRIPE -c 2 -p $POOL $POOL_DIR_NAME
+        [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR/$POOL_DIR_NAME"
+        $SETSTRIPE -c 2 -p $POOL ./$POOL_DIR_NAME
+        [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR/./$POOL_DIR_NAME"
+        $SETSTRIPE -c 2 -p $POOL ../$POOL_DIR_NAME
+        [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR/../$POOL_DIR_NAME"
+        $SETSTRIPE -c 2 -p $POOL ../$POOL_DIR_NAME/$POOL_DIR_NAME
+        [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR/../$POOL_DIR_NAME/$POOL_DIR_NAME"
+	 rm -rf $POOL_DIR_NAME; cd -
 }
 run_test 200c "Set pool on a directory ================================="
 
