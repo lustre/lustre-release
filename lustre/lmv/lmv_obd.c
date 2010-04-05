@@ -748,15 +748,19 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!mdc_obd)
                         RETURN(-EINVAL);
 
+                /* copy UUID */
+                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(mdc_obd),
+                                     min((int) data->ioc_plen2,
+                                         (int) sizeof(struct obd_uuid))))
+                        RETURN(-EFAULT);
+
                 rc = obd_statfs(mdc_obd, &stat_buf,
                                 cfs_time_current_64() - CFS_HZ, 0);
                 if (rc)
                         RETURN(rc);
                 if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,
-                                     data->ioc_plen1))
-                        RETURN(-EFAULT);
-                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(mdc_obd),
-                                     data->ioc_plen2))
+                                     min((int) data->ioc_plen1,
+                                         (int) sizeof(stat_buf))))
                         RETURN(-EFAULT);
                 break;
         }

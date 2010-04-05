@@ -1394,16 +1394,20 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (*((__u32 *) data->ioc_inlbuf2) != 0)
                         GOTO(out, rc = -ENODEV);
 
+                /* copy UUID */
+                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(obd),
+                                     min((int) data->ioc_plen2,
+                                         (int) sizeof(struct obd_uuid))))
+                        GOTO(out, rc = -EFAULT);
+
                 rc = mdc_statfs(obd, &stat_buf,
                                 cfs_time_current_64() - CFS_HZ, 0);
                 if (rc != 0)
                         GOTO(out, rc);
 
                 if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,
-                                     data->ioc_plen1))
-                        GOTO(out, rc = -EFAULT);
-                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(obd),
-                                     data->ioc_plen2))
+                                     min((int) data->ioc_plen1,
+                                         (int) sizeof(stat_buf))))
                         GOTO(out, rc = -EFAULT);
 
                 GOTO(out, rc = 0);
