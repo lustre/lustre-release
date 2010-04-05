@@ -213,56 +213,6 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# check userland size_t type
-AC_DEFUN([LIBCFS_SIZE_T_LONG],
-[AC_MSG_CHECKING([size_t is unsigned long type])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
-AC_COMPILE_IFELSE([
-	#include <linux/types.h>
-	#include <linux/stddef.h>
-	int main(void) {
-		unsigned long *data1;
-		size_t *data2 = NULL;
-
-		data1 = data2;
-		return 0;
-	}
-],[
-	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_SIZE_T_LONG, 1,
-                  [size_t is long type])
-],[
-	AC_MSG_RESULT([no])
-])
-CFLAGS="$tmp_flags"
-])
-
-AC_DEFUN([LIBCFS_SSIZE_T_LONG],
-[AC_MSG_CHECKING([ssize_t is signed long type])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
-AC_COMPILE_IFELSE([
-	#include <linux/types.h>
-	#include <linux/stddef.h>
-	int main(void) {
-		long *data1;
-		ssize_t *data2 = NULL;
-
-		data1 = data2;
-		return 0;
-	}
-],[
-	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_SSIZE_T_LONG, 1,
-                  [ssize_t is long type])
-],[
-	AC_MSG_RESULT([no])
-])
-CFLAGS="$tmp_flags"
-])
-
-
 # check if task_struct with rcu memeber
 AC_DEFUN([LIBCFS_TASK_RCU],
 [AC_MSG_CHECKING([if task_struct has a rcu field])

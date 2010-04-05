@@ -372,20 +372,6 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
  */
 # define LPPID "%d"
 
-#ifdef HAVE_SIZE_T_LONG
-# define LPSZ  "%lu"
-# define LPSZX "%lx"
-#else
-# define LPSZ  "%u"
-# define LPSZX "%x"
-#endif
-
-#ifdef HAVE_SSIZE_T_LONG
-# define LPSSZ "%ld"
-#else
-# define LPSSZ "%d"
-#endif
-
 #ifndef LPU64
 # error "No word size defined"
 #endif
