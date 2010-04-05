@@ -425,6 +425,7 @@ test_0r() {
     sleep 1
     mtime_pre=$(do_node $CLIENT1 stat --format=%Y $file)
     do_node $CLIENT1 touch $file
+    sleep 1 # avoid stat caching
     mtime_post=$(do_node $CLIENT1 stat --format=%Y $file)
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
