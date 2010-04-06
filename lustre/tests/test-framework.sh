@@ -34,15 +34,6 @@ if [ -f "$EXCEPT_LIST_FILE" ]; then
     . $EXCEPT_LIST_FILE
 fi
 
-if [[ -x $LUSTRE/utils/llobdstat ]]; then
-        LLOBDSTAT=$LUSTRE/utils/llobdstat
-elif [[ -x /usr/bin/llobdstat ]]; then
-        LLOBDSTAT=/usr/bin/llobdstat
-else
-        # Good luck
-        LLOBDSTAT=llobdstat
-fi
-
 [ -z "$MODPROBECONF" -a -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
 [ -z "$MODPROBECONF" -a -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
 

@@ -1741,11 +1741,11 @@ test_33c() {
                 ostname=$(printf "lustre-OST%.4d" $((ostnum - 1)))
                 # Parsing llobdstat's output sucks; we could grep the /proc
                 # path, but that's likely to not be as portable as using the
-                # llobdstat utility.  Besides, this way we also test that
-                # utility.
-                write_bytes=$(do_facet ost$ostnum $LLOBDSTAT $ostname |
-                              sed -e 's/^.*, Write: \([0-9][0-9]*\),.*$/\1/' |
-                              grep '^[0-9]*$')
+                # llobdstat utility.  So we parse lctl output instead.
+                write_bytes=$(do_facet ost$ostnum lctl get_param -n \
+                        obdfilter/$ostname/stats |
+                        awk '/^write_bytes/ {print $7}' )
+                echo "baseline_write_bytes@$OSTnum/$ostname=$write_bytes"
                 if (( ${write_bytes:-0} > 0 ))
                 then
                         all_zeros=false
@@ -1763,9 +1763,10 @@ test_33c() {
         # Total up write_bytes after writing.  We'd better find non-zeros.
         for ostnum in $(seq $OSTCOUNT); do
                 ostname=$(printf "lustre-OST%.4d" $((ostnum - 1)))
-                write_bytes=$(do_facet ost$ostnum $LLOBDSTAT $ostname |
-                              sed -e 's/^.*, Write: \([0-9][0-9]*\),.*$/\1/' |
-                              grep '^[0-9]*$')
+                write_bytes=$(do_facet ost$ostnum lctl get_param -n \
+                        obdfilter/$ostname/stats |
+                        awk '/^write_bytes/ {print $7}' )
+                echo "write_bytes@$OSTnum/$ostname=$write_bytes"
                 if (( ${write_bytes:-0} > 0 ))
                 then
                         all_zeros=false
@@ -1773,7 +1774,16 @@ test_33c() {
                 fi
         done
 
-        $all_zeros && error "OST not keeping write_bytes stats (b22312)"
+        if $all_zeros
+        then
+                for ostnum in $(seq $OSTCOUNT); do
+                        ostname=$(printf "lustre-OST%.4d" $((ostnum - 1)))
+                        echo "Check that write_bytes is present in obdfilter/*/stats:"
+                        do_facet ost$ostnum lctl get_param -n \
+                                obdfilter/$ostname/stats
+                done
+                error "OST not keeping write_bytes stats (b22312)"
+        fi
 }
 run_test 33c "test llobdstat and write_bytes"
 
