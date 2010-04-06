@@ -1419,7 +1419,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 out_child:
         mdt_object_put(info->mti_env, child);
 out_parent:
-        mdt_object_unlock_put(info, parent, lh, result);
+        mdt_object_unlock_put(info, parent, lh, result || !created);
 out:
         if (result && result != -EREMOTE)
                 lustre_msg_set_transno(req->rq_repmsg, 0);
