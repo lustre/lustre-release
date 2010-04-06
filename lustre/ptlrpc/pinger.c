@@ -178,11 +178,6 @@ static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 #endif /* ENABLE_PINGER */
 }
 
-void ptlrpc_ping_import_soon(struct obd_import *imp)
-{
-        imp->imp_next_ping = cfs_time_current();
-}
-
 static inline int imp_is_deactive(struct obd_import *imp)
 {
         return (imp->imp_deactive ||
