@@ -129,6 +129,10 @@ CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
 
+static int nonblk_zcack = 1;
+CFS_MODULE_PARM(nonblk_zcack, "i", int, 0644,
+                "always send ZC-ACK on non-blocking connection");
+
 static unsigned int zc_min_payload = (16 << 10);
 CFS_MODULE_PARM(zc_min_payload, "i", int, 0644,
                 "minimum payload size to zero copy");
@@ -179,6 +183,7 @@ ksock_tunables_t ksocknal_tunables = {
         .ksnd_keepalive_intvl = &keepalive_intvl,
         .ksnd_enable_csum     = &enable_csum,
         .ksnd_inject_csum_error = &inject_csum_error,
+        .ksnd_nonblk_zcack    = &nonblk_zcack,
         .ksnd_zc_min_payload  = &zc_min_payload,
         .ksnd_zc_recv         = &zc_recv,
         .ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags,
