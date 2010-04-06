@@ -1031,9 +1031,9 @@ no_export:
                                                        &remote_uuid);
 
         if (hlist_unhashed(&export->exp_nid_hash)) {
-                lustre_hash_add_unique(export->exp_obd->obd_nid_hash,
-                                       &export->exp_connection->c_peer.nid,
-                                       &export->exp_nid_hash);
+                lustre_hash_add(export->exp_obd->obd_nid_hash,
+                                &export->exp_connection->c_peer.nid,
+                                &export->exp_nid_hash);
         }
 
         if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT) {
