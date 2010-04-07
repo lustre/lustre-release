@@ -125,7 +125,7 @@ summary_and_cleanup () {
     local result=PASS
     [ $rc -eq 0 ] || result=FAIL
 
-    log "Duraion:                $DURATION
+    log "Duration:                $DURATION
 Server failover period: $SERVER_FAILOVER_PERIOD seconds
 Exited after:           $ELAPSED seconds
 Number of failovers before exit:
