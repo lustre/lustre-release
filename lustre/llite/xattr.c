@@ -417,7 +417,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
         if (rc2 < 0) {
                 GOTO(out, rc2 = 0);
-        } else {
+        } else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
                 const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX) - 1;
                 const size_t name_len   = sizeof("lov") - 1;
                 const size_t total_len  = prefix_len + name_len + 1;
