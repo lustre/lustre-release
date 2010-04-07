@@ -2129,11 +2129,10 @@ test_30()
         $LFS setquota -u $TSTUSR -b $LIMIT -B 0 -i 0 -I 0 $DIR
         $RUNAS dd if=/dev/zero of=$TESTFILE bs=1024 count=$((LIMIT * 2)) || true
         cancel_lru_locks osc
-        sleep 5
+        sleep $GRACE
         $LFS setquota -u $TSTUSR -B 0 $DIR
         $SHOW_QUOTA_USER
-        output=`$SHOW_QUOTA_USER | grep $MOUNT | awk '{ print $5 }' | tr -d s`
-        [ "$output" -le "$((GRACE - 5))" ] || error "grace times were reset or unexpectedly high latency"
+        $RUNAS dd if=/dev/zero of=$TESTFILE oflag=append bs=1024 count=1 && error "grace times were reset"
         rm -f $TESTFILE
         resetquota -u $TSTUSR
         $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
