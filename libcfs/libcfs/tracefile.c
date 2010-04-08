@@ -909,7 +909,7 @@ int cfs_trace_set_debug_mb(int mb)
 
         if (mb < cfs_num_possible_cpus()) {
                 printk(KERN_ERR "Cannot set debug_mb to %d, the value should be >= %d\n",
-                       mb, num_possible_cpus());
+                       mb, cfs_num_possible_cpus());
                 return -EINVAL;
         }
 
