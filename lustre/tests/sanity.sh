@@ -2005,6 +2005,250 @@ test_39() {
 }
 run_test 39 "mtime changed on create ==========================="
 
+test_39b() {
+	mkdir -p $DIR/$tdir
+	cp -p /etc/passwd $DIR/$tdir/fopen
+	cp -p /etc/passwd $DIR/$tdir/flink
+	cp -p /etc/passwd $DIR/$tdir/funlink
+	cp -p /etc/passwd $DIR/$tdir/frename
+	ln $DIR/$tdir/funlink $DIR/$tdir/funlink2
+
+	sleep 1
+	echo "aaaaaa" >> $DIR/$tdir/fopen
+	echo "aaaaaa" >> $DIR/$tdir/flink
+	echo "aaaaaa" >> $DIR/$tdir/funlink
+	echo "aaaaaa" >> $DIR/$tdir/frename
+
+	local open_new=`stat -c %Y $DIR/$tdir/fopen`
+	local link_new=`stat -c %Y $DIR/$tdir/flink`
+	local unlink_new=`stat -c %Y $DIR/$tdir/funlink`
+	local rename_new=`stat -c %Y $DIR/$tdir/frename`
+
+	cat $DIR/$tdir/fopen > /dev/null
+	ln $DIR/$tdir/flink $DIR/$tdir/flink2
+	rm -f $DIR/$tdir/funlink2
+	mv -f $DIR/$tdir/frename $DIR/$tdir/frename2
+
+	for (( i=0; i < 2; i++ )) ; do
+		local open_new2=`stat -c %Y $DIR/$tdir/fopen`
+		local link_new2=`stat -c %Y $DIR/$tdir/flink`
+		local unlink_new2=`stat -c %Y $DIR/$tdir/funlink`
+		local rename_new2=`stat -c %Y $DIR/$tdir/frename2`
+
+		[ $open_new2 -eq $open_new ] || error "open file reverses mtime"
+		[ $link_new2 -eq $link_new ] || error "link file reverses mtime"
+		[ $unlink_new2 -eq $unlink_new ] || error "unlink file reverses mtime"
+		[ $rename_new2 -eq $rename_new ] || error "rename file reverses mtime"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39b "mtime change on open, link, unlink, rename  ======"
+
+# this should be set to past
+TEST_39_MTIME=`date -d "1 year ago" +%s`
+
+# bug 11063
+test_39c() {
+	touch $DIR1/$tfile
+	sleep 2
+	local mtime0=`stat -c %Y $DIR1/$tfile`
+
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+	[ "$mtime1" = $TEST_39_MTIME ] || \
+		error "mtime is not set to past: $mtime1, should be $TEST_39_MTIME"
+
+	local d1=`date +%s`
+	echo hello >> $DIR1/$tfile
+	local d2=`date +%s`
+	local mtime2=`stat -c %Y $DIR1/$tfile`
+	[ "$mtime2" -ge "$d1" ] && [ "$mtime2" -le "$d2" ] || \
+		error "mtime is not updated on write: $d1 <= $mtime2 <= $d2"
+
+	mv $DIR1/$tfile $DIR1/$tfile-1
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime3=`stat -c %Y $DIR1/$tfile-1`
+		[ "$mtime2" = "$mtime3" ] || \
+			error "mtime ($mtime2) changed (to $mtime3) on rename"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39c "mtime change on rename ==========================="
+
+# bug 21114
+test_39d() {
+	touch $DIR1/$tfile
+
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime=`stat -c %Y $DIR1/$tfile`
+		[ $mtime = $TEST_39_MTIME ] || \
+			error "mtime($mtime) is not set to $TEST_39_MTIME"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39d "create, utime, stat =============================="
+
+# bug 21114
+test_39e() {
+	touch $DIR1/$tfile
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+	
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime2=`stat -c %Y $DIR1/$tfile`
+		[ $mtime2 = $TEST_39_MTIME ] || \
+			error "mtime($mtime2) is not set to $TEST_39_MTIME"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39e "create, stat, utime, stat ========================"
+
+# bug 21114
+test_39f() {
+	touch $DIR1/$tfile
+	mtime1=`stat -c %Y $DIR1/$tfile`
+
+	sleep 2
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime2=`stat -c %Y $DIR1/$tfile`
+		[ $mtime2 = $TEST_39_MTIME ] || \
+			error "mtime($mtime2) is not set to $TEST_39_MTIME"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39f "create, stat, sleep, utime, stat ================="
+
+# bug 11063
+test_39g() {
+	echo hello >> $DIR1/$tfile
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+
+	sleep 2
+	chmod o+r $DIR1/$tfile
+ 
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime2=`stat -c %Y $DIR1/$tfile`
+		[ "$mtime1" = "$mtime2" ] || \
+			error "lost mtime: $mtime2, should be $mtime1"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39g "write, chmod, stat ==============================="
+
+# bug 11063
+test_39h() {
+	touch $DIR1/$tfile
+	sleep 1
+
+	local d1=`date`
+	echo hello >> $DIR1/$tfile
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+	local d2=`date`
+	if [ "$d1" != "$d2" ]; then
+		echo "write and touch not within one second"
+	else
+		for (( i=0; i < 2; i++ )) ; do
+			local mtime2=`stat -c %Y $DIR1/$tfile`
+			[ "$mtime2" = $TEST_39_MTIME ] || \
+				error "lost mtime: $mtime2, should be $TEST_39_MTIME"
+
+			cancel_lru_locks osc
+			if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		done
+	fi
+}
+run_test 39h "write, utime within one second, stat ============="
+
+test_39i() {
+	touch $DIR1/$tfile
+	sleep 1
+
+	echo hello >> $DIR1/$tfile
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+
+	mv $DIR1/$tfile $DIR1/$tfile-1
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime2=`stat -c %Y $DIR1/$tfile-1`
+
+		[ "$mtime1" = "$mtime2" ] || \
+			error "lost mtime: $mtime2, should be $mtime1"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39i "write, rename, stat =============================="
+
+test_39j() {
+	touch $DIR1/$tfile
+	sleep 1
+
+	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c || error "multiop failed"
+	local multipid=$!
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+
+	mv $DIR1/$tfile $DIR1/$tfile-1
+
+	kill -USR1 $multipid
+	wait $multipid || error "multiop close failed"
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime2=`stat -c %Y $DIR1/$tfile-1`
+		[ "$mtime1" = "$mtime2" ] || \
+			error "mtime is lost on close: $mtime2, should be $mtime1"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39j "write, rename, close, stat ======================="
+
+test_39k() {
+	touch $DIR1/$tfile
+	sleep 1
+
+	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c || error "multiop failed"
+	local multipid=$!
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+
+	kill -USR1 $multipid
+	wait $multipid || error "multiop close failed"
+		
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime2=`stat -c %Y $DIR1/$tfile`
+
+		[ "$mtime2" = $TEST_39_MTIME ] || \
+			error "mtime is lost on close: $mtime2, should be $TEST_39_MTIME"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39k "write, utime, close, stat ========================"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error

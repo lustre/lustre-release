@@ -925,6 +925,98 @@ test_37() { # bug 18695
 }
 run_test 37 "check i_size is not updated for directory on close (bug 18695) =============="
 
+# this should be set to past
+TEST_39_MTIME=`date -d "1 year ago" +%s`
+
+# bug 11063
+test_39a() {
+	local client1=${CLIENT1:-`hostname`}
+	local client2=${CLIENT2:-`hostname`}
+
+	do_node $client1 "touch $DIR1/$tfile"
+
+	do_node $client1 "touch -m -d @$TEST_39_MTIME $DIR1/$tfile"
+	local mtime1=`do_node $client2 "stat -c %Y $DIR1/$tfile"`
+	[ "$mtime1" = $TEST_39_MTIME ] || \
+		error "mtime is not set to past: $mtime1, should be $TEST_39_MTIME"
+
+	local d1=`do_node $client1 date +%s`
+	do_node $client1 'echo hello >> '$DIR1/$tfile
+	local d2=`do_node $client1 date +%s`
+
+	local mtime2=`do_node $client2 "stat -c %Y $DIR1/$tfile"`
+	[ "$mtime2" -ge "$d1" ] && [ "$mtime2" -le "$d2" ] || \
+		error "mtime is not updated on write: $d1 <= $mtime2 <= $d2"
+
+	do_node $client1 "mv $DIR1/$tfile $DIR1/$tfile-1"
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime3=`do_node $client2 "stat -c %Y $DIR1/$tfile-1"`
+		[ "$mtime2" = "$mtime3" ] || \
+			error "mtime ($mtime2) changed (to $mtime3) on rename"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39a "test from 11063 =================================="
+
+test_39b() {
+	local client1=${CLIENT1:-`hostname`}
+	local client2=${CLIENT2:-`hostname`}
+
+	touch $DIR1/$tfile
+
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime2=`do_node $client2 "stat -c %Y $DIR1/$tfile"`
+
+	sleep 1
+	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime3=`stat -c %Y $DIR1/$tfile`
+		local mtime4=`do_node $client2 "stat -c %Y $DIR1/$tfile"`
+
+		[ "$mtime3" = "$mtime4" ] || \
+			error "different mtime on clients: $mtime3, $mtime4"
+		[ "$mtime3" = $TEST_39_MTIME ] || \
+			error "lost mtime: $mtime3, should be $TEST_39_MTIME"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39b "11063 problem 1 =================================="
+
+test_39c() {
+	local client1=${CLIENT1:-`hostname`}
+	local client2=${CLIENT2:-`hostname`}
+
+	echo hello > $DIR1/$tfile
+
+	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime2=`do_node $client2 "stat -c %Y $DIR1/$tfile"`
+	[ "$mtime1" = "$mtime2" ] || \
+		error "create: different mtime on clients: $mtime1, $mtime2"
+
+	sleep 1
+	$TRUNCATE $DIR1/$tfile 1
+
+	for (( i=0; i < 2; i++ )) ; do
+		local mtime3=`stat -c %Y $DIR1/$tfile`
+		local mtime4=`do_node $client2 "stat -c %Y $DIR1/$tfile"`
+
+		[ "$mtime3" = "$mtime4" ] || \
+			error "different mtime on clients: $mtime3, $mtime4"
+		[ "$mtime3" -gt $mtime2 ] || \
+			error "truncate did not update mtime: $mtime2, $mtime3"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+}
+run_test 39c "check truncate mtime update ======================"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
