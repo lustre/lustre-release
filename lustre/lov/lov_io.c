@@ -99,12 +99,16 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
         struct cl_io         *parent = lio->lis_cl.cis_io;
 
         switch(io->ci_type) {
-        case CIT_TRUNC: {
-                loff_t new_size = parent->u.ci_truncate.tr_size;
+        case CIT_SETATTR: {
+                io->u.ci_setattr.sa_attr = parent->u.ci_setattr.sa_attr;
+                io->u.ci_setattr.sa_valid = parent->u.ci_setattr.sa_valid;
+                io->u.ci_setattr.sa_capa = parent->u.ci_setattr.sa_capa;
+                if (cl_io_is_trunc(io)) {
+                        loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;
 
-                new_size = lov_size_to_stripe(lsm, new_size, stripe);
-                io->u.ci_truncate.tr_capa = parent->u.ci_truncate.tr_capa;
-                io->u.ci_truncate.tr_size = new_size;
+                        new_size = lov_size_to_stripe(lsm, new_size, stripe);
+                        io->u.ci_setattr.sa_attr.lvb_size = new_size;
+                }
                 break;
         }
         case CIT_FAULT: {
@@ -323,8 +327,11 @@ static void lov_io_slice_init(struct lov_io *lio,
                 }
                 break;
 
-        case CIT_TRUNC:
-                lio->lis_pos = io->u.ci_truncate.tr_size;
+        case CIT_SETATTR:
+                if (cl_io_is_trunc(io))
+                        lio->lis_pos = io->u.ci_setattr.sa_attr.lvb_size;
+                else
+                        lio->lis_pos = 0;
                 lio->lis_endpos = OBD_OBJECT_EOF;
                 break;
 
@@ -750,7 +757,7 @@ static const struct cl_io_operations lov_io_ops = {
                         .cio_start     = lov_io_start,
                         .cio_end       = lov_io_end
                 },
-                [CIT_TRUNC] = {
+                [CIT_SETATTR] = {
                         .cio_fini      = lov_io_fini,
                         .cio_iter_init = lov_io_iter_init,
                         .cio_iter_fini = lov_io_iter_fini,
@@ -826,7 +833,7 @@ static const struct cl_io_operations lov_empty_io_ops = {
                         .cio_start     = LOV_EMPTY_IMPOSSIBLE,
                         .cio_end       = LOV_EMPTY_IMPOSSIBLE
                 },
-                [CIT_TRUNC] = {
+                [CIT_SETATTR] = {
                         .cio_fini      = lov_empty_io_fini,
                         .cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
                         .cio_lock      = LOV_EMPTY_IMPOSSIBLE,
@@ -888,7 +895,7 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
                 result = 0;
                 break;
         case CIT_WRITE:
-        case CIT_TRUNC:
+        case CIT_SETATTR:
                 result = -EBADF;
                 break;
         case CIT_FAULT:

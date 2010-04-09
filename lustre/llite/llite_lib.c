@@ -1126,23 +1126,22 @@ static int ll_setattr_done_writing(struct inode *inode,
         RETURN(rc);
 }
 
-static int ll_setattr_do_truncate(struct inode *inode, loff_t size)
+static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
 {
-        struct obd_capa *capa = ll_osscapa_get(inode, CAPA_OPC_OSS_TRUNC);
+        struct obd_capa *capa;
         int rc;
 
-        rc = cl_setattr_do_truncate(inode, size, capa);
-        ll_truncate_free_capa(capa);
-        return rc;
-}
+        if (attr->ia_valid & ATTR_SIZE)
+                capa = ll_osscapa_get(inode, CAPA_OPC_OSS_TRUNC);
+        else
+                capa = ll_mdscapa_get(inode);
 
-static int ll_setattr_ost(struct inode *inode)
-{
-        struct obd_capa *capa = ll_mdscapa_get(inode);
-        int rc;
+        rc = cl_setattr_ost(inode, attr, capa);
 
-        rc = cl_setattr_ost(inode, capa);
-        capa_put(capa);
+        if (attr->ia_valid & ATTR_SIZE)
+                ll_truncate_free_capa(capa);
+        else
+                capa_put(capa);
 
         return rc;
 }
@@ -1204,16 +1203,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 attr->ia_mtime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
-        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send
-                   to mds. */
-                rc = cl_glimpse_size(inode);
-                if (rc)
-                        RETURN(rc);
-
-                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
-                attr->ia_mtime = inode->i_mtime;
-        }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
@@ -1243,7 +1232,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
         /* Open epoch for truncate. */
-        if (exp_connect_som(ll_i2mdexp(inode)) && (ia_valid & ATTR_SIZE))
+        if (exp_connect_som(ll_i2mdexp(inode)) &&
+            (ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
                 op_data->op_flags = MF_EPOCH_OPEN;
 
         rc = ll_md_setattr(inode, op_data, &mod);
@@ -1257,11 +1247,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         }
 
         if (ia_valid & ATTR_SIZE)
-                rc = ll_setattr_do_truncate(inode, attr->ia_size);
-        else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
-                CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
-                       inode->i_ino, LTIME_S(attr->ia_mtime));
-                rc = ll_setattr_ost(inode);
+                attr->ia_valid |= ATTR_SIZE;
+        if (ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)) {
+                /* mtime is set to past sending setattr op to osts under PW
+                 * 0:EOF extent lock (like truncate under PW new_size:EOF), if
+                 * mtime is not set to past setattr op is not sent to osts */
+                if ((ia_valid & ATTR_SIZE) ||
+                    LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime))
+                        rc = ll_setattr_ost(inode, attr);
         }
         EXIT;
 out:
@@ -1483,23 +1476,24 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         inode->i_ino = cl_fid_build_ino(&body->fid1);
         inode->i_generation = cl_fid_build_gen(&body->fid1);
 
-        if (body->valid & OBD_MD_FLATIME &&
-            body->atime > LTIME_S(inode->i_atime))
-                LTIME_S(inode->i_atime) = body->atime;
-
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds
-           for the same ctimes. */
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime >= LTIME_S(inode->i_ctime)) {
-                LTIME_S(inode->i_ctime) = body->ctime;
-                if (body->valid & OBD_MD_FLMTIME) {
-                        CDEBUG(D_INODE, "setting ino %lu mtime "
-                               "from %lu to "LPU64"\n", inode->i_ino,
+        if (body->valid & OBD_MD_FLATIME) {
+                if (body->atime > LTIME_S(inode->i_atime))
+                        LTIME_S(inode->i_atime) = body->atime;
+                lli->lli_lvb.lvb_atime = body->atime;
+        }
+        if (body->valid & OBD_MD_FLMTIME) {
+                if (body->mtime > LTIME_S(inode->i_mtime)) {
+                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
+                               "to "LPU64"\n", inode->i_ino,
                                LTIME_S(inode->i_mtime), body->mtime);
                         LTIME_S(inode->i_mtime) = body->mtime;
                 }
+                lli->lli_lvb.lvb_mtime = body->mtime;
+        }
+        if (body->valid & OBD_MD_FLCTIME) {
+                if (body->ctime > LTIME_S(inode->i_ctime))
+                        LTIME_S(inode->i_ctime) = body->ctime;
+                lli->lli_lvb.lvb_ctime = body->ctime;
         }
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);

@@ -48,15 +48,15 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                     struct inode *inode, struct cl_object *clob);
 
 /**
- * Locking policy for truncate.
+ * Locking policy for setattr.
  */
-enum ccc_trunc_lock_type {
+enum ccc_setattr_lock_type {
         /** Locking is done by server */
-        TRUNC_NOLOCK,
+        SETATTR_NOLOCK,
         /** Extent lock is enqueued */
-        TRUNC_EXTENT,
+        SETATTR_EXTENT_LOCK,
         /** Existing local extent lock is used */
-        TRUNC_MATCH
+        SETATTR_MATCH_LOCK
 };
 
 
@@ -87,9 +87,9 @@ struct ccc_io {
 
         union {
                 struct {
-                        int                      cui_locks_released;
-                        enum ccc_trunc_lock_type cui_local_lock;
-                } trunc;
+                        int                        cui_locks_released;
+                        enum ccc_setattr_lock_type cui_local_lock;
+                } setattr;
         } u;
         /**
          * True iff io is processing glimpse right now.
@@ -344,9 +344,8 @@ cfs_page_t         *cl2vm_page      (const struct cl_page_slice *slice);
 struct inode       *ccc_object_inode(const struct cl_object *obj);
 struct ccc_object  *cl_inode2ccc    (struct inode *inode);
 
-int cl_setattr_do_truncate(struct inode *inode, loff_t size,
-                           struct obd_capa *capa);
-int cl_setattr_ost(struct inode *inode, struct obd_capa *capa);
+int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
+                   struct obd_capa *capa);
 
 struct cl_page *ccc_vmpage_page_transient(cfs_page_t *vmpage);
 int ccc_object_invariant(const struct cl_object *obj);

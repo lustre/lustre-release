@@ -173,24 +173,22 @@ void llu_update_inode(struct inode *inode, struct lustre_md *md)
                 }
         }
 
-        if (body->valid & OBD_MD_FLMTIME &&
-            body->mtime > LTIME_S(st->st_mtime))
-                LTIME_S(st->st_mtime) = body->mtime;
-        if (body->valid & OBD_MD_FLATIME &&
-            body->atime > LTIME_S(st->st_atime))
-                LTIME_S(st->st_atime) = body->atime;
-
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds
-           for the same ctimes. */
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime >= LTIME_S(st->st_ctime)) {
-                LTIME_S(st->st_ctime) = body->ctime;
-                if (body->valid & OBD_MD_FLMTIME)
-                        LTIME_S(st->st_mtime) = body->mtime;
+        if (body->valid & OBD_MD_FLATIME) {
+                if (body->atime > LTIME_S(st->st_atime))
+                        LTIME_S(st->st_atime) = body->atime;
+                lli->lli_lvb.lvb_atime = body->atime;
         }
-       if (S_ISREG(st->st_mode))
+        if (body->valid & OBD_MD_FLMTIME) {
+                if (body->mtime > LTIME_S(st->st_mtime))
+                        LTIME_S(st->st_mtime) = body->mtime;
+                lli->lli_lvb.lvb_mtime = body->mtime;
+        }
+        if (body->valid & OBD_MD_FLCTIME) {
+                if (body->ctime > LTIME_S(st->st_ctime))
+                        LTIME_S(st->st_ctime) = body->ctime;
+                lli->lli_lvb.lvb_ctime = body->ctime;
+        }
+        if (S_ISREG(st->st_mode))
                 st->st_blksize = min(2UL * PTLRPC_MAX_BRW_SIZE, LL_MAX_BLKSIZE);
         else
                 st->st_blksize = 4096;
@@ -466,7 +464,8 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 
 static int llu_inode_revalidate(struct inode *inode)
 {
-        struct lov_stripe_md *lsm = NULL;
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
         ENTRY;
 
         if (!inode) {
@@ -484,7 +483,7 @@ static int llu_inode_revalidate(struct inode *inode)
 
                 /* Why don't we update all valid MDS fields here, if we're
                  * doing an RPC anyways?  -phil */
-                if (S_ISREG(llu_i2stat(inode)->st_mode)) {
+                if (S_ISREG(st->st_mode)) {
                         ealen = obd_size_diskmd(sbi->ll_dt_exp, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
@@ -496,7 +495,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 rc = md_getattr(sbi->ll_md_exp, &op_data, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
-                               (long long)llu_i2stat(inode)->st_ino);
+                               (long long)st->st_ino);
                         RETURN(-abs(rc));
                 }
                 rc = md_get_lustre_md(sbi->ll_md_exp, req,
@@ -518,14 +517,18 @@ static int llu_inode_revalidate(struct inode *inode)
 
 
                 llu_update_inode(inode, &md);
-                if (md.lsm != NULL && llu_i2info(inode)->lli_smd != md.lsm)
+                if (md.lsm != NULL && lli->lli_smd != md.lsm)
                         obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                 ptlrpc_req_finished(req);
         }
 
-        lsm = llu_i2info(inode)->lli_smd;
-        if (!lsm)       /* object not yet allocated, don't validate size */
+        if (!lli->lli_smd) {
+                /* object not yet allocated, don't validate size */
+                st->st_atime = lli->lli_lvb.lvb_atime;
+                st->st_mtime = lli->lli_lvb.lvb_mtime;
+                st->st_ctime = lli->lli_lvb.lvb_ctime;
                 RETURN(0);
+        }
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
@@ -781,16 +784,6 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 attr->ia_mtime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
-        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send
-                   to mds. */
-                rc = cl_glimpse_size(inode);
-                if (rc)
-                        RETURN(rc);
-
-                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
-                attr->ia_mtime = inode->i_stbuf.st_mtime;
-        }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime "CFS_TIME_T", ctime "CFS_TIME_T
@@ -847,12 +840,13 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 inode_setattr(inode, attr);
         }
 
-        if (ia_valid & ATTR_SIZE) {
-                rc = cl_setattr_do_truncate(inode, attr->ia_size, NULL);
-        } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
-                CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
-                       (long long unsigned)st->st_ino, LTIME_S(attr->ia_mtime));
-                rc = cl_setattr_ost(inode, NULL);
+        if (ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)) {
+                /* mtime is set to past sending setattr op to osts under PW
+                 * 0:EOF extent lock (like truncate under PW new_size:EOF), if
+                 * mtime is not set to past setattr op is not sent to osts */
+                if ((ia_valid & ATTR_SIZE) ||
+                    LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime))
+                        rc = cl_setattr_ost(inode, attr, NULL);
         }
         EXIT;
 out:

@@ -187,6 +187,8 @@ struct ll_inode_info {
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
         struct cl_object       *lli_clob;
+        /* the most recent timestamps obtained from mds */
+        struct ost_lvb          lli_lvb;
 };
 
 /*

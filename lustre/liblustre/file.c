@@ -135,16 +135,10 @@ void obdo_refresh_inode(struct inode *dst,
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = src->o_atime;
-
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, leave mtime from mds
-           for the same ctimes. */
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime)) {
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > LTIME_S(st->st_mtime))
+                LTIME_S(st->st_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime))
                 LTIME_S(st->st_ctime) = src->o_ctime;
-                if (valid & OBD_MD_FLMTIME)
-                        LTIME_S(st->st_mtime) = src->o_mtime;
-        }
         if (valid & OBD_MD_FLSIZE && src->o_size > st->st_size)
                 st->st_size = src->o_size;
         /* optimum IO size */

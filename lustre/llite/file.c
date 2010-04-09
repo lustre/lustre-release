@@ -770,6 +770,12 @@ int ll_merge_lvb(struct inode *inode)
 
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
+
+        /* merge timestamps the most resently obtained from mds with
+           timestamps obtained from osts */
+        lvb.lvb_atime = lli->lli_lvb.lvb_atime;
+        lvb.lvb_mtime = lli->lli_lvb.lvb_mtime;
+        lvb.lvb_ctime = lli->lli_lvb.lvb_ctime;
         rc = obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
         cl_isize_write_nolock(inode, lvb.lvb_size);
         inode->i_blocks = lvb.lvb_blocks;
@@ -2179,6 +2185,7 @@ out:
 
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
+        struct inode *inode = dentry->d_inode;
         int rc;
         ENTRY;
 
@@ -2186,14 +2193,18 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                                                   MDS_INODELOCK_LOOKUP);
 
         /* if object not yet allocated, don't validate size */
-        if (rc == 0 && ll_i2info(dentry->d_inode)->lli_smd == NULL)
+        if (rc == 0 && ll_i2info(dentry->d_inode)->lli_smd == NULL) {
+                LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
+                LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
+                LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
                 RETURN(0);
+        }
 
         /* cl_glimpse_size will prefer locally cached writes if they extend
          * the file */
 
         if (rc == 0)
-                rc = cl_glimpse_size(dentry->d_inode);
+                rc = cl_glimpse_size(inode);
 
         RETURN(rc);
 }

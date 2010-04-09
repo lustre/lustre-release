@@ -94,17 +94,12 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                         size = lov_size;
                 /* merge blocks, mtime, atime */
                 blocks += loi->loi_lvb.lvb_blocks;
+                if (loi->loi_lvb.lvb_mtime > current_mtime)
+                        current_mtime = loi->loi_lvb.lvb_mtime;
                 if (loi->loi_lvb.lvb_atime > current_atime)
                         current_atime = loi->loi_lvb.lvb_atime;
-
-                /* mtime is always updated with ctime, but can be set in past.
-                   As write and utime(2) may happen within 1 second, and utime's
-                   mtime has a priority over write's one, leave mtime from mds
-                   for the same ctimes. */
-                if (loi->loi_lvb.lvb_ctime > current_ctime) {
+                if (loi->loi_lvb.lvb_ctime > current_ctime)
                         current_ctime = loi->loi_lvb.lvb_ctime;
-                        current_mtime = loi->loi_lvb.lvb_mtime;
-                }
         }
 
         *kms_place = kms;
@@ -201,8 +196,6 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_blksize += src->o_blksize;
                 if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
                         tgt->o_ctime = src->o_ctime;
-                /* Only mtime from OSTs are merged here, as they cannot be set
-                   in past (only MDS's mtime can) do not look at ctime. */
                 if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
                         tgt->o_mtime = src->o_mtime;
         } else {

@@ -1033,7 +1033,7 @@ static int lov_lock_fits_into(const struct lu_env *env,
                                                      cl2lov(slice->cls_obj),
                                                      lov->lls_sub[0].sub_stripe,
                                                      got, need);
-        } else if (io->ci_type != CIT_TRUNC && io->ci_type != CIT_MISC &&
+        } else if (io->ci_type != CIT_SETATTR && io->ci_type != CIT_MISC &&
                    !cl_io_is_append(io) && need->cld_mode != CLM_PHANTOM)
                 /*
                  * Multi-stripe locks are only suitable for `quick' IO and for

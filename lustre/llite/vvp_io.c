@@ -262,10 +262,10 @@ static int vvp_io_write_lock(const struct lu_env *env,
         return vvp_io_rw_lock(env, io, CLM_WRITE, start, end);
 }
 
-static int vvp_io_trunc_iter_init(const struct lu_env *env,
-                                  const struct cl_io_slice *ios)
+static int vvp_io_setattr_iter_init(const struct lu_env *env,
+                                    const struct cl_io_slice *ios)
 {
-        struct ccc_io *vio   = cl2ccc_io(env, ios);
+        struct ccc_io *cio   = ccc_env_io(env);
         struct inode  *inode = ccc_object_inode(ios->cis_obj);
 
         /*
@@ -276,31 +276,38 @@ static int vvp_io_trunc_iter_init(const struct lu_env *env,
          * This last one is especially bad for racing o_append users on other
          * nodes.
          */
-
         UNLOCK_INODE_MUTEX(inode);
-        UP_WRITE_I_ALLOC_SEM(inode);
-        vio->u.trunc.cui_locks_released = 1;
+        if (cl_io_is_trunc(ios->cis_io))
+                UP_WRITE_I_ALLOC_SEM(inode);
+        cio->u.setattr.cui_locks_released = 1;
         return 0;
 }
 
 /**
- * Implementation of cl_io_operations::cio_lock() method for CIT_TRUNC io.
+ * Implementation of cl_io_operations::cio_lock() method for CIT_SETATTR io.
  *
  * Handles "lockless io" mode when extent locking is done by server.
  */
-static int vvp_io_trunc_lock(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+static int vvp_io_setattr_lock(const struct lu_env *env,
+                               const struct cl_io_slice *ios)
 {
-        struct ccc_io     *vio   = cl2ccc_io(env, ios);
-        struct cl_io      *io    = ios->cis_io;
-        loff_t new_size          = io->u.ci_truncate.tr_size;
-        __u32 enqflags = new_size == 0 ? CEF_DISCARD_DATA : 0;
-        int result;
+        struct ccc_io      *cio       = ccc_env_io(env);
+        struct cl_io       *io        = ios->cis_io;
+        size_t              new_size;
+        __u32               enqflags = 0;
 
-        vio->u.trunc.cui_local_lock = TRUNC_EXTENT;
-        result = ccc_io_one_lock(env, io, enqflags, CLM_WRITE,
-                                 new_size, OBD_OBJECT_EOF);
-        return result;
+        if (cl_io_is_trunc(io)) {
+                new_size = io->u.ci_setattr.sa_attr.lvb_size;
+                if (new_size == 0)
+                        enqflags = CEF_DISCARD_DATA;
+        } else {
+                LASSERT(io->u.ci_setattr.sa_attr.lvb_mtime <
+                        io->u.ci_setattr.sa_attr.lvb_ctime);
+                new_size = 0;
+        }
+        cio->u.setattr.cui_local_lock = SETATTR_EXTENT_LOCK;
+        return ccc_io_one_lock(env, io, enqflags, CLM_WRITE,
+                               new_size, OBD_OBJECT_EOF);
 }
 
 static int vvp_do_vmtruncate(struct inode *inode, size_t size)
@@ -319,23 +326,17 @@ static int vvp_do_vmtruncate(struct inode *inode, size_t size)
         return result;
 }
 
-static int vvp_io_trunc_start(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+static int vvp_io_setattr_trunc(const struct lu_env *env,
+                                const struct cl_io_slice *ios,
+                                struct inode *inode, loff_t size)
 {
-        struct ccc_io        *cio   = cl2ccc_io(env, ios);
         struct vvp_io        *vio   = cl2vvp_io(env, ios);
         struct cl_io         *io    = ios->cis_io;
-        struct inode         *inode = ccc_object_inode(io->ci_obj);
         struct cl_object     *obj   = ios->cis_obj;
-        loff_t                size  = io->u.ci_truncate.tr_size;
         pgoff_t               start = cl_index(obj, size);
         int                   result;
 
-        LASSERT(cio->u.trunc.cui_locks_released);
-
-        LOCK_INODE_MUTEX(inode);
         DOWN_WRITE_I_ALLOC_SEM(inode);
-        cio->u.trunc.cui_locks_released = 0;
 
         result = vvp_do_vmtruncate(inode, size);
 
@@ -369,14 +370,56 @@ static int vvp_io_trunc_start(const struct lu_env *env,
         return result;
 }
 
-static void vvp_io_trunc_end(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+static int vvp_io_setattr_mtime(const struct lu_env *env,
+                                const struct cl_io_slice *ios)
 {
-        struct vvp_io        *vio = cl2vvp_io(env, ios);
+        struct cl_io       *io    = ios->cis_io;
+        struct cl_object   *obj   = io->ci_obj;
+        struct cl_attr     *attr  = ccc_env_thread_attr(env);
+        int result;
+        unsigned valid = CAT_MTIME | CAT_CTIME;
+
+        cl_object_attr_lock(obj);
+        attr->cat_mtime = io->u.ci_setattr.sa_attr.lvb_mtime;
+        attr->cat_ctime = io->u.ci_setattr.sa_attr.lvb_ctime;
+        if (io->u.ci_setattr.sa_valid & ATTR_ATIME_SET) {
+                attr->cat_atime = io->u.ci_setattr.sa_attr.lvb_atime;
+                valid |= CAT_ATIME;
+        }
+        result = cl_object_attr_set(env, obj, attr, valid);
+        cl_object_attr_unlock(obj);
+
+        return result;
+}
+
+static int vvp_io_setattr_start(const struct lu_env *env,
+                                const struct cl_io_slice *ios)
+{
+        struct ccc_io        *cio   = cl2ccc_io(env, ios);
         struct cl_io         *io    = ios->cis_io;
         struct inode         *inode = ccc_object_inode(io->ci_obj);
-        loff_t                size  = io->u.ci_truncate.tr_size;
 
+        LASSERT(cio->u.setattr.cui_locks_released);
+
+        LOCK_INODE_MUTEX(inode);
+        cio->u.setattr.cui_locks_released = 0;
+
+        if (cl_io_is_trunc(io))
+                return vvp_io_setattr_trunc(env, ios, inode,
+                                            io->u.ci_setattr.sa_attr.lvb_size);
+        else
+                return vvp_io_setattr_mtime(env, ios);
+}
+
+static void vvp_io_setattr_end(const struct lu_env *env,
+                               const struct cl_io_slice *ios)
+{
+        struct vvp_io        *vio   = cl2vvp_io(env, ios);
+        struct cl_io         *io    = ios->cis_io;
+        struct inode         *inode = ccc_object_inode(io->ci_obj);
+
+        if (!cl_io_is_trunc(io))
+                return;
         if (vio->cui_partpage != NULL) {
                 cl_page_disown(env, ios->cis_io, vio->cui_partpage);
                 cl_page_put(env, vio->cui_partpage);
@@ -387,19 +430,21 @@ static void vvp_io_trunc_end(const struct lu_env *env,
          * Do vmtruncate again, to remove possible stale pages populated by
          * competing read threads. bz20645.
          */
-        vvp_do_vmtruncate(inode, size);
+        vvp_do_vmtruncate(inode, io->u.ci_setattr.sa_attr.lvb_size);
 }
 
-static void vvp_io_trunc_fini(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+static void vvp_io_setattr_fini(const struct lu_env *env,
+                                const struct cl_io_slice *ios)
 {
         struct ccc_io *cio   = ccc_env_io(env);
+        struct cl_io  *io    = ios->cis_io;
         struct inode  *inode = ccc_object_inode(ios->cis_io->ci_obj);
 
-        if (cio->u.trunc.cui_locks_released) {
+        if (cio->u.setattr.cui_locks_released) {
                 LOCK_INODE_MUTEX(inode);
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-                cio->u.trunc.cui_locks_released = 0;
+                if (cl_io_is_trunc(io))
+                        DOWN_WRITE_I_ALLOC_SEM(inode);
+                cio->u.setattr.cui_locks_released = 0;
         }
         vvp_io_fini(env, ios);
 }
@@ -960,12 +1005,12 @@ static const struct cl_io_operations vvp_io_ops = {
                         .cio_start     = vvp_io_write_start,
                         .cio_advance   = ccc_io_advance
                 },
-                [CIT_TRUNC] = {
-                        .cio_fini       = vvp_io_trunc_fini,
-                        .cio_iter_init  = vvp_io_trunc_iter_init,
-                        .cio_lock       = vvp_io_trunc_lock,
-                        .cio_start      = vvp_io_trunc_start,
-                        .cio_end        = vvp_io_trunc_end
+                [CIT_SETATTR] = {
+                        .cio_fini       = vvp_io_setattr_fini,
+                        .cio_iter_init  = vvp_io_setattr_iter_init,
+                        .cio_lock       = vvp_io_setattr_lock,
+                        .cio_start      = vvp_io_setattr_start,
+                        .cio_end        = vvp_io_setattr_end
                 },
                 [CIT_FAULT] = {
                         .cio_fini      = vvp_io_fault_fini,
@@ -1015,9 +1060,12 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                         cio->cui_tot_nrsegs = 0;
                         ll_stats_ops_tally(sbi, op, count);
                 }
-        } else if (io->ci_type == CIT_TRUNC) {
-                /* lockless truncate? */
-                ll_stats_ops_tally(sbi, LPROC_LL_TRUNC, 1);
+        } else if (io->ci_type == CIT_SETATTR) {
+                if (cl_io_is_trunc(io))
+                        /* lockless truncate? */
+                        ll_stats_ops_tally(sbi, LPROC_LL_TRUNC, 1);
+                else
+                        io->ci_lockreq = CILR_MANDATORY;
         }
         RETURN(result);
 }

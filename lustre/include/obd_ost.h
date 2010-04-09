@@ -63,10 +63,10 @@ struct osc_async_args {
         struct obd_info   *aa_oi;
 };
 
-struct osc_punch_args {
-        struct obdo         *pa_oa;
-        obd_enqueue_update_f pa_upcall;
-        void                *pa_cookie;
+struct osc_setattr_args {
+        struct obdo         *sa_oa;
+        obd_enqueue_update_f sa_upcall;
+        void                *sa_cookie;
 };
 
 struct osc_enqueue_args {

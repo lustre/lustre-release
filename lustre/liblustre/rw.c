@@ -212,7 +212,13 @@ int llu_merge_lvb(struct inode *inode)
         int rc;
         ENTRY;
 
+        lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
+        /* merge timestamps the most resently obtained from mds with
+           timestamps obtained from osts */
+        lvb.lvb_atime = lli->lli_lvb.lvb_atime;
+        lvb.lvb_mtime = lli->lli_lvb.lvb_mtime;
+        lvb.lvb_ctime = lli->lli_lvb.lvb_ctime;
         rc = obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
@@ -222,6 +228,7 @@ int llu_merge_lvb(struct inode *inode)
         st->st_mtime = lvb.lvb_mtime;
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
+        lov_stripe_unlock(lli->lli_smd);
 
         RETURN(rc);
 }

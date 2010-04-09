@@ -136,8 +136,11 @@ int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
                    int *flags, void *data, struct lustre_handle *lockh,
                    int unref);
 
-int osc_punch_base(struct obd_export *exp, struct obdo *oa,
-                   struct obd_capa *capa,
+int osc_setattr_async_base(struct obd_export *exp, struct obd_info *oinfo,
+                           struct obd_trans_info *oti,
+                           obd_enqueue_update_f upcall, void *cookie,
+                           struct ptlrpc_request_set *rqset);
+int osc_punch_base(struct obd_export *exp, struct obd_info *oinfo,
                    obd_enqueue_update_f upcall, void *cookie,
                    struct ptlrpc_request_set *rqset);
 

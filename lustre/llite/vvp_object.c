@@ -109,6 +109,12 @@ static int vvp_attr_set(const struct lu_env *env, struct cl_object *obj,
                 inode->i_uid = attr->cat_uid;
         if (valid & CAT_GID)
                 inode->i_gid = attr->cat_gid;
+        if (valid & CAT_ATIME)
+                LTIME_S(inode->i_atime) = attr->cat_atime;
+        if (valid & CAT_MTIME)
+                LTIME_S(inode->i_mtime) = attr->cat_mtime;
+        if (valid & CAT_CTIME)
+                LTIME_S(inode->i_ctime) = attr->cat_ctime;
         if (0 && valid & CAT_SIZE)
                 cl_isize_write_nolock(inode, attr->cat_size);
         /* not currently necessary */

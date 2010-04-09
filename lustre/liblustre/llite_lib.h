@@ -115,6 +115,8 @@ struct llu_inode_info {
         int                     lli_st_flags;
         unsigned long           lli_st_generation;
         struct cl_object       *lli_clob;
+        /* the most recent timestamps obtained from mds */
+        struct ost_lvb          lli_lvb;
 };
 
 

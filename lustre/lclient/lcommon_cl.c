@@ -1010,9 +1010,8 @@ const struct cl_req_operations ccc_req_ops = {
         .cro_completion = ccc_req_completion
 };
 
-/* Setattr helpers */
-int cl_setattr_do_truncate(struct inode *inode, loff_t size,
-                           struct obd_capa *capa)
+int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
+                   struct obd_capa *capa)
 {
         struct lu_env *env;
         struct cl_io  *io;
@@ -1027,9 +1026,15 @@ int cl_setattr_do_truncate(struct inode *inode, loff_t size,
 
         io = &ccc_env_info(env)->cti_io;
         io->ci_obj = cl_i2info(inode)->lli_clob;
-        io->u.ci_truncate.tr_size = size;
-        io->u.ci_truncate.tr_capa = capa;
-        if (cl_io_init(env, io, CIT_TRUNC, io->ci_obj) == 0)
+
+        io->u.ci_setattr.sa_attr.lvb_atime = LTIME_S(attr->ia_atime);
+        io->u.ci_setattr.sa_attr.lvb_mtime = LTIME_S(attr->ia_mtime);
+        io->u.ci_setattr.sa_attr.lvb_ctime = LTIME_S(attr->ia_ctime);
+        io->u.ci_setattr.sa_attr.lvb_size = attr->ia_size;
+        io->u.ci_setattr.sa_valid = attr->ia_valid;
+        io->u.ci_setattr.sa_capa = capa;
+
+        if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0)
                 result = cl_io_loop(env, io);
         else
                 result = io->ci_result;
@@ -1037,45 +1042,6 @@ int cl_setattr_do_truncate(struct inode *inode, loff_t size,
         cl_env_put(env, &refcheck);
         RETURN(result);
 }
-
-int cl_setattr_ost(struct inode *inode, struct obd_capa *capa)
-{
-        struct cl_inode_info *lli = cl_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        int rc;
-        obd_flag flags;
-        struct obd_info oinfo = { { { 0 } } };
-        struct obdo *oa;
-
-        OBDO_ALLOC(oa);
-        if (oa) {
-                oa->o_id = lsm->lsm_object_id;
-                oa->o_gr = lsm->lsm_object_gr;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-
-                flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                        OBD_MD_FLFID | OBD_MD_FLGENER |
-                        OBD_MD_FLGROUP;
-
-                obdo_from_inode(oa, inode, flags);
-
-                oinfo.oi_oa = oa;
-                oinfo.oi_md = lsm;
-                oinfo.oi_capa = capa;
-
-                /* XXX: this looks unnecessary now. */
-                rc = obd_setattr_rqset(cl_i2sbi(inode)->ll_dt_exp, &oinfo,
-                                       NULL);
-                if (rc)
-                        CERROR("obd_setattr_async fails: rc=%d\n", rc);
-                OBDO_FREE(oa);
-        } else {
-                rc = -ENOMEM;
-        }
-        return rc;
-}
-
 
 /*****************************************************************************
  *

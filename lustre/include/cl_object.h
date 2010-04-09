@@ -1890,8 +1890,8 @@ enum cl_io_type {
         CIT_READ,
         /** write system call */
         CIT_WRITE,
-        /** truncate system call */
-        CIT_TRUNC,
+        /** truncate, utime system calls */
+        CIT_SETATTR,
         /**
          * page fault handling
          */
@@ -2270,11 +2270,11 @@ struct cl_io {
                         int                    wr_append;
                 } ci_wr;
                 struct cl_io_rw_common ci_rw;
-                struct cl_truncate_io {
-                        /** new size to which file is truncated */
-                        loff_t           tr_size;
-                        struct obd_capa *tr_capa;
-                } ci_truncate;
+                struct cl_setattr_io {
+                        struct ost_lvb   sa_attr;
+                        unsigned int     sa_valid;
+                        struct obd_capa *sa_capa;
+                } ci_setattr;
                 struct cl_fault_io {
                         /** page index within file. */
                         pgoff_t         ft_index;
@@ -2933,6 +2933,15 @@ int   cl_io_is_going     (const struct lu_env *env);
 static inline int cl_io_is_append(const struct cl_io *io)
 {
         return io->ci_type == CIT_WRITE && io->u.ci_wr.wr_append;
+}
+
+/**
+ * True, iff \a io is a truncate(2).
+ */
+static inline int cl_io_is_trunc(const struct cl_io *io)
+{
+        return io->ci_type == CIT_SETATTR &&
+                (io->u.ci_setattr.sa_valid & ATTR_SIZE);
 }
 
 struct cl_io *cl_io_top(struct cl_io *io);

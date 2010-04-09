@@ -71,10 +71,10 @@ struct osc_io {
         int                oi_lockless;
 
         struct obdo        oi_oa;
-        struct osc_punch_cbargs {
+        struct osc_setattr_cbargs {
                 int               opc_rc;
                 cfs_completion_t  opc_sync;
-        } oi_punch_cbarg;
+        } oi_setattr_cbarg;
 };
 
 /**

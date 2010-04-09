@@ -375,9 +375,9 @@ static int osc_io_fault_start(const struct lu_env *env,
         RETURN(0);
 }
 
-static int osc_punch_upcall(void *a, int rc)
+static int osc_setattr_upcall(void *a, int rc)
 {
-        struct osc_punch_cbargs *args = a;
+        struct osc_setattr_cbargs *args = a;
 
         args->opc_rc = rc;
         cfs_complete(&args->opc_sync);
@@ -444,8 +444,8 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
 # define osc_trunc_check(env, io, oio, size) do {;} while (0)
 #endif
 
-static int osc_io_trunc_start(const struct lu_env *env,
-                              const struct cl_io_slice *slice)
+static int osc_io_setattr_start(const struct lu_env *env,
+                                const struct cl_io_slice *slice)
 {
         struct cl_io            *io     = slice->cis_io;
         struct osc_io           *oio    = cl2osc_io(env, slice);
@@ -453,24 +453,41 @@ static int osc_io_trunc_start(const struct lu_env *env,
         struct lov_oinfo        *loi    = cl2osc(obj)->oo_oinfo;
         struct cl_attr          *attr   = &osc_env_info(env)->oti_attr;
         struct obdo             *oa     = &oio->oi_oa;
-        struct osc_punch_cbargs *cbargs = &oio->oi_punch_cbarg;
-        struct obd_capa         *capa;
-        loff_t                   size   = io->u.ci_truncate.tr_size;
+        struct osc_setattr_cbargs *cbargs = &oio->oi_setattr_cbarg;
+        loff_t                   size   = io->u.ci_setattr.sa_attr.lvb_size;
+        unsigned int             ia_valid = io->u.ci_setattr.sa_valid;
         int                      result = 0;
+        struct obd_info          oinfo = { { { 0 } } };
 
-        osc_trunc_check(env, io, oio, size);
+        if (ia_valid & ATTR_SIZE)
+                osc_trunc_check(env, io, oio, size);
 
         if (oio->oi_lockless == 0) {
                 cl_object_attr_lock(obj);
                 result = cl_object_attr_get(env, obj, attr);
                 if (result == 0) {
-                        attr->cat_size = attr->cat_kms = size;
-                        result = cl_object_attr_set(env, obj, attr,
-                                                    CAT_SIZE|CAT_KMS);
+                        unsigned int cl_valid = 0;
+
+                        if (ia_valid & ATTR_SIZE) {
+                                attr->cat_size = attr->cat_kms = size;
+                                cl_valid = (CAT_SIZE | CAT_KMS);
+                        }
+                        if (ia_valid & ATTR_MTIME_SET) {
+                                attr->cat_mtime = io->u.ci_setattr.sa_attr.lvb_mtime;
+                                cl_valid |= CAT_MTIME;
+                        }
+                        if (ia_valid & ATTR_ATIME_SET) {
+                                attr->cat_atime = io->u.ci_setattr.sa_attr.lvb_atime;
+                                cl_valid |= CAT_ATIME;
+                        }
+                        if (ia_valid & ATTR_CTIME_SET) {
+                                attr->cat_ctime = io->u.ci_setattr.sa_attr.lvb_ctime;
+                                cl_valid |= CAT_CTIME;
+                        }
+                        result = cl_object_attr_set(env, obj, attr, cl_valid);
                 }
                 cl_object_attr_unlock(obj);
         }
-
         memset(oa, 0, sizeof(*oa));
         if (result == 0) {
                 oa->o_id = loi->loi_id;
@@ -480,29 +497,42 @@ static int osc_io_trunc_start(const struct lu_env *env,
                 oa->o_ctime = attr->cat_ctime;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLATIME |
                         OBD_MD_FLCTIME | OBD_MD_FLMTIME;
-                if (oio->oi_lockless) {
-                        oa->o_flags = OBD_FL_SRVLOCK;
-                        oa->o_valid |= OBD_MD_FLFLAGS;
-                }
-                oa->o_size = size;
-                oa->o_blocks = OBD_OBJECT_EOF;
-                oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+                if (ia_valid & ATTR_SIZE) {
+                        oa->o_size = size;
+                        oa->o_blocks = OBD_OBJECT_EOF;
+                        oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-                capa = io->u.ci_truncate.tr_capa;
+                        if (oio->oi_lockless) {
+                                oa->o_flags = OBD_FL_SRVLOCK;
+                                oa->o_valid |= OBD_MD_FLFLAGS;
+                        }
+                } else {
+                        LASSERT(oio->oi_lockless == 0);
+                }
+
+                oinfo.oi_oa = oa;
+                oinfo.oi_capa = io->u.ci_setattr.sa_capa;
                 cfs_init_completion(&cbargs->opc_sync);
-                result = osc_punch_base(osc_export(cl2osc(obj)), oa, capa,
-                                        osc_punch_upcall, cbargs, PTLRPCD_SET);
+
+                if (ia_valid & ATTR_SIZE)
+                        result = osc_punch_base(osc_export(cl2osc(obj)),
+                                                &oinfo, osc_setattr_upcall,
+                                                cbargs, PTLRPCD_SET);
+                else
+                        result = osc_setattr_async_base(osc_export(cl2osc(obj)),
+                                                        &oinfo, NULL,
+                                                        osc_setattr_upcall,
+                                                        cbargs, PTLRPCD_SET);
         }
         return result;
 }
 
-static void osc_io_trunc_end(const struct lu_env *env,
-                             const struct cl_io_slice *slice)
+static void osc_io_setattr_end(const struct lu_env *env,
+                               const struct cl_io_slice *slice)
 {
         struct cl_io            *io     = slice->cis_io;
         struct osc_io           *oio    = cl2osc_io(env, slice);
-        struct osc_punch_cbargs *cbargs = &oio->oi_punch_cbarg;
-        struct obdo             *oa     = &oio->oi_oa;
+        struct osc_setattr_cbargs *cbargs = &oio->oi_setattr_cbarg;
         int result;
 
         cfs_wait_for_completion(&cbargs->opc_sync);
@@ -510,56 +540,75 @@ static void osc_io_trunc_end(const struct lu_env *env,
         result = io->ci_result = cbargs->opc_rc;
         if (result == 0) {
                 struct cl_object *obj = slice->cis_obj;
-                if (oio->oi_lockless == 0) {
-                        struct cl_attr *attr = &osc_env_info(env)->oti_attr;
-                        int valid = 0;
-
-                        /* Update kms & size */
-                        if (oa->o_valid & OBD_MD_FLSIZE) {
-                                attr->cat_size = oa->o_size;
-                                attr->cat_kms  = oa->o_size;
-                                valid |= CAT_KMS|CAT_SIZE;
-                        }
-                        if (oa->o_valid & OBD_MD_FLBLOCKS) {
-                                attr->cat_blocks = oa->o_blocks;
-                                valid |= CAT_BLOCKS;
-                        }
-                        if (oa->o_valid & OBD_MD_FLMTIME) {
-                                attr->cat_mtime = oa->o_mtime;
-                                valid |= CAT_MTIME;
-                        }
-                        if (oa->o_valid & OBD_MD_FLCTIME) {
-                                attr->cat_ctime = oa->o_ctime;
-                                valid |= CAT_CTIME;
-                        }
-                        if (oa->o_valid & OBD_MD_FLATIME) {
-                                attr->cat_atime = oa->o_atime;
-                                valid |= CAT_ATIME;
-                        }
-                        cl_object_attr_lock(obj);
-                        result = cl_object_attr_set(env, obj, attr, valid);
-                        cl_object_attr_unlock(obj);
-                } else {  /* lockless truncate */
+                if (oio->oi_lockless) {
+                        /* lockless truncate */
                         struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
+
+                        LASSERT(cl_io_is_trunc(io));
                         /* XXX: Need a lock. */
                         osd->od_stats.os_lockless_truncates++;
                 }
         }
+}
 
-        /* return result; */
+static int osc_io_read_start(const struct lu_env *env,
+                             const struct cl_io_slice *slice)
+{
+        struct osc_io    *oio   = cl2osc_io(env, slice);
+        struct cl_object *obj   = slice->cis_obj;
+        struct cl_attr   *attr  = &osc_env_info(env)->oti_attr;
+        int              result = 0;
+        ENTRY;
+
+        if (oio->oi_lockless == 0) {
+                cl_object_attr_lock(obj);
+                result = cl_object_attr_get(env, obj, attr);
+                if (result == 0) {
+                        attr->cat_atime = LTIME_S(CFS_CURRENT_TIME);
+                        result = cl_object_attr_set(env, obj, attr,
+                                                    CAT_ATIME);
+                }
+                cl_object_attr_unlock(obj);
+        }
+        RETURN(result);
+}
+
+static int osc_io_write_start(const struct lu_env *env,
+                              const struct cl_io_slice *slice)
+{
+        struct osc_io    *oio   = cl2osc_io(env, slice);
+        struct cl_object *obj   = slice->cis_obj;
+        struct cl_attr   *attr  = &osc_env_info(env)->oti_attr;
+        int              result = 0;
+        ENTRY;
+
+        if (oio->oi_lockless == 0) {
+                cl_object_attr_lock(obj);
+                result = cl_object_attr_get(env, obj, attr);
+                if (result == 0) {
+                        attr->cat_mtime = attr->cat_ctime =
+                                LTIME_S(CFS_CURRENT_TIME);
+                        result = cl_object_attr_set(env, obj, attr,
+                                                    CAT_MTIME | CAT_CTIME);
+                }
+                cl_object_attr_unlock(obj);
+        }
+        RETURN(result);
 }
 
 static const struct cl_io_operations osc_io_ops = {
         .op = {
                 [CIT_READ] = {
+                        .cio_start  = osc_io_read_start,
                         .cio_fini   = osc_io_fini
                 },
                 [CIT_WRITE] = {
+                        .cio_start  = osc_io_write_start,
                         .cio_fini   = osc_io_fini
                 },
-                [CIT_TRUNC] = {
-                        .cio_start  = osc_io_trunc_start,
-                        .cio_end    = osc_io_trunc_end
+                [CIT_SETATTR] = {
+                        .cio_start  = osc_io_setattr_start,
+                        .cio_end    = osc_io_setattr_end
                 },
                 [CIT_FAULT] = {
                         .cio_fini   = osc_io_fini,
