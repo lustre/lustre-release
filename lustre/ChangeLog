@@ -1,4 +1,4 @@
-tbd        Oracle, Inc.
+2010-04-30 Oracle, Inc.
 	* version 1.8.3
 	* Support for kernels:
 	  2.6.16.60-0.42.8 (SLES 10),
@@ -8,7 +8,7 @@ tbd        Oracle, Inc.
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.30 vanilla (kernel.org)
-	* Recommended e2fsprogs version: 1.41.6.sun1
+	* Recommended e2fsprogs version: 1.41.10-sun2
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
@@ -41,6 +41,14 @@ Description: Simplify MDT/OST service start message.
 Severity   : normal
 Bugzilla   : 21961/17914
 Description: ignore trailing -mdc when determining index number
+
+Severity   : normal
+Frequency  : only with SLES11
+Bugzilla   : 22363
+Description: fix for a race condition in linux quotas implementation
+Details    : dq_flags(struct dquot) access is not properly locked which could
+	     lead to certain inconsistencies when accessing it using non-atomic
+	     bit operations like __set_bit in do_set_dqblk.
 
 -------------------------------------------------------------------------------
 
