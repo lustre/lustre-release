@@ -1354,6 +1354,7 @@ found_child:
 
                 /* In case of replay we do not get a lock assuming that the
                    caller has it already */
+                memset(&child_res_id, 0, sizeof(child_res_id));
                 child_res_id.name[0] = dchild->d_inode->i_ino;
                 child_res_id.name[1] = dchild->d_inode->i_generation;
 
