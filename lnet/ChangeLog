@@ -12,6 +12,43 @@
 	  mxlnd     - MX 1.2.10 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 22556
+Description: lst: check # of remained RPCs before aborting
+Details    : lstcon_rpc_trans_postwait() calls lstcon_rpc_trans_abort() only
+	     when the transaction is timeout, so if we got "end_session" to
+	     interrupt waiting on  transaction, then we can hit the assertion
+	     failure ASSERTION(crpc->crp_stamp != 0)
+
+Severity   : normal
+Bugzilla   : 20615
+Description: print more debug info for  timedout ZC-req
+Details    : Print more information for timedout ZC-req and partial
+	     received connection. Close connection for timedout ZC-req
+	     Always send ZC_ACK on non-blocking connection(BULK_IN)
+
+Severity   : normal
+Bugzilla   : 21945
+Description: Adding WIRE_ATTR attribute to LNET types
+Details    : LST nodes on different platforms might not communicate well
+	     due to the lack of WIRE_ATTR attribute in some LNET structures
+	     traversing network. The patch fixes the problem by adding
+	     WIRE_ATTR where needed.
+
+Severity   : normal
+Bugzilla   : 21619
+Description: hash MEs on RDMA portal
+Details    : RDMA portal can have very long ME list on client side, which
+	     will trigger soft lockup because of long searching on list.
+	     Hash MEs on RDMA portal can resolve this problem.
+
+Severity   : normal
+Bugzilla   : 21911
+Description: fix for double release of ibc_lock in o2iblnd
+Details    : Re-acquire ibc_lock in kiblnd_post_tx_locked(). Add extra
+	     reference to conn before calling kiblnd_post_tx_locked()
+	     to avoid scenario when conn disappears inside
+	     kiblnd_post_tx_locked().
 
 ------------------------------------------------------------------------------- 
 2010-01-29  Sun Microsystems, Inc.

@@ -12,6 +12,215 @@
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : major
+Bugzilla   : 22177
+Description: open-unlinked directories trigger MDS LBUG
+Details    : Fix regression introduced by the patch from bug 19640.
+	     ext3_inc_count() can reset nlink to 1 when the directory
+	     is indexed and inode->i_nlink == 2. Work around the problem
+	     by incrementing nlink by 2 instead of 1.
+
+Severity   : major
+Bugzilla   : 22423
+Description: Reconnects are not throttled
+Details    : Don't wake up pinger on reconnect failures and rely on regular
+	     pings to trigger the next reconnection.  Please note that the
+	     pinger already uses a smaller interval if the import is
+	     disconnected.
+
+Severity   : normal
+Frequency  : only with NFS export
+Bugzilla   : 22307
+Description: Console flooded with error message from ll_inode_from_lock()
+	     during NFS tests
+Details    : in mds_open, initialize the child_res_id before enqueuing
+	     the OPEN lock for the child inode, then to avoid senting
+	     wrong ldlm_res_id to client.
+
+Severity   : normal
+Bugzilla   : 22252
+Description: allow multiple instances of the same nid in NID hash
+Details    : Case of multiple separate clients from the same NID (as
+	     with liblustre) is legitimate and so we should allow
+	     multiple instances of the same NID in nid hash.
+
+Severity   : normal
+Bugzilla   : 22307
+Description: the readahead code can sleep on a semaphore while holding a
+	     spinlock
+Details    : in ras_update, "lov_get_info" could be called during increasing
+	     readahead windows, which tries to get the mutex lock "lov_lock"
+	     while holding the spin_lock "ras_lock",  then causes system
+	     lockup.
+
+Severity   : normal
+Bugzilla   : 20278
+Description: ASSERTION(cli->cl_avail_grant >= 0) failed
+Details    : fix assertion failure in the grant code.
+
+Severity   : normal
+Bugzilla   : 20805
+Description: Use CNETERR (which is rate limited) in specific places in
+	     the portal's LNET driver to avoid flooding the console.
+
+Severity   : normal
+Bugzilla   : 22108
+Description: include last created object in precreate slow case
+
+Severity   : normal
+Bugzilla   : 20373
+Description: don't do rep-ack if not created anything
+Details    : mds_open currently always put a lock into a rep-ack regardless
+	     if something was created or not. This is pointless and only
+	     creates needless contention. In fact the entire idea was to do
+	     this for real creates as a recovery protection.
+
+Severity   : normal
+Bugzilla   : 22409
+Description: Spurious error messages from smp_processor_id() on preemptible
+	     kernel
+Details    : Disable a preemption by grabbing the lock in fs_trace_get_tcd()
+	     first. The function fs_trace_get_tcd() was moved up.
+
+Severity   : normal
+Bugzilla   : 22181
+Description: interval_erase() fix
+Details    : interval_erase() calls update_maxhigh() properly when child
+	     == NULL
+
+Severity   : normal
+Bugzilla   : 22327
+Description: "lfs df" does not print stats for all mountpoints
+Details    : Print all mounted lustre filesystems with "lfs df"
+
+Severity   : normal
+Bugzilla   : 19919
+Description: lfs setstripe -p not longer work with a relative pathname
+Details    : Use realpath() to provide absolute pathname.
+
+Severity   : normal
+Bugzilla   : 21486
+Description: fix for truncated reply buffer
+Details    : reply buffer could be referred by reply_in_callback after released
+
+
+Severity   : normal
+Bugzilla   : 22301
+Description: lustre.lov error when backing up symlinks with extended attributes
+Details    : Improved logic in ll_listxattr()
+
+Severity   : major
+Bugzilla   : 22187
+Description: properly handle null value for setattr -n lustre.lov
+Details    : Running "setfattr -n trusted.lov ." causes a NULL dereference
+	     in ll_setxattr() due to no checking if "value" is NULL.
+	     This command now resets to the default striping when executed
+	     against a directory.
+
+Severity   : normal
+Bugzilla   : 22241
+Description: stack overflow on lock cancellation due to fsync call
+Details    : sync_on_lock_cancel is needed for recovery when async journal
+	     is enabled, but we actually just need to make sure that
+	     metadata blocks have hit the journal, so doing a fs sync
+	     should be enough and should consume less stack (just create an
+	     empty handle and commmit it).
+
+Severity   : normal
+Bugzilla   : 22035
+Description: using current->journal_info to store per-thread data leads
+	     to problem under memory pressure
+Details    : disable the per-thread data (current->journal_info) containing
+	     the lock info during I/O to work around the issue for short tem
+
+Severity   : normal
+Bugzilla   : 19933
+Description: control DCACHE_LUSTRE_INVALID flag with MDS_INODELOCK_LOOKUP lock
+Details    : DCACHE_LUSTRE_INVALID is controlled by MDS_INODELOCK_LOOKUP
+	     lock which is corresponding to "IT_LOOKUP", do not skip invalidate
+	     for other intent.
+
+Severity   : normal
+Bugzilla   : 20997
+Description: Cannot send after transport shutdown
+Details    : Clear imp_vbr_failed flag upon eviction
+
+Severity   : normal
+Bugzilla   : 21938
+Description: soft lock in request set code during recovery
+Details    : during recovery, uses req->rq_set itself to replay the request
+	     instead of ptlrpcd_recovery_pc
+
+Severity   : normal
+Bugzilla   : 21983
+Description: Use CFS_ALLOC_IO instead of _STD in llap_from_page_with_lockh
+Details    : During an ll_readahead under ll_readpage, we have seen the the
+	     OBD_SLAB_ALLOC hang under ldlm_pools_shrink when trying to lock
+	     a page that is already locked by the readahead code.
+
+
+Severity   : normal
+Bugzilla   : 21726
+Description: stop waitting for next replay transno if shutdown
+Details    : if the system is shutting down, wake up service thread blocked
+	     to wait for next replay transno during recovery, then all the
+	     references held by queued requests can be dropped and device
+	     can be stopped.
+
+Severity   : normal
+Bugzilla   : 20989
+Description: lov_merge_lvb()) ASSERTION(spin_is_locked(&lsm->lsm_lock)) failed
+Details    : Protect lli->lli_smd pointer updates with lli->lli_lock.
+
+Severity   : normal
+Bugzilla   : 21815
+Description: per-nid stats should not access lustre-hash internal structures
+	     directly.
+
+Severity   : normal
+Bugzilla   : 22097
+Description: mount.lustre fails to pass some options to mount()
+
+
+Severity   : major
+Bugzilla   : 21137
+Description: ext4 extent allocation is slower than in ext3
+Details    : Increase the default value of MB_DEFAULT_ORDER2_REQS to 8,
+	     enlarge ext4 preallocation table for 2048 4K blocks extents
+	     creation.
+
+Severity   : normal
+Bugzilla   : 22074
+Description: incorrect triggering of synchronous IO
+Details    : The OSC can mistakenly fall back to synchronous IO when the
+	     max_dirty_mb limit is reached and no write requests have yet
+	     been issued.  This can occur when the dirty pages are spread
+	     over many files all of which are below the optimal request size.
+
+Severity   : normal
+Bugzilla   : 21919
+Description: Optimize quota_ctl operations by sending requests in parallel
+Details    : Send MDS->OST quota_ctl requests in parallel, do not resend.
+	     Compiled from two attachments in the ticket.
+
+Severity   : normal
+Bugzilla   : 18030
+Description: ordering issue between transaction start & i_mutex
+Details    : start the transaction earlier in llog_lvfs_destroy to get
+	     transaction start and inode mutex lock nested properly.
+
+Severity   : normal
+Bugzilla   : 21882
+Description: lru resize SLV can get stuck
+Details    : calculate SLV with a greater precision to not lose small
+	     changes due to interger math truncation;  round up SLV only
+	     if the amount of granted locks less than the limit to not
+	     get stuck with this SLV
+
+Severity   : normal
+Bugzilla   : 21966
+Description: avoid divide-by-zero in lprocfs_rd_import()
+
 Severity   : normal
 Bugzilla   : 21816
 Description: lfs quota failed when OSTs are down
@@ -31,12 +240,15 @@ Details    : abort lock enqueue processing sooner when we umount is in progress.
 
 Severity   : enhancement
 Bugzilla   : 21632
-Description: Update RHEL5.4 kernel to 2.6.18-164.11.1.el5 and
-	     OEL5.4 kernel to 2.6.18-164.11.1.0.1.el5.
+Description: Update RHEL5.4 kernel to 2.6.18-164.11.1.el5 and OEL5.4 kernel to
+	     2.6.18-164.11.1.0.1.el5.
 
 Severity   : enhancement
 Bugzilla   : 16909
-Description: Simplify MDT/OST service start message.
+Description: error message improvements
+Details    : Use INFO/WARN instead of WARN/ERROR for the slow messages.
+	     Simplify MDT/OST service start message.
+	     Suppress "changing the import ..." warning.
 
 Severity   : normal
 Bugzilla   : 21961/17914
