@@ -2043,6 +2043,19 @@ test_84a() {
 }
 run_test 84a "stale open during export disconnect"
 
+test_85() { # bug 22190
+    local fail=0
+    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 1"
+
+    replay_barrier ost1
+    lfs setstripe -i 0 -c 1 $DIR/$tfile
+    dd oflag=dsync if=/dev/urandom of=$DIR/$tfile bs=4k count=100 || fail=1
+    fail_abort ost1
+    echo "FAIL $fail"
+    [ $fail -ne 0 ] || error "Write was successful"
+}
+run_test 85 "ensure there is no reply on bulk write if obd is in rdonly mode"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

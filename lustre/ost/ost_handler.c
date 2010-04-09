@@ -1205,6 +1205,14 @@ out_bulk:
         if (desc)
                 ptlrpc_free_bulk(desc);
 out:
+       /* XXX: don't send reply if obd rdonly mode, this can cause data loss
+        * on client, see bug 22190. Remove this when async bulk will be done.
+        * Meanwhile, if this is umount then don't reply anything. */
+        if (req->rq_export->exp_obd->obd_no_transno) {
+                no_reply = req->rq_export->exp_obd->obd_stopping;
+                rc = -EIO;
+        }
+
         if (rc == 0) {
                 oti_to_request(oti, req);
                 target_committed_to_req(req);
