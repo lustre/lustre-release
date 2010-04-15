@@ -3303,13 +3303,12 @@ get_osc_import_name() {
 }
 
 wait_import_state () {
-    local facet=$1
-    local expected=$2
-    local CONN_PROC=$3
+    local expected=$1
+    local CONN_PROC=$2
     local CONN_STATE
     local i=0
 
-    CONN_STATE=$(do_facet $facet $LCTL get_param -n $CONN_PROC | awk '/state/ {print $2}')
+    CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
         if [ "${expected}" == "DISCONN" ]; then
             # for disconn we can check after proc entry is removed
@@ -3322,7 +3321,7 @@ wait_import_state () {
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for $CONN_PROC into ${expected} state" && return 1
         sleep 1
-        CONN_STATE=$(do_facet $facet $LCTL get_param -n $CONN_PROC | awk '/state/ {print $2}')
+        CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
         i=$(($i + 1))
     done
 
@@ -3335,26 +3334,33 @@ wait_osc_import_state() {
     local ost_facet=$2
     local expected=$3
     local ost=$(get_osc_import_name $facet $ost_facet)
-    local CONN_PROC="osc.${ost}.import"
+    local CONN_PROC
+    local CONN_STATE
+    local i=0
 
-    wait_import_state $facet $expected $CONN_PROC || return 1
+    CONN_PROC="osc.${ost}.ost_server_uuid"
+    CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
+    while [ "${CONN_STATE}" != "${expected}" ]; do
+        if [ "${expected}" == "DISCONN" ]; then 
+            # for disconn we can check after proc entry is removed
+            [ "x${CONN_STATE}" == "x" ] && return 0
+            #  with AT we can have connect request timeout ~ reconnect timeout
+            # and test can't see real disconnect
+            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
+        fi
+        # disconnect rpc should be wait not more obd_timeout
+        [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
+            error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
+        sleep 1
+        CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
+        i=$(($i + 1))
+    done
+
+    log "${ost_facet} now in ${CONN_STATE} state"
     return 0
 }
-
 get_clientmdc_proc_path() {
-    local mdc=$(convert_facet2label $1)
-
-    echo "${mdc}-mdc-*"
-}
-
-wait_mdc_import_state() {
-    local facet=$1
-    local expected=$2
-    local mdc=$(get_clientmdc_proc_path $facet)
-    local CONN_PROC="mdc.${mdc}.import"
-
-    wait_import_state client $expected $CONN_PROC || return 1
-    return 0
+    echo "${1}-mdc-*"
 }
 
 do_rpc_nodes () {
@@ -3366,29 +3372,24 @@ do_rpc_nodes () {
     do_nodesv $list "PATH=$RPATH sh rpc.sh $@ "
 }
 
-wait_client_import_state () {
-    local facet=$1
-    local expected=$2
-    shift
-
-    case $facet in
-        ost* ) wait_osc_import_state client $facet $expected || return 1;;
-        mds* ) wait_mdc_import_state $facet $expected || return 1 ;;
-           * ) error "unknown facet!"
-               return 1 ;;
-    esac
-    return 0
-}
-
 wait_clients_import_state () {
     local list=$1
+    local facet=$2
+    local expected=$3
     shift
 
-    if ! do_rpc_nodes $list wait_client_import_state "$@"; then
-        error "import is not in expected state"
+    local label=$(convert_facet2label $facet)
+    local proc_path
+    case $facet in
+        ost* ) proc_path="osc.$(get_clientosc_proc_path $label).ost_server_uuid" ;;
+        mds* ) proc_path="mdc.$(get_clientmdc_proc_path $label).mds_server_uuid" ;;
+        *) error "unknown facet!" ;;
+    esac
+
+    if ! do_rpc_nodes $list wait_import_state $expected $proc_path; then
+        error "import is not in ${expected} state"
         return 1
     fi
-    return 0
 }
 
 oos_full() {
