@@ -772,6 +772,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
                                     struct obd_uuid *cluuid)
 {
         struct obd_export *export;
+        cfs_hash_t *hash;
         int rc = 0;
         ENTRY;
 
@@ -811,17 +812,27 @@ struct obd_export *class_new_export(struct obd_device *obd,
         cfs_spin_lock(&obd->obd_dev_lock);
          /* shouldn't happen, but might race */
         if (obd->obd_stopping)
-                GOTO(exit_err, rc = -ENODEV);
+                GOTO(exit_unlock, rc = -ENODEV);
+
+        hash = cfs_hash_getref(obd->obd_uuid_hash);
+        if (hash == NULL)
+                GOTO(exit_unlock, rc = -ENODEV);
+        cfs_spin_unlock(&obd->obd_dev_lock);
 
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
-                rc = cfs_hash_add_unique(obd->obd_uuid_hash, cluuid,
-                                         &export->exp_uuid_hash);
+                rc = cfs_hash_add_unique(hash, cluuid, &export->exp_uuid_hash);
                 if (rc != 0) {
                         LCONSOLE_WARN("%s: denying duplicate export for %s, %d\n",
                                       obd->obd_name, cluuid->uuid, rc);
                         GOTO(exit_err, rc = -EALREADY);
                 }
         }
+
+        cfs_hash_putref(hash);
+
+        cfs_spin_lock(&obd->obd_dev_lock);
+        if (obd->obd_stopping)
+                GOTO(exit_unlock, rc = -ENODEV);
 
         class_incref(obd, "export", export);
         cfs_list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
@@ -831,8 +842,9 @@ struct obd_export *class_new_export(struct obd_device *obd,
         cfs_spin_unlock(&obd->obd_dev_lock);
         RETURN(export);
 
-exit_err:
+exit_unlock:
         cfs_spin_unlock(&obd->obd_dev_lock);
+exit_err:
         class_handle_unhash(&export->exp_handle);
         LASSERT(cfs_hlist_unhashed(&export->exp_uuid_hash));
         obd_destroy_export(export);

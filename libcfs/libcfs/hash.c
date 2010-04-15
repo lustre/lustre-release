@@ -57,6 +57,8 @@
 
 #include <libcfs/libcfs.h>
 
+static void cfs_hash_destroy(cfs_hash_t *hs);
+
 static void
 cfs_hash_rlock(cfs_hash_t *hs)
 {
@@ -117,6 +119,7 @@ cfs_hash_create(char *name, unsigned int cur_bits,
         strncpy(hs->hs_name, name, sizeof(hs->hs_name));
         hs->hs_name[sizeof(hs->hs_name) - 1] = '\0';
         cfs_atomic_set(&hs->hs_rehash_count, 0);
+        cfs_atomic_set(&hs->hs_refcount, 1);
         cfs_atomic_set(&hs->hs_count, 0);
         cfs_rwlock_init(&hs->hs_rwlock);
         hs->hs_cur_bits = cur_bits;
@@ -159,7 +162,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_create);
 /**
  * Cleanup libcfs hash @hs.
  */
-void
+static void
 cfs_hash_destroy(cfs_hash_t *hs)
 {
         cfs_hash_bucket_t    *hsb;
@@ -197,7 +200,21 @@ cfs_hash_destroy(cfs_hash_t *hs)
         CFS_FREE_PTR(hs);
         EXIT;
 }
-CFS_EXPORT_SYMBOL(cfs_hash_destroy);
+
+cfs_hash_t *cfs_hash_getref(cfs_hash_t *hs)
+{
+        if (cfs_atomic_inc_not_zero(&hs->hs_refcount))
+                return hs;
+        return NULL;
+}
+CFS_EXPORT_SYMBOL(cfs_hash_getref);
+
+void cfs_hash_putref(cfs_hash_t *hs)
+{
+        if (cfs_atomic_dec_and_test(&hs->hs_refcount))
+                cfs_hash_destroy(hs);
+}
+CFS_EXPORT_SYMBOL(cfs_hash_putref);
 
 static inline unsigned int
 cfs_hash_rehash_bits(cfs_hash_t *hs)

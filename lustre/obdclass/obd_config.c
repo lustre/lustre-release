@@ -409,15 +409,15 @@ err_exp:
         }
 err_hash:
         if (obd->obd_uuid_hash) {
-                cfs_hash_destroy(obd->obd_uuid_hash);
+                cfs_hash_putref(obd->obd_uuid_hash);
                 obd->obd_uuid_hash = NULL;
         }
         if (obd->obd_nid_hash) {
-                cfs_hash_destroy(obd->obd_nid_hash);
+                cfs_hash_putref(obd->obd_nid_hash);
                 obd->obd_nid_hash = NULL;
         }
         if (obd->obd_nid_stats_hash) {
-                cfs_hash_destroy(obd->obd_nid_stats_hash);
+                cfs_hash_putref(obd->obd_nid_stats_hash);
                 obd->obd_nid_stats_hash = NULL;
         }
         obd->obd_starting = 0;
@@ -516,19 +516,19 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* destroy an uuid-export hash body */
         if (obd->obd_uuid_hash) {
-                cfs_hash_destroy(obd->obd_uuid_hash);
+                cfs_hash_putref(obd->obd_uuid_hash);
                 obd->obd_uuid_hash = NULL;
         }
 
         /* destroy a nid-export hash body */
         if (obd->obd_nid_hash) {
-                cfs_hash_destroy(obd->obd_nid_hash);
+                cfs_hash_putref(obd->obd_nid_hash);
                 obd->obd_nid_hash = NULL;
         }
 
         /* destroy a nid-stats hash body */
         if (obd->obd_nid_stats_hash) {
-                cfs_hash_destroy(obd->obd_nid_stats_hash);
+                cfs_hash_putref(obd->obd_nid_stats_hash);
                 obd->obd_nid_stats_hash = NULL;
         }
 

@@ -2299,7 +2299,7 @@ EXPORT_SYMBOL(ldlm_init_export);
 void ldlm_destroy_export(struct obd_export *exp)
 {
         ENTRY;
-        cfs_hash_destroy(exp->exp_lock_hash);
+        cfs_hash_putref(exp->exp_lock_hash);
         exp->exp_lock_hash = NULL;
         EXIT;
 }

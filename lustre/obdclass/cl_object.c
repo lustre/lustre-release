@@ -1155,7 +1155,7 @@ int cl_global_init(void)
                 }
         }
         if (result)
-                cfs_hash_destroy(cl_env_hash);
+                cfs_hash_putref(cl_env_hash);
         return result;
 }
 
@@ -1168,5 +1168,5 @@ void cl_global_fini(void)
         cl_page_fini();
         lu_context_key_degister(&cl_key);
         lu_kmem_fini(cl_object_caches);
-        cfs_hash_destroy(cl_env_hash);
+        cfs_hash_putref(cl_env_hash);
 }

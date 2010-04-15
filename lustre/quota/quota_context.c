@@ -1348,7 +1348,7 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
         cfs_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
         l_wait_event(qctxt->lqc_lqs_waitq, check_lqs(qctxt), &lwi);
         cfs_down_write(&obt->obt_rwsem);
-        cfs_hash_destroy(qctxt->lqc_lqs_hash);
+        cfs_hash_putref(qctxt->lqc_lqs_hash);
         qctxt->lqc_lqs_hash = NULL;
         cfs_up_write(&obt->obt_rwsem);
 

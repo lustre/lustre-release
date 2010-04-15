@@ -94,6 +94,7 @@ static struct lustre_qunit_size *
 quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
 {
         struct lustre_qunit_size *lqs = NULL;
+        cfs_hash_t *hs = NULL;
         int rc = 0;
 
         OBD_ALLOC_PTR(lqs);
@@ -121,15 +122,20 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
         lqs_initref(lqs);
 
         cfs_spin_lock(&qctxt->lqc_lock);
-        if (!qctxt->lqc_valid)
-                rc = -EBUSY;
-        else
-                rc = cfs_hash_add_unique(qctxt->lqc_lqs_hash,
-                                         &lqs->lqs_key, &lqs->lqs_hash);
+        if (qctxt->lqc_valid)
+                hs = cfs_hash_getref(qctxt->lqc_lqs_hash);
         cfs_spin_unlock(&qctxt->lqc_lock);
 
-        if (!rc)
+        if (hs) {
                 lqs_getref(lqs);
+                rc = cfs_hash_add_unique(qctxt->lqc_lqs_hash,
+                                         &lqs->lqs_key, &lqs->lqs_hash);
+                if (rc)
+                        lqs_putref(lqs);
+                cfs_hash_putref(hs);
+        } else {
+                rc = -EBUSY;
+        }
 
  out:
         if (rc && lqs)

@@ -874,7 +874,7 @@ static int lov_cleanup(struct obd_device *obd)
                 CDEBUG(D_INFO, "delete pool %p\n", pool);
                 lov_pool_del(obd, pool->pool_name);
         }
-        cfs_hash_destroy(lov->lov_pools_hash_body);
+        cfs_hash_putref(lov->lov_pools_hash_body);
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 

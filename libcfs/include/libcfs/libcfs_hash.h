@@ -141,6 +141,7 @@ typedef struct cfs_hash {
         struct cfs_hash_bucket    **hs_buckets;     /* hash buckets */
         struct cfs_hash_ops        *hs_ops;         /* hash operations */
         cfs_rwlock_t                hs_rwlock;      /* cfs_hash */
+        cfs_atomic_t                hs_refcount;
         char                        hs_name[CFS_MAX_HASH_NAME];
 } cfs_hash_t;
 
@@ -304,7 +305,8 @@ __cfs_hash_bucket_del(cfs_hash_t *hs,
 cfs_hash_t *cfs_hash_create(char *name, unsigned int cur_bits,
                             unsigned int max_bits,
                             cfs_hash_ops_t *ops, int flags);
-void cfs_hash_destroy(cfs_hash_t *hs);
+cfs_hash_t *cfs_hash_getref(cfs_hash_t *hs);
+void cfs_hash_putref(cfs_hash_t *hs);
 
 /* Hash addition functions */
 void cfs_hash_add(cfs_hash_t *hs, void *key,

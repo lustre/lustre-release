@@ -154,7 +154,7 @@ int ptlrpc_connection_init(void)
 
 void ptlrpc_connection_fini(void) {
         ENTRY;
-        cfs_hash_destroy(conn_hash);
+        cfs_hash_putref(conn_hash);
         EXIT;
 }
 
