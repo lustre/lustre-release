@@ -645,6 +645,8 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
 
         cfs_down(&obt->obt_quotachecking);
+        if (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))
+                GOTO(out, rc = -EBUSY);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cfs_down(&mds->mds_qonoff_sem);
 
@@ -655,6 +657,7 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
 
         cfs_up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+out:
         cfs_up(&obt->obt_quotachecking);
         RETURN(rc);
 }
