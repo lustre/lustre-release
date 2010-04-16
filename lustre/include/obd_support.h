@@ -114,9 +114,11 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_TIMEOUT_DEFAULT             100
 #define LDLM_TIMEOUT_DEFAULT            20
 #define MDS_LDLM_TIMEOUT_DEFAULT        6
-/* Time to wait for all clients to reconnect during recovery */
+/* Time to wait for all clients to reconnect during recovery (hard limit) */
+#define OBD_RECOVERY_TIME_HARD          (obd_timeout * 9)
+/* Time to wait for all clients to reconnect during recovery (soft limit) */
 /* Should be very conservative; must catch the first reconnect after reboot */
-#define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
+#define OBD_RECOVERY_TIME_SOFT          (obd_timeout * 3)
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* Client may skip 1 ping; we must wait at least 2.5. But for multiple

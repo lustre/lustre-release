@@ -1988,6 +1988,14 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                 struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
                 mnt = lmi->lmi_mnt;
                 obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+
+                /* gets recovery timeouts from mount data */
+                if (lsi->lsi_lmd && lsi->lsi_lmd->lmd_recovery_time_soft)
+                        obd->obd_recovery_timeout =
+                                lsi->lsi_lmd->lmd_recovery_time_soft;
+                if (lsi->lsi_lmd && lsi->lsi_lmd->lmd_recovery_time_hard)
+                        obd->obd_recovery_time_hard =
+                                lsi->lsi_lmd->lmd_recovery_time_hard;
         } else {
                 /* old path - used by lctl */
                 CERROR("Using old MDS mount method\n");

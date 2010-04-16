@@ -107,6 +107,17 @@ Abort client recovery and start the target service immediately.
 .BI md_stripe_cache_size
 Sets the stripe cache size for server side disk with a striped raid
 configuration.
+.TP
+.BI recovery_time_soft= timeout
+Allow 'timeout' seconds for clients to reconnect for recovery after a server
+crash.  This timeout will be incrementally extended if it is about to expire
+and the server is still handling new connections from recoverable clients.
+The default soft recovery timeout is set to 300 seconds (5 minutes).
+.TP
+.BI recovery_time_hard= timeout
+The server will be allowed to incrementally extend its timeout up to a hard
+maximum of 'timeout' seconds.  The default hard recovery timeout is set to
+900 seconds (15 minutes).
 .SH EXAMPLES
 .TP
 .B mount -t lustre cfs21@tcp0:/testfs /mnt/myfilesystem

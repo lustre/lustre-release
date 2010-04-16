@@ -1077,7 +1077,7 @@ struct obd_device {
         cfs_timer_t                      obd_recovery_timer;
         time_t                           obd_recovery_start; /* seconds */
         time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
-        time_t                           obd_recovery_max_time; /* seconds, bz13079 */
+        time_t                           obd_recovery_time_hard;
         int                              obd_recovery_timeout;
 
         /* new recovery stuff from CMD2 */

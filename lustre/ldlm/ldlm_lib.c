@@ -1328,15 +1328,11 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
         else if (!extend && (duration > obd->obd_recovery_timeout))
                 /* Track the client's largest expected replay time */
                 obd->obd_recovery_timeout = duration;
-#ifdef CRAY_XT3
-        /*
-         * If total recovery time already exceed the
-         * obd_recovery_max_time, then CRAY XT3 will
-         * abort the recovery
-         */
-        if(obd->obd_recovery_timeout > obd->obd_recovery_max_time)
-                obd->obd_recovery_timeout = obd->obd_recovery_max_time;
-#endif
+
+        /* Hard limit of obd_recovery_time_hard which should not happen */
+        if (obd->obd_recovery_timeout > obd->obd_recovery_time_hard)
+                obd->obd_recovery_timeout = obd->obd_recovery_time_hard;
+
         obd->obd_recovery_end = obd->obd_recovery_start +
                                 obd->obd_recovery_timeout;
         if (!cfs_timer_is_armed(&obd->obd_recovery_timer) ||
@@ -1358,8 +1354,6 @@ static void check_and_start_recovery_timer(struct obd_device *obd)
         }
         CDEBUG(D_HA, "%s: starting recovery timer\n", obd->obd_name);
         obd->obd_recovery_start = cfs_time_current_sec();
-        /* minimum */
-        obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
         cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
 
         reset_recovery_timer(obd, obd->obd_recovery_timeout, 0);
@@ -1807,7 +1801,7 @@ static int target_recovery_thread(void *arg)
         delta = (jiffies - delta) / CFS_HZ;
         CDEBUG(D_INFO,"4: recovery completed in %lus - %d/%d reqs/locks\n",
               delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
-        if (delta > obd_timeout * OBD_RECOVERY_FACTOR) {
+        if (delta > OBD_RECOVERY_TIME_SOFT) {
                 CWARN("too long recovery - read logs\n");
                 libcfs_debug_dumplog();
         }
@@ -1898,9 +1892,12 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
         obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
         obd->obd_recovery_start = 0;
         obd->obd_recovery_end = 0;
-        obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
-        /* bz13079: this should be set to desired value for ost but not for mds */
-        obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
+
+        /* both values can be get from mount data already */
+        if (obd->obd_recovery_timeout == 0)
+                obd->obd_recovery_timeout = OBD_RECOVERY_TIME_SOFT;
+        if (obd->obd_recovery_time_hard == 0)
+                obd->obd_recovery_time_hard = OBD_RECOVERY_TIME_HARD;
         cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
         target_start_recovery_thread(lut, handler);
 }

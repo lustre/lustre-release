@@ -650,13 +650,15 @@ struct file_operations name##_fops = {                                     \
 struct ptlrpc_request;
 extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
 
-/* lprocfs_status.c: read recovery max time bz13079 */
-int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data);
-
-/* lprocfs_status.c: write recovery max time bz13079 */
-int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
-                                    unsigned long count, void *data);
+/* lproc_status.c */
+int lprocfs_obd_rd_recovery_time_soft(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data);
+int lprocfs_obd_wr_recovery_time_soft(struct file *file, const char *buffer,
+                                      unsigned long count, void *data);
+int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data);
+int lprocfs_obd_wr_recovery_time_hard(struct file *file, const char *buffer,
+                                      unsigned long count, void *data);
 
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
