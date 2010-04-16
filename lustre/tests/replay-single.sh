@@ -1170,6 +1170,9 @@ test_53c() {
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
 
+        #bz20647: make sure all pids are exists before failover
+        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
         replay_barrier_nodf $SINGLEMDS
         fail_nodf $SINGLEMDS
         wait $open_pid || return 1
@@ -1263,6 +1266,9 @@ test_53f() {
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
 
+        #bz20647: make sure all pids are exists before failover
+        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
         replay_barrier_nodf $SINGLEMDS
         fail_nodf $SINGLEMDS
         wait $open_pid || return 1
@@ -1295,8 +1301,11 @@ test_53g() {
         do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
-
         do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+
+        #bz20647: make sure all pids are exists before failover
+        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
         replay_barrier_nodf $SINGLEMDS
         fail_nodf $SINGLEMDS
         wait $open_pid || return 1
@@ -1330,6 +1339,9 @@ test_53h() {
         cancel_lru_locks mdc    # force the close
         sleep 1
 
+        #bz20647: make sure all pids are exists before failover
+        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
         replay_barrier_nodf $SINGLEMDS
         fail_nodf $SINGLEMDS
         wait $open_pid || return 1
