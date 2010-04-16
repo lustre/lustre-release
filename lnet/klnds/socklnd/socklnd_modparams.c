@@ -129,6 +129,10 @@ CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
 
+static int nonblk_zcack = 1;
+CFS_MODULE_PARM(nonblk_zcack, "i", int, 0644,
+                "always send ZC-ACK on non-blocking connection");
+
 static unsigned int zc_min_payload = (16 << 10);
 CFS_MODULE_PARM(zc_min_payload, "i", int, 0644,
                 "minimum payload size to zero copy");
@@ -184,6 +188,7 @@ int ksocknal_tunables_init(void)
         ksocknal_tunables.ksnd_peertimeout        = &peer_timeout;
         ksocknal_tunables.ksnd_enable_csum        = &enable_csum;
         ksocknal_tunables.ksnd_inject_csum_error  = &inject_csum_error;
+        ksocknal_tunables.ksnd_nonblk_zcack       = &nonblk_zcack;
         ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;
         ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
         ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;

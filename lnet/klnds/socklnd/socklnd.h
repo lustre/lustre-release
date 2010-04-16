@@ -121,6 +121,7 @@ typedef struct
         int              *ksnd_peertimeout;     /* seconds to consider peer dead */
         int              *ksnd_enable_csum;     /* enable check sum */
         int              *ksnd_inject_csum_error; /* set non-zero to inject checksum error */
+        int              *ksnd_nonblk_zcack;    /* always send zc-ack on non-blocking connection */
         unsigned int     *ksnd_zc_min_payload;  /* minimum zero copy payload size */
         int              *ksnd_zc_recv;         /* enable ZC receive (for Chelsio TOE) */
         int              *ksnd_zc_recv_min_nfrags; /* minimum # of fragments to enable ZC receive */

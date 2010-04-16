@@ -1551,6 +1551,8 @@ ksocknal_finalize_zcreq(ksock_conn_t *conn)
                 LASSERT (tx->tx_msg.ksm_zc_cookies[0] != 0);
 
                 tx->tx_msg.ksm_zc_cookies[0] = 0;
+                if (tx->tx_resid == 0)
+                        tx->tx_resid = -1; /* mark it as not-acked */
                 cfs_list_del(&tx->tx_zc_list);
                 cfs_list_add(&tx->tx_zc_list, &zlist);
         }
@@ -1643,6 +1645,8 @@ ksocknal_queue_zombie_conn (ksock_conn_t *conn)
 void
 ksocknal_destroy_conn (ksock_conn_t *conn)
 {
+        cfs_time_t      last_rcv;
+
         /* Final coup-de-grace of the reaper */
         CDEBUG (D_NET, "connection %p\n", conn);
 
@@ -1657,10 +1661,16 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         /* complete current receive if any */
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_LNET_PAYLOAD:
-                CERROR("Completing partial receive from %s"
-                       ", ip %d.%d.%d.%d:%d, with error\n",
-                       libcfs_id2str(conn->ksnc_peer->ksnp_id),
-                       HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
+                last_rcv = conn->ksnc_rx_deadline -
+                           cfs_time_seconds(*ksocknal_tunables.ksnd_timeout);
+                CERROR("Completing partial receive from %s[%d]"
+                       ", ip %d.%d.%d.%d:%d, with error, wanted: %d, left: %d, "
+                       "last alive is %ld secs ago\n",
+                       libcfs_id2str(conn->ksnc_peer->ksnp_id), conn->ksnc_type,
+                       HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port,
+                       conn->ksnc_rx_nob_wanted, conn->ksnc_rx_nob_left,
+                       cfs_duration_sec(cfs_time_sub(cfs_time_current(),
+                                        last_rcv)));
                 lnet_finalize (conn->ksnc_peer->ksnp_ni,
                                conn->ksnc_cookie, -EIO);
                 break;
