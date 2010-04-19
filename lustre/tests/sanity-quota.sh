@@ -2099,21 +2099,35 @@ test_30()
         local TESTFILE="$DIR/$tdir/$tfile"
         local GRACE=10
 
+        set_blk_tunesz 512
+        set_blk_unitsz 1024
+
         mkdir -p $DIR/$tdir
         chmod 0777 $DIR/$tdir
+
+        $LFS setstripe $TESTFILE -i 0 -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE
 
         $LFS setquota -t -u --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
         $LFS setquota -u $TSTUSR -b $LIMIT -B 0 -i 0 -I 0 $DIR
         $RUNAS dd if=/dev/zero of=$TESTFILE bs=1024 count=$((LIMIT * 2)) || true
         cancel_lru_locks osc
-        sleep 5
+        sleep $GRACE
         $LFS setquota -u $TSTUSR -B 0 $DIR
+        # over-quota flag has not yet settled since we do not trigger async events
+        # based on grace time period expiration
         $SHOW_QUOTA_USER
-        output=`$SHOW_QUOTA_USER | grep $MOUNT | awk '{ print $5 }' | tr -d s`
-        [ "$output" -le "$((GRACE - 5))" ] || error "grace times were reset or unexpectedly high latency"
+        $RUNAS dd if=/dev/zero of=$TESTFILE conv=notrunc oflag=append bs=1048576 count=1 || true
+        cancel_lru_locks osc
+        # now over-quota flag should be settled and further writes should fail
+        $SHOW_QUOTA_USER
+        $RUNAS dd if=/dev/zero of=$TESTFILE conv=notrunc oflag=append bs=1048576 count=1 && error "grace times were reset"
         rm -f $TESTFILE
         resetquota -u $TSTUSR
         $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
+
+        set_blk_unitsz $((128 * 1024))
+        set_blk_tunesz $((128 * 1024 / 2))
 }
 run_test_with_stat 30 "hard limit updates should not reset grace times ================"
 
