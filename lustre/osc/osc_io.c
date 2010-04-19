@@ -101,12 +101,6 @@ static void osc_io_unplug(const struct lu_env *env, struct osc_object *osc,
 }
 
 /**
- * How many pages osc_io_submit() queues before checking whether an RPC is
- * ready.
- */
-#define OSC_QUEUE_GRAIN (32)
-
-/**
  * An implementation of cl_io_operations::cio_io_submit() method for osc
  * layer. Iterates over pages in the in-queue, prepares each for io by calling
  * cl_page_prep() and then either submits them through osc_io_submit_page()
@@ -208,30 +202,18 @@ static int osc_io_submit(const struct lu_env *env,
                          */
                         result = 0;
                 }
+
                 /*
-                 * Don't keep client_obd_list_lock() for too long.
+                 * We might hold client_obd_list_lock() for too long and cause
+                 * soft-lockups (see bug 16651). But on the other hand, pages
+                 * are queued here with ASYNC_URGENT flag, thus will be sent
+                 * out immediately once osc_io_unplug() be called, possibly
+                 * resulting sub-optimal RPCs.
                  *
-                 * XXX client_obd_list lock has to be unlocked periodically to
-                 * avoid soft-lockups that tend to happen otherwise (see bug
-                 * 16651). On the other hand, osc_io_submit_page() queues a
-                 * page with ASYNC_URGENT flag and so all pages queued up
-                 * until this point are sent out immediately by
-                 * osc_io_unplug() resulting in sub-optimal RPCs (sub-optimal
-                 * RPCs only happen during `warm up' phase when less than
-                 * cl_max_rpcs_in_flight RPCs are in flight). To balance these
-                 * conflicting requirements, one might unplug once enough
-                 * pages to form a large RPC were queued (i.e., use
-                 * cli->cl_max_pages_per_rpc as OSC_QUEUE_GRAIN, see
-                 * lop_makes_rpc()), or ignore soft-lockup issue altogether.
-                 *
-                 * XXX lock_need_resched() should be used here, but it is not
-                 * available in the older of supported kernels.
+                 * We think creating optimal-sized RPCs is more important than
+                 * avoiding the transient soft-lockups, plus I believe the
+                 * soft-locks only happen in full debug testing.
                  */
-                if (queued > OSC_QUEUE_GRAIN || cfs_need_resched()) {
-                        queued = 0;
-                        osc_io_unplug(env, osc, cli);
-                        cfs_cond_resched();
-                }
         }
 
         LASSERT(ergo(result == 0, cli != NULL));
