@@ -530,8 +530,8 @@ commitrw_cleanup:
         CERROR("cleaning up %d pages (%d obdos)\n",
                niocount - pgs - 1, objcount);
 
-        while (pgs ++ < niocount) {
-                cfs_page_t *page = res[pgs].page;
+        while (pgs < niocount) {
+                cfs_page_t *page = res[pgs++].page;
 
                 if (page == NULL)
                         continue;

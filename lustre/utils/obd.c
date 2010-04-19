@@ -1636,7 +1636,7 @@ int jt_obd_test_brw(int argc, char **argv)
                         obj_idx = (thread - 1)/nthr_per_obj;
                         objid += obj_idx;
                         stride *= nthr_per_obj;
-                        if (thread == 1)
+                        if ((thread - 1) % nthr_per_obj == 0)
                                 shared_data->offsets[obj_idx] = stride + thr_offset;
                         thr_offset += ((thread - 1) % nthr_per_obj) * len;
                 } else {

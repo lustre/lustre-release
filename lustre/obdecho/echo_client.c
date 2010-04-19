@@ -1157,7 +1157,7 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
 
         rc = cl_echo_enqueue0(env, eco, offset,
                               offset + npages * CFS_PAGE_SIZE - 1,
-                              rw == READ ? LCK_PW : LCK_PW, &lh.cookie,
+                              rw == READ ? LCK_PR : LCK_PW, &lh.cookie,
                               CEF_NEVER);
         if (rc < 0)
                 GOTO(error_lock, rc);
