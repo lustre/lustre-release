@@ -7058,6 +7058,7 @@ setup_obdecho_osc () {
         local rc=0
         local ost_nid=$1
         local obdfilter_name=$2
+        echo "Creating new osc for $obdfilter_name on $ost_nid"
         [ $rc -eq 0 ] && { $LCTL attach osc ${obdfilter_name}_osc     \
                            ${obdfilter_name}_osc_UUID || rc=2; }
         [ $rc -eq 0 ] && { $LCTL --device ${obdfilter_name}_osc setup \
@@ -7065,7 +7066,7 @@ setup_obdecho_osc () {
         return $rc
 }
 
-cleaup_obdecho_osc () {
+cleanup_obdecho_osc () {
         local obdfilter_name=$1
         $LCTL --device ${obdfilter_name}_osc cleanup >/dev/null
         $LCTL --device ${obdfilter_name}_osc detach  >/dev/null
@@ -7076,47 +7077,60 @@ obdecho_create_test() {
         local OBD=$1
         local node=$2
         local rc=0
+        local id
         do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||    \
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||
                            rc=2; }
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec create 1" ||      \
-                           rc=3; }
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 0 w 1" ||\
+        if [ $rc -eq 0 ]; then
+            id=$(do_facet $node "$LCTL --device ec create 1"  | awk '/object id/ {print $6}')
+            [ ${PIPESTATUS[0]} -eq 0 -a -n "$id" ] || rc=3
+        fi
+        echo "New object id is $id"
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 10 w v 64 $id" ||
                            rc=4; }
         [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
                                         "cleanup" || rc=5; }
         [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec "    \
                                         "detach" || rc=6; }
+        [ $rc -ne 0 ] && echo "obecho_create_test failed: $rc"
         return $rc
 }
 
-test_180() {
+test_180a() {
         local rc=0
         local rmmod_local=0
-        local rmmod_remote=0
 
-        lsmod | grep -q obdecho || \
-                { load_module obdecho/obdecho && rmmod_local=1; }
-        OBD=$($LCTL dl | grep -v mdt | grep osc | awk '{print $4;exit}')
-        HOST=$($LCTL dl -t | grep -v mdt | grep osc | awk '{print $7;exit}')
-        OBD=`echo $OBD | sed 's/-osc-.*$//'`
-        [ "x$OBD" != "x" ] && { setup_obdecho_osc $HOST $OBD || rc=1; } || rc=1
-        [ $rc -eq 0 ] && { obdecho_create_test ${OBD}_osc client || rc=2; }
-        [ "x$OBD" != "x" ] && cleaup_obdecho_osc $OBD
+        if ! module_loaded obdecho; then
+            load_module obdecho/obdecho 
+            rmmod_local=1           
+        fi
+
+        local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
+        local host=$(awk '/current_connection:/ {print $2}' /proc/fs/lustre/osc/$osc/import)
+        local target=$(awk '/target:/ {print $2}' /proc/fs/lustre/osc/$osc/import)
+        target=${target%_UUID}
+        
+        [[ -n $target ]]  && { setup_obdecho_osc $host $target || rc=1; } || rc=1
+        [ $rc -eq 0 ] && { obdecho_create_test ${target}_osc client || rc=2; }
+        [[ -n $target ]] && cleanup_obdecho_osc $target
         [ $rmmod_local -eq 1 ] && rmmod obdecho
-        [ $rc -eq 0 ] || return $rc
+        return $rc
+}
+run_test 180a "test obdecho on osc"
+
+test_180b() {
+        local rc=0
+        local rmmod_remote=0
 
         do_facet ost "lsmod | grep -q obdecho || "                      \
                      "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
                      "modprobe obdecho; }" && rmmod_remote=1
-        OBD=$(do_facet ost $LCTL dl | awk '/obdfilter/ {print $4;exit}')
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
+        target=$(do_facet ost $LCTL dl | awk '/obdfilter/ {print $4;exit}')
+        [[ -n $target ]] && { obdecho_create_test $target ost || rc=1; }
         [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
-        [ $rc -eq 0 ] || return $rc
-
-        true
+        return $rc
 }
-run_test 180 "test obdecho ============================================"
+run_test 180b "test obdecho directly on obdfilter"
 
 # OST pools tests
 POOL=${POOL:-cea1}
