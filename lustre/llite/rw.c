@@ -746,8 +746,15 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
                 end = ras->ras_window_start + ras->ras_window_len - 1;
         }
         if (end != 0) {
+                unsigned long tmp_end;
+                /* Align RA window to optimal RPC boundary */
+                tmp_end = ((end + 1) & (~(PTLRPC_MAX_BRW_PAGES - 1))) - 1;
+                if (tmp_end > start)
+                        end = tmp_end;
+
                 /* Truncate RA window to end of file */
                 end = min(end, (unsigned long)((kms - 1) >> CFS_PAGE_SHIFT));
+
                 ras->ras_next_readahead = max(end, end + 1);
                 RAS_CDEBUG(ras);
         }
