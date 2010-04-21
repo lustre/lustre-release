@@ -58,7 +58,8 @@ struct ost_thread_local_cache {
         /*
          * pool of nio buffers used by write-path
          */
-        struct niobuf_local   local [OST_THREAD_POOL_SIZE];
+        struct niobuf_local   local[OST_THREAD_POOL_SIZE];
+        unsigned int          temporary:1;
 };
 
 struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
