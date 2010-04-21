@@ -119,9 +119,9 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
                 cfs_list_del_init(&req->rq_set_chain);
                 req->rq_set = NULL;
                 ptlrpcd_add_req(req, PSCOPE_OTHER);
-                set->set_remaining--;
+                cfs_atomic_dec(&set->set_remaining);
         }
-        LASSERT(set->set_remaining == 0);
+        LASSERT(cfs_atomic_read(&set->set_remaining) == 0);
 }
 EXPORT_SYMBOL(ptlrpcd_add_rqset);
 
@@ -136,6 +136,31 @@ int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
         int rc;
 
         LASSERT(scope < PSCOPE_NR);
+        
+        cfs_spin_lock(&req->rq_lock);
+        if (req->rq_invalid_rqset) {
+                cfs_duration_t timeout;
+                struct l_wait_info lwi;
+
+                req->rq_invalid_rqset = 0;
+                cfs_spin_unlock(&req->rq_lock);
+
+                timeout = cfs_time_seconds(5);
+                lwi = LWI_TIMEOUT(timeout, back_to_sleep, NULL);
+                l_wait_event(req->rq_reply_waitq, (req->rq_set == NULL), &lwi);
+        } else if (req->rq_set) {
+                LASSERT(req->rq_phase == RQ_PHASE_NEW);
+                LASSERT(req->rq_send_state == LUSTRE_IMP_REPLAY);
+
+                /* ptlrpc_check_set will decrease the count */
+                cfs_atomic_inc(&req->rq_set->set_remaining);
+                cfs_spin_unlock(&req->rq_lock);
+
+                cfs_waitq_signal(&req->rq_set->set_waitq);
+        } else {
+                cfs_spin_unlock(&req->rq_lock);
+        }
+
         pt = req->rq_send_state == LUSTRE_IMP_FULL ? PT_NORMAL : PT_RECOVERY;
         pc = &ptlrpcd_scopes[scope].pscope_thread[pt].pt_ctl;
         rc = ptlrpc_set_add_new_req(pc, req);
@@ -184,7 +209,7 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
         }
         cfs_spin_unlock(&pc->pc_set->set_new_req_lock);
 
-        if (pc->pc_set->set_remaining) {
+        if (cfs_atomic_read(&pc->pc_set->set_remaining)) {
                 rc = rc | ptlrpc_check_set(env, pc->pc_set);
 
                 /*
@@ -346,7 +371,7 @@ int ptlrpcd_idle(void *arg)
         struct ptlrpcd_ctl *pc = arg;
 
         return (cfs_list_empty(&pc->pc_set->set_new_requests) &&
-                pc->pc_set->set_remaining == 0);
+                cfs_atomic_read(&pc->pc_set->set_remaining) == 0);
 }
 
 #endif

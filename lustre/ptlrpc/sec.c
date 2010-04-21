@@ -896,6 +896,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
         cfs_atomic_set(&req->rq_refcount, 10000);
         CFS_INIT_LIST_HEAD(&req->rq_ctx_chain);
         cfs_waitq_init(&req->rq_reply_waitq);
+        cfs_waitq_init(&req->rq_set_waitq);
         req->rq_import = imp;
         req->rq_flvr = sec->ps_flvr;
         req->rq_cli_ctx = ctx;

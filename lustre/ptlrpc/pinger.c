@@ -809,7 +809,7 @@ static int pinger_check_rpcs(void *arg)
         cfs_mutex_up(&pinger_sem);
 
         /* Might be empty, that's OK. */
-        if (set->set_remaining == 0)
+        if (cfs_atomic_read(&set->set_remaining) == 0)
                 CDEBUG(D_RPCTRACE, "nothing to ping\n");
 
         cfs_list_for_each(iter, &set->set_requests) {
@@ -858,7 +858,7 @@ do_check_set:
                         cfs_atomic_dec(&imp->imp_inflight);
                 }
                 cfs_spin_unlock(&imp->imp_lock);
-                set->set_remaining--;
+                cfs_atomic_dec(&set->set_remaining);
         }
         cfs_mutex_up(&pinger_sem);
 

@@ -607,6 +607,10 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * XXX nikita: some ptlrpc daemon threads have races of that sort.
  *
  */
+static inline int back_to_sleep(void *arg)
+{
+        return 0;
+}
 
 #define LWI_ON_SIGNAL_NOOP ((void (*)(void *))(-1))
 
