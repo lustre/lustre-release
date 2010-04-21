@@ -587,8 +587,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 cfs_waitq_signal(&oscc->oscc_waitq);
                 cfs_spin_unlock(&oscc->oscc_lock);
 
-                if (rc < 0)
-                        RETURN(rc);
+                RETURN(rc);
         }
 
         lsm = *ea;
