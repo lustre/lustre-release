@@ -592,9 +592,10 @@ ptlrpc_rqphase2str(struct ptlrpc_request *req)
         FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                  \
         FLAG(req->rq_no_resend, "N"),                                           \
         FLAG(req->rq_waiting, "W"),                                             \
-        FLAG(req->rq_wait_ctx, "C"), FLAG(req->rq_hp, "H")
+        FLAG(req->rq_wait_ctx, "C"), FLAG(req->rq_hp, "H"),                     \
+        FLAG(req->rq_committed, "M")
 
-#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s"
+#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s%s"
 
 void _debug_req(struct ptlrpc_request *req, __u32 mask,
                 struct libcfs_debug_msg_data *data, const char *fmt, ...)

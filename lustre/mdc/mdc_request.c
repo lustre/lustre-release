@@ -875,6 +875,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                  * exists and return no error in that case
                  */
                 if (mod) {
+                        DEBUG_REQ(D_HA, req, "Reset ESTALE = %d", rc);
                         LASSERT(mod->mod_open_req != NULL);
                         if (mod->mod_open_req->rq_committed)
                                 rc = 0;
