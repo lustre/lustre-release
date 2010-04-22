@@ -840,14 +840,16 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 inode_setattr(inode, attr);
         }
 
-        if (ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)) {
-                /* mtime is set to past sending setattr op to osts under PW
-                 * 0:EOF extent lock (like truncate under PW new_size:EOF), if
-                 * mtime is not set to past setattr op is not sent to osts */
-                if ((ia_valid & ATTR_SIZE) ||
-                    LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime))
-                        rc = cl_setattr_ost(inode, attr, NULL);
-        }
+        if (ia_valid & ATTR_SIZE)
+                attr->ia_valid |= ATTR_SIZE;
+        if ((ia_valid & ATTR_SIZE) | 
+            ((ia_valid | ATTR_ATIME | ATTR_ATIME_SET) &&
+             LTIME_S(attr->ia_atime) < LTIME_S(attr->ia_ctime)) ||
+            ((ia_valid | ATTR_MTIME | ATTR_MTIME_SET) &&
+             LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)))
+                /* perform truncate and setting mtime/atime to past under PW
+                 * 0:EOF extent lock (new_size:EOF for truncate) */
+                rc = cl_setattr_ost(inode, attr, NULL);
         EXIT;
 out:
         if (op_data.op_ioepoch)

@@ -301,8 +301,10 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
                 if (new_size == 0)
                         enqflags = CEF_DISCARD_DATA;
         } else {
-                LASSERT(io->u.ci_setattr.sa_attr.lvb_mtime <
-                        io->u.ci_setattr.sa_attr.lvb_ctime);
+                LASSERT((io->u.ci_setattr.sa_attr.lvb_mtime <
+                         io->u.ci_setattr.sa_attr.lvb_ctime) ||
+                        (io->u.ci_setattr.sa_attr.lvb_atime <
+                         io->u.ci_setattr.sa_attr.lvb_ctime));
                 new_size = 0;
         }
         cio->u.setattr.cui_local_lock = SETATTR_EXTENT_LOCK;
@@ -370,21 +372,24 @@ static int vvp_io_setattr_trunc(const struct lu_env *env,
         return result;
 }
 
-static int vvp_io_setattr_mtime(const struct lu_env *env,
-                                const struct cl_io_slice *ios)
+static int vvp_io_setattr_time(const struct lu_env *env,
+                               const struct cl_io_slice *ios)
 {
         struct cl_io       *io    = ios->cis_io;
         struct cl_object   *obj   = io->ci_obj;
         struct cl_attr     *attr  = ccc_env_thread_attr(env);
         int result;
-        unsigned valid = CAT_MTIME | CAT_CTIME;
+        unsigned valid = CAT_CTIME;
 
         cl_object_attr_lock(obj);
-        attr->cat_mtime = io->u.ci_setattr.sa_attr.lvb_mtime;
         attr->cat_ctime = io->u.ci_setattr.sa_attr.lvb_ctime;
         if (io->u.ci_setattr.sa_valid & ATTR_ATIME_SET) {
                 attr->cat_atime = io->u.ci_setattr.sa_attr.lvb_atime;
                 valid |= CAT_ATIME;
+        }
+        if (io->u.ci_setattr.sa_valid & ATTR_MTIME_SET) {
+                attr->cat_mtime = io->u.ci_setattr.sa_attr.lvb_mtime;
+                valid |= CAT_MTIME;
         }
         result = cl_object_attr_set(env, obj, attr, valid);
         cl_object_attr_unlock(obj);
@@ -408,7 +413,7 @@ static int vvp_io_setattr_start(const struct lu_env *env,
                 return vvp_io_setattr_trunc(env, ios, inode,
                                             io->u.ci_setattr.sa_attr.lvb_size);
         else
-                return vvp_io_setattr_mtime(env, ios);
+                return vvp_io_setattr_time(env, ios);
 }
 
 static void vvp_io_setattr_end(const struct lu_env *env,
