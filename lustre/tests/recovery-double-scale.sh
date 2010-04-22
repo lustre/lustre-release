@@ -77,6 +77,9 @@ reboot_recover_node () {
                 [ "$SERIAL" ] && wait_recovery_complete $item $((timeout * 4)) || true
                 ;;
        clients) for c in ${item//,/ }; do
+                      # make sure the client loads die
+                      do_nodes $c "set -x; test -f $TMP/client-load.pid && \
+                             { kill -s TERM \$(cat $TMP/client-load.pid) || true; }"
                       shutdown_client $c
                       boot_node $c
                       echo "Reintegrating $c"
