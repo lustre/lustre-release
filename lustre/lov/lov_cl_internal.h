@@ -223,6 +223,10 @@ struct lov_object {
                          */
                         struct lovsub_object **lo_sub;
                         /**
+                         * protect lo_sub
+                         */
+                        cfs_spinlock_t         lo_sub_lock;
+                        /**
                          * When this is true, lov_object::lo_attr contains
                          * valid up to date attributes for a top-level
                          * object. This field is reset to 0 when attributes of

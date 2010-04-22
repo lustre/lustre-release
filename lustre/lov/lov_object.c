@@ -209,6 +209,7 @@ static int lov_init_raid0(const struct lu_env *env,
         if (r0->lo_sub != NULL) {
                 result = 0;
                 subconf->coc_inode = conf->coc_inode;
+                cfs_spin_lock_init(&r0->lo_sub_lock);
                 /*
                  * Create stripe cl_objects.
                  */
@@ -264,11 +265,20 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
                 cfs_waitlink_init(waiter);
                 cfs_waitq_add(&site->ls_marche_funebre, waiter);
                 cfs_set_current_state(CFS_TASK_UNINT);
-
-                while (r0->lo_sub[idx] == los)
+                while (1) {
                         /* this wait-queue is signaled at the end of
                          * lu_object_free(). */
-                        cfs_waitq_wait(waiter, CFS_TASK_UNINT);
+                        cfs_set_current_state(CFS_TASK_UNINT);
+                        cfs_spin_lock(&r0->lo_sub_lock);
+                        if (r0->lo_sub[idx] == los) {
+                                cfs_spin_unlock(&r0->lo_sub_lock);
+                                cfs_waitq_wait(waiter, CFS_TASK_UNINT);
+                        } else {
+                                cfs_spin_unlock(&r0->lo_sub_lock);
+                                cfs_set_current_state(CFS_TASK_RUNNING);
+                                break;
+                        }
+                }
                 cfs_waitq_del(&site->ls_marche_funebre, waiter);
         }
         LASSERT(r0->lo_sub[idx] == NULL);
