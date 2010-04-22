@@ -562,6 +562,29 @@ test_8() {
 }
 run_test 8 "Replicate multiple file/directory moves"
 
+test_9() {
+    init_src
+    init_changelog
+
+    mkdir $DIR/$tdir/foo
+    touch $DIR/$tdir/foo/a1
+
+    $LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG
+
+    check_diff ${DIR}/$tdir $TGT/$tdir
+
+    rm -rf $DIR/$tdir/foo
+
+    $LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG
+
+    check_diff ${DIR}/$tdir $TGT/$tdir
+
+    fini_changelog
+    cleanup_src_tgt
+    return 0
+}
+run_test 9 "Replicate recursive directory removal"
+
 log "cleanup: ======================================================"
 cd $ORIG_PWD
 check_and_cleanup_lustre

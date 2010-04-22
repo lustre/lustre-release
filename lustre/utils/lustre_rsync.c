@@ -708,6 +708,19 @@ int lr_rmfile(struct lr_info *info)
         return rc;
 }
 
+/* Recursively remove directory and its contents */
+int lr_rm_recursive(struct lr_info *info)
+{
+        int rc;
+
+        snprintf(info->cmd, PATH_MAX, "rm -rf %s", info->dest);
+        rc = system(info->cmd);
+        if (rc == -1)
+                rc = -errno;
+
+        return rc;
+}
+
 /* Remove a file under SPECIAL_DIR with its tfid as its name. */
 int lr_rm_special(struct lr_info *info)
 {
@@ -825,6 +838,9 @@ int lr_remove(struct lr_info *info)
                 rc1 = lr_rmfile(info);
                 lr_debug(DINFO, "remove: %s; rc1=%d, errno=%d\n",
                          info->dest, rc1, errno);
+                if (rc1 == -ENOTEMPTY)
+                        rc1 = lr_rm_recursive(info);
+
                 if (rc1) {
                         rc = rc1;
                         continue;
