@@ -187,7 +187,7 @@ static unsigned filetype_dir_table[] = {
 static int traverse_lost_found(char *src_dir, const char *mount_path)
 {
         DIR *dir_ptr;
-        struct filter_fid trusted_fid;
+        struct filter_fid parent_fid;
         struct dirent64 *dirent;
         __u64 ff_group, ff_objid;
         char *file_path;
@@ -252,25 +252,24 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
                 case DT_REG:
                 file_path = src_dir;
                 xattr_len = getxattr(file_path, "trusted.fid",
-                                     (void *)&trusted_fid,
-                                     sizeof(trusted_fid));
+                                     (void *)&parent_fid,
+                                     sizeof(parent_fid));
 
-                if (xattr_len == -1 || xattr_len < sizeof(trusted_fid))
+                if (xattr_len == -1 || xattr_len < sizeof(parent_fid))
                         /*
                          * Its very much possible that we dont find fid
                          * on precreated files, LAST_ID
                          */
                         continue;
 
-                ff_group = le64_to_cpu(trusted_fid.ff_group);
-                ff_objid = le64_to_cpu(trusted_fid.ff_objid);
-
-                if (ff_group >= MAX_GROUPS) {
+                ff_group = le64_to_cpu(parent_fid.ff_seq);
+                if (ff_group >= FID_SEQ_OST_MAX) {
                         fprintf(stderr, "error: invalid group "LPU64" likely"
                                 "indicates a corrupt xattr for file %s.\n",
                                 ff_group, file_path);
                         continue;
                 }
+                ff_objid = le64_to_cpu(parent_fid.ff_objid);
 
                 /* might need to create the parent directories for
                    this object */

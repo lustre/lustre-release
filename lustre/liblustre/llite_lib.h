@@ -36,6 +36,18 @@
 
 #ifndef __LLU_H_
 #define __LLU_H_
+#include <fcntl.h>
+#include <sys/queue.h>
+#include <sysio.h>
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
+#include <fs.h>
+#include <mount.h>
+#include <inode.h>
+#ifdef HAVE_FILE_H
+#include <file.h>
+#endif
 
 #include <liblustre.h>
 #include <obd.h>
@@ -54,7 +66,6 @@
 /* This should not be "optimized" use ~0ULL because page->index is a long and
  * 32-bit systems are therefore limited to 16TB in a mapping */
 #define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << CFS_PAGE_SHIFT)
-
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         __u32 fd_flags;
@@ -119,7 +130,6 @@ struct llu_inode_info {
         struct ost_lvb          lli_lvb;
 };
 
-
 static inline struct llu_sb_info *llu_fs2sbi(struct filesys *fs)
 {
         return (struct llu_sb_info*)(fs->fs_private);
@@ -130,10 +140,17 @@ static inline struct llu_inode_info *llu_i2info(struct inode *inode)
         return (struct llu_inode_info*)(inode->i_private);
 }
 
+static inline int ll_inode_flags(struct inode *inode)
+{
+        return llu_i2info(inode)->lli_st_flags;
+}
+
 static inline struct intnl_stat *llu_i2stat(struct inode *inode)
 {
         return &inode->i_stbuf;
 }
+
+#define ll_inode_blksize(inode)     (llu_i2stat(inode)->st_blksize)
 
 static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
 {
@@ -229,7 +246,6 @@ extern struct mount_option_s mount_option;
 /* super.c */
 void llu_update_inode(struct inode *inode, struct lustre_md *md);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
-void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
 int llu_inode_getattr(struct inode *inode, struct obdo *obdo,

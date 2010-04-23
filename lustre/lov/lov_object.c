@@ -108,28 +108,6 @@ static void lov_install_raid0(const struct lu_env *env,
         lov->u = *state;
 }
 
-static void oinfo_get_fid(const struct lov_oinfo *oinfo, struct lu_fid *fid)
-{
-        __u64 idx = oinfo->loi_id;
-
-        /* See idif definition in wiki:CMD3_interoperability_architecture */
-
-        LASSERT(oinfo->loi_gr < 1ULL << 16);
-        LASSERT(oinfo->loi_id < 1ULL << 49);
-        ENTRY;
-
-        /*
-         * Now that the fid of stripe is not unique now, ost_idx have to
-         * be used to make it unique. This is ok because the stripe fids
-         * are just used in client side(to locate the objects). -jay
-         */
-        fid->f_seq = ((__u64)oinfo->loi_ost_idx) << 32 |
-                     oinfo->loi_gr << 16 | idx >> 32;
-        fid->f_oid = idx; /* truncated to 32 bits by assignment */
-        fid->f_ver = 0;
-        EXIT;
-}
-
 static struct cl_object *lov_sub_find(const struct lu_env *env,
                                       struct cl_device *dev,
                                       const struct lu_fid *fid,
@@ -158,11 +136,11 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
         parent = subhdr->coh_parent;
 
         oinfo = r0->lo_lsm->lsm_oinfo[idx];
-        CDEBUG(D_INODE, DFID"@%p[%d] -> "DFID"@%p: id: "LPU64" gr: "LPU64
+        CDEBUG(D_INODE, DFID"@%p[%d] -> "DFID"@%p: id: "LPU64" seq: "LPU64
                " idx: %d gen: %d\n",
                PFID(&subhdr->coh_lu.loh_fid), subhdr, idx,
                PFID(&hdr->coh_lu.loh_fid), hdr,
-               oinfo->loi_id, oinfo->loi_gr,
+               oinfo->loi_id, oinfo->loi_seq,
                oinfo->loi_ost_idx, oinfo->loi_ost_gen);
 
         if (parent == NULL) {
@@ -218,7 +196,8 @@ static int lov_init_raid0(const struct lu_env *env,
                         struct lov_oinfo *oinfo = lsm->lsm_oinfo[i];
                         int ost_idx = oinfo->loi_ost_idx;
 
-                        oinfo_get_fid(oinfo, ofid);
+                        fid_ostid_unpack(ofid, &oinfo->loi_oi,
+                                         oinfo->loi_ost_idx);
                         subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
                         subconf->u.coc_oinfo = oinfo;
                         LASSERTF(subdev != NULL, "not init ost %d\n", ost_idx);

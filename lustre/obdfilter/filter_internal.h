@@ -43,6 +43,7 @@
 #include <lustre_handles.h>
 #include <lustre_debug.h>
 #include <obd.h>
+#include <obd_class.h>
 #include <lprocfs_status.h>
 
 #define FILTER_LAYOUT_VERSION "2"
@@ -94,10 +95,31 @@ struct filter_mod_data {
 #define ClearPageConstant(page) do {} while (0)
 #endif
 
+#define POSTID LPU64":"LPU64
+/**
+ * Validate ost_id in obdo
+ */
+static inline int
+filter_validate_obdo(struct obdo *oa, struct obd_export *exp)
+{
+        if (oa != NULL && !(oa->o_valid & OBD_MD_FLGROUP)) {
+                oa->o_seq = FID_SEQ_OST_MDT0;
+        /* remove fid_seq_is_rsvd() after FID-on-OST allows SEQ > 9 */
+        } else if (oa == NULL || !fid_seq_is_rsvd(oa->o_seq)) {
+                CERROR("%s: client %s sent invalid object "POSTID"\n",
+                       exp->exp_obd->obd_name, obd_export_nid2str(exp),
+                       oa ? oa->o_id : -1, oa ? oa->o_seq : -1);
+                return -EPROTO;
+        }
+        oa->o_seq = ostid_seq(&oa->o_oi);
+        oa->o_id = ostid_id(&oa->o_oi);
+        return 0;
+}
+
 struct filter_mod_data *filter_fmd_find(struct obd_export *exp,
-                                        obd_id objid, obd_gr group);
+                                        obd_id objid, obd_seq seq);
 struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
-                                       obd_id objid, obd_gr group);
+                                       obd_id objid, obd_seq seq);
 void filter_fmd_put(struct obd_export *exp, struct filter_mod_data *fmd);
 void filter_fmd_expire(struct obd_export *exp);
 
@@ -127,19 +149,20 @@ extern void target_recovery_init(struct lu_target *lut,
 /* filter.c */
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
-                                 obd_gr group, obd_id id);
-struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
+                                 obd_seq seq, obd_id id);
+struct dentry *__filter_oa2dentry(struct obd_device *obd, struct ost_id *ostid,
                                   const char *what, int quiet);
-#define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
+#define filter_oa2dentry(obd, ostid) __filter_oa2dentry(obd, ostid,     \
+                                                        __func__, 0)
 
 int filter_finish_transno(struct obd_export *, struct inode *,
                           struct obd_trans_info *, int rc, int force_sync);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
-__u64 filter_last_id(struct filter_obd *, obd_gr group);
+__u64 filter_last_id(struct filter_obd *, obd_seq seq);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                         void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *);
-int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
+int filter_update_last_objid(struct obd_device *, obd_seq, int force_sync);
 int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
@@ -152,7 +175,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
-struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group);
+struct obd_llog_group *filter_find_olg(struct obd_device *obd, int seq);
 
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
@@ -231,9 +254,9 @@ static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 extern quota_interface_t *filter_quota_interface_ref;
 
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
-int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
                      struct lustre_capa *capa, __u64 opc);
-int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
+int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_seq seq,
                       struct lustre_capa *capa);
 void filter_free_capa_keys(struct filter_obd *filter);
 

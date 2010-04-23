@@ -50,17 +50,6 @@
 #include <fcntl.h>
 #include <sys/queue.h>
 
-#include <sysio.h>
-#ifdef HAVE_XTIO_H
-#include <xtio.h>
-#endif
-#include <fs.h>
-#include <mount.h>
-#include <inode.h>
-#ifdef HAVE_FILE_H
-#include <file.h>
-#endif
-
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #elif defined(HAVE_UNISTD_H)

@@ -49,17 +49,6 @@
 #include <sys/queue.h>
 #include <fcntl.h>
 
-#include <sysio.h>
-#ifdef HAVE_XTIO_H
-#include <xtio.h>
-#endif
-#include <fs.h>
-#include <mount.h>
-#include <inode.h>
-#ifdef HAVE_FILE_H
-#include <file.h>
-#endif
-
 #include "llite_lib.h"
 
 /* Pack the required supplementary groups into the supplied groups array.
@@ -304,9 +293,10 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
+        oa->o_seq = lsm->lsm_object_seq;
         oa->o_mode = body->mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+        obdo_from_inode(oa, NULL, &llu_i2info(dir)->lli_fid, 0);
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;

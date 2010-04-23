@@ -92,25 +92,24 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 case MDS_UNLINK_REC: {
                         struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
                         lur->lur_oid = loi->loi_id;
-                        lur->lur_ogr = loi->loi_gr;
+                        lur->lur_oseq = loi->loi_seq;
                         break;
                 }
                 case MDS_SETATTR_REC: {
                         struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
                         lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_ogr = loi->loi_gr;
+                        lsr->lsr_oseq = loi->loi_seq;
                         break;
                 }
                 case MDS_SETATTR64_REC: {
                         struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
                         lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_ogr = loi->loi_gr;
+                        lsr->lsr_oseq = loi->loi_seq;
                         break;
                 }
                 default:
                         break;
                 }
-                LASSERT(lsm->lsm_object_gr == loi->loi_gr);
                 /* inject error in llog_add() below */
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FAIL_LOV_LOG_ADD)) {
                         llog_ctxt_put(cctxt);

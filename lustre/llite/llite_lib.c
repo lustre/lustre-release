@@ -1728,14 +1728,13 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 }
 
                 oinfo.oi_oa->o_id = lsm->lsm_object_id;
-                oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
+                oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
                 oinfo.oi_oa->o_flags = flags;
                 oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS |
                                        OBD_MD_FLGROUP;
                 oinfo.oi_capa = ll_mdscapa_get(inode);
-
                 obdo_from_inode(oinfo.oi_oa, inode,
-                                OBD_MD_FLFID | OBD_MD_FLGENER);
+                                &ll_i2info(inode)->lli_fid, 0);
                 rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
                 capa_put(oinfo.oi_capa);
                 OBDO_FREE(oinfo.oi_oa);

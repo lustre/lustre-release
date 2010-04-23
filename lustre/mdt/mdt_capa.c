@@ -55,7 +55,7 @@ static inline void set_capa_key_expiry(struct mdt_device *mdt)
 static void make_capa_key(struct lustre_capa_key *key,
                           mdsno_t mdsnum, int keyid)
 {
-        key->lk_mdsid = mdsnum;
+        key->lk_seq = mdsnum;
         key->lk_keyid = keyid + 1;
         ll_get_random_bytes(key->lk_key, sizeof(key->lk_key));
 }
@@ -63,7 +63,7 @@ static void make_capa_key(struct lustre_capa_key *key,
 static inline void lck_cpu_to_le(struct lustre_capa_key *tgt,
                                  struct lustre_capa_key *src)
 {
-        tgt->lk_mdsid   = cpu_to_le64(src->lk_mdsid);
+        tgt->lk_seq   = cpu_to_le64(src->lk_seq);
         tgt->lk_keyid   = cpu_to_le32(src->lk_keyid);
         tgt->lk_padding = cpu_to_le32(src->lk_padding);
         memcpy(tgt->lk_key, src->lk_key, sizeof(src->lk_key));
@@ -72,7 +72,7 @@ static inline void lck_cpu_to_le(struct lustre_capa_key *tgt,
 static inline void lck_le_to_cpu(struct lustre_capa_key *tgt,
                                  struct lustre_capa_key *src)
 {
-        tgt->lk_mdsid   = le64_to_cpu(src->lk_mdsid);
+        tgt->lk_seq   = le64_to_cpu(src->lk_seq);
         tgt->lk_keyid   = le32_to_cpu(src->lk_keyid);
         tgt->lk_padding = le32_to_cpu(src->lk_padding);
         memcpy(tgt->lk_key, src->lk_key, sizeof(src->lk_key));
