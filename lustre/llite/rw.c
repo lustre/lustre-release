@@ -747,7 +747,14 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
         }
         if (end != 0) {
                 unsigned long tmp_end;
-                /* Align RA window to optimal RPC boundary */
+                /*
+                 * Align RA window to an optimal boundary.
+                 *
+                 * XXX This would be better to align to cl_max_pages_per_rpc
+                 * instead of PTLRPC_MAX_BRW_PAGES, because the RPC size may
+                 * be aligned to the RAID stripe size in the future and that
+                 * is more important than the RPC size.
+                 */
                 tmp_end = ((end + 1) & (~(PTLRPC_MAX_BRW_PAGES - 1))) - 1;
                 if (tmp_end > start)
                         end = tmp_end;
