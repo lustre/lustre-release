@@ -1081,6 +1081,7 @@ void
 kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
         cfs_time_t         last_alive = 0;
+        cfs_time_t         now = cfs_time_current();
         cfs_rwlock_t      *glock = &kiblnd_data.kib_global_lock;
         kib_peer_t        *peer;
         unsigned long      flags;
@@ -1104,6 +1105,10 @@ kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
          * and connection establishment with a NULL tx */
         if (peer == NULL)
                 kiblnd_launch_tx(ni, NULL, nid);
+
+        CDEBUG(D_NET, "Peer %s %p, alive %ld secs ago\n",
+               libcfs_nid2str(nid), peer,
+               last_alive ? cfs_duration_sec(now - last_alive) : -1);
         return;
 }
 

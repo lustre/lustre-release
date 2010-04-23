@@ -1815,6 +1815,7 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
         int                connect = 1;
         cfs_time_t         last_alive = 0;
+        cfs_time_t         now = cfs_time_current();
         ksock_peer_t      *peer = NULL;
         cfs_rwlock_t      *glock = &ksocknal_data.ksnd_global_lock;
         lnet_process_id_t  id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
@@ -1835,7 +1836,7 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
                                 /* something got ACKed */
                                 conn->ksnc_tx_deadline =
                                         cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
-                                peer->ksnp_last_alive = cfs_time_current();
+                                peer->ksnp_last_alive = now;
                                 conn->ksnc_tx_bufnob = bufnob;
                         }
                 }
@@ -1849,6 +1850,11 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 
         if (last_alive != 0)
                 *when = last_alive;
+
+        CDEBUG(D_NET, "Peer %s %p, alive %ld secs ago, connect %d\n",
+               libcfs_nid2str(nid), peer,
+               last_alive ? cfs_duration_sec(now - last_alive) : -1,
+               connect);
 
         if (!connect)
                 return;

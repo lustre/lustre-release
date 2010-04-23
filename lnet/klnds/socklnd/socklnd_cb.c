@@ -781,8 +781,9 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
 ksock_route_t *
 ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
 {
-        cfs_list_t        *tmp;
-        ksock_route_t     *route;
+        cfs_time_t     now = cfs_time_current();
+        cfs_list_t    *tmp;
+        ksock_route_t *route;
 
         cfs_list_for_each (tmp, &peer->ksnp_routes) {
                 route = cfs_list_entry (tmp, ksock_route_t, ksnr_list);
@@ -796,11 +797,17 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
                 if ((ksocknal_route_mask() & ~route->ksnr_connected) == 0)
                         continue;
 
-                /* too soon to retry this guy? */
                 if (!(route->ksnr_retry_interval == 0 || /* first attempt */
-                      cfs_time_aftereq (cfs_time_current(),
-                                        route->ksnr_timeout)))
+                      cfs_time_aftereq(now, route->ksnr_timeout))) {
+                        CDEBUG(D_NET,
+                               "Too soon to retry route %u.%u.%u.%u "
+                               "(cnted %d, interval %ld, %ld secs later)\n",
+                               HIPQUAD(route->ksnr_ipaddr),
+                               route->ksnr_connected,
+                               route->ksnr_retry_interval,
+                               cfs_duration_sec(route->ksnr_timeout - now));
                         continue;
+                }
 
                 return (route);
         }
