@@ -612,7 +612,7 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
                  LASSERT(obd->obd_upcall.onu_upcall != NULL);
                  rc = obd->obd_upcall.onu_upcall(obd, NULL, ev,
                                                  obd->obd_upcall.onu_owner,
-                                                 &mds->mds_mount_count);
+                                                 &mds->mds_obt.obt_mount_count);
         }
 out:
         OBD_FREE(ld, sizeof(*ld));

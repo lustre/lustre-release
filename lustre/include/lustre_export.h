@@ -51,30 +51,25 @@ struct mdt_client_data;
 struct mds_idmap_table;
 struct mdt_idmap_table;
 
-struct lu_export_data {
+struct tg_export_data {
         /** Protects led_lcd below */
-        cfs_semaphore_t         led_lcd_lock;
+        cfs_semaphore_t         ted_lcd_lock;
         /** Per-client data for each export */
-        struct lsd_client_data *led_lcd;
+        struct lsd_client_data *ted_lcd;
         /** Offset of record in last_rcvd file */
-        loff_t                  led_lr_off;
+        loff_t                  ted_lr_off;
         /** Client index in last_rcvd file */
-        int                     led_lr_idx;
+        int                     ted_lr_idx;
 };
 
 struct mdt_export_data {
-        struct lu_export_data   med_led;
+        struct tg_export_data   med_ted;
         cfs_list_t              med_open_head;
         cfs_spinlock_t          med_open_lock; /* lock med_open_head, mfd_list*/
         __u64                   med_ibits_known;
         cfs_semaphore_t         med_idmap_sem;
         struct lustre_idmap_table *med_idmap;
 };
-
-#define med_lcd_lock    med_led.led_lcd_lock
-#define med_lcd         med_led.led_lcd
-#define med_lr_off      med_led.led_lr_off
-#define med_lr_idx      med_led.led_lr_idx
 
 struct osc_creator {
         cfs_spinlock_t          oscc_lock;
@@ -98,7 +93,7 @@ struct ec_export_data { /* echo client */
 
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
-        struct lu_export_data      fed_led;
+        struct tg_export_data      fed_ted;
         cfs_spinlock_t             fed_lock;     /**< protects fed_mod_list */
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
@@ -107,11 +102,6 @@ struct filter_export_data {
         long                       fed_pending;  /* bytes just being written */
         __u32                      fed_group;
 };
-
-#define fed_lcd_lock    fed_led.led_lcd_lock
-#define fed_lcd         fed_led.led_lcd
-#define fed_lr_off      fed_led.led_lr_off
-#define fed_lr_idx      fed_led.led_lr_idx
 
 typedef struct nid_stat {
         lnet_nid_t               nid;
@@ -210,7 +200,7 @@ struct obd_export {
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
 
         union {
-                struct lu_export_data     eu_target_data;
+                struct tg_export_data     eu_target_data;
                 struct mdt_export_data    eu_mdt_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;

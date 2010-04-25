@@ -49,10 +49,10 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         struct obd_device* obd = (struct obd_device *)data;
 
         LASSERT(obd != NULL);
-        LASSERT(obd->u.mds.mds_vfsmnt->mnt_devname);
+        LASSERT(obd->u.obt.obt_vfsmnt->mnt_devname);
         *eof = 1;
 
-        return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
+        return snprintf(page, count, "%s\n",obd->u.obt.obt_vfsmnt->mnt_devname);
 }
 
 static int lprocfs_mds_rd_evictostnids(char *page, char **start, off_t off,

@@ -389,12 +389,7 @@ static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
 
-        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
-                ctxt->loc_gen.mnt_cnt = obd->u.mds.mds_mount_count;
-        else if (!strstr(obd->obd_type->typ_name, LUSTRE_OST_NAME))
-                ctxt->loc_gen.mnt_cnt = obd->u.filter.fo_mount_count;
-        else
-                ctxt->loc_gen.mnt_cnt = 0;
+        ctxt->loc_gen.mnt_cnt = obd->u.obt.obt_mount_count;
         ctxt->loc_gen.conn_cnt++;
 }
 

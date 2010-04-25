@@ -47,17 +47,17 @@
  */
 static int obt_client_data_update(struct obd_export *exp)
 {
-        struct lu_export_data *led = &exp->exp_target_data;
+        struct tg_export_data *ted = &exp->exp_target_data;
         struct obd_device_target *obt = &exp->exp_obd->u.obt;
         struct lu_target *lut = class_exp2tgt(exp);
-        loff_t off = led->led_lr_off;
+        loff_t off = ted->ted_lr_off;
         int rc = 0;
 
         rc = fsfilt_write_record(exp->exp_obd, obt->obt_rcvd_filp,
-                                 led->led_lcd, sizeof(*led->led_lcd), &off, 0);
+                                 ted->ted_lcd, sizeof(*ted->ted_lcd), &off, 0);
 
         CDEBUG(D_INFO, "update client idx %u last_epoch %#x (%#x)\n",
-               led->led_lr_idx, le32_to_cpu(led->led_lcd->lcd_last_epoch),
+               ted->ted_lr_idx, le32_to_cpu(ted->ted_lcd->lcd_last_epoch),
                le32_to_cpu(lut->lut_lsd.lsd_start_epoch));
 
         return rc;
@@ -93,7 +93,7 @@ int obt_server_data_update(struct lu_target *lut, int force_sync)
  */
 void obt_client_epoch_update(struct obd_export *exp)
 {
-        struct lsd_client_data *lcd = exp->exp_target_data.led_lcd;
+        struct lsd_client_data *lcd = exp->exp_target_data.ted_lcd;
         struct lu_target *lut = class_exp2tgt(exp);
 
         /** VBR: set client last_epoch to current epoch */
@@ -175,16 +175,16 @@ static int lut_last_rcvd_write(const struct lu_env *env, struct lu_target *lut,
  */
 void lut_client_free(struct obd_export *exp)
 {
-        struct lu_export_data *led = &exp->exp_target_data;
+        struct tg_export_data *ted = &exp->exp_target_data;
         struct lu_target *lut = class_exp2tgt(exp);
 
-        OBD_FREE_PTR(led->led_lcd);
-        led->led_lcd = NULL;
+        OBD_FREE_PTR(ted->ted_lcd);
+        ted->ted_lcd = NULL;
         /* Clear bit when lcd is freed */
         spin_lock(&lut->lut_client_bitmap_lock);
-        if (!test_and_clear_bit(led->led_lr_idx, lut->lut_client_bitmap)) {
+        if (!test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
                 CERROR("%s: client %u bit already clear in bitmap\n",
-                       exp->exp_obd->obd_name, led->led_lr_idx);
+                       exp->exp_obd->obd_name, ted->ted_lr_idx);
                 LBUG();
         }
         spin_unlock(&lut->lut_client_bitmap_lock);
@@ -196,17 +196,17 @@ EXPORT_SYMBOL(lut_client_free);
  */
 int lut_client_data_update(const struct lu_env *env, struct obd_export *exp)
 {
-        struct lu_export_data *led = &exp->exp_target_data;
+        struct tg_export_data *ted = &exp->exp_target_data;
         struct lu_target *lut = class_exp2tgt(exp);
         struct lsd_client_data tmp_lcd;
-        loff_t tmp_off = led->led_lr_off;
+        loff_t tmp_off = ted->ted_lr_off;
         struct lu_buf tmp_buf = {
                                         .lb_buf = &tmp_lcd,
                                         .lb_len = sizeof(tmp_lcd)
                                 };
         int rc = 0;
 
-        lcd_cpu_to_le(led->led_lcd, &tmp_lcd);
+        lcd_cpu_to_le(ted->ted_lcd, &tmp_lcd);
         LASSERT(lut->lut_last_rcvd);
         rc = lut_last_rcvd_write(env, lut, &tmp_buf, &tmp_off, 0);
 
@@ -245,7 +245,7 @@ static int lut_server_data_update(const struct lu_env *env,
 
 void lut_client_epoch_update(const struct lu_env *env, struct obd_export *exp)
 {
-        struct lsd_client_data *lcd = exp->exp_target_data.led_lcd;
+        struct lsd_client_data *lcd = exp->exp_target_data.ted_lcd;
         struct lu_target *lut = class_exp2tgt(exp);
 
         LASSERT(lut->lut_bottom);

@@ -356,12 +356,6 @@ struct filter_obd {
         int                      fo_sec_level;
 };
 
-#define fo_translock            fo_obt.obt_lut->lut_translock
-#define fo_last_rcvd_slots      fo_obt.obt_lut->lut_client_bitmap
-#define fo_mount_count          fo_obt.obt_lut->lut_mount_count
-#define fo_rcvd_filp            fo_obt.obt_rcvd_filp
-#define fo_vfsmnt               fo_obt.obt_vfsmnt
-
 struct timeout_item {
         enum timeout_event ti_event;
         cfs_time_t         ti_timeout;
@@ -552,14 +546,6 @@ struct mds_obd {
         struct lustre_capa_key          *mds_capa_keys;
         cfs_rw_semaphore_t               mds_notify_lock;
 };
-
-#define mds_transno_lock         mds_obt.obt_translock
-#define mds_rcvd_filp            mds_obt.obt_rcvd_filp
-#define mds_server_data          mds_obt.obt_lsd
-#define mds_client_bitmap        mds_obt.obt_client_bitmap
-#define mds_mount_count          mds_obt.obt_mount_count
-#define mds_last_transno         mds_obt.obt_last_transno
-#define mds_vfsmnt               mds_obt.obt_vfsmnt
 
 /* lov objid */
 extern __u32 mds_max_ost_index;

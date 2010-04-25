@@ -118,7 +118,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         }
 
         if (mnt) {
-                *mnt = mds->mds_vfsmnt;
+                *mnt = mds->mds_obt.obt_vfsmnt;
                 mntget(*mnt);
         }
 
@@ -315,7 +315,7 @@ static void mds_init_ctxt(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obd->u.mds;
 
-        mds->mds_vfsmnt = mnt;
+        mds->mds_obt.obt_vfsmnt = mnt;
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
 

@@ -5036,7 +5036,7 @@ static int mdt_obd_connect(const struct lu_env *env,
                         LASSERT(mti != NULL);
                         mti->mti_exp = lexp;
                         memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
-                        lexp->exp_mdt_data.med_lcd = lcd;
+                        lexp->exp_target_data.ted_lcd = lcd;
                         rc = mdt_client_new(env, mdt);
                         if (rc == 0)
                                 mdt_export_stats_init(obd, lexp, localdata);
@@ -5264,7 +5264,7 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         mdt_allow_cli(m, CONFIG_SYNC);
                         if (data)
-                                (*(__u64 *)data) = m->mdt_mount_count;
+                                (*(__u64 *)data) = m->mdt_lut.lut_mount_count;
                         break;
                 case MD_NO_TRANS:
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);

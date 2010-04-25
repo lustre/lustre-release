@@ -88,10 +88,10 @@ static int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off,
         struct obd_device *obd = (struct obd_device *)data;
 
         LASSERT(obd != NULL);
-        LASSERT(obd->u.filter.fo_vfsmnt->mnt_devname);
+        LASSERT(obd->u.obt.obt_vfsmnt->mnt_devname);
         *eof = 1;
         return snprintf(page, count, "%s\n",
-                        obd->u.filter.fo_vfsmnt->mnt_devname);
+                        obd->u.obt.obt_vfsmnt->mnt_devname);
 }
 
 static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,

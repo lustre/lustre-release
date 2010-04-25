@@ -231,7 +231,7 @@ static int mdt_som_attr_set(struct mdt_thread_info *info,
                 ma->ma_som->msd_size = la->la_valid & LA_SIZE ? la->la_size : 0;
                 ma->ma_som->msd_blocks = la->la_valid & LA_BLOCKS ?
                                          la->la_blocks : 0;
-                ma->ma_som->msd_mountid = mdt->mdt_mount_count;
+                ma->ma_som->msd_mountid = mdt->mdt_lut.lut_mount_count;
                 ma->ma_attr.la_valid &= LA_ATIME | LA_MTIME | LA_CTIME;
         } else {
                 ma->ma_som->msd_ioepoch = IOEPOCH_INVAL;
@@ -557,15 +557,15 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
                 return;
         }
 
-        cfs_spin_lock(&mdt->mdt_transno_lock);
+        cfs_spin_lock(&mdt->mdt_lut.lut_translock);
         if (info->mti_transno == 0) {
-                info->mti_transno = ++ mdt->mdt_last_transno;
+                info->mti_transno = ++ mdt->mdt_lut.lut_last_transno;
         } else {
                 /* should be replay */
-                if (info->mti_transno > mdt->mdt_last_transno)
-                        mdt->mdt_last_transno = info->mti_transno;
+                if (info->mti_transno > mdt->mdt_lut.lut_last_transno)
+                        mdt->mdt_lut.lut_last_transno = info->mti_transno;
         }
-        cfs_spin_unlock(&mdt->mdt_transno_lock);
+        cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
 
         CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
                         info->mti_transno,
@@ -883,8 +883,8 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         struct mdt_device       *mdt  = info->mti_mdt;
         struct req_capsule      *pill = info->mti_pill;
         struct ptlrpc_request   *req  = mdt_info_req(info);
-        struct mdt_export_data  *med  = &req->rq_export->exp_mdt_data;
-        struct lsd_client_data  *lcd  = med->med_lcd;
+        struct tg_export_data   *ted  = &req->rq_export->exp_target_data;
+        struct lsd_client_data  *lcd  = ted->ted_lcd;
         struct md_attr          *ma   = &info->mti_attr;
         struct mdt_reint_record *rr   = &info->mti_rr;
         __u32                   flags = info->mti_spec.sp_cr_flags;
@@ -908,7 +908,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 
         ma->ma_valid = 0;
 
-        mdt_req_from_lcd(req, med->med_lcd);
+        mdt_req_from_lcd(req, lcd);
         mdt_set_disposition(info, ldlm_rep, lcd->lcd_last_data);
 
         CERROR("This is reconstruct open: disp="LPX64", result=%d\n",
