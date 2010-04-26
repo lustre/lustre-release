@@ -976,7 +976,6 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         int zero = 0, stride_detect = 0, ra_miss = 0;
         ENTRY;
 
-        cfs_spin_lock(&sbi->ll_lock);
         cfs_spin_lock(&ras->ras_lock);
 
         ll_ra_stats_inc_sbi(sbi, hit ? RA_STAT_HIT : RA_STAT_MISS);
@@ -1117,7 +1116,6 @@ out_unlock:
         RAS_CDEBUG(ras);
         ras->ras_request_index++;
         cfs_spin_unlock(&ras->ras_lock);
-        cfs_spin_unlock(&sbi->ll_lock);
         return;
 }
 
