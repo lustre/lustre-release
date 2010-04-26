@@ -322,7 +322,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         /* only when block qunit is reduced, boardcast to osts */
         if ((adjust_res & LQS_BLK_DECREASE) && QAQ_IS_ADJBLK(oqaq))
-                rc = obd_quota_adjust_qunit(mds->mds_lov_exp, oqaq, qctxt);
+                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq, qctxt);
 
 out:
         lustre_dqput(dquot);
@@ -653,7 +653,7 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
         oqctl->qc_cmd = Q_FINVALIDATE;
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc)
-                rc = obd_quotactl(mds->mds_lov_exp, oqctl);
+                rc = obd_quotactl(mds->mds_osc_exp, oqctl);
 
         cfs_up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -893,7 +893,7 @@ int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
                 GOTO(out, rc1);
         }
 
-        rc = obd_quotactl(mds->mds_lov_exp, oqctl);
+        rc = obd_quotactl(mds->mds_osc_exp, oqctl);
         if (rc && rc != -EALREADY) {
                 CWARN("mds remote quota[%d] is failed to be off for %d\n",
                       oqctl->qc_type, rc);
@@ -1221,7 +1221,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
                 id[GRPQUOTA] = oqctl->qc_id;
 
         /* initialize all slave's limit */
-        rc = obd_quotactl(mds->mds_lov_exp, ioqc);
+        rc = obd_quotactl(mds->mds_osc_exp, ioqc);
 
         rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, id, 1, 0, NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
@@ -1252,7 +1252,7 @@ static void adjust_lqs(struct obd_device *obd, struct quota_adjust_qunit *qaq)
 
         /* adjust remote lqs */
         if (QAQ_IS_ADJBLK(qaq)) {
-                rc = obd_quota_adjust_qunit(obd->u.mds.mds_lov_exp, qaq, qctxt);
+                rc = obd_quota_adjust_qunit(obd->u.mds.mds_osc_exp, qaq, qctxt);
                 if (rc < 0)
                         CERROR("adjust slaves' qunit size failed!(rc=%d)\n", rc);
 
@@ -1263,7 +1263,7 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
-        struct obd_device *lov_obd = class_exp2obd(mds->mds_lov_exp);
+        struct obd_device *lov_obd = class_exp2obd(mds->mds_osc_exp);
         struct lov_obd *lov = &lov_obd->u.lov;
         struct quota_adjust_qunit *oqaq = NULL;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
@@ -1450,7 +1450,7 @@ static int mds_get_space(struct obd_device *obd, struct obd_quotactl *oqctl)
 
         /* get block usage from OSS */
         soqc->qc_dqblk.dqb_curspace = 0;
-        rc = obd_quotactl(obd->u.mds.mds_lov_exp, soqc);
+        rc = obd_quotactl(obd->u.mds.mds_osc_exp, soqc);
         if (!rc || rc == -EREMOTEIO) {
                 oqctl->qc_dqblk.dqb_curspace = soqc->qc_dqblk.dqb_curspace;
                 oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
@@ -1574,7 +1574,7 @@ dquot_recovery(struct obd_device *obd, unsigned int id, unsigned short type)
         qctl->qc_type = type;
         qctl->qc_id = id;
         qctl->qc_stat = QUOTA_RECOVERING;
-        rc = obd_quotactl(mds->mds_lov_exp, qctl);
+        rc = obd_quotactl(mds->mds_osc_exp, qctl);
         if (rc)
                 GOTO(out, rc);
         total_limits = qctl->qc_dqblk.dqb_bhardlimit;
@@ -1629,7 +1629,7 @@ static int qmaster_recovery_main(void *arg)
         /* for mds */
         class_incref(obd, "qmaster_recovd_mds", obd);
         /* for lov */
-        class_incref(mds->mds_lov_obd, "qmaster_recovd_lov", mds->mds_lov_obd);
+        class_incref(mds->mds_osc_obd, "qmaster_recovd_lov", mds->mds_osc_obd);
 
         cfs_complete(&data->comp);
 
@@ -1664,7 +1664,7 @@ free:
                         OBD_FREE_PTR(dqid);
                 }
         }
-        class_decref(mds->mds_lov_obd, "qmaster_recovd_lov", mds->mds_lov_obd);
+        class_decref(mds->mds_osc_obd, "qmaster_recovd_lov", mds->mds_osc_obd);
         class_decref(obd, "qmaster_recovd_mds", obd);
         RETURN(rc);
 }

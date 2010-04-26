@@ -253,7 +253,7 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
                 }
 
                 if (rc == 0 && global && is_master)
-                        rc = obd_quotactl(obd->u.mds.mds_lov_exp, oqctl);
+                        rc = obd_quotactl(obd->u.mds.mds_osc_exp, oqctl);
         }
 
         if (is_master)

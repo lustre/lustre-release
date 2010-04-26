@@ -149,7 +149,7 @@ static int mds_lov_presetup (struct mds_obd *mds, struct lustre_cfg *lcfg)
 static int mds_lov_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_device *osc = mds->mds_lov_obd;
+        struct obd_device *osc = mds->mds_osc_obd;
         ENTRY;
 
         if (mds->mds_profile) {
@@ -171,7 +171,7 @@ static int mds_lov_clean(struct obd_device *obd)
         osc->obd_fail = obd->obd_fail;
 
         /* Cleanup the lov */
-        obd_disconnect(mds->mds_lov_exp);
+        obd_disconnect(mds->mds_osc_exp);
         class_manual_cleanup(osc);
 
         RETURN(0);
@@ -247,7 +247,7 @@ int mds_postrecov(struct obd_device *obd)
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
         /* This means that we have to hack obd_notify to think we're obd_set_up
            during mds_lov_connect. */
-        obd_notify(obd->u.mds.mds_lov_obd, NULL,
+        obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
 
@@ -258,7 +258,7 @@ int mds_postrecov(struct obd_device *obd)
 static int mds_lov_early_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_device *osc = mds->mds_lov_obd;
+        struct obd_device *osc = mds->mds_osc_obd;
 
         if (!osc || (!obd->obd_force && !obd->obd_fail))
                 return(0);
@@ -289,7 +289,7 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 if (ctxt)
                         llog_cleanup(ctxt);
                 rc = obd_llog_finish(obd, 0);
-                mds->mds_lov_exp = NULL;
+                mds->mds_osc_exp = NULL;
                 cfs_up_write(&mds->mds_notify_lock);
                 break;
         }
@@ -430,7 +430,7 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        mds->mds_lov_exp = NULL;
+        mds->mds_osc_exp = NULL;
 
         if (obd->obd_fail)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
