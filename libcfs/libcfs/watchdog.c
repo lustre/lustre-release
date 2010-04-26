@@ -48,6 +48,7 @@ struct lc_watchdog {
         cfs_list_t            lcw_list;
         cfs_time_t            lcw_last_touched;
         cfs_task_t           *lcw_task;
+        cfs_atomic_t          lcw_refcount;
 
         void                (*lcw_callback)(pid_t, void *);
         void                 *lcw_data;
@@ -99,7 +100,6 @@ static cfs_list_t lcw_pending_timers = \
 /* Last time a watchdog expired */
 static cfs_time_t lcw_last_watchdog_time;
 static int lcw_recent_watchdog_count;
-static cfs_spinlock_t lcw_last_watchdog_lock = CFS_SPIN_LOCK_UNLOCKED;
 
 static void
 lcw_dump(struct lc_watchdog *lcw)
@@ -132,10 +132,6 @@ lcw_dump(struct lc_watchdog *lcw)
 static void lcw_cb(ulong_ptr_t data)
 {
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
-        cfs_time_t current_time;
-        cfs_duration_t delta_time;
-        struct timeval timediff;
-
         ENTRY;
 
         if (lcw->lcw_state != LC_WATCHDOG_ENABLED) {
@@ -144,17 +140,55 @@ static void lcw_cb(ulong_ptr_t data)
         }
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
-        current_time = cfs_time_current();
 
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+        cfs_list_add(&lcw->lcw_list, &lcw_pending_timers);
+        cfs_waitq_signal(&lcw_event_waitq);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
+
+        EXIT;
+}
+
+static inline void lcw_get(struct lc_watchdog *lcw)
+{
+        cfs_atomic_inc(&lcw->lcw_refcount);
+}
+
+static inline void lcw_put(struct lc_watchdog *lcw)
+{
+        if (cfs_atomic_dec_and_test(&lcw->lcw_refcount)) {
+                LASSERT(cfs_list_empty(&lcw->lcw_list));
+                LIBCFS_FREE(lcw, sizeof(*lcw));
+        }
+}
+
+static int is_watchdog_fired(void)
+{
+        int rc;
+
+        if (cfs_test_bit(LCW_FLAG_STOP, &lcw_flags))
+                return 1;
+
+        cfs_spin_lock_bh(&lcw_pending_timers_lock);
+        rc = !cfs_list_empty(&lcw_pending_timers);
+        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
+        return rc;
+}
+
+static void lcw_dump_stack(struct lc_watchdog *lcw)
+{
+        cfs_time_t      current_time;
+        cfs_duration_t  delta_time;
+        struct timeval  timediff;
+
+        current_time = cfs_time_current();
         delta_time = cfs_time_sub(current_time, lcw->lcw_last_touched);
         cfs_duration_usec(delta_time, &timediff);
 
-        /* Check to see if we should throttle the watchdog timer to avoid
+        /*
+         * Check to see if we should throttle the watchdog timer to avoid
          * too many dumps going to the console thus triggering an NMI.
-         * Normally we would not hold the spin lock over the CWARN but in
-         * this case we hold it to ensure non ratelimited lcw_dumps are not
-         * interleaved on the console making them hard to read. */
-        cfs_spin_lock_bh(&lcw_last_watchdog_lock);
+         */
         delta_time = cfs_duration_sec(cfs_time_sub(current_time,
                                                    lcw_last_watchdog_time));
 
@@ -176,8 +210,6 @@ static void lcw_cb(ulong_ptr_t data)
                         lcw_recent_watchdog_count = 0;
                 }
 
-		/* This warning should appear on the console, but may not get
-		 * into the logs since we're running in a softirq handler */
                 LCONSOLE_WARN("Service thread pid %u was inactive for "
                               "%lu.%.02lus. The thread might be hung, or it "
                               "might only be slow and will resume later. "
@@ -187,39 +219,14 @@ static void lcw_cb(ulong_ptr_t data)
                               timediff.tv_sec,
                               timediff.tv_usec / 10000);
                 lcw_dump(lcw);
-	}
-
-        cfs_spin_unlock_bh(&lcw_last_watchdog_lock);
-        cfs_spin_lock_bh(&lcw_pending_timers_lock);
-
-        if (cfs_list_empty(&lcw->lcw_list)) {
-                cfs_list_add(&lcw->lcw_list, &lcw_pending_timers);
-                cfs_waitq_signal(&lcw_event_waitq);
         }
-
-        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
-
-        EXIT;
-}
-
-static int is_watchdog_fired(void)
-{
-        int rc;
-
-        if (cfs_test_bit(LCW_FLAG_STOP, &lcw_flags))
-                return 1;
-
-        cfs_spin_lock_bh(&lcw_pending_timers_lock);
-        rc = !cfs_list_empty(&lcw_pending_timers);
-        cfs_spin_unlock_bh(&lcw_pending_timers_lock);
-        return rc;
 }
 
 static int lcw_dispatch_main(void *data)
 {
         int                 rc = 0;
         unsigned long       flags;
-        struct lc_watchdog *lcw;
+        struct lc_watchdog *lcw, *lcwcb;
 
         ENTRY;
 
@@ -249,23 +256,35 @@ static int lcw_dispatch_main(void *data)
                         break;
                 }
 
+                lcwcb = NULL;
                 cfs_spin_lock_bh(&lcw_pending_timers_lock);
                 while (!cfs_list_empty(&lcw_pending_timers)) {
 
                         lcw = cfs_list_entry(lcw_pending_timers.next,
                                          struct lc_watchdog,
                                          lcw_list);
+                        lcw_get(lcw);
                         cfs_list_del_init(&lcw->lcw_list);
                         cfs_spin_unlock_bh(&lcw_pending_timers_lock);
 
-                        CDEBUG(D_INFO, "found lcw for pid " LPPID "\n", lcw->lcw_pid);
+                        CDEBUG(D_INFO, "found lcw for pid " LPPID "\n",
+                               lcw->lcw_pid);
+                        lcw_dump_stack(lcw);
 
-                        if (lcw->lcw_state != LC_WATCHDOG_DISABLED)
-                                lcw->lcw_callback(lcw->lcw_pid, lcw->lcw_data);
-
+                        if (lcwcb == NULL &&
+                            lcw->lcw_state != LC_WATCHDOG_DISABLED)
+                                lcwcb = lcw;
+                        else
+                                lcw_put(lcw);
                         cfs_spin_lock_bh(&lcw_pending_timers_lock);
                 }
                 cfs_spin_unlock_bh(&lcw_pending_timers_lock);
+
+                /* only do callback once for this batch of lcws */
+                if (lcwcb != NULL) {
+                        lcwcb->lcw_callback(lcwcb->lcw_pid, lcwcb->lcw_data);
+                        lcw_put(lcwcb);
+                }
         }
 
         cfs_complete(&lcw_stop_completion);
@@ -335,6 +354,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 
         CFS_INIT_LIST_HEAD(&lcw->lcw_list);
         cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);
+        cfs_atomic_set(&lcw->lcw_refcount, 1);
 
         cfs_down(&lcw_refcount_sem);
         if (++lcw_refcount == 1)
@@ -378,6 +398,7 @@ void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
 {
         ENTRY;
         LASSERT(lcw != NULL);
+        LASSERT(cfs_atomic_read(&lcw->lcw_refcount) > 0);
 
         cfs_spin_lock_bh(&lcw_pending_timers_lock);
         cfs_list_del_init(&lcw->lcw_list);
@@ -397,6 +418,7 @@ void lc_watchdog_disable(struct lc_watchdog *lcw)
 {
         ENTRY;
         LASSERT(lcw != NULL);
+        LASSERT(cfs_atomic_read(&lcw->lcw_refcount) > 0);
 
         cfs_spin_lock_bh(&lcw_pending_timers_lock);
         if (!cfs_list_empty(&lcw->lcw_list))
@@ -414,6 +436,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 {
         ENTRY;
         LASSERT(lcw != NULL);
+        LASSERT(cfs_atomic_read(&lcw->lcw_refcount) > 0);
 
         cfs_timer_disarm(&lcw->lcw_timer);
 
@@ -423,13 +446,12 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
         if (!cfs_list_empty(&lcw->lcw_list))
                 cfs_list_del_init(&lcw->lcw_list);
         cfs_spin_unlock_bh(&lcw_pending_timers_lock);
+        lcw_put(lcw);
 
         cfs_down(&lcw_refcount_sem);
         if (--lcw_refcount == 0)
                 lcw_dispatch_stop();
         cfs_up(&lcw_refcount_sem);
-
-        LIBCFS_FREE(lcw, sizeof(*lcw));
 
         EXIT;
 }
