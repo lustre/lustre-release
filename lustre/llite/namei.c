@@ -197,6 +197,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 break;
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
+                struct ll_inode_info *lli;
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
                 struct lu_fid *fid;
 
@@ -243,8 +244,9 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_md_real_close(inode, flags);
                 }
 
+                lli = ll_i2info(inode);
                 if (bits & MDS_INODELOCK_UPDATE)
-                        ll_i2info(inode)->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
+                        lli->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
 
                 if (S_ISDIR(inode->i_mode) &&
                      (bits & MDS_INODELOCK_UPDATE)) {
@@ -252,6 +254,18 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
                         ll_drop_negative_dentry(inode);
+                }
+
+                if ((bits & MDS_INODELOCK_LOOKUP) &&
+                    !cfs_list_empty(&lli->lli_sa_dentry)) {
+                        struct ll_dentry_data *lld, *next;
+
+                        cfs_spin_lock(&lli->lli_sa_lock);
+                        cfs_list_for_each_entry_safe(lld, next,
+                                                     &lli->lli_sa_dentry,
+                                                     lld_sa_alias)
+                                cfs_list_del_init(&lld->lld_sa_alias);
+                        cfs_spin_unlock(&lli->lli_sa_lock);
                 }
 
                 if (inode->i_sb->s_root &&
@@ -433,12 +447,8 @@ void ll_lookup_it_alias(struct dentry **de, struct inode *inode, __u32 bits)
                 struct ll_dentry_data *lld = ll_d2d(*de);
 
                 /* just make sure the ll_dentry_data is ready */
-                if (unlikely(lld == NULL)) {
-                        ll_set_dd(*de);
-                        lld = ll_d2d(*de);
-                        if (likely(lld != NULL))
-                                lld->lld_sa_generation = 0;
-                }
+                if (unlikely(lld == NULL))
+                        ll_dops_init(*de, 1);
         }
         /* we have lookup look - unhide dentry */
         if (bits & MDS_INODELOCK_LOOKUP) {
@@ -450,8 +460,7 @@ void ll_lookup_it_alias(struct dentry **de, struct inode *inode, __u32 bits)
 }
 
 int ll_lookup_it_finish(struct ptlrpc_request *request,
-                        struct lookup_intent *it, void *data,
-                        struct inode **alias)
+                        struct lookup_intent *it, void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
@@ -475,8 +484,10 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                 md_set_lock_data(sbi->ll_md_exp,
                                  &it->d.lustre.it_lock_handle, inode, &bits);
 
-                if (alias != NULL) {
-                        *alias = inode;
+                if (icbd->bits != NULL)
+                        *icbd->bits = bits;
+                if (icbd->icbd_alias != NULL) {
+                        *icbd->icbd_alias = inode;
                         RETURN(0);
                 }
 
@@ -563,6 +574,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
+        icbd.icbd_alias  = NULL;
+        icbd.bits        = NULL;
 
         if (it->it_op & IT_CREAT ||
             (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT))
@@ -584,7 +597,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
-        rc = ll_lookup_it_finish(req, it, &icbd, NULL);
+        rc = ll_lookup_it_finish(req, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, retval = ERR_PTR(rc));

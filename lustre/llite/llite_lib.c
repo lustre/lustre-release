@@ -788,6 +788,8 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_rmtperm_utime = 0;
         cfs_sema_init(&lli->lli_rmtperm_sem, 1);
         CFS_INIT_LIST_HEAD(&lli->lli_oss_capas);
+        cfs_spin_lock_init(&lli->lli_sa_lock);
+        CFS_INIT_LIST_HEAD(&lli->lli_sa_dentry);
 }
 
 int ll_fill_super(struct super_block *sb)

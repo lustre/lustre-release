@@ -167,7 +167,7 @@ static int ll_ddelete(struct dentry *de)
         RETURN(0);
 }
 
-void ll_set_dd(struct dentry *de)
+int ll_set_dd(struct dentry *de)
 {
         ENTRY;
         LASSERT(de != NULL);
@@ -181,16 +181,19 @@ void ll_set_dd(struct dentry *de)
 
                 OBD_ALLOC_PTR(lld);
                 if (likely(lld != NULL)) {
+                        CFS_INIT_LIST_HEAD(&lld->lld_sa_alias);
                         lock_dentry(de);
                         if (likely(de->d_fsdata == NULL))
                                 de->d_fsdata = lld;
                         else
                                 OBD_FREE_PTR(lld);
                         unlock_dentry(de);
+                } else {
+                        RETURN(-ENOMEM);
                 }
         }
 
-        EXIT;
+        RETURN(0);
 }
 
 void ll_intent_drop_lock(struct lookup_intent *it)

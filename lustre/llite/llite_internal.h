@@ -75,6 +75,7 @@ struct ll_dentry_data {
         struct lookup_intent    *lld_it;
 #endif
         unsigned int             lld_sa_generation;
+        cfs_list_t               lld_sa_alias;
 };
 
 #define ll_d2d(de) ((struct ll_dentry_data*)((de)->d_fsdata))
@@ -174,7 +175,10 @@ struct ll_inode_info {
         struct obd_capa        *lli_mds_capa;
         cfs_list_t              lli_oss_capas;
 
-        /* metadata stat-ahead */
+        /* metadata statahead */
+        /* protect statahead stuff: lli_opendir_pid, lli_opendir_key, lli_sai,
+         * lli_sa_dentry, and so on. */
+        cfs_spinlock_t          lli_sa_lock;
         /*
          * "opendir_pid" is the token when lookup/revalid -- I am the owner of
          * dir statahead.
@@ -186,6 +190,7 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
+        cfs_list_t              lli_sa_dentry;
         struct cl_object       *lli_clob;
         /* the most recent timestamps obtained from mds */
         struct ost_lvb          lli_lvb;
@@ -521,9 +526,11 @@ static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 }
 
 struct it_cb_data {
-        struct inode *icbd_parent;
+        struct inode  *icbd_parent;
         struct dentry **icbd_childp;
-        obd_id hash;
+        obd_id        hash;
+        struct inode  **icbd_alias;
+        __u32         *bits;
 };
 
 __u32 ll_i2suppgid(struct inode *i);
@@ -583,8 +590,7 @@ struct lookup_intent *ll_convert_intent(struct open_intent *oit,
 #endif
 void ll_lookup_it_alias(struct dentry **de, struct inode *inode, __u32 bits);
 int ll_lookup_it_finish(struct ptlrpc_request *request,
-                        struct lookup_intent *it, void *data,
-                        struct inode **alias);
+                        struct lookup_intent *it, void *data);
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
@@ -674,7 +680,7 @@ extern struct dentry_operations ll_d_ops;
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 int ll_drop_dentry(struct dentry *dentry);
-extern void ll_set_dd(struct dentry *de);
+extern int ll_set_dd(struct dentry *de);
 int ll_drop_dentry(struct dentry *dentry);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
@@ -1118,6 +1124,7 @@ struct ll_statahead_info {
         unsigned int            sai_skip_hidden;/* skipped hidden dentry count */
         unsigned int            sai_ls_all:1;   /* "ls -al", do stat-ahead for
                                                  * hidden entries */
+        unsigned int            sai_nolock;     /* without lookup lock case */
         cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
         struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
         cfs_list_t              sai_entries_sent;     /* entries sent out */
@@ -1144,10 +1151,10 @@ void ll_statahead_mark(struct inode *dir, struct dentry *dentry)
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return;
 
-        cfs_spin_lock(&lli->lli_lock);
+        cfs_spin_lock(&lli->lli_sa_lock);
         if (likely(lli->lli_sai != NULL && ldd != NULL))
                 ldd->lld_sa_generation = lli->lli_sai->sai_generation;
-        cfs_spin_unlock(&lli->lli_lock);
+        cfs_spin_unlock(&lli->lli_sa_lock);
 }
 
 static inline
@@ -1189,12 +1196,16 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         return do_statahead_enter(dir, dentryp, lookup);
 }
 
-static void inline ll_dops_init(struct dentry *de, int block)
+static int inline ll_dops_init(struct dentry *de, int block)
 {
         struct ll_dentry_data *lld = ll_d2d(de);
+        int rc = 0;
 
         if (lld == NULL && block != 0) {
-                ll_set_dd(de);
+                rc = ll_set_dd(de);
+                if (rc)
+                        return rc;
+
                 lld = ll_d2d(de);
         }
 
@@ -1202,6 +1213,7 @@ static void inline ll_dops_init(struct dentry *de, int block)
                 lld->lld_sa_generation = 0;
 
         de->d_op = &ll_d_ops;
+        return rc;
 }
 
 /* llite ioctl register support rountine */

@@ -844,11 +844,12 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
         ENTRY;
 
         fid_build_reg_res_name(fid, &res_id);
-        /* As not all attributes are kept under update lock, e.g.
-           owner/group/acls are under lookup lock, we need both
-           ibits for GETATTR. */
-        policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
-                MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
+        /* Firstly consider the bits */
+        if (bits && *bits)
+                policy.l_inodebits.bits = *bits;
+        else
+                policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
+                        MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
 
         mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
@@ -1015,8 +1016,12 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         struct ptlrpc_request   *req;
         struct obd_device       *obddev = class_exp2obd(exp);
         struct ldlm_res_id       res_id;
+        /*XXX: Both MDS_INODELOCK_LOOKUP and MDS_INODELOCK_UPDATE are needed
+         *     for statahead currently. Consider CMD in future, such two bits
+         *     maybe managed by different MDS, should be adjusted then. */
         ldlm_policy_data_t       policy = {
-                                        .l_inodebits = { MDS_INODELOCK_LOOKUP }
+                                        .l_inodebits = { MDS_INODELOCK_LOOKUP | 
+                                                         MDS_INODELOCK_UPDATE }
                                  };
         int                      rc;
         int                      flags = LDLM_FL_HAS_INTENT;
