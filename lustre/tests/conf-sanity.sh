@@ -32,8 +32,9 @@ if [ -n "$MDSSIZE" ]; then
     STORED_MDSSIZE=$MDSSIZE
 fi
 # use small MDS + OST size to speed formatting time
-MDSSIZE=40000
-OSTSIZE=40000
+# do not use too small MDSSIZE/OSTSIZE, which affect the default jouranl size
+MDSSIZE=200000
+OSTSIZE=200000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 require_dsh_mds || exit 0
