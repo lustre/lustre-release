@@ -177,6 +177,8 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         rc = cfs_kernel_thread(target_quotacheck_thread, qta,
                                CLONE_VM|CLONE_FILES);
         if (rc >= 0) {
+                /* target_quotacheck_thread will drop the ref on exp and release
+                 * obt_quotachecking */
                 CDEBUG(D_INFO, "%s: target_quotacheck_thread: %d\n",
                        obd->obd_name, rc);
                 RETURN(0);

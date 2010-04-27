@@ -655,7 +655,7 @@ static int mds_quota_setup(struct obd_device *obd)
         mds->mds_quota_info.qi_version = LUSTRE_QUOTA_V2;
         cfs_sema_init(&obt->obt_quotachecking, 1);
         /* initialize quota master and quota context */
-        cfs_sema_init(&mds->mds_qonoff_sem, 1);
+        cfs_init_rwsem(&mds->mds_qonoff_sem);
         rc = qctxt_init(obd, dqacq_handler);
         if (rc) {
                 CERROR("%s: initialize quota context failed! (rc:%d)\n",
@@ -704,9 +704,9 @@ static int mds_quota_fs_cleanup(struct obd_device *obd)
         memset(&oqctl, 0, sizeof(oqctl));
         oqctl.qc_type = UGQUOTA;
 
-        cfs_down(&mds->mds_qonoff_sem);
+        cfs_down_write(&mds->mds_qonoff_sem);
         mds_admin_quota_off(obd, &oqctl);
-        cfs_up(&mds->mds_qonoff_sem);
+        cfs_up_write(&mds->mds_qonoff_sem);
         RETURN(0);
 }
 

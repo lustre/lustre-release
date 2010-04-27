@@ -215,6 +215,7 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
         int id, is_master, rc = 0, local; /* means we need a local quotaon */
 
         cfs_down(&obt->obt_quotachecking);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         id = UGQUOTA2LQC(oqctl->qc_type);
         local = (obt->obt_qctxt.lqc_flags & id) != id;
 
@@ -223,12 +224,10 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
 
         is_master = !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
         if (is_master) {
-                cfs_down(&obd->u.mds.mds_qonoff_sem);
+                cfs_down_write(&obd->u.mds.mds_qonoff_sem);
                 if (local) {
-                        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                         /* turn on cluster wide quota */
                         rc = mds_admin_quota_on(obd, oqctl);
-                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                         if (rc && rc != -ENOENT)
                                 CERROR("%s: %s admin quotaon failed. rc=%d\n",
                                        obd->obd_name, global ? "global":"local",
@@ -238,7 +237,6 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
 
         if (rc == 0) {
                 if (local) {
-                        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                         rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
                         if (rc) {
                                 if (rc != -ENOENT)
@@ -249,7 +247,6 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
                                 obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
                                 build_lqs(obd);
                         }
-                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 }
 
                 if (rc == 0 && global && is_master)
@@ -257,8 +254,9 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
         }
 
         if (is_master)
-                cfs_up(&obd->u.mds.mds_qonoff_sem);
+                cfs_up_write(&obd->u.mds.mds_qonoff_sem);
 
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cfs_up(&obt->obt_quotachecking);
 
         return rc;

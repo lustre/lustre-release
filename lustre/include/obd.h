@@ -529,7 +529,7 @@ struct mds_obd {
 
 
         struct lustre_quota_info         mds_quota_info;
-        cfs_semaphore_t                  mds_qonoff_sem;
+        cfs_rw_semaphore_t               mds_qonoff_sem;
         cfs_semaphore_t                  mds_health_sem;
         unsigned long                    mds_fl_user_xattr:1,
                                          mds_fl_acl:1,

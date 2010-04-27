@@ -2219,6 +2219,12 @@ ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
         loff_t p = pos;
         int rc;
 
+        if (!f && !inode) {
+                CERROR("lustre_read_quota failed for no quota file!\n");
+                libcfs_debug_dumpstack(NULL);
+                return -EINVAL;
+        }
+
         /* Support for both adm and op quota files must be provided */
         if (f) {
                 rc = fsfilt_ext3_read_record(f, buf, count, &p);

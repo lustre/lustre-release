@@ -103,15 +103,8 @@ int check_quota_file(struct file *f, struct inode *inode, int type,
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
         const uint *quota_versions = lustre_initqversions[version];
 
-        if (!f && !inode) {
-                CERROR("check_quota_file failed!\n");
-                libcfs_debug_dumpstack(NULL);
-                return -EINVAL;
-        }
-
         size = lustre_read_quota(f, inode, type, (char *)&dqhead,
                                  sizeof(struct lustre_disk_dqheader), 0);
-
         if (size != sizeof(struct lustre_disk_dqheader))
                 return -EINVAL;
         if (le32_to_cpu(dqhead.dqh_magic) != quota_magics[type] ||
