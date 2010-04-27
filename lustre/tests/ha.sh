@@ -197,9 +197,11 @@ ha_process_arguments()
 ha_on()
 {
     local nodes=$1
+    local rc=0
 
     shift
-    pdsh -w $nodes PATH=/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin "$@"
+    pdsh -w $nodes PATH=/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin "$@" || rc=$?
+    return $rc
 }
 
 ha_trap_exit()
@@ -254,7 +256,7 @@ ha_dump_logs()
 
     ha_lock "$lock"
     ha_info "Dumping lctl log to $file"
-    ha_on $nodes "lctl dk >$file"
+    ha_on $nodes "lctl dk >$file" || true
     ha_unlock "$lock"
 }
 
@@ -394,8 +396,12 @@ ha_wait_loads()
     rm -f "${ha_status_files[@]}"
     for file in "${ha_status_files[@]}"; do
         until [ -e "$ha_stop_file" ] ||
-              [ -e "$file" ] ||
-              (($(date +%s) >= end)); do
+              [ -e "$file" ]; do
+            if (($(date +%s) >= end)); then
+                ha_info "Timed out while waiting for load status file $file"
+                touch "$ha_fail_file"
+                return 1
+            fi
             ha_sleep 1 >/dev/null
         done
     done
@@ -474,11 +480,11 @@ ha_killer()
         ha_sleep $(ha_rand 10)
         ha_power_down $node
         ha_sleep 10
-        ha_wait_loads || return
+        ha_wait_loads || break
 
         if [ -e $ha_stop_file ]; then
             ha_power_up $node
-            break;
+            break
         fi
 
         ha_info "Bringing $node back"
@@ -489,7 +495,7 @@ ha_killer()
         # Wait for the failback to start.
         #
         ha_sleep 60
-        ha_wait_loads || return
+        ha_wait_loads || break
 
         ha_sleep $(ha_rand 20)
 
@@ -508,15 +514,14 @@ ha_main()
     ha_on ${ha_clients[0]} mkdir "$ha_test_dir"
 
     ha_start_loads
-    ha_wait_loads
-
-    if $ha_workloads_only; then
-        ha_sleep $((60 * 60))
-    else
-        ha_killer
-        ha_dump_logs
+    if ha_wait_loads; then
+        if $ha_workloads_only; then
+            ha_sleep $((60 * 60))
+        else
+            ha_killer
+        fi
     fi
-
+    ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
     ha_stop_loads
 
     if [ -e "$ha_fail_file" ]; then
