@@ -134,13 +134,6 @@ Details    : disable the per-thread data (current->journal_info) containing
 	     the lock info during I/O to work around the issue for short tem
 
 Severity   : normal
-Bugzilla   : 19933
-Description: control DCACHE_LUSTRE_INVALID flag with MDS_INODELOCK_LOOKUP lock
-Details    : DCACHE_LUSTRE_INVALID is controlled by MDS_INODELOCK_LOOKUP
-	     lock which is corresponding to "IT_LOOKUP", do not skip invalidate
-	     for other intent.
-
-Severity   : normal
 Bugzilla   : 20997
 Description: Cannot send after transport shutdown
 Details    : Clear imp_vbr_failed flag upon eviction
