@@ -785,14 +785,14 @@ int lr_create(struct lr_info *info)
         /* Is f2p(pfid) present on the target? If not, the parent has
            moved */
         if (!mkspecial) {
-                snprintf(info->dest, PATH_MAX, "%s%s", status->ls_targets[0],
+                snprintf(info->dest, PATH_MAX, "%s/%s", status->ls_targets[0],
                         info->path);
                 if (access(info->dest, F_OK) != 0)
                         mkspecial = 1;
         }
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
-                snprintf(info->dest, PATH_MAX, "%s%s",
+                snprintf(info->dest, PATH_MAX, "%s/%s",
                         status->ls_targets[info->target_no], info->savedpath);
                 lr_get_FID_PATH(status->ls_source, info->tfid, info->src,
                                     PATH_MAX);
@@ -831,7 +831,7 @@ int lr_remove(struct lr_info *info)
                         rc = rc1;
                         continue;
                 }
-                snprintf(info->dest, PATH_MAX, "%s%s/%s",
+                snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                         status->ls_targets[info->target_no], info->path,
                         info->name);
 
@@ -871,13 +871,13 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
              info->target_no++) {
 
                 if (!rc_dest) {
-                        snprintf(info->dest, PATH_MAX, "%s%s",
+                        snprintf(info->dest, PATH_MAX, "%s/%s",
                                 status->ls_targets[info->target_no],
                                 ext->path);
                         if (access(info->dest, F_OK) != 0) {
                                 rc_dest = -errno;
                         } else {
-                                snprintf(info->dest, PATH_MAX, "%s%s/%s",
+                                snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                                         status->ls_targets[info->target_no],
                                         ext->path, ext->name);
                         }
@@ -890,7 +890,7 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
                 }
 
                 if (!rc_src)
-                        snprintf(info->src, PATH_MAX, "%s%s/%s",
+                        snprintf(info->src, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
                                 info->path, info->name);
                 if (rc_src == -ENOENT || (access(info->src, F_OK) != 0 &&
@@ -957,11 +957,11 @@ int lr_link(struct lr_info *info)
                         len = strlen(info->path) - strlen(info->name);
                         if (len > 0 && strcmp(info->path + len,
                                               info->name) == 0)
-                                snprintf(info->dest, PATH_MAX, "%s%s",
+                                snprintf(info->dest, PATH_MAX, "%s/%s",
                                         status->ls_targets[info->target_no],
                                         info->path);
                         else if (info->src[0] == 0)
-                                snprintf(info->src, PATH_MAX, "%s%s",
+                                snprintf(info->src, PATH_MAX, "%s/%s",
                                         status->ls_targets[info->target_no],
                                         info->path);
                 }
@@ -1014,7 +1014,7 @@ int lr_setattr(struct lr_info *info)
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
 
-                snprintf(info->dest, PATH_MAX, "%s%s",
+                snprintf(info->dest, PATH_MAX, "%s/%s",
                          status->ls_targets[info->target_no], info->path);
                 lr_debug(DINFO, "setattr: %s %s %s", info->src, info->dest,
                          info->tfid);
@@ -1045,7 +1045,7 @@ int lr_setxattr(struct lr_info *info)
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
 
-                snprintf(info->dest, PATH_MAX, "%s%s",
+                snprintf(info->dest, PATH_MAX, "%s/%s",
                         status->ls_targets[info->target_no], info->path);
                 lr_debug(DINFO, "setxattr: %s %s %s\n", info->src, info->dest,
                          info->tfid);

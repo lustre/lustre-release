@@ -504,7 +504,7 @@ static int mdd_path_current(const struct lu_env *env,
                        PFID(&pli->pli_fid));
                 GOTO(out, rc = -EAGAIN);
         }
-
+        ptr++; /* skip leading / */
         memmove(pli->pli_path, ptr, pli->pli_path + pli->pli_pathlen - ptr);
 
         EXIT;
@@ -535,8 +535,7 @@ static int mdd_path(const struct lu_env *env, struct md_object *obj,
                 RETURN(-EOVERFLOW);
 
         if (mdd_is_root(mdo2mdd(obj), mdd_object_fid(md2mdd_obj(obj)))) {
-                path[0] = '/';
-                path[1] = '\0';
+                path[0] = '\0';
                 RETURN(0);
         }
 

@@ -6882,7 +6882,7 @@ test_161() {
     rm $DIR/$tdir/$tfile
     # rename
     mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
-    if [ "$($LFS fid2path $DIR --link 1 $FID)" != "/$tdir/foo2/maggie" ]
+    if [ "$($LFS fid2path $FSNAME --link 1 $FID)" != "$tdir/foo2/maggie" ]
 	then
 	$LFS fid2path $DIR $FID
 	err17935 "bad link rename"
@@ -6929,20 +6929,20 @@ test_162() {
     mkdir -p $DIR/$tdir/d2/p/q/r
 	# regular file
     FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[')
-    check_path "/$tdir/d2/$tfile" $DIR $FID --link 0
+    check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0
 
 	# softlink
     ln -s $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/slink
     FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[')
-    check_path "/$tdir/d2/p/q/r/slink" $DIR $FID --link 0
+    check_path "$tdir/d2/p/q/r/slink" $FSNAME $FID --link 0
 
 	# hardlink
     ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
     mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
     FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[')
     # fid2path dir/fsname should both work
-    check_path "/$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
-    check_path "/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
+    check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
+    check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
 
     # hardlink count: check that there are 2 links
     # Doesnt work with CMD yet: 17935
@@ -6951,7 +6951,7 @@ test_162() {
 
 	# hardlink indexing: remove the first link
     rm $DIR/$tdir/d2/p/q/r/hlink
-    check_path "/$tdir/d2/a/b/c/new_file" $DIR $FID --link 0
+    check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 0
 
 	return 0
 }

@@ -198,7 +198,7 @@ command_t cmdlist[] = {
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
          "       -I can be used instead of --inode-hardlimit"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx]\n" 
+         "usage: quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx]\n"
          "             [<-u|-g> <uname>|<uid>|<gname>|<gid>] <filesystem>\n"
          "       quota [-o obd_uuid|-i mdt_idx|-I ost_idx] -t <-u|-g> <filesystem>"},
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
@@ -625,7 +625,7 @@ static int lfs_find(int argc, char **argv)
                                                 "be found.\n", optarg);
                                         return -1;
                                 }
-                        }           
+                        }
                         param.exclude_gid = !!neg_opt;
                         param.check_gid = 1;
                         break;
@@ -1748,7 +1748,7 @@ int lfs_setquota(int argc, char **argv)
                                 qctl.qc_id = strtoul(optarg, &endptr, 10);
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "error: can't find id "
-                                                "for name %s\n", optarg); 
+                                                "for name %s\n", optarg);
                                         return CMD_HELP;
                                 }
                         }
@@ -2459,9 +2459,15 @@ static int lfs_fid2path(int argc, char **argv)
                 }
 
                 if (printcur)
-                        fprintf(stdout, "%lld %s\n", rectmp, path);
-                else
-                        fprintf(stdout, "%s\n", path);
+                        fprintf(stdout, "%lld ", rectmp);
+                if (device[0] == '/') {
+                        fprintf(stdout, "%s", device);
+                        if (device[strlen(device) - 1] != '/')
+                                fprintf(stdout, "/");
+                } else if (path[0] == '\0') {
+                        fprintf(stdout, "/");
+                }
+                fprintf(stdout, "%s\n", path);
 
                 if (linkno >= 0)
                         /* specified linkno */
