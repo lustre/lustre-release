@@ -14,7 +14,7 @@ EXTRA_VERSION_DELIMITER="."
 TARGET_DELIMITER="-"
 
 KERNEL_SRPM=kernel-source-$lnxmaj.$lnxrel.src.rpm
-SERIES=2.6-sles10.series
+SERIES=""
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@

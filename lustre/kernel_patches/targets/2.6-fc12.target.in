@@ -2,7 +2,7 @@ lnxmaj="2.6.31.5"
 lnxrel="127.fc12"
 
 KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
-SERIES=2.6-fc5.series
+SERIES=""
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 LUSTRE_VERSION=@VERSION@
 BASE_ARCHS="i686 x86_64"

@@ -2514,15 +2514,12 @@ lustre/include/Makefile
 lustre/include/lustre_ver.h
 lustre/include/linux/Makefile
 lustre/include/lustre/Makefile
-lustre/kernel_patches/targets/2.6-vanilla.target
-lustre/kernel_patches/targets/2.6-rhel4.target
 lustre/kernel_patches/targets/2.6-rhel5.target
-lustre/kernel_patches/targets/2.6-fc5.target
-lustre/kernel_patches/targets/2.6-patchless.target
 lustre/kernel_patches/targets/2.6-sles10.target
 lustre/kernel_patches/targets/2.6-sles11.target
 lustre/kernel_patches/targets/2.6-oel5.target
 lustre/kernel_patches/targets/2.6-fc11.target
+lustre/kernel_patches/targets/2.6-fc12.target
 lustre/ldlm/Makefile
 lustre/fid/Makefile
 lustre/fid/autoMakefile
