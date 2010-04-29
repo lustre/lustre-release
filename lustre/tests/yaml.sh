@@ -159,15 +159,20 @@ yml_log_test_status() {
 EOF
 }
 
-yml_log_sub_test() {
+yml_log_sub_test_begin() {
     cat <<EOF
         -
             name: $1
-            status: $2
-            duration: $3
-            return_code: $4
 EOF
-    shift 4
+}
+
+yml_log_sub_test_end() {
+    cat <<EOF
+            status: $1
+            duration: $2
+            return_code: $3
+EOF
+    shift 3
     if [ -z "$*" ]; then
         printf '            error:\n'
     else

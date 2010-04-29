@@ -2713,6 +2713,7 @@ run_one_logged() {
     rm -rf $LOGDIR/err
 
     echo
+    log_sub_test_begin test_${1}
     (run_one $1 "$2") 2>&1 | tee $test_log
     local RC=${PIPESTATUS[0]}
 
@@ -2722,7 +2723,7 @@ run_one_logged() {
     duration=$((`date +%s` - $BEFORE))
     pass "(${duration}s)"
     [ -f $LOGDIR/err ] && TEST_ERROR=$(cat $LOGDIR/err)
-    log_sub_test test_${1} $TEST_STATUS $duration "$RC" "$TEST_ERROR"
+    log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
 
     if [ -f $LOGDIR/err ]; then
         $FAIL_ON_ERROR && exit $RC
@@ -3929,8 +3930,12 @@ log_test() {
     yml_log_test $1 >> $YAML_LOG
 }
 
-log_sub_test() {
-    yml_log_sub_test $@ >> $YAML_LOG
+log_sub_test_begin() {
+    yml_log_sub_test_begin $@ >> $YAML_LOG
+}
+
+log_sub_test_end() {
+    yml_log_sub_test_end $@ >> $YAML_LOG
 }
 
 run_llverdev()
