@@ -168,8 +168,11 @@ yml_log_sub_test() {
             return_code: $4
 EOF
     shift 4
-    printf "            error: "
-    echo $@
+    if [ -z "$*" ]; then
+        printf '            error:\n'
+    else
+        printf '            error: "%q"\n' "$*"
+    fi
 }
 
 yml_log_sub_test_log() {
