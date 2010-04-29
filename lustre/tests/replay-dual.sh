@@ -521,7 +521,7 @@ test_21b() {
     while true; do
     test_21b_sub mds$num || break;
     let n_attempts=n_attempts+1
-    [ $n_attemtps -gt 3] &&
+    [ $n_attempts -gt 3 ] &&
         error "The test cannot check whether COS works or not: all renames are replied w/o COS"
     done
     restore_lustre_params < $param_file
