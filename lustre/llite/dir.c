@@ -1288,6 +1288,9 @@ out_free:
                                      sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
                 RETURN(0);
+        case LL_IOC_GET_CONNECT_FLAGS: {
+                RETURN(obd_iocontrol(cmd, sbi->ll_md_exp, 0, NULL, (void*)arg));
+        }
         case OBD_IOC_CHANGELOG_SEND:
         case OBD_IOC_CHANGELOG_CLEAR:
                 rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,

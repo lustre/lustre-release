@@ -139,7 +139,8 @@ struct obd_statfs {
 #define LL_IOC_LLOOP_INFO               _IOWR('f', 171, long)
 #define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 172, long)
 #define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
-#define LL_IOC_GET_MDTIDX               _IOR ('f', 174, int)
+#define LL_IOC_GET_CONNECT_FLAGS        _IOWR('f', 174, __u64 *)
+#define LL_IOC_GET_MDTIDX               _IOR ('f', 175, int)
 
 #define LL_IOC_HSM_CT_START             _IOW ('f', 178, struct lustre_kernelcomm *)
 

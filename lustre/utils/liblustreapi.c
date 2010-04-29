@@ -3244,5 +3244,21 @@ int llapi_copytool_free(struct hsm_action_list **hal)
         return 0;
 }
 
+int llapi_get_connect_flags(const char *mnt, __u64 *flags)
+{
+        DIR *root;
+        int rc;
 
+        root = opendir(mnt);
+        if (!root) {
+                llapi_err(LLAPI_MSG_ERROR, "open %s failed", mnt);
+                return -1;
+        }
 
+        rc = ioctl(dirfd(root), LL_IOC_GET_CONNECT_FLAGS, flags);
+        closedir(root);
+        if (rc < 0)
+                llapi_err(LLAPI_MSG_ERROR,
+                          "ioctl on %s for getting connect flags failed", mnt);
+        return rc;
+}

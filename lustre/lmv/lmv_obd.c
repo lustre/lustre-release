@@ -821,6 +821,10 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                                    sizeof(*icc), icc, NULL);
                 break;
         }
+        case LL_IOC_GET_CONNECT_FLAGS: {
+                rc = obd_iocontrol(cmd, lmv->tgts[0].ltd_exp, len, karg, uarg);
+                break;
+        }
 
         default : {
                 for (i = 0; i < count; i++) {
