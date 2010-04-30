@@ -369,9 +369,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 GOTO(out_sa, rc);
         }
 
-        if ((de->d_flags & DCACHE_LUSTRE_INVALID) == 0)
-                GOTO(out_sa, rc = 1);
-
         exp = ll_i2mdcexp(de->d_inode);
 
         /* Never execute intents for mount points.
@@ -390,6 +387,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
+
+        if (it->it_op == IT_LOOKUP && !(de->d_flags & DCACHE_LUSTRE_INVALID))
+                GOTO(out_sa, rc = 1);
 
         ll_prepare_mdc_op_data(&op_data, parent, de->d_inode,
                                de->d_name.name, de->d_name.len, 0, NULL);
