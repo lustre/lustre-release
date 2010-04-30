@@ -473,7 +473,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
         memset(oa, 0, sizeof(*oa));
         if (result == 0) {
                 oa->o_id = loi->loi_id;
-                oa->o_seq = loi->loi_seq;
+                oa->o_gr = loi->loi_gr;
                 oa->o_mtime = attr->cat_mtime;
                 oa->o_atime = attr->cat_atime;
                 oa->o_ctime = attr->cat_ctime;
@@ -635,7 +635,7 @@ static void osc_req_completion(const struct lu_env *env,
 
 /**
  * Implementation of struct cl_req_operations::cro_attr_set() for osc
- * layer. osc is responsible for struct obdo::o_id and struct obdo::o_seq
+ * layer. osc is responsible for struct obdo::o_id and struct obdo::o_gr
  * fields.
  */
 static void osc_req_attr_set(const struct lu_env *env,
@@ -658,7 +658,7 @@ static void osc_req_attr_set(const struct lu_env *env,
                 oa->o_valid |= OBD_MD_FLID;
         }
         if (flags & OBD_MD_FLGROUP) {
-                oa->o_seq = oinfo->loi_seq;
+                oa->o_gr = oinfo->loi_gr;
                 oa->o_valid |= OBD_MD_FLGROUP;
         }
         if (flags & OBD_MD_FLHANDLE) {

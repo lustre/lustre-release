@@ -702,7 +702,7 @@ static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
         oinfo.oi_md = lsm;
         oinfo.oi_oa = obdo;
         oinfo.oi_oa->o_id = lsm->lsm_object_id;
-        oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
+        oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
         oinfo.oi_oa->o_mode = S_IFREG;
         oinfo.oi_oa->o_ioepoch = ioepoch;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
@@ -1230,12 +1230,13 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                 GOTO(out, rc = -ENOMEM);
 
         oa->o_id = ucreatp.lrc_id;
-        oa->o_seq = ucreatp.lrc_seq;
+        oa->o_gr = ucreatp.lrc_group;
         oa->o_nlink = ucreatp.lrc_ost_idx;
         oa->o_flags |= OBD_FL_RECREATE_OBJS;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
-        obdo_from_inode(oa, inode, &ll_i2info(inode)->lli_fid, OBD_MD_FLTYPE |
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
         memcpy(lsm2, lsm, lsm_size);
         rc = obd_create(exp, oa, &lsm2, &oti);
 
@@ -1588,11 +1589,12 @@ int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
                 return -EOPNOTSUPP;
 
         fm_key.oa.o_id = lsm->lsm_object_id;
-        fm_key.oa.o_seq = lsm->lsm_object_seq;
+        fm_key.oa.o_gr = lsm->lsm_object_gr;
         fm_key.oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
-        obdo_from_inode(&fm_key.oa, inode, &ll_i2info(inode)->lli_fid,
+        obdo_from_inode(&fm_key.oa, inode, OBD_MD_FLFID | OBD_MD_FLGROUP |
                         OBD_MD_FLSIZE);
+
         /* If filesize is 0, then there would be no objects for mapping */
         if (fm_key.oa.o_size == 0) {
                 fiemap->fm_mapped_extents = 0;
@@ -1888,12 +1890,11 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         RETURN(rc ? rc : -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
-                oa->o_seq = lsm->lsm_object_seq;
+                oa->o_gr = lsm->lsm_object_gr;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-                obdo_from_inode(oa, inode, &ll_i2info(inode)->lli_fid,
-                                OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                OBD_MD_FLGROUP);
+                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                           OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                           OBD_MD_FLGROUP);
 
                 oc = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
                 err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,

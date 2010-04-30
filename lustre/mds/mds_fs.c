@@ -101,9 +101,6 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(mds->mds_objects_dir == filp->f_dentry->d_parent);
 
-        /* FIXME: need to see how this should change to properly store FID
-         *        into obdo (o_id == OID, o_seq = SEQ) (maybe as IGIF?). */
-#define o_generation o_parent_oid
         oa->o_id = filp->f_dentry->d_inode->i_ino;
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
@@ -137,7 +134,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         err = fsfilt_commit(exp->exp_obd, mds->mds_objects_dir->d_inode,
                             handle, 0);
         if (!err) {
-                oa->o_seq = mdt_to_obd_objseq(mds->mds_id);
+                oa->o_gr = mdt_to_obd_objgrp(mds->mds_id);
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLGROUP;
         } else if (!rc)
                 rc = err;
@@ -208,7 +205,6 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
-#undef o_generation
 
         err = fsfilt_commit(obd, mds->mds_objects_dir->d_inode, handle, 0);
         if (err && !rc)

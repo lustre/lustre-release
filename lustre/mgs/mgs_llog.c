@@ -193,7 +193,6 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 rc = 0;
                 CDEBUG(D_MGS, "MDT index is %u\n", index);
                 cfs_set_bit(index, fsdb->fsdb_mdt_index_map);
-                fsdb->fsdb_mdt_count ++;
         }
 
         /* COMPAT_146 */
@@ -533,7 +532,7 @@ static __inline__ int next_index(void *index_map, int map_len)
         0  newly marked as in use
         <0 err
         +EALREADY for update of an old index */
-static int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
+int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
         void *imap;
@@ -546,26 +545,18 @@ static int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
                 RETURN(rc);
         }
 
-        if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+        if (mti->mti_flags & LDD_F_SV_TYPE_OST)
                 imap = fsdb->fsdb_ost_index_map;
-        } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+        else if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
                 imap = fsdb->fsdb_mdt_index_map;
-                if (fsdb->fsdb_mdt_count >= MAX_MDT_COUNT) {
-                        LCONSOLE_ERROR_MSG(0x13f, "The max mdt count"
-                                           "is %d\n", (int)MAX_MDT_COUNT);
-                        RETURN(-ERANGE);
-                }
-        } else {
+        else
                 RETURN(-EINVAL);
-        }
 
         if (mti->mti_flags & LDD_F_NEED_INDEX) {
                 rc = next_index(imap, INDEX_MAP_SIZE);
                 if (rc == -1)
                         RETURN(-ERANGE);
                 mti->mti_stripe_index = rc;
-                if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
-                        fsdb->fsdb_mdt_count ++;
         }
 
         if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {

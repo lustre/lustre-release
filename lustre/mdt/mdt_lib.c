@@ -542,7 +542,7 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
         for (i = 0, lod = lmm->lmm_objects; i < stripe_count; i++, lod++) {
                 CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
-                       le64_to_cpu(lod->l_object_seq),
+                       le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
         }
 }

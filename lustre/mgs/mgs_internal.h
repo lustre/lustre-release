@@ -71,7 +71,6 @@ struct fs_db {
         cfs_semaphore_t   fsdb_sem;
         void             *fsdb_ost_index_map;  /* bitmap of used indicies */
         void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
-        int               fsdb_mdt_count;
         /* COMPAT_146 these items must be recorded out of the old client log */
         char             *fsdb_clilov;       /* COMPAT_146 client lov name */
         char             *fsdb_clilmv;

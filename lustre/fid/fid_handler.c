@@ -388,7 +388,7 @@ static int seq_req_handle(struct ptlrpc_request *req,
 
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
-
+			
         rc = req_capsule_server_pack(info->sti_pill);
         if (rc)
                 RETURN(err_serious(rc));

@@ -55,12 +55,18 @@
 /* struct osd_inode_id */
 #include "osd_oi.h"
 #include "osd_igif.h"
-#include "osd_internal.h"
 
 void lu_igif_to_id(const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        LASSERT(osd_fid_is_igif(fid));
+        LASSERT(fid_is_igif(fid));
         id->oii_ino = lu_igif_ino(fid);
         id->oii_gen = lu_igif_gen(fid);
 }
 
+void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
+{
+        fid->f_seq = ino;
+        fid->f_oid = gen;
+        fid->f_ver = 0;
+        LASSERT(fid_is_igif(fid));
+}

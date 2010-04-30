@@ -88,7 +88,8 @@ struct osc_async_rc {
 };
 
 struct lov_oinfo {                 /* per-stripe data structure */
-        struct ost_id   loi_oi;    /* object ID/Sequence on the target OST */
+        __u64 loi_id;              /* object ID on the target OST */
+        __u64 loi_gr;              /* object group on the target OST */
         int loi_ost_idx;           /* OST stripe index in lov_tgt_desc->tgts */
         int loi_ost_gen;           /* generation of this loi_ost_idx */
 
@@ -105,8 +106,6 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct ost_lvb loi_lvb;
         struct osc_async_rc     loi_ar;
 };
-#define loi_id  loi_oi.oi_id
-#define loi_seq loi_oi.oi_seq
 
 static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
 {
@@ -135,7 +134,7 @@ struct lov_stripe_md {
         struct {
                 /* Public members. */
                 __u64 lw_object_id;        /* lov object id */
-                __u64 lw_object_seq;       /* lov object seq */
+                __u64 lw_object_gr;        /* lov object group */
                 __u64 lw_maxbytes;         /* maximum possible file size */
 
                 /* LOV-private members start here -- only for use in lov/. */
@@ -150,7 +149,7 @@ struct lov_stripe_md {
 };
 
 #define lsm_object_id    lsm_wire.lw_object_id
-#define lsm_object_seq   lsm_wire.lw_object_seq
+#define lsm_object_gr    lsm_wire.lw_object_gr
 #define lsm_maxbytes     lsm_wire.lw_maxbytes
 #define lsm_magic        lsm_wire.lw_magic
 #define lsm_stripe_size  lsm_wire.lw_stripe_size
@@ -917,6 +916,13 @@ struct target_recovery_data {
         cfs_completion_t  trd_finishing;
 };
 
+enum filter_groups {
+        FILTER_GROUP_MDS0 = 0,
+        FILTER_GROUP_LLOG = 1,
+        FILTER_GROUP_ECHO = 2 ,
+        FILTER_GROUP_MDS1_N_BASE = 3
+};
+
 /**
   * In HEAD for CMD, the object is created in group number which is 3>=
   * or indexing starts from 3. To test this assertions are added to disallow
@@ -927,30 +933,48 @@ struct target_recovery_data {
   * 2. The group number indexing starts from 0 instead of 3
   */
 
-#define LASSERT_SEQ_IS_MDT(seq) LASSERT(fid_seq_is_mdt(seq))
-
-static inline __u64 objseq_to_mdsno(obd_seq seq)
+static inline int filter_group_is_mds(obd_gr group)
 {
-        LASSERT_SEQ_IS_MDT(seq);
-        if (seq == FID_SEQ_OST_MDT0)
-                return 0;
-        return seq - FID_SEQ_OST_MDT1 + 1;
+        return (group == FILTER_GROUP_MDS0 ||
+                group >= FILTER_GROUP_MDS1_N_BASE);
 }
 
-static inline int mdt_to_obd_objseq(int mdtid)
+#define LASSERT_MDS_GROUP(group) LASSERT(filter_group_is_mds(group))
+
+static inline __u64 objgrp_to_mdsno(obd_gr group)
+{
+        LASSERT(filter_group_is_mds(group));
+        if (group == FILTER_GROUP_MDS0)
+                return 0;
+        return group - FILTER_GROUP_MDS1_N_BASE + 1;
+}
+
+static inline int mdt_to_obd_objgrp(int mdtid)
 {
         /**
-         * MDS0 uses seq 0 pre FID-on-OST, other MDSes will use seq from
-         * FID_SEQ_OST_MDT1
+         * MDS0 uses group 0 always, other MDSes will use groups from
+         * FILTER_GROUP_MDS1_N_BASE
          */
         if (mdtid)
-                return FID_SEQ_OST_MDT1 + mdtid - 1;
+                return FILTER_GROUP_MDS1_N_BASE + mdtid - 1;
         return 0;
+}
+
+static inline __u64 obdo_mdsno(struct obdo *oa)
+{
+        LASSERT((oa->o_valid & OBD_MD_FLGROUP));
+        return objgrp_to_mdsno(oa->o_gr);
+}
+
+static inline int obdo_is_mds(struct obdo *oa)
+{
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        return filter_group_is_mds(oa->o_gr);
 }
 
 struct obd_llog_group {
         cfs_list_t         olg_list;
-        int                olg_seq;
+        int                olg_group;
         struct llog_ctxt  *olg_ctxts[LLOG_MAX_CTXTS];
         cfs_waitq_t        olg_waitq;
         cfs_spinlock_t     olg_lock;
@@ -1309,8 +1333,8 @@ struct obd_ops {
                       struct lustre_handle *srconn, struct lov_stripe_md *src,
                       obd_size start, obd_size end, struct obd_trans_info *);
         int (*o_iterate)(struct lustre_handle *conn,
-                         int (*)(obd_id, obd_seq, void *),
-                         obd_id *startid, obd_seq seq, void *data);
+                         int (*)(obd_id, obd_gr, void *),
+                         obd_id *startid, obd_gr group, void *data);
         int (*o_preprw)(int cmd, struct obd_export *exp, struct obdo *oa,
                         int objcount, struct obd_ioobj *obj,
                         struct niobuf_remote *remote, int *nr_pages,
@@ -1617,8 +1641,5 @@ static inline struct md_open_data *obd_mod_alloc(void)
                 OBD_FREE_PTR(mod);                              \
         }                                                       \
 })
-
-extern void obdo_from_inode(struct obdo *dst, struct inode *src,
-                            struct lu_fid *parent, obd_flag valid);
 
 #endif /* __OBD_H */

@@ -169,10 +169,8 @@ struct echo_object_conf *cl2echo_conf(const struct cl_object_conf *c)
 static inline void lsm2fid(struct lov_stripe_md *lsm, struct lu_fid *fid)
 {
         fid_zero(fid);
-        fid->f_seq = FID_SEQ_ECHO;
-        /* truncated to 32 bits by assignment */
+        fid->f_seq = lsm->lsm_object_gr << 16 | lsm->lsm_object_id >> 32;
         fid->f_oid = lsm->lsm_object_id;
-        fid->f_ver = lsm->lsm_object_id >> 32;
 }
 /** @} echo_helpers */
 
@@ -925,7 +923,7 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
                         struct lov_oinfo *oinfo = lsm->lsm_oinfo[0];
                         LASSERT(oinfo != NULL);
                         oinfo->loi_id = lsm->lsm_object_id;
-                        oinfo->loi_seq = lsm->lsm_object_seq;
+                        oinfo->loi_gr = lsm->lsm_object_gr;
                         conf->eoc_cl.u.coc_oinfo = oinfo;
                 } else {
                         struct lustre_md *md;
@@ -1331,7 +1329,7 @@ static int echo_create_object(struct echo_device *ed, int on_target,
         if (on_target) {
                 /* Only echo objects are allowed to be created */
                 LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
-                        (oa->o_seq == FID_SEQ_ECHO));
+                        (oa->o_gr == FILTER_GROUP_ECHO));
                 rc = obd_create(ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0) {
                         CERROR("Cannot create objects, rc = %d\n", rc);
@@ -1384,9 +1382,9 @@ static int echo_get_object(struct echo_object **ecop, struct echo_device *ed,
 
         lsm->lsm_object_id = oa->o_id;
         if (oa->o_valid & OBD_MD_FLGROUP)
-                lsm->lsm_object_seq = oa->o_seq;
+                lsm->lsm_object_gr = oa->o_gr;
         else
-                lsm->lsm_object_seq = FID_SEQ_ECHO;
+                lsm->lsm_object_gr = FILTER_GROUP_ECHO;
 
         rc = 0;
         eco = cl_echo_object_find(ed, &lsm);
@@ -1802,10 +1800,10 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         oa = &data->ioc_obdo1;
         if (!(oa->o_valid & OBD_MD_FLGROUP)) {
                 oa->o_valid |= OBD_MD_FLGROUP;
-                oa->o_seq = FID_SEQ_ECHO;
+                oa->o_gr = FILTER_GROUP_ECHO;
         }
         /* assume we can touch filter native objects with echo device. */
-        /* LASSERT(oa->o_seq == FID_SEQ_ECHO); */
+        /* LASSERT(oa->o_gr == FILTER_GROUP_ECHO); */
 
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
@@ -1965,7 +1963,7 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL |
                                  OBD_CONNECT_GRANT;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
-        ocd->ocd_group = FID_SEQ_ECHO;
+        ocd->ocd_group = FILTER_GROUP_ECHO;
 
         rc = obd_connect(NULL, &ec->ec_exp, tgt, &echo_uuid, ocd, NULL);
         if (rc == 0) {

@@ -54,6 +54,17 @@
 # include <sys/statfs.h>
 #endif
 
+#include <sysio.h>
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
+#include <fs.h>
+#include <mount.h>
+#include <inode.h>
+#ifdef HAVE_FILE_H
+#include <file.h>
+#endif
+
 #include "llite_lib.h"
 
 #ifndef MAY_EXEC
@@ -224,14 +235,9 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         valid &= src->o_valid;
 
-        LASSERTF(!(valid & (OBD_MD_FLTYPE | OBD_MD_FLGENER | OBD_MD_FLFID |
-                            OBD_MD_FLID | OBD_MD_FLGROUP)),
-                 "object "LPU64"/"LPU64", valid %x\n",
-                 src->o_id, src->o_seq, valid);
-
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE,"valid "LPX64", cur time "CFS_TIME_T"/"CFS_TIME_T
-                       ", new %lu/%lu\n",
+		       ", new %lu/%lu\n",
                        src->o_valid,
                        LTIME_S(st->st_mtime), LTIME_S(st->st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
@@ -260,6 +266,76 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 lli->lli_st_flags = src->o_flags;
 }
 
+#define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
+#define S_IALLUGO       (S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
+
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
+{
+        struct llu_inode_info *lli = llu_i2info(src);
+        struct intnl_stat *st = llu_i2stat(src);
+        obd_flag newvalid = 0;
+
+        if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
+                CDEBUG(D_INODE, "valid %x, new time "CFS_TIME_T"/"CFS_TIME_T"\n",
+                       valid, LTIME_S(st->st_mtime),
+                       LTIME_S(st->st_ctime));
+
+        if (valid & OBD_MD_FLATIME) {
+                dst->o_atime = LTIME_S(st->st_atime);
+                newvalid |= OBD_MD_FLATIME;
+        }
+        if (valid & OBD_MD_FLMTIME) {
+                dst->o_mtime = LTIME_S(st->st_mtime);
+                newvalid |= OBD_MD_FLMTIME;
+        }
+        if (valid & OBD_MD_FLCTIME) {
+                dst->o_ctime = LTIME_S(st->st_ctime);
+                newvalid |= OBD_MD_FLCTIME;
+        }
+        if (valid & OBD_MD_FLSIZE) {
+                dst->o_size = st->st_size;
+                newvalid |= OBD_MD_FLSIZE;
+        }
+        if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
+                dst->o_blocks = st->st_blocks;
+                newvalid |= OBD_MD_FLBLOCKS;
+        }
+        if (valid & OBD_MD_FLBLKSZ) {   /* optimal block size */
+                dst->o_blksize = st->st_blksize;
+                newvalid |= OBD_MD_FLBLKSZ;
+        }
+        if (valid & OBD_MD_FLTYPE) {
+                dst->o_mode = (dst->o_mode & S_IALLUGO)|(st->st_mode & S_IFMT);
+                newvalid |= OBD_MD_FLTYPE;
+        }
+        if (valid & OBD_MD_FLMODE) {
+                dst->o_mode = (dst->o_mode & S_IFMT)|(st->st_mode & S_IALLUGO);
+                newvalid |= OBD_MD_FLMODE;
+        }
+        if (valid & OBD_MD_FLUID) {
+                dst->o_uid = st->st_uid;
+                newvalid |= OBD_MD_FLUID;
+        }
+        if (valid & OBD_MD_FLGID) {
+                dst->o_gid = st->st_gid;
+                newvalid |= OBD_MD_FLGID;
+        }
+        if (valid & OBD_MD_FLFLAGS) {
+                dst->o_flags = lli->lli_st_flags;
+                newvalid |= OBD_MD_FLFLAGS;
+        }
+        if (valid & OBD_MD_FLGENER) {
+                dst->o_generation = lli->lli_st_generation;
+                newvalid |= OBD_MD_FLGENER;
+        }
+        if (valid & OBD_MD_FLFID) {
+                dst->o_fid = st->st_ino;
+                newvalid |= OBD_MD_FLFID;
+        }
+
+        dst->o_valid |= newvalid;
+}
+
 /**
  * Performs the getattr on the inode and updates its fields.
  * If @sync != 0, perform the getattr under the server-side lock.
@@ -279,7 +355,7 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
         oinfo.oi_md = lsm;
         oinfo.oi_oa = obdo;
         oinfo.oi_oa->o_id = lsm->lsm_object_id;
-        oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
+        oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
         oinfo.oi_oa->o_mode = S_IFREG;
         oinfo.oi_oa->o_ioepoch = ioepoch;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
@@ -287,7 +363,6 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                                OBD_MD_FLCTIME | OBD_MD_FLGROUP |
                                OBD_MD_FLATIME | OBD_MD_FLEPOCH;
-        obdo_from_inode(oinfo.oi_oa, NULL, &llu_i2info(inode)->lli_fid, 0);
         if (sync) {
                 oinfo.oi_oa->o_valid |= OBD_MD_FLFLAGS;
                 oinfo.oi_oa->o_flags |= OBD_FL_SRVLOCK;

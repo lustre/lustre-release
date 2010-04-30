@@ -146,7 +146,7 @@ static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
          * are the same
          */
         lsm->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
-        lsm->lsm_object_seq = le64_to_cpu(lmm->lmm_object_seq);
+        lsm->lsm_object_gr = le64_to_cpu(lmm->lmm_object_gr);
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
         lsm->lsm_pattern = le32_to_cpu(lmm->lmm_pattern);
         lsm->lsm_pool_name[0] = '\0';
@@ -207,7 +207,7 @@ int lsm_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
                 /* XXX LOV STACKING call down to osc_unpackmd() */
                 loi = lsm->lsm_oinfo[i];
                 loi->loi_id = le64_to_cpu(lmm->lmm_objects[i].l_object_id);
-                loi->loi_seq = le64_to_cpu(lmm->lmm_objects[i].l_object_seq);
+                loi->loi_gr = le64_to_cpu(lmm->lmm_objects[i].l_object_gr);
                 loi->loi_ost_idx = le32_to_cpu(lmm->lmm_objects[i].l_ost_idx);
                 loi->loi_ost_gen = le32_to_cpu(lmm->lmm_objects[i].l_ost_gen);
                 if (loi->loi_ost_idx >= lov->desc.ld_tgt_count) {
@@ -277,7 +277,7 @@ int lsm_unpackmd_v3(struct lov_obd *lov, struct lov_stripe_md *lsm,
                 /* XXX LOV STACKING call down to osc_unpackmd() */
                 loi = lsm->lsm_oinfo[i];
                 loi->loi_id = le64_to_cpu(lmm->lmm_objects[i].l_object_id);
-                loi->loi_seq = le64_to_cpu(lmm->lmm_objects[i].l_object_seq);
+                loi->loi_gr = le64_to_cpu(lmm->lmm_objects[i].l_object_gr);
                 loi->loi_ost_idx = le32_to_cpu(lmm->lmm_objects[i].l_ost_idx);
                 loi->loi_ost_gen = le32_to_cpu(lmm->lmm_objects[i].l_ost_gen);
                 if (loi->loi_ost_idx >= lov->desc.ld_tgt_count) {

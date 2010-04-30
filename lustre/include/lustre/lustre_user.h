@@ -179,7 +179,7 @@ struct obd_statfs {
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
         __u64 l_object_id;        /* OST object ID */
-        __u64 l_object_seq;       /* OST object seq number */
+        __u64 l_object_gr;        /* OST object group (creating MDS number) */
         __u32 l_ost_gen;          /* generation of this OST index */
         __u32 l_ost_idx;          /* OST index in LOV */
 } __attribute__((packed));
@@ -189,7 +189,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V1 */
         __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
         __u64 lmm_object_id;      /* LOV object ID */
-        __u64 lmm_object_seq;     /* LOV object seq */
+        __u64 lmm_object_gr;      /* LOV object group */
         __u32 lmm_stripe_size;    /* size of stripe in bytes */
         __u16 lmm_stripe_count;   /* num stripes in use for this object */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
@@ -200,7 +200,7 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
         __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
         __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
         __u64 lmm_object_id;      /* LOV object ID */
-        __u64 lmm_object_seq;     /* LOV object seq */
+        __u64 lmm_object_gr;      /* LOV object group */
         __u32 lmm_stripe_size;    /* size of stripe in bytes */
         __u16 lmm_stripe_count;   /* num stripes in use for this object */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
@@ -226,7 +226,7 @@ struct lov_user_mds_data_v3 {
 
 struct ll_recreate_obj {
         __u64 lrc_id;
-        __u64 lrc_seq;
+        __u64 lrc_group;
         __u32 lrc_ost_idx;
 };
 
@@ -235,6 +235,12 @@ struct ll_fid {
         __u32 generation; /* holds object generation */
         __u32 f_type;     /* holds object type or stripe idx when passing it to
                            * OST for saving into EA. */
+};
+
+struct filter_fid {
+        struct ll_fid   ff_fid;  /* ff_fid.f_type == file stripe number */
+        __u64           ff_objid;
+        __u64           ff_group;
 };
 
 struct obd_uuid {
@@ -307,12 +313,6 @@ struct lu_fid {
          * used.
          */
         __u32 f_ver;
-};
-
-struct filter_fid {
-        struct lu_fid   ff_parent;  /* ff_parent.f_ver == file stripe number */
-        __u64           ff_objid;
-        __u64           ff_seq;
 };
 
 /* Userspace should treat lu_fid as opaque, and only use the following methods

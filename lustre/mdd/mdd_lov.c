@@ -354,6 +354,16 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
+/*
+ * XXX: this is for create lsm object id, which should identify the lsm object
+ * unique in the whole mds, as I see. But it seems, we still not need it
+ * now. Right? So just borrow the cl_fid_build_ino().
+ */
+static obd_id mdd_lov_create_id(const struct lu_fid *fid)
+{
+        return fid_flatten(fid);
+}
+
 int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm)
 {
         /* copy mds_lov code is using wrong layer */
@@ -417,9 +427,9 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
-        oa->o_seq = mdt_to_obd_objseq(lu_site2md(site)->ms_node_id);
+        oa->o_gr = mdt_to_obd_objgrp(lu_site2md(site)->ms_node_id);
         oa->o_mode = S_IFREG | 0600;
-        oa->o_id = fid_ver_oid(mdd_object_fid(child));
+        oa->o_id = mdd_lov_create_id(mdd_object_fid(child));
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
@@ -431,6 +441,8 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                            0, &lsm, (void*)eadata);
                         if (rc)
                                 GOTO(out_oti, rc);
+                        lsm->lsm_object_id = oa->o_id;
+                        lsm->lsm_object_gr = oa->o_gr;
                 } else if (parent != NULL) {
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *_lmm;
@@ -464,18 +476,17 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         }
                         GOTO(out_oti, rc);
                 }
-                LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
+                LASSERT_MDS_GROUP(lsm->lsm_object_gr);
         } else {
                 LASSERT(eadata != NULL);
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
                                    (void*)eadata);
                 if (rc)
                         GOTO(out_oti, rc);
-
+                lsm->lsm_object_id = oa->o_id;
+                lsm->lsm_object_gr = oa->o_gr;
         }
 
-        lsm->lsm_object_id = fid_ver_oid(mdd_object_fid(child));
-        lsm->lsm_object_seq = fid_seq(mdd_object_fid(child));
         /*
          * Sometimes, we may truncate some object(without lsm) then open it
          * (with write flags), so creating lsm above.  The Nonzero(truncated)
@@ -496,8 +507,9 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                  * filter_fid, but can not see what is the usages. So just pack
                  * o_seq o_ver here, maybe fix it after this cycle.
                  */
-                obdo_from_inode(oa, NULL,
-                                (struct lu_fid *)mdd_object_fid(child), 0);
+                oa->o_fid = fid_seq(mdd_object_fid(child));
+                oa->o_generation = fid_oid(mdd_object_fid(child));
+                oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
                 oinfo->oi_capa = NULL;
@@ -516,6 +528,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         GOTO(out_oti, rc);
                 }
         }
+
         /* blksize should be changed after create data object */
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
@@ -576,7 +589,7 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
         }
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_seq = mdt_to_obd_objseq(lu_site2md(site)->ms_node_id);
+        oa->o_gr = mdt_to_obd_objgrp(lu_site2md(site)->ms_node_id);
         oa->o_mode = la->la_mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
@@ -586,8 +599,8 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
                 oti->oti_logcookies = logcookies;
         }
 
-        CDEBUG(D_INFO, "destroying OSS object "LPU64":"LPU64"\n", oa->o_seq,
-               oa->o_id);
+        CDEBUG(D_INFO, "destroying OSS object %d/%d\n",
+                        (int)oa->o_id, (int)oa->o_gr);
 
         rc = obd_destroy(lov_exp, oa, lsm, oti, NULL, NULL);
 
@@ -730,7 +743,7 @@ int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
 
 static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, const struct lu_fid *parent,
+                          struct llog_cookie *logcookies, __u64 id, __u32 gen,
                           struct obd_capa *oc)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -751,8 +764,7 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
 
         rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
-                CERROR("Error unpack md %p for obj "DFID"\n", lmm,
-                        PFID(parent));
+                CERROR("Error unpack md %p for inode "LPU64"\n", lmm, id);
                 GOTO(out, rc);
         }
 
@@ -760,7 +772,7 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
         oinfo.oi_oa->o_uid = uid;
         oinfo.oi_oa->o_gid = gid;
         oinfo.oi_oa->o_id = oinfo.oi_md->lsm_object_id;
-        oinfo.oi_oa->o_seq = oinfo.oi_md->lsm_object_seq;
+        oinfo.oi_oa->o_gr = oinfo.oi_md->lsm_object_gr;
         oinfo.oi_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP |
                                 OBD_MD_FLUID | OBD_MD_FLGID;
         if (logcookies) {
@@ -768,7 +780,9 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
                 oti.oti_logcookies = logcookies;
         }
 
-        obdo_from_inode(oinfo.oi_oa, NULL, (struct lu_fid *)parent, 0);
+        oinfo.oi_oa->o_fid = id;
+        oinfo.oi_oa->o_generation = gen;
+        oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
         oinfo.oi_capa = oc;
 
         /* do async setattr from mds to ost not waiting for responses. */
@@ -801,6 +815,7 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
                 RETURN(rc);
 
         rc = mdd_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
-                                   lmm_size, logcookies, fid, NULL);
+                                   lmm_size, logcookies, fid_seq(fid),
+                                   fid_oid(fid), NULL);
         RETURN(rc);
 }

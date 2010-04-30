@@ -60,6 +60,16 @@
 #include <sys/stat.h>
 #include <sys/queue.h>
 #include <fcntl.h>
+# include <sysio.h>
+# ifdef HAVE_XTIO_H
+#  include <xtio.h>
+# endif
+# include <fs.h>
+# include <mount.h>
+# include <inode.h>
+# ifdef HAVE_FILE_H
+#  include <file.h>
+# endif
 # include <liblustre.h>
 #endif
 
@@ -952,13 +962,11 @@ void ccc_req_completion(const struct lu_env *env,
  *
  *    - o_mode
  *
- *    - o_parent_seq
+ *    - o_fid (filled with inode number?!)
  *
  *    - o_[ug]id
  *
- *    - o_parent_oid
- *
- *    - o_parent_ver
+ *    - o_generation
  *
  *    - o_ioepoch,
  *
@@ -990,11 +998,11 @@ void ccc_req_attr_set(const struct lu_env *env,
                         oa->o_valid |= OBD_MD_FLEPOCH;
                         oa->o_ioepoch = cl_i2info(inode)->lli_ioepoch;
                         valid_flags |= OBD_MD_FLMTIME|OBD_MD_FLCTIME|
-                                OBD_MD_FLUID|OBD_MD_FLGID;
+                                OBD_MD_FLUID|OBD_MD_FLGID|
+                                OBD_MD_FLFID|OBD_MD_FLGENER;
                 }
         }
-        obdo_from_inode(oa, inode, &cl_i2info(inode)->lli_fid,
-                        valid_flags & flags);
+        obdo_from_inode(oa, inode, valid_flags & flags);
 }
 
 const struct cl_req_operations ccc_req_ops = {

@@ -3609,7 +3609,7 @@ combination()
         R=0
     else
         N=$((N + 1))
-        while [ $N -lt $M ]; do
+        while [ $N -le $M ]; do
             R=$((R * N))
             N=$((N + 1))
         done
@@ -3820,7 +3820,6 @@ wait_flavor()
             return 0
         else
             echo "found $res $flavor connections of $dir, not ready ($expect)"
-            return 0
             sleep 4
         fi
     done

@@ -564,7 +564,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
         l = snprintf(out, remains, "\t[Log ID]: #"LPX64"#"LPX64"#%08x\n"
                      "\tLog Size: %llu\n\tLast Index: %d\n"
                      "\tUncanceled Records: %d\n",
-                     logid->lgl_oid, logid->lgl_oseq, logid->lgl_ogen,
+                     logid->lgl_oid, logid->lgl_ogr, logid->lgl_ogen,
                      i_size_read(handle->lgh_file->f_dentry->d_inode),
                      handle->lgh_last_idx, count);
         out += l;
@@ -634,7 +634,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
                              "\n[Catlog ID]: #"LPX64"#"LPX64"#%08x  "
                              "[Log Count]: %d\n",
                              idarray[i].lci_logid.lgl_oid,
-                             idarray[i].lci_logid.lgl_oseq,
+                             idarray[i].lci_logid.lgl_ogr,
                              idarray[i].lci_logid.lgl_ogen, uncanceled);
 
                 data.out += l;

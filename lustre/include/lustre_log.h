@@ -457,7 +457,7 @@ static inline void llog_group_init(struct obd_llog_group *olg, int group)
         cfs_waitq_init(&olg->olg_waitq);
         cfs_spin_lock_init(&olg->olg_lock);
         cfs_sema_init(&olg->olg_cat_processing, 1);
-        olg->olg_seq = group;
+        olg->olg_group = group;
 }
 
 static inline void llog_group_set_export(struct obd_llog_group *olg,
@@ -468,7 +468,7 @@ static inline void llog_group_set_export(struct obd_llog_group *olg,
         cfs_spin_lock(&olg->olg_lock);
         if (olg->olg_exp != NULL && olg->olg_exp != exp)
                 CWARN("%s: export for group %d is changed: 0x%p -> 0x%p\n",
-                      exp->exp_obd->obd_name, olg->olg_seq,
+                      exp->exp_obd->obd_name, olg->olg_group,
                       olg->olg_exp, exp);
         olg->olg_exp = exp;
         cfs_spin_unlock(&olg->olg_lock);

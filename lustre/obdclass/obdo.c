@@ -46,83 +46,12 @@
 #endif
 
 #ifndef __KERNEL__
-#include "../liblustre/llite_lib.h"
+#include <liblustre.h>
+#include <obd.h>
 #else
 #include <obd_class.h>
 #include <lustre/lustre_idl.h>
 #endif
-
-static void obdo_set_parent_fid(struct obdo *dst, struct lu_fid *parent)
-{
-        dst->o_parent_oid = fid_oid(parent);
-        dst->o_parent_seq = fid_seq(parent);
-        dst->o_parent_ver = fid_ver(parent);
-        dst->o_valid |= OBD_MD_FLGENER | OBD_MD_FLFID;
-}
-
-/* WARNING: the file systems must take care not to tinker with
-   attributes they don't manage (such as blocks). */
-void obdo_from_inode(struct obdo *dst, struct inode *src, struct lu_fid *parent,
-                     obd_flag valid)
-{
-        obd_flag newvalid = 0;
-
-        if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(src->i_mtime),
-                       LTIME_S(src->i_ctime));
-
-        if (valid & OBD_MD_FLATIME) {
-                dst->o_atime = LTIME_S(src->i_atime);
-                newvalid |= OBD_MD_FLATIME;
-        }
-        if (valid & OBD_MD_FLMTIME) {
-                dst->o_mtime = LTIME_S(src->i_mtime);
-                newvalid |= OBD_MD_FLMTIME;
-        }
-        if (valid & OBD_MD_FLCTIME) {
-                dst->o_ctime = LTIME_S(src->i_ctime);
-                newvalid |= OBD_MD_FLCTIME;
-        }
-        if (valid & OBD_MD_FLSIZE) {
-                dst->o_size = src->i_size;
-                newvalid |= OBD_MD_FLSIZE;
-        }
-        if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
-                dst->o_blocks = src->i_blocks;
-                newvalid |= OBD_MD_FLBLOCKS;
-        }
-        if (valid & OBD_MD_FLBLKSZ) {   /* optimal block size */
-                dst->o_blksize = ll_inode_blksize(src);
-                newvalid |= OBD_MD_FLBLKSZ;
-        }
-        if (valid & OBD_MD_FLTYPE) {
-                dst->o_mode = (dst->o_mode & S_IALLUGO) |
-                              (src->i_mode & S_IFMT);
-                newvalid |= OBD_MD_FLTYPE;
-        }
-        if (valid & OBD_MD_FLMODE) {
-                dst->o_mode = (dst->o_mode & S_IFMT) |
-                              (src->i_mode & S_IALLUGO);
-                newvalid |= OBD_MD_FLMODE;
-        }
-        if (valid & OBD_MD_FLUID) {
-                dst->o_uid = src->i_uid;
-                newvalid |= OBD_MD_FLUID;
-        }
-        if (valid & OBD_MD_FLGID) {
-                dst->o_gid = src->i_gid;
-                newvalid |= OBD_MD_FLGID;
-        }
-        if (valid & OBD_MD_FLFLAGS) {
-                dst->o_flags = ll_inode_flags(src);
-                newvalid |= OBD_MD_FLFLAGS;
-        }
-        if (parent)
-                obdo_set_parent_fid(dst, parent);
-        dst->o_valid |= newvalid;
-}
-EXPORT_SYMBOL(obdo_from_inode);
 
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
 {
@@ -152,12 +81,8 @@ void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
                 dst->o_gid = src->o_gid;
         if (valid & OBD_MD_FLFLAGS)
                 dst->o_flags = src->o_flags;
-        if (valid & OBD_MD_FLFID) {
-                dst->o_parent_seq = src->o_parent_seq;
-                dst->o_parent_ver = src->o_parent_ver;
-        }
         if (valid & OBD_MD_FLGENER)
-                dst->o_parent_oid = src->o_parent_oid;
+                dst->o_generation = src->o_generation;
         if (valid & OBD_MD_FLHANDLE)
                 dst->o_handle = src->o_handle;
         if (valid & OBD_MD_FLCOOKIE)
@@ -196,12 +121,8 @@ int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare)
                 res = (res || (dst->o_flags != src->o_flags));
         if ( compare & OBD_MD_FLNLINK )
                 res = (res || (dst->o_nlink != src->o_nlink));
-        if ( compare & OBD_MD_FLFID ) {
-                res = (res || (dst->o_parent_seq != src->o_parent_seq));
-                res = (res || (dst->o_parent_ver != src->o_parent_ver));
-        }
         if ( compare & OBD_MD_FLGENER )
-                res = (res || (dst->o_parent_oid != src->o_parent_oid));
+                res = (res || (dst->o_generation != src->o_generation));
         /* XXX Don't know if thses should be included here - wasn't previously
         if ( compare & OBD_MD_FLINLINE )
                 res = (res || memcmp(dst->o_inline, src->o_inline));
@@ -214,9 +135,9 @@ void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj)
 {
         ioobj->ioo_id = oa->o_id;
         if (oa->o_valid & OBD_MD_FLGROUP)
-                ioobj->ioo_seq = oa->o_seq;
-        else
-                ioobj->ioo_seq = 0;
+                ioobj->ioo_gr = oa->o_gr;
+        else 
+                ioobj->ioo_gr = 0;
         ioobj->ioo_type = oa->o_mode;
 }
 EXPORT_SYMBOL(obdo_to_ioobj);

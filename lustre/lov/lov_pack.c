@@ -80,7 +80,7 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
         for (i = 0; i < stripe_count; ++i, ++lod) {
                 CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n", i,
                        le32_to_cpu(lod->l_ost_idx),
-                       (__u64)le64_to_cpu(lod->l_object_seq),
+                       (__u64)le64_to_cpu(lod->l_object_gr),
                        (__u64)le64_to_cpu(lod->l_object_id));
         }
 }
@@ -215,7 +215,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
          * same first fields
          */
         lmmv1->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
-        lmmv1->lmm_object_seq = cpu_to_le64(lsm->lsm_object_seq);
+        lmmv1->lmm_object_gr = cpu_to_le64(lsm->lsm_object_gr);
         lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
         lmmv1->lmm_stripe_count = cpu_to_le32(stripe_count);
         lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
@@ -229,11 +229,12 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         for (i = 0; i < stripe_count; i++) {
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+
                 /* XXX LOV STACKING call down to osc_packmd() to do packing */
                 LASSERTF(loi->loi_id, "lmm_oid "LPU64" stripe %u/%u idx %u\n",
                          lmmv1->lmm_object_id, i, stripe_count, loi->loi_ost_idx);
                 lmm_objects[i].l_object_id = cpu_to_le64(loi->loi_id);
-                lmm_objects[i].l_object_seq = cpu_to_le64(loi->loi_seq);
+                lmm_objects[i].l_object_gr = cpu_to_le64(loi->loi_gr);
                 lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
                 lmm_objects[i].l_ost_idx = cpu_to_le32(loi->loi_ost_idx);
         }
@@ -558,7 +559,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 (*lsmp)->lsm_oinfo[i]->loi_ost_idx =
                         lmm_objects[i].l_ost_idx;
                 (*lsmp)->lsm_oinfo[i]->loi_id = lmm_objects[i].l_object_id;
-                (*lsmp)->lsm_oinfo[i]->loi_seq = lmm_objects[i].l_object_seq;
+                (*lsmp)->lsm_oinfo[i]->loi_gr = lmm_objects[i].l_object_gr;
         }
         RETURN(0);
 }

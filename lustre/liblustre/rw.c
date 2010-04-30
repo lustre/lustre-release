@@ -50,6 +50,17 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
+#include <sysio.h>
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
+#include <fs.h>
+#include <mount.h>
+#include <inode.h>
+#ifdef HAVE_FILE_H
+#include <file.h>
+#endif
+
 #include "llite_lib.h"
 
 typedef ssize_t llu_file_piov_t(const struct iovec *iovec, int iovlen,

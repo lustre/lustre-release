@@ -167,7 +167,7 @@ static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
                         __u64 start, __u64 count, struct lustre_handle *lh,
                         int mode, int flags)
 {
-        struct ldlm_res_id res_id;
+        struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0} };
         ldlm_policy_data_t policy;
         __u64 end = start + count;
 
@@ -181,7 +181,6 @@ static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
             !(oa->o_flags & OBD_FL_SRVLOCK))
                 RETURN(0);
 
-        osc_build_res_name(oa->o_id, oa->o_seq, &res_id);
         CDEBUG(D_INODE, "OST-side extent lock.\n");
 
         policy.l_extent.start = start & CFS_PAGE_MASK;
@@ -472,7 +471,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         int i;
         ENTRY;
 
-        osc_build_res_name(obj->ioo_id, obj->ioo_seq, &res_id);
+        osc_build_res_name(obj->ioo_id, obj->ioo_gr, &res_id);
         LASSERT(mode == LCK_PR || mode == LCK_PW);
         LASSERT(!lustre_handle_is_used(lh));
 
@@ -577,7 +576,7 @@ static int ost_rw_prolong_locks(struct ptlrpc_request *req, struct obd_ioobj *ob
         struct ost_prolong_data opd = { 0 };
         ENTRY;
 
-        osc_build_res_name(obj->ioo_id, obj->ioo_seq, &res_id);
+        osc_build_res_name(obj->ioo_id, obj->ioo_gr, &res_id);
 
         opd.opd_mode = mode;
         opd.opd_exp = req->rq_export;
@@ -1201,20 +1200,18 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
 
                 LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: %s from "
-                                   "%s%s%s inode "DFID" object "
+                                   "%s%s%s inum "LPU64"/"LPU64" object "
                                    LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
                                    exp->exp_obd->obd_name, msg,
                                    libcfs_id2str(req->rq_peer),
                                    via, router,
                                    body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_seq : (__u64)0,
+                                                body->oa.o_fid : (__u64)0,
                                    body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_oid : 0,
-                                   body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_ver : 0,
+                                                body->oa.o_generation :(__u64)0,
                                    body->oa.o_id,
                                    body->oa.o_valid & OBD_MD_FLGROUP ?
-                                                body->oa.o_seq : (__u64)0,
+                                                body->oa.o_gr : (__u64)0,
                                    local_nb[0].offset,
                                    local_nb[npages-1].offset +
                                    local_nb[npages-1].len - 1 );
@@ -1797,7 +1794,7 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
                nb[ioo->ioo_bufcnt - 1].len - 1) | ~CFS_PAGE_MASK;
 
         LASSERT(lock->l_resource != NULL);
-        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_seq,
+        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_gr,
                              &lock->l_resource->lr_name))
                 RETURN(0);
 

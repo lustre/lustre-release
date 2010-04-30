@@ -1258,7 +1258,7 @@ int t55(char *name)
         if (opt_verbose) {
                 printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
                 printf("lmm_object_id:      "LPX64"\n", lum->lmm_object_id);
-                printf("lmm_object_seq:     "LPX64"\n", lum->lmm_object_seq);
+                printf("lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
                 printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
                 printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
@@ -1266,7 +1266,7 @@ int t55(char *name)
                 for (index = 0; index < lum->lmm_stripe_count; index++) {
                         lo = lum->lmm_objects + index;
                         printf("object %d:\n", index);
-                        printf("\tobject_seq:   "LPX64"\n", lo->l_object_seq);
+                        printf("\tobject_gr:    "LPX64"\n", lo->l_object_gr);
                         printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
                         printf("\tost_gen:      %#x\n", lo->l_ost_gen);
                         printf("\tost_idx:      %u\n", lo->l_ost_idx);
@@ -1324,7 +1324,7 @@ int t55(char *name)
         if (opt_verbose) {
                 printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
                 printf("lmm_object_id:      "LPX64"\n", lum->lmm_object_id);
-                printf("lmm_object_seq:     "LPX64"\n", lum->lmm_object_seq);
+                printf("lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
                 printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
                 printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
@@ -1332,7 +1332,7 @@ int t55(char *name)
                 for (index = 0; index < lum->lmm_stripe_count; index++) {
                         lo = lum->lmm_objects + index;
                         printf("object %d:\n", index);
-                        printf("\tobject_seq:   "LPX64"\n", lo->l_object_seq);
+                        printf("\tobject_gr:    "LPX64"\n", lo->l_object_gr);
                         printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
                         printf("\tost_gen:      %#x\n", lo->l_ost_gen);
                         printf("\tost_idx:      %u\n", lo->l_ost_idx);

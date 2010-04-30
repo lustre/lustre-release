@@ -45,8 +45,6 @@
  *
  * @{
  */
-#include <fcntl.h>
-#include <sys/queue.h>
 
 #ifdef __KERNEL__
 #error Kernel files should not #include <liblustre.h>
@@ -430,16 +428,6 @@ typedef struct file_lock {
 #define OFFSET_MAX      INT_LIMIT(loff_t)
 #endif
 
-#define i_atime                     i_stbuf.st_atime
-#define i_mtime                     i_stbuf.st_mtime
-#define i_ctime                     i_stbuf.st_ctime
-#define i_size                      i_stbuf.st_size
-#define i_blocks                    i_stbuf.st_blocks
-#define i_blksize                   i_stbuf.st_blksize
-#define i_mode                      i_stbuf.st_mode
-#define i_uid                       i_stbuf.st_uid
-#define i_gid                       i_stbuf.st_gid
-
 /* XXX: defined in kernel */
 #define FL_POSIX        1
 #define FL_SLEEP        128
@@ -526,9 +514,6 @@ static inline mm_segment_t get_fs(void)
 static inline void set_fs(mm_segment_t seg)
 {
 }
-
-#define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
-#define S_IALLUGO       (S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
 
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>

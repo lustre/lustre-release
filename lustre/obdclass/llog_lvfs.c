@@ -608,7 +608,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 
         if (logid != NULL) {
                 dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, logid->lgl_oid,
-                                             logid->lgl_ogen, logid->lgl_oseq);
+                                             logid->lgl_ogen, logid->lgl_ogr);
 
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
@@ -621,7 +621,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                         l_dput(dchild);
                         rc = -ENOENT;
                         CERROR("nonexistent log file "LPX64":"LPX64": rc %d\n",
-                               logid->lgl_oid, logid->lgl_oseq, rc);
+                               logid->lgl_oid, logid->lgl_ogr, rc);
                         GOTO(out, rc);
                 }
 
@@ -644,7 +644,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 if (IS_ERR(handle->lgh_file))
                         GOTO(out, rc = PTR_ERR(handle->lgh_file));
 
-                handle->lgh_id.lgl_oseq = 1;
+                handle->lgh_id.lgl_ogr = 1;
                 handle->lgh_id.lgl_oid =
                         handle->lgh_file->f_dentry->d_inode->i_ino;
                 handle->lgh_id.lgl_ogen =
@@ -654,19 +654,15 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 if (oa == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                oa->o_seq = FID_SEQ_LLOG;
+                oa->o_gr = FILTER_GROUP_LLOG;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
 
                 rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(out, rc);
 
-                /* FIXME: rationalize the misuse of o_generation in
-                 *        this API along with mds_obd_{create,destroy}.
-                 *        Hopefully it is only an internal API issue. */
-#define o_generation o_parent_oid
                 dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, oa->o_id,
-                                             oa->o_generation, oa->o_seq);
+                                             oa->o_generation, oa->o_gr);
 
                 if (IS_ERR(dchild))
                         GOTO(out, rc = PTR_ERR(dchild));
@@ -676,7 +672,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 if (IS_ERR(handle->lgh_file))
                         GOTO(out, rc = PTR_ERR(handle->lgh_file));
 
-                handle->lgh_id.lgl_oseq = oa->o_seq;
+                handle->lgh_id.lgl_ogr = oa->o_gr;
                 handle->lgh_id.lgl_oid = oa->o_id;
                 handle->lgh_id.lgl_ogen = oa->o_generation;
         }
@@ -742,9 +738,8 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 RETURN(-ENOMEM);
 
         oa->o_id = handle->lgh_id.lgl_oid;
-        oa->o_seq = handle->lgh_id.lgl_oseq;
+        oa->o_gr = handle->lgh_id.lgl_ogr;
         oa->o_generation = handle->lgh_id.lgl_ogen;
-#undef o_generation
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLGENER;
 
         rc = llog_lvfs_close(handle);

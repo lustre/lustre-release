@@ -125,16 +125,16 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                 GOTO (out, rc = 0);
         }
 
-        olg = filter_find_olg(obd, cookie->lgc_lgl.lgl_oseq);
+        olg = filter_find_olg(obd, cookie->lgc_lgl.lgl_ogr);
         if (!olg) {
-                CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_oseq);
+                CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
                 GOTO(out, rc = 0);
         }
 
         ctxt = llog_group_get_ctxt(olg, cookie->lgc_subsys + 1);
         if (!ctxt) {
                 CERROR("no valid context for group "LPU64"\n",
-                        cookie->lgc_lgl.lgl_oseq);
+                        cookie->lgc_lgl.lgl_ogr);
                 GOTO(out, rc = 0);
         }
 
@@ -148,7 +148,7 @@ out:
         OBD_FREE(cookie, sizeof(*cookie));
 }
 
-/* Callback for processing the unlink log record received from MDS by
+/* Callback for processing the unlink log record received from MDS by 
  * llog_client_api. */
 static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                                       struct llog_rec_hdr *rec,
@@ -168,20 +168,12 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
-        oa->o_seq = lur->lur_oseq;
+        oa->o_gr = lur->lur_ogr;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
         /* objid gap may require to destroy several objects in row */
         count = lur->lur_count + 1;
-
-        /* This check is only valid before FID-on-OST and it should
-         * be removed after FID-on-OST is implemented */
-        if (oa->o_seq > FID_SEQ_OST_MAX) {
-                CERROR("%s: invalid group number "LPU64" > MAX_CMD_GROUP %d\n",
-                        exp->exp_obd->obd_name, oa->o_seq, FID_SEQ_OST_MAX);
-                RETURN(-EINVAL);
-        }
 
         while (count > 0) {
                 rc = filter_destroy(exp, oa, NULL, NULL, NULL, NULL);
@@ -222,14 +214,14 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
                 struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
 
                 oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_seq = lsr->lsr_oseq;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
                 oinfo.oi_oa->o_uid = lsr->lsr_uid;
                 oinfo.oi_oa->o_gid = lsr->lsr_gid;
         } else {
                 struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
 
                 oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_seq = lsr->lsr_oseq;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
                 oinfo.oi_oa->o_uid = lsr->lsr_uid;
                 oinfo.oi_oa->o_gid = lsr->lsr_gid;
         }
