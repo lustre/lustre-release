@@ -807,9 +807,12 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       atomic_read(&imp->imp_inval_count));
 
         lprocfs_stats_collect(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR, &ret);
-        if (ret.lc_count != 0)
-                do_div(ret.lc_sum, ret.lc_count);
-        else
+        if (ret.lc_count != 0) {
+                /* first argument to do_div MUST be __u64 */
+                __u64 sum = ret.lc_sum;
+                do_div(sum, ret.lc_count);
+                ret.lc_sum = sum;
+        } else
                 ret.lc_sum = 0;
         i += snprintf(page + i, count - i,
                       "    rpcs:\n"
@@ -851,7 +854,10 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                                       PTLRPC_LAST_CNTR + BRW_READ_BYTES + rw,
                                       &ret);
                 if (ret.lc_sum > 0 && ret.lc_count > 0) {
-                        do_div(ret.lc_sum, ret.lc_count);
+                        /* first argument to do_div MUST be __u64 */
+                        __u64 sum = ret.lc_sum;
+                        do_div(sum, ret.lc_count);
+                        ret.lc_sum = sum;
                         i += snprintf(page + i, count - i,
                                       "    %s_data_averages:\n"
                                       "       bytes_per_rpc: "LPU64"\n",
@@ -862,7 +868,10 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                 j = opcode_offset(OST_READ + rw) + EXTRA_MAX_OPCODES;
                 lprocfs_stats_collect(obd->obd_svc_stats, j, &ret);
                 if (ret.lc_sum > 0 && ret.lc_count != 0) {
-                        do_div(ret.lc_sum, ret.lc_count);
+                        /* first argument to do_div MUST be __u64 */
+                        __u64 sum = ret.lc_sum;
+                        do_div(sum, ret.lc_count);
+                        ret.lc_sum = sum;
                         i += snprintf(page + i, count - i,
                                       "       %s_per_rpc: "LPU64"\n",
                                       ret.lc_units, ret.lc_sum);
