@@ -286,6 +286,10 @@ Details    : dq_flags(struct dquot) access is not properly locked which could
 	     lead to certain inconsistencies when accessing it using non-atomic
 	     bit operations like __set_bit in do_set_dqblk.
 
+Severity   : normal
+Bugzilla   : 22360
+Description: return any pending async errors in close(2) using flush callback
+
 -------------------------------------------------------------------------------
 
 2010-01-29 Sun Microsystems, Inc.

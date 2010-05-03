@@ -3029,6 +3029,26 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         RETURN(retval);
 }
 
+int ll_flush(struct file *file, fl_owner_t id)
+{
+        struct inode *inode = file->f_dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        int rc, err;
+
+        /* catch async errors that were recorded back when async writeback
+         * failed for pages in this mapping. */
+        rc = lli->lli_async_rc;
+        lli->lli_async_rc = 0;
+        if (lsm) {
+                err = lov_test_and_clear_async_rc(lsm);
+                if (rc == 0)
+                        rc = err;
+        }
+
+        return rc;
+}
+
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
         struct inode *inode = dentry->d_inode;
@@ -3582,6 +3602,7 @@ struct file_operations ll_file_operations = {
         .sendfile       = ll_file_sendfile,
 #endif
         .fsync          = ll_fsync,
+        .flush          = ll_flush
 };
 
 struct file_operations ll_file_operations_flock = {
@@ -3609,6 +3630,7 @@ struct file_operations ll_file_operations_flock = {
         .sendfile       = ll_file_sendfile,
 #endif
         .fsync          = ll_fsync,
+        .flush          = ll_flush,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_flock,
 #endif
@@ -3641,6 +3663,7 @@ struct file_operations ll_file_operations_noflock = {
         .sendfile       = ll_file_sendfile,
 #endif
         .fsync          = ll_fsync,
+        .flush          = ll_flush,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_noflock,
 #endif
