@@ -1,0 +1,38 @@
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -2009,9 +2009,13 @@ repeat:
+ 			if (group == EXT4_SB(sb)->s_groups_count)
+ 				group = 0;
+ 
+-			/* quick check to skip empty groups */
++			/* If there's no chance that this group has a better
++			 * extent, just skip it instead of seeking to read
++			 * block bitmap from disk. Initially ac_b_ex.fe_len = 0,
++			 * so this always skips groups with no free space. */
++
+ 			grp = ext4_get_group_info(sb, group);
+-			if (grp->bb_free == 0)
++			if (grp->bb_free <= ac->ac_b_ex.fe_len)
+ 				continue;
+ 
+ 			/*
+@@ -2780,7 +2784,7 @@ int ext4_mb_init(struct super_block *sb,
+ 
+ 		sbi->s_mb_small_req = 256;
+ 		sbi->s_mb_large_req = 1024;
+-		sbi->s_mb_group_prealloc = 512;
++		sbi->s_mb_group_prealloc = 256;
+ 	} else {
+ 		sbi->s_mb_prealloc_table_size = 3;
+ 		i = sbi->s_mb_prealloc_table_size * sizeof(unsigned long);
+@@ -2798,7 +2802,7 @@ int ext4_mb_init(struct super_block *sb,
+ 
+ 		sbi->s_mb_small_req = sbi->s_stripe;
+ 		sbi->s_mb_large_req = sbi->s_stripe * 8;
+-		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
++		sbi->s_mb_group_prealloc = sbi->s_stripe;
+ 	}
+ 
+ 	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);

@@ -288,7 +288,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.19/fs/ext3/mballoc.c
-@@ -0,0 +1,4483 @@
+@@ -0,0 +1,4486 @@
 +/*
 + * Copyright 2009 Sun Microsystems, Inc.
 + * Written by Alex Zhuravlev <alex.zhuravlev@sun.com>
@@ -2126,9 +2126,12 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			if (group == EXT3_SB(sb)->s_groups_count)
 +				group = 0;
 +
-+			/* quick check to skip empty groups */
++			/* If there's no chance that this group has a better
++			 * extent, just skip it instead of seeking to read
++			 * block bitmap from disk. Initially ac_b_ex.fe_len = 0,
++			 * so this always skips groups with no free space. */
 +			grp = EXT3_GROUP_INFO(ac->ac_sb, group);
-+			if (grp->bb_free == 0)
++			if (grp->bb_free <= ac->ac_b_ex.fe_len)
 +				continue;
 +
 +			if (EXT3_MB_GRP_NEED_INIT(EXT3_GROUP_INFO(sb, group))) {
@@ -2802,7 +2805,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +
 +		sbi->s_mb_small_req = 256;
 +		sbi->s_mb_large_req = 1024;
-+		sbi->s_mb_group_prealloc = 512;
++		sbi->s_mb_group_prealloc = 256;
 +	} else {
 +		sbi->s_mb_prealloc_table_size = 3;
 +		i = sbi->s_mb_prealloc_table_size * sizeof(unsigned long);
@@ -2821,7 +2824,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +
 +		sbi->s_mb_small_req = sbi->s_stripe;
 +		sbi->s_mb_large_req = sbi->s_stripe * 8;
-+		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
++		sbi->s_mb_group_prealloc = sbi->s_stripe;
 +	}
 +
 +	i = sizeof(struct ext3_locality_group) * num_possible_cpus();
