@@ -46,24 +46,13 @@
  *  @{
  */
 
-static void lov_sub_enter(struct lov_io_sub *sub)
+static inline void lov_sub_enter(struct lov_io_sub *sub)
 {
-        ENTRY;
-        if (sub->sub_reenter++ == 0) {
-                sub->sub_cookie = cl_env_reenter();
-                cl_env_implant(sub->sub_env, &sub->sub_refcheck2);
-        }
-        EXIT;
+        sub->sub_reenter++;
 }
-
-static void lov_sub_exit(struct lov_io_sub *sub)
+static inline void lov_sub_exit(struct lov_io_sub *sub)
 {
-        ENTRY;
-        if (--sub->sub_reenter == 0) {
-                cl_env_unplant(sub->sub_env, &sub->sub_refcheck2);
-                cl_env_reexit(sub->sub_cookie);
-        }
-        EXIT;
+        sub->sub_reenter--;
 }
 
 static void lov_io_sub_fini(const struct lu_env *env, struct lov_io *lio,
