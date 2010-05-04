@@ -199,10 +199,6 @@ static struct ll_sb_info *ll_init_sbi(void)
         sbi->ll_flags |= LL_SBI_LRU_RESIZE;
 #endif
 
-#ifdef HAVE_EXPORT___IGET
-        INIT_LIST_HEAD(&sbi->ll_deathrow);
-        spin_lock_init(&sbi->ll_deathrow_lock);
-#endif
         for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_r_hist.oh_lock);
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
@@ -625,101 +621,6 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
         }
 }
 
-#ifdef HAVE_EXPORT___IGET
-static void prune_dir_dentries(struct inode *inode)
-{
-        struct dentry *dentry, *prev = NULL;
-
-        /* due to lustre specific logic, a directory
-         * can have few dentries - a bug from VFS POV */
-restart:
-        spin_lock(&dcache_lock);
-        if (!list_empty(&inode->i_dentry)) {
-                dentry = list_entry(inode->i_dentry.prev,
-                                    struct dentry, d_alias);
-                /* in order to prevent infinite loops we
-                 * break if previous dentry is busy */
-                if (dentry != prev) {
-                        prev = dentry;
-                        dget_locked(dentry);
-                        spin_unlock(&dcache_lock);
-
-                        /* try to kill all child dentries */
-                        shrink_dcache_parent(dentry);
-                        dput(dentry);
-
-                        /* now try to get rid of current dentry */
-                        d_prune_aliases(inode);
-                        goto restart;
-                }
-        }
-        spin_unlock(&dcache_lock);
-}
-
-static void prune_deathrow_one(struct ll_inode_info *lli)
-{
-        struct inode *inode = ll_info2i(lli);
-
-        /* first, try to drop any dentries - they hold a ref on the inode */
-        if (S_ISDIR(inode->i_mode))
-                prune_dir_dentries(inode);
-        else
-                d_prune_aliases(inode);
-
-
-        /* if somebody still uses it, leave it */
-        LASSERT(atomic_read(&inode->i_count) > 0);
-        if (atomic_read(&inode->i_count) > 1)
-                goto out;
-
-        CDEBUG(D_INODE, "inode %lu/%u(%d) looks a good candidate for prune\n",
-               inode->i_ino,inode->i_generation, atomic_read(&inode->i_count));
-
-        /* seems nobody uses it anymore */
-        inode->i_nlink = 0;
-
-out:
-        iput(inode);
-        return;
-}
-
-static void prune_deathrow(struct ll_sb_info *sbi, int try)
-{
-        struct ll_inode_info *lli;
-        int empty;
-
-        do {
-                if (need_resched() && try)
-                        break;
-
-                if (try) {
-                        if (!spin_trylock(&sbi->ll_deathrow_lock))
-                                break;
-                } else {
-                        spin_lock(&sbi->ll_deathrow_lock);
-                }
-
-                empty = 1;
-                lli = NULL;
-                if (!list_empty(&sbi->ll_deathrow)) {
-                        lli = list_entry(sbi->ll_deathrow.next,
-                                         struct ll_inode_info,
-                                         lli_dead_list);
-                        list_del_init(&lli->lli_dead_list);
-                        if (!list_empty(&sbi->ll_deathrow))
-                                empty = 0;
-                }
-                spin_unlock(&sbi->ll_deathrow_lock);
-
-                if (lli)
-                        prune_deathrow_one(lli);
-
-        } while (empty == 0);
-}
-#else /* !HAVE_EXPORT___IGET */
-#define prune_deathrow(sbi, try) do {} while (0)
-#endif /* HAVE_EXPORT___IGET */
-
 void client_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -728,9 +629,6 @@ void client_common_put_super(struct super_block *sb)
         ll_close_thread_shutdown(sbi->ll_lcq);
 
         lprocfs_unregister_mountpoint(sbi);
-
-        /* destroy inodes in deathrow */
-        prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
 
@@ -1411,12 +1309,6 @@ void ll_clear_inode(struct inode *inode)
 #endif
 
         lli->lli_inode_magic = LLI_INODE_DEAD;
-
-#ifdef HAVE_EXPORT___IGET
-        spin_lock(&sbi->ll_deathrow_lock);
-        list_del_init(&lli->lli_dead_list);
-        spin_unlock(&sbi->ll_deathrow_lock);
-#endif
 
         EXIT;
 }
@@ -2328,7 +2220,6 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
 
         LASSERT(*inode || sb);
         sbi = sb ? ll_s2sbi(sb) : ll_i2sbi(*inode);
-        prune_deathrow(sbi, 1);
 
         rc = mdc_req2lustre_md(req, offset, exp, &md);
         if (rc)

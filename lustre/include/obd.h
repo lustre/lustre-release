@@ -1259,6 +1259,8 @@ struct obd_ops {
                        struct lustre_handle *lockh, int *n_matches);
         int (*o_change_cbdata)(struct obd_export *, struct lov_stripe_md *,
                                ldlm_iterator_t it, void *data);
+        int (*o_find_cbdata)(struct obd_export *, struct lov_stripe_md *,
+                             ldlm_iterator_t it, void *data);
         int (*o_cancel)(struct obd_export *, struct lov_stripe_md *md,
                         __u32 mode, struct lustre_handle *, int flags,
                         obd_off end);
