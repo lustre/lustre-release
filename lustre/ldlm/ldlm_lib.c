@@ -1508,6 +1508,17 @@ static int check_for_next_transno(struct obd_device *obd)
         }
 
         spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_abort_recovery) {
+                CDEBUG(D_HA, "waking for aborted recovery\n");
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                return 1;
+        } else if (!obd->obd_recovering) {
+                CDEBUG(D_HA, "waking for completed recovery (?)\n");
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                return 1;
+        }
+
+        LASSERT(!list_empty(&obd->obd_recovery_queue));
         req = list_entry(obd->obd_recovery_queue.next,
                          struct ptlrpc_request, rq_list);
         max = obd->obd_max_recoverable_clients;
@@ -1522,13 +1533,7 @@ static int check_for_next_transno(struct obd_device *obd)
                "queue_len: %d, req_transno: "LPU64", next_transno: "LPU64"\n",
                max, connected, obd->obd_delayed_clients, completed, queue_len,
                req_transno, next_transno);
-        if (obd->obd_abort_recovery) {
-                CDEBUG(D_HA, "waking for aborted recovery\n");
-                wake_up = 1;
-        } else if (!obd->obd_recovering) {
-                CDEBUG(D_HA, "waking for completed recovery (?)\n");
-                wake_up = 1;
-        } else if (req_transno == next_transno) {
+        if (req_transno == next_transno) {
                 CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
                 wake_up = 1;
         } else if (queue_len == obd->obd_recoverable_clients) {
