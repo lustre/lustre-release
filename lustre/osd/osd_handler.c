@@ -2450,6 +2450,7 @@ static int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
         int err = 0;
         int size;
         int boffs;
+        int dirty_inode = 0;
 
         while (bufsize > 0) {
                 if (bh != NULL)
@@ -2494,9 +2495,11 @@ static int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
                         i_size_write(inode, new_size);
                 if (i_size_read(inode) > LDISKFS_I(inode)->i_disksize) {
                         LDISKFS_I(inode)->i_disksize = i_size_read(inode);
-                        inode->i_sb->s_op->dirty_inode(inode);
+                        dirty_inode = 1;
                 }
                 spin_unlock(&inode->i_lock);
+                if (dirty_inode)
+                        inode->i_sb->s_op->dirty_inode(inode);
         }
 
         if (err == 0)
