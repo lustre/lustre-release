@@ -225,5 +225,14 @@ static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 /* Quota stuff */
 extern quota_interface_t *filter_quota_interface_ref;
 
-
+/* sync on lock cancel is useless when we force a journal flush,
+ * and if we enable async journal commit, we should also turn on
+ * sync on lock cancel if it is not enabled already. */
+static inline void filter_slc_set(struct filter_obd *filter)
+{
+        if (filter->fo_syncjournal == 1)
+                filter->fo_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
+        else if (filter->fo_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
+                filter->fo_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
+}
 #endif /* _FILTER_INTERNAL_H */

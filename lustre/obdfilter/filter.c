@@ -1958,6 +1958,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
         filter->fo_syncjournal = 1; /* Sync journals on i/o by default b=19128 */
+        filter_slc_set(filter); /* initialize sync on lock cancel */
 
         rc = filter_prep(obd);
         if (rc)
@@ -3893,6 +3894,12 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
 
                 f_dput(dentry);
                 RETURN(rc);
+        }
+
+        if (KEY_IS(KEY_SYNC_LOCK_CANCEL)) {
+                *((__u32 *) val) = obd->u.filter.fo_sync_lock_cancel;
+                *vallen = sizeof(__u32);
+                RETURN(0);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");

@@ -1384,14 +1384,20 @@ int ost_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *desc,
                              void *data, int flag)
 {
-        struct obd_device *obd = lock->l_export->exp_obd;
-        if (flag == LDLM_CB_CANCELING &&
+        __u32 sync_lock_cancel = 0;
+        __u32 len = sizeof(sync_lock_cancel);
+        int rc = 0;
+        ENTRY;
+
+        rc = obd_get_info(lock->l_export, sizeof(KEY_SYNC_LOCK_CANCEL),
+                          KEY_SYNC_LOCK_CANCEL, &len, &sync_lock_cancel, NULL);
+
+        if (!rc && flag == LDLM_CB_CANCELING &&
             (lock->l_granted_mode & (LCK_PW|LCK_GROUP)) &&
-            (obd->u.ost.ost_sync_on_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
-             (obd->u.ost.ost_sync_on_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
+            (sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
+             (sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
               lock->l_flags & LDLM_FL_CBPENDING))) {
                 struct obd_info *oinfo;
-                int rc;
 
                 OBD_ALLOC_PTR(oinfo);
                 if (!oinfo)
@@ -2044,9 +2050,6 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         sema_init(&ost->ost_health_sem, 1);
-
-        /* Always sync on lock cancel */
-        ost->ost_sync_on_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */

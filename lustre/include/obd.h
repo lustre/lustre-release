@@ -349,6 +349,7 @@ struct filter_obd {
         unsigned long        fo_read_cache:1,         /* read-only cache */
                              fo_writethrough_cache:1, /* writetrhough cache */
                              fo_syncjournal:1,      /* sync journal on writes */
+                             fo_sync_lock_cancel:2, /* sync on lock cancel */
                              fo_raid_degraded:1;    /* RAID device degraded */
 
         struct obd_import   *fo_mdc_imp;
@@ -400,6 +401,14 @@ struct filter_obd {
 #define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
 #define OSC_MAX_DIRTY_MB_MAX   2048     /* arbitrary, but < MAX_LONG bytes */
 #define OSC_DEFAULT_RESENDS      10
+
+/* possible values for fo_sync_lock_cancel */
+enum {
+        NEVER_SYNC_ON_CANCEL = 0,
+        BLOCKING_SYNC_ON_CANCEL = 1,
+        ALWAYS_SYNC_ON_CANCEL = 2,
+        NUM_SYNC_ON_CANCEL_STATES
+};
 
 #define MDC_MAX_RIF_DEFAULT       8
 #define MDC_MAX_RIF_MAX         512
@@ -657,7 +666,6 @@ struct ost_obd {
         struct ptlrpc_service *ost_create_service;
         struct ptlrpc_service *ost_io_service;
         struct semaphore       ost_health_sem;
-        int                    ost_sync_on_lock_cancel;
 };
 
 struct echo_client_obd {
@@ -1108,6 +1116,7 @@ enum obd_cleanup_stage {
 #define KEY_MAX_EASIZE          "max_ea_size"
 #define KEY_FIEMAP              "fiemap"
 #define KEY_CONNECT_FLAG        "connect_flags"
+#define KEY_SYNC_LOCK_CANCEL    "sync_lock_cancel"
 /* XXX unused */
 #define KEY_ASYNC               "async"
 #define KEY_CAPA_KEY            "capa_key"
