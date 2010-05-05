@@ -605,10 +605,10 @@ granted:
         cfs_list_del_init(&lock->l_flock_waitq);
         cfs_spin_unlock(&ldlm_flock_waitq_lock);
 
+        lock_res_and_lock(lock);
         /* ldlm_lock_enqueue() has already placed lock on the granted list. */
         cfs_list_del_init(&lock->l_res_link);
 
-        lock_res_and_lock(lock);
         if (flags & LDLM_FL_TEST_LOCK) {
                 /* fcntl(F_GETLK) request */
                 /* The old mode was saved in getlk->fl_type so that if the mode
