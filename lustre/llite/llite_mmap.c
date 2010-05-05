@@ -153,7 +153,7 @@ int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
         LASSERT(io->ci_obj != NULL);
 
         fio = &io->u.ci_fault;
-        fio->ft_index      = vma->vm_pgoff + index;
+        fio->ft_index      = index;
         fio->ft_writable   = (vma->vm_flags&writable) == writable;
         fio->ft_executable = vma->vm_flags&VM_EXEC;
 
@@ -213,7 +213,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         int                     result;
         ENTRY;
 
-        pg_offset = (address - vma->vm_start) >> PAGE_SHIFT;
+        pg_offset = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
         result = ll_fault_io_init(vma, &env,  &nest, pg_offset, &ra_flags);
         if (env == NULL)
                 return NOPAGE_SIGBUS;
