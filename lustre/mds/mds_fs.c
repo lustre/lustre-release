@@ -283,6 +283,10 @@ int mds_client_free(struct obd_export *exp)
         if (!med->med_lcd)
                 RETURN(0);
 
+        /* Do not erase record for recoverable client. */
+        if (obd->obd_fail && !exp->exp_failed)
+                GOTO(free, 0);
+
         /* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 GOTO(free, 0);

@@ -466,11 +466,11 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 obd->obd_fail = 1;
                                 obd->obd_no_transno = 1;
                                 obd->obd_no_recov = 1;
-                                /* Set the obd readonly if we can */
-                                if (OBP(obd, iocontrol))
-                                        obd_iocontrol(OBD_IOC_SET_READONLY,
+                                if (OBP(obd, iocontrol)) {
+                                        obd_iocontrol(OBD_IOC_SYNC,
                                                       obd->obd_self_export,
                                                       0, NULL, NULL);
+                                }
                                 break;
                         default:
                                 CERROR("unrecognised flag '%c'\n",

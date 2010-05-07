@@ -470,6 +470,10 @@ static int filter_client_free(struct obd_export *exp)
         if (fed->fed_lcd == NULL)
                 RETURN(0);
 
+        /* Do not erase record for recoverable client. */
+        if (obd->obd_fail && !exp->exp_failed)
+                GOTO(free, 0);
+
         /* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (strcmp(fed->fed_lcd->lcd_uuid, obd->obd_uuid.uuid ) == 0)
                 GOTO(free, 0);

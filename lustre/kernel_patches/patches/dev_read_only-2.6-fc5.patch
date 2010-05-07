@@ -16,7 +16,7 @@ Index: linux-2.6.16.i686/block/ll_rw_blk.c
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
 +		/* this is cfs's dev_rdonly check */
-+		if (bio->bi_rw == WRITE &&
++		if (bio_rw(bio) == WRITE &&
 +				dev_check_rdonly(bio->bi_bdev)) {
 +			bio_endio(bio, bio->bi_size, 0);
 +			break;
