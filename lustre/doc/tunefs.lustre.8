@@ -68,13 +68,21 @@ Print less information.
 Print more information.
 .TP
 .BI \--writeconf
-Erase all config logs for the filesystem that this MDT is part of, and
-regenerate them.  This is very dangerous.  All clients and servers should
-be stopped.
-All targets must then be restarted to regenerate the logs.  
+Erase the configuration logs for the filesystem that this server is part of, and regenerate them. This is very dangerous.  All clients must be unmounted and servers for this filesystem should be stopped.  
+All targets (OSTs/MDTs) must then be restarted to regenerate the logs. 
 No clients should be started until all targets have restarted.
-In general this should be executed on the MDT only, not the OSTs.
-
+.br
+Correct order of operations is:
+.br
+* Unmount all clients of this filesystem
+.br
+* Unmount MDT and all OSTs of this filesystem
+.br
+* Run \fBtunefs.lustre --writeconf <device>\fR on every server
+.br
+* Mount MDT and OSTs
+.br
+* Mount clients
 .SH EXAMPLES
 .TP
 .B tunefs.lustre --erase-param --mgsnode=<new_nid> --writeconf /dev/sda
