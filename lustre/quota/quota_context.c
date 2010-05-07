@@ -1485,18 +1485,10 @@ lqs_key(struct hlist_node *hnode)
 static int
 lqs_compare(void *key, struct hlist_node *hnode)
 {
-        struct lustre_qunit_size *q;
-        int rc;
-        ENTRY;
+        struct lustre_qunit_size *q =
+            hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
-        LASSERT(key);
-        q = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-
-        spin_lock(&q->lqs_lock);
-        rc = (q->lqs_key == *((unsigned long long *)key));
-        spin_unlock(&q->lqs_lock);
-
-        RETURN(rc);
+        RETURN(q->lqs_key == *((unsigned long long *)key));
 }
 
 static void *

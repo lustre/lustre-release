@@ -677,6 +677,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         DQUOT_INIT(inode);
+        fsfilt_check_slow(obd, now, "quota init");
 
         LOCK_INODE_MUTEX(inode);
         fsfilt_check_slow(obd, now, "i_mutex");
