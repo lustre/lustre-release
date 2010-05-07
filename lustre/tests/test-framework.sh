@@ -248,6 +248,8 @@ load_module() {
     shift
     BASE=`basename $module $EXT`
 
+    module_loaded ${BASE} && return
+
     # If no module arguments were passed, get them from $MODOPTS_<MODULE>, else from
     # modprobe.conf
     if [ $# -eq 0 ]; then
@@ -275,8 +277,6 @@ load_module() {
 
     [ $# -gt 0 ] && echo "${module} options: '$*'"
 
-    module_loaded ${BASE} && return
-
     # Note that insmod will ignore anything in modprobe.conf, which is why we're
     # passing options on the command-line.
     if [ "$BASE" == "lnet_selftest" ] && \
@@ -301,12 +301,6 @@ load_modules_local() {
         echo "Using modprobe to load modules"
         return 0
     fi
-    if [ "$HAVE_MODULES" = true ]; then
-        # we already loaded
-        echo "Modules already loaded"
-        return 0
-    fi
-    HAVE_MODULES=true
 
     echo Loading modules from $LUSTRE
     load_module ../libcfs/libcfs/libcfs
@@ -391,8 +385,6 @@ unload_modules() {
             do_rpc_nodes $list check_mem_leak
         fi
     fi
-
-    HAVE_MODULES=false
 
     check_mem_leak || return 254
 
@@ -3942,6 +3934,9 @@ run_llverdev()
         local dev=$1
         local devname=$(basename $1)
         local size=$(grep "$devname"$ /proc/partitions | awk '{print $3}')
+	# loop devices aren't in /proc/partitions
+	[ "x$size" == "x" ] && local size=$(ls -l $dev | awk '{print $5}')
+
         size=$(($size / 1024 / 1024)) # Gb
 
         local partial_arg=""

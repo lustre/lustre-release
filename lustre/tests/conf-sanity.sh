@@ -26,16 +26,19 @@ RLUSTRE=${RLUSTRE:-$LUSTRE}
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-init_logging
-# STORED_MDSSIZE is used in test_18
-if [ -n "$MDSSIZE" ]; then
-    STORED_MDSSIZE=$MDSSIZE
-fi
+
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default jouranl size
 MDSSIZE=200000
 OSTSIZE=200000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
+# STORED_MDSSIZE is used in test_18
+if [ -n "$MDSSIZE" ]; then
+    STORED_MDSSIZE=$MDSSIZE
+fi
+
+init_logging
 
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
@@ -151,9 +154,9 @@ manual_umount_client(){
 }
 
 setup() {
-	start_ost
-	start_mds
-	mount_client $MOUNT
+	start_ost || error "OST start failed"
+	start_mds || error "MDT start failed"
+	mount_client $MOUNT || error "client start failed"
 }
 
 setup_noconfig() {
@@ -222,7 +225,9 @@ run_test 0 "single mount setup"
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	setup
+	start_ost && error "2nd OST start should fail"
+	start_mds || error "MDT start failed"
+	mount_client $MOUNT || error "client start failed"
 	check_mount || return 42
 	cleanup || return $?
 }
@@ -232,7 +237,7 @@ test_2() {
 	start_ost
 	start_mds
 	echo "start mds second time.."
-	start_mds
+	start_mds && error "2nd MDT start should fail"
 	mount_client $MOUNT
 	check_mount || return 43
 	cleanup || return $?
@@ -242,7 +247,7 @@ run_test 2 "start up mds twice (should return err)"
 test_3() {
 	setup
 	#mount.lustre returns an error if already in mtab
-	mount_client $MOUNT && return $?
+	mount_client $MOUNT && error "2nd client mount should fail"
 	check_mount || return 44
 	cleanup || return $?
 }
@@ -2303,6 +2308,7 @@ thread_sanity() {
         # Workaround a YALA bug where YALA expects that modules will remain
         # loaded on the servers
         LOAD_MODULES_REMOTE=false
+        load_modules
         setup
         cleanup
 }
