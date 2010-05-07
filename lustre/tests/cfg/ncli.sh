@@ -15,5 +15,9 @@ init_clients_lists
 # default boulder cluster iozone location
 export PATH=/opt/iozone/bin:$PATH
 SHARED_DIRECTORY=${SHARED_DIRECTORY:-""}	# bug 17839 comment 65
-LOADS="dd tar dbench iozone"
+LOADS=${LOADS:-"dd tar dbench iozone"}
+for i in $LOADS; do
+    [ -f $LUSTRE/tests/run_${i}.sh ] || \
+        error "incorrect load: $i"
+done
 CLIENT_LOADS=($LOADS)
