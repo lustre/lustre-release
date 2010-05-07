@@ -331,6 +331,7 @@ AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
                        [use alternate names for ldiskfs-enabled e2fsprogs]),
 	[],[withval='no'])
 
+AC_MSG_CHECKING([whether to use alternate names for e2fsprogs])
 if test x$withval = xyes ; then
 	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
 	E2FSPROGS="ldiskfsprogs"
