@@ -250,25 +250,8 @@ test_13() {
 }
 run_test 13 "close resend timeout"
 
-test_14a() {
-    replay_barrier $SINGLEMDS
-    createmany -o $MOUNT1/$tfile- 25
-    createmany -o $MOUNT2/$tfile-2- 1
-    createmany -o $MOUNT1/$tfile-3- 25
-    umount $MOUNT2
-
-    facet_failover $SINGLEMDS
-    # expect failover to fail due to missing client 2
-    client_evicted || return 1
-    sleep 1
-
-    # first 25 files should have been replayed 
-    unlinkmany $MOUNT1/$tfile- 25 || return 2
-
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail" 
-    return 0
-}
-run_test 14a "timeouts waiting for lost client during replay"
+# test 14a removed after 18143 because it shouldn't fail anymore and do the same
+# as test_15a
 
 test_14b() {
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`

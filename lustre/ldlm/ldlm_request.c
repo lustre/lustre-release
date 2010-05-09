@@ -2106,6 +2106,10 @@ int ldlm_replay_locks(struct obd_import *imp)
 
         LASSERT(cfs_atomic_read(&imp->imp_replay_inflight) == 0);
 
+        /* don't replay locks if import failed recovery */
+        if (imp->imp_vbr_failed)
+                RETURN(0);
+
         /* ensure this doesn't fall to 0 before all have been queued */
         cfs_atomic_inc(&imp->imp_replay_inflight);
 

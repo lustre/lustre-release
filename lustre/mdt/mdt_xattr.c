@@ -352,8 +352,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         if (IS_ERR(obj))
                 GOTO(out, rc =  PTR_ERR(obj));
 
-        info->mti_mos[0] = obj;
-        rc = mdt_version_get_check(info, 0);
+        info->mti_mos = obj;
+        rc = mdt_version_get_check_save(info, obj, 0);
         if (rc)
                 GOTO(out_unlock, rc);
 

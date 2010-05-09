@@ -2363,7 +2363,7 @@ static void mdd_version_set(const struct lu_env *env, struct md_object *obj,
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
 
         LASSERT(mdd_object_exists(mdd_obj));
-        return do_version_set(env, mdd_object_child(mdd_obj), version);
+        do_version_set(env, mdd_object_child(mdd_obj), version);
 }
 
 const struct md_object_operations mdd_obj_ops = {

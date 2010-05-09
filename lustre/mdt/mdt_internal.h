@@ -337,8 +337,8 @@ struct mdt_thread_info {
         struct mdt_reint_record    mti_rr;
 
         /** md objects included in operation */
-        struct mdt_object         *mti_mos[PTLRPC_NUM_VERSIONS];
-
+        struct mdt_object         *mti_mos;
+        __u64                      mti_ver[PTLRPC_NUM_VERSIONS];
         /*
          * Operation specification (currently create and lookup)
          */
@@ -392,11 +392,6 @@ struct mdt_thread_info {
         struct lu_name             mti_name;
         struct md_attr             mti_tmp_attr;
 };
-
-#define mti_parent      mti_mos[0]
-#define mti_child       mti_mos[1]
-#define mti_parent1     mti_mos[2]
-#define mti_child1      mti_mos[3]
 
 typedef void (*mdt_cb_t)(const struct mdt_device *mdt, __u64 transno,
                          void *data, int err);
@@ -452,6 +447,12 @@ static inline struct md_object *mdt_object_child(struct mdt_object *o)
 static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 {
          return info->mti_pill ? info->mti_pill->rc_req : NULL;
+}
+
+static inline int req_is_replay(struct ptlrpc_request *req)
+{
+        LASSERT(req->rq_reqmsg);
+        return !!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
 }
 
 static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
@@ -644,7 +645,10 @@ int mdt_check_ucred(struct mdt_thread_info *);
 int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
 int mdt_init_ucred_reint(struct mdt_thread_info *);
 void mdt_exit_ucred(struct mdt_thread_info *);
-int mdt_version_get_check(struct mdt_thread_info *, int);
+int mdt_version_get_check(struct mdt_thread_info *, struct mdt_object *, int);
+void mdt_version_get_save(struct mdt_thread_info *, struct mdt_object *, int);
+int mdt_version_get_check_save(struct mdt_thread_info *, struct mdt_object *,
+                               int);
 
 /* mdt_idmap.c */
 int mdt_init_sec_level(struct mdt_thread_info *);

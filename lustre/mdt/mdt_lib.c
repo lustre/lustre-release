@@ -1071,8 +1071,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
 
-        if (lustre_msg_get_flags(mdt_info_req(info)->rq_reqmsg) & MSG_REPLAY)
-                info->mti_spec.no_create = 1;
+        info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
 
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
@@ -1132,8 +1131,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
 
-        if (lustre_msg_get_flags(mdt_info_req(info)->rq_reqmsg) & MSG_REPLAY)
-                info->mti_spec.no_create = 1;
+        info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
 
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
@@ -1183,8 +1181,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 mdt_set_capainfo(info, 0, rr->rr_fid1,
                                  req_capsule_client_get(pill, &RMF_CAPA1));
-        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
-            (req_capsule_get_size(pill, &RMF_CAPA2, RCL_CLIENT))) {
+        if (req_is_replay(req) &&
+            req_capsule_get_size(pill, &RMF_CAPA2, RCL_CLIENT)) {
 #if 0
                 mdt_set_capainfo(info, 1, rr->rr_fid2,
                                  req_capsule_client_get(pill, &RMF_CAPA2));
@@ -1207,8 +1205,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                                                      RCL_CLIENT);
         if (sp->u.sp_ea.eadatalen) {
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill, &RMF_EADATA);
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-                        sp->no_create = 1;
+                sp->no_create = !!req_is_replay(req);
         }
 
         RETURN(0);

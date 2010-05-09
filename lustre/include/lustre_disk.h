@@ -204,6 +204,7 @@ struct lustre_mount_data {
 #define LR_EPOCH_BITS   32
 #define lr_epoch(a) ((a) >> LR_EPOCH_BITS)
 #define LR_EXPIRE_INTERVALS 16 /**< number of intervals to track transno */
+#define ENOENT_VERSION 1 /** 'virtual' version of non-existent object */
 
 #define LR_SERVER_SIZE   512
 #define LR_CLIENT_START 8192

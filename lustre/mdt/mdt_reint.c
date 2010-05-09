@@ -96,52 +96,176 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
         RETURN(rc);
 }
 
-int mdt_version_get_check(struct mdt_thread_info *info, int index)
+/**
+ * Get version of object by fid.
+ *
+ * Return real version or ENOENT_VERSION if object doesn't exist
+ */
+static void mdt_obj_version_get(struct mdt_thread_info *info,
+                                struct mdt_object *o, __u64 *version)
 {
-        /** version recovery */
-        struct md_object *mo;
-        struct ptlrpc_request *req = mdt_info_req(info);
-        __u64 curr_version, *pre_versions;
+        LASSERT(o);
+        LASSERT(mdt_object_exists(o) >= 0);
+        if (mdt_object_exists(o) > 0)
+                *version = mo_version_get(info->mti_env, mdt_object_child(o));
+        else
+                *version = ENOENT_VERSION;
+        CDEBUG(D_INODE, "FID "DFID" version is "LPX64"\n",
+               PFID(mdt_object_fid(o)), *version);
+}
+
+/**
+ * Check version is correct.
+ *
+ * Should be called only during replay.
+ */
+static int mdt_version_check(struct ptlrpc_request *req,
+                             __u64 version, int idx)
+{
+        __u64 *pre_ver = lustre_msg_get_versions(req->rq_reqmsg);
         ENTRY;
 
         if (!exp_connect_vbr(req->rq_export))
                 RETURN(0);
 
-        LASSERT(info->mti_mos[index]);
-        if (mdt_object_exists(info->mti_mos[index]) == 0)
-                RETURN(-ESTALE);
-        mo = mdt_object_child(info->mti_mos[index]);
-
-        curr_version = mo_version_get(info->mti_env, mo);
-        CDEBUG(D_INODE, "Version is "LPX64"\n", curr_version);
+        LASSERT(req_is_replay(req));
         /** VBR: version is checked always because costs nothing */
-        if (lustre_msg_get_transno(req->rq_reqmsg) != 0) {
-                pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
-                LASSERT(index < PTLRPC_NUM_VERSIONS);
-                /** Sanity check for malformed buffers */
-                if (pre_versions == NULL) {
-                        CERROR("No versions in request buffer\n");
-                        cfs_spin_lock(&req->rq_export->exp_lock);
-                        req->rq_export->exp_vbr_failed = 1;
-                        cfs_spin_unlock(&req->rq_export->exp_lock);
-                        RETURN(-EOVERFLOW);
-                } else if (pre_versions[index] != curr_version) {
-                        CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
-                               pre_versions[index], curr_version);
-                        cfs_spin_lock(&req->rq_export->exp_lock);
-                        req->rq_export->exp_vbr_failed = 1;
-                        cfs_spin_unlock(&req->rq_export->exp_lock);
-                        RETURN(-EOVERFLOW);
-                }
+        LASSERT(idx < PTLRPC_NUM_VERSIONS);
+        /** Sanity check for malformed buffers */
+        if (pre_ver == NULL) {
+                CERROR("No versions in request buffer\n");
+                cfs_spin_lock(&req->rq_export->exp_lock);
+                req->rq_export->exp_vbr_failed = 1;
+                cfs_spin_unlock(&req->rq_export->exp_lock);
+                RETURN(-EOVERFLOW);
+        } else if (pre_ver[idx] != version) {
+                CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+                       pre_ver[idx], version);
+                cfs_spin_lock(&req->rq_export->exp_lock);
+                req->rq_export->exp_vbr_failed = 1;
+                cfs_spin_unlock(&req->rq_export->exp_lock);
+                RETURN(-EOVERFLOW);
         }
-        /** save pre-versions in reply */
-        LASSERT(req->rq_repmsg != NULL);
-        pre_versions = lustre_msg_get_versions(req->rq_repmsg);
-        if (pre_versions)
-                pre_versions[index] = curr_version;
         RETURN(0);
 }
 
+/**
+ * Save pre-versions in reply.
+ */
+static void mdt_version_save(struct ptlrpc_request *req, __u64 version,
+                             int idx)
+{
+        __u64 *reply_ver;
+
+        if (!exp_connect_vbr(req->rq_export))
+                return;
+
+        LASSERT(!req_is_replay(req));
+        LASSERT(req->rq_repmsg != NULL);
+        reply_ver = lustre_msg_get_versions(req->rq_repmsg);
+        if (reply_ver)
+                reply_ver[idx] = version;
+}
+
+/**
+ * Save enoent version, it is needed when it is obvious that object doesn't
+ * exist, e.g. child during create.
+ */
+static void mdt_enoent_version_save(struct mdt_thread_info *info, int idx)
+{
+        /* save version of file name for replay, it must be ENOENT here */
+        if (!req_is_replay(mdt_info_req(info))) {
+                info->mti_ver[idx] = ENOENT_VERSION;
+                mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
+        }
+}
+
+/**
+ * Get version from disk and save in reply buffer.
+ *
+ * Versions are saved in reply only during normal operations not replays.
+ */
+void mdt_version_get_save(struct mdt_thread_info *info,
+                          struct mdt_object *mto, int idx)
+{
+        /* don't save versions during replay */
+        if (!req_is_replay(mdt_info_req(info))) {
+                mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
+                mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
+        }
+}
+
+/**
+ * Get version from disk and check it, no save in reply.
+ */
+int mdt_version_get_check(struct mdt_thread_info *info,
+                          struct mdt_object *mto, int idx)
+{
+        /* only check versions during replay */
+        if (!req_is_replay(mdt_info_req(info)))
+                return 0;
+
+        mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
+        return mdt_version_check(mdt_info_req(info), info->mti_ver[idx], idx);
+}
+
+/**
+ * Get version from disk and check if recovery or just save.
+ */
+int mdt_version_get_check_save(struct mdt_thread_info *info,
+                               struct mdt_object *mto, int idx)
+{
+        int rc = 0;
+
+        mdt_obj_version_get(info, mto, &info->mti_ver[idx]);
+        if (req_is_replay(mdt_info_req(info)))
+                rc = mdt_version_check(mdt_info_req(info), info->mti_ver[idx],
+                                       idx);
+        else
+                mdt_version_save(mdt_info_req(info), info->mti_ver[idx], idx);
+        return rc;
+}
+
+/**
+ * Lookup with version checking.
+ *
+ * This checks version of 'name'. Many reint functions uses 'name' for child not
+ * FID, therefore we need to get object by name and check its version.
+ */
+int mdt_lookup_version_check(struct mdt_thread_info *info,
+                             struct mdt_object *p, struct lu_name *lname,
+                             struct lu_fid *fid, int idx)
+{
+        int rc, vbrc;
+
+        rc = mdo_lookup(info->mti_env, mdt_object_child(p), lname, fid,
+                        &info->mti_spec);
+        /* Check version only during replay */
+        if (!req_is_replay(mdt_info_req(info)))
+                return rc;
+
+        info->mti_ver[idx] = ENOENT_VERSION;
+        if (rc == 0) {
+                struct mdt_object *child;
+                child = mdt_object_find(info->mti_env, info->mti_mdt, fid);
+                if (likely(!IS_ERR(child))) {
+                        mdt_obj_version_get(info, child, &info->mti_ver[idx]);
+                        mdt_object_put(info->mti_env, child);
+                }
+        }
+        vbrc = mdt_version_check(mdt_info_req(info), info->mti_ver[idx], idx);
+        return vbrc ? vbrc : rc;
+
+}
+
+/*
+ * VBR: we save three versions in reply:
+ * 0 - parent. Check that parent version is the same during replay.
+ * 1 - name. Version of 'name' if file exists with the same name or
+ * ENOENT_VERSION, it is needed because file may appear due to missed replays.
+ * 2 - child. Version of child by FID. Must be ENOENT. It is mostly sanity
+ * check.
+ */
 static int mdt_md_create(struct mdt_thread_info *info)
 {
         struct mdt_device       *mdt = info->mti_mdt;
@@ -168,6 +292,24 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (IS_ERR(parent))
                 RETURN(PTR_ERR(parent));
 
+        rc = mdt_version_get_check_save(info, parent, 0);
+        if (rc)
+                GOTO(out_put_parent, rc);
+
+        /*
+         * Check child name version during replay.
+         * During create replay a file may exist with same name.
+         */
+        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
+        rc = mdt_lookup_version_check(info, parent, lname,
+                                      &info->mti_tmp_fid1, 1);
+        /* -ENOENT is expected here */
+        if (rc != 0 && rc != -ENOENT)
+                GOTO(out_put_parent, rc);
+
+        /* save version of file name for replay, it must be ENOENT here */
+        mdt_enoent_version_save(info, 1);
+
         child = mdt_object_find(info->mti_env, mdt, rr->rr_fid2);
         if (likely(!IS_ERR(child))) {
                 struct md_object *next = mdt_object_child(parent);
@@ -182,9 +324,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
-                info->mti_mos[0] = parent;
-                info->mti_mos[1] = child;
-                rc = mdt_version_get_check(info, 0);
+                /* Version of child will be updated on disk. */
+                info->mti_mos = child;
+                rc = mdt_version_get_check_save(info, child, 2);
                 if (rc)
                         GOTO(out_put_child, rc);
 
@@ -199,8 +341,6 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 info->mti_spec.sp_cr_lookup = 1;
                 info->mti_spec.sp_feat = &dt_directory_features;
 
-                lname = mdt_name(info->mti_env, (char *)rr->rr_name,
-                                 rr->rr_namelen);
                 rc = mdo_create(info->mti_env, next, lname,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);
@@ -212,10 +352,11 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 }
 out_put_child:
                 mdt_object_put(info->mti_env, child);
-        } else
+        } else {
                 rc = PTR_ERR(child);
-
+        }
         mdt_create_pack_capa(info, rc, child, repbody);
+out_put_parent:
         mdt_object_unlock_put(info, parent, lh, rc);
         RETURN(rc);
 }
@@ -312,8 +453,9 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 
         /* VBR: update version if attr changed are important for recovery */
         if (do_vbr) {
-                info->mti_mos[0] = mo;
-                rc = mdt_version_get_check(info, 0);
+                /* update on-disk version of changed object */
+                info->mti_mos = mo;
+                rc = mdt_version_get_check_save(info, mo, 0);
                 if (rc)
                         GOTO(out_unlock, rc);
         }
@@ -497,6 +639,10 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         RETURN(rc);
 }
 
+/*
+ * VBR: save parent version in reply and child version getting by its name.
+ * Version of child is getting and checking during its lookup. If 
+ */
 static int mdt_reint_unlink(struct mdt_thread_info *info,
                             struct mdt_lock_handle *lhc)
 {
@@ -546,8 +692,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out, rc);
         }
 
-        info->mti_mos[0] = mp;
-        rc = mdt_version_get_check(info, 0);
+        rc = mdt_version_get_check_save(info, mp, 0);
         if (rc)
                 GOTO(out_unlock_parent, rc);
 
@@ -575,8 +720,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         /* step 2: find & lock the child */
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
-        rc = mdo_lookup(info->mti_env, mdt_object_child(mp),
-                        lname, child_fid, &info->mti_spec);
+        /* lookup child object along with version checking */
+        rc = mdt_lookup_version_check(info, mp, lname, child_fid, 1);
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
 
@@ -595,12 +740,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
-
-        info->mti_mos[1] = mc;
-        rc = mdt_version_get_check(info, 1);
-        if (rc)
-                GOTO(out_unlock_child, rc);
-
+        /* save version when object is locked */
+        mdt_version_get_save(info, mc, 1);
         /*
          * Now we can only make sure we need MA_INODE, in mdd layer, will check
          * whether need MA_LOV and MA_COOKIE.
@@ -614,7 +755,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 mdt_handle_last_unlink(info, mc, ma);
 
         EXIT;
-out_unlock_child:
+
         mdt_object_unlock_put(info, mc, child_lh, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, parent_lh, rc);
@@ -622,6 +763,10 @@ out:
         return rc;
 }
 
+/*
+ * VBR: save versions in reply: 0 - parent; 1 - child by fid; 2 - target by
+ * name.
+ */
 static int mdt_reint_link(struct mdt_thread_info *info,
                           struct mdt_lock_handle *lhc)
 {
@@ -674,8 +819,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (IS_ERR(mp))
                 RETURN(PTR_ERR(mp));
 
-        info->mti_mos[0] = mp;
-        rc = mdt_version_get_check(info, 0);
+        rc = mdt_version_get_check_save(info, mp, 0);
         if (rc)
                 GOTO(out_unlock_parent, rc);
 
@@ -698,12 +842,22 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
-        info->mti_mos[1] = ms;
-        rc = mdt_version_get_check(info, 1);
+        info->mti_mos = ms;
+        rc = mdt_version_get_check_save(info, ms, 1);
         if (rc)
                 GOTO(out_unlock_child, rc);
 
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
+        /** check target version by name during replay */
+        rc = mdt_lookup_version_check(info, mp, lname, &info->mti_tmp_fid1, 2);
+        if (rc != 0 && rc != -ENOENT)
+                GOTO(out_unlock_child, rc);
+        /* save version of file name for replay, it must be ENOENT here */
+        if (!req_is_replay(mdt_info_req(info))) {
+                info->mti_ver[2] = ENOENT_VERSION;
+                mdt_version_save(mdt_info_req(info), info->mti_ver[2], 2);
+        }
+
         rc = mdo_link(info->mti_env, mdt_object_child(mp),
                       mdt_object_child(ms), lname, ma);
 
@@ -909,6 +1063,11 @@ static int mdt_rename_sanity(struct mdt_thread_info *info, struct lu_fid *fid)
         RETURN(rc);
 }
 
+/*
+ * VBR: rename versions in reply: 0 - src parent; 1 - tgt parent;
+ * 2 - src child; 3 - tgt child.
+ * Update on disk version of src child.
+ */
 static int mdt_reint_rename(struct mdt_thread_info *info,
                             struct mdt_lock_handle *lhc)
 {
@@ -932,7 +1091,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         ENTRY;
 
         if (info->mti_dlm_req)
-                ldlm_request_cancel(mdt_info_req(info), info->mti_dlm_req, 0);
+                ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
         if (info->mti_cross_ref) {
                 rc = mdt_reint_rename_tgt(info);
@@ -960,8 +1119,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (IS_ERR(msrcdir))
                 GOTO(out_rename_lock, rc = PTR_ERR(msrcdir));
 
-        info->mti_mos[0] = msrcdir;
-        rc = mdt_version_get_check(info, 0);
+        rc = mdt_version_get_check_save(info, msrcdir, 0);
         if (rc)
                 GOTO(out_unlock_source, rc);
 
@@ -985,31 +1143,30 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 if (IS_ERR(mtgtdir))
                         GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
 
+                /* check early, the real version will be saved after locking */
+                rc = mdt_version_get_check(info, mtgtdir, 1);
+                if (rc)
+                        GOTO(out_put_target, rc);
+
                 rc = mdt_object_exists(mtgtdir);
-                if (rc == 0)
-                        GOTO(out_unlock_target, rc = -ESTALE);
-                else if (rc > 0) {
+                if (rc == 0) {
+                        GOTO(out_put_target, rc = -ESTALE);
+                } else if (rc > 0) {
                         /* we lock the target dir if it is local */
                         rc = mdt_object_lock(info, mtgtdir, lh_tgtdirp,
                                              MDS_INODELOCK_UPDATE,
                                              MDT_LOCAL_LOCK);
-                        if (rc != 0) {
-                                mdt_object_put(info->mti_env, mtgtdir);
-                                GOTO(out_unlock_source, rc);
-                        }
-
-                        info->mti_mos[1] = mtgtdir;
-                        rc = mdt_version_get_check(info, 1);
-                        if (rc)
-                                GOTO(out_unlock_target, rc);
+                        if (rc != 0)
+                                GOTO(out_put_target, rc);
+                        /* get and save correct version after locking */
+                        mdt_version_get_save(info, mtgtdir, 1);
                 }
         }
 
         /* step 3: find & lock the old object. */
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         mdt_name_copy(&slname, lname);
-        rc = mdo_lookup(info->mti_env, mdt_object_child(msrcdir),
-                        &slname, old_fid, &info->mti_spec);
+        rc = mdt_lookup_version_check(info, msrcdir, &slname, old_fid, 2);
         if (rc != 0)
                 GOTO(out_unlock_target, rc);
 
@@ -1029,18 +1186,16 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 GOTO(out_unlock_target, rc);
         }
 
-        info->mti_mos[2] = mold;
-        rc = mdt_version_get_check(info, 2);
-        if (rc)
-                GOTO(out_unlock_old, rc);
-
+        info->mti_mos = mold;
+        /* save version after locking */
+        mdt_version_get_save(info, mold, 2);
         mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
 
         /* step 4: find & lock the new object. */
         /* new target object may not exist now */
         lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen);
-        rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
-                        lname, new_fid, &info->mti_spec);
+        /* lookup with version checking */
+        rc = mdt_lookup_version_check(info, mtgtdir, lname, new_fid, 3);
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment */
                 if (lu_fid_eq(old_fid, new_fid))
@@ -1061,15 +1216,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                         mdt_object_put(info->mti_env, mnew);
                         GOTO(out_unlock_old, rc);
                 }
-
-                info->mti_mos[3] = mnew;
-                rc = mdt_version_get_check(info, 3);
-                if (rc)
-                        GOTO(out_unlock_new, rc);
-
+                /* get and save version after locking */
+                mdt_version_get_save(info, mnew, 3);
                 mdt_set_capainfo(info, 3, new_fid, BYPASS_CAPA);
-        } else if (rc != -EREMOTE && rc != -ENOENT)
+        } else if (rc != -EREMOTE && rc != -ENOENT) {
                 GOTO(out_unlock_old, rc);
+        } else {
+                mdt_enoent_version_save(info, 3);
+        }
 
         /* step 5: rename it */
         mdt_reint_init_ma(info, ma);
@@ -1101,7 +1255,9 @@ out_unlock_new:
 out_unlock_old:
         mdt_object_unlock_put(info, mold, lh_oldp, rc);
 out_unlock_target:
-        mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
+        mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
+out_put_target:
+        mdt_object_put(info->mti_env, mtgtdir);
 out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
 out_rename_lock:

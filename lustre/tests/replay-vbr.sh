@@ -3,36 +3,40 @@
 set -e
 
 # bug number:  16356
-ALWAYS_EXCEPT="2     $REPLAY_VBR_EXCEPT"
+ALWAYS_EXCEPT="12a   $REPLAY_VBR_EXCEPT"
 
 SAVE_PWD=$PWD
-PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
-SETUP=${SETUP:-""}
-CLEANUP=${CLEANUP:-""}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+SETUP=${SETUP:-}
+CLEANUP=${CLEANUP:-}
+MOUNT_2=${MOUNT_2:-"yes"}
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
-[ -n "$CLIENTS" ] || { skip_env "Need two or more clients" && exit 0; }
-[ $CLIENTCOUNT -ge 2 ] || \
-    { skip_env "Need two or more clients, have $CLIENTCOUNT" && exit 0; }
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="7"
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-[ ! "$NAME" = "ncli" ] && ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
-[ "$NAME" = "ncli" ] && MOUNT_2=""
-MOUNT_2=""
 build_test_filter
 
 check_and_setup_lustre
+
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+
+# if there is no CLIENT1 defined, some tests can be ran on localhost
+CLIENT1=${CLIENT1:-$HOSTNAME}
+# if CLIENT2 doesn't exist then use CLIENT1 instead
+# All tests should use CLIENT2 with MOUNT2 only therefore it will work if
+# $CLIENT2 == CLIENT1
+# Exception is the test which need two separate nodes
+CLIENT2=${CLIENT2:-$CLIENT1}
+
+is_mounted $MOUNT2 || error "MOUNT2 is not mounted"
 
 rmultiop_start() {
     local client=$1
@@ -51,7 +55,7 @@ rmultiop_start() {
     # /tmp/multiop_bg.pid file
 
     local pid_file=$TMP/multiop_bg.pid.$$
-    do_node $client "rm -f $pid_file && MULTIOP_PID_FILE=$pid_file LUSTRE= runmultiop_bg_pause $file $cmds" &
+    do_node $client "MULTIOP_PID_FILE=$pid_file LUSTRE= sh runmultiop_bg_pause $file $cmds" &
     local pid=$!
     sleep 3
     local multiop_pid
@@ -85,7 +89,8 @@ get_version() {
     do_facet $SINGLEMDS $LCTL --device ${!var} getobjversion $fid
 }
 
-test_0a() {
+# test set #1: OPEN
+test_1a() { # former test_0a
     local file=$DIR/$tfile
     local pre
     local post
@@ -98,29 +103,29 @@ test_0a() {
         error "version changed unexpectedly: pre $pre, post $post"
     fi
 }
-run_test 0a "open and close do not change versions"
+run_test 1a "open and close do not change versions"
 
-test_0b() {
+test_1b() { # former test_0b
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
+    do_node $CLIENT1 mkdir -p -m 755 $MOUNT/$tdir
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR/$tdir
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
+    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT $MOUNT/$tdir/$tfile
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "open succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0b "open (O_CREAT) checks version of parent"
+run_test 1b "open (O_CREAT) checks version of parent"
 
-test_0c() {
+test_1c() { # former test_0c
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
@@ -128,52 +133,82 @@ test_0c() {
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tdir/$tfile
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR/$tdir
-    do_node $CLIENT2 chmod 666 $DIR/$tdir/$tfile
+    do_node $CLIENT2 chmod 0777 $MOUNT2/$tdir
+    do_node $CLIENT2 chmod 0666 $MOUNT2/$tdir/$tfile
     rmultiop_start $CLIENT1 $DIR/$tdir/$tfile o_c
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
+
     client_up $CLIENT1 || error "$CLIENT1 evicted"
-
     rmultiop_stop $CLIENT1 || error "close failed"
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0c "open (non O_CREAT) does not checks versions"
+run_test 1c "open (non O_CREAT) does not checks versions"
 
-test_0d() {
+# test set #2: CREAT (not open)
+# - version of parent is not changed but checked
+# - pre-version should be -1
+# - post-version should be valid
+test_2a() {  # extended former test_0d
     local pre
     local post
 
+    # fifo
     pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 mkfifo $DIR/$tfile
+    do_node $CLIENT1 mkfifo $DIR/$tfile-fifo
     post=$(get_version $CLIENT1 $DIR)
-    if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
+    if (($pre != $post)); then
+        error "version was changed: pre $pre, post $post"
     fi
-}
-run_test 0d "create changes version of parent"
+    # mkdir
+    pre=$(get_version $CLIENT1 $DIR)
+    do_node $CLIENT1 mkdir $DIR/$tfile-dir
+    post=$(get_version $CLIENT1 $DIR)
+    if (($pre != $post)); then
+        error "version was changed: pre $pre, post $post"
+    fi
+    do_node $CLIENT1 rmdir $DIR/$tfile-dir
 
-test_0e() {
+    # mknod
+    pre=$(get_version $CLIENT1 $DIR)
+    do_node $CLIENT1 mkfifo $DIR/$tfile-nod
+    post=$(get_version $CLIENT1 $DIR)
+    if (($pre != $post)); then
+        error "version was changed: pre $pre, post $post"
+    fi
+    # symlink
+    pre=$(get_version $CLIENT1 $DIR)
+    do_node $CLIENT1 mkfifo $DIR/$tfile-symlink
+    post=$(get_version $CLIENT1 $DIR)
+    if (($pre != $post)); then
+        error "version was changed: pre $pre, post $post"
+    fi
+    do_node $CLIENT1 rm $DIR/$tfile-*
+
+}
+run_test 2a "create operations doesn't change version of parent"
+
+test_2b() { # former test_0e
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR/$tdir
+    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
     do_node $CLIENT1 mkfifo $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "create succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0e "create checks version of parent"
+run_test 2b "create checks version of parent"
 
-test_0f() {
+test_3a() { # former test_0f
     local pre
     local post
 
@@ -181,13 +216,13 @@ test_0f() {
     pre=$(get_version $CLIENT1 $DIR)
     do_node $CLIENT1 rm $DIR/$tfile
     post=$(get_version $CLIENT1 $DIR)
-    if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
+    if (($pre != $post)); then
+        error "version was changed: pre $pre, post $post"
     fi
 }
-run_test 0f "unlink changes version of parent"
+run_test 3a "unlink doesn't change version of parent"
 
-test_0g() {
+test_3b() { # former test_0g
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
@@ -195,20 +230,20 @@ test_0g() {
     do_node $CLIENT1 mcreate $DIR/$tdir/$tfile
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR/$tdir
+    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
     do_node $CLIENT1 rm $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "unlink succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0g "unlink checks version of parent"
+run_test 3b "unlink checks version of parent"
 
-test_0h() {
+test_4a() { # former test_0h
     local file=$DIR/$tfile
     local pre
     local post
@@ -221,9 +256,9 @@ test_0h() {
         error "version not changed: pre $pre, post $post"
     fi
 }
-run_test 0h "setattr of UID changes versions"
+run_test 4a "setattr of UID changes versions"
 
-test_0i() {
+test_4b() { # former test_0i
     local file=$DIR/$tfile
     local pre
     local post
@@ -236,9 +271,9 @@ test_0i() {
         error "version not changed: pre $pre, post $post"
     fi
 }
-run_test 0i "setattr of GID changes versions"
+run_test 4b "setattr of GID changes versions"
 
-test_0j() {
+test_4c() { # former test_0j
     local file=$DIR/$tfile
     local var=${SINGLEMDS}_svc
 
@@ -246,20 +281,20 @@ test_0j() {
     do_node $CLIENT1 mcreate $file
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chown :$RUNAS_ID $file
+    do_node $CLIENT2 chown :$RUNAS_ID $MOUNT2/$tfile
     do_node $CLIENT1 chown $RUNAS_ID $file
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -u \\\#$UID $file; then
         error "setattr of UID succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0j "setattr of UID checks versions"
+run_test 4c "setattr of UID checks versions"
 
-test_0k() {
+test_4d() { # former test_0k
     local file=$DIR/$tfile
     local var=${SINGLEMDS}_svc
 
@@ -267,20 +302,20 @@ test_0k() {
     do_node $CLIENT1 mcreate $file
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chown $RUNAS_ID $file
+    do_node $CLIENT2 chown $RUNAS_ID $MOUNT2/$tfile
     do_node $CLIENT1 chown :$RUNAS_ID $file
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -g \\\#$UID $file; then
         error "setattr of GID succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0k "setattr of GID checks versions"
+run_test 4d "setattr of GID checks versions"
 
-test_0l() {
+test_4e() { # former test_0l
     local file=$DIR/$tfile
     local pre
     local post
@@ -293,9 +328,9 @@ test_0l() {
         error "version not changed: pre $pre, post $post"
     fi
 }
-run_test 0l "setattr of permission changes versions"
+run_test 4e "setattr of permission changes versions"
 
-test_0m() {
+test_4f() { # former test_0m
     local file=$DIR/$tfile
     local var=${SINGLEMDS}_svc
 
@@ -303,20 +338,20 @@ test_0m() {
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chown :$RUNAS_ID $file
+    do_node $CLIENT2 chown :$RUNAS_ID $MOUNT2/$tfile
     do_node $CLIENT1 chmod 666 $file
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -p 0644 $file; then
         error "setattr of permission succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0m "setattr of permission checks versions"
+run_test 4f "setattr of permission checks versions"
 
-test_0n() {
+test_4g() { # former test_0n
     local file=$DIR/$tfile
     local pre
     local post
@@ -330,7 +365,7 @@ test_0n() {
         error "version not changed: pre $pre, post $post"
     fi
 }
-run_test 0n "setattr of flags changes versions"
+run_test 4g "setattr of flags changes versions"
 
 checkattr() {
     local client=$1
@@ -344,7 +379,7 @@ checkattr() {
     do_node $client lsattr $file | cut -d ' ' -f 1 | grep -q $attr
 }
 
-test_0o() {
+test_4h() { # former test_0o
     local file=$DIR/$tfile
     local rc
     local var=${SINGLEMDS}_svc
@@ -353,9 +388,9 @@ test_0o() {
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 666 $file
+    do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
     do_node $CLIENT1 chattr +i $file
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
@@ -365,11 +400,11 @@ test_0o() {
     if [ $rc -eq 0 ]; then
         error "setattr of flags succeeded unexpectedly"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0o "setattr of flags checks versions"
+run_test 4h "setattr of flags checks versions"
 
-test_0p() {
+test_4i() { # former test_0p
     local file=$DIR/$tfile
     local pre
     local post
@@ -391,9 +426,9 @@ test_0p() {
         error "version changed unexpectedly: pre $pre, post $post"
     fi
 }
-run_test 0p "setattr of times does not change versions"
+run_test 4i "setattr of times does not change versions"
 
-test_0q() {
+test_4j() { # former test_0q
     local file=$DIR/$tfile
     local pre
     local post
@@ -406,9 +441,9 @@ test_0q() {
         error "version changed unexpectedly: pre $pre, post $post"
     fi
 }
-run_test 0q "setattr of size does not change versions"
+run_test 4j "setattr of size does not change versions"
 
-test_0r() {
+test_4k() { # former test_0r
     local file=$DIR/$tfile
     local mtime_pre
     local mtime_post
@@ -420,14 +455,14 @@ test_0r() {
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 666 $file
+    do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
     do_node $CLIENT1 truncate $file 1
     sleep 1
     mtime_pre=$(do_node $CLIENT1 stat --format=%Y $file)
     do_node $CLIENT1 touch $file
     sleep 1 # avoid stat caching
     mtime_post=$(do_node $CLIENT1 stat --format=%Y $file)
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_up $CLIENT1 || error "$CLIENT1 evicted"
@@ -441,11 +476,11 @@ test_0r() {
     if (($mtime != $mtime_post)); then
         error "setattr of times failed: expected $mtime_post, got $mtime"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0r "setattr of times and size does not check versions"
+run_test 4k "setattr of times and size does not check versions"
 
-test_0s() {
+test_5a() { # former test_0s
     local pre
     local post
     local tp_pre
@@ -461,13 +496,13 @@ test_0s() {
     if (($pre == $post)); then
         error "version of source not changed: pre $pre, post $post"
     fi
-    if (($tp_pre == $tp_post)); then
-        error "version of target parent not changed: pre $tp_pre, post $tp_post"
+    if (($tp_pre != $tp_post)); then
+        error "version of target parent was changed: pre $tp_pre, post $tp_post"
     fi
 }
-run_test 0s "link changes versions of source and target parent"
+run_test 5a "link changes versions of source but not target parent"
 
-test_0t() {
+test_5b() { # former test_0t
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
@@ -475,20 +510,20 @@ test_0t() {
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR/$tdir
+    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
     do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "link should fail"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0t "link checks version of target parent"
+run_test 5b "link checks version of target parent"
 
-test_0u() {
+test_5c() { # former test_0u
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
@@ -496,20 +531,20 @@ test_0u() {
     do_node $CLIENT1 mkdir -p $DIR/$tdir
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 666 $DIR/$tfile
+    do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
     do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "link should fail"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0u "link checks version of source"
+run_test 5c "link checks version of source"
 
-test_0v() {
+test_6a() { # former test_0v
     local sp_pre
     local tp_pre
     local sp_post
@@ -522,16 +557,16 @@ test_0v() {
     do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
     sp_post=$(get_version $CLIENT1 $DIR)
     tp_post=$(get_version $CLIENT1 $DIR/$tdir)
-    if (($sp_pre == $sp_post)); then
-        error "version of source parent not changed: pre $sp_pre, post $sp_post"
+    if (($sp_pre != $sp_post)); then
+        error "version of source parent was changed: pre $sp_pre, post $sp_post"
     fi
-    if (($tp_pre == $tp_post)); then
-        error "version of target parent not changed: pre $tp_pre, post $tp_post"
+    if (($tp_pre != $tp_post)); then
+        error "version of target parent was changed: pre $tp_pre, post $tp_post"
     fi
 }
-run_test 0v "rename changes versions of source parent and target parent"
+run_test 6a "rename doesn't change versions of source parent and target parent"
 
-test_0w() {
+test_6b() { # former test_0w
     local pre
     local post
 
@@ -539,13 +574,13 @@ test_0w() {
     pre=$(get_version $CLIENT1 $DIR)
     do_node $CLIENT1 mv $DIR/$tfile $DIR/$tfile-new
     post=$(get_version $CLIENT1 $DIR)
-    if (($pre == $post)); then
-        error "version of parent not changed: pre $pre, post $post"
+    if (($pre != $post)); then
+        error "version of parent was changed: pre $pre, post $post"
     fi
 }
-run_test 0w "rename within same dir changes version of parent"
+run_test 6b "rename within same dir doesn't change version of parent"
 
-test_0x() {
+test_6c() { # former test_0x
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
@@ -553,20 +588,20 @@ test_0x() {
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR
+    do_node $CLIENT2 chmod 777 $MOUNT2
     do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
         error "rename should fail"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0x "rename checks version of source parent"
+run_test 6c "rename checks version of source parent"
 
-test_0y() {
+test_6d() { # former test_0y
     local var=${SINGLEMDS}_svc
 
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
@@ -574,77 +609,313 @@ test_0y() {
     do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
 
     replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $DIR/$tdir
+    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
     do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT
+    zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
         error "rename should fail"
     fi
-    zconf_mount $CLIENT2 $MOUNT
+    zconf_mount $CLIENT2 $MOUNT2
 }
-run_test 0y "rename checks version of target parent"
+run_test 6d "rename checks version of target parent"
+
+# pdirops tests, bug 18143
+test_7_cycle() {
+    local first=$1
+    local lost=$2
+    local last=$3
+    local rc=0
+
+    do_node $CLIENT1 mkdir -p $DIR/$tdir
+    replay_barrier $SINGLEMDS
+    # first operation
+    do_node $CLIENT1 $first || error "Cannot do first operation"
+    # client2 operations that will be lost
+    do_node $CLIENT2 $lost || error "Cannot do 'lost' operations"
+    # second operation
+    do_node $CLIENT1 $last || error "Cannot do last operation"
+    zconf_umount $CLIENT2 $MOUNT2
+    facet_failover $SINGLEMDS
+    # should fail as conflict expected
+    client_evicted $CLIENT1 || rc=1
+
+    wait_recovery_complete $SINGLEMDS
+    wait_mds_ost_sync $SINGLEMDS
+
+    zconf_mount $CLIENT2 $MOUNT2
+    rm -rf $DIR/$tdir
+
+    return $rc
+}
+
+test_7a() {
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="rm $MOUNT2/$tdir/$tfile-0"
+    last="createmany -o $DIR/$tdir/$tfile- 1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7a.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="rm $MOUNT2/$tdir/$tfile-0"
+    last="mkdir $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7a.2 failed"
+
+    first="mkdir $DIR/$tdir/$tfile-0"
+    lost="mv $MOUNT2/$tdir/$tfile-0 $MOUNT2/$tdir/$tfile-1"
+    last="createmany -o $DIR/$tdir/$tfile- 1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7a.3 failed"
+    return 0
+}
+run_test 7a "create, {lost}, create"
+
+test_7b() {
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="rm $MOUNT2/$tdir/$tfile-0; createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7b.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="touch $MOUNT2/$tdir/$tfile; mv $MOUNT2/$tdir/$tfile $MOUNT2/$tdir/$tfile-0"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7b.2 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="rm $MOUNT2/$tdir/$tfile-0; mkdir $MOUNT2/$tdir/$tfile-0"
+    last="rmdir $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7b.3 failed"
+    return 0
+}
+run_test 7b "create, {lost}, unlink"
+
+test_7c() {
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="rm $MOUNT2/$tdir/$tfile-0; createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7c.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2"
+    lost="rm $MOUNT2/$tdir/$tfile-0; mkdir $MOUNT2/$tdir/$tfile-0"
+    last="mv $DIR/$tdir/$tfile-1 $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7c.2 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1; mkdir $DIR/$tdir/$tfile-1-0"
+    lost="rmdir $MOUNT2/$tdir/$tfile-1-0; createmany -o $MOUNT2/$tdir/$tfile-1- 1"
+    last="mv $DIR/$tdir/$tfile-1-0 $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7c.3 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1"
+    lost="mv $MOUNT2/$tdir/$tfile-0 $MOUNT2/$tdir/$tfile"
+    last="mv $DIR/$tdir/$tfile $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7c.4 failed"
+    return 0
+}
+run_test 7c "create, {lost}, rename"
+
+test_7d() {
+    first="createmany -o $DIR/$tdir/$tfile- 1; rm $DIR/$tdir/$tfile-0"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1; rm $MOUNT2/$tdir/$tfile-0"
+    last="createmany -o $DIR/$tdir/$tfile- 1"
+    test_7_cycle "$first" "$lost" "$last" && error "Test 7d.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1; rm $DIR/$tdir/$tfile-0"
+    lost="mkdir $MOUNT2/$tdir/$tfile-0; rmdir $MOUNT2/$tdir/$tfile-0"
+    last="mkdir $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" && error "Test 7d.2 failed"
+
+    first="mkdir $DIR/$tdir/$tfile-0; rmdir $DIR/$tdir/$tfile-0"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1; mv $MOUNT2/$tdir/$tfile-0 $MOUNT2/$tdir/$tfile-1"
+    last="createmany -o $DIR/$tdir/$tfile- 1"
+    test_7_cycle "$first" "$lost" "$last" && error "Test 7d.3 failed"
+    return 0
+}
+run_test 7d "unlink, {lost}, create"
+
+test_7e() {
+    first="createmany -o $DIR/$tdir/$tfile- 1; rm $DIR/$tdir/$tfile-0"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1; rm $MOUNT2/$tdir/$tfile-0;createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7e.1 failed"
+
+    first="mkdir $DIR/$tdir/$tfile-0; rmdir $DIR/$tdir/$tfile-0"
+    lost="mkdir $MOUNT2/$tdir/$tfile-0; rmdir $MOUNT2/$tdir/$tfile-0; mkdir $MOUNT2/$tdir/$tfile-0"
+    last="rmdir $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7e.2 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1; rm $DIR/$tdir/$tfile-0"
+    lost="mkdir $MOUNT2/$tdir/$tfile-0"
+    last="rmdir $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7e.3 failed"
+
+    first="mkdir $DIR/$tdir/$tfile-0; rmdir $DIR/$tdir/$tfile-0"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7e.4 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; rm $DIR/$tdir/$tfile-0"
+    lost="mv $MOUNT2/$tdir/$tfile-1 $MOUNT2/$tdir/$tfile-0"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7e.5 failed"
+    return 0
+}
+run_test 7e "unlink, {lost}, unlink"
+
+test_7f() {
+    first="createmany -o $DIR/$tdir/$tfile- 1; rm $DIR/$tdir/$tfile-0"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7f.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; rm $DIR/$tdir/$tfile-0"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="mv $DIR/$tdir/$tfile-1 $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7f.2 failed"
+
+    first="mkdir $DIR/$tdir/$tfile; createmany -o $DIR/$tdir/$tfile- 1; rmdir $DIR/$tdir/$tfile"
+    lost="mkdir $MOUNT2/$tdir/$tfile"
+    last="mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7f.3 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; rm $DIR/$tdir/$tfile-0"
+    lost="mv $MOUNT2/$tdir/$tfile-1 $MOUNT2/$tdir/$tfile-0"
+    last="mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7f.4 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; rm $DIR/$tdir/$tfile-0"
+    lost="mkdir $MOUNT2/$tdir/$tfile-0"
+    last="mv $DIR/$tdir/$tfile-1 $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7f.5 failed"
+    return 0
+}
+run_test 7f "unlink, {lost}, rename"
+
+test_7g() {
+    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    lost="mkdir $MOUNT2/$tdir/$tfile-0;rmdir $MOUNT2/$tdir/$tfile-0"
+    last="createmany -o $DIR/$tdir/$tfile- 1"
+    test_7_cycle "$first" "$lost" "$last" && error "Test 7g.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1; rm $MOUNT2/$tdir/$tfile-0"
+    last="mkdir $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" && error "Test 7g.2 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="link $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7g.3 failed"
+    return 0
+}
+run_test 7g "rename, {lost}, create"
+
+test_7h() {
+    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7h.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; mv $DIR/$tdir/$tfile-1 $DIR/$tdir/$tfile-0"
+    lost="rm $MOUNT2/$tdir/$tfile-0; createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="rm $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7h.2 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1; mkdir  $DIR/$tdir/$tfile; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+    lost="rm $MOUNT2/$tdir/$tfile/$tfile-0"
+    last="rmdir $DIR/$tdir/$tfile"
+    #test_7_cycle "$first" "$lost" "$last" || error "Test 7h.3 failed"
+    return 0
+}
+run_test 7h "rename, {lost}, unlink"
+
+test_7i() {
+    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+    last="mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7i.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+    lost="mkdir $MOUNT2/$tdir/$tfile-0"
+    last="mv $DIR/$tdir/$tfile-1 $DIR/$tdir/$tfile-0"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7i.1 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 3; mv $DIR/$tdir/$tfile-1 $DIR/$tdir/$tfile-0"
+    lost="mv $MOUNT2/$tdir/$tfile-2 $MOUNT2/$tdir/$tfile-0"
+    last="mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-2"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7i.3 failed"
+
+    first="createmany -o $DIR/$tdir/$tfile- 2; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+    lost="rm $MOUNT2/$tdir/$tfile-1"
+    last="mv $DIR/$tdir/$tfile $DIR/$tdir/$tfile-1"
+    test_7_cycle "$first" "$lost" "$last" || error "Test 7i.4 failed"
+    return 0
+}
+run_test 7i "rename, {lost}, rename"
+
+# test set #8: orphan handling bug 15392.
+# Unlink during recovery creates orphan always just in case some late open may
+# arrive. These orphans will be removed after recovery anyway.
+# Tests check that valid create,unlink,create sequence will work in this case
+# too but not fail on second create due to orphan found.
+
+test_8a() {
+    do_node $CLIENT1 mcreate $DIR/$tfile
+    do_node $CLIENT1 mkdir $DIR/$tfile-2
+    replay_barrier $SINGLEMDS
+    # missed replay from client2 will lead to recovery by versions
+    do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
+    do_node $CLIENT1 rm $DIR/$tfile || return 1
+    do_node $CLIENT1 touch $DIR/$tfile || return 2
+
+    zconf_umount $CLIENT2 $MOUNT2
+    facet_failover $SINGLEMDS
+    client_up $CLIENT1 || return 6
+
+    do_node $CLIENT1 rm $DIR/$tfile || error "$tfile doesn't exists"
+    zconf_mount $CLIENT2 $MOUNT2
+    return 0
+}
+run_test 8a "create | unlink, create shouldn't fail"
+
+test_8b() {
+    do_node $CLIENT1 touch $DIR/$tfile
+    do_node $CLIENT1 mkdir $DIR/$tfile-2
+    replay_barrier $SINGLEMDS
+    # missed replay from client2 will lead to recovery by versions
+    do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
+    do_node $CLIENT1 rm -f $MOUNT1/$tfile || return 1
+    do_node $CLIENT1 mcreate $MOUNT1/$tfile || return 2
+
+    zconf_umount $CLIENT2 $MOUNT2
+    facet_failover $SINGLEMDS
+    client_up $CLIENT1 || return 6
+
+    do_node $CLIENT1 rm $MOUNT1/$tfile || error "$tfile doesn't exists"
+    zconf_mount $CLIENT2 $MOUNT2
+    return 0
+}
+run_test 8b "create | unlink, create shouldn't fail"
+
+test_8c() {
+    do_node $CLIENT1 touch $DIR/$tfile
+    do_node $CLIENT1 mkdir $DIR/$tfile-2
+    replay_barrier $SINGLEMDS
+    # missed replay from client2 will lead to recovery by versions
+    do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
+    do_node $CLIENT1 rm -f $MOUNT1/$tfile || return 1
+    do_node $CLIENT1 mkdir $MOUNT1/$tfile || return 2
+
+    zconf_umount $CLIENT2 $MOUNT2
+    facet_failover $SINGLEMDS
+    client_up $CLIENT1 || return 6
+
+    do_node $CLIENT1 rmdir $MOUNT1/$tfile || error "$tfile doesn't exists"
+    zconf_mount $CLIENT2 $MOUNT2
+    return 0
+}
+run_test 8c "create | unlink, create shouldn't fail"
 
 [ "$CLIENTS" ] && zconf_umount_clients $CLIENTS $DIR
-
-test_1a() {
-    echo "mount client $CLIENT1,$CLIENT2..."
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT2 mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 1
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-    zconf_umount $CLIENT2 $DIR
-
-    facet_failover $SINGLEMDS
-    # recovery shouldn't fail due to missing client 2
-    client_up $CLIENT1 || return 1
-
-    # All 50 files should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
-
-    zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
-    [ -e $DIR/$tdir/$tfile-2-0 ] && error "$tfile-2-0 exists"
-
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 1a "client during replay doesn't affect another one"
-
-test_2a() {
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT2 mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 mcreate $DIR/$tdir/$tfile
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    #client1 read data from client2 which will be lost
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-    zconf_umount $CLIENT2 $DIR
-
-    facet_failover $SINGLEMDS
-    # recovery shouldn't fail due to missing client 2
-    client_up $CLIENT1 || return 1
-
-    # All 50 files should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile && return 4
-
-    zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
-
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 2a "lost data due to missed REMOTE client during replay"
 
 #
 # This test uses three Lustre clients on two hosts.
@@ -653,14 +924,16 @@ run_test 2a "lost data due to missed REMOTE client during replay"
 #   Lustre Client 2:    $CLIENT2:$MOUNT2    ($DIR2)
 #   Lustre Client 3:    $CLIENT2:$MOUNT1    ($DIR1)
 #
-test_2b() {
+test_10b() { # former test_2b
     local pre
     local post
     local var=${SINGLEMDS}_svc
 
+    [ -n "$CLIENTS" ] || { skip "Need two or more clients" && exit 0; }
+    [ $CLIENTCOUNT -ge 2 ] || \
+        { skip "Need two or more clients, have $CLIENTCOUNT" && exit 0; }
+
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    zconf_mount $CLIENT1 $MOUNT
-    zconf_mount $CLIENT2 $MOUNT2
     zconf_mount $CLIENT2 $MOUNT1
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-a
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-b
@@ -713,548 +986,79 @@ test_2b() {
     do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$RUNAS_ID -g \\\#$RUNAS_ID \
             $DIR1/$tfile-b || error "$DIR/$tfile-b: unexpected state"
 
+    zconf_mount $CLIENT2 $MOUNT2
     zconf_umount $CLIENT2 $MOUNT1
-    zconf_umount $CLIENT1 $MOUNT
 }
-run_test 2b "3 clients: some, none, and all reqs replayed"
+run_test 10b "3 clients: some, none, and all reqs replayed"
 
-test_3a() {
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    #make sure the time will change
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.atime_diff=0" || return
-    do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
-    sleep 1
+# test set #11: operations in single directory
+test_11a() {
     replay_barrier $SINGLEMDS
-    #change time
-    do_node $CLIENT2 touch $DIR/$tfile
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
-    #another change
-    do_node $CLIENT1 touch $DIR/$tfile
-    #remove file
-    do_node $CLIENT1 rm $DIR/$tfile
-    zconf_umount $CLIENT2 $DIR
+
+    do_node $CLIENT1 createmany -o $DIR/$tfile-1- 100 &
+    PID=$!
+    do_node $CLIENT2 createmany -o $MOUNT2/$tfile-2- 100
+    zconf_umount $CLIENT2 $MOUNT2
+    wait $PID
 
     facet_failover $SINGLEMDS
     # recovery shouldn't fail due to missing client 2
     client_up $CLIENT1 || return 1
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile && return 2
+    # All files from client1 should have been replayed
+    do_node $CLIENT1 unlinkmany $DIR/$tfile-1- 100 || return 2
 
-    zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
-
-    zconf_umount_clients $CLIENTS $DIR
-
+    zconf_mount $CLIENT2 $MOUNT2 || error "mount $CLIENT2 $MOUNT2 fail"
+    [ -e $DIR/$tdir/$tfile-2-0 ] && error "$tfile-2-0 exists"
     return 0
 }
-run_test 3a "setattr of time/size doesn't change version"
+run_test 11a "concurrent creates don't affect each other"
 
-test_3b() {
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
+test_11b() {
+    do_node $CLIENT2 createmany -o $MOUNT2/$tfile-2- 100
 
-    #make sure the time will change
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.atime_diff=0" || return
-
-    do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
-    sleep 1
     replay_barrier $SINGLEMDS
-    #change mode
-    do_node $CLIENT2 chmod +x $DIR/$tfile
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
-    #abother chmod
-    do_node $CLIENT1 chmod -x $DIR/$tfile
-    zconf_umount $CLIENT2 $DIR
+    do_node $CLIENT1 createmany -o $DIR/$tfile-1- 100 &
+    PID=$!
+    do_node $CLIENT2 unlinkmany -o $MOUNT2/$tfile-2- 100
+    zconf_umount $CLIENT2 $MOUNT2
+    wait $PID
 
     facet_failover $SINGLEMDS
-    # recovery should fail due to missing client 2
-    client_evicted $CLIENT1 || return 1
+    # recovery shouldn't fail due to missing client 2
+    client_up $CLIENT1 || return 1
+    # All files from client1 should have been replayed
+    do_node $CLIENT1 unlinkmany $DIR/$tfile-1- 100 || return 2
 
-    do_node $CLIENT1 $CHECKSTAT -p 0755 $DIR/$tfile && return 2
-    zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
-
-    zconf_umount_clients $CLIENTS $DIR
-
+    zconf_mount $CLIENT2 $MOUNT2 || error "mount $CLIENT2 $MOUNT2 fail"
+    [ -e $DIR/$tdir/$tfile-2-0 ] && error "$tfile-2-0 exists"
     return 0
 }
-run_test 3b "setattr of permissions changes version"
+run_test 11b "concurrent creates and unlinks don't affect each other"
 
-vbr_deactivate_client() {
-    local client=$1
-    echo "Deactivating client $client";
-    do_node $client "sysctl -w lustre.fail_loc=0x50d"
-}
-
-vbr_activate_client() {
-    local client=$1
-    echo "Activating client $client";
-    do_node $client "sysctl -w lustre.fail_loc=0x0"
-}
-
-remote_server ()
-{
-    local client=$1
-    [ -z "$(do_node $client lctl dl | grep mdt)" ] && \
-    [ -z "$(do_node $client lctl dl | grep ost)" ]
-}
-
-test_4a() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT2 mkdir -p $DIR/$tdir
+# test set #12: lock replay with VBR, bug 16356
+test_12a() { # former test_2a
+    do_node $CLIENT2 mkdir -p $MOUNT2/$tdir
     replay_barrier $SINGLEMDS
+    do_node $CLIENT2 mcreate $MOUNT2/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 25
+    #client1 read data from client2 which will be lost
+    do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-    vbr_deactivate_client $CLIENT2
+    zconf_umount $CLIENT2 $MOUNT2
 
     facet_failover $SINGLEMDS
+    # recovery shouldn't fail due to missing client 2
     client_up $CLIENT1 || return 1
 
     # All 50 files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
     do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
+    do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile && return 4
 
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 4
-    # All 25 files from client2 should have been replayed
-    do_node $CLIENT2 unlinkmany $DIR/$tdir/$tfile-2- 25 || return 5
-
-    zconf_umount_clients $CLIENTS $DIR
+    zconf_mount $CLIENT2 $MOUNT2 || error "mount $CLIENT2 $DIR fail"
     return 0
 }
-run_test 4a "fail MDS, delayed recovery"
-
-test_4b(){
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 25
-    vbr_deactivate_client $CLIENT2
-
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 1
-
-    # create another set of files
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 2
-
-    # All files from should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 3
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 4
-    do_node $CLIENT2 unlinkmany $DIR/$tdir/$tfile-2- 25 || return 5
-
-    zconf_umount_clients $CLIENTS $DIR
-}
-run_test 4b "fail MDS, normal operation, delayed open recovery"
-
-test_4c() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -m $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -m $DIR/$tdir/$tfile-2- 25
-    vbr_deactivate_client $CLIENT2
-
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 1
-
-    # create another set of files
-    do_node $CLIENT1 createmany -m $DIR/$tfile-3- 25
-
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 2
-
-    # All files from should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 3
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 4
-    do_node $CLIENT2 unlinkmany $DIR/$tdir/$tfile-2- 25 || return 5
-
-    zconf_umount_clients $CLIENTS $DIR
-}
-run_test 4c "fail MDS, normal operation, delayed recovery"
-
-test_5a() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tfile-2- 1
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 1
-    vbr_deactivate_client $CLIENT2
-
-    facet_failover $SINGLEMDS
-    client_evicted $CLIENT1 || return 1
-
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 2
-
-    # First 25 files should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 3
-    # Third file is failed due to missed client2
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile-3-0 && error "$tfile-3-0 exists"
-    # file from client2 should exists
-    do_node $CLIENT2 unlinkmany $DIR/$tfile-2- 1 || return 4
-
-    zconf_umount_clients $CLIENTS $DIR
-}
-run_test 5a "fail MDS, delayed recovery should fail"
-
-test_5b() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tfile-2- 1
-    vbr_deactivate_client $CLIENT2
-
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 1
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile-2-0 && error "$tfile-2-0 exists"
-
-    # create another set of files
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-
-    vbr_activate_client $CLIENT2
-    client_evicted $CLIENT2 || return 4
-    # file from client2 should fail
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile-2-0 && error "$tfile-2-0 exists"
-
-    # All 50 files from client 1 should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
-
-    zconf_umount_clients $CLIENTS $DIR
-}
-run_test 5b "fail MDS, normal operation, delayed recovery should fail"
-
-test_6a() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT2 mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 25
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-    vbr_deactivate_client $CLIENT2
-
-    facet_failover $SINGLEMDS
-    # replay only 5 requests
-    do_node $CLIENT2 "sysctl -w lustre.fail_val=5"
-#define OBD_FAIL_PTLRPC_REPLAY        0x50e
-    do_node $CLIENT2 "sysctl -w lustre.fail_loc=0x2000050e"
-    client_up $CLIENT2
-    # vbr_activate_client $CLIENT2
-    # need way to know that client stops replays
-    sleep 5
-
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 1
-
-    # All files should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
-    do_node $CLIENT2 unlinkmany $DIR/$tdir/$tfile-2- 25 || return 5
-
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 6a "fail MDS, delayed recovery, fail MDS"
-
-test_7a() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT2 mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 25
-    do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
-    vbr_deactivate_client $CLIENT2
-
-    facet_failover $SINGLEMDS
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 4
-
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 1
-
-    # All files should have been replayed
-    do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
-    do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
-    do_node $CLIENT2 unlinkmany $DIR/$tdir/$tfile-2- 25 || return 5
-
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 7a "fail MDS, delayed recovery, fail MDS"
-
-test_8a() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    rmultiop_start $CLIENT2 $DIR/$tfile O_tSc || return 1
-    do_node $CLIENT2 rm -f $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    rmultiop_stop $CLIENT2 || return 2
-
-    vbr_deactivate_client $CLIENT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 3
-    #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 4
-
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 8a "orphans are kept until delayed recovery"
-
-test_8b() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    rmultiop_start $CLIENT2 $DIR/$tfile O_tSc|| return 1
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 rm -f $DIR/$tfile
-
-    vbr_deactivate_client $CLIENT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 2
-    #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 3
-
-    rmultiop_stop $CLIENT2 || return 1
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 8b "open1 | unlink2 X delayed_replay1, close1"
-
-test_8c() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    rmultiop_start $CLIENT2 $DIR/$tfile O_tSc|| return 1
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 rm -f $DIR/$tfile
-    rmultiop_stop $CLIENT2 || return 2
-
-    vbr_deactivate_client $CLIENT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 3
-    #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 4
-
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 8c "open1 | unlink2, close1 X delayed_replay1"
-
-test_8d() {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    remote_server $CLIENT2 || \
-        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
-
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    rmultiop_start $CLIENT1 $DIR/$tfile O_tSc|| return 1
-    rmultiop_start $CLIENT2 $DIR/$tfile O_tSc|| return 2
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 rm -f $DIR/$tfile
-    rmultiop_stop $CLIENT2 || return 3
-    rmultiop_stop $CLIENT1 || return 4
-
-    vbr_deactivate_client $CLIENT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 6
-
-    #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 8
-
-    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 8d "open1, open2 | unlink2, close1, close2 X delayed_replay1"
-
-test_8e() {
-    zconf_mount $CLIENT1 $DIR
-    zconf_mount $CLIENT2 $DIR
-
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    # missed replay from client1 will lead to recovery by versions
-    do_node $CLIENT1 touch $DIR/$tfile-2/$tfile
-    do_node $CLIENT2 rm $DIR/$tfile || return 1
-    do_node $CLIENT2 touch $DIR/$tfile || return 2
-
-    zconf_umount $CLIENT1 $DIR
-    facet_failover $SINGLEMDS
-    client_up $CLIENT2 || return 6
-
-    do_node $CLIENT2 rm $DIR/$tfile || error "$tfile doesn't exists"
-    zconf_umount_clients $CLIENTS $DIR
-    return 0
-}
-run_test 8e "create | unlink, create shouldn't fail"
-
-test_8f() {
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT1 mkdir $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    # missed replay from client1 will lead to recovery by versions
-    do_node $CLIENT1 touch $DIR/$tfile-2/$tfile
-    do_node $CLIENT2 rm -f $DIR/$tfile || return 1
-    do_node $CLIENT2 mcreate $DIR/$tfile || return 2
-
-    zconf_umount $CLIENT1 $DIR
-    facet_failover $SINGLEMDS
-    client_up $CLIENT2 || return 6
-
-    do_node $CLIENT2 rm $DIR/$tfile || error "$tfile doesn't exists"
-    zconf_umount $CLIENT2 $DIR
-    return 0
-}
-run_test 8f "create | unlink, create shouldn't fail"
-
-test_8g() {
-    zconf_mount_clients $CLIENT1 $DIR
-    zconf_mount_clients $CLIENT2 $DIR
-
-    do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT1 mkdir $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    # missed replay from client1 will lead to recovery by versions
-    do_node $CLIENT1 touch $DIR/$tfile-2/$tfile
-    do_node $CLIENT2 rm -f $DIR/$tfile || return 1
-    do_node $CLIENT2 mkdir $DIR/$tfile || return 2
-
-    zconf_umount $CLIENT1 $DIR
-    facet_failover $SINGLEMDS
-    client_up $CLIENT2 || return 6
-
-    do_node $CLIENT2 rmdir $DIR/$tfile || error "$tfile doesn't exists"
-    zconf_umount $CLIENT2 $DIR
-    return 0
-}
-run_test 8g "create | unlink, create shouldn't fail"
-
-test_10 () {
-    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
-
-    [ -z "$DBENCH_LIB" ] && skip_env "DBENCH_LIB is not set" && return 0
-
-    zconf_mount_clients $CLIENTS $DIR
-
-    local duration="-t 60"
-    local cmd="rundbench 1 $duration "
-    local PID=""
-    for CLIENT in ${CLIENTS//,/ }; do
-        $PDSH $CLIENT "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:${DBENCH_LIB} DBENCH_LIB=${DBENCH_LIB} $cmd" &
-        PID=$!
-        echo $PID >pid.$CLIENT
-        echo "Started load PID=`cat pid.$CLIENT`"
-    done
-
-    replay_barrier $SINGLEMDS
-    sleep 3 # give clients a time to do operations
-
-    vbr_deactivate_client $CLIENT2
-
-    log "$TESTNAME fail $SINGLEMDS 1"
-    fail $SINGLEMDS
-
-# wait for client to reconnect to MDS
-    sleep $TIMEOUT
-
-    vbr_activate_client $CLIENT2
-    client_up $CLIENT2 || return 4
-
-    for CLIENT in ${CLIENTS//,/ }; do
-        PID=`cat pid.$CLIENT`
-        wait $PID
-        rc=$?
-        echo "load on ${CLIENT} returned $rc"
-    done
-
-    zconf_umount_clients $CLIENTS $DIR
-}
-run_test 10 "mds version recovery; $CLIENTCOUNT clients"
+run_test 12a "lost data due to missed REMOTE client during replay"
 
 [ "$CLIENTS" ] && zconf_mount_clients $CLIENTS $DIR
 

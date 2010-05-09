@@ -799,14 +799,13 @@ static int mdt_txn_start_cb(const struct lu_env *env,
 }
 
 /* Set new object versions */
-static void mdt_versions_set(struct mdt_thread_info *info)
+static void mdt_version_set(struct mdt_thread_info *info)
 {
-        int i;
-        for (i = 0; i < PTLRPC_NUM_VERSIONS; i++)
-                if (info->mti_mos[i] != NULL)
-                        mo_version_set(info->mti_env,
-                                       mdt_object_child(info->mti_mos[i]),
-                                       info->mti_transno);
+        if (info->mti_mos != NULL) {
+                mo_version_set(info->mti_env, mdt_object_child(info->mti_mos),
+                               info->mti_transno);
+                info->mti_mos = NULL;
+        }
 }
 
 /* Update last_rcvd records with latests transaction data */
@@ -857,7 +856,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
         /** VBR: set new versions */
         if (txn->th_result == 0)
-                mdt_versions_set(mti);
+                mdt_version_set(mti);
 
         /* filling reply data */
         CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",

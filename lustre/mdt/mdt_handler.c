@@ -2630,7 +2630,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (likely(rc == 0 && req->rq_export && h->mh_opc != MDS_DISCONNECT))
                 target_committed_to_req(req);
 
-        if (unlikely((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+        if (unlikely(req_is_replay(req) &&
                      lustre_msg_get_transno(req->rq_reqmsg) == 0)) {
                 DEBUG_REQ(D_ERROR, req, "transno is 0 during REPLAY");
                 LBUG();
@@ -2694,10 +2694,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
-        info->mti_mos[0] = NULL;
-        info->mti_mos[1] = NULL;
-        info->mti_mos[2] = NULL;
-        info->mti_mos[3] = NULL;
+        info->mti_mos = NULL;
 
         memset(&info->mti_attr, 0, sizeof(info->mti_attr));
         info->mti_body = NULL;
@@ -5476,17 +5473,10 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
                  * fid, this is error to find remote object here
                  */
                 CERROR("nonlocal object "DFID"\n", PFID(fid));
-        } else if (rc == 0) {
-                rc = -ENOENT;
-                CDEBUG(D_IOCTL, "no such object: "DFID"\n", PFID(fid));
         } else {
                 version = mo_version_get(mti->mti_env, mdt_object_child(obj));
-                if (version < 0) {
-                        rc = (int)version;
-                } else {
-                        *(__u64 *)data->ioc_inlbuf2 = version;
-                        rc = 0;
-                }
+               *(__u64 *)data->ioc_inlbuf2 = version;
+                rc = 0;
         }
         mdt_object_unlock_put(mti, obj, lh, 1);
         RETURN(rc);
