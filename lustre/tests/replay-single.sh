@@ -1706,7 +1706,7 @@ test_67b() #bug 3055
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 
     # exhaust precreations on ost1
-    local OST=$(lfs osts | grep 0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
     local mdtosc=$(get_mdtosc_proc_path $OST)
     local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
     local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
