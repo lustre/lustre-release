@@ -1092,6 +1092,7 @@ run_test 52 "time out lock replay (3764)"
 
 # bug 3462 - simultaneous MDC requests
 test_53a() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1121,6 +1122,7 @@ test_53a() {
 run_test 53a "|X| close request while two MDC requests in flight"
 
 test_53b() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
 
         mkdir -p $DIR/${tdir}-1
@@ -1152,6 +1154,7 @@ test_53b() {
 run_test 53b "|X| open request while two MDC requests in flight"
 
 test_53c() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
 
         mkdir -p $DIR/${tdir}-1
@@ -1217,6 +1220,7 @@ test_53d() {
 run_test 53d "|X| close reply while two MDC requests in flight"
 
 test_53e() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
 
         mkdir -p $DIR/${tdir}-1
@@ -1248,6 +1252,7 @@ test_53e() {
 run_test 53e "|X| open reply while two MDC requests in flight"
 
 test_53f() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
 
         mkdir -p $DIR/${tdir}-1
@@ -1284,6 +1289,7 @@ test_53f() {
 run_test 53f "|X| open reply and close reply while two MDC requests in flight"
 
 test_53g() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
 
         mkdir -p $DIR/${tdir}-1
@@ -1320,6 +1326,7 @@ test_53g() {
 run_test 53g "|X| drop open reply and close request while close and open are both in flight"
 
 test_53h() {
+        cancel_lru_locks mdc    # cleanup locks from former test cases
         rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
 
         mkdir -p $DIR/${tdir}-1
