@@ -90,7 +90,6 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         rc =  mgs_export_stats_init(obd, exp, 0, localdata);
         if (rc) {
                 class_disconnect(exp);
-                lprocfs_exp_cleanup(exp);
         } else {
                 class_export_put(exp);
         }

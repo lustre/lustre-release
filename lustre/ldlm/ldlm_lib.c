@@ -551,9 +551,6 @@ int server_disconnect_export(struct obd_export *exp)
         }
         spin_unlock(&exp->exp_lock);
 
-        /* release nid stat refererence */
-        lprocfs_exp_cleanup(exp);
-
         RETURN(rc);
 }
 
