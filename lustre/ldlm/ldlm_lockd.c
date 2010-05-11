@@ -1773,12 +1773,15 @@ static int ldlm_handle_setinfo(struct ptlrpc_request *req)
 }
 
 static inline void ldlm_callback_errmsg(struct ptlrpc_request *req,
-                                        const char *msg, int rc)
+                                        const char *msg, int rc,
+                                        struct lustre_handle *handle)
 {
-        CWARN("%s: [pid %d] [xid x"LPU64"] [nid %s] [opc %d] [rc %d].\n",
+        CWARN("%s: [pid %d] [xid x"LPU64"] [nid %s] [opc %d] [rc %d] "
+              "[lock "LPX64"].\n",
               msg, lustre_msg_get_status(req->rq_reqmsg),
               req->rq_xid, libcfs_id2str(req->rq_peer),
-              lustre_msg_get_opc(req->rq_reqmsg), rc);
+              lustre_msg_get_opc(req->rq_reqmsg), rc,
+              handle ? handle->cookie : 0);
         if (req->rq_no_reply)
                 CWARN("No reply was sent, maybe cause bug 21636.\n");
         else if (rc)
@@ -1807,7 +1810,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
         if (req->rq_export == NULL) {
                 rc = ldlm_callback_reply(req, -ENOTCONN);
-                ldlm_callback_errmsg(req, "Operate on unconnected server", rc);
+                ldlm_callback_errmsg(req, "Operate on unconnected server",
+                                     rc, NULL);
                 RETURN(0);
         }
 
@@ -1898,7 +1902,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
         if (dlm_req == NULL) {
                 rc = ldlm_callback_reply(req, -EPROTO);
-                ldlm_callback_errmsg(req, "Operate without parameter", rc);
+                ldlm_callback_errmsg(req, "Operate without parameter", rc,
+                                     NULL);
                 RETURN(0);
         }
 
@@ -1916,7 +1921,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 CDEBUG(D_DLMTRACE, "callback on lock "LPX64" - lock "
                        "disappeared\n", dlm_req->lock_handle[0].cookie);
                 rc = ldlm_callback_reply(req, -EINVAL);
-                ldlm_callback_errmsg(req, "Operate with invalid parameter", rc);
+                ldlm_callback_errmsg(req, "Operate with invalid parameter", rc,
+                                     &dlm_req->lock_handle[0]);
                 RETURN(0);
         }
 
@@ -1941,7 +1947,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         unlock_res_and_lock(lock);
                         LDLM_LOCK_RELEASE(lock);
                         rc = ldlm_callback_reply(req, -EINVAL);
-                        ldlm_callback_errmsg(req, "Operate on stale lock", rc);
+                        ldlm_callback_errmsg(req, "Operate on stale lock", rc,
+                                             &dlm_req->lock_handle[0]);
                         RETURN(0);
                 }
                 /* BL_AST locks are not needed in lru.
@@ -1967,7 +1974,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)) {
                         rc = ldlm_callback_reply(req, 0);
                         if (req->rq_no_reply || rc)
-                                ldlm_callback_errmsg(req, "Normal process", rc);
+                                ldlm_callback_errmsg(req, "Normal process", rc,
+                                                     &dlm_req->lock_handle[0]);
                 }
                 if (ldlm_bl_to_thread_lock(ns, &dlm_req->lock_desc, lock))
                         ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
