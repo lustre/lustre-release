@@ -29,17 +29,24 @@ init_logging
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
-if [ ! -x /usr/sbin/lfsck ]; then
-    log "$($E2FSCK -V)"
-    log "SKIP: $E2FSCK does not support lfsck"
-    exit 0
+SKIP_LFSCK=${SKIP_LFSCK:-"yes"} # bug 13698, change to "no" when fixed
+
+if [ "$SKIP_LFSCK" == "no" ]; then
+	if [ ! -x /usr/sbin/lfsck ]; then
+		log "$($E2FSCK -V)"
+		log "SKIP: $E2FSCK does not support lfsck"
+		exit 0
+	fi
+
+	MDSDB_OPT="--mdsdb $MDSDB"
+	OSTDB_OPT="--ostdb $OSTDB-\$ostidx"
 fi
 
 # if nothing mounted, don't nuke MOUNT variable needed in llmount.sh
 WAS_MOUNTED=$(mounted_lustre_filesystems | head -1)
 if [ -z "$WAS_MOUNTED" ]; then
        # This code doesn't handle multiple mounts well, so nuke MOUNT2 variable
-        MOUNT2="" sh llmount.sh
+        MOUNT2="" MOUNT_2="" check_and_setup_lustre
         MOUNT=$(mounted_lustre_filesystems)
         [ -z "$MOUNT" ] && echo "NAME=$NAME not mounted" && exit 2
 else
@@ -64,7 +71,9 @@ get_mnt_devs() {
         done
 }
 
-if [ "$LFSCK_SETUP" != "no" ]; then
+MDSDEV=$(mdsdevname 1)
+
+if [ "$LFSCK_SETUP" != "no" -a "$SKIP_LFSCK" == "no" ]; then
         #Create test directory 
         # -- can't remove the mountpoint...
         [ -z "$DIR" ] && rm -rf $DIR/*
@@ -178,26 +187,24 @@ else
         OSTCOUNT=`echo $OSTDEVS | wc -w`
 fi # LFSCK_SETUP
 
-# Run e2fsck to get mds and ost info
-# a return status of 1 indicates e2fsck successfuly fixed problems found
-set +e
-
-echo "$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV"
+echo "$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV"
 df > /dev/null  # update statfs data on disk
-$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV
-RET=$?
+RET=0
+$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV || RET=$?
 [ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 90 || true
 
 export OSTDB_LIST=""
-i=0
+ostidx=0
 for OSTDEV in $OSTDEVS; do
         df > /dev/null  # update statfs data on disk
-        $E2FSCK -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
-        RET=$?
+        RET=0
+        eval $E2FSCK -d -v -fn $MDSDB_OPT $OSTDB_OPT $OSTDEV || RET=$?
         [ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 100
-        OSTDB_LIST="$OSTDB_LIST $OSTDB-$i"
-        i=$((i + 1))
+        OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
+        ostidx=$((ostidx + 1))
 done
+
+[ "$SKIP_LFSCK" != "no" ] && exit 0
 
 #Remount filesystem
 [ "`mount | grep $MOUNT`" ] || $SETUP
@@ -205,9 +212,9 @@ done
 # need to turn off shell error detection to get proper error return
 # lfsck will return 1 if the filesystem had errors fixed
 echo "LFSCK TEST 1"
-echo "lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
-echo y | lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT
-RET=$?
+echo "lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT"
+RET=0
+echo y | lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT || RET=$?
 [ $RET -eq 0 ] && echo "clean after first check" && exit 0
 echo "LFSCK TEST 1 - finished with rc=$RET"
 [ $RET -gt $MAX_ERR ] && exit 110 || true
@@ -216,27 +223,27 @@ echo "LFSCK TEST 1 - finished with rc=$RET"
 sync; sleep 2; sync
 
 echo "LFSCK TEST 2"
-echo "$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV"
+echo "$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV"
 df > /dev/null  # update statfs data on disk
-$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV
-RET=$?
+RET=0
+$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV || RET=$?
 [ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 123 || true
 
-i=0
+ostidx=0
 export OSTDB_LIST=""
 for OSTDEV in $OSTDEVS; do
         df > /dev/null  # update statfs data on disk
-        $E2FSCK -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
-        RET=$?
+        RET=0
+        eval $E2FSCK -d -v -fn $MDSDB_OPT $OSTDB_OPT $OSTDEV || RET=$?
         [ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 124
-        OSTDB_LIST="$OSTDB_LIST $OSTDB-$i"
-        i=$((i + 1))
+        OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
+        ostidx=$((ostidx + 1))
 done
 
 echo "LFSCK TEST 2"
-echo "lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
-lfsck -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT
-RET=$?
+echo "lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT"
+RET=0
+lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT || RET=$?
 echo "LFSCK TEST 2 - finished with rc=$RET"
 [ $RET -ne 0 ] && exit 125 || true
 if [ -z "$WAS_MOUNTED" ]; then

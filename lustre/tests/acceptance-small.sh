@@ -42,7 +42,6 @@ if [ "$ACC_SM_ONLY" ]; then
         export ${O}="yes"
     done
 fi
-LFSCK="no" # bug 13698
 
 STARTTIME=`date +%s`
 
