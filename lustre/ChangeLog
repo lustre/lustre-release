@@ -12,6 +12,47 @@ tbd        Oracle, Inc.
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : enhancement
+Bugzilla   : 22194
+Description: lfs quota output is not very convenient for awk/sed-parsing
+Details    : Some positions if lfs quota output table could be empty or
+	     non-empty which made it hard to parse it with scripts, now
+	     a dash is put instead of space where there is not supposed
+	     to be any data.
+
+Severity   : normal
+Bugzilla   : 22360
+Description: file operations after eviction have successful return values
+Details    : use vfs ->flush callback to return any pending async errors
+	     on file close.
+
+Severity   : normal
+Bugzilla   : 20433
+Description: mdsrate fails to write after 1.3+M files opened
+Details    : decrease memory usage on clients by recycling dentries and
+	     inodes.
+
+Severity   : normal
+Bugzilla   : 17382
+Description: obdfilter-survey gives unreasonably high numbers
+Details    : Wait for all threads to complete when running test_brw.
+
+Severity   : normal
+Bugzilla   : 22299
+Description: do not set lustre read_only device when server umount and keep
+	     client records for recoverable ones
+
+Severity   : normal
+Bugzilla   : 22656
+Description: Prevent failover nids from registering with MGS first
+
+Severity   : normal
+Bugzilla   : 22241
+Description: move sync_on_lock_cancel tunable to the obdfilter layer
+Details    : move the tunable to trigger a journal flush on lock cancel from
+	     the ost layer to the obdfilter layer. This tunable is useful
+	     when using the async journal commit feature.
+
 -------------------------------------------------------------------------------
 
 2010-04-30 Oracle, Inc.
@@ -27,14 +68,6 @@ tbd        Oracle, Inc.
 	* Recommended e2fsprogs version: 1.41.10-sun2
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
-
-Severity   : enhancement
-Bugzilla   : 22194
-Description: lfs quota output is not very convenient for awk/sed-parsing
-Details    : Some positions if lfs quota output table could be empty or
-	     non-empty which made it hard to parse it with scripts, now
-	     a dash is put instead of space where there is not supposed
-	     to be any data.
 
 Severity   : major
 Bugzilla   : 22177
