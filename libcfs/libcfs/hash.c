@@ -106,6 +106,12 @@ cfs_hash_create(char *name, unsigned int cur_bits,
 
         LASSERT(name != NULL);
         LASSERT(ops != NULL);
+        /* The following ops are required for all hash table types */
+        LASSERT(ops->hs_hash != NULL);
+        LASSERT(ops->hs_key != NULL);
+        LASSERT(ops->hs_compare != NULL);
+        LASSERT(ops->hs_get != NULL);
+        LASSERT(ops->hs_put != NULL);
 
         LASSERT(cur_bits > 0);
         LASSERT(max_bits >= cur_bits);

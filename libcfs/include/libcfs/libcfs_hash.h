@@ -157,86 +157,44 @@ typedef struct cfs_hash_ops {
 #define CFS_HASH_DEBUG          0x0001  /* Enable expensive debug checks */
 #define CFS_HASH_REHASH         0x0002  /* Enable dynamic hash resizing */
 
-#define CFS_HO(hs)             (hs)->hs_ops
 #define CFS_HOP(hs, op)        (hs)->hs_ops->hs_ ## op
 
 static inline unsigned
 cfs_hash_id(cfs_hash_t *hs, void *key, unsigned mask)
 {
-        LASSERT(hs);
-        LASSERT(CFS_HO(hs));
-        LASSERT(CFS_HOP(hs, hash));
-
         return CFS_HOP(hs, hash)(hs, key, mask);
 }
 
 static inline void *
 cfs_hash_key(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        LASSERT(hs);
-        LASSERT(hnode);
-        LASSERT(CFS_HO(hs));
-        LASSERT(CFS_HOP(hs, key));
-
         return CFS_HOP(hs, key)(hnode);
 }
 
-/* Returns 1 on a match,
- * XXX: This would be better if it returned, -1, 0, or 1 for
- *      <, =, > respectivly.  It could then be used to implement
- *      a CFS_HASH_SORT feature flags which could keep each hash
- *      bucket in order.  This would increase insertion times
- *      but could reduce lookup times for deep chains.  Ideally,
- *      the rehash should keep chain depth short but if that
- *      ends up not being the case this would be a nice feature.
- */
+/* Returns TRUE on a match. */
 static inline int
 cfs_hash_compare(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 {
-        LASSERT(hs);
-        LASSERT(hnode);
-        LASSERT(CFS_HO(hs));
-
-        if (CFS_HOP(hs, compare))
-                return CFS_HOP(hs, compare)(key, hnode);
-
-        return -EOPNOTSUPP;
+        return CFS_HOP(hs, compare)(key, hnode);
 }
 
 static inline void *
 cfs_hash_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        LASSERT(hs);
-        LASSERT(hnode);
-        LASSERT(CFS_HO(hs));
-
-        if (CFS_HOP(hs, get))
-                return CFS_HOP(hs, get)(hnode);
-
-        return NULL;
+        return CFS_HOP(hs, get)(hnode);
 }
 
 static inline void *
 cfs_hash_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        LASSERT(hs);
-        LASSERT(hnode);
-        LASSERT(CFS_HO(hs));
-
-        if (CFS_HOP(hs, put))
-                return CFS_HOP(hs, put)(hnode);
-
-        return NULL;
+        return CFS_HOP(hs, put)(hnode);
 }
 
 static inline void
 cfs_hash_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        LASSERT(hs);
-        LASSERT(hnode);
-        LASSERT(CFS_HO(hs));
-
-        if (CFS_HOP(hs, exit))
+        /* This is allowed to be a NOOP */
+        if (CFS_HOP(hs, exit) != NULL)
                 return CFS_HOP(hs, exit)(hnode);
 }
 
@@ -246,7 +204,7 @@ __cfs_hash_key_validate(cfs_hash_t *hs, void *key,
                         cfs_hlist_node_t *hnode)
 {
         if (unlikely(hs->hs_flags & CFS_HASH_DEBUG))
-                LASSERT(cfs_hash_compare(hs, key, hnode) > 0);
+                LASSERT(cfs_hash_compare(hs, key, hnode));
 }
 
 /* Validate hnode is in the correct bucket */
@@ -269,7 +227,7 @@ __cfs_hash_bucket_lookup(cfs_hash_t *hs,
         cfs_hlist_node_t *hnode;
 
         cfs_hlist_for_each(hnode, &hsb->hsb_head)
-                if (cfs_hash_compare(hs, key, hnode) > 0)
+                if (cfs_hash_compare(hs, key, hnode))
                         return hnode;
 
         return NULL;
