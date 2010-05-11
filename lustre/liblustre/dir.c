@@ -67,9 +67,9 @@
 #include <unistd.h>
 #endif
 
-#include <dirent.h>
 
 #include "llite_lib.h"
+#include <dirent.h>
 
 /* (new) readdir implementation overview can be found in lustre/llite/dir.c */
 
