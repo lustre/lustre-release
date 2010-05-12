@@ -1037,7 +1037,7 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
         struct cl_lock          *lock    = olck->ols_cl.cls_lock;
         struct cl_lock_descr    *descr   = &lock->cll_descr;
         struct cl_object_header *hdr     = cl_object_header(descr->cld_obj);
-        struct cl_lock          *scan    = lock;
+        struct cl_lock          *scan;
         struct cl_lock          *conflict= NULL;
         int lockless                     = osc_lock_is_lockless(olck);
         int rc                           = 0;
@@ -1052,9 +1052,12 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
                 return 0;
 
         cfs_spin_lock(&hdr->coh_lock_guard);
-        cfs_list_for_each_entry_continue(scan, &hdr->coh_locks, cll_linkage) {
+        cfs_list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
                 struct cl_lock_descr *cld = &scan->cll_descr;
                 const struct osc_lock *scan_ols;
+
+                if (scan == lock)
+                        break;
 
                 if (scan->cll_state < CLS_QUEUING ||
                     scan->cll_state == CLS_FREEING ||
