@@ -85,19 +85,19 @@ CFS_MODULE_PARM(check_routers_before_use, "i", int, 0444,
                 "Assume routers are down and ping them before use");
 
 static int avoid_asym_router_failure = 0;
-CFS_MODULE_PARM(avoid_asym_router_failure, "i", int, 0444,
+CFS_MODULE_PARM(avoid_asym_router_failure, "i", int, 0644,
                 "Avoid asymmetrical failures: reserved, use at your own risk");
 
 static int dead_router_check_interval = 0;
-CFS_MODULE_PARM(dead_router_check_interval, "i", int, 0444,
+CFS_MODULE_PARM(dead_router_check_interval, "i", int, 0644,
                 "Seconds between dead router health checks (<= 0 to disable)");
 
 static int live_router_check_interval = 0;
-CFS_MODULE_PARM(live_router_check_interval, "i", int, 0444,
+CFS_MODULE_PARM(live_router_check_interval, "i", int, 0644,
                 "Seconds between live router health checks (<= 0 to disable)");
 
 static int router_ping_timeout = 50;
-CFS_MODULE_PARM(router_ping_timeout, "i", int, 0444,
+CFS_MODULE_PARM(router_ping_timeout, "i", int, 0644,
                 "Seconds to wait for the reply to a router health query");
 
 int
