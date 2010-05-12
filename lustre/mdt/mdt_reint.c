@@ -557,13 +557,13 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
                 /* Close the found mfd, update attributes. */
                 ma->ma_lmm_size = info->mti_mdt->mdt_max_mdsize;
-                OBD_ALLOC(ma->ma_lmm, info->mti_mdt->mdt_max_mdsize);
+                OBD_ALLOC(ma->ma_lmm, ma->ma_lmm_size);
                 if (ma->ma_lmm == NULL)
                         GOTO(out_put, rc = -ENOMEM);
 
                 mdt_mfd_close(info, mfd);
 
-                OBD_FREE(ma->ma_lmm, info->mti_mdt->mdt_max_mdsize);
+                OBD_FREE(ma->ma_lmm, ma->ma_lmm_size);
         } else {
                 rc = mdt_attr_set(info, mo, ma, rr->rr_flags);
                 if (rc)
