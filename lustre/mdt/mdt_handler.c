@@ -3548,25 +3548,6 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         RETURN(rc);
 }
 
-/*
- * Seq wrappers
- */
-static void mdt_seq_adjust(const struct lu_env *env,
-                          struct mdt_device *m, int lost)
-{
-        struct md_site *ms = mdt_md_site(m);
-        struct lu_seq_range out;
-        ENTRY;
-
-        LASSERT(ms && ms->ms_server_seq);
-        LASSERT(lost >= 0);
-        /* get extra seq from seq_server, moving it's range up */
-        while (lost-- > 0) {
-                seq_server_alloc_meta(ms->ms_server_seq, NULL, &out, env);
-        }
-        EXIT;
-}
-
 static int mdt_seq_fini(const struct lu_env *env,
                         struct mdt_device *m)
 {
@@ -5543,12 +5524,8 @@ int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 #ifdef HAVE_QUOTA_SUPPORT
         struct md_device *next = mdt->mdt_child;
 #endif
-        int rc, lost;
+        int rc;
         ENTRY;
-        /* if some clients didn't participate in recovery then we can possibly
-         * lost sequence. Now we should increase sequence for safe value */
-        lost = obd->obd_max_recoverable_clients - obd->obd_connected_clients;
-        mdt_seq_adjust(env, mdt, lost);
 
         rc = ld->ld_ops->ldo_recovery_complete(env, ld);
 #ifdef HAVE_QUOTA_SUPPORT

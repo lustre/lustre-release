@@ -718,30 +718,30 @@ test_32() {
 }
 run_test 32 "close() notices client eviction; close() after client eviction"
 
-# Abort recovery before client complete
-test_33a() {	# was test_33
-    replay_barrier $SINGLEMDS
-    createmany -o $DIR/$tfile-%d 100
-    fail_abort $SINGLEMDS
-    # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile-* && return 3
-    unlinkmany $DIR/$tfile-%d 0 100
-    return 0
-}
-run_test 33a "abort recovery before client does replay"
-
-# Stale FID sequence bug 15962
-test_33b() {	# was test_33a
-    replay_barrier $SINGLEMDS
+test_33a() {
     createmany -o $DIR/$tfile-%d 10
+    replay_barrier_nosync $SINGLEMDS
     fail_abort $SINGLEMDS
-    unlinkmany $DIR/$tfile-%d 0 10
     # recreate shouldn't fail
-    createmany -o $DIR/$tfile-%d 10 || return 3
-    unlinkmany $DIR/$tfile-%d 0 10
+    createmany -o $DIR/$tfile--%d 10 || return 1
+    rm $DIR/$tfile-* -f
     return 0
 }
-run_test 33b "fid shouldn't be reused after abort recovery"
+run_test 33a "fid seq shouldn't be reused after abort recovery"
+
+test_33b() {
+    #define OBD_FAIL_SEQ_ALLOC                          0x1311
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x1311"
+
+    createmany -o $DIR/$tfile-%d 10
+    replay_barrier_nosync $SINGLEMDS
+    fail_abort $SINGLEMDS
+    # recreate shouldn't fail
+    createmany -o $DIR/$tfile--%d 10 || return 1
+    rm $DIR/$tfile-* -f
+    return 0
+}
+run_test 33b "test fid seq allocation"
 
 test_34() {
     multiop_bg_pause $DIR/$tfile O_c || return 2

@@ -63,13 +63,13 @@
 #include <lustre_mdc.h>
 #include "fid_internal.h"
 
-static int seq_client_rpc(struct lu_client_seq *seq, struct lu_seq_range *input,
+static int seq_client_rpc(struct lu_client_seq *seq,
                           struct lu_seq_range *output, __u32 opc,
                           const char *opcname)
 {
         struct obd_export     *exp = seq->lcs_exp;
         struct ptlrpc_request *req;
-        struct lu_seq_range       *out, *in;
+        struct lu_seq_range   *out, *in;
         __u32                 *op;
         int                    rc;
         ENTRY;
@@ -85,10 +85,7 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_seq_range *input,
 
         /* Zero out input range, this is not recovery yet. */
         in = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_RANGE);
-        if (input != NULL)
-                *in = *input;
-        else
-                range_init(in);
+        range_init(in);
 
         ptlrpc_request_set_replen(req);
 
@@ -126,7 +123,6 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_seq_range *input,
                        DRANGE"]\n", seq->lcs_name, PRANGE(output));
                 GOTO(out_req, rc = -EINVAL);
         }
-        *in = *out;
 
         CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n",
                seq->lcs_name, opcname, PRANGE(output));
@@ -138,9 +134,8 @@ out_req:
 }
 
 /* Request sequence-controller node to allocate new super-sequence. */
-int seq_client_replay_super(struct lu_client_seq *seq,
-                            struct lu_seq_range *range,
-                            const struct lu_env *env)
+int seq_client_alloc_super(struct lu_client_seq *seq,
+                           const struct lu_env *env)
 {
         int rc;
         ENTRY;
@@ -150,25 +145,17 @@ int seq_client_replay_super(struct lu_client_seq *seq,
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
                 LASSERT(env != NULL);
-                rc = seq_server_alloc_super(seq->lcs_srv, range,
-                                            &seq->lcs_space, env);
+                rc = seq_server_alloc_super(seq->lcs_srv, &seq->lcs_space,
+                                            env);
         } else {
 #endif
-                rc = seq_client_rpc(seq, range, &seq->lcs_space,
+                rc = seq_client_rpc(seq, &seq->lcs_space,
                                     SEQ_ALLOC_SUPER, "super");
 #ifdef __KERNEL__
         }
 #endif
         cfs_up(&seq->lcs_sem);
         RETURN(rc);
-}
-
-/* Request sequence-controller node to allocate new super-sequence. */
-int seq_client_alloc_super(struct lu_client_seq *seq,
-                           const struct lu_env *env)
-{
-        ENTRY;
-        RETURN(seq_client_replay_super(seq, NULL, env));
 }
 
 /* Request sequence-controller node to allocate new meta-sequence. */
@@ -181,11 +168,10 @@ static int seq_client_alloc_meta(struct lu_client_seq *seq,
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
                 LASSERT(env != NULL);
-                rc = seq_server_alloc_meta(seq->lcs_srv, NULL,
-                                           &seq->lcs_space, env);
+                rc = seq_server_alloc_meta(seq->lcs_srv, &seq->lcs_space, env);
         } else {
 #endif
-                rc = seq_client_rpc(seq, NULL, &seq->lcs_space,
+                rc = seq_client_rpc(seq, &seq->lcs_space,
                                     SEQ_ALLOC_META, "meta");
 #ifdef __KERNEL__
         }

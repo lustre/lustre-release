@@ -75,19 +75,11 @@ int seq_store_init(struct lu_server_seq *seq,
 void seq_store_fini(struct lu_server_seq *seq,
                     const struct lu_env *env);
 
-int seq_store_write(struct lu_server_seq *seq,
-                    const struct lu_env *env,
-                    struct thandle *th);
-
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_env *env);
 
-struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
-                                       const struct lu_env *env,
-                                       int credits);
-void seq_store_trans_stop(struct lu_server_seq *seq,
-                          const struct lu_env *env,
-                          struct thandle *th);
+int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
+                     struct lu_seq_range *out, int sync);
 
 #ifdef LPROCFS
 extern struct lprocfs_vars seq_server_proc_list[];

@@ -73,8 +73,9 @@ static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
         return buf;
 }
 
-struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
-                                       const struct lu_env *env, int credit)
+struct thandle *seq_store_trans_start(struct lu_server_seq *seq,
+                                      const struct lu_env *env, int credit,
+                                      int sync)
 {
         struct seq_thread_info *info;
         struct dt_device *dt_dev;
@@ -86,6 +87,8 @@ struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
         LASSERT(info != NULL);
 
         txn_param_init(&info->sti_txn, credit);
+        if (sync)
+                txn_param_sync(&info->sti_txn);
 
         th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &info->sti_txn);
         return th;
@@ -135,6 +138,37 @@ int seq_store_write(struct lu_server_seq *seq,
 
 
         RETURN(rc);
+}
+
+int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
+                     struct lu_seq_range *out, int sync)
+{
+        struct thandle *th;
+        int rc;
+        int credits = SEQ_TXN_STORE_CREDITS;
+
+        if (out != NULL)
+                credits += FLD_TXN_INDEX_INSERT_CREDITS;
+
+        th = seq_store_trans_start(seq, env, credits, sync);
+        if (IS_ERR(th))
+                RETURN(PTR_ERR(th));
+
+        rc = seq_store_write(seq, env, th);
+        if (rc) {
+                CERROR("%s: Can't write space data, rc %d\n",
+                       seq->lss_name, rc);
+        } else if (out != NULL) {
+                rc = fld_server_create(seq->lss_site->ms_server_fld,
+                                       env, out, th);
+                if (rc) {
+                        CERROR("%s: Can't Update fld database, rc %d\n",
+                               seq->lss_name, rc);
+                }
+        }
+
+        seq_store_trans_stop(seq, env, th);
+        return rc;
 }
 
 /*

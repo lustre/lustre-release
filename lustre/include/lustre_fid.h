@@ -79,6 +79,11 @@ enum {
         /* changed to 16 to avoid overflow in test11 */
         LUSTRE_SEQ_META_WIDTH = 0x0000000000000010ULL,
 
+         /*
+          * seq allocation pool size.
+          */
+        LUSTRE_SEQ_BATCH_WIDTH = LUSTRE_SEQ_META_WIDTH * 1000,
+
         /*
          * This is how many sequences may be in one super-sequence allocated to
          * MDTs.
@@ -183,6 +188,10 @@ struct lu_server_seq {
         /* Available sequences space */
         struct lu_seq_range         lss_space;
 
+        /* keeps highwater in lsr_end for seq allocation algorithm */
+        struct lu_seq_range         lss_lowater_set;
+        struct lu_seq_range         lss_hiwater_set;
+
         /*
          * Device for server side seq manager needs (saving sequences to backing
          * store).
@@ -216,6 +225,14 @@ struct lu_server_seq {
          */
         __u64                   lss_width;
 
+        /*
+         * minimum lss_alloc_set size that should be allocated from
+         * lss_space
+         */
+        __u64                   lss_set_width;
+
+        /* transaction no of seq update write operation */
+        __u64                   lss_set_transno;
         /**
          * Pointer to site object, required to access site fld.
          */
@@ -236,12 +253,10 @@ void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_env *env);
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
-                           struct lu_seq_range *in,
                            struct lu_seq_range *out,
                            const struct lu_env *env);
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
-                          struct lu_seq_range *in,
                           struct lu_seq_range *out,
                           const struct lu_env *env);
 

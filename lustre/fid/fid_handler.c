@@ -54,6 +54,7 @@
 
 #include <obd.h>
 #include <obd_class.h>
+#include <lu_target.h>
 #include <dt_object.h>
 #include <md_object.h>
 #include <obd_support.h>
@@ -100,6 +101,18 @@ out_up:
         return rc;
 }
 EXPORT_SYMBOL(seq_server_set_cli);
+/*
+ * allocate \a w units of sequence from range \a from.
+ */
+static inline void range_alloc(struct lu_seq_range *to,
+                               struct lu_seq_range *from,
+                               __u64 width)
+{
+        width = min(range_space(from), width);
+        to->lsr_start = from->lsr_start;
+        to->lsr_end = from->lsr_start + width;
+        from->lsr_start += width;
+}
 
 /**
  * On controller node, allocate new super sequence for regular sequence server.
@@ -109,67 +122,24 @@ EXPORT_SYMBOL(seq_server_set_cli);
  */
 
 static int __seq_server_alloc_super(struct lu_server_seq *seq,
-                                    struct lu_seq_range *in,
                                     struct lu_seq_range *out,
                                     const struct lu_env *env)
 {
         struct lu_seq_range *space = &seq->lss_space;
-        struct thandle *th;
-        __u64 mdt = out->lsr_mdt;
-        int rc, credit;
+        int rc;
         ENTRY;
 
         LASSERT(range_is_sane(space));
 
-        if (in != NULL) {
-                CDEBUG(D_INFO, "%s: Input seq range: "
-                       DRANGE"\n", seq->lss_name, PRANGE(in));
-
-                if (in->lsr_end > space->lsr_start)
-                        space->lsr_start = in->lsr_end;
-                *out = *in;
-
-                CDEBUG(D_INFO, "%s: Recovered space: "DRANGE"\n",
-                       seq->lss_name, PRANGE(space));
+        if (range_is_exhausted(space)) {
+                CERROR("%s: Sequences space is exhausted\n",
+                       seq->lss_name);
+                RETURN(-ENOSPC);
         } else {
-                if (range_space(space) < seq->lss_width) {
-                        CWARN("%s: Sequences space to be exhausted soon. "
-                              "Only "LPU64" sequences left\n", seq->lss_name,
-                              range_space(space));
-                        *out = *space;
-                        space->lsr_start = space->lsr_end;
-                } else if (range_is_exhausted(space)) {
-                        CERROR("%s: Sequences space is exhausted\n",
-                               seq->lss_name);
-                        RETURN(-ENOSPC);
-                } else {
-                        range_alloc(out, space, seq->lss_width);
-                }
-        }
-        out->lsr_mdt = mdt;
-
-        credit = SEQ_TXN_STORE_CREDITS + FLD_TXN_INDEX_INSERT_CREDITS;
-
-        th = seq_store_trans_start(seq, env, credit);
-        if (IS_ERR(th))
-                RETURN(PTR_ERR(th));
-
-        rc = seq_store_write(seq, env, th);
-        if (rc) {
-                CERROR("%s: Can't write space data, rc %d\n",
-                       seq->lss_name, rc);
-                goto out;
+                range_alloc(out, space, seq->lss_width);
         }
 
-        rc = fld_server_create(seq->lss_site->ms_server_fld,
-                               env, out, th);
-        if (rc) {
-                CERROR("%s: Can't Update fld database, rc %d\n",
-                       seq->lss_name, rc);
-        }
-
-out:
-        seq_store_trans_stop(seq, env, th);
+        rc = seq_store_update(env, seq, out, 1 /* sync */);
 
         CDEBUG(D_INFO, "%s: super-sequence allocation rc = %d "
                DRANGE"\n", seq->lss_name, rc, PRANGE(out));
@@ -178,7 +148,6 @@ out:
 }
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
-                           struct lu_seq_range *in,
                            struct lu_seq_range *out,
                            const struct lu_env *env)
 {
@@ -186,145 +155,137 @@ int seq_server_alloc_super(struct lu_server_seq *seq,
         ENTRY;
 
         cfs_down(&seq->lss_sem);
-        rc = __seq_server_alloc_super(seq, in, out, env);
+        rc = __seq_server_alloc_super(seq, out, env);
         cfs_up(&seq->lss_sem);
 
         RETURN(rc);
 }
 
+static int __seq_set_init(const struct lu_env *env,
+                            struct lu_server_seq *seq)
+{
+        struct lu_seq_range *space = &seq->lss_space;
+        int rc;
+
+        range_alloc(&seq->lss_lowater_set, space, seq->lss_set_width);
+        range_alloc(&seq->lss_hiwater_set, space, seq->lss_set_width);
+
+        rc = seq_store_update(env, seq, NULL, 1);
+        seq->lss_set_transno = 0;
+
+        return rc;
+}
+
+/*
+ * This function implements new seq allocation algorithm using async
+ * updates to seq file on disk. ref bug 18857 for details.
+ * there are four variable to keep track of this process
+ *
+ * lss_space; - available lss_space
+ * lss_lowater_set; - lu_seq_range for all seqs before barrier, i.e. safe to use
+ * lss_hiwater_set; - lu_seq_range after barrier, i.e. allocated but may be
+ *                    not yet committed
+ *
+ * when lss_lowater_set reaches the end it is replaced with hiwater one and
+ * a write operation is initiated to allocate new hiwater range.
+ * if last seq write opearion is still not commited, current operation is
+ * flaged as sync write op.
+ */
+static int range_alloc_set(const struct lu_env *env,
+                            struct lu_seq_range *out,
+                            struct lu_server_seq *seq)
+{
+        struct lu_seq_range *space = &seq->lss_space;
+        struct lu_seq_range *loset = &seq->lss_lowater_set;
+        struct lu_seq_range *hiset = &seq->lss_hiwater_set;
+        int rc = 0;
+
+        if (range_is_zero(loset))
+                __seq_set_init(env, seq);
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_SEQ_ALLOC)) /* exhaust set */
+                loset->lsr_start = loset->lsr_end;
+
+        if (range_is_exhausted(loset)) {
+                /* reached high water mark. */
+                struct lu_device *dev = seq->lss_site->ms_lu.ls_top_dev;
+                struct lu_target *tg = dev->ld_obd->u.obt.obt_lut;
+                int obd_num_clients = dev->ld_obd->obd_num_exports;
+                __u64 set_sz;
+                int sync = 0;
+
+                /* calculate new seq width based on number of clients */
+                set_sz = max(seq->lss_set_width,
+                               obd_num_clients * seq->lss_width);
+                set_sz = min(range_space(space), set_sz);
+
+                /* Switch to hiwater range now */
+                loset = hiset;
+                /* allocate new hiwater range */
+                range_alloc(hiset, space, set_sz);
+
+                if (seq->lss_set_transno > dev->ld_obd->obd_last_committed)
+                        sync = 1;
+
+                /* update ondisk seq with new *space */
+                rc = seq_store_update(env, seq, NULL, sync);
+
+                /* set new hiwater transno */
+                cfs_spin_lock(&tg->lut_translock);
+                seq->lss_set_transno = tg->lut_last_transno;
+                cfs_spin_unlock(&tg->lut_translock);
+        }
+
+        LASSERTF(!range_is_exhausted(loset) || range_is_sane(loset),
+                 DRANGE"\n", PRANGE(loset));
+
+        if (rc == 0)
+                range_alloc(out, loset, seq->lss_width);
+
+        RETURN(rc);
+}
+
 static int __seq_server_alloc_meta(struct lu_server_seq *seq,
-                                   struct lu_seq_range *in,
                                    struct lu_seq_range *out,
                                    const struct lu_env *env)
 {
         struct lu_seq_range *space = &seq->lss_space;
-        struct thandle *th;
         int rc = 0;
 
         ENTRY;
 
         LASSERT(range_is_sane(space));
 
-        /*
-         * This is recovery case. Adjust super range if input range looks like
-         * it is allocated from new super.
-         */
-        if (in != NULL) {
-                CDEBUG(D_INFO, "%s: Input seq range: "
-                       DRANGE"\n", seq->lss_name, PRANGE(in));
-
-                if (in->lsr_end <= space->lsr_start) {
-                        /*
-                         * Client is replaying a fairly old range, server
-                         * don't need to do any allocation.
-                         */
-                } else if (range_is_exhausted(space)) {
-                        /*
-                         * Start is set to end of last allocated, because it
-                         * *is* already allocated so we take that into account
-                         * and do not use for other allocations.
-                         */
-                        space->lsr_start = in->lsr_end;
-
-                        /*
-                         * End is set to in->lsr_start + super sequence
-                         * allocation unit. That is because in->lsr_start is
-                         * first seq in new allocated range from controller
-                         * before failure.
-                         */
-                        space->lsr_end = in->lsr_start + LUSTRE_SEQ_SUPER_WIDTH;
-
-                        if (!seq->lss_cli) {
-                                CERROR("%s: No sequence controller "
-                                       "is attached.\n", seq->lss_name);
-                                RETURN(-ENODEV);
-                        }
-
-                        /*
-                         * Let controller know that this is recovery and last
-                         * obtained range from it was @space.
-                         */
-                        rc = seq_client_replay_super(seq->lss_cli, space, env);
-
-                        if (rc) {
-                                CERROR("%s: Can't replay super-sequence, "
-                                       "rc %d\n", seq->lss_name, rc);
-                                RETURN(rc);
-                        }
-                } else {
-                        /*
-                         * Update super start by end from client's range. Super
-                         * end should not be changed if range was not exhausted.
-                         */
-                        space->lsr_start = in->lsr_end;
+        /* Check if available space ends and allocate new super seq */
+        if (range_is_exhausted(space)) {
+                if (!seq->lss_cli) {
+                        CERROR("%s: No sequence controller is attached.\n",
+                               seq->lss_name);
+                        RETURN(-ENODEV);
                 }
 
-                /* sending replay_super to update fld as only super sequence
-                 * server can update fld.
-                 * we are sending meta sequence to fld rather than super
-                 * sequence, but fld server can handle range merging. */
-
-                in->lsr_mdt = space->lsr_mdt;
-                rc = seq_client_replay_super(seq->lss_cli, in, env);
-
+                rc = seq_client_alloc_super(seq->lss_cli, env);
                 if (rc) {
-                        CERROR("%s: Can't replay super-sequence, "
-                                        "rc %d\n", seq->lss_name, rc);
+                        CERROR("%s: Can't allocate super-sequence, rc %d\n",
+                               seq->lss_name, rc);
                         RETURN(rc);
                 }
 
-                *out = *in;
-
-                CDEBUG(D_INFO, "%s: Recovered space: "DRANGE"\n",
-                       seq->lss_name, PRANGE(space));
-        } else {
-                /*
-                 * XXX: Avoid cascading RPCs using kind of async preallocation
-                 * when meta-sequence is close to exhausting.
-                 */
-                if (range_is_exhausted(space)) {
-                        if (!seq->lss_cli) {
-                                CERROR("%s: No sequence controller "
-                                       "is attached.\n", seq->lss_name);
-                                RETURN(-ENODEV);
-                        }
-
-                        rc = seq_client_alloc_super(seq->lss_cli, env);
-                        if (rc) {
-                                CERROR("%s: Can't allocate super-sequence, "
-                                       "rc %d\n", seq->lss_name, rc);
-                                RETURN(rc);
-                        }
-
-                        /* Saving new range to allocation space. */
-                        *space = seq->lss_cli->lcs_space;
-                        LASSERT(range_is_sane(space));
-                }
-
-                range_alloc(out, space, seq->lss_width);
+                /* Saving new range to allocation space. */
+                *space = seq->lss_cli->lcs_space;
+                LASSERT(range_is_sane(space));
         }
 
-        th = seq_store_trans_start(seq, env, SEQ_TXN_STORE_CREDITS);
-        if (IS_ERR(th))
-                RETURN(PTR_ERR(th));
-
-        rc = seq_store_write(seq, env, th);
-        if (rc) {
-                CERROR("%s: Can't write space data, rc %d\n",
-		       seq->lss_name, rc);
-        }
-
+        rc = range_alloc_set(env, out, seq);
         if (rc == 0) {
                 CDEBUG(D_INFO, "%s: Allocated meta-sequence "
                        DRANGE"\n", seq->lss_name, PRANGE(out));
         }
 
-        seq_store_trans_stop(seq, env, th);
         RETURN(rc);
 }
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
-                          struct lu_seq_range *in,
                           struct lu_seq_range *out,
                           const struct lu_env *env)
 {
@@ -332,7 +293,7 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
         ENTRY;
 
         cfs_down(&seq->lss_sem);
-        rc = __seq_server_alloc_meta(seq, in, out, env);
+        rc = __seq_server_alloc_meta(seq, out, env);
         cfs_up(&seq->lss_sem);
 
         RETURN(rc);
@@ -341,8 +302,7 @@ EXPORT_SYMBOL(seq_server_alloc_meta);
 
 static int seq_server_handle(struct lu_site *site,
                              const struct lu_env *env,
-                             __u32 opc, struct lu_seq_range *in,
-                             struct lu_seq_range *out)
+                             __u32 opc, struct lu_seq_range *out)
 {
         int rc;
         struct md_site *mite;
@@ -356,8 +316,7 @@ static int seq_server_handle(struct lu_site *site,
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
-                rc = seq_server_alloc_meta(mite->ms_server_seq,
-                                           in, out, env);
+                rc = seq_server_alloc_meta(mite->ms_server_seq, out, env);
                 break;
         case SEQ_ALLOC_SUPER:
                 if (!mite->ms_control_seq) {
@@ -365,8 +324,7 @@ static int seq_server_handle(struct lu_site *site,
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
-                rc = seq_server_alloc_super(mite->ms_control_seq,
-                                            in, out, env);
+                rc = seq_server_alloc_super(mite->ms_control_seq, out, env);
                 break;
         default:
                 rc = -EINVAL;
@@ -380,12 +338,13 @@ static int seq_req_handle(struct ptlrpc_request *req,
                           const struct lu_env *env,
                           struct seq_thread_info *info)
 {
-        struct lu_seq_range *out, *in = NULL, *tmp;
+        struct lu_seq_range *out, *tmp;
         struct lu_site *site;
         int rc = -EPROTO;
         __u32 *opc;
         ENTRY;
 
+	LASSERT(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY));
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
 			
@@ -401,20 +360,11 @@ static int seq_req_handle(struct ptlrpc_request *req,
 
                 tmp = req_capsule_client_get(info->sti_pill, &RMF_SEQ_RANGE);
 
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        in = tmp;
-
-                        if (range_is_zero(in) || !range_is_sane(in)) {
-                                CERROR("Replayed seq range is invalid: "
-                                       DRANGE"\n", PRANGE(in));
-                                RETURN(err_serious(-EINVAL));
-                        }
-                }
                 /* seq client passed mdt id, we need to pass that using out
                  * range parameter */
 
                 out->lsr_mdt = tmp->lsr_mdt;
-                rc = seq_server_handle(site, env, *opc, in, out);
+                rc = seq_server_handle(site, env, *opc, out);
         } else
                 rc = err_serious(-EPROTO);
 
@@ -455,6 +405,9 @@ static int seq_handle(struct ptlrpc_request *req)
 
         seq_thread_info_init(req, info);
         rc = seq_req_handle(req, env, info);
+        /* XXX: we don't need replay but MDT assign transno in any case,
+         * remove it manually before reply*/
+        lustre_msg_set_transno(req->rq_repmsg, 0);
         seq_thread_info_fini(info);
 
         return rc;
@@ -522,6 +475,7 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 }
 #endif
 
+
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *prefix,
@@ -529,17 +483,21 @@ int seq_server_init(struct lu_server_seq *seq,
                     struct md_site *ms,
                     const struct lu_env *env)
 {
-        struct thandle *th;
         int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
         ENTRY;
 
-	LASSERT(dev != NULL);
+        LASSERT(dev != NULL);
         LASSERT(prefix != NULL);
 
         seq->lss_cli = NULL;
         seq->lss_type = type;
         seq->lss_site = ms;
         range_init(&seq->lss_space);
+
+        range_init(&seq->lss_lowater_set);
+        range_init(&seq->lss_hiwater_set);
+        seq->lss_set_width = LUSTRE_SEQ_BATCH_WIDTH;
+
         cfs_sema_init(&seq->lss_sem, 1);
 
         seq->lss_width = is_srv ?
@@ -565,22 +523,16 @@ int seq_server_init(struct lu_server_seq *seq,
                        "on store. Initialize space\n",
                        seq->lss_name);
 
-                th = seq_store_trans_start(seq, env, SEQ_TXN_STORE_CREDITS);
-                if (IS_ERR(th))
-                        RETURN(PTR_ERR(th));
-
-                /* Save default controller value to store. */
-                rc = seq_store_write(seq, env, th);
+                rc = seq_store_update(env, seq, NULL, 0);
                 if (rc) {
                         CERROR("%s: Can't write space data, "
                                "rc %d\n", seq->lss_name, rc);
                 }
-                seq_store_trans_stop(seq, env, th);
         } else if (rc) {
-		CERROR("%s: Can't read space data, rc %d\n",
-		       seq->lss_name, rc);
-		GOTO(out, rc);
-	}
+                CERROR("%s: Can't read space data, rc %d\n",
+                       seq->lss_name, rc);
+                GOTO(out, rc);
+        }
 
         if (is_srv) {
                 LASSERT(range_is_sane(&seq->lss_space));
@@ -591,13 +543,13 @@ int seq_server_init(struct lu_server_seq *seq,
 
         rc  = seq_server_proc_init(seq);
         if (rc)
-		GOTO(out, rc);
+                GOTO(out, rc);
 
-	EXIT;
+        EXIT;
 out:
-	if (rc)
-		seq_server_fini(seq, env);
-	return rc;
+        if (rc)
+                seq_server_fini(seq, env);
+        return rc;
 }
 EXPORT_SYMBOL(seq_server_init);
 

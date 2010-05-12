@@ -216,18 +216,6 @@ static inline int range_within(const struct lu_seq_range *range,
         return s >= range->lsr_start && s < range->lsr_end;
 }
 
-/**
- * allocate \a w units of sequence from range \a from.
- */
-static inline void range_alloc(struct lu_seq_range *to,
-                               struct lu_seq_range *from,
-                               __u64 width)
-{
-        to->lsr_start = from->lsr_start;
-        to->lsr_end = from->lsr_start + width;
-        from->lsr_start += width;
-}
-
 static inline int range_is_sane(const struct lu_seq_range *range)
 {
         return (range->lsr_end >= range->lsr_start);
