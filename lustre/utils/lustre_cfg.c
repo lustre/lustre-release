@@ -527,11 +527,11 @@ static char *display_name(char *filename, int show_type)
         /* append the indicator to entries*/
         if (show_type) {
                 if (S_ISDIR(st.st_mode))
-                        filename[strlen(filename)] = '/';
+                        strcat(filename, "/");
                 else if (S_ISLNK(st.st_mode))
-                        filename[strlen(filename)] = '@';
+                        strcat(filename, "@");
                 else if (st.st_mode & S_IWUSR)
-                        filename[strlen(filename)] = '=';
+                        strcat(filename, "=");
         }
 
         return filename;
@@ -595,7 +595,113 @@ struct param_opts {
         int only_path;
         int show_path;
         int show_type;
+        int recursive;
 };
+
+static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
+{
+        int ch;
+        popt->show_path = 1;
+        popt->only_path = 1;
+        popt->show_type = 0;
+        popt->recursive = 0;
+
+        while ((ch = getopt(argc, argv, "FR")) != -1) {
+                switch (ch) {
+                case 'F':
+                        popt->show_type = 1;
+                        break;
+                case 'R':
+                        popt->recursive = 1;
+                        break;
+                default:
+                        return -1;
+                }
+        }
+
+        return optind;
+}
+
+static int listparam_display(struct param_opts *popt, char *pattern)
+{
+        int rc;
+        int i;
+        glob_t glob_info;
+        char filename[PATH_MAX + 1];    /* extra 1 byte for file type */
+
+        rc = glob(pattern, GLOB_BRACE | (popt->recursive ? GLOB_MARK : 0),
+                  NULL, &glob_info);
+        if (rc) {
+                fprintf(stderr, "error: list_param: %s: %s\n",
+                        pattern, globerrstr(rc));
+                return -ESRCH;
+        }
+
+        for (i = 0; i < glob_info.gl_pathc; i++) {
+                char *valuename;
+                int last;
+
+                /* Trailing '/' will indicate recursion into directory */
+                last = strlen(glob_info.gl_pathv[i]) - 1;
+
+                /* Remove trailing '/' or it will be converted to '.' */
+                if (last > 0 && glob_info.gl_pathv[i][last] == '/')
+                        glob_info.gl_pathv[i][last] = '\0';
+                else
+                        last = 0;
+                strcpy(filename, glob_info.gl_pathv[i]);
+                valuename = display_name(filename, popt->show_type);
+                if (valuename)
+                        printf("%s\n", valuename);
+                if (last) {
+                        strcpy(filename, glob_info.gl_pathv[i]);
+                        strcat(filename, "/*");
+                        listparam_display(popt, filename);
+                }
+        }
+
+        globfree(&glob_info);
+        return rc;
+}
+
+int jt_lcfg_listparam(int argc, char **argv)
+{
+        int fp;
+        int rc = 0, i;
+        struct param_opts popt;
+        char pattern[PATH_MAX];
+        char *path;
+
+        rc = listparam_cmdline(argc, argv, &popt);
+        if (rc == argc && popt.recursive) {
+                rc--;           /* we know at least "-R" is a parameter */
+                argv[rc] = "*";
+        } else if (rc < 0 || rc >= argc) {
+                return CMD_HELP;
+        }
+
+        for (i = rc; i < argc; i++) {
+                path = argv[i];
+
+                clean_path(path);
+
+                /* If the entire path is specified as input */
+                fp = open(path, O_RDONLY);
+                if (fp < 0) {
+                        snprintf(pattern, PATH_MAX,
+                                 "/proc/{fs,sys}/{lnet,lustre}/%s", path);
+                } else {
+                        strcpy(pattern, path);
+                        close(fp);
+                }
+
+                rc = listparam_display(&popt, pattern);
+                if (rc < 0)
+                        return rc;
+        }
+
+        return 0;
+}
 
 static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
