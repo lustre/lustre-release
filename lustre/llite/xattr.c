@@ -142,6 +142,11 @@ int ll_setxattr_common(struct inode *inode, const char *name,
             (xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0))
                 RETURN(0);
 
+        /* b15587: ignore security.capability xattr for now */
+        if ((xattr_type == XATTR_SECURITY_T &&
+            strcmp(name, "security.capability") == 0))
+                RETURN(0);
+
         ll_inode2fid(&fid, inode);
         rc = mdc_setxattr(sbi->ll_mdc_exp, &fid, valid,
                           name, value, size, 0, flags, &req);
@@ -251,6 +256,11 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         rc = xattr_type_filter(sbi, xattr_type);
         if (rc)
                 RETURN(rc);
+
+        /* b15587: ignore security.capability xattr for now */
+        if ((xattr_type == XATTR_SECURITY_T &&
+            strcmp(name, "security.capability") == 0))
+                RETURN(-ENODATA);
 
         /* posix acl is under protection of LOOKUP lock. when calling to this,
          * we just have path resolution to the target inode, so we have great
