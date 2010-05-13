@@ -35,7 +35,7 @@ lib_LIBRARIES = liblustreapi.a libiam.a
 
 lctl_SOURCES = obd.c lustre_cfg.c lctl.c obdctl.h
 lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
-lctl_DEPENDENCIES := $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lfs_SOURCES = lfs.c obd.c lustre_cfg.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
@@ -43,7 +43,7 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
-loadgen_DEPENDENCIES := $(LIBPTLCTL)
+loadgen_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
 lustre_rsync_LDADD :=  $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
