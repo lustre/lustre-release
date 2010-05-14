@@ -398,7 +398,7 @@ typedef struct sfw_test_instance {
 /* XXX: trailing (CFS_PAGE_SIZE % sizeof(lnet_process_id_t)) bytes at
  * the end of pages are not used */
 #define SFW_MAX_CONCUR     LST_MAX_CONCUR
-#define SFW_ID_PER_PAGE    (CFS_PAGE_SIZE / sizeof(lnet_process_id_t))
+#define SFW_ID_PER_PAGE    (CFS_PAGE_SIZE / sizeof(lnet_process_id_packed_t))
 #define SFW_MAX_NDESTS     (LNET_MAX_IOV * SFW_ID_PER_PAGE)
 #define sfw_id_pages(n)    (((n) + SFW_ID_PER_PAGE - 1) / SFW_ID_PER_PAGE)
 

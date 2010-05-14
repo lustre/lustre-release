@@ -703,31 +703,31 @@ lstcon_statrpc_prep(lstcon_node_t *nd, lstcon_rpc_t **crpc)
         return 0;
 }
 
-lnet_process_id_t *
+lnet_process_id_packed_t *
 lstcon_next_id(int idx, int nkiov, lnet_kiov_t *kiov)
 {
-        lnet_process_id_t *pid;
-        int                i;
+        lnet_process_id_packed_t *pid;
+        int                       i;
 
-        i = idx / (CFS_PAGE_SIZE / sizeof(lnet_process_id_t));
+        i = idx / SFW_ID_PER_PAGE;
         
         LASSERT (i < nkiov);
 
-        pid = (lnet_process_id_t *)cfs_page_address(kiov[i].kiov_page);
+        pid = (lnet_process_id_packed_t *)cfs_page_address(kiov[i].kiov_page);
 
-        return &pid[idx % (CFS_PAGE_SIZE / sizeof(lnet_process_id_t))];
+        return &pid[idx % SFW_ID_PER_PAGE];
 }
 
 int
 lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
                      int dist, int span, int nkiov, lnet_kiov_t *kiov)
 {
-        lnet_process_id_t *pid;
-        lstcon_ndlink_t   *ndl;
-        lstcon_node_t     *nd;
-        int                start;
-        int                end;
-        int                i = 0;
+        lnet_process_id_packed_t *pid;
+        lstcon_ndlink_t          *ndl;
+        lstcon_node_t            *nd;
+        int                       start;
+        int                       end;
+        int                       i = 0;
 
         LASSERT (dist >= 1);
         LASSERT (span >= 1);
@@ -751,7 +751,8 @@ lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
                         break;
 
                 pid = lstcon_next_id((i - start), nkiov, kiov);
-                *pid = nd->nd_id;
+                pid->nid = nd->nd_id.nid;
+                pid->pid = nd->nd_id.pid;
                 i++;
         }
 
@@ -765,7 +766,8 @@ lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
 
                 nd = ndl->ndl_node;
                 pid = lstcon_next_id((i - start), nkiov, kiov);
-                *pid = nd->nd_id;
+                pid->nid = nd->nd_id.nid;
+                pid->pid = nd->nd_id.pid;
                 i++;
         }
 

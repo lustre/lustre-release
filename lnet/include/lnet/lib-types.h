@@ -58,11 +58,17 @@
 
 #define WIRE_ATTR       __attribute__((packed))
 
+/* Packed version of lnet_process_id_t to transfer via network */
+#include <libcfs/libcfs_pack.h>
+typedef struct {
+        lnet_nid_t nid;
+        lnet_pid_t pid;   /* node id / process id */
+} WIRE_ATTR lnet_process_id_packed_t;
+
 /* The wire handle's interface cookie only matches one network interface in
  * one epoch (i.e. new cookie when the interface restarts or the node
  * reboots).  The object cookie only matches one object on that interface
  * during that object's lifetime (i.e. no cookie re-use). */
-#include <libcfs/libcfs_pack.h>
 typedef struct {
         __u64 wh_interface_cookie;
         __u64 wh_object_cookie;

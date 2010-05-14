@@ -761,9 +761,9 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
         memcpy(&tsi->tsi_u, &req->tsr_u, sizeof(tsi->tsi_u));
 
         for (i = 0; i < ndest; i++) {
-                lnet_process_id_t *dests;
-                lnet_process_id_t  id;
-                int                j;
+                lnet_process_id_packed_t *dests;
+                lnet_process_id_packed_t  id;
+                int                       j;
 
 #ifdef __KERNEL__
                 dests = cfs_page_address(bk->bk_iovs[i / SFW_ID_PER_PAGE].kiov_page);
@@ -784,7 +784,8 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
                                 goto error;
                         }
 
-                        tsu->tsu_dest     = id;
+                        tsu->tsu_dest.nid = id.nid;
+                        tsu->tsu_dest.pid = id.pid;
                         tsu->tsu_instance = tsi;
                         tsu->tsu_private  = NULL;
                         cfs_list_add_tail(&tsu->tsu_list, &tsi->tsi_units);
