@@ -6,7 +6,7 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = lrun
+sbin_scripts = lrun 
 bin_scripts = llstat llobdstat plot-llstat
 
 if UTILS
@@ -28,12 +28,12 @@ endif # UTILS
 lib_LIBRARIES = liblustreapi.a
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
-lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
+lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lfs_SOURCES = lfs.c parser.c lustre_cfg.c obd.c
-lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
-lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
@@ -45,7 +45,7 @@ if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs
 E2PLIB = -le2p
 else
-E2PLIB =
+E2PLIB = 
 EXT2FSLIB =
 endif
 
