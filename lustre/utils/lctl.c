@@ -154,7 +154,8 @@ command_t cmdlist[] = {
          "usage: list_param [-F] <param_path1 param_path2 ...>\n"
          "List the name of Lustre or LNET parameter from the specified path.\n"
          "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files,\n"
-                "respectively."},
+                "respectively.\n"
+         "  -R  Recursively list all parameters under the specified path.\n"},
 
         /* Debug commands */
         {"==== debugging control ====", jt_noop, 0, "debug"},
