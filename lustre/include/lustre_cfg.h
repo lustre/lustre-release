@@ -94,9 +94,6 @@ struct lustre_cfg_bufs {
         __u32    lcfg_bufcount;
 };
 
-/* Mountconf transitional hack, should go away after 1.6 */
-#define LCFG_FLG_MOUNTCONF 0x400
-
 struct lustre_cfg {
         __u32 lcfg_version;
         __u32 lcfg_command;

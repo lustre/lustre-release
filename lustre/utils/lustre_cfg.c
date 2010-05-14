@@ -491,19 +491,48 @@ int jt_lcfg_param(int argc, char **argv)
 }
 
 /* Param set in config log on MGS */
-/* conf_param key1=value1 [key2=value2...] */
+/* conf_param key=value */
+/* Note we can actually send mgc conf_params from clients, but currently
+ * that's only done for default file striping (see ll_send_mgc_param),
+ * and not here. */
+/* After removal of a parameter (-d) Lustre will use the default
+ * AT NEXT REBOOT, not immediately. */
 int jt_lcfg_mgsparam(int argc, char **argv)
 {
-        int i, rc;
+        int rc;
+        int del = 0;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
+        char *buf = NULL;
 
-        if ((argc >= LUSTRE_CFG_MAX_BUFCOUNT) || (argc <= 1))
+        /* mgs_setparam processes only lctl buf #1 */
+        if ((argc > 3) || (argc <= 1))
                 return CMD_HELP;
 
+        while ((rc = getopt(argc, argv, "d")) != -1) {
+                switch (rc) {
+                        case 'd':
+                                del = 1;
+                                break;
+                        default:
+                                return CMD_HELP;
+                }
+        }
+
         lustre_cfg_bufs_reset(&bufs, NULL);
-        for (i = 1; i < argc; i++) {
-                lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
+        if (del) {
+                char *ptr;
+
+                /* for delete, make it "<param>=\0" */
+                buf = malloc(strlen(argv[optind]) + 2);
+                /* put an '=' on the end in case it doesn't have one */
+                sprintf(buf, "%s=", argv[optind]);
+                /* then truncate after the first '=' */
+                ptr = strchr(buf, '=');
+                *(++ptr) = '\0';
+                lustre_cfg_bufs_set_string(&bufs, 1, buf);
+        } else {
+                lustre_cfg_bufs_set_string(&bufs, 1, argv[optind]);
         }
 
         /* We could put other opcodes here. */
@@ -511,6 +540,8 @@ int jt_lcfg_mgsparam(int argc, char **argv)
 
         rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
+        if (buf)
+                free(buf);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));

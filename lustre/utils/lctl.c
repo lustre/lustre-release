@@ -131,11 +131,12 @@ command_t cmdlist[] = {
          "abort recovery on a restarting MDT or OST device\n"},
         {"set_timeout", jt_lcfg_set_timeout, 0,
          "usage: conf_param obd_timeout=<secs>\n"},
-        {"conf_param", jt_lcfg_mgsparam, 0, "set a permanent config param. "
+        {"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
          "This command must be run on the MGS node\n"
-         "usage: conf_param <target.keyword=val> ...\n"},
+         "usage: conf_param [-d] <target.keyword=val>\n"
+         "  -d  Remove the permanent setting."},
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
-         "usage: local_param <target.keyword=val> ...\n"},
+         "usage: local_param <target.keyword=val>\n"},
         {"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
          "usage: get_param [-n|-N|-F] <param_path1 param_path2 ...>\n"
          "Get the value of Lustre or LNET parameter from the specified path.\n"

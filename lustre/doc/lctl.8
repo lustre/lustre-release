@@ -92,12 +92,45 @@ Show all the local Lustre OBDs. AKA
 .PP
 .SS Device Operations
 .TP 
-.BI conf_param " <device> <parameter>"
+.BI conf_param " [-d] <device|fsname>.<parameter>=<value>"
 Set a permanent configuration parameter for any device via the MGS.  This
-command must be run on the MGS node. 
+command must be run on the MGS node.
+.br
+.B -d <device|fsname>.<parameter>
+Delete a parameter setting (use the default value at the next restart).  A null value for <value> also deletes the parameter setting.
+.br
+.B Parameters:
+.br
+All of the writable parameters under 
+.B lctl list_param
+(e.g. 
+.I lctl list_param -F osc.*.* | grep =
+) can be permanently set using
+.B lctl conf_param
+, but the format is slightly different.  For conf_param, the device is specified first, then the obdtype. (See examples below.)  Wildcards are not supported.
+.br
+Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout.)  <device> is ignored for system wide parameters.
+.br
+.B Examples:
+.br 
+# lctl conf_param testfs.sys.at_max=1200
+.br
+# lctl conf_param testfs.llite.max_read_ahead_mb=16 
+.br
+# lctl conf_param testfs-MDT0000.lov.stripesize=2M
+.br
+# lctl conf_param lustre-OST0001.osc.active=0 
+.br
+# lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15 
+.br
+# lctl conf_param testfs-OST0000.ost.client_cache_seconds=15 
+.br
+# lctl conf_param testfs-OST0000.failover.node=1.2.3.4@tcp1
 .TP 
 .BI activate 
-Reactivate an import after deactivating, below.
+Reactivate an import after deactivating, below.  This setting is only effective until the next restart (see 
+.B conf_param
+).
 .TP 
 .BI deactivate 
 Deactivate an import, in particular meaning do not assign new file stripes
@@ -170,7 +203,7 @@ number. See
 .TP
 .B --ignore_errors | ignore_errors 
 Ignore errors during script processing
-.TP
+
 .SH EXAMPLES
 # lctl
 .br
@@ -183,8 +216,6 @@ lctl > dk /tmp/log
 Debug log: 87 lines, 87 kept, 0 dropped.
 .br
 lctl > quit
-.PP
-# lctl conf_param testfs-MDT0000 sys.timeout=40
 
 .SH BUGS
 Please report all bugs to Sun Microsystems, Inc. http://bugzilla.lustre.org/
