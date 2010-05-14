@@ -115,10 +115,10 @@ EXPORT_SYMBOL(libcfs_kmemory);
 
 static cfs_waitq_t debug_ctlwq;
 
-char libcfs_debug_file_path_arr[1024] = LIBCFS_DEBUG_FILE_PATH_DEFAULT;
+char libcfs_debug_file_path_arr[PATH_MAX] = LIBCFS_DEBUG_FILE_PATH_DEFAULT;
 
 /* We need to pass a pointer here, but elsewhere this must be a const */
-char *libcfs_debug_file_path = &libcfs_debug_file_path_arr[0];
+char *libcfs_debug_file_path;
 CFS_MODULE_PARM(libcfs_debug_file_path, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
@@ -391,6 +391,12 @@ int libcfs_debug_init(unsigned long bufsize)
             libcfs_console_min_delay >= libcfs_console_max_delay) {
                 libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
                 libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
+        }
+
+        if (libcfs_debug_file_path != NULL) {
+                memset(libcfs_debug_file_path_arr, 0, PATH_MAX);
+                strncpy(libcfs_debug_file_path_arr, 
+                        libcfs_debug_file_path, PATH_MAX-1);
         }
 
         /* If libcfs_debug_mb is set to an invalid value or uninitialized

@@ -77,11 +77,6 @@
 #include <linux/kallsyms.h>
 #endif
 
-/* We need to pass a pointer here, but elsewhere this must be a const */
-static char *debug_file_path = &libcfs_debug_file_path_arr[0];
-CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
-                "Path for dumping debug logs (deprecated)");
-
 char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
 char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";
 
