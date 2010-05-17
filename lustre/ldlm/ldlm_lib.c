@@ -1624,6 +1624,12 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         }
 
         spin_lock_bh(&obd->obd_processing_task_lock);
+
+        if (!obd->obd_recovering) {
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                RETURN(0);
+        }
+
         /* If we're processing the queue, we want don't want to queue this
          * message.
          *
