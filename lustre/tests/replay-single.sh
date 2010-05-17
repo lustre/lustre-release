@@ -1607,6 +1607,8 @@ test_65b() #bug 3055
     $LCTL dk > /dev/null
     # Slow down a request to the current service time, this is critical
     # because previous tests may have caused this value to increase.
+    lfs setstripe $DIR/$tfile --index=0 --count=1
+    multiop $DIR/$tfile Ow1yc
     REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
                awk '/portal 6/ {print $5}'`
     REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
