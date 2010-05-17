@@ -806,11 +806,10 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                  * (i.e. all default values specified) then delete default
                  * striping from dir. */
                 if (S_ISDIR(inode->i_mode) &&
-                    (lum->lmm_stripe_size == 0 &&
-                      lum->lmm_stripe_offset ==
-                      (typeof(lum->lmm_stripe_offset))(-1) &&
-                      lum->lmm_stripe_count == 0 &&
-                      le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V3)){
+                    LOVEA_DELETE_VALUES(lum->lmm_stripe_size,
+                                        lum->lmm_stripe_count,
+                                        lum->lmm_stripe_offset) &&
+                    (le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V3)) {
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);

@@ -582,7 +582,7 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
         rc = fsfilt_get_md(obd, inode, md, *size, "lov");
 
         if (rc == 0 && flags == MDS_GETATTR)
-                rc = mds_get_default_md(obd, md, &lmm_size);
+                rc = mds_get_default_md(obd, md);
 
         if (rc < 0) {
                 CERROR("Error %d reading eadata for ino %lu\n",

@@ -1214,26 +1214,31 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         RETURN(rc);
 }
 
-int mds_get_default_md(struct obd_device *obd, struct lov_mds_md *lmm,
-                       int *size)
+int mds_get_default_md(struct obd_device *obd, struct lov_user_md *lum)
 {
         struct lov_desc *ldesc;
+        int rc, size = sizeof(*ldesc);
         ENTRY;
+
+        if (!lum)
+                RETURN(0);
 
         ldesc = &obd->u.mds.mds_lov_desc;
         LASSERT(ldesc != NULL);
 
-        if (!lmm)
-                RETURN(0);
+        rc = obd_get_info(obd->u.mds.mds_lov_exp, sizeof(KEY_LOVDESC),
+                          KEY_LOVDESC, &size, ldesc, NULL);
+        if (rc)
+                RETURN(rc);
 
-        lmm->lmm_magic = LOV_MAGIC_V1;
-        lmm->lmm_object_gr = LOV_OBJECT_GROUP_DEFAULT;
-        lmm->lmm_pattern = ldesc->ld_pattern;
-        lmm->lmm_stripe_size = ldesc->ld_default_stripe_size;
-        lmm->lmm_stripe_count = ldesc->ld_default_stripe_count;
-        *size = sizeof(struct lov_mds_md);
+        lum->lmm_magic = LOV_MAGIC_V1;
+        lum->lmm_object_gr = LOV_OBJECT_GROUP_DEFAULT;
+        lum->lmm_pattern = ldesc->ld_pattern;
+        lum->lmm_stripe_size = ldesc->ld_default_stripe_size;
+        lum->lmm_stripe_count = ldesc->ld_default_stripe_count;
+        lum->lmm_stripe_offset = ldesc->ld_default_stripe_offset;
 
-        RETURN(sizeof(struct lov_mds_md));
+        RETURN(sizeof(*lum));
 }
 
 /* Convert the on-disk LOV EA structre.

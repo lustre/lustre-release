@@ -528,6 +528,10 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * we define this to be 2T - 4k, which is the ext3 maxbytes. */
 #define LUSTRE_STRIPE_MAXBYTES 0x1fffffff000ULL
 
+/* Special values for remove LOV EA from disk */
+#define LOVEA_DELETE_VALUES(size, count, offset) (size == 0 && count == 0 && \
+                                                 offset == (typeof(offset))(-1))
+
 /* #define POISON_BULK 0 */
 
 /*

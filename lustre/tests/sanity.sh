@@ -1238,6 +1238,22 @@ test_27y() {
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
 
+test_27z() { # b=19102
+        local restore_size=`$GETSTRIPE -s $MOUNT`
+        local restore_count=`$GETSTRIPE -c $MOUNT`
+        local restore_offset=`$GETSTRIPE -o $MOUNT`
+        $SETSTRIPE -c 0 -o -1 -s 0 $MOUNT
+        local default_size=`$GETSTRIPE -s $MOUNT`
+        local default_count=`$GETSTRIPE -c $MOUNT`
+        local default_offset=`$GETSTRIPE -o $MOUNT`
+        local dsize=$((1024 * 1024))
+        [ $default_size -eq $dsize ] || error "stripe size $default_size != $dsize"
+        [ $default_count -eq 1 ] || error "stripe count $default_count != 1"
+        [ $default_offset -eq -1 ] || error "stripe offset $default_offset != -1"
+        $SETSTRIPE -c $restore_count -o $restore_offset -s $restore_size $MOUNT
+}
+run_test 27z "check filesystem-wide default LOV EA values"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
