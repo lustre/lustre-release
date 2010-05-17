@@ -3501,6 +3501,7 @@ num_inodes() {
 }
 
 test_76() { # Now for bug 20433, added originally in bug 1443
+	cancel_lru_locks osc
 	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
 	local COUNT=1000
@@ -3509,11 +3510,19 @@ test_76() { # Now for bug 20433, added originally in bug 1443
 		touch $DIR/$tfile
 		rm -f $DIR/$tfile
 	done
+	cancel_lru_locks osc
 	AFTER_INODES=`num_inodes`
 	echo "after inodes: $AFTER_INODES"
-	[ $AFTER_INODES -gt $((BEFORE_INODES + 32)) ] && \
-		error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
-	true
+	local wait=0
+	while [ $AFTER_INODES -gt $BEFORE_INODES ]; do
+		sleep 2
+		AFTER_INODES=`num_inodes`
+		wait=$((wait+2))
+		echo "wait $wait seconds inodes: $AFTER_INODES"
+		if [ $wait -gt 30 ]; then
+			error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
+		fi
+	done
 }
 run_test 76 "confirm clients recycle inodes properly ===="
 
