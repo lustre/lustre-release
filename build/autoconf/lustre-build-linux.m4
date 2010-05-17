@@ -84,7 +84,7 @@ fi
 AC_MSG_RESULT([$LINUXRELEASE])
 AC_SUBST(LINUXRELEASE)
 
-moduledir='/lib/modules/'$LINUXRELEASE/kernel
+moduledir='/lib/modules/'$LINUXRELEASE/updates/kernel
 AC_SUBST(moduledir)
 
 modulefsdir='$(moduledir)/fs/$(PACKAGE)'
