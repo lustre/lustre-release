@@ -1347,6 +1347,10 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 return 0;
         }
 
+        /* If this is mmaped file - it can be changed at any time */
+        if (oa->o_flags & OBD_FL_MMAP)
+                return 1;
+
         if (oa->o_valid & OBD_MD_FLFLAGS)
                 cksum_type = cksum_type_unpack(oa->o_flags);
         else
@@ -2223,9 +2227,19 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
 
         if (osc_recoverable_error(rc)) {
-                rc = osc_brw_redo_request(request, aa);
-                if (rc == 0)
-                        RETURN(0);
+                /* Only retry once for mmaped files since the mmaped page
+                 * might be modified at anytime. We have to retry at least
+                 * once in case there WAS really a corruption of the page
+                 * on the network, that was not caused by mmap() modifying
+                 * the page. bug 11742 */
+                if ((rc == -EAGAIN) && (aa->aa_resends > 0) &&
+                    (aa->aa_oa->o_flags & OBD_FL_MMAP)) {
+                        rc = 0;
+                } else {
+                	rc = osc_brw_redo_request(request, aa);
+                	if (rc == 0)
+                        	RETURN(0);
+		}
         }
 
         cli = aa->aa_cli;

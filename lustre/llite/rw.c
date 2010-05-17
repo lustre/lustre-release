@@ -492,6 +492,9 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         }
 
         obdo_from_inode(oa, inode, valid_flags);
+        /* Bug11742 - set the OBD_FL_MMAP flag for memory mapped files */
+        if (atomic_read(&(ll_i2info(inode)->lli_mmap_cnt)) != 0) 
+                oa->o_flags |= OBD_FL_MMAP;
 }
 
 static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
@@ -913,8 +916,17 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                                page, csum);
                 } else {
                         /* origin == LLAP_ORIGIN_WRITEPAGE */
-                        LL_CDEBUG_PAGE(D_ERROR, page, "old cksum %x != new "
-                                       "%x!\n", llap->llap_checksum, csum);
+                        if (!atomic_read(&(ll_i2info(inode)->lli_mmap_cnt))) {
+			        LL_CDEBUG_PAGE(D_ERROR, page,
+                                               "old cksum %x != new %x!\n",
+                                               llap->llap_checksum, csum);
+                        } else {
+                                /* mmapped page was modified */
+                                CDEBUG(D_PAGE,
+                                       "page %p old cksum %x != new %x\n",
+                                       page, llap->llap_checksum, csum);
+                        }
+                        llap->llap_checksum = csum;
                 }
         }
 

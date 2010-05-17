@@ -1090,7 +1090,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 repbody->oa.o_cksum = server_cksum;
                 cksum_counter++;
                 if (unlikely(client_cksum != server_cksum)) {
-                        CERROR("client csum %x, server csum %x\n",
+                        CDEBUG_LIMIT((body->oa.o_flags&OBD_FL_MMAP) ? D_INFO
+                                                                    : D_ERROR,
+                               "client csum %x, server csum %x\n",
                                client_cksum, server_cksum);
                         cksum_counter = 0;
                 } else if ((cksum_counter & (-cksum_counter)) == cksum_counter){
@@ -1128,7 +1130,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
          */
         repbody->oa.o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLATIME);
 
-        if (unlikely(client_cksum != server_cksum && rc == 0)) {
+        if (unlikely(client_cksum != server_cksum && rc == 0 &&
+                     !(body->oa.o_flags & OBD_FL_MMAP))) {
                 int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
                 char *msg;
                 char *via;
