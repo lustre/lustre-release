@@ -439,21 +439,16 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
 
                 rc = llog_cat_cancel_records(cathandle, 1, logcookies);
 
+                err = fsfilt_commit(disk_obd, inode, handle, 0);
+
                 /* Do not raise -ENOENT errors for resent rpcs. This rec already
                  * might be killed. */
                 if (rc == -ENOENT && 
                     (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)) {
-                        /* Do not change this message, reply-single.sh test_59b
-                         * expects to find this in dmesg. */
-                        CDEBUG(D_RPCTRACE, "RESENT cancel req %p - ignored\n",
-                               req);
+                        CDEBUG(D_INFO, "RESENT cancel req %p - ignored\n", req);
                         rc = 0;
-                } else if (rc == 0) {
-                        CDEBUG(D_RPCTRACE, "Canceled %d llog-records\n", 
-                               num_cookies);
                 }
 
-                err = fsfilt_commit(disk_obd, inode, handle, 0);
                 if (err) {
                         CERROR("Error committing transaction: %d\n", err);
                         if (!rc)
@@ -469,6 +464,9 @@ pop_ctxt:
         if (rc)
                 CERROR("Cancel %d of %d llog-records failed: %d\n", 
                        failed, num_cookies, rc);
+        else
+                CDEBUG(D_RPCTRACE, "Canceled %d llog-records\n", 
+                       num_cookies);
 
         llog_ctxt_put(ctxt);
         return rc;
