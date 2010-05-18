@@ -1975,7 +1975,6 @@ static struct ldlm_callback_suite cbs = {
 static int mdt_enqueue(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req;
-        __u64 req_bits;
         int rc;
 
         /*
@@ -1985,17 +1984,6 @@ static int mdt_enqueue(struct mdt_thread_info *info)
         LASSERT(info->mti_dlm_req != NULL);
 
         req = mdt_info_req(info);
-
-        /*
-         * Lock without inodebits makes no sense and will oops later in
-         * ldlm. Let's check it now to see if we have wrong lock from client or
-         * bits get corrupted somewhere in mdt_intent_policy().
-         */
-        req_bits = info->mti_dlm_req->lock_desc.l_policy_data.l_inodebits.bits;
-        /* This is disabled because we need to support liblustre flock.
-         * LASSERT(req_bits != 0);
-         */
-
         rc = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
                                   req, info->mti_dlm_req, &cbs);
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
@@ -2565,10 +2553,25 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
                 dlm_req = req_capsule_client_get(info->mti_pill, &RMF_DLM_REQ);
                 if (dlm_req != NULL) {
-                        if (info->mti_mdt->mdt_opts.mo_compat_resname)
-                                rc = mdt_lock_resname_compat(info->mti_mdt,
-                                                             dlm_req);
-                        info->mti_dlm_req = dlm_req;
+                        if (unlikely(dlm_req->lock_desc.l_resource.lr_type ==
+                                        LDLM_IBITS &&
+                                     dlm_req->lock_desc.l_policy_data.\
+                                        l_inodebits.bits == 0)) {
+                                /*
+                                 * Lock without inodebits makes no sense and
+                                 * will oops later in ldlm. If client miss to
+                                 * set such bits, do not trigger ASSERTION.
+                                 *
+                                 * For liblustre flock case, it maybe zero.
+                                 */
+                                rc = -EPROTO;
+                        } else {
+                                if (info->mti_mdt->mdt_opts.mo_compat_resname)
+                                        rc = mdt_lock_resname_compat(
+                                                                info->mti_mdt,
+                                                                dlm_req);
+                                info->mti_dlm_req = dlm_req;
+                        }
                 } else {
                         rc = -EFAULT;
                 }
@@ -3514,23 +3517,19 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 req_capsule_extend(pill, &RQF_LDLM_INTENT);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
-                        const struct ldlm_request *dlmreq;
-                        __u64 req_bits;
-
                         rc = mdt_intent_opc(it->opc, info, lockp, flags);
                         if (rc == 0)
                                 rc = ELDLM_OK;
 
-                        /*
-                         * Lock without inodebits makes no sense and will oops
+                        /* Lock without inodebits makes no sense and will oops
                          * later in ldlm. Let's check it now to see if we have
-                         * wrong lock from client or bits get corrupted
-                         * somewhere in mdt_intent_opc().
-                         */
-                        dlmreq = info->mti_dlm_req;
-                        req_bits = dlmreq->lock_desc.l_policy_data.l_inodebits.bits;
-                        LASSERT(req_bits != 0);
-
+                         * ibits corrupted somewhere in mdt_intent_opc().
+                         * The case for client miss to set ibits has been
+                         * processed by others. */
+                        LASSERT(ergo(info->mti_dlm_req->lock_desc.l_resource.\
+                                        lr_type == LDLM_IBITS,
+                                     info->mti_dlm_req->lock_desc.\
+                                        l_policy_data.l_inodebits.bits != 0));
                 } else
                         rc = err_serious(-EFAULT);
         } else {

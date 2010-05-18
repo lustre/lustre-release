@@ -1173,6 +1173,9 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                          LA_CTIME | LA_MTIME | LA_ATIME;
         memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
         info->mti_spec.sp_cr_flags = rec->cr_flags;
+        /* Do not trigger ASSERTION if client miss to set such flags. */
+        if (unlikely(info->mti_spec.sp_cr_flags == 0))
+                RETURN(-EPROTO);
         info->mti_replayepoch = rec->cr_ioepoch;
 
         info->mti_spec.sp_ck_split = !!(rec->cr_bias & MDS_CHECK_SPLIT);

@@ -174,8 +174,11 @@ static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         LASSERT(!lustre_handle_is_used(lh));
-        LASSERT((oa->o_valid & (OBD_MD_FLID | OBD_MD_FLGROUP)) ==
-                (OBD_MD_FLID | OBD_MD_FLGROUP));
+        /* o_id and o_gr are used for localizing resource, if client miss to set
+         * them, do not trigger ASSERTION. */
+        if (unlikely((oa->o_valid & (OBD_MD_FLID | OBD_MD_FLGROUP)) !=
+                     (OBD_MD_FLID | OBD_MD_FLGROUP)))
+                RETURN(-EPROTO);
 
         if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
             !(oa->o_flags & OBD_FL_SRVLOCK))
