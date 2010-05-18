@@ -570,6 +570,8 @@ static char *display_name(char *filename, int show_type)
 
         if (strncmp(filename, "lustre/", strlen("lustre/")) == 0)
                 filename += strlen("lustre/");
+        else if (strncmp(filename, "lnet/", strlen("lnet/")) == 0)
+                filename += strlen("lnet/");
 
         /* replace '/' with '.' to match conf_param and sysctl */
         tmp = filename;

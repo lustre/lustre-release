@@ -426,7 +426,7 @@ static cfs_sysctl_table_t lnet_table[] = {
         },
         {
                 .ctl_name = PSDEV_LNET_MEMUSED,
-                .procname = "memused",
+                .procname = "lnet_memused",
                 .data     = (int *)&libcfs_kmemory.counter,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
