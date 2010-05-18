@@ -129,6 +129,11 @@ int ll_setxattr_common(struct inode *inode, const char *name,
             (xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0))
                 RETURN(0);
 
+        /* b15587: ignore security.capability xattr for now */
+        if ((xattr_type == XATTR_SECURITY_T &&
+            strcmp(name, "security.capability") == 0))
+                RETURN(0);
+
 #ifdef CONFIG_FS_POSIX_ACL
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
             (xattr_type == XATTR_ACL_ACCESS_T ||
@@ -292,6 +297,11 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         rc = xattr_type_filter(sbi, xattr_type);
         if (rc)
                 RETURN(rc);
+
+        /* b15587: ignore security.capability xattr for now */
+        if ((xattr_type == XATTR_SECURITY_T &&
+            strcmp(name, "security.capability") == 0))
+                RETURN(-ENODATA);
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
