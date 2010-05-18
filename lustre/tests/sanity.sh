@@ -768,6 +768,20 @@ test_24u() { # bug12192
 }
 run_test 24u "create stripe file"
 
+test_24w() { # bug21506
+        SZ1=234852
+        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=4096 || \
+                error "First write failed."
+        dd if=/dev/zero bs=$SZ1 count=1 >> $DIR/$tfile || \
+                error "Second write failed."
+        dd if=$DIR/$tfile of=$DIR/${tfile}_left bs=1M skip=4097 || \
+                error "Reading the file failed."
+        SZ2=`ls -l $DIR/${tfile}_left | awk '{print $5}'`
+        [ "$SZ1" = "$SZ2" ] || \
+                error "Error reading at the end of the file $tfile"
+}
+run_test 24w "Reading a file larger than 4Gb"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 
