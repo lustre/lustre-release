@@ -84,11 +84,11 @@ static __inline__ unsigned long __fls(long data)
 		return 0;
 
 #if BITS_PER_LONG == 64
-        pos += 32;
-
-        if ((data & 0xFFFFFFFF) == 0) {
-                data <<= 32;
-                pos -= 32;
+        /* If any bit of the high 32 bits are set, shift the high
+         * 32 bits down and pretend like it is a 32-bit value. */
+        if ((data & 0xFFFFFFFF00000000llu)) {
+                data >>= 32;
+                pos += 32;
         }
 #endif
 

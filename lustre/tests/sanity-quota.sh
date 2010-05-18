@@ -2236,6 +2236,76 @@ test_31() {
 }
 run_test_with_stat 31 "test duplicate quota releases ==="
 
+# check hash_cur_bits
+check_quota_hash_cur_bits() {
+        local bits=$1
+        local ostcount=`lctl get_param -n lov.$LOVNAME.numobd`
+
+        # check quota_hash_cur_bits on all obdfilters
+        for num in `seq $OSTCOUNT`; do
+	    cb=`do_facet ost$num "cat /sys/module/lquota/parameters/hash_lqs_cur_bits"`
+	    if [ $cb -gt $bits ]; then
+		echo "hash_lqs_cur_bits of ost$num is too large(cur_bits=$cb)"
+		return 1;
+	    fi
+        done
+        # check quota_hash_cur_bits on mds
+        cb=`do_facet mds  "cat /sys/module/lquota/parameters/hash_lqs_cur_bits"`
+        if [ $cb -gt $bits ]; then
+	    echo "hash_lqs_cur_bits of mds is too large(cur_bits=$cb)"
+	    return 1;
+        fi
+        return 0;
+}
+
+# check lqs hash
+check_lqs_hash() {
+        local ostcount=`lctl get_param -n lov.$LOVNAME.numobd`
+
+        # check distribution of all obdfilters
+        for num in `seq $OSTCOUNT`; do
+	    do_facet ost$num "lctl get_param obdfilter.${FSNAME}-OST*.hash_stats | grep LQS_HASH" | while read line; do
+		rehash_count=`echo $line | awk '{print $9}'`
+		if [ $rehash_count -eq 0 ]; then
+		    echo -e "ost$num:\n $line"
+		    error "Rehearsh didn't happen"
+		fi
+	    done
+        done
+        # check distribution of mds
+        do_facet mds "lctl get_param mds.${FSNAME}-MDT*.hash_stats | grep LQS_HASH" | while read line; do
+	    rehash_count=`echo $line | awk '{print $9}'`
+	    if [ $rehash_count -eq 0 ]; then
+		echo -e "mdt:\n $line"
+		error "Rehearsh didn't happen"
+	    fi
+        done
+}
+
+test_32()
+{
+        for user in $SANITY_QUOTA_USERS; do
+	    check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" >/dev/null 2>/dev/null || \
+		missing_users="$missing_users $user"
+        done
+        [ -n "$missing_users" ] && { skip_env "the following users are missing: $missing_users" ; return 0 ; }
+        check_quota_hash_cur_bits 3 || { skip_env "hash_lqs_cur_bits isn't set properly"; return 0;}
+
+        $LFS quotaoff -ug $DIR
+        $LFS quotacheck -ug $DIR
+
+        for user in $SANITY_QUOTA_USERS; do
+	    $LFS setquota -u $user --block-hardlimit 1048576 $DIR
+        done
+
+        check_lqs_hash
+
+        for user in $SANITY_QUOTA_USERS; do
+	    resetquota -u $user
+        done
+}
+run_test 32 "check lqs hash(bug 21846) =========================================="
+
 #
 # run 98 at the end because of reformatall
 #

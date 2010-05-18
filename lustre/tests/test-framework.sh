@@ -274,7 +274,7 @@ load_modules_local() {
     load_module lvfs/lvfs
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
-    [ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
+    [ "$USE_QUOTA" = "yes" ] && load_module quota/lquota $LQUOTAOPTS
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov

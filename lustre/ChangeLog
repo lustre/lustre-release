@@ -602,8 +602,8 @@ Details    : fix race during quota release on the slave.
 Severity   : enhancement
 Bugzilla   : 18690
 Description: smaller hash bucket sizes, cleanups
-Details    : increase hash table sizes and enabled rehashing for pools, uuid,
-	     nid & per-nid stats.
+Details    : increase hash table sizes and enabled rehashing for pools, quota,
+	     uuid, nid & per-nid stats.
 
 Severity   : enhancement
 Bugzilla   : 19673
