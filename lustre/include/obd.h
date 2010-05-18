@@ -350,7 +350,8 @@ struct filter_obd {
                              fo_writethrough_cache:1, /* writetrhough cache */
                              fo_syncjournal:1,      /* sync journal on writes */
                              fo_sync_lock_cancel:2, /* sync on lock cancel */
-                             fo_raid_degraded:1;    /* RAID device degraded */
+                             fo_raid_degraded:1,    /* RAID device degraded */
+                             fo_mds_ost_sync:1; /**< MDS-OST orphan recovery*/
 
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
@@ -1287,6 +1288,7 @@ struct obd_ops {
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
                            int *idx);
         int (*o_llog_finish)(struct obd_device *obd, int count);
+        int (*o_llog_connect)(struct obd_export *, struct llogd_conn_body *);
 
         /* metadata-only methods */
         int (*o_pin)(struct obd_export *, struct ll_fid *,

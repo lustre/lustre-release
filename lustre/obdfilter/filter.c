@@ -2205,6 +2205,37 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
+static int filter_llog_connect(struct obd_export *exp,
+                               struct llogd_conn_body *body)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_OTHER, "%s: Recovery from log "LPX64"/"LPX64":%x\n",
+               obd->obd_name, body->lgdc_logid.lgl_oid,
+               body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
+
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        obd->u.filter.fo_mds_ost_sync = 1;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+
+        ctxt = llog_get_context(obd, body->lgdc_ctxt_idx);
+        if (ctxt == NULL) {
+                CERROR("NULL ctxt at idx %d\n", body->lgdc_ctxt_idx);
+                RETURN(-ENOENT);
+        }
+
+        rc = llog_connect(ctxt, &body->lgdc_logid, &body->lgdc_gen, NULL);
+        llog_ctxt_put(ctxt);
+        if (rc != 0)
+                CERROR("%s: failed to connect rc %d idx %d\n", obd->obd_name,
+                       rc, body->lgdc_ctxt_idx);
+
+        RETURN(rc);
+}
+
 static int filter_precleanup(struct obd_device *obd,
                              enum obd_cleanup_stage stage)
 {
@@ -4102,6 +4133,7 @@ static struct obd_ops filter_obd_ops = {
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
         .o_llog_init      = filter_llog_init,
+        .o_llog_connect   = filter_llog_connect,
         .o_llog_finish    = filter_llog_finish,
         .o_iocontrol      = filter_iocontrol,
         .o_health_check   = filter_health_check,

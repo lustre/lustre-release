@@ -310,6 +310,15 @@ int lprocfs_filter_wr_sync_lock_cancel(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_filter_rd_mds_sync(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_mds_ost_sync);
+}
+
 int lprocfs_filter_rd_degraded(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -391,6 +400,7 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
                           lprocfs_filter_wr_syncjournal, 0 },
         { "sync_on_lock_cancel", lprocfs_filter_rd_sync_lock_cancel,
                                  lprocfs_filter_wr_sync_lock_cancel, 0 },
+        { "mds_sync",     lprocfs_filter_rd_mds_sync, 0, 0},
         { "degraded",     lprocfs_filter_rd_degraded,
                           lprocfs_filter_wr_degraded, 0 },
         { 0 }

@@ -416,7 +416,7 @@ int llog_cat_process_thread(void *data)
         struct llog_process_cat_args *args = data;
         struct llog_ctxt *ctxt = args->lpca_ctxt;
         struct llog_handle *llh = NULL;
-        void  *cb = args->lpca_cb;
+        llog_cb_t cb = args->lpca_cb;
         struct llog_logid logid;
         int rc;
         ENTRY;
@@ -436,9 +436,10 @@ int llog_cat_process_thread(void *data)
         }
 
         if (cb) {
-                rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
+                rc = llog_cat_process(llh, cb, NULL);
                 if (rc != LLOG_PROC_BREAK && rc != 0)
                         CERROR("llog_cat_process() failed %d\n", rc);
+                cb(llh, NULL, NULL);
         } else {
                 CWARN("No callback function for recovery\n");
         }

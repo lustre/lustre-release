@@ -411,13 +411,8 @@ test_20b() { # bug 10480
     client_up || client_up || true    # reconnect
 
     fail mds                            # start orphan recovery
-    wait_recovery_complete mds || error "MDS recovery not done"
-
-    # For interop with 2.0 only:
-    # FIXME just because recovery is done doesn't mean we've finished
-    # orphan cleanup.  Fake it with a sleep for now...
-    sleep 10
-
+    wait_recovery_complete mds || error "MDS recovery isn't done"
+    wait_mds_ost_sync || return 3
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \

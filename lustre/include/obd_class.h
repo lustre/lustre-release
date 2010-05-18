@@ -1524,6 +1524,19 @@ static inline void obd_import_event(struct obd_device *obd,
         EXIT;
 }
 
+static inline int obd_llog_connect(struct obd_export *exp,
+                                   struct llogd_conn_body *body)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, llog_connect, 0);
+        EXP_COUNTER_INCREMENT(exp, llog_connect);
+
+        rc = OBP(exp->exp_obd, llog_connect)(exp, body);
+        RETURN(rc);
+}
+
 static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
                              enum obd_notify_event ev, void *data)

@@ -1774,6 +1774,7 @@ static int ost_handle(struct ptlrpc_request *req)
         struct obd_trans_info *oti = &trans_info;
         int should_process, fail = OBD_FAIL_OST_ALL_REPLY_NET, rc = 0;
         struct obd_device *obd = NULL;
+        struct llogd_conn_body *body;
         ENTRY;
 
         LASSERT(current->journal_info == NULL);
@@ -1930,7 +1931,9 @@ static int ost_handle(struct ptlrpc_request *req)
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
                 DEBUG_REQ(D_INODE, req, "log connect");
-                rc = llog_handle_connect(req);
+                body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                      sizeof(*body));
+                rc = obd_llog_connect(req->rq_export, body);
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
