@@ -658,6 +658,7 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
 
 /* flags for lm_flags */
 #define MSGHDR_AT_SUPPORT               0x1
+#define MSGHDR_CKSUM_INCOMPAT18         0x2
 
 #define lustre_msg lustre_msg_v2
 /* we depend on this structure to be 8-byte aligned */
@@ -796,6 +797,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LOV_V3        0x100000000ULL /*client supports LOV v3 EA */
 #define OBD_CONNECT_GRANT_SHRINK  0x200000000ULL /* support grant shrink */
 #define OBD_CONNECT_SKIP_ORPHAN   0x400000000ULL /* don't reuse orphan objids */
+#define OBD_CONNECT_FULL20        0x800000000ULL /* it is 2.0 client */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -815,7 +817,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
-                                OBD_CONNECT_LOV_V3 | OBD_CONNECT_SOM)
+                                OBD_CONNECT_LOV_V3 | OBD_CONNECT_SOM | \
+                                OBD_CONNECT_FULL20)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -826,9 +829,10 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
-                                OBD_CONNECT_GRANT_SHRINK)
+                                OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20)
 #define ECHO_CONNECT_SUPPORTED (0)
-#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
+                                OBD_CONNECT_FULL20)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))

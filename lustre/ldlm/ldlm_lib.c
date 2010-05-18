@@ -1053,6 +1053,12 @@ dont_check_exports:
         else
                 revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
+        if ((export->exp_connect_flags & OBD_CONNECT_FULL20) &&
+            (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1))
+                revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
+        else
+                revimp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
+
         rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
         if (rc) {
                 CERROR("Failed to get sec for reverse import: %d\n", rc);

@@ -1999,7 +1999,8 @@ llu_fsswop_mount(const char *source,
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
                                 OBD_CONNECT_FID | OBD_CONNECT_AT |
-                                OBD_CONNECT_VBR | OBD_CONNECT_SOM;
+                                OBD_CONNECT_VBR | OBD_CONNECT_SOM |
+                                OBD_CONNECT_FULL20;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -2036,7 +2037,7 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
                                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK |
                                 OBD_CONNECT_FID | OBD_CONNECT_AT |
-                                OBD_CONNECT_SOM;
+                                OBD_CONNECT_SOM | OBD_CONNECT_FULL20;
 
         ocd.ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, &ocd, NULL);

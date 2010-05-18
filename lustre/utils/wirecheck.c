@@ -221,6 +221,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
         CHECK_CDEFINE(OBD_CONNECT_VBR);
         CHECK_CDEFINE(OBD_CONNECT_SKIP_ORPHAN);
+        CHECK_CDEFINE(OBD_CONNECT_FULL20);
 }
 
 static void

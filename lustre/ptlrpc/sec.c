@@ -1115,6 +1115,7 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
         early_req->rq_repdata = (struct lustre_msg *) early_buf;
         early_req->rq_repdata_len = early_size;
         early_req->rq_early = 1;
+        early_req->rq_reqmsg = req->rq_reqmsg;
 
         rc = do_cli_unwrap_reply(early_req);
         if (rc) {

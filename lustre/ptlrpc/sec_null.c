@@ -107,7 +107,16 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 
         if (req->rq_early) {
                 cksums = lustre_msg_get_cksum(req->rq_repdata);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
+                if (lustre_msghdr_get_flags(req->rq_reqmsg) &
+                    MSGHDR_CKSUM_INCOMPAT18)
+                        cksumc = lustre_msg_calc_cksum(req->rq_repmsg, 0);
+                else
+                        cksumc = lustre_msg_calc_cksum(req->rq_repmsg, 1);
+#else
+# warning "remove checksum compatibility support for b1_8"
                 cksumc = lustre_msg_calc_cksum(req->rq_repmsg);
+#endif
                 if (cksumc != cksums) {
                         CWARN("early reply checksum mismatch: %08x != %08x\n",
                               cksumc, cksums);
@@ -358,8 +367,19 @@ int null_authorize(struct ptlrpc_request *req)
                 else
                         req->rq_reply_off = 0;
         } else {
-                lustre_msg_set_cksum(rs->rs_repbuf,
-                                     lustre_msg_calc_cksum(rs->rs_repbuf));
+                __u32 cksum;
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
+                if (lustre_msghdr_get_flags(req->rq_reqmsg) &
+                    MSGHDR_CKSUM_INCOMPAT18)
+                        cksum = lustre_msg_calc_cksum(rs->rs_repbuf, 0);
+                else
+                        cksum = lustre_msg_calc_cksum(rs->rs_repbuf, 1);
+#else
+# warning "remove checksum compatibility support for b1_8"
+                cksum = lustre_msg_calc_cksum(rs->rs_repbuf);
+#endif
+                lustre_msg_set_cksum(rs->rs_repbuf, cksum);
                 req->rq_reply_off = 0;
         }
 

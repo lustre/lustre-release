@@ -489,6 +489,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_LRU_RESIZE == 0x2000000ULL);
         CLASSERT(OBD_CONNECT_VBR == 0x80000000ULL);
         CLASSERT(OBD_CONNECT_SKIP_ORPHAN == 0x400000000ULL);
+        CLASSERT(OBD_CONNECT_FULL20 == 0x800000000ULL);
 
         /* Checks for struct obdo */
         LASSERTF((int)sizeof(struct obdo) == 208, " found %lld\n",

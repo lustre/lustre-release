@@ -667,6 +667,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
          * the server is updated on-the-fly we will get the new features. */
         imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
         imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
+        imp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
 
         rc = obd_reconnect(NULL, imp->imp_obd->obd_self_export, obd,
                            &obd->obd_uuid, &imp->imp_connect_data, NULL);
@@ -1111,6 +1112,12 @@ finish:
                         imp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
                 else
                         imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
+
+                if ((ocd->ocd_connect_flags & OBD_CONNECT_FULL20) &&
+                    (imp->imp_msg_magic == LUSTRE_MSG_MAGIC_V2))
+                        imp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
+                else
+                        imp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
 
                 LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
                         (cli->cl_max_pages_per_rpc > 0));
