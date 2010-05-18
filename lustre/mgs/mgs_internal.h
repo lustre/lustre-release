@@ -81,6 +81,8 @@ struct fs_db {
         __u32             fsdb_flags;
         __u32             fsdb_gen;
 
+        __u8              fsdb_revoking_lock;  /* lock is being revoked */
+
         /* in-memory copy of the srpc rules, guarded by fsdb_sem */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
@@ -96,14 +98,19 @@ int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
 int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd, struct fs_db *fsdb);
 int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
-int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);
-int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti);
+int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti,
+                         struct fs_db *fsdb);
+int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti,
+                      struct fs_db *fsdb);
 int mgs_erase_log(struct obd_device *obd, char *name);
 int mgs_erase_logs(struct obd_device *obd, char *fsname);
 int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
 
 int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                  char *poolname, char *fsname, char *ostname);
+
+/* mgs_handler.c */
+void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb);
 
 /* mgs_fs.c */
 int mgs_client_add(struct obd_device *obd, struct obd_export *exp,

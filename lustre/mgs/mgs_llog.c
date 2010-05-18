@@ -2649,9 +2649,9 @@ int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti)
 }
 
 int mgs_write_log_target(struct obd_device *obd,
-                         struct mgs_target_info *mti)
+                         struct mgs_target_info *mti,
+                         struct fs_db *fsdb)
 {
-        struct fs_db *fsdb;
         int rc = -EINVAL;
         char *buf, *params;
         ENTRY;
@@ -2694,12 +2694,6 @@ int mgs_write_log_target(struct obd_device *obd,
                            osc's. So don't update the client/mdt logs. */
                         mti->mti_flags &= ~LDD_F_UPDATE;
                 }
-        }
-
-        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
-        if (rc) {
-                CERROR("Can't get db for %s\n", mti->mti_fsname);
-                RETURN(rc);
         }
 
         cfs_down(&fsdb->fsdb_sem);
@@ -2757,9 +2751,9 @@ out_up:
 
 /* COMPAT_146 */
 /* verify that we can handle the old config logs */
-int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
+int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti,
+                      struct fs_db *fsdb)
 {
-        struct fs_db *fsdb;
         int rc = 0;
         ENTRY;
 
@@ -2777,10 +2771,6 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 
         LCONSOLE_INFO("upgrading server %s from pre-1.6\n", mti->mti_svname);
         server_mti_print("upgrade", mti);
-
-        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
-        if (rc)
-                RETURN(rc);
 
         if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
                 LCONSOLE_ERROR_MSG(0x14a, "The old client log %s-client is "
@@ -3004,6 +2994,13 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         rc = mgs_write_log_param(obd, fsdb, mti, mti->mti_params);
         cfs_up(&fsdb->fsdb_sem);
 
+        /*
+         * Revoke lock so everyone updates.  Should be alright if
+         * someone was already reading while we were updating the logs,
+         * so we don't really need to hold the lock while we're
+         * writing (above).
+         */
+        mgs_revoke_lock(obd, fsdb);
 out:
         OBD_FREE_PTR(mti);
         RETURN(rc);
@@ -3142,6 +3139,8 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
         name_destroy(&logname);
 
         cfs_up(&fsdb->fsdb_sem);
+        /* request for update */
+        mgs_revoke_lock(obd, fsdb);
 
         EXIT;
 out:

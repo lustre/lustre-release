@@ -164,7 +164,8 @@
 /* SEQ_MAXREPSIZE == lustre_msg + ptlrpc_body + lu_range */
 #define SEQ_MAXREPSIZE  (152)
 
-#define MGS_THREADS_AUTO_MIN 2
+/* MGS threads must be >= 3, see bug 22458 comment #28 */
+#define MGS_THREADS_AUTO_MIN 3
 #define MGS_THREADS_AUTO_MAX 32
 #define MGS_NBUFS       (64 * cfs_num_online_cpus())
 #define MGS_BUFSIZE     (8 * 1024)

@@ -350,18 +350,23 @@ static int mgs_put_cfg_lock(struct lustre_handle *lockh)
         RETURN(0);
 }
 
-static void mgs_revoke_lock(struct obd_device *obd, char *fsname,
-                            struct lustre_handle *lockh)
+void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb)
 {
-        int lockrc;
+        struct lustre_handle lockh;
+        int                  lockrc;
 
-        if (fsname[0]) {
-                lockrc = mgs_get_cfg_lock(obd, fsname, lockh);
+        LASSERT(fsdb->fsdb_name[0] != '\0');
+
+        if (cfs_test_and_set_bit(1, &fsdb->fsdb_revoking_lock) == 0) {
+                lockrc = mgs_get_cfg_lock(obd, fsdb->fsdb_name, &lockh);
+                /* clear the bit before lock put */
+                cfs_clear_bit(1, &fsdb->fsdb_revoking_lock);
+
                 if (lockrc != ELDLM_OK)
-                        CERROR("lock error %d for fs %s\n", lockrc,
-                               fsname);
+                        CERROR("lock error %d for fs %s\n",
+                               lockrc, fsdb->fsdb_name);
                 else
-                        mgs_put_cfg_lock(lockh);
+                        mgs_put_cfg_lock(&lockh);
         }
 }
 
@@ -400,9 +405,9 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 static int mgs_handle_target_reg(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct lustre_handle lockh;
         struct mgs_target_info *mti, *rep_mti;
-        int rc = 0, lockrc;
+        struct fs_db *fsdb;
+        int rc = 0;
         ENTRY;
 
         mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
@@ -420,23 +425,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         GOTO(out_nolock, rc);
         }
 
-        /* Revoke the config lock to make sure nobody is reading. */
-        /* Although actually I think it should be alright if
-           someone was reading while we were updating the logs - if we
-           revoke at the end they will just update from where they left off. */
-        lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
-        if (lockrc != ELDLM_OK) {
-                LCONSOLE_ERROR_MSG(0x13d, "%s: Can't signal other nodes to "
-                                   "update their configuration (%d). Updating "
-                                   "local logs anyhow; you might have to "
-                                   "manually restart other nodes to get the "
-                                   "latest configuration.\n",
-                                   obd->obd_name, lockrc);
-        }
-
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
-
-        /* Log writing contention is handled by the fsdb_sem */
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 if (mti->mti_flags & LDD_F_SV_TYPE_MDT &&
@@ -458,9 +447,23 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
         }
 
+        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
+        if (rc) {
+                CERROR("Can't get db for %s: %d\n", mti->mti_fsname, rc);
+                GOTO(out_nolock, rc);
+        }
+
+        /*
+         * Log writing contention is handled by the fsdb_sem.
+         *
+         * It should be alright if someone was reading while we were
+         * updating the logs - if we revoke at the end they will just update
+         * from where they left off.
+         */
+
         /* COMPAT_146 */
         if (mti->mti_flags & LDD_F_UPGRADE14) {
-                rc = mgs_upgrade_sv_14(obd, mti);
+                rc = mgs_upgrade_sv_14(obd, mti, fsdb);
                 if (rc) {
                         CERROR("Can't upgrade from 1.4 (%d)\n", rc);
                         GOTO(out, rc);
@@ -477,7 +480,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
                 /* create or update the target log
                    and update the client/mdt logs */
-                rc = mgs_write_log_target(obd, mti);
+                rc = mgs_write_log_target(obd, mti, fsdb);
                 if (rc) {
                         CERROR("Failed to write %s log (%d)\n",
                                mti->mti_svname, rc);
@@ -491,9 +494,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         }
 
 out:
-        /* done with log update */
-        if (lockrc == ELDLM_OK)
-                mgs_put_cfg_lock(&lockh);
+        mgs_revoke_lock(obd, fsdb);
+
 out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
                mti->mti_stripe_index, rc);
@@ -514,7 +516,6 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mgs_send_param *msp, *rep_msp;
-        struct lustre_handle lockh;
         int rc;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
@@ -534,9 +535,6 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
                        rc, msp->mgs_param, fsname);
                 RETURN(rc);
         }
-
-        /* request for update */
-        mgs_revoke_lock(obd, fsname, &lockh);
 
         lustre_cfg_free(lcfg);
 
@@ -796,7 +794,6 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
                               struct obd_ioctl_data *data)
 {
         int rc;
-        struct lustre_handle lockh;
         struct lustre_cfg *lcfg = NULL;
         struct llog_rec_hdr rec;
         char *fsname = NULL;
@@ -883,9 +880,6 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
                 GOTO(out_pool, rc);
         }
 
-        /* request for update */
-        mgs_revoke_lock(obd, fsname, &lockh);
-
 out_pool:
         if (lcfg != NULL)
                 OBD_FREE(lcfg, data->ioc_plen1);
@@ -914,7 +908,6 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         switch (cmd) {
 
         case OBD_IOC_PARAM: {
-                struct lustre_handle lockh;
                 struct lustre_cfg *lcfg;
                 struct llog_rec_hdr rec;
                 char fsname[MTI_NAME_MAXLEN];
@@ -942,13 +935,6 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         CERROR("setparam err %d\n", rc);
                         GOTO(out_free, rc);
                 }
-
-                /* Revoke lock so everyone updates.  Should be alright if
-                   someone was already reading while we were updating the logs,
-                   so we don't really need to hold the lock while we're
-                   writing (above). */
-                mgs_revoke_lock(obd, fsname, &lockh);
-
 out_free:
                 OBD_FREE(lcfg, data->ioc_plen1);
                 RETURN(rc);
