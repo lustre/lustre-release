@@ -20,6 +20,12 @@ Severity   : enhancement
 Bugzilla   : 22787
 Description: Add OFED 1.5.1 support
 
+Severity   : enhancement
+Bugzilla   : 21678
+Description: The peer health code lacked some important debugging info in
+	     lnd_query code paths. We've added necessary debug prints,
+	     not just for bug 21678, but also for future troubleshooting.
+
 -------------------------------------------------------------------------------
 
 2010-04-30 Oracle, Inc.
