@@ -12,16 +12,6 @@ tbd        Oracle, Inc.
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
-Severity   : normal
-Bugzilla   : 22610
-Description: a race condition could lead to SIGBUS being sent to an
-	     application using mmap-ped files from Lustre
-Details    : truncate_complete_page implementation for the patchless
-	     client could arbitrarily unset PG_Uptodate flag for a
-	     page being kicked from the page cache, an uptodate check
-	     right after a readpage call in filemap_fault could fail
-	     because of that as though the page read had been unsuccessful.
-
 Severity   : enhancement
 Bugzilla   : 22455
 Description: add list_param to b1_8 and add "-R" option to list params
@@ -34,6 +24,24 @@ Details    : Some positions if lfs quota output table could be empty or
 	     non-empty which made it hard to parse it with scripts, now a dash
 	     is put instead of space where there is not supposed to be any data.
 
+Severity   : enhancement
+Bugzilla   : 15685
+Description: fix obdfilter-survey script to work properly with remote oss-s
+
+Severity   : enhancement
+Bugzilla   : 22402
+Description: add new OBDFILTER_SURVEY test suite
+
+Severity   : normal
+Bugzilla   : 22610
+Description: a race condition could lead to SIGBUS being sent to an
+	     application using mmap-ped files from Lustre
+Details    : truncate_complete_page implementation for the patchless
+	     client could arbitrarily unset PG_Uptodate flag for a
+	     page being kicked from the page cache, an uptodate check
+	     right after a readpage call in filemap_fault could fail
+	     because of that as though the page read had been unsuccessful.
+
 Severity   : normal
 Bugzilla   : 22476
 Description: dlm lock slab shrinking is not efficient
@@ -45,6 +53,11 @@ Bugzilla   : 22850
 Description: Lustre does not do 1MB IOs to HW RAID
 Details    : Bump MAX_PHYS/HW_SEGMENTS and SG_ALL to 256 in the RHEL5 kernel.
 	     This is what we do already for SLES kernels.
+
+Severity   : normal
+Bugzilla   : 17086
+Description: LSI Fusion MPT driver hacks to improve performance
+Details    : Set CONFIG_FUSION_MAX_SGE to 256 for RHEL5
 
 Severity   : normal
 Bugzilla   : 15587/21439
