@@ -25,6 +25,12 @@ Details    : Some positions if lfs quota output table could be empty or
 	     is put instead of space where there is not supposed to be any data.
 
 Severity   : normal
+Bugzilla   : 22476
+Description: dlm lock slab shrinking is not efficient
+Details    : The dlm_locks slab can grow significantly and consumes a lot of
+	     memory on the server. Set a hardlimit to grant_plan.
+
+Severity   : normal
 Bugzilla   : 15587/21439
 Description: don't handle security.capability xattr
 Details    : CONFIG_SECURITY_FILE_CAPABILITIES is enabled by default on SLES11.
