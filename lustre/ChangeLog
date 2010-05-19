@@ -56,10 +56,6 @@ Details    : Implement "weak-modules" support which enables kernel modules
 	     order to achieve this modules are now installed in
 	     /lib/modules/$(uname -r)/updates/kernel on all distributions.
 
-Severity   : enhancement
-Bugzilla   : 16909
-Description: Quiet some LNET messages
-
 Severity   : normal
 Bugzilla   : 22360
 Description: file operations after eviction have successful return values
