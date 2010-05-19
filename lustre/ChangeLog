@@ -31,6 +31,12 @@ Details    : The dlm_locks slab can grow significantly and consumes a lot of
 	     memory on the server. Set a hardlimit to grant_plan.
 
 Severity   : normal
+Bugzilla   : 22850
+Description: Lustre does not do 1MB IOs to HW RAID
+Details    : Bump MAX_PHYS/HW_SEGMENTS and SG_ALL to 256 in the RHEL5 kernel.
+	     This is what we do already for SLES kernels.
+
+Severity   : normal
 Bugzilla   : 15587/21439
 Description: don't handle security.capability xattr
 Details    : CONFIG_SECURITY_FILE_CAPABILITIES is enabled by default on SLES11.
