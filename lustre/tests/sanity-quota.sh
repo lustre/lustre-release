@@ -1564,7 +1564,7 @@ test_18bc_sub() {
         fi
 
         DDPID=$!
-        do_facet mds "$LCTL conf_param ${FSNAME}-MDT*.mdt.quota_type=ug"
+        do_facet mds "$LCTL conf_param ${FSNAME}-MDT*.$(get_md_name).quota_type=ug"
 
         log "failing mds for $((2 * timeout)) seconds"
         fail mds $((2 * timeout))
