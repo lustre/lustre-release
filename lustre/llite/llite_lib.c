@@ -1203,7 +1203,7 @@ int ll_shrink_cache(int nr_to_scan, SHRINKER_MASK_T gfp_mask)
         struct ll_sb_info *sbi;
         int count = 0;
 
-        if ((nr_to_scan != 0) && (gfp_mask & __GFP_FS))
+        if ((nr_to_scan != 0) && !(gfp_mask & __GFP_FS))
                 return -1;
 
         /* don't race with umount */
