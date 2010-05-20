@@ -400,20 +400,9 @@ static void mdt_pack_size2body(struct mdt_thread_info *info,
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid)
 {
-        struct md_attr          *ma  = &info->mti_attr;
+        struct md_attr *ma = &info->mti_attr;
 
-        /*XXX should pack the reply body according to lu_valid*/
-        b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
-                    OBD_MD_FLGID   | OBD_MD_FLTYPE  |
-                    OBD_MD_FLMODE  | OBD_MD_FLNLINK | OBD_MD_FLFLAGS |
-                    OBD_MD_FLATIME | OBD_MD_FLMTIME ;
-
-        if (!S_ISREG(attr->la_mode))
-                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLRDEV;
-
-        /* if no object is allocated on osts, the size on mds is valid. b=22272 */
-        if (ma->ma_lmm_size == 0)
-                b->valid |= OBD_MD_FLSIZE;
+        LASSERT(ma->ma_valid & MA_INODE);
 
         b->atime      = attr->la_atime;
         b->mtime      = attr->la_mtime;
@@ -426,6 +415,23 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
         b->flags      = attr->la_flags;
         b->nlink      = attr->la_nlink;
         b->rdev       = attr->la_rdev;
+
+        /*XXX should pack the reply body according to lu_valid*/
+        b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
+                    OBD_MD_FLGID   | OBD_MD_FLTYPE  |
+                    OBD_MD_FLMODE  | OBD_MD_FLNLINK | OBD_MD_FLFLAGS |
+                    OBD_MD_FLATIME | OBD_MD_FLMTIME ;
+
+        if (!S_ISREG(attr->la_mode)) {
+                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLRDEV;
+        } else if (ma->ma_need & MA_LOV && ma->ma_lmm_size == 0) {
+                /* means no objects are allocated on osts. */
+                LASSERT(!(ma->ma_valid & MA_LOV));
+                /* just ignore blocks occupied by extend attributes on MDS */
+                b->blocks = 0;
+                /* if no object is allocated on osts, the size on mds is valid. b=22272 */
+                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        }
 
         if (fid) {
                 b->fid1 = *fid;
@@ -533,9 +539,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         LASSERT(S_ISDIR(la->la_mode));
                         repbody->eadatasize = ma->ma_lmv_size;
                         repbody->valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
-                }
-                if (!(ma->ma_valid & MA_LOV) && !(ma->ma_valid & MA_LMV)) {
-                        repbody->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
                 }
         } else if (S_ISLNK(la->la_mode) &&
                    reqbody->valid & OBD_MD_LINKNAME) {
