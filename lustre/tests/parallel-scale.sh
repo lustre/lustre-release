@@ -252,22 +252,42 @@ test_connectathon() {
     local savePWD=$PWD
     cd $cnt_DIR
 
-    # -f      a quick functionality test
-    # -a      run basic, general, special, and lock tests
+    #
+    # cthon options (must be in this order)
+    #
     # -N numpasses - will be passed to the runtests script.  This argument
     #         is optional.  It specifies the number of times to run
     #         through the tests.
+    #
+    # One of these test types
+    #    -b  basic
+    #    -g  general
+    #    -s  special
+    #    -l  lock
+    #    -a  all of the above
+    #   
+    # -f      a quick functionality test
+    # 
 
-    local cmd="./runtests -N $cnt_NRUN -a -f $testdir"
+    tests="-b -g -s"
+    # Include lock tests unless we're running on nfsv4
+    local fstype=$(df -T $testdir | awk 'NR==2  {print $2}')
+    echo "$testdir: $fstype"
+    if [[ $fstype != "nfs4" ]]; then
+	tests="$tests -l"
+    fi
+    echo "tests: $tests"
+    for test in $tests; do
+	local cmd="./runtests -N $cnt_NRUN $test -f $testdir"
+	local rc=0
 
-    log "$cmd"
-
-    local rc=0
-    eval $cmd
-    rc=$?
+	log "$cmd"
+	eval $cmd
+	rc=$?
+	[ $rc = 0 ] || error "connectathon failed: $rc"
+    done
 
     cd $savePWD
-    [ $rc = 0 ] || error "connectathon failed: $rc"
     rm -rf $testdir
 }
 run_test connectathon "connectathon"
