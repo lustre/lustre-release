@@ -19,7 +19,8 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 ONLY=${ONLY:-"$*"}
 # test_11 has been used to protect a kernel bug(bz10912), now it isn't
 # useful any more. Then add it to ALWAYS_EXCEPT. b=19835
-ALWAYS_EXCEPT="10 11 $SANITY_QUOTA_EXCEPT"
+# test 32 is disabled due to bug 22868
+ALWAYS_EXCEPT="10 11 32 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case `uname -r` in
