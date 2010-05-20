@@ -81,6 +81,10 @@ Details    : revert patch from bug 20355 to resolve an issue with lctl --threads
 	     not working correctly with $(PTHREAD_LIBS) being linked to lctl.
 
 Severity   : normal
+Bugzilla   : 22786
+Description: ll_shrink_cache does not handle __GFP_FS properly
+
+Severity   : normal
 Bugzilla   : 19102
 Description: lfs getstripe shows wrong info for directories
 Details    : Set correct LOVEA default values for filesystem-wide.
