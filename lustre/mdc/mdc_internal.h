@@ -142,7 +142,7 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request);
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
                       ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                      int flags, void *opaque);
+                      ldlm_cancel_flags_t flags, void *opaque);
 
 static inline void mdc_set_capa_size(struct ptlrpc_request *req,
                                      const struct req_msg_field *field,

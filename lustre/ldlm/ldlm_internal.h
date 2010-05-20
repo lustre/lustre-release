@@ -79,7 +79,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                     int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns,
                           cfs_list_t *cancels, int count, int max,
-                          int cancel_flags, int flags);
+                          ldlm_cancel_flags_t cancel_flags, int flags);
 extern int ldlm_enqueue_min;
 int ldlm_get_enq_timeout(struct ldlm_lock *lock);
 

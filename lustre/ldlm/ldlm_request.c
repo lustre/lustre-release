@@ -1076,7 +1076,7 @@ static void ldlm_cancel_pack(struct ptlrpc_request *req,
 /* Prepare and send a batched cancel rpc, it will include count lock handles
  * of locks given in @head. */
 int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *cancels,
-                        int count, int flags)
+                        int count, ldlm_cancel_flags_t flags)
 {
         struct ptlrpc_request *req = NULL;
         struct obd_import *imp;
@@ -1130,7 +1130,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *cancels,
                 ldlm_cancel_pack(req, cancels, count);
 
                 ptlrpc_request_set_replen(req);
-                if (flags & LDLM_FL_ASYNC) {
+                if (flags & LCF_ASYNC) {
                         ptlrpcd_add_req(req, PSCOPE_OTHER);
                         sent = count;
                         GOTO(out, 0);
@@ -1261,7 +1261,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 flags = ns_connect_lru_resize(ns) ?
                         LDLM_CANCEL_LRUR : LDLM_CANCEL_AGED;
                 count += ldlm_cancel_lru_local(ns, &cancels, 0, avail - 1,
-                                               LDLM_FL_BL_AST, flags);
+                                               LCF_BL_AST, flags);
         }
         ldlm_cli_cancel_list(&cancels, count, NULL, 0);
         RETURN(0);
@@ -1269,7 +1269,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
 /* XXX until we will have compound requests and can cut cancels from generic rpc
  * we need send cancels with LDLM_FL_BL_AST flag as separate rpc */
-static int ldlm_cancel_list(cfs_list_t *cancels, int count, int flags)
+static int ldlm_cancel_list(cfs_list_t *cancels, int count,
+                            ldlm_cancel_flags_t flags)
 {
         CFS_LIST_HEAD(head);
         struct ldlm_lock *lock, *next;
@@ -1280,13 +1281,13 @@ static int ldlm_cancel_list(cfs_list_t *cancels, int count, int flags)
                 if (left-- == 0)
                         break;
 
-                if (flags & LDLM_FL_LOCAL_ONLY) {
+                if (flags & LCF_LOCAL) {
                         rc = LDLM_FL_LOCAL_ONLY;
                         ldlm_lock_cancel(lock);
                 } else {
                         rc = ldlm_cli_cancel_local(lock);
                 }
-                if (!(flags & LDLM_FL_BL_AST) && (rc == LDLM_FL_BL_AST)) {
+                if (!(flags & LCF_BL_AST) && (rc == LDLM_FL_BL_AST)) {
                         LDLM_DEBUG(lock, "Cancel lock separately");
                         cfs_list_del_init(&lock->l_bl_ast);
                         cfs_list_add(&lock->l_bl_ast, &head);
@@ -1473,7 +1474,8 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
  * flags & LDLM_CANCEL_AGED -   cancel alocks according to "aged policy".
  */
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, cfs_list_t *cancels,
-                          int count, int max, int cancel_flags, int flags)
+                          int count, int max, ldlm_cancel_flags_t cancel_flags,
+                          int flags)
 {
         ldlm_cancel_lru_policy_t pf;
         struct ldlm_lock *lock, *next;
@@ -1616,7 +1618,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                cfs_list_t *cancels,
                                ldlm_policy_data_t *policy,
                                ldlm_mode_t mode, int lock_flags,
-                               int cancel_flags, void *opaque)
+                               ldlm_cancel_flags_t cancel_flags, void *opaque)
 {
         struct ldlm_lock *lock;
         int count = 0;
@@ -1631,13 +1633,8 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                         continue;
                 }
 
-                if (lock->l_readers || lock->l_writers) {
-                        if (cancel_flags & LDLM_FL_WARN) {
-                                LDLM_ERROR(lock, "lock in use");
-                                //LBUG();
-                        }
+                if (lock->l_readers || lock->l_writers)
                         continue;
-                }
 
                 /* If somebody is already doing CANCEL, or blocking ast came,
                  * skip this lock. */
@@ -1676,7 +1673,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
  * buffer at the offset @off.
  * Destroy @cancels at the end. */
 int ldlm_cli_cancel_list(cfs_list_t *cancels, int count,
-                         struct ptlrpc_request *req, int flags)
+                         struct ptlrpc_request *req, ldlm_cancel_flags_t flags)
 {
         struct ldlm_lock *lock;
         int res = 0;
@@ -1724,7 +1721,9 @@ int ldlm_cli_cancel_list(cfs_list_t *cancels, int count,
 int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                     const struct ldlm_res_id *res_id,
                                     ldlm_policy_data_t *policy,
-                                    ldlm_mode_t mode, int flags, void *opaque)
+                                    ldlm_mode_t mode,
+                                    ldlm_cancel_flags_t flags,
+                                    void *opaque)
 {
         struct ldlm_resource *res;
         CFS_LIST_HEAD(cancels);
@@ -1766,11 +1765,11 @@ static inline int have_no_nsresource(struct ldlm_namespace *ns)
 /* Cancel all locks on a namespace (or a specific resource, if given)
  * that have 0 readers/writers.
  *
- * If flags & LDLM_FL_LOCAL_ONLY, throw the locks away without trying
+ * If flags & LCF_LOCAL, throw the locks away without trying
  * to notify the server. */
 int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                            const struct ldlm_res_id *res_id,
-                           int flags, void *opaque)
+                           ldlm_cancel_flags_t flags, void *opaque)
 {
         int i;
         ENTRY;

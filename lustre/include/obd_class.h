@@ -1452,7 +1452,8 @@ static inline int obd_cancel(struct obd_export *exp,
 
 static inline int obd_cancel_unused(struct obd_export *exp,
                                     struct lov_stripe_md *ea,
-                                    int flags, void *opaque)
+                                    ldlm_cancel_flags_t flags,
+                                    void *opaque)
 {
         int rc;
         ENTRY;
@@ -2054,7 +2055,9 @@ static inline int md_set_lock_data(struct obd_export *exp,
 static inline int md_cancel_unused(struct obd_export *exp,
                                    const struct lu_fid *fid,
                                    ldlm_policy_data_t *policy,
-                                   ldlm_mode_t mode, int flags, void *opaque)
+                                   ldlm_mode_t mode,
+                                   ldlm_cancel_flags_t flags,
+                                   void *opaque)
 {
         int rc;
         ENTRY;

@@ -169,7 +169,9 @@ ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
 int mdc_cancel_unused(struct obd_export *exp,
                       const struct lu_fid *fid,
                       ldlm_policy_data_t *policy,
-                      ldlm_mode_t mode, int flags, void *opaque)
+                      ldlm_mode_t mode,
+                      ldlm_cancel_flags_t flags,
+                      void *opaque)
 {
         struct ldlm_res_id res_id;
         struct obd_device *obd = class_exp2obd(exp);

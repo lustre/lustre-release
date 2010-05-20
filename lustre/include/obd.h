@@ -1356,7 +1356,7 @@ struct obd_ops {
         int (*o_cancel)(struct obd_export *, struct lov_stripe_md *md,
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
-                               int flags, void *opaque);
+                               ldlm_cancel_flags_t flags, void *opaque);
         int (*o_init_export)(struct obd_export *exp);
         int (*o_destroy_export)(struct obd_export *exp);
         int (*o_extent_calc)(struct obd_export *, struct lov_stripe_md *,
@@ -1524,8 +1524,8 @@ struct md_ops {
                                     struct lustre_handle *);
 
         int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
-                               ldlm_policy_data_t *, ldlm_mode_t, int flags,
-                               void *opaque);
+                               ldlm_policy_data_t *, ldlm_mode_t,
+                               ldlm_cancel_flags_t flags, void *opaque);
         int (*m_renew_capa)(struct obd_export *, struct obd_capa *oc,
                             renew_capa_cb_t cb);
         int (*m_unpack_capa)(struct obd_export *, struct ptlrpc_request *,
