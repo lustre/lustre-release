@@ -66,7 +66,7 @@ if [[ $mds_HOST == $mgs_HOST ]] && [[ $MDSDEV == $MGSDEV ]]; then
     MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
 else
     MDS_MKFS_OPTS="--mgsnode=$MGSNID $MDS_MKFS_OPTS"
-    mgs_MKFS_OPTS="--mgs "
+    mgs_MKFS_OPTS="--mgs --device-size=$MGSSIZE"
 fi
 
 MKFSOPT=""
