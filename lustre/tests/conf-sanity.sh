@@ -1022,6 +1022,7 @@ run_test 29 "permanently remove an OST"
 test_30() {
 	setup
 
+	echo Big config llog
 	TEST="lctl get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
 	ORIG=$($TEST)
 	LIST=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
@@ -1032,10 +1033,20 @@ test_30() {
  	umount_client $MOUNT
 	mount_client $MOUNT || return 4
 	[ "$($TEST)" -ne "$i" ] && return 5
-	set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $ORIG || return 6
+	pass
+
+	echo Erase parameter setting
+	do_facet mgs "$LCTL conf_param -d $FSNAME.llite.max_read_ahead_whole_mb" || return 6
+	umount_client $MOUNT
+	mount_client $MOUNT || return 6
+	FINAL=$($TEST)
+	echo "deleted (default) value=$FINAL, orig=$ORIG"
+	# assumes this parameter started at the default value
+	[ "$FINAL" -eq "$ORIG" ] || fail "Deleted value=$FINAL, orig=$ORIG"
+
 	cleanup
 }
-run_test 30 "Big config llog"
+run_test 30 "Big config llog and conf_param deletion"
 
 test_31() { # bug 10734
         # ipaddr must not exist
@@ -1186,9 +1197,11 @@ test_32b() {
 	echo OST uuid $UUID
 	[ "$UUID" == "lustre-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
+	local NID=$($LCTL list_nids | head -1)
+
 	echo "OSC changes should succeed:"
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || error "OSC conf_param failed"
+	$LCTL conf_param lustre-OST0000.failover.node=$NID || error "add failover nid=$NID failed"
 	echo "ok."
 	echo "MDC changes should succeed:"
 	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9

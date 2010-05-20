@@ -42,7 +42,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGS
-#define D_MGS D_CONFIG/*|D_WARNING*/
+#define D_MGS D_CONFIG
 
 #ifdef __KERNEL__
 # include <linux/module.h>

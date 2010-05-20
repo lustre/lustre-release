@@ -13,6 +13,14 @@ tbd        Oracle, Inc.
 	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : enhancement
+Bugzilla   : 15253
+Description: add conf-param -d option to remove permanent settings.
+Details    : Add the ability to remove permanent lctl conf_param settings.
+	     (Previously conf_param settings could only be changed, not
+	     removed.) This also provides a method to change failover
+	     nid locations. Improve lctl man page.
+
+Severity   : enhancement
 Bugzilla   : 22455
 Description: add list_param to b1_8 and add "-R" option to list params
 	     recursively
