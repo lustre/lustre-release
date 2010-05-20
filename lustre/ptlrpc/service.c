@@ -2141,16 +2141,14 @@ out:
         CDEBUG(D_RPCTRACE, "service thread [ %p : %u ] %d exiting: rc %d\n",
                thread, thread->t_pid, thread->t_id, rc);
 
-        if (st.running) {
-                cfs_spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_lock);
+        if (st.running)
                 svc->srv_threads_running--;
-                cfs_spin_unlock(&svc->srv_lock);
-        }
-
         thread->t_id = rc;
         thread->t_flags = SVC_STOPPED;
-
         cfs_waitq_signal(&thread->t_ctl_waitq);
+        cfs_spin_unlock(&svc->srv_lock);
+
         return rc;
 }
 
