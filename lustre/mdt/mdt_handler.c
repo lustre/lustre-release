@@ -4979,7 +4979,6 @@ static int mdt_obd_connect(const struct lu_env *env,
                            void *localdata)
 {
         struct mdt_thread_info *info;
-        struct lsd_client_data *lcd;
         struct obd_export      *lexp;
         struct lustre_handle    conn = { 0 };
         struct mdt_device      *mdt;
@@ -5008,28 +5007,25 @@ static int mdt_obd_connect(const struct lu_env *env,
 
         rc = mdt_connect_internal(lexp, mdt, data);
         if (rc == 0) {
-                OBD_ALLOC_PTR(lcd);
-                if (lcd != NULL) {
-                        struct mdt_thread_info *mti;
-                        mti = lu_context_key_get(&env->le_ctx,
-                                                 &mdt_thread_key);
-                        LASSERT(mti != NULL);
-                        mti->mti_exp = lexp;
-                        memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
-                        lexp->exp_target_data.ted_lcd = lcd;
-                        rc = mdt_client_new(env, mdt);
-                        if (rc == 0)
-                                mdt_export_stats_init(obd, lexp, localdata);
-                } else {
-                        rc = -ENOMEM;
-                }
+                struct mdt_thread_info *mti;
+                struct lsd_client_data *lcd = lexp->exp_target_data.ted_lcd;
+                LASSERT(lcd);
+                mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+                LASSERT(mti != NULL);
+                mti->mti_exp = lexp;
+                memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
+                rc = mdt_client_new(env, mdt);
+                if (rc == 0)
+                        mdt_export_stats_init(obd, lexp, localdata);
         }
 
 out:
-        if (rc != 0)
+        if (rc != 0) {
                 class_disconnect(lexp);
-        else
+                *exp = NULL;
+        } else {
                 *exp = lexp;
+        }
 
         RETURN(rc);
 }
@@ -5176,7 +5172,10 @@ static int mdt_init_export(struct obd_export *exp)
         cfs_spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         cfs_spin_unlock(&exp->exp_lock);
-        rc = ldlm_init_export(exp);
+        rc = lut_client_alloc(exp);
+        if (rc == 0)
+                rc = ldlm_init_export(exp);
+
         if (rc)
                 CERROR("Error %d while initializing export\n", rc);
         RETURN(rc);
@@ -5194,13 +5193,13 @@ static int mdt_destroy_export(struct obd_export *exp)
 
         target_destroy_export(exp);
         ldlm_destroy_export(exp);
+        lut_client_free(exp);
 
         LASSERT(cfs_list_empty(&exp->exp_outstanding_replies));
         LASSERT(cfs_list_empty(&exp->exp_mdt_data.med_open_head));
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
 
-        lut_client_free(exp);
         RETURN(rc);
 }
 

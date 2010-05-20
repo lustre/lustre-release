@@ -171,6 +171,20 @@ static int lut_last_rcvd_write(const struct lu_env *env, struct lu_target *lut,
 }
 
 /**
+ * Allocate in-memory data for client slot related to export.
+ */
+int lut_client_alloc(struct obd_export *exp)
+{
+        OBD_ALLOC_PTR(exp->exp_target_data.ted_lcd);
+        if (exp->exp_target_data.ted_lcd == NULL)
+                RETURN(-ENOMEM);
+        /* Mark that slot is not yet valid, 0 doesn't work here */
+        exp->exp_target_data.ted_lr_idx = -1;
+        RETURN(0);
+}
+EXPORT_SYMBOL(lut_client_alloc);
+
+/**
  * Free in-memory data for client slot related to export.
  */
 void lut_client_free(struct obd_export *exp)
@@ -180,6 +194,10 @@ void lut_client_free(struct obd_export *exp)
 
         OBD_FREE_PTR(ted->ted_lcd);
         ted->ted_lcd = NULL;
+
+        /* Slot may be not yet assigned */
+        if (ted->ted_lr_idx < 0)
+                return;
         /* Clear bit when lcd is freed */
         spin_lock(&lut->lut_client_bitmap_lock);
         if (!test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {

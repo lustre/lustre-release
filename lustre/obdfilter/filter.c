@@ -643,14 +643,18 @@ static void filter_fmd_cleanup(struct obd_export *exp)
 
 static int filter_init_export(struct obd_export *exp)
 {
+        int rc;
         cfs_spin_lock_init(&exp->exp_filter_data.fed_lock);
         CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
 
         cfs_spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         cfs_spin_unlock(&exp->exp_lock);
+        rc = lut_client_alloc(exp);
+        if (rc == 0)
+                rc = ldlm_init_export(exp);
 
-        return ldlm_init_export(exp);
+        return rc;
 }
 
 static int filter_free_server_data(struct obd_device_target *obt)
@@ -821,17 +825,15 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 GOTO(out, rc = 0);
         }
 
+        OBD_ALLOC_PTR(lcd);
+        if (!lcd)
+                GOTO(err_client, rc = -ENOMEM);
+
         for (cl_idx = 0, off = le32_to_cpu(lsd->lsd_client_start);
              off < last_rcvd_size; cl_idx++) {
                 __u64 last_rcvd;
                 struct obd_export *exp;
                 struct filter_export_data *fed;
-
-                if (!lcd) {
-                        OBD_ALLOC_PTR(lcd);
-                        if (!lcd)
-                                GOTO(err_client, rc = -ENOMEM);
-                }
 
                 /* Don't assume off is incremented properly by
                  * fsfilt_read_record(), in case sizeof(*lcd)
@@ -855,55 +857,47 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
                 last_rcvd = le64_to_cpu(lcd->lcd_last_transno);
 
+                CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
+                       " srv lr: "LPU64"\n", lcd->lcd_uuid, cl_idx,
+                       last_rcvd, le64_to_cpu(lsd->lsd_last_transno));
+
                 /* These exports are cleaned up by filter_disconnect(), so they
                  * need to be set up like real exports as filter_connect() does.
                  */
                 exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
-
-                CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                       " srv lr: "LPU64"\n", lcd->lcd_uuid, cl_idx,
-                       last_rcvd, le64_to_cpu(lsd->lsd_last_transno));
                 if (IS_ERR(exp)) {
                         if (PTR_ERR(exp) == -EALREADY) {
                                 /* export already exists, zero out this one */
-                                CERROR("Zeroing out duplicate export due to "
-                                       "bug 10479.\n");
-                                lcd->lcd_uuid[0] = '\0';
-                        } else {
-                                GOTO(err_client, rc = PTR_ERR(exp));
+                                CERROR("Duplicate export %s!\n", lcd->lcd_uuid);
+                                continue;
                         }
-                } else {
-                        fed = &exp->exp_filter_data;
-                        fed->fed_ted.ted_lcd = lcd;
-                        fed->fed_group = 0; /* will be assigned at connect */
-                        filter_export_stats_init(obd, exp, NULL);
-                        rc = filter_client_add(obd, exp, cl_idx);
-                        /* can't fail for existing client */
-                        LASSERTF(rc == 0, "rc = %d\n", rc);
-
-                        /* VBR: set export last committed */
-                        exp->exp_last_committed = last_rcvd;
-                        cfs_spin_lock(&exp->exp_lock);
-                        exp->exp_connecting = 0;
-                        exp->exp_in_recovery = 0;
-                        cfs_spin_unlock(&exp->exp_lock);
-                        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
-                        obd->obd_max_recoverable_clients++;
-                        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
-                        lcd = NULL;
-                        class_export_put(exp);
+                        OBD_FREE_PTR(lcd);
+                        GOTO(err_client, rc = PTR_ERR(exp));
                 }
 
-                /* Need to check last_rcvd even for duplicated exports. */
-                CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
-                       cl_idx, last_rcvd);
+                fed = &exp->exp_filter_data;
+                *fed->fed_ted.ted_lcd = *lcd;
+                fed->fed_group = 0; /* will be assigned at connect */
+                filter_export_stats_init(obd, exp, NULL);
+                rc = filter_client_add(obd, exp, cl_idx);
+                /* can't fail for existing client */
+                LASSERTF(rc == 0, "rc = %d\n", rc);
+
+                /* VBR: set export last committed */
+                exp->exp_last_committed = last_rcvd;
+                cfs_spin_lock(&exp->exp_lock);
+                exp->exp_connecting = 0;
+                exp->exp_in_recovery = 0;
+                cfs_spin_unlock(&exp->exp_lock);
+                cfs_spin_lock_bh(&obd->obd_processing_task_lock);
+                obd->obd_max_recoverable_clients++;
+                cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
+                class_export_put(exp);
 
                 if (last_rcvd > le64_to_cpu(lsd->lsd_last_transno))
                         lsd->lsd_last_transno = cpu_to_le64(last_rcvd);
         }
-
-        if (lcd)
-                OBD_FREE_PTR(lcd);
+        OBD_FREE_PTR(lcd);
 
         obd->obd_last_committed = le64_to_cpu(lsd->lsd_last_transno);
 out:
@@ -2775,8 +2769,6 @@ static int filter_connect(const struct lu_env *env,
         struct lvfs_run_ctxt saved;
         struct lustre_handle conn = { 0 };
         struct obd_export *lexp;
-        struct tg_export_data *ted;
-        struct lsd_client_data *lcd = NULL;
         __u32 group;
         int rc;
         ENTRY;
@@ -2790,22 +2782,15 @@ static int filter_connect(const struct lu_env *env,
         lexp = class_conn2export(&conn);
         LASSERT(lexp != NULL);
 
-        ted = &lexp->exp_target_data;
-
         rc = filter_connect_internal(lexp, data, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
         filter_export_stats_init(obd, lexp, localdata);
         if (obd->obd_replayable) {
-                OBD_ALLOC(lcd, sizeof(*lcd));
-                if (!lcd) {
-                        CERROR("filter: out of memory for client data\n");
-                        GOTO(cleanup, rc = -ENOMEM);
-                }
-
+                struct lsd_client_data *lcd = lexp->exp_target_data.ted_lcd;
+                LASSERT(lcd);
                 memcpy(lcd->lcd_uuid, cluuid, sizeof(lcd->lcd_uuid));
-                ted->ted_lcd = lcd;
                 rc = filter_client_add(obd, lexp, -1);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -2960,11 +2945,10 @@ static int filter_destroy_export(struct obd_export *exp)
 
         target_destroy_export(exp);
         ldlm_destroy_export(exp);
+        lut_client_free(exp);
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
-
-        lut_client_free(exp);
 
         if (!exp->exp_obd->obd_replayable)
                 fsfilt_sync(exp->exp_obd, exp->exp_obd->u.obt.obt_sb);
