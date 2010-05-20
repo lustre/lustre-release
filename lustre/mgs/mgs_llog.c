@@ -1449,7 +1449,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
         char *logname;
         char *ptr = mti->mti_params;
         char *endptr, *tmp;
-        int rc = 0;
+        int rc = 0, rc2 = 0;
         ENTRY;
 
         if (!mti->mti_params)
@@ -1649,6 +1649,7 @@ active_err:
                 }
 
                 LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
+                rc2 = -ENOSYS;
 
 end_while:
                 if (rc) {
@@ -1664,7 +1665,7 @@ end_while:
                 ptr = endptr + 1;
         }
 
-        RETURN(rc);
+        RETURN(rc ?: rc2);
 }
 
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti)
