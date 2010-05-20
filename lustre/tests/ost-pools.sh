@@ -1324,10 +1324,19 @@ test_25() {
         clients_up
 
         # Veriy that the pool got created and is usable
-        df $POOL_ROOT
-        echo "Creating a file in pool$i"
-        create_file $POOL_ROOT/file$i pool$i || break
-        check_file_in_pool $POOL_ROOT/file$i pool$i || break
+        df $POOL_ROOT > /dev/null
+		sleep 5
+		# Make sure OST0 can be striped on
+		$SETSTRIPE -o 0 -c 1 $POOL_ROOT/$tfile
+		STR=$($GETSTRIPE $POOL_ROOT/$tfile | grep 0x | cut -f2 | tr -d " ")
+		rm $POOL_ROOT/$tfile
+		if [[ "$STR" == "0" ]]; then
+			echo "Creating a file in pool$i"
+			create_file $POOL_ROOT/file$i pool$i || break
+			check_file_in_pool $POOL_ROOT/file$i pool$i || break
+		else
+			echo "OST 0 seems to be unavailable.  Try later."
+		fi
     done
 
     rm -rf $POOL_ROOT
