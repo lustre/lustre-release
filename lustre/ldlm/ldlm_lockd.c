@@ -2222,8 +2222,10 @@ static int ldlm_bl_thread_main(void *arg)
                 if (blwi->blwi_count) {
                         /* The special case when we cancel locks in lru
                          * asynchronously, we pass the list of locks here.
-                         * Thus lock is marked LDLM_FL_CANCELING, and already
-                         * canceled locally. */
+                         * Thus locks are marked LDLM_FL_CANCELING, but NOT
+                         * canceled locally yet. */
+                        ldlm_cli_cancel_list_local(&blwi->blwi_head,
+                                                   blwi->blwi_count, 0);
                         ldlm_cli_cancel_list(&blwi->blwi_head,
                                              blwi->blwi_count, NULL, 0);
                 } else {
@@ -2654,6 +2656,7 @@ EXPORT_SYMBOL(ldlm_namespace_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach_res);
 EXPORT_SYMBOL(ldlm_resource_iterate);
 EXPORT_SYMBOL(ldlm_cancel_resource_local);
+EXPORT_SYMBOL(ldlm_cli_cancel_list_local);
 EXPORT_SYMBOL(ldlm_cli_cancel_list);
 
 /* ldlm_lockd.c */
