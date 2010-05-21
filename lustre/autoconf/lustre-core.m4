@@ -421,9 +421,7 @@ AC_DEFUN([LC_POSIX_ACL_XATTR_H],
 [LB_CHECK_FILE([$LINUX/include/linux/posix_acl_xattr.h],[
         AC_MSG_CHECKING([if linux/posix_acl_xattr.h can be compiled])
         LB_LINUX_TRY_COMPILE([
-                #ifdef CONFIG_FS_POSIX_ACL
-                #  include <linux/fs.h>
-                #endif
+                #include <linux/fs.h>
                 #include <linux/posix_acl_xattr.h>
         ],[],[
                 AC_MSG_RESULT([yes])
@@ -434,7 +432,7 @@ AC_DEFUN([LC_POSIX_ACL_XATTR_H],
         ])
 $1
 ],[
-AC_MSG_RESULT([no])
+        AC_MSG_RESULT([no])
 ])
 ])
 

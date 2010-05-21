@@ -51,6 +51,41 @@ enum {
 #define PSDEV_LNET_NIS     CTL_UNNUMBERED
 #endif
 
+/*
+ * NB: we don't use the highest bit of *ppos because it's signed;
+ *     next 9 bits is used to stash idx (assuming that
+ *     LNET_PEER_HASHSIZE < 512)
+ */
+#define LNET_LOFFT_BITS        (sizeof(loff_t) * 8)
+#define LNET_VERSION_BITS      MAX(((MIN(LNET_LOFFT_BITS, 64)) / 4), 8)
+#define LNET_PHASH_IDX_BITS    9
+#define LNET_PHASH_NUM_BITS    (LNET_LOFFT_BITS - 1 -\
+                                LNET_VERSION_BITS - LNET_PHASH_IDX_BITS)
+#define LNET_PHASH_BITS        (LNET_PHASH_IDX_BITS + LNET_PHASH_NUM_BITS)
+
+#define LNET_VERSION_BITMASK   ((1ULL << LNET_VERSION_BITS) - 1)
+#define LNET_PHASH_IDX_BITMASK ((1ULL << LNET_PHASH_IDX_BITS) - 1)
+#define LNET_PHASH_NUM_BITMASK ((1ULL << LNET_PHASH_NUM_BITS) - 1)
+
+#define LNET_VERSION_MASK      (LNET_VERSION_BITMASK << LNET_PHASH_BITS)
+#define LNET_PHASH_IDX_MASK    (LNET_PHASH_IDX_BITMASK << LNET_PHASH_NUM_BITS)
+#define LNET_PHASH_NUM_MASK    (LNET_PHASH_NUM_BITMASK)
+
+#define LNET_VERSION_GET(pos)   (int)(((pos) & LNET_VERSION_MASK) >> \
+                                     LNET_PHASH_BITS)
+#define LNET_PHASH_IDX_GET(pos) (int)(((pos) & LNET_PHASH_IDX_MASK) >> \
+                                      LNET_PHASH_NUM_BITS)
+#define LNET_PHASH_NUM_GET(pos) (int)((pos) & LNET_PHASH_NUM_MASK)
+#define LNET_VERSION_VALID_MASK(ver) \
+                                (unsigned int)((ver) & \
+                                 LNET_VERSION_BITMASK)
+#define LNET_PHASH_POS_MAKE(ver, idx, num)                                     \
+                                (((((loff_t)(ver)) & LNET_VERSION_BITMASK) <<  \
+                                   LNET_PHASH_BITS) |                          \
+                                 ((((loff_t)(idx)) & LNET_PHASH_IDX_BITMASK) <<\
+                                   LNET_PHASH_NUM_BITS) |                      \
+                                 ((num) & LNET_PHASH_NUM_BITMASK))
+
 static int __proc_lnet_stats(void *data, int write,
                              loff_t pos, void *buffer, int nob)
 {
@@ -113,9 +148,13 @@ int LL_PROC_PROTO(proc_lnet_routes)
         char      *s;
         const int  tmpsiz = 256;
         int        len;
-        int       *ver_p  = (unsigned int *)(&filp->private_data);
+        int        ver;
+        int        num;
 
         DECLARE_LL_PROC_PPOS_DECL;
+
+        num = LNET_PHASH_NUM_GET(*ppos);
+        ver = LNET_VERSION_GET(*ppos);
 
         LASSERT (!write);
 
@@ -138,18 +177,19 @@ int LL_PROC_PROTO(proc_lnet_routes)
                 LASSERT (tmpstr + tmpsiz - s > 0);
 
                 LNET_LOCK();
-                *ver_p = (unsigned int)the_lnet.ln_remote_nets_version;
+                ver = (unsigned int)the_lnet.ln_remote_nets_version;
                 LNET_UNLOCK();
+                *ppos = LNET_PHASH_POS_MAKE(ver, 0, num);
         } else {
                 cfs_list_t        *n;
                 cfs_list_t        *r;
                 lnet_route_t      *route = NULL;
                 lnet_remotenet_t  *rnet  = NULL;
-                int                skip  = *ppos - 1;
+                int                skip  = num - 1;
 
                 LNET_LOCK();
 
-                if (*ver_p != (unsigned int)the_lnet.ln_remote_nets_version) {
+                if (ver != LNET_VERSION_VALID_MASK(the_lnet.ln_remote_nets_version)) {
                         LNET_UNLOCK();
                         LIBCFS_FREE(tmpstr, tmpsiz);
                         return -ESTALE;
@@ -200,8 +240,10 @@ int LL_PROC_PROTO(proc_lnet_routes)
         } else if (len > 0) { /* wrote something */
                 if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
-                else
-                        *ppos += 1;
+                else {
+                        num += 1;
+                        *ppos = LNET_PHASH_POS_MAKE(ver, 0, num);
+                }
         }
 
         LIBCFS_FREE(tmpstr, tmpsiz);
@@ -219,9 +261,13 @@ int LL_PROC_PROTO(proc_lnet_routers)
         char      *s;
         const int  tmpsiz = 256;
         int        len;
-        int       *ver_p = (unsigned int *)(&filp->private_data);
+        int        ver;
+        int        num;
 
         DECLARE_LL_PROC_PPOS_DECL;
+
+        num = LNET_PHASH_NUM_GET(*ppos);
+        ver = LNET_VERSION_GET(*ppos);
 
         LASSERT (!write);
 
@@ -242,16 +288,17 @@ int LL_PROC_PROTO(proc_lnet_routers)
                 LASSERT (tmpstr + tmpsiz - s > 0);
 
                 LNET_LOCK();
-                *ver_p = (unsigned int)the_lnet.ln_routers_version;
+                ver = (unsigned int)the_lnet.ln_routers_version;
                 LNET_UNLOCK();
+                *ppos = LNET_PHASH_POS_MAKE(ver, 0, num);
         } else {
                 cfs_list_t        *r;
                 lnet_peer_t       *peer = NULL;
-                int                skip = *ppos - 1;
+                int                skip = num - 1;
 
                 LNET_LOCK();
 
-                if (*ver_p != (unsigned int)the_lnet.ln_routers_version) {
+                if (ver != LNET_VERSION_VALID_MASK(the_lnet.ln_routers_version)) {
                         LNET_UNLOCK();
                         LIBCFS_FREE(tmpstr, tmpsiz);
                         return -ESTALE;
@@ -314,8 +361,10 @@ int LL_PROC_PROTO(proc_lnet_routers)
         } else if (len > 0) { /* wrote something */
                 if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
-                else
-                        *ppos += 1;
+                else {
+                        num += 1;
+                        *ppos = LNET_PHASH_POS_MAKE(ver, 0, num);
+                }
         }
 
         LIBCFS_FREE(tmpstr, tmpsiz);
@@ -326,23 +375,6 @@ int LL_PROC_PROTO(proc_lnet_routers)
         return rc;
 }
 
-/*
- * NB: we don't use the highest bit of *ppos because it's signed;
- *     next 9 bits is used to stash idx (assuming that
- *     LNET_PEER_HASHSIZE < 512)
- */
-#define LNET_LOFFT_BITS (sizeof(loff_t) * 8)
-#define LNET_PHASH_BITS 9
-#define LNET_PHASH_IDX_MASK (((1ULL << LNET_PHASH_BITS) - 1) <<               \
-                             (LNET_LOFFT_BITS - LNET_PHASH_BITS - 1))
-#define LNET_PHASH_NUM_MASK ((1ULL <<                                         \
-                              (LNET_LOFFT_BITS - LNET_PHASH_BITS -1)) - 1)
-#define LNET_PHASH_IDX_GET(pos) (int)(((pos) & LNET_PHASH_IDX_MASK) >>  \
-                                      (LNET_LOFFT_BITS - LNET_PHASH_BITS -1))
-#define LNET_PHASH_NUM_GET(pos) (int)((pos) & LNET_PHASH_NUM_MASK)
-#define LNET_PHASH_POS_MAKE(idx, num) ((((loff_t)idx) << (LNET_LOFFT_BITS -   \
-                                                  LNET_PHASH_BITS -1)) | (num))
-
 int LL_PROC_PROTO(proc_lnet_peers)
 {
         int        rc = 0;
@@ -350,7 +382,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
         char      *s;
         const int  tmpsiz      = 256;
         int        len;
-        int       *ver_p       = (unsigned int *)(&filp->private_data);
+        int        ver;
         int        idx;
         int        num;
 
@@ -358,8 +390,9 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
         idx = LNET_PHASH_IDX_GET(*ppos);
         num = LNET_PHASH_NUM_GET(*ppos);
+        ver = LNET_VERSION_GET(*ppos);
 
-        CLASSERT ((1 << LNET_PHASH_BITS) > LNET_PEER_HASHSIZE);
+        CLASSERT ((1ULL << LNET_PHASH_BITS) > LNET_PEER_HASHSIZE);
 
         LASSERT (!write);
 
@@ -380,8 +413,9 @@ int LL_PROC_PROTO(proc_lnet_peers)
                 LASSERT (tmpstr + tmpsiz - s > 0);
 
                 LNET_LOCK();
-                *ver_p  = (unsigned int)the_lnet.ln_peertable_version;
+                ver = (unsigned int)the_lnet.ln_peertable_version;
                 LNET_UNLOCK();
+                *ppos = LNET_PHASH_POS_MAKE(ver, idx, num);
 
                 num++;
         } else {
@@ -391,7 +425,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
                 LNET_LOCK();
 
-                if (*ver_p != (unsigned int)the_lnet.ln_peertable_version) {
+                if (ver != LNET_VERSION_VALID_MASK(the_lnet.ln_peertable_version)) {
                         LNET_UNLOCK();
                         LIBCFS_FREE(tmpstr, tmpsiz);
                         return -ESTALE;
@@ -467,7 +501,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
                 if (cfs_copy_to_user(buffer, tmpstr, len))
                         rc = -EFAULT;
                 else
-                        *ppos = LNET_PHASH_POS_MAKE(idx, num);
+                        *ppos = LNET_PHASH_POS_MAKE(ver, idx, num);
         }
 
         LIBCFS_FREE(tmpstr, tmpsiz);

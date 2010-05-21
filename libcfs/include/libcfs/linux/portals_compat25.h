@@ -148,6 +148,18 @@ typedef unsigned long cfs_cpumask_t;
 #define __cfs_fls __fls
 #endif
 
+#ifdef HAVE_5ARGS_SYSCTL_PROC_HANDLER
+#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
+        proc_dointvec(table, write, buffer, lenp, ppos);
+
+#define ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos)        \
+        proc_doulongvec_minmax(table, write, buffer, lenp, ppos);
+#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
+        proc_dostring(table, write, buffer, lenp, ppos);
+#define LL_PROC_PROTO(name)                                             \
+        name(cfs_sysctl_table_t *table, int write,                      \
+             void __user *buffer, size_t *lenp, loff_t *ppos)
+#else
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
         proc_dointvec(table, write, filp, buffer, lenp, ppos);
 
@@ -158,6 +170,7 @@ typedef unsigned long cfs_cpumask_t;
 #define LL_PROC_PROTO(name)                                             \
         name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
              void __user *buffer, size_t *lenp, loff_t *ppos)
+#endif
 #define DECLARE_LL_PROC_PPOS_DECL
 
 /* helper for sysctl handlers */
