@@ -1002,6 +1002,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
                 lnb[i].page = pga[i].pg;
                 rnb[i].offset = pga[i].off;
                 rnb[i].len = pga[i].count;
+                lnb[i].flags = rnb[i].flags = pga[i].flag;
         }
 
         obdo_to_ioobj(oinfo->oi_oa, &ioo);

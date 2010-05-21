@@ -528,6 +528,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         int                     rc;
         int                     verify;
         int                     gfp_mask;
+        int                     brw_flags = 0;
 
         verify = ((oa->o_id) != ECHO_PERSISTENT_OBJID &&
                   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
@@ -542,6 +543,9 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         if (count <= 0 ||
             (count & (~CFS_PAGE_MASK)) != 0)
                 return (-EINVAL);
+
+        if (rw == OBD_BRW_WRITE)
+                brw_flags = OBD_BRW_ASYNC;
 
         set =  ptlrpc_prep_set();
         if (set == NULL)
@@ -567,7 +571,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
 
                 pgp->count = CFS_PAGE_SIZE;
                 pgp->off = off;
-                pgp->flag = 0;
+                pgp->flag = brw_flags;
 
                 if (verify)
                         echo_client_page_debug_setup(lsm, pgp->pg, rw,
@@ -715,6 +719,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         struct echo_async_state *eas;
         int rc = 0;
         struct echo_async_page **aps = NULL;
+        int brw_flags = 0;
 
         ENTRY;
 #if 0
@@ -742,6 +747,9 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         OBD_ALLOC_PTR(eas);
         if (NULL == eas)
                 return(-ENOMEM);
+
+        if (rw == OBD_BRW_WRITE)
+                brw_flags = OBD_BRW_ASYNC;
 
         memcpy(&eas->eas_oa, oa, sizeof(*oa));
         eas->eas_next_offset = offset;
@@ -828,7 +836,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 /* always asserts urgent, which isn't quite right */
                 rc = obd_queue_async_io(exp, lsm, NULL, eap->eap_cookie,
-                                        rw, 0, CFS_PAGE_SIZE, 0,
+                                        rw, 0, CFS_PAGE_SIZE, brw_flags,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE);
                 spin_lock(&eas->eas_lock);
