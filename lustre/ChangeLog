@@ -95,14 +95,6 @@ Description: FSX checksum false positves due to mmap IO
 Details    : Use OBD_FL_MMAP flag for IOs on a memory mapped file. Do not print
 	     checksum errors, if the flag is set on a request.
 
-Severity   : enhancement
-Bugzilla   : 21452
-Description: "weak-modules" support
-Details    : Implement "weak-modules" support which enables kernel modules
-	     to be used with any kernel that implements the same kABI.  In
-	     order to achieve this modules are now installed in
-	     /lib/modules/$(uname -r)/updates/kernel on all distributions.
-
 Severity   : normal
 Bugzilla   : 22360
 Description: file operations after eviction have successful return values
