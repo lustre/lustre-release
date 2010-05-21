@@ -744,6 +744,7 @@ static const char *obd_connect_names[] = {
         "pools",
         "grant_shrink",
         "skip_orphan",
+        "large_ea",
         "full20",
         NULL
 };
