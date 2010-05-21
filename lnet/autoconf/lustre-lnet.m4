@@ -1510,6 +1510,30 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
+# See if sysctl proc_handler wants only 5 arguments (since 2.6.32)
+AC_DEFUN([LN_5ARGS_SYSCTL_PROC_HANDLER],
+[AC_MSG_CHECKING([if sysctl proc_handler wants 5 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/sysctl.h>
+],[
+        struct ctl_table *table = NULL;
+	int write = 1;
+	void __user *buffer = NULL;
+	size_t *lenp = NULL;
+	loff_t *ppos = NULL;
+
+	proc_handler *proc_handler;
+	proc_handler(table, write, buffer, lenp, ppos);
+
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_5ARGS_SYSCTL_PROC_HANDLER, 1,
+                  [sysctl proc_handler wants 5 args])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LN_PROG_LINUX
 #
@@ -1567,6 +1591,8 @@ LN_HAVE_LINUX_CRED_H
 LN_STRUCT_CRED_IN_TASK
 # 2.6.30
 LN_FUNC_UNSHARE_FS_STRUCT
+# 2.6.32
+LN_5ARGS_SYSCTL_PROC_HANDLER
 ])
 
 #
