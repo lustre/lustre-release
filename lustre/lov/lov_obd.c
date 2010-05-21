@@ -1866,6 +1866,7 @@ static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         lap->lap_caller_ops->ap_fill_obdo(lap->lap_caller_data, cmd, oa);
         /* XXX woah, shouldn't we be altering more here?  size? */
         oa->o_id = lap->lap_loi_id;
+        oa->o_gr = lap->lap_loi_gr;
         oa->o_stripe_idx = lap->lap_stripe;
 }
 
@@ -1940,6 +1941,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* so the callback doesn't need the lsm */
         lap->lap_loi_id = loi->loi_id;
+        lap->lap_loi_gr = loi->loi_gr;
 
         lap->lap_sub_cookie = (void *)lap + size_round(sizeof(*lap));
 
@@ -2826,6 +2828,7 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
                         fm_local->fm_flags = fiemap->fm_flags;
 
                         fm_key->oa.o_id = lsm->lsm_oinfo[cur_stripe]->loi_id;
+                        fm_key->oa.o_gr = lsm->lsm_oinfo[cur_stripe]->loi_gr;
                         ost_index = lsm->lsm_oinfo[cur_stripe]->loi_ost_idx;
 
                         if (ost_index < 0 || ost_index >=lov->desc.ld_tgt_count)

@@ -621,6 +621,8 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
                 LBUG();
         }
         ret_oa->o_id = src_oa->o_id;
+        ret_oa->o_gr = src_oa->o_gr;
+        ret_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         memcpy(src_oa, ret_oa, sizeof(*src_oa));
         OBDO_FREE(ret_oa);
 
@@ -704,6 +706,7 @@ int lov_update_create_set(struct lov_request_set *set,
         }
 
         loi->loi_id = req->rq_oi.oi_oa->o_id;
+        loi->loi_gr = req->rq_oi.oi_oa->o_gr;
         loi->loi_ost_idx = req->rq_idx;
         loi_init(loi);
 
@@ -802,6 +805,7 @@ static int common_attr_done(struct lov_request_set *set)
                 rc = -EIO;
         }
         tmp_oa->o_id = set->set_oi->oi_oa->o_id;
+        tmp_oa->o_gr = set->set_oi->oi_oa->o_gr;
         memcpy(set->set_oi->oi_oa, tmp_oa, sizeof(*set->set_oi->oi_oa));
 out:
         if (tmp_oa)
@@ -919,6 +923,7 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                                sizeof(*req->rq_oi.oi_oa));
                 }
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
                 req->rq_oi.oi_oa->o_stripe_idx = i;
 
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md);
@@ -1037,6 +1042,7 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
                 req->rq_oi.oi_cb_up = cb_getattr_update;
 
                 lov_set_add_req(req, set);
@@ -1114,6 +1120,7 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obd_info *oinfo,
                 }
                 memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
                 lov_set_add_req(req, set);
         }
         if (!set->set_count)
@@ -1225,6 +1232,7 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_setattr_update;
 
@@ -1357,6 +1365,7 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_update_punch;
 
@@ -1452,6 +1461,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
                 req->rq_oi.oi_oa->o_stripe_idx = i;
 
                 req->rq_oi.oi_policy.l_extent.start = rs;
