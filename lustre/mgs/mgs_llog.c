@@ -1372,7 +1372,7 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *llh = NULL;
         char *mdcname, *nodeuuid, *mdcuuid, *lmvuuid;
-        char index[5];
+        char index[6];
         int i, rc;
         ENTRY;
 
@@ -1669,7 +1669,7 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *llh = NULL;
         char *nodeuuid, *oscname, *oscuuid, *lovuuid, *svname;
-        char index[5];
+        char index[6];
         int i, rc;
 
         ENTRY;

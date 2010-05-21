@@ -395,7 +395,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
         if (size == 0)
                 RETURN(0);
 
-        page = (size / (OBJID_PER_PAGE() * sizeof(obd_id))) + 1;
+        page = (size + MDS_LOV_ALLOC_SIZE - 1) / MDS_LOV_ALLOC_SIZE;
         CDEBUG(D_INFO, "file size %lu pages %d\n", size, page);
         for (i = 0; i < page; i++) {
                 obd_id *data;
@@ -409,23 +409,22 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 data = mds->mds_lov_page_array[i];
 
                 rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, data,
-                                        OBJID_PER_PAGE()*sizeof(obd_id), &off);
+                                        MDS_LOV_ALLOC_SIZE, &off);
                 if (rc < 0) {
                         CERROR("Error reading objids %d\n", rc);
                         GOTO(out, rc);
                 }
+                if (off == off_old) /* hole is read */
+                        off += MDS_LOV_ALLOC_SIZE;
 
-                count += (off - off_old) / sizeof(obd_id);
+                count = (off - off_old) / sizeof(obd_id);
                 if (mds_lov_update_from_read(mds, data, count)) {
                         CERROR("Can't update mds data\n");
                         GOTO(out, rc = -EIO);
                 }
-
-                if (off == off_old)
-                        break; /* eof */
         }
-        mds->mds_lov_objid_lastpage = i;
-        mds->mds_lov_objid_lastidx = count % OBJID_PER_PAGE();
+        mds->mds_lov_objid_lastpage = page - 1;
+        mds->mds_lov_objid_lastidx = count - 1;
 
         CDEBUG(D_INFO, "Read %u - %u %u objid\n", mds->mds_lov_objid_count,
                mds->mds_lov_objid_lastpage, mds->mds_lov_objid_lastidx);
@@ -448,7 +447,7 @@ int mds_lov_write_objids(struct obd_device *obd)
 
         cfs_foreach_bit(mds->mds_lov_page_dirty, i) {
                 obd_id *data =  mds->mds_lov_page_array[i];
-                unsigned int size = OBJID_PER_PAGE()*sizeof(obd_id);
+                unsigned int size = MDS_LOV_ALLOC_SIZE;
                 loff_t off = i * size;
 
                 LASSERT(data != NULL);
