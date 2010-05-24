@@ -681,6 +681,60 @@ enum interval_iter interval_search(struct interval_node *node,
 }
 EXPORT_SYMBOL(interval_search);
 
+enum interval_iter interval_search_expand_extent( struct interval_node *node,
+                                       struct interval_node_extent *ext,
+                                       struct interval_node_extent *result_ext,
+                                       interval_callback_t func, void *data)
+{
+        struct interval_node *parent;
+        enum interval_iter rc = INTERVAL_ITER_CONT;
+
+        LASSERT(ext != NULL);
+        LASSERT(func != NULL);
+
+        while (node) {
+                if (ext->end < interval_low(node)) {
+                        if (result_ext->end > interval_low(node) - 1)
+                                result_ext->end = interval_low(node) - 1;
+                        if (node->in_left) {
+                                node = node->in_left;
+                                continue;
+                        }
+                } else if (ext->start > node->in_max_high) {
+                        if (result_ext->start < node->in_max_high + 1)
+                                result_ext->start = node->in_max_high + 1;
+                } else {
+                        if (extent_overlapped(ext, &node->in_extent)) {
+                                rc = func(node, data);
+                                if (rc == INTERVAL_ITER_STOP)
+                                        break;
+                        }
+
+                        if (node->in_left) {
+                                node = node->in_left;
+                                continue;
+                        }
+                        if (node->in_right) {
+                                node = node->in_right;
+                                continue;
+                        }
+                }
+
+                parent = node->in_parent;
+                while (parent) {
+                        if (node_is_left_child(node) && parent->in_right) {
+                                node = parent->in_right;
+                                break;
+                        }
+                        node = parent;
+                        parent = node->in_parent;
+                }
+                if (parent == NULL)
+                        break;
+        }
+        return rc;
+}
+
 static enum interval_iter interval_overlap_cb(struct interval_node *n,
                                               void *args)
 {
