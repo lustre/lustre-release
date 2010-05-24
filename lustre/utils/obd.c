@@ -533,8 +533,7 @@ static void shmem_snap(int total_threads, int live_threads)
                (prev_time.tv_sec + prev_time.tv_usec / 1000000.0);
 
         if (prev_valid &&
-            live_threads == total_threads &&
-            secs > 0.0)                    /* someone screwed with the time? */
+            secs > 1.0)                    /* someone screwed with the time? */
                 printf("%d/%d Total: %f/second\n", non_zero, total_threads, total / secs);
 
         memcpy(counter_snapshot[1], counter_snapshot[0],
@@ -715,7 +714,7 @@ int jt_opt_threads(int argc, char **argv)
 
                         thread = i;
                         argv[2] = "--device";
-                        return jt_opt_device(argc - 2, argv + 2);
+                        exit(jt_opt_device(argc - 2, argv + 2));
                 } else if (be_verbose(verbose, NULL, i, &next_thread, threads))
                         printf("%s: thread #%d (PID %d) started\n",
                                argv[0], i, rc);
