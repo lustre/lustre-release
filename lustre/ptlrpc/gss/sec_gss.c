@@ -1611,6 +1611,8 @@ void gss_free_repbuf(struct ptlrpc_sec *sec,
         OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
+        req->rq_repdata = NULL;
+        req->rq_repdata_len = 0;
 
         req->rq_repmsg = NULL;
 }
