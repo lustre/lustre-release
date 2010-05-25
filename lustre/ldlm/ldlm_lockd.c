@@ -1776,12 +1776,10 @@ static inline void ldlm_callback_errmsg(struct ptlrpc_request *req,
                                         const char *msg, int rc,
                                         struct lustre_handle *handle)
 {
-        CWARN("%s: [pid %d] [xid x"LPU64"] [nid %s] [opc %d] [rc %d] "
-              "[lock "LPX64"].\n",
-              msg, lustre_msg_get_status(req->rq_reqmsg),
-              req->rq_xid, libcfs_id2str(req->rq_peer),
-              lustre_msg_get_opc(req->rq_reqmsg), rc,
-              handle ? handle->cookie : 0);
+        DEBUG_REQ((req->rq_no_reply || rc) ? D_WARNING : D_DLMTRACE, req,
+                  "%s: [nid %s] [rc %d] [lock "LPX64"]",
+                  msg, libcfs_id2str(req->rq_peer), rc,
+                  handle ? handle->cookie : 0);
         if (req->rq_no_reply)
                 CWARN("No reply was sent, maybe cause bug 21636.\n");
         else if (rc)
