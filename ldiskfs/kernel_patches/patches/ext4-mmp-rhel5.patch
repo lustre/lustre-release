@@ -92,7 +92,7 @@ Index: linux-stage/fs/ext4/super.c
 +static void dump_mmp_msg(struct super_block *sb, struct mmp_struct *mmp,
 +			 const char *function, const char *msg)
 +{
-+	ext4_warning(sb, function, msg);
++	ext4_warning(sb, function, "%s", msg);
 +	ext4_warning(sb, function, "MMP failure info: last update time: %llu, "
 +		     "last update node: %s, last update device: %s\n",
 +		     (long long unsigned int)le64_to_cpu(mmp->mmp_time),
