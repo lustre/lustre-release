@@ -68,7 +68,7 @@ int          nomtab = 0;
 int          fake = 0;
 int          force = 0;
 int          retry = 0;
-int          md_stripe_cache_size = 2048;
+int          md_stripe_cache_size = 16384;
 char         *progname = NULL;
 
 void usage(FILE *out)
