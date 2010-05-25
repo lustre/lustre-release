@@ -1138,15 +1138,40 @@ out:
         return rc;
 }
 
-static int is_same_dentry(struct dentry *d1, struct dentry *d2)
+/*
+ * tgt: the dentry to be revalidate or lookup
+ * new: the dentry created by statahead
+ */
+static int is_same_dentry(struct dentry *tgt, struct dentry *new, int lookup)
 {
-        if (unlikely(d1 == d2))
+        if (tgt == new) {
+                LASSERT(lookup == 0);
                 return 1;
-        if (d1->d_parent == d2->d_parent &&
-            d1->d_name.hash == d2->d_name.hash &&
-            d1->d_name.len == d2->d_name.len &&
-            memcmp(d1->d_name.name, d2->d_name.name, d1->d_name.len) == 0)
+        }
+        if (tgt->d_parent != new->d_parent)
+                return 0;
+        if (tgt->d_name.hash != new->d_name.hash)
+                return 0;
+        if (tgt->d_name.len != new->d_name.len)
+                return 0;
+        if (memcmp(tgt->d_name.name, new->d_name.name, tgt->d_name.len) != 0)
+                return 0;
+        if (tgt->d_inode == NULL && lookup)
                 return 1;
+        if (tgt->d_inode)
+                LASSERTF(tgt->d_flags & DCACHE_LUSTRE_INVALID,
+                         "[%.*s/%.*s] [%x %p "DFID"] [%x %p "DFID"]\n",
+                         tgt->d_parent->d_name.len, tgt->d_parent->d_name.name,
+                         tgt->d_name.len, tgt->d_name.name,
+                         tgt->d_flags, tgt, PFID(ll_inode2fid(tgt->d_inode)),
+                         new->d_flags, new, PFID(ll_inode2fid(new->d_inode)));
+        else
+                LASSERTF(tgt->d_flags & DCACHE_LUSTRE_INVALID,
+                         "[%.*s/%.*s] [%x %p 0] [%x %p "DFID"]\n",
+                         tgt->d_parent->d_name.len, tgt->d_parent->d_name.name,
+                         tgt->d_name.len, tgt->d_name.name,
+                         tgt->d_flags, tgt,
+                         new->d_flags, new, PFID(ll_inode2fid(new->d_inode)));
         return 0;
 }
 
@@ -1283,10 +1308,10 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                                 }
 
                                 ll_lookup_it_alias(&dchild, ichild, bits);
+                                found = is_same_dentry(*dentryp, dchild, lookup);
                                 ll_lookup_finish_locks(&it, dchild);
                                 if (dchild != save)
                                         dput(save);
-                                found = is_same_dentry(dchild, *dentryp);
                                 ichild = NULL;
 
 out_mutex:
@@ -1301,24 +1326,13 @@ out_mutex:
                                 entry->se_inode = NULL;
                                 if (found) {
                                         if (lookup) {
-                                                LASSERT(dchild != *dentryp);
+                                                LASSERT(*dentryp != dchild);
                                                 /* VFS will drop the reference
                                                  * count for dchild and *dentryp
                                                  * by itself. */
                                                 *dentryp = dchild;
                                         } else {
-                                                LASSERTF(dchild == *dentryp,
-                                                         "[%.*s/%.*s] "
-                                                         "[%p "DFID"] "
-                                                         "[%p "DFID"]\n",
-                                                dchild->d_parent->d_name.len,
-                                                dchild->d_parent->d_name.name,
-                                                dchild->d_name.len,
-                                                dchild->d_name.name,
-                                                dchild,
-                                                PFID(ll_inode2fid(dchild->d_inode)),
-                                                *dentryp,
-                                                PFID(ll_inode2fid((*dentryp)->d_inode)));
+                                                LASSERT(*dentryp == dchild);
                                                 /* Drop the dentry reference
                                                  * count held by statahead. */
                                                 dput(dchild);
