@@ -415,12 +415,15 @@ static int mdt_server_data_init(const struct lu_env *env,
         }
         /** Interop: evict all clients at first boot with 1.8 last_rcvd */
         if (!(lsd->lsd_feature_compat & OBD_COMPAT_20)) {
-                LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, remove all"
-                              " clients for interop needs\n", obd->obd_name);
-                simple_truncate(lsi->lsi_srv_mnt->mnt_sb->s_root,
-                                lsi->lsi_srv_mnt, LAST_RCVD,
-                                lsd->lsd_client_start);
-                last_rcvd_size = lsd->lsd_client_start;
+                if (last_rcvd_size > lsd->lsd_client_start) {
+                        LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, "
+                                      "remove all clients for interop needs\n",
+                                      obd->obd_name);
+                        simple_truncate(lsi->lsi_srv_mnt->mnt_sb->s_root,
+                                        lsi->lsi_srv_mnt, LAST_RCVD,
+                                        lsd->lsd_client_start);
+                        last_rcvd_size = lsd->lsd_client_start;
+                }
                 /** set 2.0 flag to upgrade/downgrade between 1.8 and 2.0 */
                 lsd->lsd_feature_compat |= OBD_COMPAT_20;
         }
