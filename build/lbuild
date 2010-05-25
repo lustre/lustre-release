@@ -83,6 +83,9 @@ UP_ARCHS=
 # not in the target file any more
 CONFIG=
 
+# build the lustre-tests rpm?
+LUSTRE_TESTS=true
+
 DATE=$(date)
 
 USE_DATESTAMP=1
@@ -833,15 +836,24 @@ build_lustre() {
         echo NORPM mode. Only compiling.
     fi
 
-    # convert the $PATCHLESS boolean to an empty/no-empty boolean
+    # convert the $PATCHLESS boolean to an empty/not-empty boolean
     # as silly as this seems, it makes the syntax of the rpmbuild command
     # simpler and not need an eval to deal with the quotes in the quotes
     local is_patchless=""
     if $PATCHLESS; then
         is_patchless="yes"
     fi
+
+    # ditto for the lustre-tests boolean
+    local lustre_tests=""
+    if ! $LUSTRE_TESTS; then
+        lustre_tests="no"
+    fi
+
     $RPMBUILD $targets $rpmbuildopt ../lustre.spec \
         ${is_patchless:+--define "lustre_name lustre-client"} \
+        ${lustre_tests:+--define "build_lustre_tests 0"} \
+        --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
         --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" 2>&1 || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
@@ -1912,6 +1924,11 @@ while [ "$1" ]; do
             ;;
         --)
             shift
+            # there are actually some lustre configure flags that we need to
+            # handle ourselves (but we still give them to configure)
+            if [[ \ $@\  == *\ --disable-tests\ * ]]; then
+                LUSTRE_TESTS=false
+            fi
             CONFIGURE_FLAGS=$@
             CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-liblustre --enable-liblustre-tests"
             break

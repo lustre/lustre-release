@@ -3,6 +3,7 @@
 %{!?kversion: %define kversion @LINUXRELEASE@}
 %{!?release: %define release @RELEASE@}
 %{!?lustre_name: %define lustre_name lustre}
+%{!?build_lustre_tests: %define build_lustre_tests 1}
 
 %define is_client %(bash -c "if [[ %{lustre_name} = *-client ]]; then echo -n '1'; else echo -n '0'; fi")
 # for those uses that don't want the -smp/-bigsmp on the end of %kversion
@@ -109,7 +110,13 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 # override %optflags so that the vendor's overzealous flags don't create
 # build failures
 %define optflags -g -O2 -Werror
-%configure @ac_configure_args@ %{?configure_flags:configure_flags}
+CONFIGURE_ARGS=""
+%if %{build_lustre_tests}
+CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests --enable-liblustre-tests"
+%else
+CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests --disable-liblustre-tests"
+%endif
+%configure %{?configure_args:%configure_args} $CONFIGURE_ARGS
 make -j $RPM_BUILD_NCPUS -s
 
 %install
@@ -180,15 +187,17 @@ if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/linux/lustre_types.h ] ;
   echo '%attr(-, root, root) /usr/include/linux/lustre_types.h' >>lustre.files
 fi
 
+%if %{build_lustre_tests}
 echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
 echo '%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
-modules_excludes="llog_test"
+modules_excludes="|llog_test"
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
   echo '%attr(-, root, root) %{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
 fi
+%endif
 
 pushd $RPM_BUILD_ROOT >/dev/null
-find lib/modules/%{kversion}/kernel -type f | awk "!/($modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
+find lib/modules/%{kversion}/kernel -type f | awk "!/(ZZZZZZZZZZ$modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
 popd >/dev/null
 
 %files -f lustre.files
@@ -205,7 +214,9 @@ popd >/dev/null
 # %files deps-sles
 # %files deps-rhel
 
+%if %{build_lustre_tests}
 %files tests -f lustre-tests.files
+%endif
 
 %post modules
 if [ -f /boot/System.map-%{kversion} ]; then
@@ -265,6 +276,7 @@ else
 	depmod -ae %{kversion} || exit 0
 fi
 
+%if %{build_lustre_tests}
 %post tests
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
@@ -278,6 +290,7 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT

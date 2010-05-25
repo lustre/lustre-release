@@ -8,6 +8,9 @@ EXTRA_SOURCES := @SYMVERFILE@
 endif
 endif
 
+@TESTS_TRUE@BUILD_TESTS = true
+@TESTS_FALSE@BUILD_TESTS = false
+
 include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += config.h.in debian/*

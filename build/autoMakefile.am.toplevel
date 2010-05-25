@@ -103,10 +103,18 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/mptlinux.spec.patch build/patches
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
-	rpmbuild -ta $(distdir).tar.gz
+	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | sed -re 's/--(en|dis)able-tests//'); \
+	RPMARGS="--define \"configure_args $$CONFIGURE_ARGS\""; \
+	if ! $(BUILD_TESTS); then \
+		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
+	fi; \
+	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
 srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
-	rpmbuild -ts $(distdir).tar.gz
+	if ! $(BUILD_TESTS); then \
+		RPMARGS="--define \"build_lustre_tests 0\""; \
+	fi; \
+	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
 rpms:
 	for subdir in $(RPM_SUBDIRS) ; do				\
