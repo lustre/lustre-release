@@ -83,6 +83,8 @@ AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 
 LB_DEFINE_LDISKFS_OPTIONS
 
+LB_HAVE_EXT4_ENABLED
+
 if test x$enable_ext4 = xyes ; then
 	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [ldiskfs based on ext4])
 	BACKFS=ext4
