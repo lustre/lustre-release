@@ -5023,7 +5023,7 @@ test_116() {
 	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
 	[ $MAXC -gt $MINC ] || error_ignore "stripe QOS didn't balance free space"
 
-	rm -rf $DIR/$tdir/OST${MINI}
+	rm -rf $DIR/$tdir
 }
 run_test 116 "stripe QOS: free space balance ==================="
 
@@ -5381,16 +5381,17 @@ test_118k()
 	set_nodes_failloc "$(osts_nodes)" 0x20e
 	mkdir -p $DIR/$tdir
 
-        for ((i=0;i<10;i++)); do
-                (dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1M count=10 || \
+	for ((i=0;i<10;i++)); do
+		(dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1M count=10 || \
 			error "dd to $DIR/$tdir/$tfile-$i failed" )&
-	        SLEEPPID=$!
-                sleep 0.500s
-	        kill $SLEEPPID
-	        wait $SLEEPPID
-        done
+		SLEEPPID=$!
+		sleep 0.500s
+		kill $SLEEPPID
+		wait $SLEEPPID
+	done
 
-        set_nodes_failloc "$(osts_nodes)" 0
+	set_nodes_failloc "$(osts_nodes)" 0
+	rm -rf $DIR/$tdir
 }
 run_test 118k "bio alloc -ENOMEM and IO TERM handling ========="
 
