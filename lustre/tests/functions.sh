@@ -185,7 +185,7 @@ mpi_run () {
     eval $command 2>&1 | tee $mpilog || true
 
     rc=${PIPESTATUS[0]}
-    if [ $rc -eq 0 ] && grep -q "p4_error: : [^0]" $mpilog ; then
+    if [ $rc -eq 0 ] && grep -q "p4_error:" $mpilog ; then
        rc=1
     fi
     return $rc
