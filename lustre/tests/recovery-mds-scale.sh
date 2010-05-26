@@ -82,15 +82,20 @@ rm -f $END_RUN_FILE
 vmstatLOG=${TESTSUITELOG}_$(basename $0 .sh).vmstat
 
 server_numfailovers () {
+    local facet=$1
+    local var=${facet}_numfailovers
+    local val=0
+
+    [[ ${!var} ]] && val=${!var}
+    echo $val
+}
+
+servers_numfailovers () {
     local facet
     local var
 
-    for facet in $MDTS ${OSTS//,/ }; do
-        var=${facet}_nums
-        val=${!var}
-        if [ "$val" ] ; then
-            echo "$facet failed  over  $val times"
-        fi
+    for facet in ${MDTS//,/ } ${OSTS//,/ }; do
+        echo "$facet: $(server_numfailovers $facet) times"
     done
 }
 
@@ -131,7 +136,7 @@ summary_and_cleanup () {
 Server failover period: $SERVER_FAILOVER_PERIOD seconds
 Exited after:           $ELAPSED seconds
 Number of failovers before exit:
-$(server_numfailovers)
+$(servers_numfailovers)
 Status: $result: rc=$rc"
 
     # stop the vmstats on the OSTs
@@ -173,7 +178,6 @@ log "-----============= $0 starting =============-----"
 trap summary_and_cleanup EXIT INT
 
 ELAPSED=0
-NUM_FAILOVERS=0
 
 # vmstat the osts
 if [ "$VMSTAT" ]; then
@@ -207,7 +211,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     it_time_start=$(date +%s)
     
     SERVERFACET=$(get_random_entry $SERVERS)
-    var=${SERVERFACET}_nums
+    var=${SERVERFACET}_numfailovers
 
     # Check that our client loads are still running. If any have died, 
     # that means they have died outside of recovery, which is unacceptable.    
@@ -220,7 +224,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     fi
 
     log "Wait $SERVERFACET recovery complete before doing next failover ...."
-    if [[ $NUM_FAILOVERS != 0 ]]; then
+    if [[ $(server_numfailovers $SERVERFACET) != 0 ]]; then
         if ! wait_recovery_complete $SERVERFACET ; then
             echo "$SERVERFACET recovery is not completed!"
             exit 7
@@ -246,7 +250,6 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     fi
 
     # Increment the number of failovers
-    NUM_FAILOVERS=$((NUM_FAILOVERS+1))
     val=$((${!var} + 1))
     eval $var=$val
  
