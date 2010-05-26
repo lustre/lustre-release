@@ -381,6 +381,19 @@ do {                                                            \
 #define EXP_MD_COUNTER_INCREMENT(exp, op)
 #endif
 
+static inline int lprocfs_nid_ldlm_stats_init(struct nid_stat* tmp) {
+        /* Always add in ldlm_stats */
+        tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC
+                                                  ,LPROCFS_STATS_FLAG_NOPERCPU);
+        if (tmp->nid_ldlm_stats == NULL)
+                return -ENOMEM;
+
+        lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+
+        return lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+                                      tmp->nid_ldlm_stats);
+}
+
 #define OBD_CHECK_MD_OP(obd, op, err)                           \
 do {                                                            \
         if (!OBT(obd) || !MDP((obd), op)) {                     \

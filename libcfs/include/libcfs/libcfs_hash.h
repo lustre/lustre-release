@@ -286,6 +286,8 @@ void cfs_hash_for_each_safe(cfs_hash_t *hs, cfs_hash_for_each_cb_t, void *data);
 void cfs_hash_for_each_empty(cfs_hash_t *hs, cfs_hash_for_each_cb_t, void *data);
 void cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
                            cfs_hash_for_each_cb_t, void *data);
+typedef int (*cfs_hash_cond_opt_cb_t)(void *obj, void *data);
+void cfs_hash_cond_del(cfs_hash_t *hs, cfs_hash_cond_opt_cb_t, void *data);
 
 /*
  * Rehash - Theta is calculated to be the average chained

@@ -383,6 +383,37 @@ cfs_hash_del(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 CFS_EXPORT_SYMBOL(cfs_hash_del);
 
 /**
+ * Delete item from the libcfs hash @hs when @func return true.
+ * The write lock being hold during loop for each bucket to avoid
+ * any object be reference.
+ */
+void
+cfs_hash_cond_del(cfs_hash_t *hs, cfs_hash_cond_opt_cb_t func, void *data)
+{
+        cfs_hlist_node_t       *hnode;
+        cfs_hlist_node_t       *pos;
+        cfs_hash_bucket_t      *hsb;
+        int                    i;
+        ENTRY;
+
+        cfs_hash_wlock(hs);
+        cfs_hash_for_each_bucket(hs, hsb, i) {
+                cfs_write_lock(&hsb->hsb_rwlock);
+                cfs_hlist_for_each_safe(hnode, pos, &(hsb->hsb_head)) {
+                        __cfs_hash_bucket_validate(hs, hsb, hnode);
+                        if (func(cfs_hash_get(hs, hnode), data))
+                                __cfs_hash_bucket_del(hs, hsb, hnode);
+                        (void)cfs_hash_put(hs, hnode);
+                }
+                cfs_write_unlock(&hsb->hsb_rwlock);
+        }
+        cfs_hash_wunlock(hs);
+
+        EXIT;
+}
+CFS_EXPORT_SYMBOL(cfs_hash_cond_del);
+
+/**
  * Delete item given @key in libcfs hash @hs.  The first @key found in
  * the hash will be removed, if the key exists multiple times in the hash
  * @hs this function must be called once per key.  The removed object
@@ -765,7 +796,7 @@ void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key, void *new_key,
                 cfs_write_lock(&new_hsb->hsb_rwlock);
                 cfs_write_lock(&old_hsb->hsb_rwlock);
         } else { /* do nothing */
-                cfs_read_unlock(&hs->hs_rwlock);
+                cfs_hash_runlock(hs);
                 EXIT;
                 return;
         }

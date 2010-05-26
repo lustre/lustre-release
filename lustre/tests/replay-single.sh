@@ -2063,6 +2063,13 @@ test_85() { # bug 22190
 }
 run_test 85 "ensure there is no reply on bulk write if obd is in rdonly mode"
 
+test_86() {
+        umount $MOUNT
+        do_facet $SINGLEMDS lctl set_param mdt.${FSNAME}-MDT*.exports.clear=0
+        remount_facet $SINGLEMDS
+}
+run_test 86 "umount server after clear nid_stats should not hit LBUG"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

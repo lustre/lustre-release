@@ -878,6 +878,13 @@ shutdown_facet() {
     fi
 }
 
+remount_facet() {
+    local facet=$1
+
+    stop $facet
+    mount_facet $facet
+}
+
 reboot_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
