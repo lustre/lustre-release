@@ -1454,7 +1454,8 @@ static inline int obd_cancel(struct obd_export *exp, struct lov_stripe_md *ea,
 }
 
 static inline int obd_cancel_unused(struct obd_export *exp,
-                                    struct lov_stripe_md *ea, int flags,
+                                    struct lov_stripe_md *ea,
+                                    ldlm_cancel_flags_t flags,
                                     void *opaque)
 {
         int rc;
