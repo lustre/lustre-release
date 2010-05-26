@@ -1136,8 +1136,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
 /* XXX until we will have compound requests and can cut cancels from generic rpc
  * we need send cancels with LDLM_FL_BL_AST flag as separate rpc */
-static int ldlm_cancel_list(struct list_head *cancels, int count,
-                            ldlm_cancel_flags_t flags)
+int ldlm_cli_cancel_list_local(struct list_head *cancels, int count,
+                               ldlm_cancel_flags_t flags)
 {
         CFS_LIST_HEAD(head);
         struct ldlm_lock *lock, *next;
@@ -1337,9 +1337,9 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
  *                               sending any rpcs or waiting for any
  *                               outstanding rpc to complete
  */
-int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
-                          int count, int max, ldlm_cancel_flags_t cancel_flags,
-                          int flags)
+static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
+                                 struct list_head *cancels,
+                                 int count, int max, int flags)
 {
         ldlm_cancel_lru_policy_t pf;
         struct ldlm_lock *lock, *next;
@@ -1461,7 +1461,18 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                 unused--;
         }
         spin_unlock(&ns->ns_unused_lock);
-        RETURN(ldlm_cancel_list(cancels, added, cancel_flags));
+        RETURN(added);
+}
+
+int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
+                          int count, int max, ldlm_cancel_flags_t cancel_flags,
+                          int flags)
+{
+        int added;
+        added = ldlm_prepare_lru_list(ns, cancels, count, max, flags);
+        if (added <= 0)
+                return added;
+        return ldlm_cli_cancel_list_local(cancels, added, cancel_flags);
 }
 
 /* when called with LDLM_ASYNC the blocking callback will be handled
@@ -1478,7 +1489,9 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t mode,
 #ifndef __KERNEL__
         mode = LDLM_SYNC; /* force to be sync in user space */
 #endif
-        count = ldlm_cancel_lru_local(ns, &cancels, nr, 0, 0, flags);
+        /* Just prepare the list of locks, do not actually cancel them yet.
+         * Locks are cancelled later in a separate thread. */
+        count = ldlm_prepare_lru_list(ns, &cancels, nr, 0, flags);
 
         rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count, mode);
         if (rc == 0)
@@ -1540,7 +1553,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
         unlock_res(res);
 
         /* Handle only @count inserted locks. */
-        RETURN(ldlm_cancel_list(cancels, count, cancel_flags));
+        RETURN(ldlm_cli_cancel_list_local(cancels, count, cancel_flags));
 }
 
 /* If @req is NULL, send CANCEL request to server with handles of locks
