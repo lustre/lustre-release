@@ -960,6 +960,11 @@ static int osc_should_shrink_grant(struct client_obd *client)
 {
         cfs_time_t time = cfs_time_current();
         cfs_time_t next_shrink = client->cl_next_shrink_grant;
+
+        if ((client->cl_import->imp_connect_data.ocd_connect_flags &
+             OBD_CONNECT_GRANT_SHRINK) == 0)
+                return 0;
+
         if (cfs_time_aftereq(time, next_shrink - 5 * CFS_TICK)) {
                 if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
                     client->cl_avail_grant > GRANT_SHRINK_LIMIT)

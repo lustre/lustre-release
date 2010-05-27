@@ -45,6 +45,11 @@ Bugzilla   : 21647
 Description: add support for async journal commit in echo client
 
 Severity   : normal
+Bugzilla   : 22755
+Description: The shrink grant feature is still active on the client although the
+	     connect flag is not set.
+
+Severity   : normal
 Bugzilla   : 22610
 Description: a race condition could lead to SIGBUS being sent to an
 	     application using mmap-ped files from Lustre
