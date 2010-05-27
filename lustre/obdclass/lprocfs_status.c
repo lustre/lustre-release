@@ -726,8 +726,6 @@ static int obd_import_flags2str(struct obd_import *imp, char *str, int max)
         flag2str(deactive);
         flag2str(replayable);
         flag2str(pingable);
-        flag2str(recon_bk);
-        flag2str(last_recon);
         return len;
 }
 #undef flags2str

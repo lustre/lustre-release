@@ -1577,29 +1577,6 @@ int mdc_set_info_async(struct obd_export *exp,
         int                rc = -EINVAL;
         ENTRY;
 
-        if (KEY_IS(KEY_INIT_RECOV)) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_initial_recov = *(int *)val;
-                cfs_spin_unlock(&imp->imp_lock);
-                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
-                       exp->exp_obd->obd_name, imp->imp_initial_recov);
-                RETURN(0);
-        }
-        /* Turn off initial_recov after we try all backup servers once */
-        if (KEY_IS(KEY_INIT_RECOV_BACKUP)) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_initial_recov_bk = *(int *)val;
-                if (imp->imp_initial_recov_bk)
-                        imp->imp_initial_recov = 1;
-                cfs_spin_unlock(&imp->imp_lock);
-                CDEBUG(D_HA, "%s: set imp_initial_recov_bk = %d\n",
-                       exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
-                RETURN(0);
-        }
         if (KEY_IS(KEY_READ_ONLY)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);

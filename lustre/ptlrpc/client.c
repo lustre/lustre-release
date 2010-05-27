@@ -828,6 +828,7 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         cfs_list_add_tail(&req->rq_set_chain, &set->set_requests);
         req->rq_set = set;
         cfs_atomic_inc(&set->set_remaining);
+        req->rq_queued_time = cfs_time_current(); /* Where is the best place to set this? */
 }
 
 /**
@@ -886,6 +887,12 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         } else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
                 *status = -EIO;
+        } else if (imp->imp_obd->obd_no_recov) {
+                *status = -ESHUTDOWN;
+        } else if (ptlrpc_send_limit_expired(req)) {
+                /* probably doesn't need to be a D_ERROR after initial testing */
+                DEBUG_REQ(D_ERROR, req, "send limit expired ");
+                *status = -EIO;
         } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
                    imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
@@ -893,13 +900,7 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                         DEBUG_REQ(D_ERROR, req, "invalidate in flight");
                         *status = -EIO;
                 }
-        } else if ((imp->imp_invalid && (!imp->imp_recon_bk)) ||
-                                         imp->imp_obd->obd_no_recov) {
-                /* If the import has been invalidated (such as by an OST
-                 * failure), and if the import(MGC) tried all of its connection
-                 * list (Bug 13464), the request must fail with -ESHUTDOWN.
-                 * This indicates the requests should be discarded; an -EIO
-                 * may result in a resend of the request. */
+        } else if (imp->imp_invalid) {
                 if (!imp->imp_deactive)
                           DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
                 *status = -ESHUTDOWN; /* bz 12940 */
@@ -1024,7 +1025,7 @@ static int after_reply(struct ptlrpc_request *req)
         LASSERT(!req->rq_receiving_reply && !req->rq_must_unlink);
 
         if (req->rq_reply_truncate) {
-                if (req->rq_no_resend) {
+                if (ptlrpc_no_resend(req)) {
                         DEBUG_REQ(D_ERROR, req, "reply buffer overflow,"
                                   " expected: %d, actual size: %d",
                                   req->rq_nob_received, req->rq_repbuf_len);
@@ -1367,7 +1368,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                         cfs_spin_unlock(&imp->imp_lock);
                                         GOTO(interpret, req->rq_status);
                                 }
-                                if (req->rq_no_resend && !req->rq_wait_ctx) {
+                                if (ptlrpc_no_resend(req) && !req->rq_wait_ctx) {
                                         req->rq_status = -ENOTCONN;
                                         ptlrpc_rqphase_move(req,
                                                 RQ_PHASE_INTERPRET);
@@ -1385,7 +1386,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                 req->rq_waiting = 0;
                                 cfs_spin_unlock(&req->rq_lock);
 
-                                if (req->rq_timedout||req->rq_resend) {
+                                if (req->rq_timedout || req->rq_resend) {
                                         /* This is re-sending anyways,
                                          * let's mark req as resend. */
                                         cfs_spin_lock(&req->rq_lock);
@@ -1610,7 +1611,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 
         /* if a request can't be resent we can't wait for an answer after
            the timeout */
-        if (req->rq_no_resend) {
+        if (ptlrpc_no_resend(req)) {
                 DEBUG_REQ(D_RPCTRACE, req, "TIMEOUT-NORESEND:");
                 rc = 1;
         }

@@ -154,8 +154,8 @@ manual_umount_client(){
 }
 
 setup() {
-	start_ost || error "OST start failed"
 	start_mds || error "MDT start failed"
+	start_ost || error "OST start failed"
 	mount_client $MOUNT || error "client start failed"
 }
 
@@ -223,10 +223,10 @@ test_0() {
 run_test 0 "single mount setup"
 
 test_1() {
+	start_mds || error "MDT start failed"
 	start_ost
 	echo "start ost second time..."
 	start_ost && error "2nd OST start should fail"
-	start_mds || error "MDT start failed"
 	mount_client $MOUNT || error "client start failed"
 	check_mount || return 42
 	cleanup || return $?
@@ -234,10 +234,10 @@ test_1() {
 run_test 1 "start up ost twice (should return errors)"
 
 test_2() {
-	start_ost
 	start_mds
 	echo "start mds second time.."
 	start_mds && error "2nd MDT start should fail"
+	start_ost
 	mount_client $MOUNT
 	check_mount || return 43
 	cleanup || return $?
@@ -330,8 +330,8 @@ test_5b() {
 run_test 5b "mds down, cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5c() {
-	start_ost
 	start_mds
+	start_ost
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
 	local oldfs="${FSNAME}"
@@ -357,8 +357,8 @@ test_5d() {
 run_test 5d "mount with ost down"
 
 test_5e() {
-	start_ost
 	start_mds
+	start_ost
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "lctl set_param fail_loc=0x80000506"
@@ -551,8 +551,8 @@ run_test 19b "start/stop OSTs without MDS"
 
 test_20() {
 	# first format the ost/mdt
-	start_ost
 	start_mds
+	start_ost
 	mount_client $MOUNT
 	check_mount || return 43
 	rm -f $DIR/$tfile
@@ -635,8 +635,8 @@ test_22() {
 run_test 22 "start a client before osts (should return errs)"
 
 test_23a() {	# was test_23
-        setup
-        # fail mds
+	setup
+	# fail mds
 	stop $SINGLEMDS
 	# force down client so that recovering mds waits for reconnect
 	local running=$(grep -c $MOUNT /proc/mounts) || true
@@ -689,8 +689,8 @@ umount_client $MOUNT
 cleanup_nocli
 
 test_23b() {    # was test_23
-	start_ost
 	start_mds
+	start_ost
 	# Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
 	lctl set_param fail_loc=0x80000313
 	mount_client $MOUNT

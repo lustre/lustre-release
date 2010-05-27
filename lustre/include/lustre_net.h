@@ -459,6 +459,8 @@ struct ptlrpc_request {
         /* client+server request */
         lnet_handle_md_t     rq_req_md_h;
         struct ptlrpc_cb_id  rq_req_cbid;
+        cfs_duration_t       rq_delay_limit;           /* optional time limit for send attempts */
+        cfs_time_t           rq_queued_time;          /* time request was first queued */
 
         /* server-side... */
         struct timeval       rq_arrival_time;       /* request arrival time */
@@ -1322,6 +1324,27 @@ static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
                          req->rq_reqmsg->lm_magic);
                 return -EFAULT;
         }
+}
+
+static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)
+{
+        if (req->rq_delay_limit != 0 &&
+            cfs_time_before(cfs_time_add(req->rq_queued_time,
+                                         cfs_time_seconds(req->rq_delay_limit)),
+                            cfs_time_current())) {
+                return 1;
+        }
+        return 0;
+}
+
+static inline int ptlrpc_no_resend(struct ptlrpc_request *req)
+{
+        if (!req->rq_no_resend && ptlrpc_send_limit_expired(req)) {
+                cfs_spin_lock(&req->rq_lock);
+                req->rq_no_resend = 1;
+                cfs_spin_unlock(&req->rq_lock);
+        }
+        return req->rq_no_resend;
 }
 
 /* ldlm/ldlm_lib.c */

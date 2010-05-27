@@ -781,6 +781,11 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(rc);
 }
 
+/* Not sure where this should go... */
+#define  MGC_ENQUEUE_LIMIT 50
+#define  MGC_TARGET_REG_LIMIT 10
+#define  MGC_SEND_PARAM_LIMIT 10
+
 /* Send parameter to MGS*/
 static int mgc_set_mgs_param(struct obd_export *exp,
                              struct mgs_send_param *msp)
@@ -805,6 +810,8 @@ static int mgc_set_mgs_param(struct obd_export *exp,
         memcpy(req_msp, msp, sizeof(*req_msp));
         ptlrpc_request_set_replen(req);
 
+        /* Limit how long we will wait for the enqueue to complete */
+        req->rq_delay_limit = MGC_SEND_PARAM_LIMIT;
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_msp = req_capsule_server_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
@@ -826,7 +833,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct config_llog_data *cld = (struct config_llog_data *)data;
         struct ldlm_enqueue_info einfo = { type, mode, mgc_blocking_ast,
                          ldlm_completion_ast, NULL, NULL, data};
-
+        struct ptlrpc_request *req;
+        int short_limit = cld->cld_is_sptlrpc;
         int rc;
         ENTRY;
 
@@ -839,12 +847,25 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* We need a callback for every lockholder, so don't try to
            ldlm_lock_match (see rev 1.1.2.11.2.47) */
-
-        rc = ldlm_cli_enqueue(exp, NULL, &einfo, &cld->cld_resid, NULL, flags,
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_LDLM_ENQUEUE, LUSTRE_DLM_VERSION,
+                                        LDLM_ENQUEUE);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+        ptlrpc_request_set_replen(req);
+        /* check if this is server or client */
+        if (cld->cld_cfg.cfg_sb) {
+                struct lustre_sb_info *lsi = s2lsi(cld->cld_cfg.cfg_sb);
+                if (lsi && (lsi->lsi_flags & LSI_SERVER))
+                        short_limit = 1;
+        }
+        /* Limit how long we will wait for the enqueue to complete */
+        req->rq_delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT;
+        rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
                               NULL, 0, lockh, 0);
         /* A failed enqueue should still call the mgc_blocking_ast,
            where it will be requeued if needed ("grant failed"). */
-
+        ptlrpc_req_finished(req);
         RETURN(rc);
 }
 
@@ -857,60 +878,6 @@ static int mgc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
 
         RETURN(0);
 }
-
-#if 0
-static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                         void *karg, void *uarg)
-{
-        struct obd_device *obd = exp->exp_obd;
-        struct obd_ioctl_data *data = karg;
-        struct llog_ctxt *ctxt;
-        struct lvfs_run_ctxt saved;
-        int rc;
-        ENTRY;
-
-        if (!cfs_try_module_get(THIS_MODULE)) {
-                CERROR("Can't get module. Is it alive?");
-                return -EINVAL;
-        }
-        switch (cmd) {
-        /* REPLicator context */
-        case OBD_IOC_PARSE: {
-                CERROR("MGC parsing llog %s\n", data->ioc_inlbuf1);
-                ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
-                rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
-                GOTO(out, rc);
-        }
-#ifdef __KERNEL__
-        case OBD_IOC_LLOG_INFO:
-        case OBD_IOC_LLOG_PRINT: {
-                ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                rc = llog_ioctl(ctxt, cmd, data);
-
-                GOTO(out, rc);
-        }
-#endif
-        /* ORIGinator context */
-        case OBD_IOC_DUMP_LOG: {
-                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                if (rc)
-                        RETURN(rc);
-
-                GOTO(out, rc);
-        }
-        default:
-                CERROR("mgc_ioctl(): unrecognised ioctl %#x\n", cmd);
-                GOTO(out, rc = -ENOTTY);
-        }
-out:
-        cfs_module_put(THIS_MODULE);
-
-        return rc;
-}
-#endif
 
 /* Send target_reg message to MGS */
 static int mgc_target_register(struct obd_export *exp,
@@ -936,6 +903,8 @@ static int mgc_target_register(struct obd_export *exp,
         memcpy(req_mti, mti, sizeof(*req_mti));
         ptlrpc_request_set_replen(req);
         CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
+        /* Limit how long we will wait for the enqueue to complete */
+        req->rq_delay_limit = MGC_TARGET_REG_LIMIT;
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
@@ -954,40 +923,24 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                        void *key, obd_count vallen, void *val,
                        struct ptlrpc_request_set *set)
 {
-        struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
         ENTRY;
 
-        /* Try to "recover" the initial connection; i.e. retry */
-        if (KEY_IS(KEY_INIT_RECOV)) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_initial_recov = *(int *)val;
-                cfs_spin_unlock(&imp->imp_lock);
-                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
-                       exp->exp_obd->obd_name, imp->imp_initial_recov);
-                RETURN(0);
-        }
         /* Turn off initial_recov after we try all backup servers once */
         if (KEY_IS(KEY_INIT_RECOV_BACKUP)) {
+                struct obd_import *imp = class_exp2cliimp(exp);
                 int value;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 value = *(int *)val;
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_initial_recov_bk = value > 0;
-                /* Even after the initial connection, give up all comms if
-                   nobody answers the first time. */
-                imp->imp_recon_bk = 1;
-                cfs_spin_unlock(&imp->imp_lock);
-                CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n",
-                       imp->imp_obd->obd_name, value, imp->imp_initial_recov,
+                CDEBUG(D_MGC, "InitRecov %s %d/d%d:i%d:r%d:or%d:%s\n",
+                       imp->imp_obd->obd_name, value,
                        imp->imp_deactive, imp->imp_invalid,
                        imp->imp_replayable, imp->imp_obd->obd_replayable,
                        ptlrpc_import_state_name(imp->imp_state));
                 /* Resurrect if we previously died */
-                if (imp->imp_invalid || value > 1)
+                if ((imp->imp_state != LUSTRE_IMP_FULL &&
+                     imp->imp_state != LUSTRE_IMP_NEW) || value > 1)
                         ptlrpc_reconnect_import(imp);
                 RETURN(0);
         }
@@ -1344,7 +1297,7 @@ int mgc_process_log(struct obd_device *mgc,
          * read it up here.
          */
         if (rcl && cld->cld_is_sptlrpc)
-                goto out_pop;
+                GOTO(out_pop, rc);
 
         /* Copy the setup log locally if we can. Don't mess around if we're
            running an MGS though (logs are already local). */
@@ -1380,7 +1333,8 @@ int mgc_process_log(struct obd_device *mgc,
         /* logname and instance info should be the same, so use our
            copy of the instance for the update.  The cfg_last_idx will
            be updated here. */
-        rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
+        if (rcl == 0 || lctxt == ctxt)
+                rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
 out_pop:
         llog_ctxt_put(ctxt);
         if (ctxt != lctxt)

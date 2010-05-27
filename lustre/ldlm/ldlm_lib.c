@@ -337,8 +337,6 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 GOTO(err_ldlm, rc = -ENOENT);
         imp->imp_client = &obddev->obd_ldlm_client;
         imp->imp_connect_op = connect_op;
-        imp->imp_initial_recov = 1;
-        imp->imp_initial_recov_bk = 0;
         CFS_INIT_LIST_HEAD(&imp->imp_pinger_chain);
         memcpy(cli->cl_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
                LUSTRE_CFG_BUFLEN(lcfg, 1));

@@ -273,13 +273,6 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
         cfs_atomic_inc(&imp->imp_inval_count);
 
-        /*
-         * If this is an invalid MGC connection, then don't bother
-         * waiting for imp_inflight to drop to 0.
-         */
-        if (imp->imp_invalid && imp->imp_recon_bk &&!imp->imp_obd->obd_no_recov)
-                goto out;
-
         if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
                 ptlrpc_deactivate_import(imp);
 
@@ -375,7 +368,6 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
          * "invalidate" state.
          */
         LASSERT(cfs_atomic_read(&imp->imp_inflight) == 0);
-out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
         sptlrpc_import_flush_all_ctx(imp);
 
@@ -514,8 +506,7 @@ static int import_select_connection(struct obd_import *imp)
            we do finally connect. (FIXME: really we should wait for all network
            state associated with the last connection attempt to drain before
            trying to reconnect on it.) */
-        if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item) &&
-            !imp->imp_recon_bk /* not retrying */) {
+        if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
                 if (at_get(&imp->imp_at.iat_net_latency) <
                     CONNECTION_SWITCH_MAX) {
                         at_measured(&imp->imp_at.iat_net_latency,
@@ -637,27 +628,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         rc = import_select_connection(imp);
         if (rc)
                 GOTO(out, rc);
-
-        /* last in connection list */
-        if (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list) {
-                if (imp->imp_initial_recov_bk && initial_connect) {
-                        CDEBUG(D_HA, "Last connection attempt (%d) for %s\n",
-                               imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
-                        /* Don't retry if connect fails */
-                        rc = 0;
-                        obd_set_info_async(obd->obd_self_export,
-                                           sizeof(KEY_INIT_RECOV),
-                                           KEY_INIT_RECOV,
-                                           sizeof(rc), &rc, NULL);
-                }
-                if (imp->imp_recon_bk) {
-                        CDEBUG(D_HA, "Last reconnection attempt (%d) for %s\n",
-                               imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
-                        cfs_spin_lock(&imp->imp_lock);
-                        imp->imp_last_recon = 1;
-                        cfs_spin_unlock(&imp->imp_lock);
-                }
-        }
 
         rc = sptlrpc_import_sec_adapt(imp, NULL, 0);
         if (rc)
@@ -1127,15 +1097,7 @@ finish:
 out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                cfs_spin_lock(&imp->imp_lock);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov &&
-                    (request->rq_import_generation == imp->imp_generation))
-                        ptlrpc_deactivate_and_unlock_import(imp);
-                else
-                        cfs_spin_unlock(&imp->imp_lock);
-
-                if ((imp->imp_recon_bk && imp->imp_last_recon) ||
-                    (rc == -EACCES)) {
+                if (rc == -EACCES) {
                         /*
                          * Give up trying to reconnect
                          * EACCES means client has no permission for connection
@@ -1182,10 +1144,6 @@ out:
                        obd2cli_tgt(imp->imp_obd),
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }
-
-        cfs_spin_lock(&imp->imp_lock);
-        imp->imp_last_recon = 0;
-        cfs_spin_unlock(&imp->imp_lock);
 
         cfs_waitq_broadcast(&imp->imp_recovery_waitq);
         RETURN(rc);
@@ -1464,8 +1422,6 @@ out:
         else
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
         memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
-        /* Try all connections in the future - bz 12758 */
-        imp->imp_last_recon = 0;
         cfs_spin_unlock(&imp->imp_lock);
 
         RETURN(rc);

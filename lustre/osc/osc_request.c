@@ -3977,18 +3977,6 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS(KEY_INIT_RECOV)) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_initial_recov = *(int *)val;
-                cfs_spin_unlock(&imp->imp_lock);
-                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
-                       exp->exp_obd->obd_name,
-                       imp->imp_initial_recov);
-                RETURN(0);
-        }
-
         if (KEY_IS(KEY_CHECKSUM)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);

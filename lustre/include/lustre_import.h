@@ -177,16 +177,12 @@ struct obd_import {
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
                                   imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
-                                  imp_initial_recov:1,    /* retry the initial connection */
-                                  imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
                                   imp_delayed_recovery:1, /* VBR: imp in delayed recovery */
                                   imp_no_lock_replay:1,   /* VBR: if gap was found then no lock replays */
                                   imp_vbr_failed:1,       /* recovery by versions was failed */
                                   imp_force_verify:1,     /* force an immidiate ping */
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
-                                  imp_recon_bk:1,         /* turn off reconnect if all failovers fail */
-                                  imp_last_recon:1,       /* internally used by above */
                                   imp_force_reconnect:1;  /* import must be reconnected instead of chouse new connection */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;

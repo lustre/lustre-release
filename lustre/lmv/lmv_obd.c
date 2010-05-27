@@ -2650,8 +2650,7 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
         }
         lmv = &obd->u.lmv;
 
-        if (KEY_IS(KEY_READ_ONLY) || KEY_IS(KEY_FLUSH_CTX) ||
-            KEY_IS(KEY_INIT_RECOV_BACKUP)) {
+        if (KEY_IS(KEY_READ_ONLY) || KEY_IS(KEY_FLUSH_CTX)) {
                 int i, err = 0;
 
                 for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
