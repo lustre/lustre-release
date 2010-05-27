@@ -1317,16 +1317,17 @@ static int ptlrpc_server_request_add(struct ptlrpc_service *svc,
 static int ptlrpc_server_allow_normal(struct ptlrpc_service *svc, int force)
 {
         return force || !svc->srv_hpreq_handler || svc->srv_n_hpreq > 0 ||
-               svc->srv_threads_running < svc->srv_threads_started - 2;
+                svc->srv_threads_running <= svc->srv_threads_started - 2;
 }
 
 static struct ptlrpc_request *
-ptlrpc_server_request_get(struct ptlrpc_service *svc)
+ptlrpc_server_request_get(struct ptlrpc_service *svc, int force)
 {
         struct ptlrpc_request *req = NULL;
         ENTRY;
 
-        if (!cfs_list_empty(&svc->srv_request_queue) &&
+        if (ptlrpc_server_allow_normal(svc, force) &&
+            !cfs_list_empty(&svc->srv_request_queue) &&
             (cfs_list_empty(&svc->srv_request_hpq) ||
              svc->srv_hpreq_count >= svc->srv_hpreq_ratio)) {
                 req = cfs_list_entry(svc->srv_request_queue.next,
@@ -1514,7 +1515,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 RETURN(0);
         }
 #endif
-        request = ptlrpc_server_request_get(svc);
+        request = ptlrpc_server_request_get(svc, 0);
         if  (request == NULL) {
                 cfs_spin_unlock(&svc->srv_lock);
                 RETURN(0);
@@ -1531,7 +1532,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                         cfs_spin_unlock(&svc->srv_lock);
                         OBD_FAIL_TIMEOUT(fail_opc, 4);
                         cfs_spin_lock(&svc->srv_lock);
-                        request = ptlrpc_server_request_get(svc);
+                        request = ptlrpc_server_request_get(svc, 0);
                         if  (request == NULL) {
                                 cfs_spin_unlock(&svc->srv_lock);
                                 RETURN(0);
@@ -1941,35 +1942,34 @@ static int ptlrpc_main_check_event(struct ptlrpc_thread *t,
         }
 
         cfs_spin_lock(&svc->srv_lock);
-        /* count this thread as not running before possible sleep in
-         * the outer wait event if it is not done yet. */
-        if (status->running) {
-                LASSERT(svc->srv_threads_running > 0);
-                svc->srv_threads_running--;
-                status->running = 0;
+        /* ptlrpc_server_request_pending() needs this thread to be
+         * counted as running. */
+        if (!status->running) {
+                svc->srv_threads_running++;
+                status->running = 1;
         }
         /* Process all incoming reqs before handling any */
         if (!cfs_list_empty(&svc->srv_req_in_queue)) {
-                        status->todo |= PTLRPC_MAIN_IN_REQ;
+                status->todo |= PTLRPC_MAIN_IN_REQ;
         }
         /* Don't handle regular requests in the last thread, in order
          * to handle any incoming reqs, early replies, etc. */
         if (ptlrpc_server_request_pending(svc, 0) &&
-            (svc->srv_threads_running < (svc->srv_threads_started - 1))) {
+            svc->srv_threads_running <= svc->srv_threads_started - 1) {
                 status->todo |= PTLRPC_MAIN_ACTIVE_REQ;
         }
         if (svc->srv_at_check) {
                 status->todo |= PTLRPC_MAIN_CHECK_TIMED;
         }
-        if ((!cfs_list_empty(&svc->srv_idle_rqbds) &&
-             svc->srv_rqbd_timeout == 0)) {
+        if (!cfs_list_empty(&svc->srv_idle_rqbds) &&
+            svc->srv_rqbd_timeout == 0) {
                 status->todo |= PTLRPC_MAIN_REPOST;
         }
-        /* count this thread as active if it goes out the outer
-         * wait event */
-        if (status->todo) {
-                svc->srv_threads_running++;
-                status->running = 1;
+        /* count this thread as not running if it is going to sleep in
+         * the outer wait event */
+        if (!status->todo) {
+                svc->srv_threads_running--;
+                status->running = 0;
         }
         cfs_spin_unlock(&svc->srv_lock);
  out:
@@ -2100,6 +2100,7 @@ static int ptlrpc_main(void *arg)
                         /* Ignore return code - we tried... */
                         ptlrpc_start_thread(dev, svc);
 
+                /* Process all incoming reqs before handling any */
                 if (st.todo & PTLRPC_MAIN_IN_REQ) {
                         ptlrpc_server_handle_req_in(svc);
                         /* but limit ourselves in case of flood */
@@ -2583,7 +2584,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         while (ptlrpc_server_request_pending(service, 1)) {
                 struct ptlrpc_request *req;
 
-                req = ptlrpc_server_request_get(service);
+                req = ptlrpc_server_request_get(service, 1);
                 cfs_list_del(&req->rq_list);
                 service->srv_n_queued_reqs--;
                 service->srv_n_active_reqs++;
