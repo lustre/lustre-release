@@ -795,7 +795,11 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
                         cfs_atomic_dec(&set->set_remaining);
                 }
 
+                cfs_spin_lock(&req->rq_lock);
                 req->rq_set = NULL;
+                req->rq_invalid_rqset = 0;
+                cfs_spin_unlock(&req->rq_lock);
+
                 ptlrpc_req_finished (req);
         }
 
