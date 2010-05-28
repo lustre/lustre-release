@@ -59,7 +59,7 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 #include "mgs_internal.h"
-#include <lustre_param.h>
+
 
 /* Establish a connection to the MGS.*/
 static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
@@ -375,9 +375,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         struct mgs_target_info *mti, *rep_mti;
         int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*mti) };
         int rc = 0, lockrc;
-        char *ptr;
-        lnet_nid_t nid;
-        int i;
         ENTRY;
 
         mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
@@ -413,23 +410,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
-
-        /* Ensure this is not a failover node that is connecting first */
-        ptr = mti->mti_params;
-        while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
-                while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-                        for (i = 0; i < mti->mti_nid_count; i++) {
-                                if (nid == mti->mti_nids[i]
-                                    && mgs_check_index(obd, mti) != 1) {
-                                        LCONSOLE_WARN("Denying registration "
-                                                      "attempt from failover "
-                                                      "nid %s\n",
-                                                      libcfs_nid2str(nid));
-                                        GOTO(out, rc = -EADDRNOTAVAIL);
-                                }
-                        }
-                }
-        }
 
         /* Log writing contention is handled by the fsdb_sem */
 
