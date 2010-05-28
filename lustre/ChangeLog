@@ -151,10 +151,6 @@ Description: do not set lustre read_only device when server umount and keep
 	     client records for recoverable ones
 
 Severity   : normal
-Bugzilla   : 22656
-Description: Prevent failover nids from registering with MGS first
-
-Severity   : normal
 Bugzilla   : 22241
 Description: move sync_on_lock_cancel tunable to the obdfilter layer
 Details    : move the tunable to trigger a journal flush on lock cancel from
