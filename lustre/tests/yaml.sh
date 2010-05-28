@@ -147,6 +147,7 @@ yml_log_test() {
         name: $1
         description: $TESTSUITE $1
         submission: $(date)
+        report_version: 2
         SubTests:
 EOF
     fi
@@ -154,8 +155,8 @@ EOF
 
 yml_log_test_status() {
     cat <<EOF
-    duration: $1
-    status: $2
+        duration: $1
+        status: $2
 EOF
 }
 
