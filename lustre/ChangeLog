@@ -41,8 +41,24 @@ Bugzilla   : 22402
 Description: add new OBDFILTER_SURVEY test suite
 
 Severity   : enhancement
+Bugzilla   : 20326
+Description: add new multiple mount protection (MMP) test suite
+
+Severity   : enhancement
 Bugzilla   : 21647
 Description: add support for async journal commit in echo client
+
+Severity   : enhancement
+Bugzilla   : 21244
+Description: allow userland programs to include <lustre/lustre_idl.h>
+	     from stardard include directories
+
+Severity   : normal
+Bugzilla   : 22244/21128
+Description: stack overflow when freeing locks under memory pressure
+Details    : instead of cancelling locks locally in the shrinking thread,
+	     deletate it to a separate blocking thread to prevent stack
+	     overflow.
 
 Severity   : normal
 Bugzilla   : 22755
@@ -79,6 +95,10 @@ Severity   : normal
 Bugzilla   : 17086
 Description: LSI Fusion MPT driver hacks to improve performance
 Details    : Set CONFIG_FUSION_MAX_SGE to 256 for RHEL5
+
+Severity   : enhancement
+Bugzilla   : 22509
+Description: increase default md stripe_cache_size to 16k
 
 Severity   : normal
 Bugzilla   : 15587/21439
