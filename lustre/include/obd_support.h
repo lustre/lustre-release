@@ -41,6 +41,7 @@
 #include <lvfs.h>
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_ver.h>
 
 /* global variables */
 extern struct lprocfs_stats *obd_memory;

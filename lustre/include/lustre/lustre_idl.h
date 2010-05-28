@@ -95,10 +95,7 @@
 
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
-#include <lustre_ver.h>
 #include <lustre/ll_fiemap.h>
-
-#include <libcfs/kp30.h>
 
 /*
  * this file contains all data structures used in Lustre interfaces:
@@ -419,13 +416,8 @@ struct obd_connect_data {
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
 
-/* b1_6 has smaller body. The defines below is for interoperability */
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,0,0,0)
 #define PTLRPC_INTEROP_1_6      1
 #define PTLRPC_BODY_MIN_SIZE    offsetof(struct ptlrpc_body, pb_pre_versions)
-#else
-#define PTLRPC_BODY_MIN_SIZE    sizeof(struct ptlrpc_body)
-#endif
 
 /*
  * Supported checksum algorithms. Up to 32 checksum types are supported.
@@ -2153,7 +2145,6 @@ struct qunit_data {
 #define QDATA_CLR_GRP(qdata)        ((qdata)->qd_flags &= ~LQUOTA_FLAGS_GRP)
 #define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 /* this will be used when OBD_CONNECT_QUOTA64 is set */
 struct qunit_data_old2 {
         __u32 qd_id; /* ID appiles to (uid, gid) */
@@ -2161,16 +2152,9 @@ struct qunit_data_old2 {
                          * Block quota or file quota occupy one bit */
         __u64 qd_count; /* acquire/release count (bytes for block quota) */
 };
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 extern void lustre_swab_qdata_old2(struct qunit_data_old2 *d);
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 extern int quota_get_qdata(void*req, struct qunit_data *qdata,
                            int is_req, int is_exp);
 extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
