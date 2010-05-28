@@ -197,8 +197,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
 
-        if ((oscc->oscc_flags & OSCC_FLAG_RECOVERING) ||
-            (oscc->oscc_flags & OSCC_FLAG_DEGRADED)) {
+        /* Do not check for a degraded OST here - bug21563/bug18539 */
+        if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
@@ -363,8 +363,11 @@ int osc_precreate(struct obd_export *exp)
                 RETURN(0);
         }
 
-        if ((oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) ||
-            (oscc->oscc_flags & OSCC_FLAG_CREATING)) {
+        /* Do not check for OSCC_FLAG_CREATING flag here, let
+         * osc_precreate() call oscc_internal_create() and
+         * adjust oscc_grow_count bug21563 */
+
+        if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(1);
         }
