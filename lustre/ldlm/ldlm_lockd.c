@@ -1629,14 +1629,10 @@ static int __ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_bl_work_it
         }
         spin_unlock(&blp->blp_lock);
 
-        if (mode == LDLM_SYNC) {
-                /* keep ref count as object is on this stack for SYNC call */
-                ldlm_bl_work_item_get(blwi);
-                cfs_waitq_signal(&blp->blp_waitq);
+        cfs_waitq_signal(&blp->blp_waitq);
+
+        if (mode == LDLM_SYNC)
                 wait_for_completion(&blwi->blwi_comp);
-        } else {
-                cfs_waitq_signal(&blp->blp_waitq);
-        }
 
         RETURN(0);
 }
@@ -1653,7 +1649,8 @@ static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
                  */
                 struct ldlm_bl_work_item blwi;
                 memset(&blwi, 0, sizeof(blwi));
-                /* have extra ref as this obj is on stack */
+                /* take extra ref as this obj is on stack */
+                ldlm_bl_work_item_get(&blwi);
                 RETURN(__ldlm_bl_to_thread(ns, &blwi, ld, lock, cancels, count, mode));
         } else {
                 struct ldlm_bl_work_item *blwi;
