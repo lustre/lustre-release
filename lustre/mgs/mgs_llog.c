@@ -1044,6 +1044,48 @@ static int mgs_write_log_failnids(struct obd_device *obd,
         return rc;
 }
 
+static int __mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
+                             struct mgs_target_info *mti)
+{
+        struct llog_handle *llh = NULL;
+        char mdt_uuid[sizeof(struct obd_uuid)];
+        char *svname;
+        int rc;
+
+        ENTRY;
+        name_create(&svname, mti->mti_fsname, "-MDT0000");
+        if (!mgs_log_is_empty(obd, svname))
+                GOTO(out, rc = 0);
+
+        /* Make up our own uuid */
+        snprintf(mdt_uuid, sizeof(struct obd_uuid), "%s_UUID", svname);
+
+        rc = mgs_write_log_lov(obd, fsdb, mti, svname,
+                        fsdb->fsdb_mdtlov);
+        if (rc)
+                GOTO(out, rc);
+
+        rc = record_start_log(obd, &llh, svname);
+        if (rc)
+                GOTO(out, rc);
+        /* FIXME this whole fn should be a single journal transaction */
+        record_marker(obd, llh, fsdb, CM_START, svname,"add mdt");
+        record_mount_opt(obd, llh, svname, fsdb->fsdb_mdtlov, 0);
+        record_attach(obd, llh, svname, LUSTRE_MDS_NAME, mdt_uuid);
+
+        record_setup(obd, llh, svname,
+                   mdt_uuid /* Ignored. Compatible with future. */,
+                   "0" /* MDT Index, default to zero. */,
+                   svname,
+                   0 /* options */);
+        record_marker(obd, llh, fsdb, CM_END, svname, "add mdt");
+        record_end_log(obd, &llh);
+        EXIT;
+out:
+        name_destroy(&svname);
+        return rc;
+}
+
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti)
 {
@@ -1065,8 +1107,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 /* This is the first time for all logs for this fs,
                    since any ost should have already started the mdt log. */
                 first_log++;
-                rc = mgs_write_log_lov(obd, fsdb, mti, mti->mti_svname,
-                                       fsdb->fsdb_mdtlov);
+                rc = __mgs_write_log_mdt(obd, fsdb, mti);
         }
         /* else there's already some ost entries in the mdt log. */
 
@@ -1075,27 +1116,6 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
            of this log, this is when the mdt will start. (This was not
            formerly part of the old mds log, it was directly executed by
            lconf.) */
-        /*
-        mount_option 0:  1:mdsA  2:lov_mdsA
-        attach mds mdsA mdsA_UUID
-        setup /dev/loop2 ldiskfs mdsA errors=remount-ro,user_xattr
-        */
-        rc = record_start_log(obd, &llh, mti->mti_svname);
-        if (rc)
-                RETURN(rc);
-        /* FIXME this whole fn should be a single journal transaction */
-        rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,"add mdt");
-        rc = record_mount_opt(obd, llh, mti->mti_svname, fsdb->fsdb_mdtlov, 0);
-        rc = record_attach(obd, llh, mti->mti_svname, LUSTRE_MDS_NAME,
-                           mti->mti_uuid);
-        rc = record_setup(obd, llh, mti->mti_svname,
-                          mti->mti_uuid /* Ignored. Compatible with future. */,
-                          "0" /* MDT Index, default to zero. */,
-                          mti->mti_svname,
-                          0 /* options */);
-        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdt");
-        rc = record_end_log(obd, &llh);
-
         /* Append the mdt info to the client log */
         name_create(&cliname, mti->mti_fsname, "-client");
         if (first_log) {
@@ -1283,7 +1303,9 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         /* Append ost info to mdt log */
         /* FIXME add to all MDT logs for CMD */
         /* FIXME need real MDT name, but MDT may not have registered yet! */
+
         name_create(&logname, mti->mti_fsname, "-MDT0000");
+        rc = __mgs_write_log_mdt(obd, fsdb, mti);
         rc = mgs_write_log_osc(obd, fsdb, mti, logname, fsdb->fsdb_mdtlov,
                                flags);
         name_destroy(&logname);

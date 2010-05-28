@@ -85,6 +85,12 @@ start_mds() {
 	start mds $MDSDEV $MDS_MOUNT_OPTS || return 94
 }
 
+stop_mgs() {
+	echo "stop mgs service on `facet_active_host mgs`"
+	# These tests all use non-failover stop
+	stop mgs -f  || return 97
+}
+
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
 	# These tests all use non-failover stop
@@ -701,6 +707,28 @@ test_21c() {
 	writeconf
 }
 run_test 21c "start mds between two osts, stop mds last"
+
+test_21d() {
+	if combined_mgs_mds ; then
+		skip "need separate mgs device" && return 0
+	fi
+	stopall
+
+	reformat
+
+	start_mgs
+	start_ost
+	start_ost2
+	start_mds
+	wait_osc_import_state mds ost2 FULL
+
+	stop_ost
+	stop_ost2
+	stop_mds
+	stop_mgs
+}
+run_test 21d "start mgs then ost and then mds"
+
 
 test_22() {
 	start_mds
