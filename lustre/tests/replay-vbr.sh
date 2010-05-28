@@ -84,6 +84,12 @@ get_version() {
     do_facet mds $LCTL --device $mds_svc getobjversion $fid
 }
 
+# interop 18 <-> 20
+lustre_version=$(get_lustre_version mds)
+if [[ $lustre_version != 1.8* ]]; then
+    mds20="yes"
+fi
+
 test_0a() {
     local file=$DIR/$tfile
     local pre
@@ -143,7 +149,7 @@ test_0d() {
     do_node $CLIENT1 mkfifo $DIR/$tfile
     post=$(get_version $CLIENT1 $DIR)
     if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
+        [ -n "$mds20" ] || error "version not changed: pre $pre, post $post"
     fi
 }
 run_test 0d "VBR: create changes version of parent"
@@ -175,7 +181,7 @@ test_0f() {
     do_node $CLIENT1 rm $DIR/$tfile
     post=$(get_version $CLIENT1 $DIR)
     if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
+        [ -n "$mds20" ] || error "version not changed: pre $pre, post $post"
     fi
 }
 run_test 0f "VBR: unlink changes version of parent"
@@ -446,7 +452,8 @@ test_0s() {
         error "version of source not changed: pre $pre, post $post"
     fi
     if (($tp_pre == $tp_post)); then
-        error "version of target parent not changed: pre $tp_pre, post $tp_post"
+        [ -n "$mds20" ] || \
+            error "version of target parent not changed: pre $tp_pre, post $tp_post"
     fi
 }
 run_test 0s "VBR: link changes versions of source and target parent"
@@ -503,10 +510,12 @@ test_0v() {
     sp_post=$(get_version $CLIENT1 $DIR)
     tp_post=$(get_version $CLIENT1 $DIR/$tdir)
     if (($sp_pre == $sp_post)); then
-        error "version of source parent not changed: pre $sp_pre, post $sp_post"
+        [ -n "$mds20" ] || \
+            error "version of source parent not changed: pre $sp_pre, post $sp_post"
     fi
     if (($tp_pre == $tp_post)); then
-        error "version of target parent not changed: pre $tp_pre, post $tp_post"
+        [ -n "$mds20" ] || \
+            error "version of target parent not changed: pre $tp_pre, post $tp_post"
     fi
 }
 run_test 0v "VBR: rename changes versions of source parent and target parent"
@@ -520,7 +529,8 @@ test_0w() {
     do_node $CLIENT1 mv $DIR/$tfile $DIR/$tfile-new
     post=$(get_version $CLIENT1 $DIR)
     if (($pre == $post)); then
-        error "version of parent not changed: pre $pre, post $post"
+        [ -n "$mds20" ] || \
+            error "version of parent not changed: pre $pre, post $post"
     fi
 }
 run_test 0w "VBR: rename within same dir changes version of parent"

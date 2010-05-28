@@ -256,6 +256,12 @@ test_13() {
 run_test 13 "close resend timeout"
 
 test_14a() {
+    # interop 18 <-> 20
+    local lustre_version=$(get_lustre_version mds)
+    if [[ $lustre_version != 1.8* ]]; then
+        skip "mds is running $lustre_version, test is obsoleted"
+        return 0
+    fi
     replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
