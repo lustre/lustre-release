@@ -13,6 +13,27 @@ tbd  Sun Microsystems, Inc.
        * Recommended e2fsprogs version: 1.41.10-sun2
 
 Severity   : normal
+Bugzilla   : 22787
+Description: Update to OFED 1.5.1
+Details    : OFED 1.5.1 will be  used in environments that don't use
+	     vendor supplied OFED.
+
+Severity   : normal
+Bugzilla   : 22455
+Description: Remove lnet. prefix from lctl params display
+Details    : Also renamed lnet.memused to lnet_memused to
+	     avoid name conflict.
+
+Severity   : normal
+Bugzilla   : 15253
+Description: Use conf_param -d to remove permanant settings.
+
+Severity   : normal
+Bugzilla   : 22455
+Description: Add list_param -R
+Details    : lctl list_param now supports recursive mode.
+
+Severity   : normal
 Bugzilla   : 21829, 22312
 Description: Fix llobdstat.
 Details    : 1. Now updating the write_bytes counter
