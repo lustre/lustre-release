@@ -895,8 +895,6 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                ldlm_policy_data_t *policy,
                                ldlm_mode_t mode, int lock_flags,
                                ldlm_cancel_flags_t cancel_flags, void *opaque);
-int ldlm_cli_cancel_list_local(struct list_head *cancels, int count,
-                               ldlm_cancel_flags_t flags);
 int ldlm_cli_cancel_list(struct list_head *head, int count,
                          struct ptlrpc_request *req, int off);
 
