@@ -28,7 +28,7 @@ Description: add list_param to b1_8 and add "-R" option to list params
 Severity   : enhancement
 Bugzilla   : 22194
 Description: lfs quota output is not very convenient for awk/sed-parsing
-Details    : Some positions if lfs quota output table could be empty or
+Details    : Some positions in lfs quota output table could be empty or
 	     non-empty which made it hard to parse it with scripts, now a dash
 	     is put instead of space where there is not supposed to be any data.
 

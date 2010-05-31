@@ -3050,7 +3050,7 @@ int ll_flush(struct file *file, fl_owner_t id)
                         rc = err;
         }
 
-        return rc;
+        return rc ? -EIO : 0;
 }
 
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
