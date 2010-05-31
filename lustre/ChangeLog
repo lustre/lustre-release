@@ -53,6 +53,11 @@ Bugzilla   : 21244
 Description: allow userland programs to include <lustre/lustre_idl.h>
 	     from stardard include directories
 
+Severity   : enhancement
+Bugzilla   : 18399
+Description: The prune-icache-use-trylock is no longer needed now that
+	     the patch from bug 20008 is landed.
+
 Severity   : normal
 Bugzilla   : 22244/21128
 Description: stack overflow when freeing locks under memory pressure
