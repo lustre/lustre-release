@@ -30,6 +30,8 @@ NEW_MTIME="2005-05-05 GMT"
 test_UID=$(id -u)
 test_GID=$(id -g)
 
+SUMFILE=$TESTDIR/mdsum
+
 NUM_FILES=1000
 
 WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null)} || true
@@ -46,6 +48,7 @@ cleanup_prepare () {
 DIR=$TESTDIR/\\\$(hostname);
 TESTFILE=\\\$DIR/$FILE;
 rm -f \\\$TESTFILE;
+rm -f $SUMFILE;
 rmdir \\\$DIR 2>/dev/null;
 mkdir -p \\\$DIR" || return ${PIPESTATUS[0]}
     return 0;
@@ -65,17 +68,15 @@ do_write () {
 TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
 dd if=/dev/zero of=\\\$TESTFILE bs=$FILE_SIZE count=1 2>/dev/null || exit 54;
 echo \\\$(hostname) | dd of=\\\$TESTFILE conv=notrunc 2>/dev/null || exit 55; 
-md5sum \\\$TESTFILE; " || return ${PIPESTATUS[0]}
+md5sum \\\$TESTFILE >> $SUMFILE; " || return ${PIPESTATUS[0]}
     return 0
 }
 
 do_check_data () {
-    local sums=$1
-    local HOST
     echo "Checking file(s) data ... md5sum : "
-    echo "$sums"
+    cat $SUMFILE
 
-    do_nodesv $NODES_TO_USE "echo \\\"$sums\\\" | md5sum --check $sum" || \
+    do_nodesv $NODES_TO_USE "md5sum --check $SUMFILE" || \
         return ${PIPESTATUS[0]}
     return 0
 }
@@ -216,8 +217,8 @@ cleanup_prepare     || error_exit "cleanup failed"
 echo "Part 1. create file(s) (mknod (2)), write data, check data, check file attributes."
 do_mknod              || error_exit "mknod failed"
 echo "Writing data to file(s) ... store md5sum ... "
-sums="$(do_write)"    || error_exit "write data failed"
-do_check_data "$sums" || error_exit "md5sum verification failed"
+do_write              || error_exit "write data failed"
+do_check_data         || error_exit "md5sum verification failed"
 get_stat              || { error_noexit "attributes check failed" ; STATUS=1; }
 
 # file(s) attributes modification
