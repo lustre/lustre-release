@@ -1276,7 +1276,7 @@ struct obd_ops {
                         __u32 mode, struct lustre_handle *, int flags,
                         obd_off end);
         int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
-                               ldlm_cancel_flags_t flags, void *opaque);
+                               int flags, void *opaque);
         int (*o_join_lru)(struct obd_export *, struct lov_stripe_md *,
                          int join);
         int (*o_init_export)(struct obd_export *exp);

@@ -103,7 +103,7 @@ typedef enum {
 #define LDLM_FL_REPLAY         0x000100
 
 #define LDLM_FL_INTENT_ONLY    0x000200 /* don't grant lock, just do intent */
-#define LDLM_FL_LOCAL_ONLY     0x000400
+#define LDLM_FL_LOCAL_ONLY     0x000400 /* see ldlm_cli_cancel_unused */
 
 /* don't run the cancel callback under ldlm_cli_cancel_unused */
 #define LDLM_FL_FAILED         0x000800
@@ -111,7 +111,7 @@ typedef enum {
 #define LDLM_FL_HAS_INTENT     0x001000 /* lock request has intent */
 #define LDLM_FL_CANCELING      0x002000 /* lock cancel has already been sent */
 #define LDLM_FL_LOCAL          0x004000 /* local lock (ie, no srv/cli split) */
-/* was LDLM_FL_WARN  until 1.8.4  0x008000 */
+#define LDLM_FL_WARN           0x008000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 
 #define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
@@ -499,14 +499,6 @@ struct ldlm_interval_tree {
         struct interval_node *lit_root; /* actually ldlm_interval */
 };
 
-/* Cancel flag. */
-typedef enum {
-        /* LCF_ASYNC = 0x1 is used in 2.0 to cancel locks asynchronously. */
-        LCF_LOCAL      = 0x2, /* Cancel locks locally, not notifing server */
-        LCF_BL_AST     = 0x4, /* Cancel locks marked as LDLM_FL_BL_AST
-                               * in the same RPC */
-} ldlm_cancel_flags_t;
-
 struct ldlm_lock {
         struct portals_handle l_handle; // must be first in the structure
         atomic_t              l_refc;
@@ -886,15 +878,14 @@ int ldlm_cli_convert(struct lustre_handle *, int new_mode, __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
-                           ldlm_cancel_flags_t flags, void *opaque);
+                           int flags, void *opaque);
 int ldlm_cli_cancel_req(struct obd_export *exp,
                         struct list_head *head, int count);
 int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *, int join);
 int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                struct list_head *cancels,
-                               ldlm_policy_data_t *policy,
-                               ldlm_mode_t mode, int lock_flags,
-                               ldlm_cancel_flags_t cancel_flags, void *opaque);
+                               ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                               int lock_flags, int cancel_flags, void *opaque);
 int ldlm_cli_cancel_list(struct list_head *head, int count,
                          struct ptlrpc_request *req, int off);
 

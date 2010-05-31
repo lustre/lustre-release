@@ -243,9 +243,8 @@ static enum interval_iter sanity_cb(struct interval_node *node, void *args)
         }
 
         if (!has) {
-                int count;
+                int count = 1;
 err:
-                count = 1;
                 dprintf("node"__S":%llu Child list:\n",
                         node->in_extent.start,
                         node->in_extent.end,
