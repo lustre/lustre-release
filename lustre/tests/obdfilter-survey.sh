@@ -6,14 +6,14 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 
-nobjhi=${nobjhi:-32}
-thrhi=${thrhi:-64} 
+nobjhi=${nobjhi:-1}
+thrhi=${thrhi:-16} 
 size=${size:-1024}
 
 # the summary file a bit smaller than OSTSIZE  
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = no ] && { nobjhi=4; thrhi=4; }
+[ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
 
 # Skip these tests
 ALWAYS_EXCEPT="$OBDFILTER_SURVEY_EXCEPT"
