@@ -1,256 +1,286 @@
 #!/bin/bash
+#
+# test e2fsck and lfsck to detect and fix filesystem corruption
+#
 #set -vx
 set -e
 
-TESTNAME="lfsck"
-TMP=${TMP:-/tmp}
-MDSDB=${MDSDB:-$TMP/mdsdb}
-OSTDB=${OSTDB:-$TMP/ostdb}
-LOG=${LOG:-"$TMP/lfsck.log"}
-L2FSCK_PATH=${L2FSCK_PATH:-""}
-NUMFILES=${NUMFILES:-10}
-NUMDIRS=${NUMDIRS:-4}
-LFIND=${LFIND:-"lfs find"}
-GETFATTR=${GETFATTR:-getfattr}
-SETFATTR=${SETFATTR:-setfattr}
-MAX_ERR=1
-
-export PATH=$LFSCK_PATH:`dirname $0`:`dirname $0`/../utils:$PATH
-
-[ -z "`which $GETFATTR`" ] && echo "$0: $GETFATTR not found" && exit 5
-[ -z "`which $SETFATTR`" ] && echo "$0: $SETFATTR not found" && exit 6
-
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-init_logging
 
-require_dsh_mds || exit 0
-require_dsh_ost || exit 0
+NUMFILES=${NUMFILES:-10}
+NUMDIRS=${NUMDIRS:-4}
+OSTIDX=${OSTIDX:-0} # the OST index in LOV
+OBJGRP=${OBJGRP:-0} # the OST object group
 
-SKIP_LFSCK=${SKIP_LFSCK:-"yes"} # bug 13698, change to "no" when fixed
+[ -d "$SHARED_DIRECTORY" ] || \
+    { skip "SHARED_DIRECTORY should be specified with a shared directory \
+which can be accessable on all of the nodes" && exit 0; }
 
-if [ "$SKIP_LFSCK" == "no" ]; then
-	if [ ! -x /usr/sbin/lfsck ]; then
-		log "$($E2FSCK -V)"
-		log "SKIP: $E2FSCK does not support lfsck"
-		exit 0
-	fi
+which getfattr > /dev/null 2>&1 || { skip "could not find getfattr" && exit 0; }
+which setfattr > /dev/null 2>&1 || { skip "could not find setfattr" && exit 0; }
 
-	MDSDB_OPT="--mdsdb $MDSDB"
-	OSTDB_OPT="--ostdb $OSTDB-\$ostidx"
-fi
+MOUNT_2=""
+check_and_setup_lustre
 
-# if nothing mounted, don't nuke MOUNT variable needed in llmount.sh
-WAS_MOUNTED=$(mounted_lustre_filesystems | head -1)
-if [ -z "$WAS_MOUNTED" ]; then
-       # This code doesn't handle multiple mounts well, so nuke MOUNT2 variable
-        MOUNT2="" MOUNT_2="" check_and_setup_lustre
-        MOUNT=$(mounted_lustre_filesystems)
-        [ -z "$MOUNT" ] && echo "NAME=$NAME not mounted" && exit 2
-else
-        MOUNT=${WAS_MOUNTED}
-fi
+assert_DIR
 
-DIR=${DIR:-$MOUNT/$TESTNAME}
-[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 3
+# Create some dirs and files on the filesystem.
+create_files_sub() {
+    local test_dir=$1
+    local num_dirs=$2
+    local file_name=$3
+    local first_num=$4
+    local last_num=$5
+    local d e f
 
-if [ "$WAS_MOUNTED" ]; then
-        LFSCK_SETUP=no
-        MAX_ERR=4               # max expected error from e2fsck
-fi
-
-get_mnt_devs() {
-        DEVS=`lctl get_param -n $1.*.mntdev`
-        for DEV in $DEVS; do
-                case $DEV in
-                *loop*) losetup $DEV | sed -e "s/.*(//" -e "s/).*//" ;;
-                *) echo $DEV ;;
-                esac
+    for d in $(seq -f d%g $first_num $last_num); do
+        echo "creating files in $test_dir/$d"
+        for e in $(seq -f d%g $num_dirs); do
+            mkdir -p $test_dir/$d/$e || error "mkdir $test_dir/$d/$e failed"
+            for f in $(seq -f test%g $num_dirs); do
+                cp $file_name $test_dir/$d/$e/$f || \
+                    error "cp $file_name $test_dir/$d/$e/$f failed"
+            done
         done
+    done
 }
 
-MDSDEV=$(mdsdevname 1)
+create_files() {
+    local test_dir=$1
+    local num_dirs=$2
+    local num_files=$3
+    local f
 
-if [ "$LFSCK_SETUP" != "no" -a "$SKIP_LFSCK" == "no" ]; then
-        #Create test directory 
-        # -- can't remove the mountpoint...
-        [ -z "$DIR" ] && rm -rf $DIR/*
-        mkdir -p $DIR
-        OSTCOUNT=`$LFIND $MOUNT | grep -c "^[0-9]*: "`
+    # create some files on the filesystem
+    local first_num=1
+    local last_num=$num_dirs
+    create_files_sub $test_dir $num_dirs /etc/fstab $first_num $last_num
 
-        # Create some files on the filesystem
-        for d in `seq -f d%g $NUMDIRS`; do
-                echo "creating files in $DIR/$d"
-                for e in `seq -f d%g $NUMDIRS`; do
-                        mkdir -p  $DIR/$d/$e
-                        for f in `seq -f test%g $NUMDIRS`; do
-                                cp /etc/fstab $DIR/$d/$e/$f ||exit 5
-                        done
-                done
-        done
+    # create files to be modified
+    for f in $(seq -f $test_dir/testfile.%g $((num_files * 3))); do
+        echo "creating $f"
+        cp /etc/termcap $f || error "cp /etc/termcap $f failed"
+    done
 
-        # Create Files to be modified
-        for f in `seq -f $DIR/testfile.%g $((NUMFILES * 3))`; do
-                echo "creating $f"
-                cp /etc/termcap $f || exit 10
-        done
+    # create some more files
+    first_num=$((num_dirs * 2 + 1))
+    last_num=$((num_dirs * 2 + 3))
+    create_files_sub $test_dir $num_dirs /etc/hosts $first_num $last_num
 
-        #Create some more files
-        for d in `seq -f d%g $((NUMDIRS * 2 + 1)) $((NUMDIRS * 2 + 3))`; do
-                echo "creating files in $DIR/$d"
-                for e in `seq -f d%g $NUMDIRS`; do
-                        mkdir -p  $DIR/$d/$e
-                        for f in `seq -f test%g $NUMDIRS`; do
-                                cp /etc/hosts $DIR/$d/$e/$f ||exit 15
-                        done
-                done
-        done
+    # these should NOT be taken as duplicates
+    for f in $(seq -f $test_dir/d$last_num/linkfile.%g $num_files); do
+        echo "linking files in $test_dir/d$last_num"
+        cp /etc/hosts $f || error "cp /etc/hosts $f failed"
+        ln $f $f.link || error "ln $f $f.link failed"
+    done
+}
 
-        # these should NOT be taken as duplicates
-        for f in `seq -f $DIR/$d/linkfile.%g $NUMFILES`; do
-                echo "linking files in $DIR/$d"
-                cp /etc/hosts $f
-                ln $f $f.link
-        done
+# Get the objids for files on the OST (given the OST index and object group).
+get_objects() {
+    local obdidx=$1
+    shift
+    local group=$1
+    shift
+    local ost_files="$@"
+    local ost_objids
+    ost_objids=$($LFS getstripe $ost_files | \
+                awk '{if ($1 == '$obdidx' && $4 == '$group') print $2 }')
+    echo $ost_objids
+}
 
-        # Get objids for a file on the OST
-        OST_FILES=`seq -f $DIR/testfile.%g $NUMFILES`
-        OST_REMOVE=`$LFIND $OST_FILES | awk '$1 == 0 { print $2 }' | head -n $NUMFILES`
+# Get the OST nodet name (given the OST index).
+get_ost_node() {
+    local obdidx=$1
+    local ost_uuid
+    local ost_node
+    local node
 
-        export MDS_DUPE=""
-        for f in `seq -f testfile.%g $((NUMFILES + 1)) $((NUMFILES * 2))`; do
-                TEST_FILE=$DIR/$f
-                echo "DUPLICATING MDS file $TEST_FILE"
-                $LFIND -v $TEST_FILE >> $LOG || exit 20
-                MDS_DUPE="$MDS_DUPE $TEST_FILE"
-        done
-        MDS_DUPE=`echo $MDS_DUPE | sed "s#$MOUNT/##g"`
+    ost_uuid=$($LFS osts | grep "^$obdidx: " | cut -d' ' -f2 | head -n1)
 
-        export MDS_REMOVE=""
-        for f in `seq -f testfile.%g $((NUMFILES * 2 + 1)) $((NUMFILES * 3))`; do
-                TEST_FILE=$DIR/$f
-                echo "REMOVING MDS file $TEST_FILE which has info:"
-                $LFIND -v $TEST_FILE >> $LOG || exit 30
-                MDS_REMOVE="$MDS_REMOVE $TEST_FILE"
-        done
-        MDS_REMOVE=`echo $MDS_REMOVE | sed "s#$MOUNT/##g"`
+    for node in $(osts_nodes); do
+        do_node $node "lctl get_param -n obdfilter.*.uuid" | grep -q $ost_uuid
+        [ ${PIPESTATUS[1]} -eq 0 ] && ost_node=$node && break
+    done
+    [ -z "$ost_node" ] && \
+        echo "failed to find the OST with index $obdidx" && return 1
+    echo $ost_node
+}
 
-        # when the OST is also using an OSD this needs to be fixed
-        MDTDEVS=`get_mnt_devs osd`
-        OSTDEVS=`get_mnt_devs obdfilter`
-        OSTCOUNT=`echo $OSTDEVS | wc -w`
-        sh llmountcleanup.sh || exit 40
+# Get the OST target device (given the OST facet name and OST index).
+get_ost_dev() {
+    local node=$1
+    local obdidx=$2
+    local ost_name
+    local ost_dev
 
-        # Remove objects associated with files
-        echo "removing objects: `echo $OST_REMOVE`"
-        DEBUGTMP=`mktemp $TMP/debugfs.XXXXXXXXXX`
-        for i in $OST_REMOVE; do
-                echo "rm O/0/d$((i % 32))/$i" >> $DEBUGTMP
-        done
-        $DEBUGFS -w -f $DEBUGTMP `echo $OSTDEVS | cut -d' ' -f 1`
-        RET=$?
-        rm $DEBUGTMP
-        [ $RET -ne 0 ] && exit 50
+    ost_name=$($LFS osts | grep "^$obdidx: " | cut -d' ' -f2 | \
+                head -n1 | sed -e 's/_UUID$//')
 
-        SAVE_PWD=$PWD
-        mount -t $FSTYPE -o loop $MDSDEV $MOUNT || exit 60
-        do_umount() {
-                trap 0
-                cd $SAVE_PWD
-                umount -f $MOUNT
-        }
-        trap do_umount EXIT
+    ost_dev=$(do_node $node "lctl get_param -n obdfilter.$ost_name.mntdev")
+    [ ${PIPESTATUS[0]} -ne 0 ] && \
+        echo "failed to find the OST device with index $obdidx on $facet" && \
+        return 1
 
-        #Remove files from mds
-        for f in $MDS_REMOVE; do
-                rm $MOUNT/ROOT/$f || exit 70
-        done
+    if [[ $ost_dev = *loop* ]]; then
+        ost_dev=$(do_node $node "losetup $ost_dev" | \
+                sed -e "s/.*(//" -e "s/).*//")
+    fi
 
-        #Create EAs on files so objects are referenced from different files
-        ATTRTMP=`mktemp $TMP/setfattr.XXXXXXXXXX`
-        cd $MOUNT/ROOT || exit 78
-        for f in $MDS_DUPE; do
-                touch $f.bad || exit 74
-                getfattr -n trusted.lov $f | sed "s#$f#&.bad#" > $ATTRTMP
-                setfattr --restore $ATTRTMP || exit 80
-        done
-        cd $SAVE_PWD
-        rm $ATTRTMP
+    echo $ost_dev
+}
 
-        do_umount
-else
-        # when the OST is also using an OSD this needs to be fixed
-        MDTDEVS=`get_mnt_devs osd`
-        OSTDEVS=`get_mnt_devs obdfilter`
-        OSTCOUNT=`echo $OSTDEVS | wc -w`
-fi # LFSCK_SETUP
+# Get the file names to be duplicated or removed on the MDS.
+get_files() {
+    local flavor=$1
+    local test_dir=$2
+    local num_files=$3
+    local first last
+    local test_file
 
-echo "$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV"
-df > /dev/null  # update statfs data on disk
-RET=0
-$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV || RET=$?
-[ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 90 || true
+    case $flavor in
+    dup)
+        first=$((num_files + 1))
+        last=$((num_files * 2))
+        ;;
+    remove)
+        first=$((num_files * 2 + 1))
+        last=$((num_files * 3))
+        ;;
+    *) echo "get_files(): invalid flavor" && return 1 ;;
+    esac
 
-export OSTDB_LIST=""
-ostidx=0
-for OSTDEV in $OSTDEVS; do
-        df > /dev/null  # update statfs data on disk
-        RET=0
-        eval $E2FSCK -d -v -fn $MDSDB_OPT $OSTDB_OPT $OSTDEV || RET=$?
-        [ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 100
-        OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
-        ostidx=$((ostidx + 1))
-done
+    local files=""
+    local f 
+    for f in $(seq -f testfile.%g $first $last); do
+        test_file=$test_dir/$f
+        files="$files $test_file"
+    done
+    files=$(echo $files | sed "s#$DIR/##g")
+    echo $files
+}
 
-[ "$SKIP_LFSCK" != "no" ] && exit 0
+# Remove objects associated with files.
+remove_objects() {
+    local node=$1
+    shift
+    local ostdev=$1
+    shift
+    local group=$1
+    shift
+    local objids="$@"
+    local tmp
+    local i
+    local rc
 
-#Remount filesystem
-[ "`mount | grep $MOUNT`" ] || $SETUP
+    echo "removing objects from $ostdev on $facet: $objids"
+    tmp=$(mktemp $SHARED_DIRECTORY/debugfs.XXXXXXXXXX)
+    for i in $objids; do
+        echo "rm O/$group/d$((i % 32))/$i" >> $tmp
+    done
 
-# need to turn off shell error detection to get proper error return
-# lfsck will return 1 if the filesystem had errors fixed
-echo "LFSCK TEST 1"
-echo "lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT"
-RET=0
-echo y | lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT || RET=$?
-[ $RET -eq 0 ] && echo "clean after first check" && exit 0
-echo "LFSCK TEST 1 - finished with rc=$RET"
-[ $RET -gt $MAX_ERR ] && exit 110 || true
+    do_node $node "$DEBUGFS -w -f $tmp $ostdev"
+    rc=${PIPESTATUS[0]}
+    rm -f $tmp
 
-# make sure everything gets to the backing store
-sync; sleep 2; sync
+    return $rc
+}
 
-echo "LFSCK TEST 2"
-echo "$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV"
-df > /dev/null  # update statfs data on disk
-RET=0
-$E2FSCK -d -v -fn $MDSDB_OPT $MDSDEV || RET=$?
-[ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 123 || true
+# Remove files from MDS.
+remove_files() {
+    do_rpc_nodes $(facet_host $1) remove_mdt_files $@
+}
 
-ostidx=0
-export OSTDB_LIST=""
-for OSTDEV in $OSTDEVS; do
-        df > /dev/null  # update statfs data on disk
-        RET=0
-        eval $E2FSCK -d -v -fn $MDSDB_OPT $OSTDB_OPT $OSTDEV || RET=$?
-        [ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 124
-        OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
-        ostidx=$((ostidx + 1))
-done
+# Create EAs on files so objects are referenced from different files.
+duplicate_files() {
+    do_rpc_nodes $(facet_host $1) duplicate_mdt_files $@
+}
 
-echo "LFSCK TEST 2"
-echo "lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT"
-RET=0
-lfsck -c -l $MDSDB_OPT --ostdb $OSTDB_LIST $MOUNT || RET=$?
-echo "LFSCK TEST 2 - finished with rc=$RET"
-[ $RET -ne 0 ] && exit 125 || true
-if [ -z "$WAS_MOUNTED" ]; then
-        sh llmountcleanup.sh || exit 120
+#********************************* Main Flow **********************************#
+
+init_logging
+
+# get the server target devices
+get_svr_devs
+
+if [ "$SKIP_LFSCK" = "no" ] && is_empty_fs $MOUNT; then
+    # create test directory
+    TESTDIR=$DIR/d0.$TESTSUITE
+    mkdir -p $TESTDIR || error "mkdir $TESTDIR failed"
+
+    # create some dirs and files on the filesystem
+    create_files $TESTDIR $NUMDIRS $NUMFILES
+
+    # get the objids for files in group $OBJGRP on the OST with index $OSTIDX
+    OST_REMOVE=$(get_objects $OSTIDX $OBJGRP \
+                $(seq -f $TESTDIR/testfile.%g $NUMFILES))
+
+    # get the node name and target device for the OST with index $OSTIDX
+    OSTNODE=$(get_ost_node $OSTIDX) || error "get_ost_node by index $OSTIDX failed"
+    OSTDEV=$(get_ost_dev $OSTNODE $OSTIDX) || \
+	error "get_ost_dev $OSTNODE $OSTIDX failed"
+
+    # get the file names to be duplicated on the MDS
+    MDS_DUPE=$(get_files dup $TESTDIR $NUMFILES) || error "$MDS_DUPE"
+    # get the file names to be removed from the MDS
+    MDS_REMOVE=$(get_files remove $TESTDIR $NUMFILES) || error "$MDS_REMOVE"
+
+    stopall -f || error "cleanupall failed"
+
+    # remove objects associated with files in group $OBJGRP
+    # on the OST with index $OSTIDX
+    remove_objects $OSTNODE $OSTDEV $OBJGRP $OST_REMOVE || \
+        error "removing objects failed"
+
+    # remove files from MDS
+    remove_files $SINGLEMDS $MDTDEV $MDS_REMOVE || error "removing files failed"
+
+    # create EAs on files so objects are referenced from different files
+    duplicate_files $SINGLEMDS $MDTDEV $MDS_DUPE || \
+        error "duplicating files failed"
+    FSCK_MAX_ERR=1   # file system errors corrected
+else    # I_MOUNTED=no
+    FSCK_MAX_ERR=4   # file system errors left uncorrected
 fi
 
-#Cleanup 
-rm -f $MDSDB $OSTDB-* || true
+# Test 1a - check and repair the filesystem
+# lfsck will return 1 if the filesystem had errors fixed
+# run e2fsck to generate databases used for lfsck
+generate_db
+if [ "$SKIP_LFSCK" != "no" ]; then
+    echo "skip lfsck"
+else
+    # remount filesystem
+    REFORMAT=""
+    check_and_setup_lustre
+
+    # run lfsck
+    rc=0
+    run_lfsck || rc=$?
+    if [ $rc -eq 0 ]; then
+	echo "clean after the first check"
+    else
+        # run e2fsck again to generate databases used for lfsck
+	generate_db
+
+        # run lfsck again
+	rc=0
+	run_lfsck || rc=$?
+	if [ $rc -eq 0 ]; then
+	    echo "clean after the second check"
+	else
+	    error "lfsck test 2 - finished with rc=$rc"
+	fi
+    fi
+fi
+
+equals_msg $(basename $0): test complete, cleaning up
+
+LFSCK_ALWAYS=no
+check_and_cleanup_lustre
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && \
+    grep -q FAIL $TESTSUITELOG && exit 1 || true
 
 echo "$0: completed"
