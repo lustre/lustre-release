@@ -201,8 +201,8 @@ EXPORT_SYMBOL(class_parse_nid);
 /********************** class fns **********************/
 
 /**
- * Create a new device and set the type, name and uuid.  If successful, the new
- * device can be accessed by either name or uuid.
+ * Create a new obd device and set the type, name and uuid.  If successful,
+ * the new device can be accessed by either name or uuid.
  */
 int class_attach(struct lustre_cfg *lcfg)
 {
@@ -313,6 +313,9 @@ int class_attach(struct lustre_cfg *lcfg)
         return rc;
 }
 
+/** Create hashes, self-export, and call type-specific setup.
+ * Setup is effectively the "start this obd" call.
+ */
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int err = 0;
@@ -425,6 +428,9 @@ err_hash:
         return err;
 }
 
+/** We have finished using this obd and are ready to destroy it.
+ * There can be no more references to this obd.
+ */
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         ENTRY;
@@ -454,6 +460,10 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(0);
 }
 
+/** Start shutting down the obd.  There may be in-progess ops when
+ * this is called.  We tell them to start shutting down with a call
+ * to class_disconnect_exports().
+ */
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int err = 0;
@@ -599,6 +609,9 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
         }
 }
 
+/** Add a failover nid location.
+ * Client obd types contact server obd types using this nid list.
+ */
 int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct obd_import *imp;
@@ -630,6 +643,8 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
+/** Remove a failover nid location.
+ */
 int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct obd_import *imp;
@@ -675,6 +690,10 @@ struct lustre_profile *class_get_profile(const char * prof)
         RETURN(NULL);
 }
 
+/** Create a named "profile".
+ * This defines the mdc and osc names to use for a client.
+ * This also is used to define the lov to be used by a mdt.
+ */
 int class_add_profile(int proflen, char *prof, int osclen, char *osc,
                       int mdclen, char *mdc)
 {
@@ -791,6 +810,10 @@ void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg))
 }
 EXPORT_SYMBOL(lustre_register_client_process_config);
 
+/** Process configuration commands given in lustre_cfg form.
+ * These may come from direct calls (e.g. class_manual_cleanup)
+ * or processing the config llog, or ioctl from lctl.
+ */
 int class_process_config(struct lustre_cfg *lcfg)
 {
         struct obd_device *obd;
@@ -1059,6 +1082,11 @@ extern int lustre_check_exclusion(struct super_block *sb, char *svname);
 #define lustre_check_exclusion(a,b)  0
 #endif
 
+/** Parse a configuration llog, doing various manipulations on them
+ * for various reasons, (modifications for compatibility, skip obsolete
+ * records, change uuids, etc), then class_process_config() resulting
+ * net records.
+ */
 static int class_config_llog_handler(struct llog_handle * handle,
                                      struct llog_rec_hdr *rec, void *data)
 {
@@ -1371,7 +1399,9 @@ parse_out:
 
 }
 
-/* Cleanup and detach */
+/** Call class_cleanup and class_detach.
+ * "Manual" only in the sense that we're faking lcfg commands.
+ */
 int class_manual_cleanup(struct obd_device *obd)
 {
         char                    flags[3] = "";

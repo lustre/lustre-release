@@ -261,8 +261,8 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         RETURN(cld);
 }
 
-/**
- * Add this log to our list of active logs.
+/** Add this log to the list of active logs watched by an MGC.
+ * Active means we're watching for updates.
  * We have one active log per "mount" - client instance or servername.
  * Each instance may be at a different point in the log.
  */
@@ -313,7 +313,8 @@ static int config_log_add(struct obd_device *obd, char *logname,
 
 CFS_DECLARE_MUTEX(llog_process_lock);
 
-/* Stop watching for updates on this log. */
+/** Stop watching for updates on this log.
+ */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {
         struct config_llog_data *cld, *cld_sptlrpc = NULL;
@@ -1242,8 +1243,10 @@ out:
         RETURN(rc);
 }
 
-/* Get a config log from the MGS and process it.
-   This func is called for both clients and servers. */
+/** Get a config log from the MGS and process it.
+ * This func is called for both clients and servers.
+ * Copy the log locally before parsing it if appropriate (non-MGS server)
+ */
 int mgc_process_log(struct obd_device *mgc,
                     struct config_llog_data *cld)
 {
@@ -1371,6 +1374,10 @@ out_pop:
         RETURN(rc);
 }
 
+/** Called from lustre_process_log.
+ * LCFG_LOG_START gets the config log from the MGS, processes it to start
+ * any services, and adds it to the list logs to watch (follow).
+ */
 static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
@@ -1380,7 +1387,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         switch(cmd = lcfg->lcfg_command) {
         case LCFG_LOV_ADD_OBD: {
-                /* Add any new target, not just osts */
+                /* Overloading this cfg command: register a new target */
                 struct mgs_target_info *mti;
 
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) !=
@@ -1394,8 +1401,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 break;
         }
         case LCFG_LOV_DEL_OBD:
-                /* Remove target from the fs? */
-                /* FIXME */
+                /* Unregister has no meaning at the moment. */
                 CERROR("lov_del_obd unimplemented\n");
                 rc = -ENOSYS;
                 break;

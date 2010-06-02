@@ -844,6 +844,7 @@ int ll_fill_super(struct super_block *sb)
                 GOTO(out_free, err);
         }
 
+        /* Profile set with LCFG_MOUNTOPT so we can find our mdc and osc obds */
         lprof = class_get_profile(profilenm);
         if (lprof == NULL) {
                 LCONSOLE_ERROR_MSG(0x156, "The client profile '%s' could not be"

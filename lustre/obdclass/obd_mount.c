@@ -377,11 +377,18 @@ out:
 
 /**************** config llog ********************/
 
-/* Get a config log from the MGS and process it.
-   This func is called for both clients and servers.
-   Continue to process new statements appended to the logs
-   (whenever the config lock is revoked) until lustre_end_log
-   is called. */
+/** Get a config log from the MGS and process it.
+ * This func is called for both clients and servers.
+ * Continue to process new statements appended to the logs
+ * (whenever the config lock is revoked) until lustre_end_log
+ * is called.
+ * @param sb The superblock is used by the MGC to write to the local copy of
+ *   the config log
+ * @param logname The name of the llog to replicate from the MGS
+ * @param cfg Since the same mgc may be used to follow multiple config logs
+ *   (e.g. ost1, ost2, client), the config_llog_instance keeps the state for
+ *   this log, and is added to the mgc's list of logs to follow.
+ */
 int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg)
 {
@@ -451,6 +458,9 @@ int lustre_end_log(struct super_block *sb, char *logname,
 
 /**************** obd start *******************/
 
+/** lustre_cfg_bufs are a holdover from 1.4; we can still set these up from
+ * lctl (and do for echo cli/srv.
+ */
 int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
             char *s1, char *s2, char *s3, char *s4)
 {
@@ -478,6 +488,9 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         return(rc);
 }
 
+/** Call class_attach and class_setup.  These methods in turn call
+ * obd type-specific methods.
+ */
 static int lustre_start_simple(char *obdname, char *type, char *uuid,
                                char *s1, char *s2)
 {
@@ -1058,7 +1071,8 @@ out:
         RETURN(rc);
 }
 
-/* Start targets */
+/** Start server targets: MDTs and OSTs
+ */
 static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 {
         struct obd_device *obd;
@@ -1110,8 +1124,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 cfs_mutex_up(&server_start_lock);
         }
 
-        /* Set the mgc fs to our server disk.  This allows the MGC
-           to read and write configs locally. */
+        /* Set the mgc fs to our server disk.  This allows the MGC to
+         * read and write configs locally, in case it can't talk to the MGS. */
         rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
         if (rc)
                 RETURN(rc);
@@ -1271,7 +1285,11 @@ static int lustre_put_lsi(struct super_block *sb)
 
 /*************** server mount ******************/
 
-/* Kernel mount using mount options in MOUNT_DATA_FILE */
+/** Kernel mount using mount options in MOUNT_DATA_FILE.
+ * Since this file lives on the disk, we pre-mount using a common
+ * type, read the file, then re-mount using the type specified in the
+ * file.
+ */
 static struct vfsmount *server_kernel_mount(struct super_block *sb)
 {
         struct lvfs_run_ctxt mount_ctxt;
@@ -1376,7 +1394,7 @@ out_free:
         RETURN(ERR_PTR(rc));
 }
 
-/* Wait here forever until the mount refcount is 0 before completing umount,
+/** Wait here forever until the mount refcount is 0 before completing umount,
  * else we risk dereferencing a null pointer.
  * LNET may take e.g. 165s before killing zombies.
  */
@@ -1414,6 +1432,8 @@ static void server_wait_finished(struct vfsmount *mnt)
        }
 }
 
+/** Start the shutdown of servers at umount.
+ */
 static void server_put_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -1505,6 +1525,8 @@ static void server_put_super(struct super_block *sb)
         EXIT;
 }
 
+/** Called only for 'umount -f'
+ */
 #ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
 static void server_umount_begin(struct vfsmount *vfsmnt, int flags)
 {
@@ -1567,6 +1589,9 @@ static int server_statfs (struct dentry *dentry, cfs_kstatfs_t *buf)
         RETURN(0);
 }
 
+/** The operations we support directly on the superblock:
+ * mount, umount, and df.
+ */
 static struct super_operations server_ops =
 {
         .put_super      = server_put_super,
@@ -1612,6 +1637,11 @@ static int server_fill_super_common(struct super_block *sb)
         RETURN(0);
 }
 
+/** Fill in the superblock info for a Lustre server.
+ * Mount the device with the correct options.
+ * Read the on-disk config file.
+ * Start the services.
+ */
 static int server_fill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -1652,6 +1682,7 @@ static int server_fill_super(struct super_block *sb)
                         GOTO(out_mnt, rc);
         }
 
+        /* Start MGC before servers */
         rc = lustre_start_mgc(sb);
         if (rc)
                 GOTO(out_mnt, rc);
@@ -1883,7 +1914,10 @@ static int lmd_parse_mgssec(struct lustre_mount_data *lmd, char *ptr)
         return 0;
 }
 
-/* mount -v -t lustre uml1:uml2:/lustre-client /mnt/lustre */
+/** Parse mount line options
+ * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
+ * dev is passed as device=uml1:/lustre by mount.lustre
+ */
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
         char *s1, *s2, *devname = NULL;
@@ -2025,7 +2059,11 @@ invalid:
 }
 
 
-/* Common mount */
+/** This is the entry point for the mount call into Lustre.
+ * This is called when a server or client is mounted,
+ * and this is where we start setting things up.
+ * @param data Mount options (e.g. -o flock,abort_recov)
+ */
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct lustre_mount_data *lmd;
@@ -2136,6 +2174,8 @@ void lustre_kill_super(struct super_block *sb)
         kill_anon_super(sb);
 }
 
+/** Register the "lustre" fs type
+ */
 struct file_system_type lustre_fs_type = {
         .owner        = THIS_MODULE,
         .name         = "lustre",
