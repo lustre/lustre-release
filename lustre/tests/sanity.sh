@@ -6351,9 +6351,11 @@ som_mode_switch() {
 
         if [ x$som = x"enabled" ]; then
                 [ $((gl2 - gl1)) -gt 0 ] && error "no glimpse RPC is expected"
+                MOUNTOPT=`echo $MOUNTOPT | sed 's/som_preview//g'`
                 do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=disabled"
         else
                 [ $((gl2 - gl1)) -gt 0 ] || error "some glimpse RPC is expected"
+                MOUNTOPT="$MOUNTOPT,som_preview"
                 do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=enabled"
         fi
 
@@ -6365,8 +6367,9 @@ som_mode_switch() {
 }
 
 test_132() { #1028, SOM
-	local num=$(get_mds_dir $DIR)
-	local mymds=mds${num}
+        local num=$(get_mds_dir $DIR)
+        local mymds=mds${num}
+        local MOUNTOPT_SAVE=$MOUNTOPT
 
         dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
         cancel_lru_locks osc
@@ -6396,8 +6399,9 @@ test_132() { #1028, SOM
         gl1=$(get_ost_param "ldlm_glimpse_enqueue")
         stat $DIR/$tfile >/dev/null
         gl2=$(get_ost_param "ldlm_glimpse_enqueue")
-        echo "SOM is "$som2", "$((gl2 - gl1))" glimpse RPC occured"
+        echo "====> SOM is "$som2", "$((gl2 - gl1))" glimpse RPC occured"
         som_mode_switch $som2 $gl1 $gl2
+        MOUNTOPT=$MOUNTOPT_SAVE
 }
 run_test 132 "som avoids glimpse rpc"
 

@@ -198,8 +198,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
                                   OBD_CONNECT_FID      | OBD_CONNECT_AT |
                                   OBD_CONNECT_LOV_V3 | OBD_CONNECT_RMT_CLIENT |
-                                  OBD_CONNECT_VBR      | OBD_CONNECT_SOM |
-                                  OBD_CONNECT_FULL20;
+                                  OBD_CONNECT_VBR      | OBD_CONNECT_FULL20;
+
+        if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
+                data->ocd_connect_flags |= OBD_CONNECT_SOM;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -340,7 +342,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK|
                                   OBD_CONNECT_AT | OBD_CONNECT_RMT_CLIENT |
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_VBR|
-                                  OBD_CONNECT_SOM | OBD_CONNECT_FULL20;
+                                  OBD_CONNECT_FULL20;
+
+        if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
+                data->ocd_connect_flags |= OBD_CONNECT_SOM;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
@@ -751,6 +756,11 @@ static int ll_options(char *options, int *flags)
                 tmp = ll_set_opt("nolazystatfs", s1, LL_SBI_LAZYSTATFS);
                 if (tmp) {
                         *flags &= ~tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("som_preview", s1, LL_SBI_SOM_PREVIEW);
+                if (tmp) {
+                        *flags |= tmp;
                         goto next;
                 }
 
