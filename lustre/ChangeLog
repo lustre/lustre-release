@@ -12,6 +12,11 @@ tbd        Oracle, Inc.
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : normal
+Bugzilla   : 22658
+Description: Do not fail OST activation when a llog is not found, just
+	     issue an error message.
+
 Severity   : enhancement
 Bugzilla   : 15253
 Description: add conf-param -d option to remove permanent settings.
