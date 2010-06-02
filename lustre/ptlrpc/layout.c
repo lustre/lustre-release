@@ -546,7 +546,7 @@ static const struct req_msg_field *ost_get_fiemap_server[] = {
         &RMF_FIEMAP_VAL
 };
 
-static const struct req_format *req_formats[] = {
+static struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_OBD_SET_INFO,
         &RQF_SEC_CTX,
@@ -627,16 +627,16 @@ static const struct req_format *req_formats[] = {
 };
 
 struct req_msg_field {
-        __u32       rmf_flags;
-        const char *rmf_name;
+        const __u32 rmf_flags;
+        const char  *rmf_name;
         /**
          * Field length. (-1) means "variable length".  If the
          * \a RMF_F_STRUCT_ARRAY flag is set the field is also variable-length,
          * but the actual size must be a whole multiple of \a rmf_size.
          */
-        int         rmf_size;
-        void      (*rmf_swabber)(void *);
-        void      (*rmf_dumper)(void *);
+        const int   rmf_size;
+        void        (*rmf_swabber)(void *);
+        void        (*rmf_dumper)(void *);
         int         rmf_offset[ARRAY_SIZE(req_formats)][RCL_NR];
 };
 
@@ -670,136 +670,136 @@ struct req_capsule;
         .rmf_dumper  = (void (*)(void*))(dumper)                \
 }
 
-const struct req_msg_field RMF_GENERIC_DATA =
+struct req_msg_field RMF_GENERIC_DATA =
         DEFINE_MSGF("generic_data", 0,
                     -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_GENERIC_DATA);
 
-const struct req_msg_field RMF_MGS_TARGET_INFO =
+struct req_msg_field RMF_MGS_TARGET_INFO =
         DEFINE_MSGF("mgs_target_info", 0,
                     sizeof(struct mgs_target_info),
                     lustre_swab_mgs_target_info, NULL);
 EXPORT_SYMBOL(RMF_MGS_TARGET_INFO);
 
-const struct req_msg_field RMF_MGS_SEND_PARAM =
+struct req_msg_field RMF_MGS_SEND_PARAM =
         DEFINE_MSGF("mgs_send_param", 0,
                     sizeof(struct mgs_send_param),
                     NULL, NULL);
 EXPORT_SYMBOL(RMF_MGS_SEND_PARAM);
 
-const struct req_msg_field RMF_SETINFO_VAL =
+struct req_msg_field RMF_SETINFO_VAL =
         DEFINE_MSGF("setinfo_val", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_SETINFO_VAL);
 
-const struct req_msg_field RMF_GETINFO_KEY =
+struct req_msg_field RMF_GETINFO_KEY =
         DEFINE_MSGF("getinfo_key", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_GETINFO_KEY);
 
-const struct req_msg_field RMF_GETINFO_VALLEN =
+struct req_msg_field RMF_GETINFO_VALLEN =
         DEFINE_MSGF("getinfo_vallen", 0,
                     sizeof(__u32), lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_GETINFO_VALLEN);
 
-const struct req_msg_field RMF_GETINFO_VAL =
+struct req_msg_field RMF_GETINFO_VAL =
         DEFINE_MSGF("getinfo_val", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_GETINFO_VAL);
 
-const struct req_msg_field RMF_SEQ_OPC =
+struct req_msg_field RMF_SEQ_OPC =
         DEFINE_MSGF("seq_query_opc", 0,
                     sizeof(__u32), lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_SEQ_OPC);
 
-const struct req_msg_field RMF_SEQ_RANGE =
+struct req_msg_field RMF_SEQ_RANGE =
         DEFINE_MSGF("seq_query_range", 0,
                     sizeof(struct lu_seq_range),
                     lustre_swab_lu_seq_range, NULL);
 EXPORT_SYMBOL(RMF_SEQ_RANGE);
 
-const struct req_msg_field RMF_FLD_OPC =
+struct req_msg_field RMF_FLD_OPC =
         DEFINE_MSGF("fld_query_opc", 0,
                     sizeof(__u32), lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_FLD_OPC);
 
-const struct req_msg_field RMF_FLD_MDFLD =
+struct req_msg_field RMF_FLD_MDFLD =
         DEFINE_MSGF("fld_query_mdfld", 0,
                     sizeof(struct lu_seq_range),
                     lustre_swab_lu_seq_range, NULL);
 EXPORT_SYMBOL(RMF_FLD_MDFLD);
 
-const struct req_msg_field RMF_MDT_BODY =
+struct req_msg_field RMF_MDT_BODY =
         DEFINE_MSGF("mdt_body", 0,
                     sizeof(struct mdt_body), lustre_swab_mdt_body, NULL);
 EXPORT_SYMBOL(RMF_MDT_BODY);
 
-const struct req_msg_field RMF_OBD_QUOTACTL =
+struct req_msg_field RMF_OBD_QUOTACTL =
         DEFINE_MSGF("obd_quotactl", 0,
                     sizeof(struct obd_quotactl),
                     lustre_swab_obd_quotactl, NULL);
 EXPORT_SYMBOL(RMF_OBD_QUOTACTL);
 
-const struct req_msg_field RMF_QUOTA_ADJUST_QUNIT =
+struct req_msg_field RMF_QUOTA_ADJUST_QUNIT =
         DEFINE_MSGF("quota_adjust_qunit", 0,
                     sizeof(struct quota_adjust_qunit),
                     lustre_swab_quota_adjust_qunit, NULL);
 EXPORT_SYMBOL(RMF_QUOTA_ADJUST_QUNIT);
 
-const struct req_msg_field RMF_QUNIT_DATA =
+struct req_msg_field RMF_QUNIT_DATA =
         DEFINE_MSGF("qunit_data", 0,
                     sizeof(struct qunit_data), lustre_swab_qdata, NULL);
 EXPORT_SYMBOL(RMF_QUNIT_DATA);
 
-const struct req_msg_field RMF_MDT_EPOCH =
+struct req_msg_field RMF_MDT_EPOCH =
         DEFINE_MSGF("mdt_ioepoch", 0,
                     sizeof(struct mdt_ioepoch), lustre_swab_mdt_ioepoch, NULL);
 EXPORT_SYMBOL(RMF_MDT_EPOCH);
 
-const struct req_msg_field RMF_PTLRPC_BODY =
+struct req_msg_field RMF_PTLRPC_BODY =
         DEFINE_MSGF("ptlrpc_body", 0,
                     sizeof(struct ptlrpc_body), lustre_swab_ptlrpc_body, NULL);
 EXPORT_SYMBOL(RMF_PTLRPC_BODY);
 
-const struct req_msg_field RMF_OBD_STATFS =
+struct req_msg_field RMF_OBD_STATFS =
         DEFINE_MSGF("obd_statfs", 0,
                     sizeof(struct obd_statfs), lustre_swab_obd_statfs, NULL);
 EXPORT_SYMBOL(RMF_OBD_STATFS);
 
-const struct req_msg_field RMF_SETINFO_KEY =
+struct req_msg_field RMF_SETINFO_KEY =
         DEFINE_MSGF("setinfo_key", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_SETINFO_KEY);
 
-const struct req_msg_field RMF_NAME =
+struct req_msg_field RMF_NAME =
         DEFINE_MSGF("name", RMF_F_STRING, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_NAME);
 
-const struct req_msg_field RMF_SYMTGT =
+struct req_msg_field RMF_SYMTGT =
         DEFINE_MSGF("symtgt", RMF_F_STRING, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_SYMTGT);
 
-const struct req_msg_field RMF_TGTUUID =
+struct req_msg_field RMF_TGTUUID =
         DEFINE_MSGF("tgtuuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL,
         NULL);
 EXPORT_SYMBOL(RMF_TGTUUID);
 
-const struct req_msg_field RMF_CLUUID =
+struct req_msg_field RMF_CLUUID =
         DEFINE_MSGF("cluuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL,
         NULL);
 EXPORT_SYMBOL(RMF_CLUUID);
 
-const struct req_msg_field RMF_STRING =
+struct req_msg_field RMF_STRING =
         DEFINE_MSGF("string", RMF_F_STRING, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_STRING);
 
-const struct req_msg_field RMF_LLOGD_BODY =
+struct req_msg_field RMF_LLOGD_BODY =
         DEFINE_MSGF("llogd_body", 0,
                     sizeof(struct llogd_body), lustre_swab_llogd_body, NULL);
 EXPORT_SYMBOL(RMF_LLOGD_BODY);
 
-const struct req_msg_field RMF_LLOG_LOG_HDR =
+struct req_msg_field RMF_LLOG_LOG_HDR =
         DEFINE_MSGF("llog_log_hdr", 0,
                     sizeof(struct llog_log_hdr), lustre_swab_llog_hdr, NULL);
 EXPORT_SYMBOL(RMF_LLOG_LOG_HDR);
 
-const struct req_msg_field RMF_LLOGD_CONN_BODY =
+struct req_msg_field RMF_LLOGD_CONN_BODY =
         DEFINE_MSGF("llogd_conn_body", 0,
                     sizeof(struct llogd_conn_body),
                     lustre_swab_llogd_conn_body, NULL);
@@ -811,68 +811,68 @@ EXPORT_SYMBOL(RMF_LLOGD_CONN_BODY);
  * No swabbing needed because struct lustre_handle contains only a 64-bit cookie
  * that the client does not interpret at all.
  */
-const struct req_msg_field RMF_CONN =
+struct req_msg_field RMF_CONN =
         DEFINE_MSGF("conn", 0, sizeof(struct lustre_handle), NULL, NULL);
 EXPORT_SYMBOL(RMF_CONN);
 
-const struct req_msg_field RMF_CONNECT_DATA =
+struct req_msg_field RMF_CONNECT_DATA =
         DEFINE_MSGF("cdata",
                     RMF_F_NO_SIZE_CHECK /* we allow extra space for interop */,
                     sizeof(struct obd_connect_data), lustre_swab_connect, NULL);
 EXPORT_SYMBOL(RMF_CONNECT_DATA);
 
-const struct req_msg_field RMF_DLM_REQ =
+struct req_msg_field RMF_DLM_REQ =
         DEFINE_MSGF("dlm_req", RMF_F_NO_SIZE_CHECK /* ldlm_request_bufsize */,
                     sizeof(struct ldlm_request),
                     lustre_swab_ldlm_request, NULL);
 EXPORT_SYMBOL(RMF_DLM_REQ);
 
-const struct req_msg_field RMF_DLM_REP =
+struct req_msg_field RMF_DLM_REP =
         DEFINE_MSGF("dlm_rep", 0,
                     sizeof(struct ldlm_reply), lustre_swab_ldlm_reply, NULL);
 EXPORT_SYMBOL(RMF_DLM_REP);
 
-const struct req_msg_field RMF_LDLM_INTENT =
+struct req_msg_field RMF_LDLM_INTENT =
         DEFINE_MSGF("ldlm_intent", 0,
                     sizeof(struct ldlm_intent), lustre_swab_ldlm_intent, NULL);
 EXPORT_SYMBOL(RMF_LDLM_INTENT);
 
-const struct req_msg_field RMF_DLM_LVB =
+struct req_msg_field RMF_DLM_LVB =
         DEFINE_MSGF("dlm_lvb", 0, sizeof(struct ost_lvb), lustre_swab_ost_lvb,
         NULL);
 EXPORT_SYMBOL(RMF_DLM_LVB);
 
-const struct req_msg_field RMF_MDT_MD =
+struct req_msg_field RMF_MDT_MD =
         DEFINE_MSGF("mdt_md", RMF_F_NO_SIZE_CHECK, MIN_MD_SIZE, NULL, NULL);
 EXPORT_SYMBOL(RMF_MDT_MD);
 
-const struct req_msg_field RMF_REC_REINT =
+struct req_msg_field RMF_REC_REINT =
         DEFINE_MSGF("rec_reint", 0, sizeof(struct mdt_rec_reint),
                     lustre_swab_mdt_rec_reint, NULL);
 EXPORT_SYMBOL(RMF_REC_REINT);
 
 /* FIXME: this length should be defined as a macro */
-const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1,
+struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1,
                                                     NULL, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
-const struct req_msg_field RMF_ACL =
+struct req_msg_field RMF_ACL =
         DEFINE_MSGF("acl", RMF_F_NO_SIZE_CHECK,
                     LUSTRE_POSIX_ACL_MAX_SIZE, NULL, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
 /* FIXME: this should be made to use RMF_F_STRUCT_ARRAY */
-const struct req_msg_field RMF_LOGCOOKIES =
+struct req_msg_field RMF_LOGCOOKIES =
         DEFINE_MSGF("logcookies", RMF_F_NO_SIZE_CHECK /* multiple cookies */,
                     sizeof(struct llog_cookie), NULL, NULL);
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
-const struct req_msg_field RMF_CAPA1 =
+struct req_msg_field RMF_CAPA1 =
         DEFINE_MSGF("capa", 0, sizeof(struct lustre_capa),
                     lustre_swab_lustre_capa, NULL);
 EXPORT_SYMBOL(RMF_CAPA1);
 
-const struct req_msg_field RMF_CAPA2 =
+struct req_msg_field RMF_CAPA2 =
         DEFINE_MSGF("capa", 0, sizeof(struct lustre_capa),
                     lustre_swab_lustre_capa, NULL);
 EXPORT_SYMBOL(RMF_CAPA2);
@@ -880,38 +880,38 @@ EXPORT_SYMBOL(RMF_CAPA2);
 /*
  * OST request field.
  */
-const struct req_msg_field RMF_OST_BODY =
+struct req_msg_field RMF_OST_BODY =
         DEFINE_MSGF("ost_body", 0,
                     sizeof(struct ost_body), lustre_swab_ost_body, dump_ost_body);
 EXPORT_SYMBOL(RMF_OST_BODY);
 
-const struct req_msg_field RMF_OBD_IOOBJ =
+struct req_msg_field RMF_OBD_IOOBJ =
         DEFINE_MSGF("obd_ioobj", RMF_F_STRUCT_ARRAY,
                     sizeof(struct obd_ioobj), lustre_swab_obd_ioobj, dump_ioo);
 EXPORT_SYMBOL(RMF_OBD_IOOBJ);
 
-const struct req_msg_field RMF_NIOBUF_REMOTE =
+struct req_msg_field RMF_NIOBUF_REMOTE =
         DEFINE_MSGF("niobuf_remote", RMF_F_STRUCT_ARRAY,
                     sizeof(struct niobuf_remote), lustre_swab_niobuf_remote,
                     dump_rniobuf);
 EXPORT_SYMBOL(RMF_NIOBUF_REMOTE);
 
-const struct req_msg_field RMF_RCS =
+struct req_msg_field RMF_RCS =
         DEFINE_MSGF("niobuf_remote", RMF_F_STRUCT_ARRAY, sizeof(__u32),
                     lustre_swab_generic_32s, dump_rcs);
 EXPORT_SYMBOL(RMF_RCS);
 
-const struct req_msg_field RMF_OBD_ID =
+struct req_msg_field RMF_OBD_ID =
         DEFINE_MSGF("obd_id", 0,
                     sizeof(obd_id), lustre_swab_ost_last_id, NULL);
 EXPORT_SYMBOL(RMF_OBD_ID);
 
-const struct req_msg_field RMF_FIEMAP_KEY =
+struct req_msg_field RMF_FIEMAP_KEY =
         DEFINE_MSGF("fiemap", 0, sizeof(struct ll_fiemap_info_key),
                     lustre_swab_fiemap, NULL);
 EXPORT_SYMBOL(RMF_FIEMAP_KEY);
 
-const struct req_msg_field RMF_FIEMAP_VAL =
+struct req_msg_field RMF_FIEMAP_VAL =
         DEFINE_MSGF("fiemap", 0, -1, lustre_swab_fiemap, NULL);
 EXPORT_SYMBOL(RMF_FIEMAP_VAL);
 
@@ -945,354 +945,354 @@ struct req_format {
 #define DEFINE_REQ_FMT0(name, client, server)                                  \
 DEFINE_REQ_FMT(name, client, ARRAY_SIZE(client), server, ARRAY_SIZE(server))
 
-const struct req_format RQF_OBD_PING =
+struct req_format RQF_OBD_PING =
         DEFINE_REQ_FMT0("OBD_PING", empty, empty);
 EXPORT_SYMBOL(RQF_OBD_PING);
 
-const struct req_format RQF_OBD_SET_INFO =
+struct req_format RQF_OBD_SET_INFO =
         DEFINE_REQ_FMT0("OBD_SET_INFO", obd_set_info_client, empty);
 EXPORT_SYMBOL(RQF_OBD_SET_INFO);
 
-const struct req_format RQF_SEC_CTX =
+struct req_format RQF_SEC_CTX =
         DEFINE_REQ_FMT0("SEC_CTX", empty, empty);
 EXPORT_SYMBOL(RQF_SEC_CTX);
 
-const struct req_format RQF_MGS_TARGET_REG =
+struct req_format RQF_MGS_TARGET_REG =
         DEFINE_REQ_FMT0("MGS_TARGET_REG", mgs_target_info_only,
                          mgs_target_info_only);
 EXPORT_SYMBOL(RQF_MGS_TARGET_REG);
 
-const struct req_format RQF_MGS_SET_INFO =
+struct req_format RQF_MGS_SET_INFO =
         DEFINE_REQ_FMT0("MGS_SET_INFO", mgs_set_info,
                          mgs_set_info);
 EXPORT_SYMBOL(RQF_MGS_SET_INFO);
 
-const struct req_format RQF_SEQ_QUERY =
+struct req_format RQF_SEQ_QUERY =
         DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);
 EXPORT_SYMBOL(RQF_SEQ_QUERY);
 
-const struct req_format RQF_FLD_QUERY =
+struct req_format RQF_FLD_QUERY =
         DEFINE_REQ_FMT0("FLD_QUERY", fld_query_client, fld_query_server);
 EXPORT_SYMBOL(RQF_FLD_QUERY);
 
-const struct req_format RQF_LOG_CANCEL =
+struct req_format RQF_LOG_CANCEL =
         DEFINE_REQ_FMT0("OBD_LOG_CANCEL", log_cancel_client, empty);
 EXPORT_SYMBOL(RQF_LOG_CANCEL);
 
-const struct req_format RQF_MDS_QUOTACHECK =
+struct req_format RQF_MDS_QUOTACHECK =
         DEFINE_REQ_FMT0("MDS_QUOTACHECK", quotactl_only, empty);
 EXPORT_SYMBOL(RQF_MDS_QUOTACHECK);
 
-const struct req_format RQF_OST_QUOTACHECK =
+struct req_format RQF_OST_QUOTACHECK =
         DEFINE_REQ_FMT0("OST_QUOTACHECK", quotactl_only, empty);
 EXPORT_SYMBOL(RQF_OST_QUOTACHECK);
 
-const struct req_format RQF_MDS_QUOTACTL =
+struct req_format RQF_MDS_QUOTACTL =
         DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTACTL);
 
-const struct req_format RQF_OST_QUOTACTL =
+struct req_format RQF_OST_QUOTACTL =
         DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_OST_QUOTACTL);
 
-const struct req_format RQF_OST_QUOTA_ADJUST_QUNIT =
+struct req_format RQF_OST_QUOTA_ADJUST_QUNIT =
         DEFINE_REQ_FMT0("OST_QUOTA_ADJUST_QUNIT", quota_adjust_qunit_only,
                         quota_adjust_qunit_only);
 EXPORT_SYMBOL(RQF_OST_QUOTA_ADJUST_QUNIT);
 
-const struct req_format RQF_QC_CALLBACK =
+struct req_format RQF_QC_CALLBACK =
         DEFINE_REQ_FMT0("QC_CALLBACK", quotactl_only, empty);
 EXPORT_SYMBOL(RQF_QC_CALLBACK);
 
-const struct req_format RQF_MDS_QUOTA_DQACQ =
+struct req_format RQF_MDS_QUOTA_DQACQ =
         DEFINE_REQ_FMT0("MDS_QUOTA_DQACQ", qunit_data_only, qunit_data_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTA_DQACQ);
 
-const struct req_format RQF_MDS_GETSTATUS =
+struct req_format RQF_MDS_GETSTATUS =
         DEFINE_REQ_FMT0("MDS_GETSTATUS", mdt_body_only, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_GETSTATUS);
 
-const struct req_format RQF_MDS_STATFS =
+struct req_format RQF_MDS_STATFS =
         DEFINE_REQ_FMT0("MDS_STATFS", empty, obd_statfs_server);
 EXPORT_SYMBOL(RQF_MDS_STATFS);
 
-const struct req_format RQF_MDS_SYNC =
+struct req_format RQF_MDS_SYNC =
         DEFINE_REQ_FMT0("MDS_SYNC", mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_SYNC);
 
-const struct req_format RQF_MDS_GETATTR =
+struct req_format RQF_MDS_GETATTR =
         DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_capa, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
-const struct req_format RQF_MDS_GETXATTR =
+struct req_format RQF_MDS_GETXATTR =
         DEFINE_REQ_FMT0("MDS_GETXATTR",
                         mds_getxattr_client, mds_getxattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETXATTR);
 
-const struct req_format RQF_MDS_GETATTR_NAME =
+struct req_format RQF_MDS_GETATTR_NAME =
         DEFINE_REQ_FMT0("MDS_GETATTR_NAME",
                         mds_getattr_name_client, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR_NAME);
 
-const struct req_format RQF_MDS_REINT =
+struct req_format RQF_MDS_REINT =
         DEFINE_REQ_FMT0("MDS_REINT", mds_reint_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT);
 
-const struct req_format RQF_MDS_REINT_CREATE =
+struct req_format RQF_MDS_REINT_CREATE =
         DEFINE_REQ_FMT0("MDS_REINT_CREATE",
                         mds_reint_create_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE);
 
-const struct req_format RQF_MDS_REINT_CREATE_RMT_ACL =
+struct req_format RQF_MDS_REINT_CREATE_RMT_ACL =
         DEFINE_REQ_FMT0("MDS_REINT_CREATE_RMT_ACL",
                         mds_reint_create_rmt_acl_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_RMT_ACL);
 
-const struct req_format RQF_MDS_REINT_CREATE_SLAVE =
+struct req_format RQF_MDS_REINT_CREATE_SLAVE =
         DEFINE_REQ_FMT0("MDS_REINT_CREATE_EA",
                         mds_reint_create_slave_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_SLAVE);
 
-const struct req_format RQF_MDS_REINT_CREATE_SYM =
+struct req_format RQF_MDS_REINT_CREATE_SYM =
         DEFINE_REQ_FMT0("MDS_REINT_CREATE_SYM",
                         mds_reint_create_sym_client, mdt_body_capa);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_SYM);
 
-const struct req_format RQF_MDS_REINT_OPEN =
+struct req_format RQF_MDS_REINT_OPEN =
         DEFINE_REQ_FMT0("MDS_REINT_OPEN",
                         mds_reint_open_client, mds_reint_open_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_OPEN);
 
-const struct req_format RQF_MDS_REINT_UNLINK =
+struct req_format RQF_MDS_REINT_UNLINK =
         DEFINE_REQ_FMT0("MDS_REINT_UNLINK", mds_reint_unlink_client,
                         mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_UNLINK);
 
-const struct req_format RQF_MDS_REINT_LINK =
+struct req_format RQF_MDS_REINT_LINK =
         DEFINE_REQ_FMT0("MDS_REINT_LINK",
                         mds_reint_link_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_LINK);
 
-const struct req_format RQF_MDS_REINT_RENAME =
+struct req_format RQF_MDS_REINT_RENAME =
         DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client,
                         mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_RENAME);
 
-const struct req_format RQF_MDS_REINT_SETATTR =
+struct req_format RQF_MDS_REINT_SETATTR =
         DEFINE_REQ_FMT0("MDS_REINT_SETATTR",
                         mds_reint_setattr_client, mds_setattr_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_SETATTR);
 
-const struct req_format RQF_MDS_REINT_SETXATTR =
+struct req_format RQF_MDS_REINT_SETXATTR =
         DEFINE_REQ_FMT0("MDS_REINT_SETXATTR",
                         mds_reint_setxattr_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_SETXATTR);
 
-const struct req_format RQF_MDS_CONNECT =
+struct req_format RQF_MDS_CONNECT =
         DEFINE_REQ_FMT0("MDS_CONNECT",
                         obd_connect_client, obd_connect_server);
 EXPORT_SYMBOL(RQF_MDS_CONNECT);
 
-const struct req_format RQF_MDS_DISCONNECT =
+struct req_format RQF_MDS_DISCONNECT =
         DEFINE_REQ_FMT0("MDS_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_MDS_DISCONNECT);
 
-const struct req_format RQF_MDS_GET_INFO =
+struct req_format RQF_MDS_GET_INFO =
         DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
                         mds_getinfo_server);
 EXPORT_SYMBOL(RQF_MDS_GET_INFO);
 
-const struct req_format RQF_LDLM_ENQUEUE =
+struct req_format RQF_LDLM_ENQUEUE =
         DEFINE_REQ_FMT0("LDLM_ENQUEUE",
                         ldlm_enqueue_client, ldlm_enqueue_lvb_server);
 EXPORT_SYMBOL(RQF_LDLM_ENQUEUE);
 
-const struct req_format RQF_LDLM_ENQUEUE_LVB =
+struct req_format RQF_LDLM_ENQUEUE_LVB =
         DEFINE_REQ_FMT0("LDLM_ENQUEUE_LVB",
                         ldlm_enqueue_client, ldlm_enqueue_lvb_server);
 EXPORT_SYMBOL(RQF_LDLM_ENQUEUE_LVB);
 
-const struct req_format RQF_LDLM_CONVERT =
+struct req_format RQF_LDLM_CONVERT =
         DEFINE_REQ_FMT0("LDLM_CONVERT",
                         ldlm_enqueue_client, ldlm_enqueue_server);
 EXPORT_SYMBOL(RQF_LDLM_CONVERT);
 
-const struct req_format RQF_LDLM_CANCEL =
+struct req_format RQF_LDLM_CANCEL =
         DEFINE_REQ_FMT0("LDLM_CANCEL", ldlm_enqueue_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_CANCEL);
 
-const struct req_format RQF_LDLM_CALLBACK =
+struct req_format RQF_LDLM_CALLBACK =
         DEFINE_REQ_FMT0("LDLM_CALLBACK", ldlm_enqueue_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_CALLBACK);
 
-const struct req_format RQF_LDLM_CP_CALLBACK =
+struct req_format RQF_LDLM_CP_CALLBACK =
         DEFINE_REQ_FMT0("LDLM_CP_CALLBACK", ldlm_cp_callback_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_CP_CALLBACK);
 
-const struct req_format RQF_LDLM_BL_CALLBACK =
+struct req_format RQF_LDLM_BL_CALLBACK =
         DEFINE_REQ_FMT0("LDLM_BL_CALLBACK", ldlm_enqueue_client, empty);
 EXPORT_SYMBOL(RQF_LDLM_BL_CALLBACK);
 
-const struct req_format RQF_LDLM_GL_CALLBACK =
+struct req_format RQF_LDLM_GL_CALLBACK =
         DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_enqueue_client,
                         ldlm_gl_callback_server);
 EXPORT_SYMBOL(RQF_LDLM_GL_CALLBACK);
 
-const struct req_format RQF_LDLM_INTENT =
+struct req_format RQF_LDLM_INTENT =
         DEFINE_REQ_FMT0("LDLM_INTENT",
                         ldlm_intent_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
-const struct req_format RQF_LDLM_INTENT_GETATTR =
+struct req_format RQF_LDLM_INTENT_GETATTR =
         DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
                         ldlm_intent_getattr_client, ldlm_intent_getattr_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_GETATTR);
 
-const struct req_format RQF_LDLM_INTENT_OPEN =
+struct req_format RQF_LDLM_INTENT_OPEN =
         DEFINE_REQ_FMT0("LDLM_INTENT_OPEN",
                         ldlm_intent_open_client, ldlm_intent_open_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_OPEN);
 
-const struct req_format RQF_LDLM_INTENT_CREATE =
+struct req_format RQF_LDLM_INTENT_CREATE =
         DEFINE_REQ_FMT0("LDLM_INTENT_CREATE",
                         ldlm_intent_create_client, ldlm_intent_getattr_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_CREATE);
 
-const struct req_format RQF_LDLM_INTENT_UNLINK =
+struct req_format RQF_LDLM_INTENT_UNLINK =
         DEFINE_REQ_FMT0("LDLM_INTENT_UNLINK",
                         ldlm_intent_unlink_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
 
-const struct req_format RQF_MDS_CLOSE =
+struct req_format RQF_MDS_CLOSE =
         DEFINE_REQ_FMT0("MDS_CLOSE",
                         mdt_close_client, mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_CLOSE);
 
-const struct req_format RQF_MDS_PIN =
+struct req_format RQF_MDS_PIN =
         DEFINE_REQ_FMT0("MDS_PIN",
                         mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_PIN);
 
-const struct req_format RQF_MDS_UNPIN =
+struct req_format RQF_MDS_UNPIN =
         DEFINE_REQ_FMT0("MDS_UNPIN", mdt_body_only, empty);
 EXPORT_SYMBOL(RQF_MDS_UNPIN);
 
-const struct req_format RQF_MDS_DONE_WRITING =
+struct req_format RQF_MDS_DONE_WRITING =
         DEFINE_REQ_FMT0("MDS_DONE_WRITING",
                         mdt_close_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_DONE_WRITING);
 
-const struct req_format RQF_MDS_READPAGE =
+struct req_format RQF_MDS_READPAGE =
         DEFINE_REQ_FMT0("MDS_READPAGE",
                         mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
 
 /* This is for split */
-const struct req_format RQF_MDS_WRITEPAGE =
+struct req_format RQF_MDS_WRITEPAGE =
         DEFINE_REQ_FMT0("MDS_WRITEPAGE",
                         mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_WRITEPAGE);
 
-const struct req_format RQF_MDS_IS_SUBDIR =
+struct req_format RQF_MDS_IS_SUBDIR =
         DEFINE_REQ_FMT0("MDS_IS_SUBDIR",
                         mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_IS_SUBDIR);
 
-const struct req_format RQF_LLOG_CATINFO =
+struct req_format RQF_LLOG_CATINFO =
         DEFINE_REQ_FMT0("LLOG_CATINFO",
                         llog_catinfo_client, llog_catinfo_server);
 EXPORT_SYMBOL(RQF_LLOG_CATINFO);
 
-const struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
+struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_CREATE",
                         llog_origin_handle_create_client, llogd_body_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_CREATE);
 
-const struct req_format RQF_LLOG_ORIGIN_HANDLE_DESTROY =
+struct req_format RQF_LLOG_ORIGIN_HANDLE_DESTROY =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_DESTROY",
                         llogd_body_only, llogd_body_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_DESTROY);
 
-const struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK =
+struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_NEXT_BLOCK",
                         llogd_body_only, llog_origin_handle_next_block_server);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
 
-const struct req_format RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK =
+struct req_format RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_PREV_BLOCK",
                         llogd_body_only, llog_origin_handle_next_block_server);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK);
 
-const struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER =
+struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_READ_HEADER",
                         llogd_body_only, llog_log_hdr_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
 
-const struct req_format RQF_LLOG_ORIGIN_CONNECT =
+struct req_format RQF_LLOG_ORIGIN_CONNECT =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_CONNECT", llogd_conn_body_only, empty);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_CONNECT);
 
-const struct req_format RQF_OST_CONNECT =
+struct req_format RQF_OST_CONNECT =
         DEFINE_REQ_FMT0("OST_CONNECT",
                         obd_connect_client, obd_connect_server);
 EXPORT_SYMBOL(RQF_OST_CONNECT);
 
-const struct req_format RQF_OST_DISCONNECT =
+struct req_format RQF_OST_DISCONNECT =
         DEFINE_REQ_FMT0("OST_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_OST_DISCONNECT);
 
-const struct req_format RQF_OST_GETATTR =
+struct req_format RQF_OST_GETATTR =
         DEFINE_REQ_FMT0("OST_GETATTR", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_GETATTR);
 
-const struct req_format RQF_OST_SETATTR =
+struct req_format RQF_OST_SETATTR =
         DEFINE_REQ_FMT0("OST_SETATTR", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SETATTR);
 
-const struct req_format RQF_OST_CREATE =
+struct req_format RQF_OST_CREATE =
         DEFINE_REQ_FMT0("OST_CREATE", ost_body_only, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_CREATE);
 
-const struct req_format RQF_OST_PUNCH =
+struct req_format RQF_OST_PUNCH =
         DEFINE_REQ_FMT0("OST_PUNCH", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_PUNCH);
 
-const struct req_format RQF_OST_SYNC =
+struct req_format RQF_OST_SYNC =
         DEFINE_REQ_FMT0("OST_SYNC", ost_body_capa, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SYNC);
 
-const struct req_format RQF_OST_DESTROY =
+struct req_format RQF_OST_DESTROY =
         DEFINE_REQ_FMT0("OST_DESTROY", ost_destroy_client, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_DESTROY);
 
-const struct req_format RQF_OST_BRW_READ =
+struct req_format RQF_OST_BRW_READ =
         DEFINE_REQ_FMT0("OST_BRW_READ", ost_brw_client, ost_brw_read_server);
 EXPORT_SYMBOL(RQF_OST_BRW_READ);
 
-const struct req_format RQF_OST_BRW_WRITE =
+struct req_format RQF_OST_BRW_WRITE =
         DEFINE_REQ_FMT0("OST_BRW_WRITE", ost_brw_client, ost_brw_write_server);
 EXPORT_SYMBOL(RQF_OST_BRW_WRITE);
 
-const struct req_format RQF_OST_STATFS =
+struct req_format RQF_OST_STATFS =
         DEFINE_REQ_FMT0("OST_STATFS", empty, obd_statfs_server);
 EXPORT_SYMBOL(RQF_OST_STATFS);
 
-const struct req_format RQF_OST_SET_GRANT_INFO =
+struct req_format RQF_OST_SET_GRANT_INFO =
         DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_grant_shrink_client,
                          ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SET_GRANT_INFO);
 
-const struct req_format RQF_OST_GET_INFO_GENERIC =
+struct req_format RQF_OST_GET_INFO_GENERIC =
         DEFINE_REQ_FMT0("OST_GET_INFO", ost_get_info_generic_client,
                                         ost_get_info_generic_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_GENERIC);
 
-const struct req_format RQF_OST_GET_INFO_LAST_ID =
+struct req_format RQF_OST_GET_INFO_LAST_ID =
         DEFINE_REQ_FMT0("OST_GET_INFO_LAST_ID", ost_get_info_generic_client,
                                                 ost_get_last_id_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_LAST_ID);
 
-const struct req_format RQF_OST_GET_INFO_FIEMAP =
+struct req_format RQF_OST_GET_INFO_FIEMAP =
         DEFINE_REQ_FMT0("OST_GET_INFO_FIEMAP", ost_get_fiemap_client,
                                                ost_get_fiemap_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_FIEMAP);
@@ -1315,7 +1315,7 @@ int req_layout_init(void)
         struct req_format *rf = NULL;
 
         for (i = 0; i < ARRAY_SIZE(req_formats); ++i) {
-                rf = (struct req_format *)req_formats[i];
+                rf = req_formats[i];
                 rf->rf_idx = i;
                 for (j = 0; j < RCL_NR; ++j) {
                         LASSERT(rf->rf_fields[j].nr <= REQ_MAX_FIELD_NR);

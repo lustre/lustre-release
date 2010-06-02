@@ -133,155 +133,155 @@ void req_layout_fini(void);
 /* __REQ_LAYOUT_USER__ */
 #endif
 
-extern const struct req_format RQF_OBD_PING;
-extern const struct req_format RQF_OBD_SET_INFO;
-extern const struct req_format RQF_SEC_CTX;
+extern struct req_format RQF_OBD_PING;
+extern struct req_format RQF_OBD_SET_INFO;
+extern struct req_format RQF_SEC_CTX;
 /* MGS req_format */
-extern const struct req_format RQF_MGS_TARGET_REG;
-extern const struct req_format RQF_MGS_SET_INFO;
+extern struct req_format RQF_MGS_TARGET_REG;
+extern struct req_format RQF_MGS_SET_INFO;
 /* fid/fld req_format */
-extern const struct req_format RQF_SEQ_QUERY;
-extern const struct req_format RQF_FLD_QUERY;
+extern struct req_format RQF_SEQ_QUERY;
+extern struct req_format RQF_FLD_QUERY;
 /* MDS req_format */
-extern const struct req_format RQF_MDS_CONNECT;
-extern const struct req_format RQF_MDS_DISCONNECT;
-extern const struct req_format RQF_MDS_STATFS;
-extern const struct req_format RQF_MDS_GETSTATUS;
-extern const struct req_format RQF_MDS_SYNC;
-extern const struct req_format RQF_MDS_GETXATTR;
-extern const struct req_format RQF_MDS_GETATTR;
+extern struct req_format RQF_MDS_CONNECT;
+extern struct req_format RQF_MDS_DISCONNECT;
+extern struct req_format RQF_MDS_STATFS;
+extern struct req_format RQF_MDS_GETSTATUS;
+extern struct req_format RQF_MDS_SYNC;
+extern struct req_format RQF_MDS_GETXATTR;
+extern struct req_format RQF_MDS_GETATTR;
 /*
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.
  */
-extern const struct req_format RQF_MDS_GETATTR_NAME;
-extern const struct req_format RQF_MDS_CLOSE;
-extern const struct req_format RQF_MDS_PIN;
-extern const struct req_format RQF_MDS_UNPIN;
-extern const struct req_format RQF_MDS_CONNECT;
-extern const struct req_format RQF_MDS_DISCONNECT;
-extern const struct req_format RQF_MDS_GET_INFO;
-extern const struct req_format RQF_MDS_READPAGE;
-extern const struct req_format RQF_MDS_WRITEPAGE;
-extern const struct req_format RQF_MDS_IS_SUBDIR;
-extern const struct req_format RQF_MDS_DONE_WRITING;
-extern const struct req_format RQF_MDS_REINT;
-extern const struct req_format RQF_MDS_REINT_CREATE;
-extern const struct req_format RQF_MDS_REINT_CREATE_RMT_ACL;
-extern const struct req_format RQF_MDS_REINT_CREATE_SLAVE;
-extern const struct req_format RQF_MDS_REINT_CREATE_SYM;
-extern const struct req_format RQF_MDS_REINT_OPEN;
-extern const struct req_format RQF_MDS_REINT_UNLINK;
-extern const struct req_format RQF_MDS_REINT_LINK;
-extern const struct req_format RQF_MDS_REINT_RENAME;
-extern const struct req_format RQF_MDS_REINT_SETATTR;
-extern const struct req_format RQF_MDS_REINT_SETXATTR;
-extern const struct req_format RQF_MDS_QUOTACHECK;
-extern const struct req_format RQF_MDS_QUOTACTL;
-extern const struct req_format RQF_MDS_QUOTA_DQACQ;
-extern const struct req_format RQF_QC_CALLBACK;
+extern struct req_format RQF_MDS_GETATTR_NAME;
+extern struct req_format RQF_MDS_CLOSE;
+extern struct req_format RQF_MDS_PIN;
+extern struct req_format RQF_MDS_UNPIN;
+extern struct req_format RQF_MDS_CONNECT;
+extern struct req_format RQF_MDS_DISCONNECT;
+extern struct req_format RQF_MDS_GET_INFO;
+extern struct req_format RQF_MDS_READPAGE;
+extern struct req_format RQF_MDS_WRITEPAGE;
+extern struct req_format RQF_MDS_IS_SUBDIR;
+extern struct req_format RQF_MDS_DONE_WRITING;
+extern struct req_format RQF_MDS_REINT;
+extern struct req_format RQF_MDS_REINT_CREATE;
+extern struct req_format RQF_MDS_REINT_CREATE_RMT_ACL;
+extern struct req_format RQF_MDS_REINT_CREATE_SLAVE;
+extern struct req_format RQF_MDS_REINT_CREATE_SYM;
+extern struct req_format RQF_MDS_REINT_OPEN;
+extern struct req_format RQF_MDS_REINT_UNLINK;
+extern struct req_format RQF_MDS_REINT_LINK;
+extern struct req_format RQF_MDS_REINT_RENAME;
+extern struct req_format RQF_MDS_REINT_SETATTR;
+extern struct req_format RQF_MDS_REINT_SETXATTR;
+extern struct req_format RQF_MDS_QUOTACHECK;
+extern struct req_format RQF_MDS_QUOTACTL;
+extern struct req_format RQF_MDS_QUOTA_DQACQ;
+extern struct req_format RQF_QC_CALLBACK;
 /* OST req_format */
-extern const struct req_format RQF_OST_CONNECT;
-extern const struct req_format RQF_OST_DISCONNECT;
-extern const struct req_format RQF_OST_QUOTACHECK;
-extern const struct req_format RQF_OST_QUOTACTL;
-extern const struct req_format RQF_OST_QUOTA_ADJUST_QUNIT;
-extern const struct req_format RQF_OST_GETATTR;
-extern const struct req_format RQF_OST_SETATTR;
-extern const struct req_format RQF_OST_CREATE;
-extern const struct req_format RQF_OST_PUNCH;
-extern const struct req_format RQF_OST_SYNC;
-extern const struct req_format RQF_OST_DESTROY;
-extern const struct req_format RQF_OST_BRW_READ;
-extern const struct req_format RQF_OST_BRW_WRITE;
-extern const struct req_format RQF_OST_STATFS;
-extern const struct req_format RQF_OST_SET_GRANT_INFO;
-extern const struct req_format RQF_OST_GET_INFO_GENERIC;
-extern const struct req_format RQF_OST_GET_INFO_LAST_ID;
-extern const struct req_format RQF_OST_GET_INFO_FIEMAP;
+extern struct req_format RQF_OST_CONNECT;
+extern struct req_format RQF_OST_DISCONNECT;
+extern struct req_format RQF_OST_QUOTACHECK;
+extern struct req_format RQF_OST_QUOTACTL;
+extern struct req_format RQF_OST_QUOTA_ADJUST_QUNIT;
+extern struct req_format RQF_OST_GETATTR;
+extern struct req_format RQF_OST_SETATTR;
+extern struct req_format RQF_OST_CREATE;
+extern struct req_format RQF_OST_PUNCH;
+extern struct req_format RQF_OST_SYNC;
+extern struct req_format RQF_OST_DESTROY;
+extern struct req_format RQF_OST_BRW_READ;
+extern struct req_format RQF_OST_BRW_WRITE;
+extern struct req_format RQF_OST_STATFS;
+extern struct req_format RQF_OST_SET_GRANT_INFO;
+extern struct req_format RQF_OST_GET_INFO_GENERIC;
+extern struct req_format RQF_OST_GET_INFO_LAST_ID;
+extern struct req_format RQF_OST_GET_INFO_FIEMAP;
 
 /* LDLM req_format */
-extern const struct req_format RQF_LDLM_ENQUEUE;
-extern const struct req_format RQF_LDLM_ENQUEUE_LVB;
-extern const struct req_format RQF_LDLM_CONVERT;
-extern const struct req_format RQF_LDLM_INTENT;
-extern const struct req_format RQF_LDLM_INTENT_GETATTR;
-extern const struct req_format RQF_LDLM_INTENT_OPEN;
-extern const struct req_format RQF_LDLM_INTENT_CREATE;
-extern const struct req_format RQF_LDLM_INTENT_UNLINK;
-extern const struct req_format RQF_LDLM_CANCEL;
-extern const struct req_format RQF_LDLM_CALLBACK;
-extern const struct req_format RQF_LDLM_CP_CALLBACK;
-extern const struct req_format RQF_LDLM_BL_CALLBACK;
-extern const struct req_format RQF_LDLM_GL_CALLBACK;
+extern struct req_format RQF_LDLM_ENQUEUE;
+extern struct req_format RQF_LDLM_ENQUEUE_LVB;
+extern struct req_format RQF_LDLM_CONVERT;
+extern struct req_format RQF_LDLM_INTENT;
+extern struct req_format RQF_LDLM_INTENT_GETATTR;
+extern struct req_format RQF_LDLM_INTENT_OPEN;
+extern struct req_format RQF_LDLM_INTENT_CREATE;
+extern struct req_format RQF_LDLM_INTENT_UNLINK;
+extern struct req_format RQF_LDLM_CANCEL;
+extern struct req_format RQF_LDLM_CALLBACK;
+extern struct req_format RQF_LDLM_CP_CALLBACK;
+extern struct req_format RQF_LDLM_BL_CALLBACK;
+extern struct req_format RQF_LDLM_GL_CALLBACK;
 /* LOG req_format */
-extern const struct req_format RQF_LOG_CANCEL;
-extern const struct req_format RQF_LLOG_CATINFO;
-extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE;
-extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_DESTROY;
-extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK;
-extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK;
-extern const struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER;
-extern const struct req_format RQF_LLOG_ORIGIN_CONNECT;
+extern struct req_format RQF_LOG_CANCEL;
+extern struct req_format RQF_LLOG_CATINFO;
+extern struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE;
+extern struct req_format RQF_LLOG_ORIGIN_HANDLE_DESTROY;
+extern struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK;
+extern struct req_format RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK;
+extern struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER;
+extern struct req_format RQF_LLOG_ORIGIN_CONNECT;
 
-extern const struct req_msg_field RMF_GENERIC_DATA;
-extern const struct req_msg_field RMF_PTLRPC_BODY;
-extern const struct req_msg_field RMF_MDT_BODY;
-extern const struct req_msg_field RMF_MDT_EPOCH;
-extern const struct req_msg_field RMF_OBD_STATFS;
-extern const struct req_msg_field RMF_NAME;
-extern const struct req_msg_field RMF_SYMTGT;
-extern const struct req_msg_field RMF_TGTUUID;
-extern const struct req_msg_field RMF_CLUUID;
-extern const struct req_msg_field RMF_SETINFO_VAL;
-extern const struct req_msg_field RMF_SETINFO_KEY;
-extern const struct req_msg_field RMF_GETINFO_VAL;
-extern const struct req_msg_field RMF_GETINFO_VALLEN;
-extern const struct req_msg_field RMF_GETINFO_KEY;
+extern struct req_msg_field RMF_GENERIC_DATA;
+extern struct req_msg_field RMF_PTLRPC_BODY;
+extern struct req_msg_field RMF_MDT_BODY;
+extern struct req_msg_field RMF_MDT_EPOCH;
+extern struct req_msg_field RMF_OBD_STATFS;
+extern struct req_msg_field RMF_NAME;
+extern struct req_msg_field RMF_SYMTGT;
+extern struct req_msg_field RMF_TGTUUID;
+extern struct req_msg_field RMF_CLUUID;
+extern struct req_msg_field RMF_SETINFO_VAL;
+extern struct req_msg_field RMF_SETINFO_KEY;
+extern struct req_msg_field RMF_GETINFO_VAL;
+extern struct req_msg_field RMF_GETINFO_VALLEN;
+extern struct req_msg_field RMF_GETINFO_KEY;
 
 /*
  * connection handle received in MDS_CONNECT request.
  */
-extern const struct req_msg_field RMF_CONN;
-extern const struct req_msg_field RMF_CONNECT_DATA;
-extern const struct req_msg_field RMF_DLM_REQ;
-extern const struct req_msg_field RMF_DLM_REP;
-extern const struct req_msg_field RMF_DLM_LVB;
-extern const struct req_msg_field RMF_LDLM_INTENT;
-extern const struct req_msg_field RMF_MDT_MD;
-extern const struct req_msg_field RMF_REC_REINT;
-extern const struct req_msg_field RMF_EADATA;
-extern const struct req_msg_field RMF_ACL;
-extern const struct req_msg_field RMF_LOGCOOKIES;
-extern const struct req_msg_field RMF_CAPA1;
-extern const struct req_msg_field RMF_CAPA2;
-extern const struct req_msg_field RMF_OBD_QUOTACHECK;
-extern const struct req_msg_field RMF_OBD_QUOTACTL;
-extern const struct req_msg_field RMF_QUOTA_ADJUST_QUNIT;
-extern const struct req_msg_field RMF_QUNIT_DATA;
-extern const struct req_msg_field RMF_STRING;
+extern struct req_msg_field RMF_CONN;
+extern struct req_msg_field RMF_CONNECT_DATA;
+extern struct req_msg_field RMF_DLM_REQ;
+extern struct req_msg_field RMF_DLM_REP;
+extern struct req_msg_field RMF_DLM_LVB;
+extern struct req_msg_field RMF_LDLM_INTENT;
+extern struct req_msg_field RMF_MDT_MD;
+extern struct req_msg_field RMF_REC_REINT;
+extern struct req_msg_field RMF_EADATA;
+extern struct req_msg_field RMF_ACL;
+extern struct req_msg_field RMF_LOGCOOKIES;
+extern struct req_msg_field RMF_CAPA1;
+extern struct req_msg_field RMF_CAPA2;
+extern struct req_msg_field RMF_OBD_QUOTACHECK;
+extern struct req_msg_field RMF_OBD_QUOTACTL;
+extern struct req_msg_field RMF_QUOTA_ADJUST_QUNIT;
+extern struct req_msg_field RMF_QUNIT_DATA;
+extern struct req_msg_field RMF_STRING;
 
 /* seq-mgr fields */
-extern const struct req_msg_field RMF_SEQ_OPC;
-extern const struct req_msg_field RMF_SEQ_RANGE;
+extern struct req_msg_field RMF_SEQ_OPC;
+extern struct req_msg_field RMF_SEQ_RANGE;
 
 /* FLD fields */
-extern const struct req_msg_field RMF_FLD_OPC;
-extern const struct req_msg_field RMF_FLD_MDFLD;
+extern struct req_msg_field RMF_FLD_OPC;
+extern struct req_msg_field RMF_FLD_MDFLD;
 
-extern const struct req_msg_field RMF_LLOGD_BODY;
-extern const struct req_msg_field RMF_LLOG_LOG_HDR;
-extern const struct req_msg_field RMF_LLOGD_CONN_BODY;
+extern struct req_msg_field RMF_LLOGD_BODY;
+extern struct req_msg_field RMF_LLOG_LOG_HDR;
+extern struct req_msg_field RMF_LLOGD_CONN_BODY;
 
-extern const struct req_msg_field RMF_MGS_TARGET_INFO;
-extern const struct req_msg_field RMF_MGS_SEND_PARAM;
+extern struct req_msg_field RMF_MGS_TARGET_INFO;
+extern struct req_msg_field RMF_MGS_SEND_PARAM;
 
-extern const struct req_msg_field RMF_OST_BODY;
-extern const struct req_msg_field RMF_OBD_IOOBJ;
-extern const struct req_msg_field RMF_OBD_ID;
-extern const struct req_msg_field RMF_NIOBUF_REMOTE;
-extern const struct req_msg_field RMF_RCS;
-extern const struct req_msg_field RMF_FIEMAP_KEY;
-extern const struct req_msg_field RMF_FIEMAP_VAL;
+extern struct req_msg_field RMF_OST_BODY;
+extern struct req_msg_field RMF_OBD_IOOBJ;
+extern struct req_msg_field RMF_OBD_ID;
+extern struct req_msg_field RMF_NIOBUF_REMOTE;
+extern struct req_msg_field RMF_RCS;
+extern struct req_msg_field RMF_FIEMAP_KEY;
+extern struct req_msg_field RMF_FIEMAP_VAL;
 
 /** @} req_layout */
 
