@@ -189,15 +189,15 @@ resetquota() {
         fi
 
         while [ $((count++)) -lt $timeout ]; do
-                $LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT
-                RC=$?
+		local RC=0
+		OUTPUT=`$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT 2>&1` || RC=${PIPESTATUS[0]}
                 if [ $RC -ne 0 ]; then
-                        if [ $RC -eq 240 ]; then # 240 means -EBUSY
-                                log "resetquota is blocked for quota master recovery, retry after 1 sec"
-                                sleep 1
+			if echo "$OUTPUT" | grep -q busy; then
+                                log "resetquota is blocked for quota master recovery, retry after $((count * 3)) sec"
+                                sleep 3
                                 continue
                         else
-                                error "resetquota failed: $RC"
+                                error "resetquota failed"
                         fi
                 fi
                 break
