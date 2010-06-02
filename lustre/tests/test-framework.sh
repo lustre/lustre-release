@@ -1750,7 +1750,7 @@ switch_identity() {
         do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"NONE\""
     fi
 
-    do_facet mds$num "lctl set_param -n mdt/$MDT/identity_flush \"-1\""
+    do_facet mds$num "lctl set_param -n mdt/$MDT/identity_flush=-1"
 
     if [ $old = "NONE" ]; then
         return 1

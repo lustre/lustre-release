@@ -647,10 +647,10 @@ static void clean_path(char *path)
 }
 
 struct param_opts {
-        int only_path;
-        int show_path;
-        int show_type;
-        int recursive;
+        int only_path:1;
+        int show_path:1;
+        int show_type:1;
+        int recursive:1;
 };
 
 static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
@@ -766,6 +766,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
         popt->show_path = 1;
         popt->only_path = 0;
         popt->show_type = 0;
+        popt->recursive = 0;
 
         while ((ch = getopt(argc, argv, "nNF")) != -1) {
                 switch (ch) {
@@ -905,6 +906,7 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
         popt->show_path = 1;
         popt->only_path = 0;
         popt->show_type = 0;
+        popt->recursive = 0;
 
         while ((ch = getopt(argc, argv, "n")) != -1) {
                 switch (ch) {
