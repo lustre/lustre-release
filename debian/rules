@@ -78,17 +78,26 @@ SRCDIR=.
 autogen: autogen-stamp
 autogen-stamp: patch-stamp
 	# see if any patches requires us to run autogen
-	if ! grep "^--- .*\/autoconf" debian/patches/* || \
-	   [ ! -f autogen.sh ]; then \
-		exit 0; \
-	fi
-	cp /usr/share/misc/config.sub config.sub
-	cp /usr/share/misc/config.sub libsysio/config.sub
-	cp /usr/share/misc/config.sub ldiskfs/config.sub
-	cp /usr/share/misc/config.guess config.guess
-	cp /usr/share/misc/config.guess libsysio/config.guess
-	cp /usr/share/misc/config.guess ldiskfs/config.guess
-	sh ./autogen.sh
+	# (for a distribution release tarball, it is expected that if
+	#  downstream adds any patches that requires autogen.sh to be
+	#  run, a patch will be added by downstream to install the
+	#  needed autogen.sh scripts
+	#  see https://bugzilla.lustre.org/attachment.cgi?id=27156
+	#  for an example)
+	if grep "^--- .*\/autoconf" debian/patches/*; then \
+		if [ ! -f autogen.sh ]; then \
+			echo "You have patches which require autogen.sh to be run, but it doesn't exist"; \
+			echo "Please see https://bugzilla.lustre.org/attachment.cgi?id=27156"; \
+			exit 1; \
+		fi; \
+		cp /usr/share/misc/config.sub config.sub; \
+		cp /usr/share/misc/config.sub libsysio/config.sub; \
+		cp /usr/share/misc/config.sub ldiskfs/config.sub; \
+		cp /usr/share/misc/config.guess config.guess; \
+		cp /usr/share/misc/config.guess libsysio/config.guess; \
+		cp /usr/share/misc/config.guess ldiskfs/config.guess; \
+		sh ./autogen.sh; \
+	fi; \
 	touch $@
 
 configure: configure-stamp
