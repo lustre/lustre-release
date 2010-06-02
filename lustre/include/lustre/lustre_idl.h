@@ -797,7 +797,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LOV_V3        0x100000000ULL /*client supports LOV v3 EA */
 #define OBD_CONNECT_GRANT_SHRINK  0x200000000ULL /* support grant shrink */
 #define OBD_CONNECT_SKIP_ORPHAN   0x400000000ULL /* don't reuse orphan objids */
-#define OBD_CONNECT_FULL20        0x800000000ULL /* it is 2.0 client */
+#define OBD_CONNECT_MAX_EASIZE    0x800000000ULL /* preserved for large EA */
+#define OBD_CONNECT_FULL20       0x1000000000ULL /* it is 2.0 client */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
