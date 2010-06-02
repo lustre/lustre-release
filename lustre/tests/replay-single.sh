@@ -1855,6 +1855,24 @@ test_70a () {
 }
 run_test 70a "check multi client t-f"
 
+check_dbench_load () {
+	local clients=${1//,/ }
+	local client=
+
+	for client in $clients; do
+		if ! do_node $client "ps ax | grep -v grep | awk '{ print $6 }' | grep -q rundbench"; then
+			error_noexit "rundbench load on $client failed!"
+			return 1
+		fi
+	done
+	return 0
+}
+
+kill_dbench_load () {
+	local clients=${1:-$(hostname)}
+	do_nodes $clients "killall dbench"
+}
+
 test_70b () {
 	local clients=${CLIENTS:-$HOSTNAME}
 
@@ -1875,6 +1893,10 @@ test_70b () {
 	START_TS=$(date +%s)
 	CURRENT_TS=$START_TS
 	while [ $ELAPSED -lt $duration ]; do
+		if ! check_dbench_load $clients; then
+			kill_dbench_load $clients
+			break
+		fi
 		sleep 1
 		replay_barrier $SINGLEMDS
 		sleep 1 # give clients a time to do operations
