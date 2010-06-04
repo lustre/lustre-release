@@ -416,8 +416,11 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
 
         LASSERT(req->rq_reply_state == NULL);
 
-        if ((flags & LPRFL_EARLY_REPLY) == 0)
+        if ((flags & LPRFL_EARLY_REPLY) == 0) {
+                spin_lock(&req->rq_lock);
                 req->rq_packed_final = 1;
+                spin_unlock(&req->rq_lock);
+        }
 
         msg_len = lustre_msg_size_v1(count, lens);
         size = sizeof(struct ptlrpc_reply_state) + msg_len;
@@ -457,8 +460,11 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 
         LASSERT(req->rq_reply_state == NULL);
 
-        if ((flags & LPRFL_EARLY_REPLY) == 0)
+        if ((flags & LPRFL_EARLY_REPLY) == 0) {
+                spin_lock(&req->rq_lock);
                 req->rq_packed_final = 1;
+                spin_unlock(&req->rq_lock);
+        }
 
         /* use the same size of ptlrpc_body as client requested for
          * interoperability cases */

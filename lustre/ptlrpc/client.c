@@ -1031,7 +1031,10 @@ static int after_reply(struct ptlrpc_request *req)
                  * space for early reply) */
                 req->rq_replen       = size_round(req->rq_nob_received);
                 req->rq_nob_received = 0;
+
+                spin_lock(&req->rq_lock);
                 req->rq_resend       = 1;
+                spin_unlock(&req->rq_lock);
                 RETURN(0);
         }
 
@@ -1173,7 +1176,10 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         rc = ptl_send_rpc(req, 0);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); expect timeout", rc);
+
+                spin_lock(&req->rq_lock);
                 req->rq_net_err = 1;
+                spin_unlock(&req->rq_lock);
                 RETURN(rc);
         }
         RETURN(0);
@@ -1311,12 +1317,16 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 
                                 spin_unlock(&imp->imp_lock);
 
+                                spin_lock(&req->rq_lock);
                                 req->rq_waiting = 0;
+                                spin_unlock(&req->rq_lock);
 
                                 if (req->rq_timedout||req->rq_resend) {
                                         /* This is re-sending anyways, 
                                          * let's mark req as resend. */
+                                        spin_lock(&req->rq_lock);
                                         req->rq_resend = 1;
+                                        spin_unlock(&req->rq_lock);
                                         if (req->rq_bulk) {
                                                 __u64 old_xid;
 
@@ -1338,7 +1348,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         DEBUG_REQ(D_HA, req, "send failed (%d)",
                                                   rc);
                                         force_timer_recalc = 1;
+
+                                        spin_lock(&req->rq_lock);
                                         req->rq_net_err = 1;
+                                        spin_unlock(&req->rq_lock);
                                 }
                                 /* need to reset the timeout */
                                 force_timer_recalc = 1;
@@ -2209,7 +2222,9 @@ restart:
                 /* we can have rq_timeout on dlm fake import which not support
                  * recovery - but me need resend request on this import instead
                  * of return error */
+                spin_lock(&req->rq_lock);
                 req->rq_resend = 1;
+                spin_unlock(&req->rq_lock);
                 goto restart;
         }
 

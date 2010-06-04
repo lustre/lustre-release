@@ -1169,7 +1169,9 @@ static void target_request_copy_get(struct ptlrpc_request *req)
         /* mark that request is in recovery queue, so request handler will not
          * drop rpc count in export, bug 19870*/
         LASSERT(!req->rq_copy_queued);
+        spin_lock(&req->rq_lock);
         req->rq_copy_queued = 1;
+        spin_unlock(&req->rq_lock);
         /* increase refcount to keep request in queue */
         atomic_inc(&req->rq_refcount);
         /* release service thread while request is queued

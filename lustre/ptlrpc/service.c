@@ -471,7 +471,9 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
                 struct ptlrpc_at_array *array = &svc->srv_at_array;
                 __u32 index = req->rq_at_index;
 
+                spin_lock(&req->rq_lock);
                 req->rq_at_linked = 0;
+                spin_unlock(&req->rq_lock);
                 array->paa_reqs_count[index]--;
                 array->paa_count--;
         }
@@ -722,7 +724,10 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if (list_empty(&req->rq_timed_list))
                 list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
 
+        spin_lock(&req->rq_lock);
         req->rq_at_linked = 1;
+        spin_unlock(&req->rq_lock);
+
         req->rq_at_index = index;
         array->paa_reqs_count[index]++;
         array->paa_count++;
@@ -927,7 +932,9 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                                 counter++;
                                 array->paa_reqs_count[index]--;
                                 array->paa_count--;
+                                spin_lock(&rq->rq_lock);
                                 rq->rq_at_linked = 0;
+                                spin_unlock(&rq->rq_lock);
                                 continue;
                         }
 
