@@ -1062,7 +1062,8 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
         int total = 0, cached = 0, nr_ns;
         struct ldlm_namespace *ns;
 
-        if (nr != 0 && !(gfp_mask & __GFP_FS))
+        if (client == LDLM_NAMESPACE_CLIENT && nr != 0 &&
+            !(gfp_mask & __GFP_FS))
                 return -1;
 
         if (nr != 0)
