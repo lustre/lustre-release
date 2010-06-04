@@ -162,7 +162,7 @@ debs:
 			desc=$$(cat $$file | sed -e '1,/^$$/d' -e '/^---$$/,$$d'); \
 			dpatch_file=$${file/.patch/.dpatch}; \
 			sed -e '1,/^---$$/d' $$file | \
-			  dpatch patch-template -p "$$file" "$$desc" > \
+			  dpatch patch-template -p "$${file%.patch}" "$$desc" > \
 			  $$dpatch_file; \
 			echo "faked by make debs run from git" > \
 			  ../patched/$$dpatch_file; \
