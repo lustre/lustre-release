@@ -1,0 +1,148 @@
+#!/bin/bash
+# set -x
+set -e
+
+# lfs_migrate: a simple tool to copy and check files.
+#
+# To avoid allocating objects on one or more OSTs, they should be
+# deactivated on the MDS via "lctl --device {device_number} deactivate",
+# where {device_number} is from the output of "lctl dl" on the MDS.
+#
+# To guard against corruption, the file is compared after migration
+# to verify the copy is correct and the file has not been modified.
+# This is not a protection against the file being open by another
+# process, but it would catch the worst cases of in-use files, but
+# to be 100% safe the administrator needs to ensure this is safe.
+
+RSYNC=${RSYNC:-rsync}
+ECHO=echo
+LFS=${LFS:-lfs}
+
+usage() {
+    echo "usage: lfs_migrate [-c|-s] [-h] [-l] [-n] [-y] [file|dir ...]" 1>&2
+    echo "    -c compare file data after migrate (default)" 1>&2
+    echo "    -s skip file data comparison after migrate" 1>&2
+    echo "    -h show this usage message" 1>&2
+    echo "    -l migrate files with hard links (skip by default)" 1>&2
+    echo "    -n only print the names of files to be migrated" 1>&2
+    echo "    -y answer 'y' to usage question" 1>&2
+    echo "    if no file or directory is given, file list is read from stdin"
+    echo ""
+    echo "e.g.: lfs_migrate -c /mnt/lustre/file"
+    echo "      lfs find /scratch -O lustre-OST0004 -size +4G | lfs_migrate -y"
+    exit 1
+}
+
+OPT_CHECK=y
+
+while getopts "chlnqsy" opt $*; do
+    case $opt in
+	c) OPT_CHECK=y;;
+	l) OPT_NLINK=y;;
+	n) OPT_DRYRUN=n; OPT_YES=y;;
+	q) ECHO=:;;
+	s) OPT_CHECK="";;
+	y) OPT_YES=y;;
+	h|\?) usage;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if [ -z "$OPT_YES" ]; then
+	echo ""
+	echo "lfs_migrate is currently NOT SAFE for moving in-use files." 1>&2
+	echo "Use it only when you are sure migrated files are unused." 1>&2
+	echo "" 1>&2
+	echo "If emptying OST(s) that are not disabled on the MDS, new" 1>&2
+	echo "files may use them.  To prevent MDS allocating any files on" 1>&2
+	echo "OSTNNNN run 'lctl --device %{fsname}-OSTNNNN-osc deactivate'" 1>&2
+	echo "on the MDS." 1>&2
+	echo -n "Continue? (y/n) "
+	read CHECK
+	[ "$CHECK" != "y" -a "$CHECK" != "yes" ] && exit 1
+fi
+
+# if rsync has --xattr support, then try to copy the xattrs.
+$RSYNC --help 2>&1 | grep -q xattr && RSYNC_OPTS="$RSYNC_OPTS -X"
+$RSYNC --help 2>&1 | grep -q acls && RSYNC_OPTS="$RSYNC_OPTS -A"
+# If rsync copies lustre xattrs in the future, then we can skip lfs (bug 22189)
+strings $(which $RSYNC) 2>&1 | grep -q lustre && LFS=:
+
+lfs_migrate() {
+	while read OLDNAME; do
+		$ECHO -n "$OLDNAME: "
+
+		# avoid duplicate stat if possible
+		TYPE_LINK=($(stat -c "%h %F" "$OLDNAME" || true))
+
+		# skip non-regular files, since they don't have any objects
+		# and there is no point in trying to migrate them.
+		if [ "${TYPE_LINK[1]}" != "regular" ]; then
+			echo -e "not a regular file, skipped"
+			continue
+		fi
+
+		if [ -z "$OPT_NLINK" -a ${TYPE_LINK[0]} -gt 1 ]; then
+			echo -e "multiple hard links, skipped"
+			continue
+		fi
+
+		# working out write perms is hard, let the shell do it
+		if [ ! -w "$OLDNAME" ]; then
+			echo -e "no write permission, skipped"
+			continue
+		fi
+
+		if [ "$OPT_DRYRUN" ]; then
+			echo -e "dry run, skipped"
+			continue
+		fi
+
+
+		# if rsync copies Lustre xattrs properly in the future
+		# (i.e. before the file data, so that it preserves striping)
+		# then we don't need to do this getstripe/mktemp stuff.
+		UNLINK="-u"
+		COUNT=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
+		SIZE=$($LFS getstripe -s "$OLDNAME" 2> /dev/null)
+		[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
+		NEWNAME=$(mktemp $UNLINK "$OLDNAME.tmp.XXXXXX")
+		if [ $? -ne 0 -o -z "$NEWNAME" ]; then
+			echo -e "\r$OLDNAME: can't make temp file, skipped" 1>&2
+			continue
+		fi
+
+		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} -s${SIZE} "$NEWNAME"
+
+		# we use --inplace, since we created our own temp file already
+		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
+			echo -e "\r$OLDNAME: copy error, exiting" 1>&2
+			rm -f "$NEWNAME"
+			exit 4
+		fi
+
+		if [ "$OPT_CHECK" ] && ! cmp "$OLDNAME" "$NEWNAME"; then
+			echo -e "\r$NEWNAME: compare failed, exiting" 1>&2
+			exit 8
+		fi
+
+		if ! mv "$NEWNAME" "$OLDNAME"; then
+			echo -e "\r$OLDNAME: rename error, exiting" 1>&2
+			exit 12
+		fi
+		$ECHO "done"
+	done
+}
+
+if [ "$#" -eq 0 ]; then
+	lfs_migrate
+else
+	while [ "$1" ]; do
+		if [ -d "$1" ]; then
+			lfs find "$1" -type f | lfs_migrate
+		else
+			echo $1 | lfs_migrate
+		fi
+		shift
+	done
+fi

@@ -41,7 +41,7 @@ genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman lustre_createcsv \
     lc_md lc_lvm lustre_start
 
 sbin_SCRIPTS = $(genscripts) $(sbinscripts)
-bin_SCRIPTS = lustre_req_history
+bin_SCRIPTS = lustre_req_history lfs_migrate
 
 EXTRA_DIST = license-status maketags.sh version_tag.pl lc_common \
 	     $(addsuffix .in,$(genscripts)) lc_mon $(sbinscripts) \
