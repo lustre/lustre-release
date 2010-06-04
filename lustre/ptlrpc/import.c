@@ -59,6 +59,10 @@ struct ptlrpc_connect_async_args {
         int pcaa_initial_connect;
 };
 
+/**
+ * Updates import \a imp current state to provided \a state value
+ * Helper function. Must be called under imp_lock.
+ */
 static void __import_set_state(struct obd_import *imp,
                                enum lustre_imp_state state)
 {
@@ -130,7 +134,8 @@ static void deuuidify(char *uuid, const char *prefix, char **uuid_start,
                 *uuid_len -= strlen(UUID_STR);
 }
 
-/* Returns true if import was FULL, false if import was already not
+/**
+ * Returns true if import was FULL, false if import was already not
  * connected.
  * @imp - import to be disconnected
  * @conn_cnt - connection count (epoch) of the request that timed out
@@ -257,7 +262,7 @@ static unsigned int ptlrpc_inflight_timeout(struct obd_import *imp)
         return timeout;
 }
 
-/*
+/**
  * This function will invalidate the import, if necessary, then block
  * for all the RPC completions, and finally notify the obd to
  * invalidate its state (ie cancel locks, clear pending requests,
@@ -445,6 +450,11 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 
 EXPORT_SYMBOL(ptlrpc_reconnect_import);
 
+/**
+ * Connection on import \a imp is changed to another one (if more than one is
+ * present). We typically chose connection that we have not tried to connect to
+ * the longest
+ */
 static int import_select_connection(struct obd_import *imp)
 {
         struct obd_import_conn *imp_conn = NULL, *conn;
@@ -571,6 +581,12 @@ static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
         return 1;
 }
 
+/**
+ * Attempt to (re)connect import \a imp. This includes all preparations,
+ * initializing CONNECT RPC request and passing it to ptlrpcd for
+ * actual sending.
+ * Returns 0 on success or error code.
+ */
 int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
@@ -759,7 +775,12 @@ static int ptlrpc_busy_reconnect(int rc)
         return (rc == -EBUSY) || (rc == -EAGAIN);
 }
 
-
+/**
+ * interpret_reply callback for connect RPCs.
+ * Looks into returned status of connect operation and decides
+ * what to do with the import - i.e enter recovery, promote it to
+ * full state for normal operations of disconnect it due to an error.
+ */
 static int ptlrpc_connect_interpret(const struct lu_env *env,
                                     struct ptlrpc_request *request,
                                     void *data, int rc)
@@ -1149,6 +1170,10 @@ out:
         RETURN(rc);
 }
 
+/**
+ * interpret callback for "completed replay" RPCs.
+ * \see signal_completed_replay
+ */
 static int completed_replay_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
                                       void * data, int rc)
@@ -1175,6 +1200,10 @@ static int completed_replay_interpret(const struct lu_env *env,
         RETURN(0);
 }
 
+/**
+ * Let server know that we have no requests to replay anymore.
+ * Achieved by just sending a PING request
+ */
 static int signal_completed_replay(struct obd_import *imp)
 {
         struct ptlrpc_request *req;
@@ -1203,6 +1232,11 @@ static int signal_completed_replay(struct obd_import *imp)
 }
 
 #ifdef __KERNEL__
+/**
+ * In kernel code all import invalidation happens in its own
+ * separate thread, so that whatever application happened to encounter
+ * a problem could still be killed or otherwise continue
+ */
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
@@ -1230,6 +1264,26 @@ static int ptlrpc_invalidate_import_thread(void *data)
 }
 #endif
 
+/**
+ * This is the state machine for client-side recovery on import.
+ *
+ * Typicaly we have two possibly paths. If we came to server and it is not
+ * in recovery, we just enter IMP_EVICTED state, invalidate our import
+ * state and reconnect from scratch.
+ * If we came to server that is in recovery, we enter IMP_REPLAY import state.
+ * We go through our list of requests to replay and send them to server one by
+ * one.
+ * After sending all request from the list we change import state to 
+ * IMP_REPLAY_LOCKS and re-request all the locks we believe we have from server
+ * and also all the locks we don't yet have and wait for server to grant us.
+ * After that we send a special "replay completed" request and change import
+ * state to IMP_REPLAY_WAIT.
+ * Upon receiving reply to that "replay completed" RPC we enter IMP_RECOVER
+ * state and resend all requests from sending list.
+ * After that we promote import to FULL state and send all delayed requests
+ * and import is fully operational after that.
+ *
+ */
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
         int rc = 0;

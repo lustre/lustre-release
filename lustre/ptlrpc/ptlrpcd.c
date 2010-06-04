@@ -36,6 +36,23 @@
  * lustre/ptlrpc/ptlrpcd.c
  */
 
+/** \defgroup ptlrpcd PortalRPC daemon
+ *
+ * ptlrpcd is a special thread with its own set where other user might add
+ * requests when they don't want to wait for their completion.
+ * PtlRPCD will take care of sending such requests and then processing their
+ * replies and calling completion callbacks as necessary.
+ * The callbacks are called directly from ptlrpcd context.
+ * It is important to never significantly block (esp. on RPCs!) within such
+ * completion handler or a deadlock might occur where ptlrpcd enters some
+ * callback that attempts to send another RPC and wait for it to return,
+ * during which time ptlrpcd is completely blocked, so e.g. if import
+ * fails, recovery cannot progress because connection requests are also
+ * sent by ptlrpcd.
+ *
+ * @{
+ */
+
 #define DEBUG_SUBSYSTEM S_RPC
 
 #ifdef __KERNEL__
@@ -102,7 +119,7 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
         cfs_waitq_signal(&rq_set->set_waitq);
 }
 
-/*
+/**
  * Move all request from an existing request set to the ptlrpcd queue.
  * All requests from the set must be in phase RQ_PHASE_NEW.
  */
@@ -125,7 +142,7 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
 }
 EXPORT_SYMBOL(ptlrpcd_add_rqset);
 
-/*
+/**
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
@@ -190,6 +207,10 @@ int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
         return rc;
 }
 
+/**
+ * Check if there is more work to do on ptlrpcd set.
+ * Returns 1 if yes.
+ */
 static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
 {
         cfs_list_t *tmp, *pos;
@@ -241,10 +262,11 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
 }
 
 #ifdef __KERNEL__
-/*
+/**
+ * Main ptlrpcd thread.
  * ptlrpc's code paths like to execute in process context, so we have this
- * thread which spins on a set which contains the io rpcs. llite specifies
- * ptlrpcd's set when it pushes pages down into the oscs.
+ * thread which spins on a set which contains the rpcs and sends them.
+ *
  */
 static int ptlrpcd(void *arg)
 {
@@ -336,6 +358,11 @@ static int ptlrpcd(void *arg)
 
 #else /* !__KERNEL__ */
 
+/**
+ * In liblustre we do not have separate threads, so this function
+ * is called from time to time all across common code to see
+ * if something needs to be processed on ptlrpcd set.
+ */
 int ptlrpcd_check_async_rpcs(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
@@ -509,3 +536,4 @@ void ptlrpcd_decref(void)
                 ptlrpcd_fini();
         cfs_mutex_up(&ptlrpcd_sem);
 }
+/** @} ptlrpcd */

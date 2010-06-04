@@ -60,6 +60,10 @@
 
 static int ptlrpc_recover_import_no_retry(struct obd_import *, char *);
 
+/**
+ * Start recovery on disconnected import.
+ * This is done by just attempting a connect
+ */
 void ptlrpc_initiate_recovery(struct obd_import *imp)
 {
         ENTRY;
@@ -70,6 +74,10 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
         EXIT;
 }
 
+/**
+ * Identify what request from replay list needs to be replayed next
+ * (based on what we have already replayed) and send it to server.
+ */
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 {
         int rc = 0;
@@ -142,6 +150,10 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
         RETURN(rc);
 }
 
+/**
+ * Schedule resending of request on sending_list. This is done after
+ * we completed replaying of requests and locks.
+ */
 int ptlrpc_resend(struct obd_import *imp)
 {
         struct ptlrpc_request *req, *next;
@@ -173,6 +185,10 @@ int ptlrpc_resend(struct obd_import *imp)
         RETURN(0);
 }
 
+/**
+ * Go through all requests in delayed list and wake their threads
+ * for resending
+ */
 void ptlrpc_wake_delayed(struct obd_import *imp)
 {
         cfs_list_t *tmp, *pos;
@@ -222,7 +238,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
         EXIT;
 }
 
-/*
+/**
  * Administratively active/deactive a client. 
  * This should only be called by the ioctl interface, currently
  *  - the lctl deactivate and activate commands

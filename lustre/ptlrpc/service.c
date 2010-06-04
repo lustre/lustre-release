@@ -161,6 +161,10 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service *svc)
         return (0);
 }
 
+/**
+ * Part of Rep-Ack logic.
+ * Puts a lock and its mode into reply state assotiated to request reply.
+ */
 void
 ptlrpc_save_lock(struct ptlrpc_request *req,
                  struct lustre_handle *lock, int mode, int no_ack)
@@ -324,6 +328,10 @@ static void rs_batch_fini(struct rs_batch *b)
 
 #endif /* __KERNEL__ */
 
+/**
+ * Put reply state into a queue for processing because we received
+ * ACK from the client
+ */
 void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs)
 {
 #ifdef __KERNEL__
@@ -439,6 +447,10 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
         return (-1);
 }
 
+/**
+ * Start a service with parameters from struct ptlrpc_service_conf \a c
+ * as opposed to directly calling ptlrpc_init_svc with tons of arguments.
+ */
 struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                             svc_handler_t h, char *name,
                                             struct proc_dir_entry *proc_entry,
@@ -463,7 +475,25 @@ static void ptlrpc_at_timer(unsigned long castmeharder)
         cfs_waitq_signal(&svc->srv_waitq);
 }
 
-/* @threadname should be 11 characters or less - 3 will be added on */
+/**
+ * Initialize service on a given portal.
+ * This includes starting serving threads , allocating and posting rqbds and
+ * so on.
+ * \a nbufs is how many buffers to post
+ * \a bufsize is buffer size to post
+ * \a max_req_size - maximum request size to be accepted for this service
+ * \a max_reply_size maximum reply size this service can ever send
+ * \a req_portal - portal to listed for requests on
+ * \a rep_portal - portal of where to send replies to
+ * \a watchdog_factor soft watchdog timeout multiplifier to print stuck service traces.
+ * \a handler - function to process every new request
+ * \a name - service name
+ * \a proc_entry - entry in the /proc tree for sttistics reporting
+ * \a min_threads \a max_threads - min/max number of service threads to start.
+ * \a threadname should be 11 characters or less - 3 will be added on
+ * \a hp_handler - function to determine priority of the request, also called
+ *                 on every new request.
+ */
 struct ptlrpc_service *
 ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int req_portal, int rep_portal, int watchdog_factor,
@@ -751,9 +781,11 @@ static void ptlrpc_server_finish_request(struct ptlrpc_request *req)
         ptlrpc_server_drop_request(req);
 }
 
-/* This function makes sure dead exports are evicted in a timely manner.
-   This function is only called when some export receives a message (i.e.,
-   the network is up.) */
+/**
+ * This function makes sure dead exports are evicted in a timely manner.
+ * This function is only called when some export receives a message (i.e.,
+ * the network is up.)
+ */
 static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
 {
         struct obd_export *oldest_exp;
@@ -833,6 +865,10 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
         EXIT;
 }
 
+/**
+ * Sanity check request \a req.
+ * Return 0 if all is ok, error code otherwise.
+ */
 static int ptlrpc_check_req(struct ptlrpc_request *req)
 {
         if (unlikely(lustre_msg_get_conn_cnt(req->rq_reqmsg) <
@@ -1251,6 +1287,9 @@ static void ptlrpc_hpreq_reorder_nolock(struct ptlrpc_service *svc,
         EXIT;
 }
 
+/**
+ * \see ptlrpc_hpreq_reorder_nolock
+ */
 void ptlrpc_hpreq_reorder(struct ptlrpc_request *req)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
@@ -1309,17 +1348,24 @@ static int ptlrpc_server_request_add(struct ptlrpc_service *svc,
         RETURN(0);
 }
 
-/* Only allow normal priority requests on a service that has a high-priority
+/**
+ * Only allow normal priority requests on a service that has a high-priority
  * queue if forced (i.e. cleanup), if there are other high priority requests
  * already being processed (i.e. those threads can service more high-priority
  * requests), or if there are enough idle threads that a later thread can do
- * a high priority request. */
+ * a high priority request.
+ */
 static int ptlrpc_server_allow_normal(struct ptlrpc_service *svc, int force)
 {
         return force || !svc->srv_hpreq_handler || svc->srv_n_hpreq > 0 ||
                 svc->srv_threads_running <= svc->srv_threads_started - 2;
 }
 
+/**
+ * Fetch a request for processing from queue of unprocessed requests.
+ * Favors high-priority requests.
+ * Returns a pointer to fetched request.
+ */
 static struct ptlrpc_request *
 ptlrpc_server_request_get(struct ptlrpc_service *svc, int force)
 {
@@ -1341,6 +1387,11 @@ ptlrpc_server_request_get(struct ptlrpc_service *svc, int force)
         RETURN(req);
 }
 
+/**
+ * Returns true if there are requests available in incoming
+ * request queue for processing and it is allowed to fetch them
+ * \see ptlrpc_server_allow_normal
+ */
 static int ptlrpc_server_request_pending(struct ptlrpc_service *svc, int force)
 {
         return ((ptlrpc_server_allow_normal(svc, force) &&
@@ -1348,8 +1399,12 @@ static int ptlrpc_server_request_pending(struct ptlrpc_service *svc, int force)
                 !cfs_list_empty(&svc->srv_request_hpq));
 }
 
-/* Handle freshly incoming reqs, add to timed early reply list,
-   pass on to regular request queue */
+/**
+ * Handle freshly incoming reqs, add to timed early reply list,
+ * pass on to regular request queue.
+ * All incoming requests pass through here before getting into
+ * ptlrpc_server_handle_req later on.
+ */
 static int
 ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
 {
@@ -1492,6 +1547,10 @@ err_req:
         RETURN(1);
 }
 
+/**
+ * Main incoming request handling logic.
+ * Calls handler function from service to do actual processing.
+ */
 static int
 ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                              struct ptlrpc_thread *thread)
@@ -1977,7 +2036,10 @@ static int ptlrpc_main_check_event(struct ptlrpc_thread *t,
 }
 
 /**
- * Main prlrpc service thread routine.
+ * Main thread body for service threads.
+ * Waits in a loop waiting for new requests to process to appear.
+ * Every time an incoming requests is added to its queue, a waitq
+ * is woken up and one of the threads will handle it.
  */
 static int ptlrpc_main(void *arg)
 {
@@ -2172,6 +2234,10 @@ static int hrt_dont_sleep(struct ptlrpc_hr_thread *t,
         return result;
 }
 
+/**
+ * Main body of "handle reply" function.
+ * It processes acked reply states
+ */
 static int ptlrpc_hr_main(void *arg)
 {
         struct ptlrpc_hr_args * hr_args = arg;
@@ -2317,6 +2383,9 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         EXIT;
 }
 
+/**
+ * Stops all threads of a particular service \a svc
+ */
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 {
         struct ptlrpc_thread *thread;
@@ -2634,7 +2703,8 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         RETURN(0);
 }
 
-/* Returns 0 if the service is healthy.
+/**
+ * Returns 0 if the service is healthy.
  *
  * Right now, it just checks to make sure that requests aren't languishing
  * in the queue.  We'll use this health check to govern whether a node needs

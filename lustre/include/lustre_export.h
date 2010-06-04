@@ -33,6 +33,10 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
+/** \defgroup obd_export PortalRPC export definitions
+ *
+ * @{
+ */
 
 #ifndef __EXPORT_H
 #define __EXPORT_H
@@ -51,6 +55,9 @@ struct mdt_client_data;
 struct mds_idmap_table;
 struct mdt_idmap_table;
 
+/**
+ * Target-specific export data
+ */
 struct tg_export_data {
         /** Protects led_lcd below */
         cfs_semaphore_t         ted_lcd_lock;
@@ -62,10 +69,15 @@ struct tg_export_data {
         int                     ted_lr_idx;
 };
 
+/**
+ * MDT-specific export data
+ */
 struct mdt_export_data {
         struct tg_export_data   med_ted;
+        /** List of all files opened by client on this MDT */
         cfs_list_t              med_open_head;
         cfs_spinlock_t          med_open_lock; /* lock med_open_head, mfd_list*/
+        /** Bitmask of all ibit locks this MDT understands */
         __u64                   med_ibits_known;
         cfs_semaphore_t         med_idmap_sem;
         struct lustre_idmap_table *med_idmap;
@@ -92,6 +104,7 @@ struct ec_export_data { /* echo client */
 };
 
 /* In-memory access to client data from OST struct */
+/** Filter (oss-side) specific import data */
 struct filter_export_data {
         struct tg_export_data      fed_ted;
         cfs_spinlock_t             fed_lock;     /**< protects fed_mod_list */
@@ -103,6 +116,10 @@ struct filter_export_data {
         __u32                      fed_group;
 };
 
+/**
+ * per-NID statistics structure.
+ * It tracks access patterns to this export on a per-client-NID basis
+ */
 typedef struct nid_stat {
         lnet_nid_t               nid;
         cfs_hlist_node_t         nid_hash;
@@ -134,7 +151,19 @@ enum obd_option {
         OBD_OPT_ABORT_RECOV =   0x0004,
 };
 
+/**
+ * Export structure. Represents target-side of connection in portals.
+ * Also used in Lustre to connect between layers on the same node when
+ * there is no network-connection in-between.
+ * For every connected client there is an export structure on the server
+ * attached to the same obd device.
+ */
 struct obd_export {
+        /**
+         * Export handle, it's id is provided to client on connect
+         * Subsequent client RPCs contain this handle id to identify
+         * what export they are talking to.
+         */
         struct portals_handle     exp_handle;
         cfs_atomic_t              exp_refcount;
         /**
@@ -150,29 +179,47 @@ struct obd_export {
         cfs_list_t                exp_locks_list;
         cfs_spinlock_t            exp_locks_list_guard;
 #endif
+        /** Number of queued replay requests to be processes */
         cfs_atomic_t              exp_replay_count;
+        /** UUID of client connected to this export */
         struct obd_uuid           exp_client_uuid;
+        /** To link all exports on an obd device */
         cfs_list_t                exp_obd_chain;
-        cfs_hlist_node_t          exp_uuid_hash; /* uuid-export hash*/
-        cfs_hlist_node_t          exp_nid_hash; /* nid-export hash */
-        /* exp_obd_chain_timed fo ping evictor, protected by obd_dev_lock */
+        cfs_hlist_node_t          exp_uuid_hash; /** uuid-export hash*/
+        cfs_hlist_node_t          exp_nid_hash; /** nid-export hash */
+        /**
+         * All exports eligible for ping evictor are linked into a list
+         * through this field in "most time since last request on this export"
+         * order
+         * protected by obd_dev_lock
+         */
         cfs_list_t                exp_obd_chain_timed;
+        /** Obd device of this export */
         struct obd_device        *exp_obd;
-        struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
+        /** "reverse" import to send requests (e.g. from ldlm) back to client */
+        struct obd_import        *exp_imp_reverse;
         struct nid_stat          *exp_nid_stats;
         struct lprocfs_stats     *exp_md_stats;
+        /** Active connetion */
         struct ptlrpc_connection *exp_connection;
+        /** Connection count value from last succesful reconnect rpc */
         __u32                     exp_conn_cnt;
-        cfs_hash_t               *exp_lock_hash; /* existing lock hash */
+        /** Hash list of all ldlm locks granted on this export */
+        cfs_hash_t               *exp_lock_hash;
+        /** lock to protect exp_lock_hash accesses */
         cfs_spinlock_t            exp_lock_hash_lock;
         cfs_list_t                exp_outstanding_replies;
         cfs_list_t                exp_uncommitted_replies;
         cfs_spinlock_t            exp_uncommitted_replies_lock;
+        /** Last committed transno for this export */
         __u64                     exp_last_committed;
+        /** When was last request received */
         cfs_time_t                exp_last_request_time;
+        /** On replay all requests waiting for replay are linked here */
         cfs_list_t                exp_req_replay_queue;
-        cfs_spinlock_t            exp_lock; /* protects flags int below */
-        /* ^ protects exp_outstanding_replies too */
+        /** protects exp_flags and exp_outstanding_replies */
+        cfs_spinlock_t            exp_lock;
+        /** Compatibility flags for this export */
         __u64                     exp_connect_flags;
         enum obd_option           exp_flags;
         unsigned long             exp_failed:1,
@@ -199,6 +246,7 @@ struct obd_export {
         struct sptlrpc_flavor     exp_flvr_old[2];      /* about-to-expire */
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
 
+        /** Target specific data */
         union {
                 struct tg_export_data     eu_target_data;
                 struct mdt_export_data    eu_mdt_data;
@@ -273,3 +321,4 @@ extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
 /** @} export */
 
 #endif /* __EXPORT_H */
+/** @} obd_export */

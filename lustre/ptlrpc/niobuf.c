@@ -44,6 +44,11 @@
 #include <obd.h>
 #include "ptlrpc_internal.h"
 
+/**
+ * Helper function. Sends \a len bytes from \a base at offset \a offset
+ * over \a conn connection to portal \a portal.
+ * Returns 0 on success or error code.
+ */
 static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
                          lnet_ack_req_t ack, struct ptlrpc_cb_id *cbid,
                          struct ptlrpc_connection *conn, int portal, __u64 xid,
@@ -95,6 +100,10 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
         RETURN (0);
 }
 
+/**
+ * Starts bulk transfer for descriptor \a desc
+ * Returns 0 on success or error code.
+ */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
         struct ptlrpc_connection *conn = desc->bd_export->exp_connection;
@@ -162,8 +171,10 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
         RETURN(0);
 }
 
-/* Server side bulk abort. Idempotent. Not thread-safe (i.e. only
- * serialises with completion callback) */
+/**
+ * Server side bulk abort. Idempotent. Not thread-safe (i.e. only
+ * serialises with completion callback)
+ */
 void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
         struct l_wait_info       lwi;
@@ -201,6 +212,10 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
         }
 }
 
+/**
+ * Register bulk for later transfer
+ * Returns 0 on success or error code.
+ */
 int ptlrpc_register_bulk(struct ptlrpc_request *req)
 {
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
@@ -274,8 +289,12 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-/* Disconnect a bulk desc from the network. Idempotent. Not
- * thread-safe (i.e. only interlocks with completion callback). */
+/**
+ * Disconnect a bulk desc from the network. Idempotent. Not
+ * thread-safe (i.e. only interlocks with completion callback).
+ * Returns 1 on success or 0 if network unregistration failed for whatever
+ * reason.
+ */
 int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 {
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
@@ -380,6 +399,11 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
         }
 }
 
+/**
+ * Send request reply from request \a req reply buffer.
+ * \a flags defines reply types
+ * Returns 0 on sucess or error code
+ */
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 {
         struct ptlrpc_service     *svc = req->rq_rqbd->rqbd_service;
@@ -466,6 +490,10 @@ int ptlrpc_reply (struct ptlrpc_request *req)
                 return (ptlrpc_send_reply(req, 0));
 }
 
+/**
+ * For request \a req send an error reply back. Create empty
+ * reply buffers if necessary.
+ */
 int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
 {
         int rc;
@@ -491,6 +519,12 @@ int ptlrpc_error(struct ptlrpc_request *req)
         return ptlrpc_send_error(req, 0);
 }
 
+/**
+ * Send request \a request.
+ * if \a noreply is set, don't expect any reply back and don't set up
+ * reply buffers.
+ * Returns 0 on success or error code.
+ */
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 {
         int rc;
@@ -669,6 +703,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         return rc;
 }
 
+/**
+ * Register request buffer descriptor for request receiving.
+ */
 int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 {
         struct ptlrpc_service   *service = rqbd->rqbd_service;
