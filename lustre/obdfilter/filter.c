@@ -2897,9 +2897,9 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_SETATTR_CREDITS))
                 fsfilt_extend(exp->exp_obd, inode, 0, handle);
 
-        /* The truncate might have used up our transaction credits.  Make
-         * sure we have one left for the last_rcvd update. */
-        err = fsfilt_extend(exp->exp_obd, inode, 1, handle);
+        /* The truncate might have used up our transaction credits.  Make sure
+         * we have two left for the last_rcvd and VBR inode version updates. */
+        err = fsfilt_extend(exp->exp_obd, inode, 2, handle);
         rc = filter_finish_transno(exp, inode, oti, rc, sync);
         if (sync) {
                 filter_cancel_cookies_cb(exp->exp_obd, 0, fcc, rc);
