@@ -1189,6 +1189,41 @@ int cl_inode_init(struct inode *inode, struct lustre_md *md)
         return result;
 }
 
+/**
+ * Wait for others drop their references of the object at first, then we drop
+ * the last one, which will lead to the object be destroyed immediately.
+ * Must be called after cl_object_kill() against this object.
+ *
+ * The reason we want to do this is: destroying top object will wait for sub
+ * objects being destroyed first, so we can't let bottom layer (e.g. from ASTs)
+ * to initiate top object destroying which may deadlock. See bz22520.
+ */
+static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
+{
+        struct lu_object_header *header = obj->co_lu.lo_header;
+        struct lu_site          *site;
+        cfs_waitlink_t           waiter;
+
+        if (unlikely(cfs_atomic_read(&header->loh_ref) != 1)) {
+                site = obj->co_lu.lo_dev->ld_site;
+
+                cfs_waitlink_init(&waiter);
+                cfs_waitq_add(&site->ls_marche_funebre, &waiter);
+
+                while (1) {
+                        cfs_set_current_state(CFS_TASK_UNINT);
+                        if (cfs_atomic_read(&header->loh_ref) == 1)
+                                break;
+                        cfs_waitq_wait(&waiter, CFS_TASK_UNINT);
+                }
+
+                cfs_set_current_state(CFS_TASK_RUNNING);
+                cfs_waitq_del(&site->ls_marche_funebre, &waiter);
+        }
+
+        cl_object_put(env, obj);
+}
+
 void cl_inode_fini(struct inode *inode)
 {
         struct lu_env           *env;
@@ -1216,7 +1251,7 @@ void cl_inode_fini(struct inode *inode)
                  */
                 cl_object_kill(env, clob);
                 lu_object_ref_del(&clob->co_lu, "inode", inode);
-                cl_object_put(env, clob);
+                cl_object_put_last(env, clob);
                 lli->lli_clob = NULL;
                 if (emergency) {
                         cl_env_unplant(ccc_inode_fini_env, &refcheck);
