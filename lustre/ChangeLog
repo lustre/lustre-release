@@ -12,6 +12,14 @@ tbd  Sun Microsystems, Inc.
 	 2.6.29.4-167.fc11 (FC11)
        * Recommended e2fsprogs version: 1.41.10-sun2
 
+Severity   : enhancement
+Bugzilla   : 22194
+Description: lfs quota output is not very convenient for awk/sed-parsing
+Details    : Some positions in lfs quota output table could be empty or
+	     non-empty which made it hard to parse it with scripts, now
+	     a dash is put instead of space where there is not supposed
+	     to be any data.
+
 Severity   : normal
 Bugzilla   : 22787
 Description: Update to OFED 1.5.1

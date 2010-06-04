@@ -198,7 +198,7 @@ command_t cmdlist[] = {
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
          "       -I can be used instead of --inode-hardlimit"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx]\n"
+         "usage: quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx]\n"
          "             [<-u|-g> <uname>|<uid>|<gname>|<gid>] <filesystem>\n"
          "       quota [-o obd_uuid|-i mdt_idx|-I ost_idx] -t <-u|-g> <filesystem>"},
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
@@ -1966,12 +1966,12 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type, int rc)
                                         ? LPU64 : "["LPU64"]",
                                         dqb->dqb_bsoftlimit);
                         else
-                                sprintf(numbuf[1], "%s", "");
+                                sprintf(numbuf[1], "%s", "-");
                         sprintf(numbuf[2], (dqb->dqb_valid & QIF_BLIMITS)
                                 ? LPU64 : "["LPU64"]", dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
-                               numbuf[2], bover > 1 ? timebuf : "");
+                               numbuf[2], bover > 1 ? timebuf : "-");
 
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
@@ -1983,13 +1983,15 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type, int rc)
                                         ? LPU64 : "["LPU64"]",
                                         dqb->dqb_isoftlimit);
                         else
-                                sprintf(numbuf[1], "%s", "");
+                                sprintf(numbuf[1], "%s", "-");
                         sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
                                 LPU64 : "["LPU64"]", dqb->dqb_ihardlimit);
                         if (type != QC_OSTIDX)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],
-                                       numbuf[2], iover > 1 ? timebuf : "");
+                                       numbuf[2], iover > 1 ? timebuf : "-");
+                        else
+                                printf(" %7s %7s %7s %7s", "-", "-", "-", "-");
                         printf("\n");
                 }
         } else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
@@ -2049,12 +2051,12 @@ static int lfs_quota(int argc, char **argv)
                                     .qc_type = UGQUOTA };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
-        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, pass = 0;
+        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0, pass = 0, quiet = 0;
         char *endptr;
         __u32 valid = QC_GENERAL, idx = 0;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ugto:i:I:v")) != -1) {
+        while ((c = getopt(argc, argv, "ugto:i:I:qv")) != -1) {
                 switch (c) {
                 case 'u':
                         if (qctl.qc_type != UGQUOTA) {
@@ -2087,6 +2089,9 @@ static int lfs_quota(int argc, char **argv)
                         break;
                 case 'v':
                         verbose = 1;
+                        break;
+                case 'q':
+                        quiet = 1;
                         break;
                 default:
                         fprintf(stderr, "error: %s: option '-%c' "
@@ -2141,13 +2146,24 @@ ug_output:
         mnt = argv[optind];
 
         rc1 = llapi_quotactl(mnt, &qctl);
-        if (rc1 == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n",
-                        qctl.qc_type == USRQUOTA ? "user" : "group");
-                goto out;
+        if (rc1 == -1) {
+                switch (errno) {
+                case ESRCH:
+                        fprintf(stderr, "%s quotas are not enabled.\n",
+                                qctl.qc_type == USRQUOTA ? "user" : "group");
+                        goto out;
+                case EPERM:
+                        fprintf(stderr, "Permission denied.\n");
+                case ENOENT:
+                        /* We already got a "No such file..." message. */
+                        goto out;
+                default:
+                        fprintf(stderr, "Unexpected quotactl error: %s\n",
+                                strerror(errno));
+                }
         }
 
-        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA)
+        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && !quiet)
                 print_quota_title(name, &qctl);
 
         if (rc1 && *obd_type)
@@ -2172,7 +2188,7 @@ out:
         if (pass == 1)
                 goto ug_output;
 
-        return 0;
+        return rc1;
 }
 #endif /* HAVE_SYS_QUOTA_H! */
 

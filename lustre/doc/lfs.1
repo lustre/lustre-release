@@ -36,7 +36,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs poollist <filesystem>[.<pool>] | <pathname>
 .br
-.B lfs quota [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] <filesystem>
+.B lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] <filesystem>
 .br
 .B lfs quota -t <-u|-g> <filesystem>
 .br
@@ -144,8 +144,8 @@ Delete the default striping on the specified directory.
 .B poollist <filesystem>[.<pool>] | <pathname>
 List the pools in \fBfilesystem\fR or \fBpathname\fR, or the OSTs in \fBfilesystem.pool\fR
 .TP
-.B quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g <uname>|<uid>|<gname>|<gid>] <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
+.B quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g <uname>|<uid>|<gname>|<gid>] <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output. -q disables printing of additional descriptions (including column titles).
 .TP
 .B quota -t <-u|-g> <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas

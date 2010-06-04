@@ -233,6 +233,36 @@ quota_log() {
         log "$*"
 }
 
+#
+# get quota info for a user or a group
+# usage: getquota -u|-g <username>|<groupname> global|<obd_uuid> bhardlimit|bsoftlimit|bgrace|ihardlimit|isoftlimit|igrace
+#
+getquota() {
+        local spec
+        local uuid
+
+        [ "$#" != 4 ] && error "getquota: wrong number of arguments: $#"
+        [ "$1" != "-u" -a "$1" != "-g" ] && error "getquota: wrong u/g specifier $1 passed"
+
+        uuid="$3"
+
+        case "$4" in
+                curspace)   spec=1;;
+                bsoftlimit) spec=2;;
+                bhardlimit) spec=3;;
+                bgrace)     spec=4;;
+                curinodes)  spec=5;;
+                isoftlimit) spec=6;;
+                ihardlimit) spec=7;;
+                igrace)     spec=8;;
+                *)          error "unknown quota parameter $4";;
+        esac
+
+        [ "$uuid" = "global" ] && uuid=$DIR
+
+        $LFS quota -v "$1" "$2" $DIR | awk 'BEGIN { num='$spec' } { if ($1 == "'$uuid'") { if (NF == 1) { getline } else { num++ } ; print $num;} }'
+}
+
 quota_show_check() {
         LOCAL_BF=$1
         LOCAL_UG=$2
@@ -242,7 +272,7 @@ quota_show_check() {
         $LFS quota -v -$LOCAL_UG $LOCAL_ID $DIR
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "b" ]; then
-	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $2 }'`"
+                USAGE=`getquota -$LOCAL_UG $LOCAL_ID global curspace`
                 if [ -z $USAGE ]; then
                         quota_error $LOCAL_UG $LOCAL_ID "System is error when query quota for block ($LOCAL_UG:$LOCAL_ID)."
                 else
@@ -251,7 +281,7 @@ quota_show_check() {
         fi
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "f" ]; then
-	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $5 }'`"
+                USAGE=`getquota -$LOCAL_UG $LOCAL_ID global curinodes`
                 if [ -z $USAGE ]; then
                         quota_error $LOCAL_UG $LOCAL_ID "System is error when query quota for file ($LOCAL_UG:$LOCAL_ID)."
                 else
@@ -309,7 +339,7 @@ test_1_sub() {
         rm -f $TESTFILE
 	sync; sleep 1; sync;
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED=`getquota -u $TSTUSR $OST0_UUID curspace`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
@@ -347,7 +377,7 @@ test_1_sub() {
         rm -f $TESTFILE
 	sync; sleep 1; sync;
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED=`getquota -g $TSTUSR $OST0_UUID curspace`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
@@ -402,7 +432,7 @@ test_2_sub() {
 	sync; sleep 1; sync;
 
 	MDS_UUID=`do_facet $SINGLEMDS $LCTL dl | grep -m1 " mdt " | awk '{print $((NF-1))}'`
-	MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        MDS_QUOTA_USED=`getquota -u $TSTUSR $MDS_UUID curinodes`
 	echo $MDS_QUOTA_USED
 	[ $MDS_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
@@ -430,7 +460,7 @@ test_2_sub() {
 	sync; sleep 1; sync;
 
 	MDS_UUID=`do_facet $SINGLEMDS $LCTL dl | grep -m1 " mdt " | awk '{print $((NF-1))}'`
-	MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        MDS_QUOTA_USED=`getquota -g $TSTUSR $MDS_UUID curinodes`
 	echo $MDS_QUOTA_USED
 	[ $MDS_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
@@ -778,7 +808,7 @@ test_6() {
         while [ $((count--)) -gt 0 ]; do
                 sync && sleep 5
 
-	        OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                OST0_QUOTA_HOLD=`getquota -u $TSTUSR $OST0_UUID bhardlimit`
                 if [ -z $OST0_QUOTA_HOLD ]; then
                         error "System is error when query quota for block (U:$TSTUSR)."
                 else
@@ -794,7 +824,7 @@ test_6() {
         while [ $((count--)) -gt 0 ]; do
                 sync && sleep 5
 
-	        OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                OST0_QUOTA_HOLD=`getquota -g $TSTUSR $OST0_UUID bhardlimit`
                 if [ -z $OST0_QUOTA_HOLD ]; then
                         error "System is error when query quota for block (G:$TSTUSR)."
                 else
@@ -859,13 +889,13 @@ test_7()
 
 	# check limits
 	PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
-	TOTAL_LIMIT="`$LFS quota -v -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        TOTAL_LIMIT=`getquota -u $TSTUSR global bhardlimit`
 	[ $TOTAL_LIMIT -eq $LIMIT ] || error "total limits not recovery!"
 	echo "  total limits = $TOTAL_LIMIT"
 
         OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
         [ -z "$OST0_UUID" ] && OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
-	OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
+        OST0_LIMIT=`getquota  -u $TSTUSR $OST0_UUID bhardlimit`
 	[ $OST0_LIMIT -eq $BUNIT_SZ ] || error "high limits not released!"
 	echo "  limits on $OST0_UUID = $OST0_LIMIT"
 
@@ -1172,9 +1202,9 @@ check_if_quota_zero(){
         line=`$LFS quota -v -$1 $2 $DIR | wc -l`
 	for i in `seq 3 $line`; do
 	    if [ $i -eq 3 ]; then
-		field="3 4 6 7"
+		field="3 4 7 8"
 	    else
-		field="3 5"
+		field="3 6"
 	    fi
 	    for j in $field; do
 		tmp=`$LFS quota -v -$1 $2 $DIR | sed -n ${i}p |
@@ -1231,14 +1261,14 @@ test_15(){
 
         # test for user
         $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-        TOTAL_LIMIT="`$LFS quota -v -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        TOTAL_LIMIT=`getquota -u $TSTUSR global bhardlimit`
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         resetquota -u $TSTUSR
 
         # test for group
         $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-        TOTAL_LIMIT="`$LFS quota -v -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        TOTAL_LIMIT=`getquota -g $TSTUSR global bhardlimit`
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         resetquota -g $TSTUSR
@@ -1658,9 +1688,10 @@ test_20()
                                  --inode-hardlimit ${LSTR[3]} \
                                  $MOUNT || error "could not set quota limits"
 
-        ($LFS quota -v -u $TSTUSR $MOUNT  | \
-            grep -E '^ *'$MOUNT' *[0-9]+\** *'${LVAL[0]}' *'${LVAL[1]}' *[0-9]+\** *'${LVAL[2]}' *'${LVAL[3]}) \
-                 || error "lfs quota output is unexpected"
+        [ "`getquota -u $TSTUSR global bsoftlimit`" = "${LVAL[0]}" ] || error "bsoftlimit was not set properly"
+        [ "`getquota -u $TSTUSR global bhardlimit`" = "${LVAL[1]}" ] || error "bhardlimit was not set properly"
+        [ "`getquota -u $TSTUSR global isoftlimit`" = "${LVAL[2]}" ] || error "isoftlimit was not set properly"
+        [ "`getquota -u $TSTUSR global ihardlimit`" = "${LVAL[3]}" ] || error "ihardlimit was not set properly"
 
         resetquota -u $TSTUSR
 }
@@ -1796,7 +1827,7 @@ test_23_sub() {
 	rm -f $TESTFILE
 	wait_delete_completed
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED=`getquota -u $TSTUSR $OST0_UUID curspace`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; quota_error u $TSTUSR "quota deleted isn't released")
@@ -1882,10 +1913,10 @@ test_25_sub() {
 	$LFS setstripe $DIR/$tdir -c 1 -i 0
 	MDS_UUID=`do_facet $SINGLEMDS $LCTL dl | grep -m1 " mdt " | awk '{print $((NF-1))}'`
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
-	MDS_QUOTA_USED_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
-	OST0_QUOTA_USED_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
-	MDS_QUOTA_USED2_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
-	OST0_QUOTA_USED2_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        MDS_QUOTA_USED_OLD=`getquota $1 $TSTUSR $MDS_UUID curinodes`
+        OST0_QUOTA_USED_OLD=`getquota $1 $TSTUSR $OST0_UUID curspace`
+        MDS_QUOTA_USED2_OLD=`getquota $1 $TSTUSR2 $MDS_UUID curinodes`
+        OST0_QUOTA_USED2_OLD=`getquota $1 $TSTUSR2 $OST0_UUID curspace`
 
         # TSTUSR write 4M
         log "$TSTUSR write 4M to $TESTFILE"
@@ -1893,10 +1924,10 @@ test_25_sub() {
         sync
 	show_quota $1 $TSTUSR
 	show_quota $1 $TSTUSR2
-	MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        MDS_QUOTA_USED_NEW=`getquota  $1 $TSTUSR $MDS_UUID curinodes`
         [ $MDS_QUOTA_USED_NEW -ne $((MDS_QUOTA_USED_OLD + 1)) ] && \
                 quota_error a $TSTUSR "$TSTUSR inode quota usage error: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
-	OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED_NEW=`getquota   $1 $TSTUSR $OST0_UUID curspace`
         OST0_QUOTA_USED_DELTA=$((OST0_QUOTA_USED_NEW - OST0_QUOTA_USED_OLD))
         [ $OST0_QUOTA_USED_DELTA -lt 4096 ] && \
                 quota_error a $TSTUSR "$TSTUSR block quota usage error: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
@@ -1912,19 +1943,19 @@ test_25_sub() {
         sync
 	show_quota $1 $TSTUSR
 	show_quota $1 $TSTUSR2
-	MDS_QUOTA_USED2_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        MDS_QUOTA_USED2_NEW=`getquota $1 $TSTUSR2 $MDS_UUID curinodes`
         [ $MDS_QUOTA_USED2_NEW -ne $((MDS_QUOTA_USED2_OLD + 1)) ] && \
                 quota_error a $TSTUSR2 "$TSTUSR2 inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED2_OLD|$MDS_QUOTA_USED2_NEW]"
-	OST0_QUOTA_USED2_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED2_NEW=`getquota  $1 $TSTUSR2 $OST0_UUID curspace`
 	# when chown, the quota on ost could be displayed out of quota temporarily. Delete the '*' in this situation. b=20433
 	OST0_QUOTA_USED2_NEW=${OST0_QUOTA_USED2_NEW%\*}
         OST0_QUOTA_USED2_DELTA=$((OST0_QUOTA_USED2_NEW - OST0_QUOTA_USED2_OLD))
         [ $OST0_QUOTA_USED2_DELTA -ne $OST0_QUOTA_USED_DELTA ] && \
                 quota_error a $TSTUSR2 "$TSTUSR2 block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED2_OLD|$OST0_QUOTA_USED2_NEW]"
-	MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        MDS_QUOTA_USED_NEW=`getquota  $1 $TSTUSR $MDS_UUID curinodes`
         [ $MDS_QUOTA_USED_NEW -ne $MDS_QUOTA_USED_OLD ] && \
                 quota_error a $TSTUSR "$TSTUSR inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
-	OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED_NEW=`getquota  $1 $TSTUSR $OST0_UUID curspace`
         [ $OST0_QUOTA_USED_NEW -ne $OST0_QUOTA_USED_OLD ] && \
                 quota_error a $TSTUSR "$TSTUSR block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
 
