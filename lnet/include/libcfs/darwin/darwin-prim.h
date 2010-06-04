@@ -286,6 +286,11 @@ static inline int cfs_schedule_timeout(int state, int64_t timeout)
  * unefficient and can be harmful if we have many elements to process */
 #define cfs_cond_resched() cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, 1)
 
+static inline int cfs_cond_resched_lock(cfs_spinlock_t *lock)
+{
+        return 0;
+}
+
 #define __wait_event(wq, condition)				\
 do {								\
 	struct cfs_waitlink __wait;				\

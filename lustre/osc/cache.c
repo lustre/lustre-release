@@ -340,6 +340,9 @@ static int cache_remove_extents_from_lock(struct lustre_cache *cache,
 
         spin_lock(&lock->l_extents_list_lock);
         while (!list_empty(&lock->l_extents_list)) {
+                if (unlikely(cfs_cond_resched_lock(&lock->l_extents_list_lock)))
+                        continue;
+
                 extent = list_entry(lock->l_extents_list.next,
                                     struct osc_async_page, oap_page_list);
 

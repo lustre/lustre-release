@@ -166,6 +166,11 @@ Description: exp->exp_nid_stats == NULL in filter_tally()
 Details    : fix race with per-nid stats by delaying procfs cleanup until
 	     exp_refcount == 0
 
+Severity   : normal
+Bugzilla   : 21556
+Description: extent lock cancellation on client can keep the cpu busy for too
+	     long.
+
 -------------------------------------------------------------------------------
 
 2010-04-30 Oracle, Inc.

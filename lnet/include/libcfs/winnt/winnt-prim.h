@@ -549,6 +549,11 @@ static inline void cfs_cond_resched()
     schedule_timeout(1i64);
 }
 
+static inline int cfs_cond_resched_lock(cfs_spinlock_t *lock)
+{
+        return 0;
+}
+
 #define CFS_DECL_JOURNAL_DATA	
 #define CFS_PUSH_JOURNAL	    do {;} while(0)
 #define CFS_POP_JOURNAL		    do {;} while(0)

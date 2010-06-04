@@ -99,7 +99,8 @@ int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeou
                 cfs_waitlink_t    l;            \
                 cfs_waitq_timedwait(&l, s, t);  \
         } while (0)
-#define cfs_cond_resched() do {} while(0)
+#define cfs_cond_resched()       do {} while(0)
+#define cfs_cond_resched_lock(l) (0)
 
 #define CFS_TASK_INTERRUPTIBLE  (0)
 #define CFS_TASK_UNINT          (0)
