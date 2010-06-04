@@ -804,7 +804,7 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
 
         cl_2queue_init_page(queue, page);
         cl_page_clip(env, page, 0, to);
-        
+
         result = cl_io_submit_sync(env, io, crt, queue, CRP_NORMAL, 0);
         LASSERT(cl_page_is_owned(page, io));
         cl_page_clip(env, page, 0, CFS_PAGE_SIZE);

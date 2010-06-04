@@ -1380,8 +1380,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
         char *prefix = is_dir ? "" : "lmm_";
         char nl = is_dir ? ' ' : '\n';
 
-        if (is_dir && lum->lmm_object_gr == LOV_OBJECT_GROUP_DEFAULT) {
-                lum->lmm_object_gr = LOV_OBJECT_GROUP_CLEAR;
+        if (is_dir && lum->lmm_object_seq == LOV_OBJECT_GROUP_DEFAULT) {
+                lum->lmm_object_seq = LOV_OBJECT_GROUP_CLEAR;
                 if (verbose & VERBOSE_DETAIL)
                         llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
         }
@@ -1392,8 +1392,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
         if ((verbose & VERBOSE_DETAIL) && !is_dir) {
                 llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
                              lum->lmm_magic);
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_gr:      "LPX64"\n",
-                             lum->lmm_object_gr);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_seq:            "LPX64"\n",
+                             lum->lmm_object_seq);
                 llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
                              lum->lmm_object_id);
         }
@@ -1464,7 +1464,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                 for (i = 0; i < lum->lmm_stripe_count; i++) {
                         int idx = objects[i].l_ost_idx;
                         long long oid = objects[i].l_object_id;
-                        long long gr = objects[i].l_object_gr;
+                        long long gr = objects[i].l_object_seq;
                         if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
                                 llapi_printf(LLAPI_MSG_NORMAL,
                                            "\t%6u\t%14llu\t%#13llx\t%14llu%s\n",

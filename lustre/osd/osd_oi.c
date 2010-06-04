@@ -200,7 +200,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
         struct lu_fid *oi_fid = &info->oti_fid;
         int rc;
 
-        if (fid_is_igif(fid)) {
+        if (osd_fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
                 rc = 0;
         } else {
@@ -235,7 +235,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         struct osd_inode_id *id;
         const struct dt_key *key;
 
-        if (fid_is_igif(fid))
+        if (osd_fid_is_igif(fid))
                 return 0;
 
         if (fid_is_oi_fid(fid))
@@ -262,7 +262,7 @@ int osd_oi_delete(struct osd_thread_info *info,
         struct dt_object    *idx;
         const struct dt_key *key;
 
-        if (fid_is_igif(fid))
+        if (osd_fid_is_igif(fid))
                 return 0;
 
         idx = oi->oi_dir;

@@ -64,7 +64,7 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *new)
 
         cfs_spin_lock(&capa_lock);
         cfs_list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
-                if (k->k_key.lk_mdsid != new->lk_mdsid)
+                if (k->k_key.lk_seq != new->lk_seq)
                         continue;
 
                 if (keys[0]) {
@@ -112,7 +112,7 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *new)
         RETURN(0);
 }
 
-int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
                      struct lustre_capa *capa, __u64 opc)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -120,13 +120,12 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
         struct filter_capa_key *k;
         struct lustre_capa_key key;
         struct obd_capa *oc;
-        __u64 mdsid;
         __u8 *hmac;
         int keys_ready = 0, key_found = 0, rc = 0;
         ENTRY;
 
         /* skip capa check for llog and obdecho */
-        if (!filter_group_is_mds(group))
+        if (!fid_seq_is_mdt(seq))
                 RETURN(0);
 
         /* capability is disabled */
@@ -136,16 +135,15 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
         if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
                 RETURN(0);
 
-        mdsid = objgrp_to_mdsno(group);
         if (capa == NULL) {
                 if (fid)
-                        CERROR("mdsno/fid/opc "LPU64"/"DFID"/"LPX64
+                        CERROR("seq/fid/opc "LPU64"/"DFID"/"LPX64
                                ": no capability has been passed\n",
-                               mdsid, PFID(fid), opc);
+                               seq, PFID(fid), opc);
                 else
-                        CERROR("mdsno/opc "LPU64"/"LPX64
+                        CERROR("seq/opc "LPU64"/"LPX64
                                ": no capability has been passed\n",
-                               mdsid, opc);
+                               seq, opc);
                 RETURN(-EACCES);
         }
 
@@ -180,7 +178,7 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
 
         cfs_spin_lock(&capa_lock);
         cfs_list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
-                if (k->k_key.lk_mdsid == mdsid) {
+                if (k->k_key.lk_seq == seq) {
                         keys_ready = 1;
                         if (k->k_key.lk_keyid == capa_keyid(capa)) {
                                 key = k->k_key;
@@ -227,15 +225,14 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
         RETURN(0);
 }
 
-int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
+int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_seq seq,
                       struct lustre_capa *capa)
 {
-        __u64 mdsid;
         int rc = 0;
         ENTRY;
 
         /* skip capa check for llog and obdecho */
-        if (!filter_group_is_mds(group))
+        if (!fid_seq_is_mdt(seq))
                 RETURN(0);
 
         if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
@@ -244,7 +241,6 @@ int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
         if (unlikely(!capa))
                 RETURN(-EACCES);
 
-        mdsid = objgrp_to_mdsno(group);
         if (capa_flags(capa) == LC_ID_CONVERT) {
                 struct obd_device *obd = exp->exp_obd;
                 struct filter_obd *filter = &obd->u.filter;
@@ -253,7 +249,7 @@ int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
 
                 cfs_spin_lock(&capa_lock);
                 cfs_list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
-                        if (k->k_key.lk_mdsid == mdsid &&
+                        if (k->k_key.lk_seq == seq &&
                             k->k_key.lk_keyid == capa_keyid(capa)) {
                                 found = 1;
                                 break;

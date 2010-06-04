@@ -1578,8 +1578,8 @@ void lustre_swab_obdo (struct obdo  *o)
 {
         __swab64s (&o->o_valid);
         __swab64s (&o->o_id);
-        __swab64s (&o->o_gr);
-        __swab64s (&o->o_fid);
+        __swab64s (&o->o_seq);
+        __swab64s (&o->o_parent_seq);
         __swab64s (&o->o_size);
         __swab64s (&o->o_mtime);
         __swab64s (&o->o_atime);
@@ -1592,12 +1592,19 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_gid);
         __swab32s (&o->o_flags);
         __swab32s (&o->o_nlink);
-        __swab32s (&o->o_generation);
+        __swab32s (&o->o_parent_oid);
         __swab32s (&o->o_misc);
         __swab64s (&o->o_ioepoch);
         __swab32s (&o->o_stripe_idx);
-        __swab32s (&o->o_padding_1);
-        /* o_inline is opaque */
+        __swab32s (&o->o_parent_ver);
+        /* o_handle is opaque */
+        /* o_lcookie is swabbed elsewhere */
+        CLASSERT(offsetof(typeof(*o), o_padding_2) != 0);
+        CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
+        CLASSERT(offsetof(typeof(*o), o_padding_4) != 0);
+        CLASSERT(offsetof(typeof(*o), o_padding_5) != 0);
+        CLASSERT(offsetof(typeof(*o), o_padding_6) != 0);
+
 }
 
 void lustre_swab_obd_statfs (struct obd_statfs *os)
@@ -1613,13 +1620,21 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
         __swab32s (&os->os_namelen);
         __swab64s (&os->os_maxbytes);
         __swab32s (&os->os_state);
-        /* no need to swap os_spare */
+        CLASSERT(offsetof(typeof(*os), os_spare1) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare2) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare3) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare4) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare5) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare6) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare7) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare8) != 0);
+        CLASSERT(offsetof(typeof(*os), os_spare9) != 0);
 }
 
 void lustre_swab_obd_ioobj (struct obd_ioobj *ioo)
 {
         __swab64s (&ioo->ioo_id);
-        __swab64s (&ioo->ioo_gr);
+        __swab64s (&ioo->ioo_seq);
         __swab32s (&ioo->ioo_type);
         __swab32s (&ioo->ioo_bufcnt);
 }
@@ -1689,7 +1704,7 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->aclsize);
         __swab32s (&b->max_mdsize);
         __swab32s (&b->max_cookiesize);
-        __swab32s (&b->padding_4);
+        CLASSERT(offsetof(typeof(*b), padding_4) != 0);
 }
 
 void lustre_swab_mdt_body (struct mdt_body *b)
@@ -1720,7 +1735,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->aclsize);
         __swab32s (&b->max_mdsize);
         __swab32s (&b->max_cookiesize);
-        __swab32s (&b->padding_4);
+        CLASSERT(offsetof(typeof(*b), padding_4) != 0);
 }
 
 void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b)
@@ -1857,10 +1872,6 @@ void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
         __swab64s (&rr->rr_blocks);
         __swab32s (&rr->rr_bias);
         __swab32s (&rr->rr_mode);
-        __swab32s (&rr->rr_padding_1);
-        __swab32s (&rr->rr_padding_2);
-        __swab32s (&rr->rr_padding_3);
-        __swab32s (&rr->rr_padding_4);
 
         CLASSERT(offsetof(typeof(*rr), rr_padding_1) != 0);
         CLASSERT(offsetof(typeof(*rr), rr_padding_2) != 0);
@@ -1906,7 +1917,7 @@ static void print_lum (struct lov_user_md *lum)
         CDEBUG(D_OTHER, "\tlmm_magic: %#x\n", lum->lmm_magic);
         CDEBUG(D_OTHER, "\tlmm_pattern: %#x\n", lum->lmm_pattern);
         CDEBUG(D_OTHER, "\tlmm_object_id: "LPU64"\n", lum->lmm_object_id);
-        CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lum->lmm_object_gr);
+        CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lum->lmm_object_seq);
         CDEBUG(D_OTHER, "\tlmm_stripe_size: %#x\n", lum->lmm_stripe_size);
         CDEBUG(D_OTHER, "\tlmm_stripe_count: %#x\n", lum->lmm_stripe_count);
         CDEBUG(D_OTHER, "\tlmm_stripe_offset: %#x\n", lum->lmm_stripe_offset);
@@ -1918,7 +1929,7 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
         __swab32s(&lum->lmm_magic);
         __swab32s(&lum->lmm_pattern);
         __swab64s(&lum->lmm_object_id);
-        __swab64s(&lum->lmm_object_gr);
+        __swab64s(&lum->lmm_object_seq);
         __swab32s(&lum->lmm_stripe_size);
         __swab16s(&lum->lmm_stripe_count);
         __swab16s(&lum->lmm_stripe_offset);
@@ -1950,7 +1961,7 @@ void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
         __swab32s(&lmm->lmm_magic);
         __swab32s(&lmm->lmm_pattern);
         __swab64s(&lmm->lmm_object_id);
-        __swab64s(&lmm->lmm_object_gr);
+        __swab64s(&lmm->lmm_object_seq);
         __swab32s(&lmm->lmm_stripe_size);
         __swab32s(&lmm->lmm_stripe_count);
         EXIT;
@@ -1963,7 +1974,7 @@ void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
         ENTRY;
         for (i = 0; i < stripe_count; i++) {
                 __swab64s(&(lod[i].l_object_id));
-                __swab64s(&(lod[i].l_object_gr));
+                __swab64s(&(lod[i].l_object_seq));
                 __swab32s(&(lod[i].l_ost_gen));
                 __swab32s(&(lod[i].l_ost_idx));
         }
@@ -2044,15 +2055,15 @@ void lustre_swab_qdata(struct qunit_data *d)
         __swab32s (&d->qd_flags);
         __swab64s (&d->qd_count);
         __swab64s (&d->qd_qunit);
-        __swab64s (&d->padding);
+        CLASSERT(offsetof(typeof(*d), padding) != 0);
 }
 
 /* Dump functions */
 void dump_ioo(struct obd_ioobj *ioo)
 {
         CDEBUG(D_RPCTRACE,
-               "obd_ioobj: ioo_id="LPD64", ioo_gr="LPD64", ioo_type=%d, "
-               "ioo_bufct=%d\n", ioo->ioo_id, ioo->ioo_gr, ioo->ioo_type,
+               "obd_ioobj: ioo_id="LPD64", ioo_seq="LPD64", ioo_type=%d, "
+               "ioo_bufct=%d\n", ioo->ioo_id, ioo->ioo_seq, ioo->ioo_type,
                ioo->ioo_bufcnt);
 }
 
@@ -2070,9 +2081,10 @@ void dump_obdo(struct obdo *oa)
         if (valid & OBD_MD_FLID)
                 CDEBUG(D_RPCTRACE, "obdo: o_id = "LPD64"\n", oa->o_id);
         if (valid & OBD_MD_FLGROUP)
-                CDEBUG(D_RPCTRACE, "obdo: o_gr = "LPD64"\n", oa->o_gr);
+                CDEBUG(D_RPCTRACE, "obdo: o_seq = "LPD64"\n", oa->o_seq);
         if (valid & OBD_MD_FLFID)
-                CDEBUG(D_RPCTRACE, "obdo: o_fid = "LPD64"\n", oa->o_fid);
+                CDEBUG(D_RPCTRACE, "obdo: o_parent_seq = "LPX64"\n",
+                       oa->o_parent_seq);
         if (valid & OBD_MD_FLSIZE)
                 CDEBUG(D_RPCTRACE, "obdo: o_size = "LPD64"\n", oa->o_size);
         if (valid & OBD_MD_FLMTIME)
@@ -2100,16 +2112,23 @@ void dump_obdo(struct obdo *oa)
         if (valid & OBD_MD_FLNLINK)
                 CDEBUG(D_RPCTRACE, "obdo: o_nlink = %u\n", oa->o_nlink);
         else if (valid & OBD_MD_FLCKSUM)
-                CDEBUG(D_RPCTRACE, "obdo: o_checksum (o_nlink) = %u\n", oa->o_nlink);
+                CDEBUG(D_RPCTRACE, "obdo: o_checksum (o_nlink) = %u\n",
+                       oa->o_nlink);
         if (valid & OBD_MD_FLGENER)
-                CDEBUG(D_RPCTRACE, "obdo: o_generation = %u\n",
-                       oa->o_generation);
-        else if (valid & OBD_MD_FLEPOCH)
-                CDEBUG(D_RPCTRACE, "obdo: o_ioepoch = "LPD64"\n", oa->o_ioepoch);
-        if (valid & OBD_MD_FLID)
-                CDEBUG(D_RPCTRACE, "obdo: o_stripe_idx = %u\n", oa->o_stripe_idx);
+                CDEBUG(D_RPCTRACE, "obdo: o_parent_oid = %x\n",
+                       oa->o_parent_oid);
+        if (valid & OBD_MD_FLEPOCH)
+                CDEBUG(D_RPCTRACE, "obdo: o_ioepoch = "LPD64"\n",
+                       oa->o_ioepoch);
+        if (valid & OBD_MD_FLFID) {
+                CDEBUG(D_RPCTRACE, "obdo: o_stripe_idx = %u\n",
+                       oa->o_stripe_idx);
+                CDEBUG(D_RPCTRACE, "obdo: o_parent_ver = %x\n",
+                       oa->o_parent_ver);
+        }
         if (valid & OBD_MD_FLHANDLE)
-                CDEBUG(D_RPCTRACE, "obdo: o_handle = "LPD64"\n", oa->o_handle.cookie);
+                CDEBUG(D_RPCTRACE, "obdo: o_handle = "LPD64"\n",
+                       oa->o_handle.cookie);
         if (valid & OBD_MD_FLCOOKIE)
                 CDEBUG(D_RPCTRACE, "obdo: o_lcookie = "
                        "(llog_cookie dumping not yet implemented)\n");
@@ -2264,9 +2283,9 @@ void lustre_swab_lustre_capa(struct lustre_capa *c)
 
 void lustre_swab_lustre_capa_key(struct lustre_capa_key *k)
 {
-        __swab64s (&k->lk_mdsid);
+        __swab64s (&k->lk_seq);
         __swab32s (&k->lk_keyid);
-        __swab32s (&k->lk_padding);
+        CLASSERT(offsetof(typeof(*k), lk_padding) != 0);
 }
 
 void lustre_swab_kuch(struct kuc_hdr *l)

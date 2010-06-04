@@ -60,17 +60,7 @@
 #include <sys/stat.h>
 #include <sys/queue.h>
 #include <fcntl.h>
-# include <sysio.h>
-# ifdef HAVE_XTIO_H
-#  include <xtio.h>
-# endif
-# include <fs.h>
-# include <mount.h>
-# include <inode.h>
-# ifdef HAVE_FILE_H
-#  include <file.h>
-# endif
-# include <liblustre.h>
+#include <liblustre.h>
 #endif
 
 #include "cl_object.h"

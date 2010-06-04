@@ -135,9 +135,9 @@ static inline __u32 capa_keyid(struct lustre_capa *capa)
         return capa->lc_keyid;
 }
 
-static inline __u64 capa_key_mdsid(struct lustre_capa_key *key)
+static inline __u64 capa_key_seq(struct lustre_capa_key *key)
 {
-        return key->lk_mdsid;
+        return key->lk_seq;
 }
 
 static inline __u32 capa_key_keyid(struct lustre_capa_key *key)
@@ -166,8 +166,8 @@ CDEBUG(level, fmt " capability@%p fid "DFID" opc "LPX64" uid "LPU64" gid "     \
 
 #define DEBUG_CAPA_KEY(level, k, fmt, args...)                                 \
 do {                                                                           \
-CDEBUG(level, fmt " capability key@%p mdsid "LPU64" keyid %u\n",               \
-       ##args, k, capa_key_mdsid(k), capa_key_keyid(k));                       \
+CDEBUG(level, fmt " capability key@%p seq "LPU64" keyid %u\n",                 \
+       ##args, k, capa_key_seq(k), capa_key_keyid(k));                         \
 } while (0)
 
 typedef int (* renew_capa_cb_t)(struct obd_capa *, struct lustre_capa *);

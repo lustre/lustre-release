@@ -716,11 +716,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* filter_direct_io drops i_mutex */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
-        if (rc == 0)
-                obdo_from_inode(oa, inode,
-                                FILTER_VALID_FLAGS |OBD_MD_FLUID |OBD_MD_FLGID);
-        else
-                obdo_from_inode(oa, inode, OBD_MD_FLUID | OBD_MD_FLGID);
+
+        obdo_from_inode(oa, inode, NULL, rc == 0 ? FILTER_VALID_FLAGS : 0 |
+                                                   OBD_MD_FLUID |OBD_MD_FLGID);
 
         lquota_getflag(filter_quota_interface_ref, obd, oa);
 

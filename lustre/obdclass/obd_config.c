@@ -278,7 +278,7 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
 
-        llog_group_init(&obd->obd_olg, FILTER_GROUP_LLOG);
+        llog_group_init(&obd->obd_olg, FID_SEQ_LLOG);
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {

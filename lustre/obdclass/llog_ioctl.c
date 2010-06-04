@@ -74,7 +74,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_ogr = simple_strtoull(start, &endp, 0);
+        logid->lgl_oseq = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
@@ -135,7 +135,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 if (rc) {
                         CDEBUG(D_IOCTL,
                                "cannot find log #"LPX64"#"LPX64"#%08x\n",
-                               lir->lid_id.lgl_oid, lir->lid_id.lgl_ogr,
+                               lir->lid_id.lgl_oid, lir->lid_id.lgl_oseq,
                                lir->lid_id.lgl_ogen);
                         RETURN(rc);
                 }
@@ -222,7 +222,7 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 l = snprintf(out, remains,
                              "[index]: %05d  [logid]: #"LPX64"#"LPX64"#%08x\n",
                              cur_index, lir->lid_id.lgl_oid,
-                             lir->lid_id.lgl_ogr, lir->lid_id.lgl_ogen);
+                             lir->lid_id.lgl_oseq, lir->lid_id.lgl_ogen);
         } else {
                 l = snprintf(out, remains,
                              "[index]: %05d  [type]: %02x  [len]: %04d\n",
@@ -248,7 +248,7 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
         rc = llog_cat_id2handle(cat, &log, logid);
         if (rc) {
                 CDEBUG(D_IOCTL, "cannot find log #"LPX64"#"LPX64"#%08x\n",
-                       logid->lgl_oid, logid->lgl_ogr, logid->lgl_ogen);
+                       logid->lgl_oid, logid->lgl_oseq, logid->lgl_ogen);
                 GOTO(out, rc = -ENOENT);
         }
 
@@ -322,7 +322,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                              "flags:            %x (%s)\n"
                              "records count:    %d\n"
                              "last index:       %d\n",
-                             handle->lgh_id.lgl_oid, handle->lgh_id.lgl_ogr,
+                             handle->lgh_id.lgl_oid, handle->lgh_id.lgl_oseq,
                              handle->lgh_id.lgl_ogen,
                              handle->lgh_hdr->llh_flags,
                              handle->lgh_hdr->llh_flags &
@@ -448,7 +448,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
                 id = &idarray[i].lci_logid;
                 l = snprintf(out, remains,
                              "catalog log: #"LPX64"#"LPX64"#%08x\n",
-                             id->lgl_oid, id->lgl_ogr, id->lgl_ogen);
+                             id->lgl_oid, id->lgl_oseq, id->lgl_ogen);
                 out += l;
                 remains -= l;
                 if (remains <= 0) {

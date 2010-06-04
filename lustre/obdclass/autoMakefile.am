@@ -5,7 +5,7 @@ endif
 DIST_SUBDIRS := linux darwin
 
 if LIBLUSTRE
-
+INCLUDES = -I$(SYSIO)/include
 noinst_LIBRARIES = liblustreclass.a
 liblustreclass_a_SOURCES = class_obd.c debug.c genops.c statfs_pack.c mea.c uuid.c 
 liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c

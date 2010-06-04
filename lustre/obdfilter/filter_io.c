@@ -393,8 +393,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
-        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa,
+        rc = filter_auth_capa(exp, NULL, oa->o_seq, capa,
                               CAPA_OPC_OSS_READ);
         if (rc)
                 RETURN(rc);
@@ -413,7 +412,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 RETURN(PTR_ERR(iobuf));
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = filter_oa2dentry(obd, oa);
+        dentry = filter_oa2dentry(obd, &oa->o_oi);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 dentry = NULL;
@@ -661,8 +660,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa,
+        rc = filter_auth_capa(exp, NULL, oa->o_seq, capa,
                               CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
@@ -677,7 +675,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = PTR_ERR(iobuf));
         cleanup_phase = 1;
 
-        dentry = filter_fid2dentry(obd, NULL, obj->ioo_gr,
+        dentry = filter_fid2dentry(obd, NULL, obj->ioo_seq,
                                    obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
@@ -691,7 +689,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID) &&
             dentry->d_inode->i_mode & (S_ISUID | S_ISGID)) {
-                rc = filter_capa_fixoa(exp, oa, oa->o_gr, capa);
+                rc = filter_capa_fixoa(exp, oa, oa->o_seq, capa);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -715,7 +713,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         /* XXX when we start having persistent reservations this needs to
          * be changed to filter_fmd_get() to create the fmd if it doesn't
          * already exist so we can store the reservation handle there. */
-        fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
+        fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_seq);
 
         LASSERT(oa != NULL);
         cfs_spin_lock(&obd->obd_osfs_lock);
@@ -897,7 +895,7 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
         int i;
         ENTRY;
 
-        osc_build_res_name(obj->ioo_id, obj->ioo_gr, &res_id);
+        osc_build_res_name(obj->ioo_id, obj->ioo_seq, &res_id);
         /* If oa != NULL then filter_preprw_read updated the inode atime
          * and we should update the lvb so that other glimpses will also
          * get the updated value. bug 5972 */

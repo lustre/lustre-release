@@ -96,9 +96,9 @@ static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (lsm) {
                 LASSERT(lsm->lsm_object_id);
-                LASSERT_MDS_GROUP(lsm->lsm_object_gr);
+                LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
                 (*lmmp)->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
-                (*lmmp)->lmm_object_gr = cpu_to_le64(lsm->lsm_object_gr);
+                (*lmmp)->lmm_object_seq = cpu_to_le64(lsm->lsm_object_seq);
         }
 
         RETURN(lmm_size);
@@ -151,9 +151,9 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         if (lmm != NULL) {
                 /* XXX zero *lsmp? */
                 (*lsmp)->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
-                (*lsmp)->lsm_object_gr = le64_to_cpu (lmm->lmm_object_gr);
+                (*lsmp)->lsm_object_seq = le64_to_cpu (lmm->lmm_object_seq);
                 LASSERT((*lsmp)->lsm_object_id);
-                LASSERT_MDS_GROUP((*lsmp)->lsm_object_gr);
+                LASSERT_SEQ_IS_MDT((*lsmp)->lsm_object_seq);
         }
 
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
@@ -485,7 +485,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
          * This needs to be fixed in a big way.
          */
         lsm->lsm_object_id = oa->o_id;
-        lsm->lsm_object_gr = oa->o_gr;
+        lsm->lsm_object_seq = oa->o_seq;
         *ea = lsm;
 
         if (oti != NULL) {
@@ -629,7 +629,7 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
         int count;
         ENTRY;
 
-        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
+        osc_build_res_name(oa->o_id, oa->o_seq, &res_id);
         res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
         if (res == NULL)
                 RETURN(0);
@@ -1442,15 +1442,14 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 msg = "changed in transit AND doesn't match the original - "
                       "likely false positive due to mmap IO (bug 11742)";
 
-        LCONSOLE_ERROR_MSG(0x132, "BAD WRITE CHECKSUM: %s: from %s inum "
-                           LPU64"/"LPU64" object "LPU64"/"LPU64" extent "
-                           "["LPU64"-"LPU64"]\n",
+        LCONSOLE_ERROR_MSG(0x132, "BAD WRITE CHECKSUM: %s: from %s inode "DFID
+                           " object "LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
                            msg, libcfs_nid2str(peer->nid),
-                           oa->o_valid & OBD_MD_FLFID ? oa->o_fid : (__u64)0,
-                           oa->o_valid & OBD_MD_FLFID ? oa->o_generation :
-                                                        (__u64)0,
+                           oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
+                           oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
+                           oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
                            oa->o_id,
-                           oa->o_valid & OBD_MD_FLGROUP ? oa->o_gr : (__u64)0,
+                           oa->o_valid & OBD_MD_FLGROUP ? oa->o_seq : (__u64)0,
                            pga[0]->off,
                            pga[page_count-1]->off + pga[page_count-1]->count - 1);
         CERROR("original client csum %x (type %x), server csum %x (type %x), "
@@ -1577,19 +1576,21 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                                libcfs_nid2str(peer->nid));
                 } else if (server_cksum != client_cksum) {
                         LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "
-                                           "%s%s%s inum "LPU64"/"LPU64" object "
+                                           "%s%s%s inode "DFID" object "
                                            LPU64"/"LPU64" extent "
                                            "["LPU64"-"LPU64"]\n",
                                            req->rq_import->imp_obd->obd_name,
                                            libcfs_nid2str(peer->nid),
                                            via, router,
                                            body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_fid : (__u64)0,
+                                                body->oa.o_parent_seq : (__u64)0,
                                            body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_generation :(__u64)0,
+                                                body->oa.o_parent_oid : 0,
+                                           body->oa.o_valid & OBD_MD_FLFID ?
+                                                body->oa.o_parent_ver : 0,
                                            body->oa.o_id,
                                            body->oa.o_valid & OBD_MD_FLGROUP ?
-                                                body->oa.o_gr : (__u64)0,
+                                                body->oa.o_seq : (__u64)0,
                                            aa->aa_ppga[0]->off,
                                            aa->aa_ppga[aa->aa_page_count-1]->off +
                                            aa->aa_ppga[aa->aa_page_count-1]->count -
@@ -3103,7 +3104,7 @@ static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct ldlm_res_id res_id;
         struct obd_device *obd = class_exp2obd(exp);
 
-        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
+        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_seq, &res_id);
         ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         return 0;
 }
@@ -3119,7 +3120,7 @@ static int osc_find_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_device *obd = class_exp2obd(exp);
         int rc = 0;
 
-        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
+        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_seq, &res_id);
         rc = ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         if (rc == LDLM_ITER_STOP)
                 return(1);
@@ -3394,7 +3395,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         ENTRY;
 
         osc_build_res_name(oinfo->oi_md->lsm_object_id,
-                           oinfo->oi_md->lsm_object_gr, &res_id);
+                           oinfo->oi_md->lsm_object_seq, &res_id);
 
         rc = osc_enqueue_base(exp, &res_id, &oinfo->oi_flags, &oinfo->oi_policy,
                               &oinfo->oi_md->lsm_oinfo[0]->loi_lvb,
@@ -3472,7 +3473,7 @@ static int osc_cancel_unused(struct obd_export *exp,
 
         if (lsm != NULL) {
                 resp = osc_build_res_name(lsm->lsm_object_id,
-                                          lsm->lsm_object_gr, &res_id);
+                                          lsm->lsm_object_seq, &res_id);
         }
 
         return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
@@ -3707,7 +3708,7 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
         }
 
         lumk->lmm_object_id = lsm->lsm_object_id;
-        lumk->lmm_object_gr = lsm->lsm_object_gr;
+        lumk->lmm_object_seq = lsm->lsm_object_seq;
         lumk->lmm_stripe_count = 1;
 
         if (cfs_copy_to_user(lump, lumk, lum_size))
@@ -4030,9 +4031,9 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (KEY_IS(KEY_MDS_CONN)) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
 
-                oscc->oscc_oa.o_gr = (*(__u32 *)val);
+                oscc->oscc_oa.o_seq = (*(__u32 *)val);
                 oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
-                LASSERT_MDS_GROUP(oscc->oscc_oa.o_gr);
+                LASSERT_SEQ_IS_MDT(oscc->oscc_oa.o_seq);
                 req->rq_no_delay = req->rq_no_resend = 1;
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
         } else if (KEY_IS(KEY_GRANT_SHRINK)) {
@@ -4121,7 +4122,7 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         CDEBUG(D_INFO, "%s: Init llog for %d - catid "LPX64"/"LPX64":%x\n",
                obd->obd_name, *index, catid.lci_logid.lgl_oid,
-               catid.lci_logid.lgl_ogr, catid.lci_logid.lgl_ogen);
+               catid.lci_logid.lgl_oseq, catid.lci_logid.lgl_ogen);
 
         rc = __osc_llog_init(obd, olg, disk_obd, &catid);
         if (rc) {

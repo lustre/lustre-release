@@ -622,7 +622,7 @@ int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm,
         }
 
         lmm->lmm_magic = LOV_MAGIC_V1;
-        lmm->lmm_object_gr = LOV_OBJECT_GROUP_DEFAULT;
+        lmm->lmm_object_seq = LOV_OBJECT_GROUP_DEFAULT;
         lmm->lmm_pattern = ldesc->ld_pattern;
         lmm->lmm_stripe_size = ldesc->ld_default_stripe_size;
         lmm->lmm_stripe_count = ldesc->ld_default_stripe_count;
