@@ -1768,7 +1768,7 @@ extern cfs_mem_cache_t *obdo_cachep;
 
 #define OBDO_ALLOC(ptr)                                                       \
 do {                                                                          \
-        OBD_SLAB_ALLOC_PTR((ptr), obdo_cachep);                               \
+        OBD_SLAB_ALLOC_PTR_GFP((ptr), obdo_cachep, CFS_ALLOC_IO);             \
 } while(0)
 
 #define OBDO_FREE(ptr)                                                        \
