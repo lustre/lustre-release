@@ -547,7 +547,10 @@ int
 main(int argc, char *argv[])
 {
         int    i, j, fd, rc, nops, lastOps, ag_ops;
+        int    ag_interval = 0;
         float  rate, ag_rate;
+        float  avg_rate = 0;
+        float  effective_rate = 0;
         time_t startTime, lastTime, curTime, interval;
         char * file;
 
@@ -752,6 +755,12 @@ main(int argc, char *argv[])
                 fatal(myrank, "Failure in MPI_Reduce of total ops.\n");
         }
 
+        rc = MPI_Reduce(&interval, &ag_interval, 1, MPI_INT, MPI_SUM, 0,
+                        MPI_COMM_WORLD);
+        if (rc != MPI_SUCCESS) {
+                fatal(myrank, "Failure in MPI_Reduce of total interval.\n");
+        }
+
         rc = MPI_Reduce(&rate, &ag_rate, 1, MPI_FLOAT, MPI_SUM, 0,
                         MPI_COMM_WORLD);
         if (rc != MPI_SUCCESS) {
@@ -759,8 +768,19 @@ main(int argc, char *argv[])
         }
 
         if (myrank == 0) {
-                printf("Rate: %.2f %ss/sec (total: %d threads %d %ss %lu secs)"
-                       "\n", ag_rate, cmd, nthreads, ag_ops, cmd, interval);
+                curTime = time(0);
+                interval = curTime - startTime;
+                if (interval != 0)
+                        effective_rate = (float) ag_ops/ (float)interval;
+
+                if (ag_interval > 0)
+                        avg_rate = (float)ag_ops/(float)ag_interval;
+
+
+                printf("Rate: %.2f eff %.2f aggr %.2f client %ss/sec "
+                       "(total: %d threads %d %ss %d dirs %d threads/dir %lu secs)\n",
+                       effective_rate, ag_rate, avg_rate, cmd, nthreads, ag_ops, cmd, 
+                       ndirs, dirthreads, interval);
         }
 
         if (recreate) {
