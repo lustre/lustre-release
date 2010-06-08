@@ -1592,7 +1592,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, cfs_list_t *cancels,
  * in a thread and this function will return after the thread has been
  * asked to call the callback.  when called with LDLM_SYNC the blocking
  * callback will be performed in this function. */
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t mode,
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                     int flags)
 {
         CFS_LIST_HEAD(cancels);
@@ -1600,15 +1600,19 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t mode,
         ENTRY;
 
 #ifndef __KERNEL__
-        mode = LDLM_SYNC; /* force to be sync in user space */
+        sync = LDLM_SYNC; /* force to be sync in user space */
 #endif
         count = ldlm_cancel_lru_local(ns, &cancels, nr, 0, 0, flags);
+        if (sync == LDLM_ASYNC) {
+                rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count);
+                if (rc == 0)
+                        RETURN(count);
+        }
 
-        rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count, mode);
-        if (rc == 0)
-                RETURN(count);
-
-        RETURN(0);
+        /* If an error occured in ASYNC mode, or this is SYNC mode,
+         * cancel the list. */
+        ldlm_cli_cancel_list(&cancels, count, NULL, 0);
+        RETURN(count);
 }
 
 /* Find and cancel locally unused locks found on resource, matched to the
