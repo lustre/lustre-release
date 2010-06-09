@@ -772,6 +772,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
         struct lprocfs_counter ret;
         struct obd_device *obd = (struct obd_device *)data;
         struct obd_import *imp;
+        struct obd_import_conn *conn;
         int i, j, k, rw = 0;
 
         LASSERT(obd != NULL);
@@ -783,12 +784,10 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                      "import:\n"
                      "    name: %s\n"
                      "    target: %s\n"
-                     "    current_connection: %s\n"
                      "    state: %s\n"
                      "    connect_flags: [",
                      obd->obd_name,
                      obd2cli_tgt(obd),
-                     imp->imp_connection->c_remote_uuid.uuid,
                      ptlrpc_import_state_name(imp->imp_state));
         i += obd_connect_flags2str(page + i, count - i,
                                    imp->imp_connect_data.ocd_connect_flags,
@@ -801,9 +800,22 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
         i += snprintf(page + i, count - i,
                       "]\n"
                       "    connection:\n"
+                      "       failover_nids: [");
+        spin_lock(&imp->imp_lock);
+        j = 0;
+        list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+                i += snprintf(page + i, count - i, "%s%s", j ? ", " : "",
+                              libcfs_nid2str(conn->oic_conn->c_peer.nid));
+                j++;
+        }
+        spin_unlock(&imp->imp_lock);
+        i += snprintf(page + i, count - i,
+                      "]\n"
+                      "       current_connection: %s\n"
                       "       connection_attempts: %u\n"
                       "       generation: %u\n"
                       "       in-progress_invalidations: %u\n",
+                      libcfs_nid2str(imp->imp_connection->c_peer.nid),
                       imp->imp_conn_cnt,
                       imp->imp_generation,
                       atomic_read(&imp->imp_inval_count));

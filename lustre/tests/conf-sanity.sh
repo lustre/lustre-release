@@ -1056,7 +1056,7 @@ test_29() {
 }
 run_test 29 "permanently remove an OST"
 
-test_30() {
+test_30a() {
 	setup
 
 	echo Big config llog
@@ -1069,7 +1069,7 @@ test_30() {
 	# make sure client restart still works
  	umount_client $MOUNT
 	mount_client $MOUNT || return 4
-	[ "$($TEST)" -ne "$i" ] && return 5
+	[ "$($TEST)" -ne "$i" ] && error "Param didn't stick across restart $($TEST) != $i"
 	pass
 
 	echo Erase parameter setting
@@ -1083,7 +1083,32 @@ test_30() {
 
 	cleanup
 }
-run_test 30 "Big config llog and conf_param deletion"
+run_test 30a "Big config llog and conf_param deletion"
+
+test_30b() {
+	setup
+
+	NEW="1.2.3.4@tcp"
+	TEST="lctl get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
+	set_and_check client "$TEST" "$FSNAME-OST0000.failover.node" $NEW || error "didn't add failover nid $NEW"
+	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
+	echo $NIDS
+	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
+	echo "should have 2 failover nids: $NIDCOUNT"
+	[ $NIDCOUNT -eq 2 ] || error "Failover nid not added"
+	do_facet mgs "$LCTL conf_param -d $FSNAME-OST0000.failover.node" || error "conf_param delete failed"
+	umount_client $MOUNT
+	mount_client $MOUNT || return 3
+
+	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
+	echo $NIDS
+	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
+	echo "only 1 final nid should remain: $NIDCOUNT"
+	[ $NIDCOUNT -eq 1 ] || error "Failover nids not removed"
+
+	cleanup
+}
+run_test 30b "Remove failover nids"
 
 test_31() { # bug 10734
         # ipaddr must not exist
