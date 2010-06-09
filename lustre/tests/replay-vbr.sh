@@ -652,6 +652,7 @@ test_6d() { # former test_0y
 run_test 6d "rename checks version of target parent"
 
 # pdirops tests, bug 18143
+cycle=0
 test_7_cycle() {
     local first=$1
     local lost=$2
@@ -659,18 +660,24 @@ test_7_cycle() {
     local rc=0
     local var=${SINGLEMDS}_svc
     zconf_mount $CLIENT2 $MOUNT2
+    cycle=$((cycle + 1))
+    local cname=$TESTNAME.$cycle
 
+    echo "start cycle: $cname"
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
     do_node $CLIENT1 mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     # first operation
-    do_node $CLIENT1 $first || error "Cannot do first operation"
+    echo "$cname first: $first"
+    do_node $CLIENT1 $first || error "$cname: Cannot do first operation"
     # client2 operations that will be lost
-    do_node $CLIENT2 $lost || error "Cannot do 'lost' operations"
+    echo "$cname lost: $lost"
+    do_node $CLIENT2 $lost || error "$cname: Cannot do 'lost' operations"
     # second operation
-    do_node $CLIENT1 $last || error "Cannot do last operation"
+    echo "$cname last: $last"
+    do_node $CLIENT1 $last || error "$cname: Cannot do last operation"
     zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
     # should fail as conflict expected
