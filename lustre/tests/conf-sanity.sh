@@ -38,7 +38,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
 #
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a 45"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="30 31 45"
 
 assert_DIR
 
@@ -46,15 +46,23 @@ reformat() {
         formatall
 }
 
-writeconf() {
-	local facet=mds
-	shift
+writeconf1() {
+	local facet=$1
+	local dev=$2
+
 	stop ${facet} -f
 	rm -f ${facet}active
 	# who knows if/where $TUNEFS is installed?  Better reformat if it fails...
-	do_facet ${facet} "$TUNEFS --writeconf $MDSDEV" ||
-		echo "tunefs failed, reformatting instead" && reformat_and_config
+	do_facet ${facet} "$TUNEFS --writeconf $dev" ||
+		{ echo "tunefs failed, reformatting instead" && reformat_and_config && return 1; }
+	return 0
+}
 
+writeconf() {
+	# if writeconf failed, we reformatted
+	writeconf1 mds $MDSDEV || return 0
+	writeconf1 ost1 `ostdevname 1` || return 0
+	writeconf1 ost2 `ostdevname 2` || return 0
 }
 
 gen_config() {
@@ -160,9 +168,9 @@ manual_umount_client(){
 }
 
 setup() {
-	start_ost
-	start_mds
-	mount_client $MOUNT
+	start_mds || error "MDT start failed"
+	start_ost || error "OST start failed"
+	mount_client $MOUNT || error "client start failed"
 	df $MOUNT
 }
 
@@ -230,7 +238,9 @@ run_test 0 "single mount setup"
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	setup
+	start_ost && error "2nd OST start should fail"
+	start_mds || error "MDT start failed"
+	mount_client $MOUNT || error "client start failed"
 	check_mount || return 42
 	cleanup || return $?
 }
@@ -240,7 +250,7 @@ test_2() {
 	start_ost
 	start_mds
 	echo "start mds second time.."
-	start_mds
+	start_mds && error "2nd MDT start should fail"
 	mount_client $MOUNT
 	check_mount || return 43
 	cleanup || return $?
@@ -250,7 +260,7 @@ run_test 2 "start up mds twice (should return err)"
 test_3() {
 	setup
 	#mount.lustre returns an error if already in mtab
-	mount_client $MOUNT && return $?
+	mount_client $MOUNT && error "2nd client mount should fail"
 	check_mount || return 44
 	cleanup || return $?
 }
@@ -498,7 +508,6 @@ test_9() {
         fi
         stop_ost || return $?
 }
-
 run_test 9 "test ptldebug and subsystem for mkfs"
 
 is_blkdev () {
@@ -1395,6 +1404,8 @@ test_35a() { # bug 12459
 		       }" $TMP/lustre-log-$TESTNAME.log`
 	[ "$NEXTCONN" != "0" ] && log "The client didn't try to reconnect to the last active server (tried ${NEXTCONN} instead)" && return 7
 	cleanup
+	# remove nid settings
+	writeconf
 }
 run_test 35a "Reconnect to the last active server first"
 
@@ -1470,6 +1481,8 @@ test_35b() { # bug 18674
 		return 6
 
         cleanup
+	# remove nid settings
+	writeconf
 }
 run_test 35b "Continue reconnection retries, if the active server is busy"
 
@@ -1767,10 +1780,9 @@ cleanup_46a() {
 		let count=count-1
 	done	
 	stop_mds || rc=$? 
-	# writeconf is needed after the test, otherwise,
-	# we might end up with extra OSTs
-	writeconf || rc=$?
 	cleanup_nocli || rc=$?
+	#writeconf to remove all ost2 traces for subsequent tests
+	writeconf
 	return $rc
 }
 
@@ -2103,6 +2115,7 @@ test_50f() {
 	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
+	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
 }
 run_test 50f "normal statfs one server in down =========================="
@@ -2128,6 +2141,7 @@ test_50g() {
 	stop_ost2 || error "Unable to stop OST2"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
+	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
 }
 run_test 50g "deactivated OST should not cause panic====================="
