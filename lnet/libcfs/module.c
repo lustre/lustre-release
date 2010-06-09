@@ -222,7 +222,7 @@ EXPORT_SYMBOL(libcfs_deregister_ioctl);
 
 static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *arg)
 {
-        char    buf[1024];
+        char    buf[1000];
         int err = -EINVAL;
         struct libcfs_ioctl_data *data;
         ENTRY;
@@ -251,7 +251,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 RETURN(0);
 #if LWT_SUPPORT
         case IOC_LIBCFS_LWT_CONTROL:
-                err = lwt_control ((data->ioc_flags & 1) != 0, 
+                err = lwt_control ((data->ioc_flags & 1) != 0,
                                    (data->ioc_flags & 2) != 0);
                 break;
 
@@ -323,7 +323,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                         err = hand->handle_ioctl(cmd, data);
                         if (err != -EINVAL) {
                                 if (err == 0)
-                                        err = libcfs_ioctl_popdata(arg, 
+                                        err = libcfs_ioctl_popdata(arg,
                                                         data, sizeof (*data));
                                 break;
                         }
