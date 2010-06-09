@@ -1545,6 +1545,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
                                 struct ost_lvb xtimes;
 
+                                UNLOCK_INODE_MUTEX(inode);
                                 /* setting mtime to past is performed under PW
                                  * EOF extent lock */
                                 oinfo->oi_policy.l_extent.start = 0;
@@ -1552,6 +1553,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW,
                                                     &oinfo->oi_policy,
                                                     &lockh, 0);
+                                LOCK_INODE_MUTEX(inode);
                                 if (rc) {
                                         OBD_FREE_PTR(oinfo);
                                         RETURN(rc);

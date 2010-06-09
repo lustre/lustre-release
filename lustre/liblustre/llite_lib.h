@@ -107,7 +107,7 @@ struct llu_inode_info {
         /* not for stat, change it later */
         int                     lli_st_flags;
         unsigned long           lli_st_generation;
-        /* the most recent attributes from mds, it is used for timestampts
+        /* the most recent attributes from mds, it is used for timestamps
          * only so far */
         struct ost_lvb         lli_lvb;
 };

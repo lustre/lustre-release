@@ -274,7 +274,7 @@ int llu_glimpse_size(struct inode *inode)
 
         lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
-        /* merge timestamps the most resently obtained from mds with
+        /* merge timestamps the most recently obtained from mds with
            timestamps obtained from osts */
         lvb = lli->lli_lvb;
         rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);

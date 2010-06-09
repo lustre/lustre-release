@@ -185,7 +185,7 @@ struct ll_inode_info {
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
         struct rw_semaphore     lli_truncate_rwsem;
-        /* the most recent attributes from mds, it is used for timestampts
+        /* the most recent attributes from mds, it is used for timestamps
          * only so far */
         struct ost_lvb         lli_lvb;
         struct inode            lli_vfs_inode;

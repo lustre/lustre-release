@@ -998,7 +998,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
-        /* merge timestamps the most resently obtained from mds with
+        /* merge timestamps the most recently obtained from mds with
            timestamps obtained from osts */
         lvb.lvb_atime = lli->lli_lvb.lvb_atime;
         lvb.lvb_mtime = lli->lli_lvb.lvb_mtime;
