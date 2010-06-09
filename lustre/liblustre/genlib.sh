@@ -14,7 +14,7 @@ set -e
 AR=/usr/bin/ar
 # see http://osdir.com/ml/gmane.comp.gnu.binutils.bugs/2006-01/msg00016.php
 ppc64_CPU=`uname -p`
-if [ ${ppc64_CPU} == "ppc64" ]; then
+if [ "x${ppc64_CPU}" = "xppc64" ]; then
   LD="gcc -m64"
 else
   LD="gcc"
