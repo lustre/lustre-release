@@ -99,6 +99,23 @@ init_test_env() {
     export E2LABEL=${E2LABEL:-e2label}
     export DUMPE2FS=${DUMPE2FS:-dumpe2fs}
     export E2FSCK=${E2FSCK:-e2fsck}
+    export LFSCK1=${LFSCK1:-lfsck}
+    export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check filesystem after each test suit
+    export SKIP_LFSCK=${SKIP_LFSCK:-"yes"} # bug 13698, change to "no" when fixed
+    export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
+    export FSCK_MAX_ERR=4   # File system errors left uncorrected
+    if [ "$SKIP_LFSCK" == "no" ]; then
+	if [ ! -x `which $LFSCK1` ]; then
+	    log "$($E2FSCK -V)"
+	    error_exit "$E2FSCK does not support lfsck"
+	fi
+
+	export MDSDB=${MDSDB:-$SHARED_DIRECTORY/mdsdb}
+	export OSTDB=${OSTDB:-$SHARED_DIRECTORY/ostdb}
+	export MDSDB_OPT="--mdsdb $MDSDB"
+	export OSTDB_OPT="--ostdb $OSTDB-\$ostidx"
+    fi
+    declare -a OSTDEVS
 
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
@@ -1783,6 +1800,20 @@ is_mounted () {
     echo $mounted' ' | grep -w -q $mntpt' '
 }
 
+is_empty_dir() {
+    [ $(find $1 -maxdepth 1 -print | wc -l) = 1 ] && return 0
+    return 1
+}
+
+# empty lustre filesystem may have empty directories lost+found and .lustre
+is_empty_fs() {
+    [ $(find $1 -maxdepth 1 -name lost+found -o -name .lustre -prune -o \
+       -print | wc -l) = 1 ] || return 1
+    [ ! -d $1/lost+found ] || is_empty_dir $1/lost+found && return 0
+    [ ! -d $1/.lustre ] || is_empty_dir $1/.lustre && return 0
+    return 1
+}
+
 check_and_setup_lustre() {
     nfs_client_mode && return
 
@@ -1873,7 +1904,119 @@ cleanup_and_setup_lustre() {
     check_and_setup_lustre
 }
 
+# Get all of the server target devices from a given server node and type.
+get_mnt_devs() {
+    local node=$1
+    local type=$2
+    local obd_type
+    local devs
+    local dev
+
+    case $type in
+    mdt) obd_type="osd" ;;
+    ost) obd_type="obdfilter" ;; # needs to be fixed when OST also uses an OSD
+    *) echo "invalid server type" && return 1 ;;
+    esac
+
+    devs=$(do_node $node "lctl get_param -n $obd_type.*.mntdev")
+    for dev in $devs; do
+        case $dev in
+        *loop*) do_node $node "losetup $dev" | \
+                sed -e "s/.*(//" -e "s/).*//" ;;
+        *) echo $dev ;;
+        esac
+    done
+}
+
+# Get all of the server target devices.
+get_svr_devs() {
+    local i
+
+    # OST devices
+    i=0
+    for node in $(osts_nodes); do
+        OSTDEVS[i]=$(get_mnt_devs $node ost)
+        i=$((i + 1))
+    done
+}
+
+# Run e2fsck on MDT or OST device.
+run_e2fsck() {
+    local node=$1
+    local target_dev=$2
+    local ostidx=$3
+    local ostdb_opt=$4
+
+    df > /dev/null	# update statfs data on disk
+    local cmd="$E2FSCK -d -v -f -n $MDSDB_OPT $ostdb_opt $target_dev"
+    echo $cmd
+    do_node $node $cmd
+    local rc=${PIPESTATUS[0]}
+    [ $rc -le $FSCK_MAX_ERR ] || \
+        error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
+    return 0
+}
+
+# Run e2fsck on MDT and OST(s) to generate databases used for lfsck.
+generate_db() {
+    local i
+    local ostidx
+    local dev
+    local tmp_file
+
+    tmp_file=$(mktemp -p $SHARED_DIRECTORY || 
+        error "fail to create file in $SHARED_DIRECTORY")
+
+    # make sure everything gets to the backing store
+    local list=$(comma_list $CLIENTS $(facet_host mds) $(osts_nodes))
+    do_nodes $list "sync; sleep 2; sync"
+
+    do_nodes $list ls $tmp_file || \
+        error "$SHARED_DIRECTORY is not a shared directory"
+    rm $tmp_file
+
+    run_e2fsck $(facet_host mds) $MDSDEV
+
+    i=0
+    ostidx=0
+    OSTDB_LIST=""
+    for node in $(osts_nodes); do
+        for dev in ${OSTDEVS[i]}; do
+	    local ostdb_opt=`eval echo $OSTDB_OPT`
+            run_e2fsck $node $dev $ostidx "$ostdb_opt"
+            OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
+            ostidx=$((ostidx + 1))
+        done
+        i=$((i + 1))
+    done
+}
+
+run_lfsck() {
+    local cmd="$LFSCK1 -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
+    echo $cmd
+    eval $cmd
+    local rc=${PIPESTATUS[0]}
+    [ $rc -le $FSCK_MAX_ERR ] || \
+        error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
+    echo "lfsck finished with rc=$rc"
+
+    rm -rvf $MDSDB* $OSTDB* || true
+
+    return $rc
+}
+
 check_and_cleanup_lustre() {
+    if [ "$LFSCK_ALWAYS" = "yes" ]; then
+        get_svr_devs
+        generate_db
+        if [ "$SKIP_LFSCK" == "no" ]; then
+	    local rc=0
+	    run_lfsck || rc=$?
+	else
+	    echo "skip lfsck"
+        fi
+    fi
+
     if is_mounted $MOUNT; then
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
         [ "$ENABLE_QUOTA" ] && restore_quota_type || true
@@ -3143,4 +3286,53 @@ max_recovery_time () {
     local service_time=$(( $(at_max_get client) + $(( 2 * $(( 25 + 1  + init_connect_timeout)) )) ))
 
     echo $service_time 
+}
+
+remove_mdt_files() {
+    local facet=$1
+    local mdtdev=$2
+    shift 2
+    local files="$@"
+    local mntpt=${MOUNT%/*}/$facet
+
+    echo "removing files from $mdtdev on $facet: $files"
+    mount -t $FSTYPE $MDS_MOUNT_OPTS $mdtdev $mntpt || return $?
+    rc=0;
+    for f in $files; do
+	rm $mntpt/ROOT/$f || { rc=$?; break; }
+    done
+    umount -f $mntpt || return $?
+    return $rc
+}
+
+duplicate_mdt_files() {
+    local facet=$1
+    local mdtdev=$2
+    shift 2
+    local files="$@"
+    local mntpt=${MOUNT%/*}/$facet
+
+    echo "duplicating files on $mdtdev on $facet: $files"
+    mkdir -p $mntpt || return $?
+    mount -t $FSTYPE $MDS_MOUNT_OPTS $mdtdev $mntpt || return $?
+
+    do_umount() {
+	trap 0
+	popd > /dev/null
+	rm $tmp
+	umount -f $mntpt
+    }
+    trap do_umount EXIT
+
+    tmp=$(mktemp $TMP/setfattr.XXXXXXXXXX)
+    pushd $mntpt/ROOT > /dev/null || return $?
+    rc=0
+    for f in $files; do
+	touch $f.bad || return $?
+	getfattr -n trusted.lov $f | sed "s#$f#&.bad#" > $tmp
+	rc=${PIPESTATUS[0]}
+	[ $rc -eq 0 ] || return $rc
+	setfattr --restore $tmp || return $?
+    done
+    do_umount
 }

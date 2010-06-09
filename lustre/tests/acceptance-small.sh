@@ -286,16 +286,9 @@ for NAME in $CONFIGS; do
 		SANITYN="done"
 	fi
 
-	[ "$LFSCK" != "no" ] && remote_mds && log "Remote MDS, skipping LFSCK test" && LFSCK=no && MSKIPPED=1
-	[ "$LFSCK" != "no" ] && remote_ost && log "Remote OST, skipping LFSCK test" && LFSCK=no && OSKIPPED=1
 	if [ "$LFSCK" != "no" ]; then
 	        title lfsck
-		if [ -x /usr/sbin/lfsck ]; then
-			bash lfscktest.sh
-		else
-			log "$($E2FSCK -V)"
-			log "SKIP: $E2FSCK does not support lfsck"
-		fi
+		bash lfscktest.sh
 		LFSCK="done"
 	fi
 
