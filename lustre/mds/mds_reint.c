@@ -1726,6 +1726,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
         struct dentry *pending_child;
         char fidname[LL_FID_NAMELEN];
         int fidlen = 0, rc, mode;
+        int ignoring_quota;
         ENTRY;
 
         LASSERT(inode != NULL);
@@ -1759,6 +1760,11 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
         /* avoid vfs_link upon 0 nlink inode, inc by 2 instead of 1 because
          * ext3_inc_count() can reset i_nlink for indexed directory */
         inode->i_nlink += 2;
+
+        /* Temporarily raise the resource capability as we do not want to
+         * get -EDQUOT from VFS during this unlink operation */
+        ignoring_quota = lquota_enforce(mds_quota_interface_ref, obd, 1);
+
         rc = ll_vfs_link(dentry, mds->mds_vfsmnt, pending_dir, pending_child,
                          mds->mds_vfsmnt);
         if (rc)
@@ -1783,6 +1789,9 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
         inode->i_nlink -= 2;
         if (inode->i_sb->s_op->dirty_inode)
                 inode->i_sb->s_op->dirty_inode(inode);
+
+        if (!ignoring_quota)
+                lquota_enforce(mds_quota_interface_ref, obd, 0);
 
         if (rc)
                 GOTO(out_dput, rc);

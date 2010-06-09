@@ -145,12 +145,15 @@ static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd
         RETURN(0);
 }
 
-static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
+static int target_quota_enforce(struct obd_device *obd, unsigned int ignore)
 {
         ENTRY;
 
         if (!ll_sb_any_quota_active(obd->u.obt.obt_sb))
-                RETURN(0);
+                RETURN(-EINVAL);
+
+        if (!!cfs_cap_raised(CFS_CAP_SYS_RESOURCE) == !!ignore)
+                RETURN(-EALREADY);
 
         if (ignore) {
                 CDEBUG(D_QUOTA, "blocks will be written with ignoring quota.\n");
@@ -895,6 +898,7 @@ quota_interface_t mds_quota_interface = {
         .quota_recovery = mds_quota_recovery,
         .quota_adjust   = mds_quota_adjust,
         .quota_chkquota = mds_quota_check,
+        .quota_enforce  = target_quota_enforce,
         .quota_acquire  = mds_quota_acquire,
         .quota_pending_commit = mds_quota_pending_commit,
 };
@@ -906,7 +910,7 @@ quota_interface_t filter_quota_interface = {
         .quota_ctl      = filter_quota_ctl,
         .quota_setinfo  = filter_quota_setinfo,
         .quota_clearinfo = filter_quota_clearinfo,
-        .quota_enforce  = filter_quota_enforce,
+        .quota_enforce  = target_quota_enforce,
         .quota_getflag  = filter_quota_getflag,
         .quota_acquire  = filter_quota_acquire,
         .quota_adjust   = filter_quota_adjust,
