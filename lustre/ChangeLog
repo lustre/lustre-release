@@ -12,6 +12,10 @@ tbd  Sun Microsystems, Inc.
 	 2.6.29.4-167.fc11 (FC11)
        * Recommended e2fsprogs version: 1.41.10-sun2
 
+Bugzilla   : 22850
+Description: Lustre does not do 1MB IOs to HW RAID
+Details    : Bump MAX_PHYS/HW_SEGMENTS and SG_ALL to 256 in the RHEL5 kernel.
+
 Severity   : enhancement
 Bugzilla   : 22194
 Description: lfs quota output is not very convenient for awk/sed-parsing
