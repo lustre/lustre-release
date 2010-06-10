@@ -1278,6 +1278,72 @@ test_27y() {
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
 
+check_seq_oid()
+{
+        echo check file $1
+        local old_ifs="$IFS"
+        IFS=$'\t\n :'
+        lmm=($($GETSTRIPE -v $1))
+
+        IFS=$'[:]'
+        fid=($($LFS path2fid $1))
+        IFS="$old_ifs"
+
+        # compare lmm_seq and lu_fid->f_seq
+        [ ${lmm[4]} = ${fid[1]} ] || { error "SEQ mismatch"; return 1; }
+        # compare lmm_object_id and lu_fid->oid
+        [ ${lmm[6]} = ${fid[2]} ] || { error "OID mismatch"; return 2; }
+
+        echo -e "\tseq ${fid[1]}, oid ${fid[2]} ver ${fid[3]}\n\tstripe count: ${lmm[8]}"
+
+        [ "$FSTYPE" != "ldiskfs" ] && skip "can not check trusted.fid FSTYPE=$FSTYPE" && return 0
+
+        # check the trusted.fid attribute of the OST objects of the file
+        for (( i=0, j=19; i < ${lmm[8]}; i++, j+=4 )); do
+                local obdidx=${lmm[$j]}
+                local devnum=$((obdidx + 1))
+                local objid=${lmm[$((j+1))]}
+                local group=${lmm[$((j+3))]}
+                local dev=$(ostdevname $devnum)
+                local dir=${MOUNT%/*}/ost$devnum
+                do_facet ost$devnum mount -t $FSTYPE $dev $dir $OST_MOUNT_OPTS ||
+                        { error "mounting $dev as $FSTYPE failed"; return 3; }
+
+                obj_filename=$(do_facet ost$devnum find $dir/O/$group -name $objid)
+                local ff=$(do_facet ost$devnum $LL_DECODE_FILTER_FID $obj_filename)
+                IFS=$'/= [:]'
+                ff=($(echo $ff))
+                IFS="$old_ifs"
+
+                # compare lmm_seq and filter_fid->ff_parent.f_seq
+                [ ${ff[11]} = ${lmm[4]} ] || { error "parent SEQ mismatch"; return 4; }
+                # compare lmm_object_id and filter_fid->ff_parent.f_oid
+                [ ${ff[12]} = ${lmm[6]} ] || { error "parent OID mismatch"; return 5; }
+                let stripe=${ff[13]}
+                [ $stripe -eq $i ] || { error "stripe mismatch"; return 6; }
+
+                echo -e "\t\tost $obdidx, objid $objid, group $group"
+                do_facet ost$devnum umount -d $dev
+        done
+}
+
+test_27z() {
+        mkdir -p $DIR/$tdir
+        $SETSTRIPE $DIR/$tdir/$tfile-1 -c 1 -o 0 -s 1m ||
+                { error "setstripe -c -1 failed"; return 1; }
+        dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=1M count=1 ||
+                { error "dd 1 mb failed"; return 2; }
+        $SETSTRIPE $DIR/$tdir/$tfile-2 -c -1 -o $(($OSTCOUNT - 1)) -s 1m ||
+                { error "setstripe -c 1 failed"; return 3; }
+        dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=1M count=$OSTCOUNT ||
+                { error "dd $OSTCOUNT mb failed"; return 4; }
+        sync
+
+        check_seq_oid $DIR/$tdir/$tfile-1 || return 5
+        check_seq_oid $DIR/$tdir/$tfile-2 || return 6
+}
+run_test 27z "check SEQ/OID on the MDT and OST filesystems"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

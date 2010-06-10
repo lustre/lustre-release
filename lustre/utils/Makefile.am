@@ -22,7 +22,7 @@ rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getidentity llverfs llverdev \
 	llog_reader lr_reader lshowmount lustre_rsync \
-	ll_recover_lost_found_objs ltrack_stats
+	ll_recover_lost_found_objs ltrack_stats ll_decode_filter_fid
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
