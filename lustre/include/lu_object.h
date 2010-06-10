@@ -42,9 +42,9 @@
 /*
  * struct lu_fid
  */
-#include <lustre/lustre_idl.h>
-
 #include <libcfs/libcfs.h>
+
+#include <lustre/lustre_idl.h>
 
 #include <lu_ref.h>
 

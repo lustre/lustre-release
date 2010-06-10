@@ -52,7 +52,6 @@
 #include <liblustre.h>
 #endif
 
-#include <lustre/lustre_idl.h>
 #include <lustre_log.h>
 #include <obd_support.h>
 #include <lustre_lib.h>

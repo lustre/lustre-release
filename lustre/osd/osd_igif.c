@@ -49,13 +49,14 @@
 
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
-/* fid stuff */
-#include <lustre/lustre_idl.h>
 
 /* struct osd_inode_id */
 #include "osd_oi.h"
 #include "osd_igif.h"
 #include "osd_internal.h"
+
+/* fid stuff */
+#include <lustre/lustre_idl.h>
 
 void lu_igif_to_id(const struct lu_fid *fid, struct osd_inode_id *id)
 {

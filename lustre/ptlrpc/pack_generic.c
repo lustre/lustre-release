@@ -2288,12 +2288,3 @@ void lustre_swab_lustre_capa_key(struct lustre_capa_key *k)
         CLASSERT(offsetof(typeof(*k), lk_padding) != 0);
 }
 
-void lustre_swab_kuch(struct kuc_hdr *l)
-{
-        __swab16s(&l->kuc_magic);
-        /* __u8 l->kuc_transport */
-        __swab16s(&l->kuc_msgtype);
-        __swab16s(&l->kuc_msglen);
-}
-EXPORT_SYMBOL(lustre_swab_kuch);
-

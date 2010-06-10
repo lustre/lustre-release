@@ -91,11 +91,8 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
-#include <libcfs/libcfs.h>
-
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
-#include <lustre/ll_fiemap.h>
 
 /*
  *  GENERAL STUFF
@@ -2847,8 +2844,6 @@ struct getinfo_fid2path {
 } __attribute__((packed));
 
 void lustre_swab_fid2path (struct getinfo_fid2path *gf);
-
-extern void lustre_swab_kuch(struct kuc_hdr *);
 
 
 #endif

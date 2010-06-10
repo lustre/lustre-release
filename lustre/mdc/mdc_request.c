@@ -1504,6 +1504,14 @@ static void lustre_swab_hal(struct hsm_action_list *h)
         }
 }
 
+static void lustre_swab_kuch(struct kuc_hdr *l)
+{
+        __swab16s(&l->kuc_magic);
+        /* __u8 l->kuc_transport */
+        __swab16s(&l->kuc_msgtype);
+        __swab16s(&l->kuc_msglen);
+}
+
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                                 struct lustre_kernelcomm *lk)
 {
