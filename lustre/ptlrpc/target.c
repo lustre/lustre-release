@@ -199,13 +199,13 @@ void lut_client_free(struct obd_export *exp)
         if (ted->ted_lr_idx < 0)
                 return;
         /* Clear bit when lcd is freed */
-        spin_lock(&lut->lut_client_bitmap_lock);
-        if (!test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
+        cfs_spin_lock(&lut->lut_client_bitmap_lock);
+        if (!cfs_test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
                 CERROR("%s: client %u bit already clear in bitmap\n",
                        exp->exp_obd->obd_name, ted->ted_lr_idx);
                 LBUG();
         }
-        spin_unlock(&lut->lut_client_bitmap_lock);
+        cfs_spin_unlock(&lut->lut_client_bitmap_lock);
 }
 EXPORT_SYMBOL(lut_client_free);
 
