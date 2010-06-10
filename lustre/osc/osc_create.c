@@ -196,8 +196,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
 
-        if ((oscc->oscc_flags & OSCC_FLAG_RECOVERING) ||
-            (oscc->oscc_flags & OSCC_FLAG_DEGRADED)) {
+        /* Do not check for a degraded OST here - bug21563/bug18539 */
+        if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
                 cfs_spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
@@ -361,8 +361,8 @@ int osc_precreate(struct obd_export *exp)
                 RETURN(1000);
         }
 
-        /* Do not check for a degraded OST here - bug21563/bug18539 */
-        if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
+        if ((oscc->oscc_flags & OSCC_FLAG_RECOVERING) ||
+            (oscc->oscc_flags & OSCC_FLAG_DEGRADED)) {
                 cfs_spin_unlock(&oscc->oscc_lock);
                 RETURN(2);
         }
