@@ -51,6 +51,7 @@ TIMESTAMP=
 # this is a dir to try reuse old kernel RPMs in (although, it seems to be
 # unused in any real manner
 REUSERPM=
+# this is the dir that should be used to store reuse products
 REUSEBUILD=
 # should cached products be used or force rebuilding?
 USE_BUILD_CACHE=true
@@ -1043,55 +1044,6 @@ unpack_linux_devel_rpm() {
 
     return 0
 
-}
-
-# XXX - this rhel/sles goop needs abstracting out into the
-#       lbuild-{rhel5,sles10} method files
-find_linux_devel_paths() {
-    local path="$1"
-
-    local RC=0
-
-    pushd $path
-        # RHEL-style and SLES-style rpms
-        # XXX - until bug 19336 cleans this up, we need to extricate the
-        #       ${lnxmin}- from the $lnxrel
-        local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
-
-        local path
-        for path in $paths; do
-            local src='usr/src'
-
-            if [ -d "$src/$path/" ]; then
-                LINUX="$(pwd)/$src/$path"
-            fi
-            # SLES has a separate -obj tree
-            if [ -d "$src/${path}-obj" ]; then
-                local src="$src/${path}-obj"
-                local objects="$TARGET_ARCH/$RPMSMPTYPE"
-
-                # Novell, are you *TRYING* to make life hard for me?
-                if [ -d "$src/powerpc" ]; then
-                    objects="powerpc/$TARGET_ARCH"
-                elif [ $TARGET_ARCH == 'i686' ]; then
-                    objects="i386/$RPMSMPTYPE"
-                fi
-
-                LINUXOBJ="$(pwd)/$src/$objects"
-            fi
-        done
-        if [ -z "$LINUX" ]; then
-            RC=255
-        else
-            # dig out the release version
-            LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
-            if [ -z "$LINUXRELEASE" ]; then
-                echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
-                RC=255
-            fi
-        fi
-    popd
-    return $RC
 }
 
 build_kernel_ib() {
