@@ -196,7 +196,6 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define to_kdev_t(dev)                  (dev)
 #define kdev_t_to_nr(dev)               (dev)
 #define val_to_kdev(dev)                (dev)
-#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, (void *)(data));
 
 #ifdef HAVE_BLKDEV_PUT_2ARGS
 #define ll_blkdev_put(a, b) blkdev_put(a, b)

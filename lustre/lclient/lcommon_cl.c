@@ -1285,26 +1285,22 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent)
 }
 
 /**
- * build inode number from passed @fid */
-ino_t cl_fid_build_ino(const struct lu_fid *fid)
+ * for 32 bit inode numbers directly map seq+oid to 32bit number.
+ */
+__u32 cl_fid_build_ino32(const struct lu_fid *fid)
 {
-        ino_t ino;
-        ENTRY;
+        RETURN(fid_flatten32(fid));
+}
 
-        if (fid_is_igif(fid)) {
-                ino = lu_igif_ino(fid);
-                RETURN(ino);
-        }
-
-        /* Very stupid and having many downsides inode allocation algorithm
-         * based on fid. */
-        ino = fid_flatten(fid) & 0xFFFFFFFF;
-
-        if (unlikely(ino == 0))
-                /* the first result ino is 0xFFC001, so this is rarely used */
-                ino = 0xffbcde;
-        ino = ino | 0x80000000;
-        RETURN(ino);
+/**
+ * build inode number from passed @fid */
+__u64 cl_fid_build_ino(const struct lu_fid *fid)
+{
+#if BITS_PER_LONG == 32
+        RETURN(fid_flatten32(fid));
+#else
+        RETURN(fid_flatten(fid));
+#endif
 }
 
 /**

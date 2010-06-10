@@ -442,7 +442,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 char          *name;
                                 int            namelen;
                                 struct lu_fid  fid;
-                                ino_t          ino;
+                                __u64          ino;
 
                                 /*
                                  * XXX: implement correct swabbing here.
@@ -467,7 +467,10 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 fid  = ent->lde_fid;
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
-                                ino  = cl_fid_build_ino(&fid);
+                                if (cfs_curproc_is_32bit())
+                                        ino = cl_fid_build_ino32(&fid);
+                                else
+                                        ino = cl_fid_build_ino(&fid);
                                 type = ll_dirent_type_get(ent);
                                 done = filldir(cookie, name, namelen,
                                                (loff_t)hash, ino, type);

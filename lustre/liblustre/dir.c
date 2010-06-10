@@ -238,7 +238,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                                 char          *name;
                                 int            namelen;
                                 struct lu_fid  fid;
-                                ino_t          ino;
+                                __u64          ino;
 
                                 hash    = le64_to_cpu(ent->lde_hash);
                                 namelen = le16_to_cpu(ent->lde_namelen);
