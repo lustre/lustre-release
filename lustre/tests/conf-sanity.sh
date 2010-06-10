@@ -880,8 +880,11 @@ test_24a() {
  	umount_client $MOUNT
 	# the MDS must remain up until last MDT
 	stop_mds
-	MDS=$(do_facet mds "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDS") { print $4 }')
-	[ -z "$MDS" ] && error "No MDS" && return 8
+
+	local mdt_obdname=$(do_facet mds "lctl get_param -n devices" | \
+        awk '/ mdt / { print $4 }' | head -1)
+	[ -z "$mdt_obdname" ] && error "No MDT" && return 8
+	
 	cleanup_24a
 	cleanup_nocli || return 6
 }
@@ -1301,9 +1304,19 @@ test_33a() { # bug 12333, was test_33
                 skip_env "mixed loopback and real device not working" && return
         fi
 
+        # interop 1.8 <-> 2.0
+        local mkfs_opts
+        local major=$(get_mds_version_major)
+        local minor=$(get_mds_version_minor)
+        if [ $major -le 1 -a $minor -le 8 ]; then
+                mkfs_opts=""
+        else
+                mkfs_opts="--mkfsoptions='-J size=8'" # bug 17931
+        fi
+
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
         local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
-        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} --reformat $fs2mdsdev || exit 10
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME2} $mkfs_opts --reformat $fs2mdsdev || exit 10
         add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME2} --index=8191 --mgsnode=$MGSNID --reformat $fs2ostdev || exit 10
 
         start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT

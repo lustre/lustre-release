@@ -2968,7 +2968,7 @@ wait_osc_import_state() {
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
         sleep 1
-        CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC | cut -f2)
+        CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
         i=$(($i + 1))
     done
 
