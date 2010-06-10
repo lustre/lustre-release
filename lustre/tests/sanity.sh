@@ -2311,12 +2311,10 @@ stop_writeback() {
 
 # ensure that all stripes have some grant before we test client-side cache
 setup_test42() {
-	[ "$SETUP_TEST42" ] && return
 	for i in `seq -f $DIR/f42-%g 1 $OSTCOUNT`; do
 		dd if=/dev/zero of=$i bs=4k count=1
 		rm $i
 	done
-	SETUP_TEST42=DONE
 }
 
 # Tests 42* verify that our behaviour is correct WRT caching, file closure,
@@ -4284,9 +4282,7 @@ test_101() {
 }
 run_test 101 "check read-ahead for random reads ================"
 
-export SETUP_TEST101=no
 setup_test101() {
-	[ "$SETUP_TEST101" = "yes" ] && return
 	mkdir -p $DIR/$tdir
 	STRIPE_SIZE=1048576
 	STRIPE_COUNT=$OSTCOUNT
@@ -4297,15 +4293,12 @@ setup_test101() {
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1024k count=100 2> /dev/null
-	SETUP_TEST101=yes
 }
 
 cleanup_test101() {
-	[ "$SETUP_TEST101" = "yes" ] || return
 	trap 0
 	rm -rf $DIR/$tdir
-        rm -f $DIR/$tfile
-	SETUP_TEST101=no
+	rm -f $DIR/$tfile
 }
 
 calc_total() {
@@ -4353,7 +4346,6 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101 $BSIZE
 	done
-	cleanup_test101
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
@@ -4403,9 +4395,7 @@ test_101d() {
 }
 run_test 101d "file read with and without read-ahead enabled  ================="
 
-export SETUP_TEST102=no
 setup_test102() {
-	[ "$SETUP_TEST102" = "yes" ] && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	STRIPE_SIZE=65536
@@ -4432,14 +4422,12 @@ setup_test102() {
 
 	cd $DIR
 	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
-	SETUP_TEST102=yes
 }
 
 cleanup_test102() {
 	trap 0
-	[ "$SETUP_TEST102" = "yes" ] || return 0
 	rm -f $TMP/f102.tar
-	SETUP_TEST102=no
+	rm -rf $DIR/d0.sanity/d102
 }
 
 test_102a() {
