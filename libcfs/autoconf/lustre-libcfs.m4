@@ -675,6 +675,26 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+# LIBCFS_HAVE_IS_COMPAT_TASK
+#
+# Added in 2.6.17, it wasn't until 2.6.29 that all
+# Linux architectures have is_compat_task()
+#
+AC_DEFUN([LIBCFS_HAVE_IS_COMPAT_TASK],
+[AC_MSG_CHECKING([if is_compat_task() is declared])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/compat.h>
+],[
+        int i = is_compat_task();
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_IS_COMPAT_TASK, 1, [is_compat_task() is available])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -693,6 +713,7 @@ LIBCFS_U64_LONG_LONG
 LIBCFS_TASK_RCU
 # 2.6.18
 LIBCFS_TASKLIST_LOCK
+LIBCFS_HAVE_IS_COMPAT_TASK
 # 2.6.19
 LIBCFS_NETLINK
 LIBCFS_NLMSG_MULTICAST
