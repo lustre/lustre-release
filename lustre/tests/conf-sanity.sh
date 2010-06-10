@@ -958,18 +958,31 @@ run_test 30a "Big config llog and conf_param deletion"
 test_30b() {
 	setup
 
-	NEW="1.2.3.4@tcp"
-	TEST="lctl get_param -n osc.$FSNAME-OST0000-osc-????????*/import | grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
+	# Make a fake nid.  Use the OST nid, and add 20 to the least significant
+	# numerical part of it. Hopefully that's not already a failover address for
+	# the server.
+	OSTNID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
+	ORIGVAL=$(echo $OSTNID | egrep -oi "[0-9]*@")
+	NEWVAL=$((($(echo $ORIGVAL | egrep -oi "[0-9]*") + 20) % 256))
+	NEW=$(echo $OSTNID | sed "s/$ORIGVAL/$NEWVAL@/")
+	echo "Using fake nid $NEW"
+
+	TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
 	set_and_check client "$TEST" "$FSNAME-OST0000.failover.node" $NEW || error "didn't add failover nid $NEW"
+	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
+	echo $NIDS
+	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
+	echo "should have 2 failover nids: $NIDCOUNT"
+	[ $NIDCOUNT -eq 2 ] || error "Failover nid not added"
 	do_facet mgs "$LCTL conf_param -d $FSNAME-OST0000.failover.node" || error "conf_param delete failed"
 	umount_client $MOUNT
 	mount_client $MOUNT || return 3
 
-	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-????????*/import | grep failover_nids)
-	NIDCOUNT=$(echo "$NIDS" | wc -w)
-	echo "only 1 final nid should remain: $NIDS"
-	[ $NIDCOUNT -eq 2 ] || fail "Failover nids not removed"
-	pass
+	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
+	echo $NIDS
+	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
+	echo "only 1 final nid should remain: $NIDCOUNT"
+	[ $NIDCOUNT -eq 1 ] || error "Failover nids not removed"
 
 	cleanup
 }
