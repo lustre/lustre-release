@@ -87,21 +87,6 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                         continue;
                 }
 
-                if (lock->l_req_mode == LCK_COS) {
-                        if (lock->l_client_cookie == req->l_client_cookie) {
-                                tmp = mode_tail;
-                        } else {
-                                tmp = mode_tail;
-                                if (!work_list)
-                                        RETURN(0);
-                                compat = 0;
-                                if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(lock, req,
-                                                               work_list);
-                        }
-                        continue;
-                }
-
                 for (;;) {
                         cfs_list_t *head;
 
@@ -112,6 +97,11 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
 
                         /* locks with bits overlapped are conflicting locks */
                         if (lock->l_policy_data.l_inodebits.bits & req_bits) {
+                                /* COS lock from the same client is
+                                   not conflicting */
+                                if (lock->l_req_mode == LCK_COS &&
+                                    lock->l_client_cookie == req->l_client_cookie)
+                                        goto not_conflicting;
                                 /* conflicting policy */
                                 if (!work_list)
                                         RETURN(0);
@@ -130,6 +120,7 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                                                 ldlm_add_ast_work_item(lock, req,
                                                                        work_list);
                         }
+                not_conflicting:
                         if (tmp == mode_tail)
                                 break;
 
