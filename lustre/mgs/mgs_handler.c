@@ -357,10 +357,10 @@ void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb)
 
         LASSERT(fsdb->fsdb_name[0] != '\0');
 
-        if (cfs_test_and_set_bit(1, &fsdb->fsdb_revoking_lock) == 0) {
+        if (cfs_test_and_set_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags) == 0) {
                 lockrc = mgs_get_cfg_lock(obd, fsdb->fsdb_name, &lockh);
                 /* clear the bit before lock put */
-                cfs_clear_bit(1, &fsdb->fsdb_revoking_lock);
+                cfs_clear_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags);
 
                 if (lockrc != ELDLM_OK)
                         CERROR("lock error %d for fs %s\n",

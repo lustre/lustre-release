@@ -201,7 +201,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         /* #01 L attach 0:lov_mdsA 1:lov 2:cdbe9_lov_mdsA_dc8cf7f3bb */
         if ((fsdb->fsdb_gen == 0) && (lcfg->lcfg_command == LCFG_ATTACH) &&
             (strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_LOV_NAME) == 0)) {
-                fsdb->fsdb_flags |= FSDB_OLDLOG14;
+                cfs_set_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags);
                 name_destroy(&fsdb->fsdb_clilov);
                 rc = name_create(&fsdb->fsdb_clilov,
                                  lustre_cfg_string(lcfg, 0), "");
@@ -214,7 +214,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         if ((fsdb->fsdb_gen == 0) && (lcfg->lcfg_command == LCFG_SETUP) &&
             (strncmp(lustre_cfg_string(lcfg, 0), "MDC_", 4) == 0)) {
                 char *ptr;
-                fsdb->fsdb_flags |= FSDB_OLDLOG14;
+                cfs_set_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags);
                 ptr = strstr(lustre_cfg_string(lcfg, 1), "_UUID");
                 if (!ptr) {
                         CERROR("Can't parse MDT uuid %s\n",
@@ -239,13 +239,13 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         /*
          * compat to 1.8, check osc name used by MDT0 to OSTs, bz18548.
          */
-        if (fsdb->fsdb_fl_oscname_18 == 0 &&
+        if (!cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags) &&
             lcfg->lcfg_command == LCFG_ATTACH &&
             strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_OSC_NAME) == 0) {
                 if (OBD_OCD_VERSION_MAJOR(d->ver) == 1 &&
                     OBD_OCD_VERSION_MINOR(d->ver) <= 8) {
                         CWARN("MDT using 1.8 OSC name scheme\n");
-                        fsdb->fsdb_fl_oscname_18 = 1;
+                        cfs_set_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags);
                 }
         }
 
@@ -287,7 +287,7 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, struct fs_db *fsdb)
                 GOTO(out_close, rc);
 
         if (llog_get_size(loghandle) <= 1)
-                fsdb->fsdb_flags |= FSDB_LOG_EMPTY;
+                cfs_set_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
 
         rc = llog_process(loghandle, mgs_fsdb_handler, (void *) &d, NULL);
         CDEBUG(D_INFO, "get_db = %d\n", rc);
@@ -357,10 +357,10 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
 
         strcpy(fsdb->fsdb_name, fsname);
         cfs_sema_init(&fsdb->fsdb_sem, 1);
-        fsdb->fsdb_fl_udesc = 1;
+        cfs_set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
 
         if (strcmp(fsname, MGSSELF_NAME) == 0) {
-                fsdb->fsdb_fl_mgsself = 1;
+                cfs_set_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags);
         } else {
                 OBD_ALLOC(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
                 OBD_ALLOC(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
@@ -462,7 +462,7 @@ int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
         if (!fsdb)
                 return -ENOMEM;
 
-        if (!fsdb->fsdb_fl_mgsself) {
+        if (!cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 /* populate the db from the client llog */
                 rc = mgs_get_fsdb_from_llog(obd, fsdb);
                 if (rc) {
@@ -503,7 +503,7 @@ int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti)
                 RETURN(rc);
         }
 
-        if (fsdb->fsdb_flags & FSDB_LOG_EMPTY)
+        if (cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags))
                 RETURN(-1);
 
         if (mti->mti_flags & LDD_F_SV_TYPE_OST)
@@ -593,7 +593,7 @@ static int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
         }
 
         cfs_set_bit(mti->mti_stripe_index, imap);
-        fsdb->fsdb_flags &= ~FSDB_LOG_EMPTY;
+        cfs_clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
         server_make_name(mti->mti_flags, mti->mti_stripe_index,
                          mti->mti_fsname, mti->mti_svname);
 
@@ -1531,7 +1531,7 @@ static void name_create_mdt_and_lov(char **logname, char **lovname,
 {
         name_create_mdt(logname, fsdb->fsdb_name, i);
         /* COMPAT_180 */
-        if (i == 0 && fsdb->fsdb_fl_oscname_18)
+        if (i == 0 && cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
                 name_create(lovname, fsdb->fsdb_name, "-mdtlov");
         else
                 name_create(lovname, *logname, "-mdtlov");
@@ -1542,7 +1542,7 @@ static inline void name_create_mdt_osc(char **oscname, char *ostname,
 {
         char suffix[16];
 
-        if (i == 0 && fsdb->fsdb_fl_oscname_18)
+        if (i == 0 && cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
                 sprintf(suffix, "-osc");
         else
                 sprintf(suffix, "-osc-MDT%04x", i);
@@ -1785,7 +1785,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         /* We also have to update the other logs where this osc is part of
            the lov */
 
-        if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
+        if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
                 /* If we're upgrading, the old mdt log already has our
                    entry. Let's do a fake one for fun. */
                 /* Note that we can't add any new failnids, since we don't
@@ -2086,10 +2086,10 @@ static int mgs_srpc_set_param_udesc_mem(struct fs_db *fsdb,
                 goto error_out;
 
         if (strcmp(ptr, "yes") == 0) {
-                fsdb->fsdb_fl_udesc = 1;
+                cfs_set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
                 CWARN("Enable user descriptor shipping from client to MDT\n");
         } else if (strcmp(ptr, "no") == 0) {
-                fsdb->fsdb_fl_udesc = 0;
+                cfs_clear_bit(FSDB_UDESC, &fsdb->fsdb_flags);
                 CWARN("Disable user descriptor shipping from client to MDT\n");
         } else {
                 *(ptr - 1) = '=';
@@ -2133,7 +2133,7 @@ static int mgs_srpc_set_param_mem(struct fs_db *fsdb,
                 RETURN(rc);
 
         /* mgs rules implies must be mgc->mgs */
-        if (fsdb->fsdb_fl_mgsself) {
+        if (cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 if ((rule.sr_from != LUSTRE_SP_MGC &&
                      rule.sr_from != LUSTRE_SP_ANY) ||
                     (rule.sr_to != LUSTRE_SP_MGS &&
@@ -2219,7 +2219,7 @@ static int mgs_srpc_set_param(struct obd_device *obd,
         if (rc)
                 goto out_free;
 
-        if (fsdb->fsdb_fl_mgsself) {
+        if (cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 /*
                  * for mgs rules, make them effective immediately.
                  */
@@ -2451,7 +2451,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                                            "changes were made to the "
                                            "config log.\n",
                                            mti->mti_svname, rc);
-                        if (fsdb->fsdb_flags & FSDB_OLDLOG14)
+                        if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags))
                                 LCONSOLE_ERROR_MSG(0x146, "This may be"
                                                    " because the log"
                                                    "is in the old 1.4"
@@ -2517,7 +2517,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                                             "-mdc");
                 } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                         /* COMPAT_146 */
-                        if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
+                        if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
                                 LCONSOLE_ERROR_MSG(0x148, "Upgraded "
                                                    "client logs for %s"
                                                    " cannot be "
@@ -2781,7 +2781,7 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti,
         LCONSOLE_INFO("upgrading server %s from pre-1.6\n", mti->mti_svname);
         server_mti_print("upgrade", mti);
 
-        if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
+        if (cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
                 LCONSOLE_ERROR_MSG(0x14a, "The old client log %s-client is "
                                    "missing.  Was tunefs.lustre successful?\n",
                                    mti->mti_fsname);
@@ -2814,7 +2814,7 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti,
                 }
         }
 
-        if (!(fsdb->fsdb_flags & FSDB_OLDLOG14)) {
+        if (!cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
                 LCONSOLE_ERROR_MSG(0x14c, "%s-client is supposedly an old "
                                    "log, but no old LOV or MDT was found. "
                                    "Consider updating the configuration with"
@@ -2973,7 +2973,8 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
         if (rc)
                 RETURN(rc);
-        if (!fsdb->fsdb_fl_mgsself && fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
+        if (!cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
+            cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
                 CERROR("No filesystem targets for %s.  cfg_device from lctl "
                        "is '%s'\n", fsname, devname);
                 mgs_free_fsdb(obd, fsdb);
@@ -3052,7 +3053,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                 CERROR("Can't get db for %s\n", fsname);
                 RETURN(rc);
         }
-        if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
+        if (cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
                 CERROR("%s is not defined\n", fsname);
                 mgs_free_fsdb(obd, fsdb);
                 RETURN(-EINVAL);

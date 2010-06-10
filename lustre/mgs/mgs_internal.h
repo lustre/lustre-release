@@ -61,8 +61,13 @@ struct mgs_tgt_srpc_conf {
 };
 
 #define INDEX_MAP_SIZE  8192     /* covers indicies to FFFF */
-#define FSDB_LOG_EMPTY  0x0001  /* missing client log */
-#define FSDB_OLDLOG14   0x0002  /* log starts in old (1.4) style */
+
+#define FSDB_LOG_EMPTY          (0)  /* missing client log */
+#define FSDB_OLDLOG14           (1)  /* log starts in old (1.4) style */
+#define FSDB_REVOKING_LOCK      (2)  /* DLM lock is being revoked */
+#define FSDB_MGS_SELF           (3)  /* for '_mgs', used by sptlrpc */
+#define FSDB_OSCNAME18          (4)  /* old 1.8 style OSC naming */
+#define FSDB_UDESC              (5)  /* sptlrpc user desc, will be obsolete */
 
 
 struct fs_db {
@@ -79,17 +84,12 @@ struct fs_db {
         char             *fsdb_mdtlmv;
         char             *fsdb_mdc;          /* COMPAT_146 mdc name */
         /* end COMPAT_146 */
-        __u32             fsdb_flags;
+        unsigned long     fsdb_flags;
         __u32             fsdb_gen;
-
-        __u8              fsdb_revoking_lock;  /* lock is being revoked */
 
         /* in-memory copy of the srpc rules, guarded by fsdb_sem */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
-        unsigned int              fsdb_fl_udesc:1,
-                                  fsdb_fl_mgsself:1,
-                                  fsdb_fl_oscname_18:1;
 };
 
 int mgs_init_fsdb_list(struct obd_device *obd);
