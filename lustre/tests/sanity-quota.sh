@@ -19,8 +19,7 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 ONLY=${ONLY:-"$*"}
 # test_11 has been used to protect a kernel bug(bz10912), now it isn't
 # useful any more. Then add it to ALWAYS_EXCEPT. b=19835
-# test 32 is disabled due to bug 22868
-ALWAYS_EXCEPT="10 11 32 $SANITY_QUOTA_EXCEPT"
+ALWAYS_EXCEPT="10 11 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case `uname -r` in
@@ -2240,7 +2239,6 @@ run_test_with_stat 31 "test duplicate quota releases ==="
 # check hash_cur_bits
 check_quota_hash_cur_bits() {
         local bits=$1
-        local ostcount=`lctl get_param -n lov.$LOVNAME.numobd`
 
         # check quota_hash_cur_bits on all obdfilters
         for num in `seq $OSTCOUNT`; do
@@ -2261,8 +2259,6 @@ check_quota_hash_cur_bits() {
 
 # check lqs hash
 check_lqs_hash() {
-        local ostcount=`lctl get_param -n lov.$LOVNAME.numobd`
-
         # check distribution of all obdfilters
         for num in `seq $OSTCOUNT`; do
 	    do_facet ost$num "lctl get_param obdfilter.${FSNAME}-OST*.hash_stats | grep LQS_HASH" | while read line; do
@@ -2285,6 +2281,13 @@ check_lqs_hash() {
 
 test_32()
 {
+        # reset system so that quota_hash_cur_bits==3
+        echo "Reset system ..."
+        local LMR_orig=$LOAD_MODULES_REMOTE
+        LOAD_MODULES_REMOTE=true
+        cleanup_and_setup_lustre
+        LOAD_MODULES_REMOTE=$LMR_orig
+
         for user in $SANITY_QUOTA_USERS; do
 	    check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" >/dev/null 2>/dev/null || \
 		missing_users="$missing_users $user"
