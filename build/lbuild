@@ -48,10 +48,12 @@ LUSTRE_EXTRA_VERSION=
 STAGEDIR=
 TMPDIR=${TMPDIR:-"/var/tmp"}
 TIMESTAMP=
-# XXX - i think these two parameters/arguments/variables need to be
-#       cleaned up and merged.  they effectively do the same thing
+# this is a dir to try reuse old kernel RPMs in (although, it seems to be
+# unused in any real manner
 REUSERPM=
 REUSEBUILD=
+# should cached products be used or force rebuilding?
+USE_BUILD_CACHE=true
 # what does this do exactly?  does it imply no kernel build?
 NORPM=false
 LDISKFSRPM=true
@@ -748,7 +750,7 @@ do_patch_linux() {
 
     local do_patch=${1:-true}
 
-    FULL_PATCH="$PWD/lustre-kernel-${TARGET}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}.patch"
+    FULL_PATCH="$PWD/lustre-kernel-${TARGET}-${EXTRA_VERSION}.patch"
     [ -f "$FULL_PATCH" ] && rm -f "$FULL_PATCH"
     $do_patch && pushd linux >/dev/null
     for series in $SERIES; do
@@ -941,7 +943,7 @@ skeep_ldiskfs_rpm() {
 #generate LUSTRE_EXTRA_VERSION from EXTRA_VERSION
 gen_lustre_version() {
 
-    LUSTRE_EXTRA_VERSION="${lnxmaj}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_DELIMITER}${RPMSMPTYPE}"
+    LUSTRE_EXTRA_VERSION="${lnxmaj}-${EXTRA_VERSION}${FLAVOR_DELIMITER}${RPMSMPTYPE}"
     LUSTRE_EXTRA_VERSION=${LUSTRE_EXTRA_VERSION//-/_}
 
 }
@@ -986,13 +988,12 @@ find_linux_release() {
 #     or just gotten rid of.  :-)
 find_linux_rpm() {
     local prefix="$1"
-    local delimiter=${2:-"-"}
 
     local pathtorpms="${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
     [ -d $pathtorpms ] || return 255
 
     local kernelbinaryrpm rpmfile
-    local wanted_kernel="${lnxmaj}${delimiter}${lnxrel}"
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
 
     local arch ret=1
     for arch in $TARGET_ARCHS_ALL; do
@@ -1021,10 +1022,6 @@ find_linux_rpm() {
 # lustre itself)
 unpack_linux_devel_rpm() {
     local kernelrpm="${1}"
-    # it's worth noting that neither sles10 nor rhel5 appear to use their
-    # extra_version delimiter for the dirname under /usr/src, so we could
-    # probably just get rid of this parameter
-    local delimiter=${2:-"-"}
 
     [ -f "$kernelrpm" ] || return 255
     [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused || return 255
@@ -1332,21 +1329,27 @@ build_kernel_with_srpm() {
     if $RELEASE; then
         local release_str="RELEASE=$RELEASE\n"
     fi
-    local REUSE_SIGNATURE=$({ echo -en $release_str; echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } | md5sum | cut -d" " -f1)
 
-    # see if we can link to the reuse pool
-    # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
-    local CAN_LINK_FOR_REUSE=false
-    touch $REUSEBUILD/$$
-    if cp -al $REUSEBUILD/$$ $TOPDIR/ 2>/dev/null; then
-        CAN_LINK_FOR_REUSE=true
+    if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
+        local REUSE_SIGNATURE=$({ echo -en $release_str;
+                                  echo $BUILD_GEN;
+                                  cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } |
+                                md5sum | cut -d" " -f1)
+        # see if we can link to the reuse pool
+        # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
+        #       "library"
+        local CAN_LINK_FOR_REUSE=false
+        touch $REUSEBUILD/$$
+        if cp -al $REUSEBUILD/$$ $TOPDIR/ 2>/dev/null; then
+            CAN_LINK_FOR_REUSE=true
+        fi
+        rm $REUSEBUILD/$$
     fi
-    rm $REUSEBUILD/$$
 
     # the extra version string to use for the kernel (which might be a reused
     # kernel, remember)
     local kernel_extra_version=""
-    if $REUSERPM && ! reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+    if ! $USE_BUILD_CACHE || ! reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
                                    "$REUSE_SIGNATURE"; then
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
@@ -1366,14 +1369,18 @@ build_kernel_with_srpm() {
         prepare_and_build_srpm >&${outfd} ||
             fatal 1 "failed to prepare_and_build_srpm"
 
-        # store the resulting kernel RPM build tree for future use
-        echo "caching the built kenel for future builds..." >&${outfd}
-        if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
-                             "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
-                             "$CAN_LINK_FOR_REUSE"; then
-            error "Failed to store kernel RPMS for reuse"
-            echo "unknown"
-            return 1
+        if [ -z "$REUSE_SIGNATURE" ]; then
+            echo "No reuse signature was caculated so not storing the built kernel" >&${outfd}
+        else
+            # store the resulting kernel RPM build tree for future use
+            echo "Storing the built kernel for future reuse" >&${outfd}
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                                 "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                                 "$CAN_LINK_FOR_REUSE"; then
+                error "Failed to store kernel RPMS for reuse"
+                echo "unknown"
+                return 1
+            fi
         fi
     fi  # build reuse
 
@@ -1520,7 +1527,7 @@ build_rdac() {
 # build OFED
 # globals used:
 #    TOPDIR
-#    REUSEBUILD, REUSERPM
+#    REUSEBUILD, USE_BUILD_CACHE
 #    CONFIGURE_FLAGS
 
 build_ofed() {
@@ -1532,10 +1539,14 @@ build_ofed() {
         return 0
     fi
 
-    if [ -n "$REUSEBUILD" ]; then
+    if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
+        local REUSE_SIGNATURE=$({ echo "$ofed_version";
+                                  echo "$(find_linux_release ${linux})";
+                                  cat "${linux}/include/linux/autoconf.h"; } |
+                                md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
-            # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
-            #       "library"
+        # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
+        #       "library"
         local CAN_LINK_FOR_REUSE=false
         touch $REUSEBUILD/$$
         if cp -al $REUSEBUILD/$$ $TOPDIR/; then
@@ -1544,33 +1555,38 @@ build_ofed() {
         rm $REUSEBUILD/$$
     fi
 
-    local REUSE_SIGNATURE=$({ echo "$ofed_version";
-                              echo "$(find_linux_release ${linux})";
-                              cat "${linux}/include/linux/autoconf.h"; } |
-                            md5sum | cut -d" " -f1)
-    if ! $REUSERPM || ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+    if ! $USE_BUILD_CACHE || ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
                                    "$REUSE_SIGNATURE"; then
-        # stash away the existing built articles for a moment
-        mkdir bak
-        mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
-        function mv_back {
-            pushd bak
-            find . | cpio -pudlm ..
-            popd
-            rm -rf bak
-        }
-        create_rpmbuild_dirs
+        if [ -n "$REUSE_SIGNATURE" ]; then
+            # stash away the existing built articles for a moment
+            mkdir bak
+            mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
+            function mv_back {
+                pushd bak
+                find . | cpio -pudlm ..
+                popd
+                rm -rf bak
+            }
+            create_rpmbuild_dirs
+        fi
         # build it
         build_kernel_ib "${linux}"
-        if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
-                             "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
-                             "$CAN_LINK_FOR_REUSE"; then
-            error "Failed to store OFED RPMS for reuse"
+
+        if [ -z "$REUSE_SIGNATURE" ]; then
+            echo "No reuse signature was caculated so not storing the built ofed"
+        else
+            # store the resulting RPM build tree for future use
+            echo "Storing the built ofed for future reuse"
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                                 "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                                 "$CAN_LINK_FOR_REUSE"; then
+                error "Failed to store OFED RPMS for reuse"
+                mv_back
+                return 1
+            fi
+            # put the stuff we stashed away back
             mv_back
-            return 1
         fi
-        # put the stuff we stashed away back
-        mv_back
     fi
 
     pushd "$TOPDIR" >/dev/null
@@ -1604,10 +1620,8 @@ build_with_srpm() {
             fi
 
             # install the -devel RPM in preparation for the lustre build
-            # note that the EXTRA_VERSION_DELIMITER is *NOT* used in the
-            # version of the directory name under /usr/src
             if ! lnxrel="$kernel_extra_version" unpack_linux_devel_rpm \
-                           "$TOPDIR/RPMS/$arch/$kernel_devel_rpm" "-"; then
+                           "$TOPDIR/RPMS/$arch/$kernel_devel_rpm"; then
                 fatal 1 "Could not find the Linux tree in $TOPDIR/RPMS/$arch/$kernel_devel_rpm"
             fi
         done
@@ -1615,7 +1629,7 @@ build_with_srpm() {
         # need to find and unpack the vendor's own kernel-devel for patchless
         # client build
         local kernelrpm
-        if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE" ${EXTRA_VERSION_DELIMITER:-"-"}); then
+        if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE"); then
             fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
         fi
         if ! lnxrel="$lnxrel" unpack_linux_devel_rpm "$kernelrpm" "-"; then
@@ -1944,7 +1958,6 @@ check_options
 unpack_lustre
 
 load_target
-EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
 
 if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     download_ofed
@@ -1985,6 +1998,7 @@ else
 
         build_with_srpm || fatal 1 "Failed to build_with_srpm"
     else
+        EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
         source ${0%/*}/lbuild.old_school
 
         old_school_download_kernel
