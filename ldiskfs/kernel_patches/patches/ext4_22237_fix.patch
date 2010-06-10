@@ -1,0 +1,18 @@
+--- linux-2.6.18-164.6.1_ext4/fs/ext4/super.c	2010-03-31 15:35:44.000000000 +0530
++++ linux-2.6.18-164.6.1_ext4_1/fs/ext4/super.c	2010-03-31 16:53:00.000000000 +0530
+@@ -2818,7 +2818,6 @@ static int ext4_fill_super(struct super_
+ 		if (p == NULL) {
+ 			printk(KERN_ERR "EXT4-fs: unable to create %s\n",
+ 			       EXT4_MAX_DIR_SIZE_NAME);
+-			remove_proc_entry(EXT4_MAX_DIR_SIZE_NAME, sbi->s_proc);
+ 			ret = -ENOMEM;
+ 			goto failed_mount;
+ 		}
+@@ -3123,6 +3122,7 @@ failed_mount:
+ 	if (sbi->s_proc) {
+ 		remove_proc_entry("inode_readahead_blks", sbi->s_proc);
+ 		remove_proc_entry("inode_goal", sbi->s_proc);
++		remove_proc_entry(EXT4_MAX_DIR_SIZE_NAME, sbi->s_proc);
+ 		remove_proc_entry(sb->s_id, ext4_proc_root);
+ 	}
+ #ifdef CONFIG_QUOTA
