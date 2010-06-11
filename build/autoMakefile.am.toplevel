@@ -146,6 +146,23 @@ debs:
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
+	fi; \
+	if [ -d .git ]; then \
+		pdir="debian/patches"; \
+		git format-patch -o $$pdir $$lversion..HEAD^; \
+		pushd $$pdir; \
+		rm -f 00list *.dpatch; \
+		for file in [0-9][0-9][0-9][0-9]-*.patch; do \
+			desc=$$(cat $$file | sed -e '1,/^$$/d' -e '/^---$$/,$$d'); \
+			dpatch_file=$${file/.patch/.dpatch}; \
+			sed -e '1,/^---$$/d' $$file | \
+			  dpatch patch-template -p "$$file" "$$desc" > \
+			  $$dpatch_file; \
+			echo "faked by make debs run from git" > \
+			  ../patched/$$dpatch_file; \
+			echo $$dpatch_file >> 00list; \
+			rm -f $$file; \
+		done; \
 	fi
 	dpkg-buildpackage || { \
 		rc=$${PIPESTATUS[0]}; \
