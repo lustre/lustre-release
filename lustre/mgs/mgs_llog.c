@@ -1183,7 +1183,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *llh = NULL;
         char *nodeuuid, *oscname, *oscuuid, *lovuuid;
-        char index[5];
+        char index[6];
         int i, rc;
 
         if (mgs_log_is_empty(obd, logname)) {

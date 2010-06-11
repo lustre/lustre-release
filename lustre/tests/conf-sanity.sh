@@ -2192,6 +2192,61 @@ test_50g() {
 }
 run_test 50g "deactivated OST should not cause panic====================="
 
+lov_objid_size()
+{
+	local max_ost_index=$1
+	echo -n $(($max_ost_index * 8 + 8))
+}
+
+test_55() {
+	local saved_opts=$OST_MKFS_OPTS
+
+	for i in 0 1023 2048
+	do
+		OST_MKFS_OPTS="$saved_opts --index $i"
+		reformat
+
+		setup_noconfig
+		cp /etc/passwd $DIR/1
+		stopall
+
+		setup
+		cp /etc/passwd $DIR/2
+		sync
+
+		echo checking size of lov_objid for ost index $i
+		local file_size=`do_facet mds \
+		    "$DEBUGFS -R 'stat lov_objid' $MDSDEV 2>/dev/null" | \
+		    grep ^User | awk '{print $6}'`
+		if [ "$file_size" != $(lov_objid_size $i) ]; then
+			error "lov_objid size has to be $(lov_objid_size $i), \
+not $file_size"
+		else
+			echo ok, lov_objid size is correct: $file_size
+		fi
+		stopall
+	done
+
+	OST_MKFS_OPTS=$saved_opts
+	reformat
+}
+run_test 55 "check lov_objid size"
+
+test_56() {
+	add mds $MDS_MKFS_OPTS --mkfsoptions='\"-J size=16\"' --reformat $MDSDEV
+	add ost1 $OST_MKFS_OPTS --index=1000 --reformat `ostdevname 1`
+	add ost2 $OST_MKFS_OPTS --index=10000 --reformat `ostdevname 2`
+
+	start_mds
+	start_ost
+	start_ost2 || error "Unable to start second ost"
+	mount_client $MOUNT || error "Unable to mount client"
+
+	stopall
+	reformat
+}
+run_test 56 "check big indexes"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
