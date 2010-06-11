@@ -12,6 +12,23 @@ tbd  Sun Microsystems, Inc.
 	 2.6.29.4-167.fc11 (FC11)
        * Recommended e2fsprogs version: 1.41.10-sun2
 
+Severity   : enhancement
+Bugzilla   : 22481
+Description: Distribute lfs_migrate script with lustre
+Details    : The lfs_migrate mentioned in the manual is now included in the
+             lustre tree in lustre/scripts and will distributed in lustre RPMs.
+
+
+Severity   : enhancement
+Bugzilla   : 15253
+Description: Failover nid list added to import proc file.
+
+Severity   : enhancement
+Bugzilla   : 22864
+Description: "som_preview" mount option required to use SOM
+Details    : The clients will need to use som_preview mount option
+             in order to use SOM. 
+
 Bugzilla   : 22850
 Description: Lustre does not do 1MB IOs to HW RAID
 Details    : Bump MAX_PHYS/HW_SEGMENTS and SG_ALL to 256 in the RHEL5 kernel.
