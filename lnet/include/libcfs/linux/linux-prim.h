@@ -160,7 +160,17 @@ typedef long                            cfs_task_state_t;
 #define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
 
 #define cfs_cond_resched()              cond_resched()
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12))
+/* cond_resched_lock() is bogus for kernels prior to 2.6.12,
+ * see bug 23039 */
+static inline int cfs_cond_resched_lock(cfs_spinlock_t *lock)
+{
+        return 0;
+}
+#else
 #define cfs_cond_resched_lock(lock)     cond_resched_lock(lock)
+#endif
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);

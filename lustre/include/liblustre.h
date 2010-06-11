@@ -306,6 +306,7 @@ extern int echo_client_init(void);
 struct rcu_head { };
 
 typedef struct { } spinlock_t;
+typedef spinlock_t cfs_spinlock_t;
 typedef __u64 kdev_t;
 
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
