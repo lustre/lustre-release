@@ -157,13 +157,41 @@ int class_match_param(char *buf, char *key, char **valp)
         return 0;
 }
 
+static int parse_nid(char *buf, void *value)
+{
+        lnet_nid_t *nid = (lnet_nid_t *)value;
+
+        *nid = libcfs_str2nid(buf);
+        if (*nid != LNET_NID_ANY)
+                return 0;
+
+        LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
+        return -EINVAL;
+}
+
+static int parse_net(char *buf, void *value)
+{
+        __u32 *net = (__u32 *)net;
+
+        *net = libcfs_str2net(buf);
+        CDEBUG(D_INFO, "Net %s\n", libcfs_net2str(*net));
+        return 0;
+}
+
+enum {
+        CLASS_PARSE_NID = 1,
+        CLASS_PARSE_NET,
+};
+
 /* 0 is good nid,
    1 not found
    < 0 error
    endh is set to next separator */
-int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
+static int class_parse_value(char *buf, int opc, void *value, char **endh)
 {
-        char tmp, *endp;
+        char *endp;
+        char  tmp;
+        int   rc = 0;
 
         if (!buf)
                 return 1;
@@ -179,17 +207,46 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 
         tmp = *endp;
         *endp = '\0';
-        *nid = libcfs_str2nid(buf);
-        if (*nid == LNET_NID_ANY) {
-                LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
-                *endp = tmp;
-                return -EINVAL;
+        switch (opc) {
+        default:
+                LBUG();
+        case CLASS_PARSE_NID:
+                rc = parse_nid(buf, value);
+                break;
+        case CLASS_PARSE_NET:
+                rc = parse_net(buf, value);
+                break;
         }
         *endp = tmp;
-
+        if (rc != 0)
+                return rc;
         if (endh)
                 *endh = endp;
-        CDEBUG(D_INFO, "Nid %s\n", libcfs_nid2str(*nid));
+        return 0;
+}
+
+int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
+{
+        return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh);
+}
+
+int class_parse_net(char *buf, __u32 *net, char **endh)
+{
+        return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh);
+}
+
+int class_match_net(char *buf, lnet_nid_t nid)
+{
+        __u32 net;
+
+        while (class_find_param(buf, PARAM_NETWORK, &buf) == 0) {
+                /* please restrict to the nids pertaining to
+                 * the specified networks */
+                while (class_parse_net(buf, &net, &buf) == 0) {
+                        if (LNET_NIDNET(nid) == net)
+                                return 1;
+                }
+        }
         return 0;
 }
 
@@ -197,6 +254,8 @@ EXPORT_SYMBOL(class_find_param);
 EXPORT_SYMBOL(class_get_next_param);
 EXPORT_SYMBOL(class_match_param);
 EXPORT_SYMBOL(class_parse_nid);
+EXPORT_SYMBOL(class_parse_net);
+EXPORT_SYMBOL(class_match_net);
 
 /********************** class fns **********************/
 

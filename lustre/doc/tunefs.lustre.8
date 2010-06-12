@@ -52,6 +52,9 @@ OST: \fIerrors=remount-ro,mballoc,extents\fR;
 MGS/MDT: \fIerrors=remount-ro,iopen_nopriv,user_xattr\fR.
 \fBDO NOT\fR alter the default mount options unless you know what you are doing.
 .TP
+.BI \--network= net,...
+Network(s) to restrict this ost/mdt to. This option can be repeated as desired.
+.TP
 .BI \--mgs
 Add a configuration management service to this target
 .TP

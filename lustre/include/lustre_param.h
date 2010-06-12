@@ -53,6 +53,8 @@ int class_find_param(char *buf, char *key, char **valp);
 int class_get_next_param(char **params, char *copy);
 int class_match_param(char *buf, char *key, char **valp);
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
+int class_parse_net(char *buf, __u32 *net, char **endh);
+int class_match_net(char *buf, lnet_nid_t nid);
 /* obd_mount.c */
 int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
             char *s1, char *s2, char *s3, char *s4);
@@ -83,6 +85,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_FAILNODE             "failover.node="    /* add failover nid */
 #define PARAM_FAILMODE             "failover.mode="    /* initial mount only */
 #define PARAM_ACTIVE               "active="           /* activate/deactivate */
+#define PARAM_NETWORK              "network="          /* bind on nid */
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
 #define PARAM_OST                  "ost."

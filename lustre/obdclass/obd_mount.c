@@ -964,7 +964,7 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
         struct lustre_sb_info    *lsi = s2lsi(sb);
         struct lustre_disk_data  *ldd = lsi->lsi_ldd;
         lnet_process_id_t         id;
-        int i = 0;
+        int                       i = 0;
         ENTRY;
 
         if (!(lsi->lsi_flags & LSI_SERVER))
@@ -979,6 +979,14 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
         while (LNetGetId(i++, &id) != -ENOENT) {
                 if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND)
                         continue;
+
+                if (class_find_param(ldd->ldd_params,
+                                     PARAM_NETWORK, NULL) == 0 &&
+                    !class_match_net(ldd->ldd_params, id.nid)) {
+                        /* can't match specified network */
+                        continue;
+                }
+
                 mti->mti_nids[mti->mti_nid_count] = id.nid;
                 mti->mti_nid_count++;
                 if (mti->mti_nid_count >= MTI_NIDS_MAX) {

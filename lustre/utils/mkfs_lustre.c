@@ -130,6 +130,7 @@ void usage(FILE *out)
                 */
                 "\t\t--comment=<user comment>: arbitrary user string (%d bytes)\n"
                 "\t\t--mountfsoptions=<opts> : permanent mount options\n"
+                "\t\t--network=<net>[,<...>] : network(s) to restrict this ost/mdt to\n"
 #ifndef TUNEFS
                 "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
                 "\t\t--device-size=#N(KB) : device size for loop devices\n"
@@ -1224,6 +1225,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"verbose", 0, 0, 'v'},
                 {"writeconf", 0, 0, 'w'},
                 {"upgrade_to_18", 0, 0, 'U'},
+                {"network", 1, 0, 't'},
                 {0, 0, 0, 0}
         };
         char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqru:vw";
@@ -1378,6 +1380,22 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'r':
                         mop->mo_flags |= MO_FORCEFORMAT;
+                        break;
+                case 't':
+                        if (!IS_MDT(&mop->mo_ldd) && !IS_OST(&mop->mo_ldd)) {
+                                badopt(long_opt[longidx].name, "MDT,OST");
+                                return 1;
+                        }
+
+                        if (!optarg)
+                                return 1;
+
+                        rc = add_param(mop->mo_ldd.ldd_params,
+                                       PARAM_NETWORK, optarg);
+                        if (rc != 0)
+                                return rc;
+                        /* Must update the mgs logs */
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 case 'u':
                         strscpy(mop->mo_ldd.ldd_userdata, optarg,
