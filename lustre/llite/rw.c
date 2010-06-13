@@ -1509,23 +1509,26 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
         if (Page_Uptodate(page))
                 GOTO(unlock_page, rc = 0);
 
+        if (!lustre_handle_is_used(&lockh)) {
+                start = ((loff_t)index) << CFS_PAGE_SHIFT;
+                end = start + CFS_PAGE_SIZE - 1;
+                rc = obd_get_lock(exp,
+                                  ll_i2info(mapping->host)->lli_smd,
+                                  &llap->llap_cookie, OBD_BRW_READ, 
+                                  start, end, &lockh, OBD_FAST_LOCK);
+                /* Is the lock being cancelling? */
+                if (rc <= 0)
+                        GOTO(unlock_page, rc = 0);
+        }
+
+        llap->llap_lockh_granted = lockh;
+
         rc = ll_issue_page_read(exp, llap, oig, 1);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_READA | D_PAGE, page, "started read-ahead\n");
                 rc = 1;
-
-                if (!lustre_handle_is_used(&lockh)) {
-                        start = ((loff_t)index) << CFS_PAGE_SHIFT;
-                        end = start + CFS_PAGE_SIZE - 1;
-                        rc = obd_get_lock(exp,
-                                          ll_i2info(mapping->host)->lli_smd,
-                                          &llap->llap_cookie, OBD_BRW_READ, 
-                                          start, end, &lockh, OBD_FAST_LOCK);
-                        LASSERT(rc);
-                }
-
-                llap->llap_lockh_granted = lockh;
         } else {
+                llap->llap_lockh_granted.cookie = 0;
 unlock_page:
                 if (lustre_handle_is_used(&lockh))
                         ldlm_lock_decref(&lockh, LCK_PR);
