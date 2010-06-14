@@ -1604,8 +1604,9 @@ struct mdt_body {
         __u32          aclsize;
         __u32          max_mdsize;
         __u32          max_cookiesize;
-        __u32          padding_4; /* also fix lustre_swab_mdt_body */
-        __u64          padding_5;
+        __u32          uid_h; /* high 32-bits of uid, for FUID */
+        __u32          gid_h; /* high 32-bits of gid, for FUID */
+        __u32          padding_5; /* also fix lustre_swab_mdt_body */
         __u64          padding_6;
         __u64          padding_7;
         __u64          padding_8;
@@ -1717,7 +1718,9 @@ struct mdt_remote_perm {
         __u32           rp_uid;
         __u32           rp_gid;
         __u32           rp_fsuid;
+        __u32           rp_fsuid_h;
         __u32           rp_fsgid;
+        __u32           rp_fsgid_h;
         __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
 };
 
@@ -2591,7 +2594,8 @@ struct obdo {
         struct lustre_handle    o_handle;       /* brw: lock handle to prolong locks */
         struct llog_cookie      o_lcookie;      /* destroy: unlink cookie from MDS */
 
-        __u64                   o_padding_2;
+        __u32                   o_uid_h;
+        __u32                   o_gid_h;
         __u64                   o_padding_3;
         __u64                   o_padding_4;
         __u64                   o_padding_5;

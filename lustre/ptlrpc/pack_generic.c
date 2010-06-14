@@ -1599,7 +1599,8 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_parent_ver);
         /* o_handle is opaque */
         /* o_lcookie is swabbed elsewhere */
-        CLASSERT(offsetof(typeof(*o), o_padding_2) != 0);
+        __swab32s (&o->o_uid_h);
+        __swab32s (&o->o_gid_h);
         CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
         CLASSERT(offsetof(typeof(*o), o_padding_4) != 0);
         CLASSERT(offsetof(typeof(*o), o_padding_5) != 0);
@@ -1735,7 +1736,9 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->aclsize);
         __swab32s (&b->max_mdsize);
         __swab32s (&b->max_cookiesize);
-        CLASSERT(offsetof(typeof(*b), padding_4) != 0);
+        __swab32s (&b->uid_h);
+        __swab32s (&b->gid_h);
+        CLASSERT(offsetof(typeof(*b), padding_5) != 0);
 }
 
 void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b)
@@ -1814,7 +1817,9 @@ void lustre_swab_mdt_remote_perm (struct mdt_remote_perm *p)
         __swab32s (&p->rp_uid);
         __swab32s (&p->rp_gid);
         __swab32s (&p->rp_fsuid);
+        __swab32s (&p->rp_fsuid_h);
         __swab32s (&p->rp_fsgid);
+        __swab32s (&p->rp_fsgid_h);
         __swab32s (&p->rp_access_perm);
 };
 
@@ -2105,8 +2110,12 @@ void dump_obdo(struct obdo *oa)
                                      (valid & OBD_MD_FLMODE ? ~S_IFMT : 0)));
         if (valid & OBD_MD_FLUID)
                 CDEBUG(D_RPCTRACE, "obdo: o_uid = %u\n", oa->o_uid);
+        if (valid & OBD_MD_FLUID)
+                CDEBUG(D_RPCTRACE, "obdo: o_uid_h = %u\n", oa->o_uid_h);
         if (valid & OBD_MD_FLGID)
                 CDEBUG(D_RPCTRACE, "obdo: o_gid = %u\n", oa->o_gid);
+        if (valid & OBD_MD_FLGID)
+                CDEBUG(D_RPCTRACE, "obdo: o_gid_h = %u\n", oa->o_gid_h);
         if (valid & OBD_MD_FLFLAGS)
                 CDEBUG(D_RPCTRACE, "obdo: o_flags = %x\n", oa->o_flags);
         if (valid & OBD_MD_FLNLINK)

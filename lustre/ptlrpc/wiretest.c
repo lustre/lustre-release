@@ -589,10 +589,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_lcookie));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_lcookie) == 32, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_lcookie));
-        LASSERTF((int)offsetof(struct obdo, o_padding_2) == 168, " found %lld\n",
-                 (long long)(int)offsetof(struct obdo, o_padding_2));
-        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_2) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_2));
+        LASSERTF((int)offsetof(struct obdo, o_uid_h) == 168, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_uid_h));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_uid_h) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_uid_h));
+        LASSERTF((int)offsetof(struct obdo, o_gid_h) == 172, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_gid_h));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_gid_h) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_gid_h));
         LASSERTF((int)offsetof(struct obdo, o_padding_3) == 176, " found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_padding_3));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_3) == 8, " found %lld\n",
