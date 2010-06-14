@@ -46,3 +46,17 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
      fi
     done
 }
+
+unpack_linux_devel_rpm-sles10() {
+    local callers_rpm="$1"
+
+    # get the Module.symvers out of the kenrel-flavor RPM
+    local kernelrpm=${callers_rpm/-source-/-$RPMSMPTYPE-}
+
+    if ! rpm2cpio < "$kernelrpm" | cpio -id ./usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$TARGET_ARCH/$RPMSMPTYPE/Module.symvers > /dev/null 2>&1; then
+        return 255
+    fi
+
+    return 0
+
+}
