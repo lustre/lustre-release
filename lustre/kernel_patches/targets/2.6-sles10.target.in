@@ -11,7 +11,7 @@ rpmfix=""
 FLAVOR_DELIMITER="-"
 
 KERNEL_SRPM=kernel-source-${lnxmaj}${lnxmin}-${lnxrel}${rpmfix}.src.rpm
-SERIES=2.6-sles10.series
+SERIES=""
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxmin#.}-${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@
