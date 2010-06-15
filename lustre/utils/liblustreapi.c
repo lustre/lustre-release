@@ -1654,28 +1654,26 @@ int llapi_file_lookup(int dirfd, const char *name)
  * Note: 5th actually means that the value is within the interval
  * (limit - margin, limit]. */
 static int find_value_cmp(unsigned int file, unsigned int limit, int sign,
-                          unsigned long long margin, int mds)
+                          int negopt, unsigned long long margin, int mds)
 {
+        int ret = -1;
+
         if (sign > 0) {
-                if (file < limit)
-                        return mds ? 0 : 1;
+                if (file <= limit)
+                        ret = mds ? 0 : 1;
+        } else if (sign == 0) {
+                if (file <= limit && file + margin >= limit)
+                        ret = mds ? 0 : 1;
+                else if (file + margin <= limit)
+                        ret = mds ? 0 : -1;
+        } else if (sign < 0) {
+                if (file >= limit)
+                        ret = 1;
+                else if (mds)
+                        ret = 0;
         }
 
-        if (sign == 0) {
-                if (file <= limit && file + margin > limit)
-                        return mds ? 0 : 1;
-                if (file + margin <= limit)
-                        return mds ? 0 : -1;
-        }
-
-        if (sign < 0) {
-                if (file > limit)
-                        return 1;
-                if (mds)
-                        return 0;
-        }
-
-        return -1;
+        return negopt ? ~ret + 1 : ret;
 }
 
 /* Check if the file time matches all the given criteria (e.g. --atime +/-N).
@@ -1693,7 +1691,8 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
         /* Check if file is accepted. */
         if (param->atime) {
                 ret = find_value_cmp(st->st_atime, param->atime,
-                                     param->asign, 24 * 60 * 60, mds);
+                                     param->asign, param->exclude_atime,
+                                     24 * 60 * 60, mds);
                 if (ret < 0)
                         return ret;
                 rc = ret;
@@ -1701,7 +1700,8 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 
         if (param->mtime) {
                 ret = find_value_cmp(st->st_mtime, param->mtime,
-                                     param->msign, 24 * 60 * 60, mds);
+                                     param->msign, param->exclude_mtime,
+                                     24 * 60 * 60, mds);
                 if (ret < 0)
                         return ret;
 
@@ -1713,7 +1713,8 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 
         if (param->ctime) {
                 ret = find_value_cmp(st->st_ctime, param->ctime,
-                                     param->csign, 24 * 60 * 60, mds);
+                                     param->csign, param->exclude_ctime,
+                                     24 * 60 * 60, mds);
                 if (ret < 0)
                         return ret;
 
@@ -1972,10 +1973,11 @@ obd_matches:
                         goto decided;
         }
 
-        if (param->size_check)
+        if (param->size_check) {
                 decision = find_value_cmp(st->st_size, param->size,
-                                          param->size_sign, param->size_units,
-                                          0);
+                                          param->size_sign, param->exclude_size,
+                                          param->size_units, 0);
+        }
 
         if (decision != -1) {
                 llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
