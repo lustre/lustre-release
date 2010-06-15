@@ -530,8 +530,13 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
         int blocksize = exp->exp_obd->u.obt.obt_sb->s_blocksize;
         unsigned long used = 0, ungranted = 0, using;
         int i, rc = -ENOSPC, obj, n = 0;
+        int resend = oa->o_valid & OBD_FL_RECOV_RESEND;
 
         LASSERT_SPIN_LOCKED(&exp->exp_obd->obd_osfs_lock);
+
+        if (resend)
+                CDEBUG(D_CACHE, "Recoverable resend arrived, skipping "
+                       "accounting\n");
 
         for (obj = 0; obj < objcount; obj++) {
                 for (i = 0; i < fso[obj].fso_bufcnt; i++, n++) {
@@ -546,7 +551,11 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
 
                         if ((lnb[n].flags & OBD_BRW_FROM_GRANT) &&
                             (oa->o_valid & OBD_MD_FLGRANT)) {
-                                if (fed->fed_grant < used + bytes) {
+                                if (resend) {
+                                        lnb[n].flags |= OBD_BRW_GRANTED;
+                                        rc = 0;
+                                        continue;
+                                } else if (fed->fed_grant < used + bytes) {
                                         CDEBUG(D_CACHE,
                                                "%s: cli %s/%p claims %ld+%d "
                                                "GRANT, real grant %lu idx %d\n",
