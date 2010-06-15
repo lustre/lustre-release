@@ -736,7 +736,11 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
          * for setting UID/GID and fid EA in first write time. */
-        if (oa->o_valid & OBD_MD_FLGRANT)
+        /* If OBD_FL_SHRINK_GRANT is set, the client just returned us some grant
+         * so no sense in allocating it some more. We either return the grant
+         * back to the client if we have plenty of space or we don't return
+         * anything if we are short. This was decided in filter_grant_incoming*/
+        if (oa->o_valid & OBD_MD_FLGRANT &&!(oa->o_valid & OBD_FL_SHRINK_GRANT))
                 oa->o_grant = filter_grant(exp, oa->o_grant, oa->o_undirty,
                                            left, 1);
 
