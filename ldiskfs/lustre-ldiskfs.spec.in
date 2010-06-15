@@ -16,6 +16,9 @@ Requires: modutils >= 2.4.10
 Provides the ldiskfs backend file system kernel module, used by
 servers in the Lustre file system, for Linux %{kversion}.
 
+%if 0%{?suse_version}
+%debug_package
+%endif
 %prep
 %setup -q
 
