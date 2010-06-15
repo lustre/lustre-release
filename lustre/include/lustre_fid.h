@@ -67,14 +67,17 @@ extern const struct lu_fid LU_DOT_LUSTRE_FID;
 
 enum {
         /*
-         * This is how may FIDs may be allocated in one sequence(128k)
+         * This is how may FIDs may be allocated in one sequence. 16384 for
+         * now.
          */
-        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000020000ULL,
+        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000000400ULL,
 
         /*
-         * How many sequences to allocate to a client at once.
+         * How many sequences may be allocate for meta-sequence (this is 128
+         * sequences).
          */
-        LUSTRE_SEQ_META_WIDTH = 0x0000000000000001ULL,
+        /* changed to 16 to avoid overflow in test11 */
+        LUSTRE_SEQ_META_WIDTH = 0x0000000000000010ULL,
 
          /*
           * seq allocation pool size.
@@ -327,51 +330,9 @@ fid_build_pdo_res_name(const struct lu_fid *f,
         return name;
 }
 
-
-/**
- * Flatten 128-bit FID values into a 64-bit value for
- * use as an inode number.  For non-IGIF FIDs this
- * starts just over 2^32, and continues without conflict
- * until 2^64, at which point we wrap the high 32 bits
- * of the SEQ into the range where there may not be many
- * OID values in use, to minimize the risk of conflict.
- *
- * The time between re-used inode numbers is very long -
- * 2^32 SEQ numbers, or about 2^32 client mounts. */
 static inline __u64 fid_flatten(const struct lu_fid *fid)
 {
-        __u64 ino;
-        __u64 seq;
-
-        if (fid_is_igif(fid)) {
-                ino = lu_igif_ino(fid);
-                RETURN(ino);
-        }
-
-        seq = fid_seq(fid);
-
-        ino = (seq << 24) + ((seq >> (64-8)) & 0xffffff0000ULL) + fid_oid(fid);
-
-        RETURN(ino ? ino : fid_oid(fid));
-}
-
-/**
- * map fid to 32 bit value for ino on 32bit systems. */
-static inline __u32 fid_flatten32(const struct lu_fid *fid)
-{
-        __u32 ino;
-        __u64 seq;
-
-        if (fid_is_igif(fid)) {
-                ino = lu_igif_ino(fid);
-                RETURN(ino);
-        }
-
-        seq = fid_seq(fid) - FID_SEQ_START;
-
-        ino = ((seq & 0xfffffULL) << 12) + ((seq >> 8) & 0xfffff000) +
-                (seq >> (64 - (40-8)) & 0xffffff00) + fid_oid(fid);
-        RETURN(ino ? ino : fid_oid(fid));
+        return (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
 }
 
 #define LUSTRE_SEQ_SRV_NAME "seq_srv"

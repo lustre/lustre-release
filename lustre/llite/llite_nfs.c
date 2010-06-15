@@ -73,14 +73,14 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         struct ptlrpc_request *req = NULL;
         struct inode          *inode = NULL;
         int                   eadatalen = 0;
-        unsigned long         hash = (unsigned long) cl_fid_build_ino(fid);
+        ino_t                 ino = cl_fid_build_ino(fid);
         struct  md_op_data    *op_data;
         int                   rc;
         ENTRY;
 
-        CDEBUG(D_INFO, "searching inode for:(%lu,"DFID")\n", hash, PFID(fid));
+        CDEBUG(D_INFO, "searching inode for:(%lu,"DFID")\n", ino, PFID(fid));
 
-        inode = ilookup5(sb, hash, ll_nfs_test_inode, (void *)fid);
+        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, fid);
         if (inode)
                 RETURN(inode);
 
