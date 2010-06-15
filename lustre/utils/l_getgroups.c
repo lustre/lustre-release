@@ -94,16 +94,17 @@ static void errlog(const char *fmt, ...)
 int get_groups_local(struct mds_grp_downcall_data **grp)
 {
         struct mds_grp_downcall_data *param;
-        int i, maxgroups, size;
+        int i, maxgroups, size, saved_errno;
         struct passwd *pw;
         struct group  *gr;
 
         CHECK_DURATION_START;
         pw = getpwuid((*grp)->mgd_uid);
+        saved_errno = errno;
         CHECK_DURATION_END("getpwuid", 2);
         if (!pw) {
                 errlog("no such user %u\n", (*grp)->mgd_uid);
-                (*grp)->mgd_err = errno ? errno : EIDRM;
+                (*grp)->mgd_err = saved_errno ? saved_errno : EIDRM;
                 return sizeof(*param);
         }
         (*grp)->mgd_gid = pw->pw_gid;
