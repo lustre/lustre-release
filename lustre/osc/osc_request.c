@@ -1495,13 +1495,13 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         }
 #endif
 
+        osc_update_grant(cli, body);
+
         if (rc < 0)
                 RETURN(rc);
 
         if (aa->aa_oa->o_valid & OBD_MD_FLCKSUM)
                 client_cksum = aa->aa_oa->o_cksum; /* save for later */
-
-        osc_update_grant(cli, body);
 
         if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE) {
                 if (rc > 0) {
@@ -1681,7 +1681,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         ENTRY;
 
         if (!osc_should_resend(aa->aa_resends, aa->aa_cli)) {
-                CERROR("too many resend retries, returning error\n");
+                CERROR("too many resent retries, returning error\n");
                 RETURN(-EIO);
         }
 
