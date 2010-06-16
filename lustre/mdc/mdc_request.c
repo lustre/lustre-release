@@ -1331,6 +1331,14 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
+                struct client_obd *cli = &obd->u.cli;
+                /* Flush current sequence to make client obtain new one
+                 * from server in case of disconnect/reconnect.
+                 * If range is already empty then no need to flush it. */
+                if (cli->cl_seq != NULL &&
+                    !range_is_exhausted(&cli->cl_seq->lcs_space))
+                        seq_client_flush(cli->cl_seq);
+
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
                 break;
         }

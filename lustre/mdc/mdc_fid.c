@@ -224,11 +224,16 @@ static int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
  * Finish the current sequence due to disconnect.
  * See mdc_import_event()
  */
-static void seq_client_flush(struct lu_client_seq *seq)
+void seq_client_flush(struct lu_client_seq *seq)
 {
         LASSERT(seq != NULL);
         down(&seq->lcs_sem);
         fid_init(&seq->lcs_fid);
+        /**
+         * this id shld not be used for seq range allocation.
+         * set to -1 for dgb check.
+         */
+        seq->lcs_space.lsr_mdt = -1;
         range_init(&seq->lcs_space);
         up(&seq->lcs_sem);
 }

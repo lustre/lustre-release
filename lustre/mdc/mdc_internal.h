@@ -91,6 +91,8 @@ void seq_client_fini(struct lu_client_seq *seq);
 
 int mdc_fid_alloc(struct lu_client_seq *seq, struct lu_fid *fid);
 
+void seq_client_flush(struct lu_client_seq *seq);
+
 struct mdc_open_data {
         struct obd_client_handle *mod_och;
         struct ptlrpc_request    *mod_open_req;
