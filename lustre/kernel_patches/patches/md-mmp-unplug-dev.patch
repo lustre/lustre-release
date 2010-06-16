@@ -12,8 +12,8 @@ Index: linux-2.6.18-128.1.14/drivers/md/raid5.c
  	spin_unlock(&sh->lock);
  
 @@ -3012,6 +3014,8 @@
- 		bi->bi_size = 0;
- 		bi->bi_end_io(bi, bytes, 0);
+			      test_bit(BIO_UPTODATE, &bi->bi_flags)
+			        ? 0 : -EIO);
  	}
 +	if (bio_sync(bi))
 +		raid5_unplug_device(q);

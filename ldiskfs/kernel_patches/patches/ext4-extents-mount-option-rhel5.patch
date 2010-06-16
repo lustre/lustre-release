@@ -30,9 +30,9 @@ diff -up linux-2.6.18-164/fs/ext4/extents.c linux-2.6.18-164/fs/ext4/extents.c
  
 -	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)) {
 +	if (test_opt(sb, EXTENTS)) {
+ #if defined(AGGRESSIVE_TEST) || defined(CHECK_BINSEARCH) || defined(EXTENTS_STATS)
  		printk(KERN_INFO "EXT4-fs: file extents enabled");
  #ifdef AGGRESSIVE_TEST
- 		printk(", aggressive tests");
 @@ -2338,7 +2338,7 @@ void ext4_ext_init(struct super_block *s
   */
  void ext4_ext_release(struct super_block *sb)

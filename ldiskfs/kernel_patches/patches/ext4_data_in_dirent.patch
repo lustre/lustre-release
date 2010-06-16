@@ -49,9 +49,9 @@ Index: b/fs/ext4/dir.c
 @@ -175,7 +182,7 @@ revalidate:
  				 * failure will be detected in the
  				 * dirent test below. */
- 				if (ext4_rec_len_from_disk(de->rec_len)
--						< EXT4_DIR_REC_LEN(1))
-+						< __EXT4_DIR_REC_LEN(1))
+				if (ext4_rec_len_from_disk(de->rec_len,
+-					sb->s_blocksize) < EXT4_DIR_REC_LEN(1))
++					sb->s_blocksize) < __EXT4_DIR_REC_LEN(1))
  					break;
  				i += ext4_rec_len_from_disk(de->rec_len);
  			}
@@ -61,8 +61,8 @@ Index: b/fs/ext4/dir.c
  	int len;
 +	int extra_data = 1;
  
- 	info = (struct dir_private_info *) dir_file->private_data;
- 	p = &info->root.rb_node;
+	info = (struct dir_private_info *) dir_file->private_data;
+	p = &info->root.rb_node;
  
  	/* Create and allocate the fname structure */
 -	len = sizeof(struct fname) + dirent->name_len + 1;
@@ -169,14 +169,13 @@ Index: b/fs/ext4/ext4.h
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 -				  struct inode *inode);
 +			  struct inode *inode, const void *, const void *);
+ extern unsigned int ext4_rec_len_from_disk(__le16 dlen, unsigned blocksize);
+ extern __le16 ext4_rec_len_to_disk(unsigned len, unsigned blocksize);
  extern int ext4_orphan_add(handle_t *, struct inode *);
- extern int ext4_orphan_del(handle_t *, struct inode *);
- extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
-@@ -1343,7 +1386,28 @@ static inline int ext4_is_group_locked(s
+@@ -1343,6 +1386,28 @@ static inline int ext4_is_group_locked(s
+
  	return spin_is_locked(ext4_group_lock_ptr(sb, group));
  }
- 
--
 +/*
 + * Compute the total directory entry data length.
 + * This includes the filename and an implicit NUL terminator (always present),
@@ -247,7 +246,7 @@ Index: b/fs/ext4/namei.c
 +	unsigned entry_space;
 +
 +	BUG_ON(dot_de->name_len != 1);
-+	dotdot_de = ext4_next_entry(dot_de);
++	dotdot_de = ext4_next_entry(dot_de, blocksize);
 +	entry_space = blocksize - EXT4_DIR_REC_LEN(dot_de) -
 +			 EXT4_DIR_REC_LEN(dotdot_de) - infosize;
 +
@@ -286,7 +285,7 @@ Index: b/fs/ext4/namei.c
  					   dir->i_sb->s_blocksize -
 -					   EXT4_DIR_REC_LEN(0));
 +					   __EXT4_DIR_REC_LEN(0));
- 	for (; de < top; de = ext4_next_entry(de)) {
+	for (; de < top; de = ext4_next_entry(de, dir->i_sb->s_blocksize)) {
  		if (!ext4_check_dir_entry("htree_dirblock_to_tree", dir, de, bh,
  					(block<<EXT4_BLOCK_SIZE_BITS(dir->i_sb))
 @@ -1026,7 +1036,7 @@ static struct buffer_head * ext4_dx_find
@@ -295,13 +294,13 @@ Index: b/fs/ext4/namei.c
  		top = (struct ext4_dir_entry_2 *) ((char *) de + sb->s_blocksize -
 -				       EXT4_DIR_REC_LEN(0));
 +					__EXT4_DIR_REC_LEN(0));
- 		for (; de < top; de = ext4_next_entry(de)) {
+		for (; de < top; de = ext4_next_entry(de, sb->s_blocksize)) {
  			int off = (block << EXT4_BLOCK_SIZE_BITS(sb))
  				  + ((char *) de - bh->b_data);
 @@ -1193,7 +1203,7 @@ dx_move_dirents(char *from, char *to, st
- 
  	while (count--) {
- 		struct ext4_dir_entry_2 *de = (struct ext4_dir_entry_2 *) (from + map->offs);
+		struct ext4_dir_entry_2 *de = (struct ext4_dir_entry_2 *) 
+						(from + (map->offs<<2));
 -		rec_len = EXT4_DIR_REC_LEN(de->name_len);
 +		rec_len = EXT4_DIR_REC_LEN(de);
  		memcpy (to, de, rec_len);
@@ -341,7 +340,7 @@ Index: b/fs/ext4/namei.c
  			}
 -			nlen = EXT4_DIR_REC_LEN(de->name_len);
 +			nlen = EXT4_DIR_REC_LEN(de);
- 			rlen = ext4_rec_len_from_disk(de->rec_len);
+			rlen = ext4_rec_len_from_disk(de->rec_len, blocksize);
  			if ((de->inode? rlen - nlen: rlen) >= reclen)
  				break;
 @@ -1383,7 +1399,7 @@ static int add_dirent_to_buf(handle_t *h
@@ -350,7 +349,7 @@ Index: b/fs/ext4/namei.c
  	/* By now the buffer is marked for journaling */
 -	nlen = EXT4_DIR_REC_LEN(de->name_len);
 +	nlen = EXT4_DIR_REC_LEN(de);
- 	rlen = ext4_rec_len_from_disk(de->rec_len);
+	rlen = ext4_rec_len_from_disk(de->rec_len, blocksize);
  	if (de->inode) {
  		struct ext4_dir_entry_2 *de1 = (struct ext4_dir_entry_2 *)((char *)de + nlen);
 @@ -1399,6 +1415,12 @@ static int add_dirent_to_buf(handle_t *h
@@ -432,7 +431,7 @@ Index: b/fs/ext4/namei.c
  
  out_journal:
  	if (journal) {
-@@ -1972,11 +2007,12 @@ retry:
+@@ -1972,12 +2007,13 @@ retry:
  /* Initialize @inode as a subdirectory of @dir, and add the
   * "." and ".." entries into the first directory block. */
  int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
@@ -440,6 +439,7 @@ Index: b/fs/ext4/namei.c
 +			 struct inode *inode,
 +			 const void *data1, const void *data2)
  {
+ 	unsigned int blocksize = dir->i_sb->s_blocksize;
  	struct buffer_head * dir_block;
 	struct ext4_dir_entry_2 * de;
 -	int err = 0;
@@ -447,11 +447,12 @@ Index: b/fs/ext4/namei.c
  
 	if (IS_ERR(handle))
 		return PTR_ERR(handle);
-@@ -1993,16 +2029,34 @@ int ext4_add_dot_dotdot(handle_t *handle
+@@ -1993,17 +2029,34 @@ int ext4_add_dot_dotdot(handle_t *handle
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
--	de->rec_len = ext4_rec_len_to_disk(EXT4_DIR_REC_LEN(de->name_len));
+-	de->rec_len = ext4_rec_len_to_disk(EXT4_DIR_REC_LEN(de->name_len),
+-					   blocksize);
  	strcpy(de->name, ".");
  	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 +	/* get packed fid data*/
@@ -465,11 +466,11 @@ Index: b/fs/ext4/namei.c
 +	de->rec_len = cpu_to_le16(EXT4_DIR_REC_LEN(de));
 +	dot_reclen = cpu_to_le16(de->rec_len);
 +
- 	de = ext4_next_entry(de);
+	de = ext4_next_entry(de, blocksize);
  	de->inode = cpu_to_le32(dir->i_ino);
- 	de->rec_len = ext4_rec_len_to_disk(inode->i_sb->s_blocksize -
--						EXT4_DIR_REC_LEN(1));
-+						dot_reclen);
+-	de->rec_len = ext4_rec_len_to_disk(blocksize - EXT4_DIR_REC_LEN(1),
++	de->rec_len = ext4_rec_len_to_disk(blocksize - dot_reclen,
+					   blocksize);
  	de->name_len = 2;
  	strcpy(de->name, "..");
  	ext4_set_de_type(dir->i_sb, de, S_IFDIR);

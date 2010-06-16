@@ -5671,6 +5671,7 @@ test_129() {
         [ -z "$DEV" ] && error "can't access mds mntdev"
         EFBIG=27
         LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size
+        do_facet mds "test -e /sys/fs/ldiskfs/$DEV/max_dir_size" && LDPROC=/sys/fs/ldiskfs/$DEV/max_dir_size
         MAX=16384
 
         do_facet mds "echo $MAX > $LDPROC"

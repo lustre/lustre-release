@@ -3,9 +3,7 @@ ext4-wantedi-2.6-rhel5.patch
 iopen-2.6.18-rhel5-ext4.patch
 ext4-map_inode_page-2.6.18-rhel5.patch
 export-ext4-2.6-rhel5.patch
-ext4-include-fixes-2.6-rhel5.patch
 ext4-remove-cond_resched-calls-rhel5.patch
-ext4-filterdata-rhel5.patch
 ext4-inode-version-rhel5.patch
 ext4-mmp-rhel5.patch
 ext4-lookup-dotdot-rhel5.patch
@@ -17,7 +15,6 @@ ext4-mballoc-extra-checks-rhel5.patch
 ext4-big-endian-check-2.6-rhel5.patch
 ext4-alloc-policy-2.6-rhel5.patch
 ext4-misc-rhel5.patch
-ext4-convert-group-lock-rhel5.patch
 ext4-force_over_16tb-rhel5.patch
 ext4-pdir-fix.patch
 ext4-osd-iop-common.patch
@@ -31,4 +28,3 @@ ext4_data_in_dirent.patch
 ext4-extents-mount-option-rhel5.patch
 ext4-fiemap-2.6-rhel5.patch
 ext4-mballoc-skip-grps.patch
-ext4_22237_fix.patch

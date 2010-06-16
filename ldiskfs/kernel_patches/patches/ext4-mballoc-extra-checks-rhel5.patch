@@ -13,11 +13,11 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
 						 ext4_group_t group);
  
 @@ -660,7 +660,7 @@ static void ext4_mb_mark_free_simple(str
- 	}
  }
  
--static void ext4_mb_generate_buddy(struct super_block *sb,
-+static int ext4_mb_generate_buddy(struct super_block *sb,
+ static noinline_for_stack
+-void ext4_mb_generate_buddy(struct super_block *sb,
++int ext4_mb_generate_buddy(struct super_block *sb,
  				void *buddy, void *bitmap, ext4_group_t group)
  {
  	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
@@ -155,7 +155,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
  	if (ac->ac_op == EXT4_MB_HISTORY_ALLOC) {
  		if (ac->ac_g_ex.fe_start == ac->ac_b_ex.fe_start &&
  				ac->ac_g_ex.fe_group == ac->ac_b_ex.fe_group)
-@@ -3539,22 +3555,67 @@ ext4_mb_use_preallocated(struct ext4_all
+@@ -3539,23 +3555,68 @@ ext4_mb_use_preallocated(struct ext4_all
  }
  
  /*
@@ -194,10 +194,11 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
 +/*
   * the function goes through all preallocation in this group and marks them
   * used in in-core bitmap. buddy must be generated from this bitmap
-  * Need to be called with ext4 group lock (ext4_lock_group)
+  * Need to be called with ext4 group lock held
   */
--static void ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
-+static int ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
+ static noinline_for_stack
+-void ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
++int ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
  					ext4_group_t group)
  {
  	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
@@ -224,7 +225,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
  	/* all form of preallocation discards first load group,
  	 * so the only competing code is preallocation use.
  	 * we don't need any locking here
-@@ -3570,15 +3631,24 @@ static void ext4_mb_generate_from_pa(str
+@@ -3570,14 +3631,23 @@ static void ext4_mb_generate_from_pa(str
  					     &groupnr, &start);
  		len = pa->pa_len;
  		spin_unlock(&pa->pa_lock);
@@ -234,8 +235,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
  			continue;
 +		}
  		BUG_ON(groupnr != group);
- 		mb_set_bits(sb_bgl_lock(EXT4_SB(sb), group),
- 						bitmap, start, len);
+		mb_set_bits(bitmap, start, len);
  		preallocated += len;
  		count++;
  	}
@@ -245,7 +245,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
 +			   count, grp->bb_prealloc_nr, skip);
 +		return -EIO;
 +	}
-	mb_debug("prellocated %u for group %u\n", preallocated, group);
+	mb_debug(1, "prellocated %u for group %u\n", preallocated, group);
 +	return 0;
  }
  

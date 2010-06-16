@@ -170,14 +170,14 @@ Index: b/fs/ext4/namei.c
 	root = (struct dx_root *) bh->b_data;
  
 +	dot_de = (struct ext4_dir_entry_2 *) bh->b_data;
-+	dotdot_de = ext4_next_entry(dot_de);
++	dotdot_de = ext4_next_entry(dot_de, blocksize);
 +
  	/* The 0th block becomes the root, move the dirents out */
 -	fde = &root->dotdot;
 -	de = (struct ext4_dir_entry_2 *)((char *)fde +
--		ext4_rec_len_from_disk(fde->rec_len));
+-		ext4_rec_len_from_disk(fde->rec_len, blocksize));
 +	de = (struct ext4_dir_entry_2 *)((char *)dotdot_de +
-+		ext4_rec_len_from_disk(dotdot_de->rec_len));
++		ext4_rec_len_from_disk(dotdot_de->rec_len, blocksize));
 -	if ((char *) de >= (((char *) root) + blocksize)) {
 +	if ((char *) de >= (((char *) dot_de) + blocksize)) {
 		ext4_error(dir->i_sb, __func__,
@@ -191,12 +191,13 @@ Index: b/fs/ext4/namei.c
  
 	/* Allocate new block for the 0th block's dirents */
 	bh2 = ext4_append(handle, dir, &block, &retval);
-@@ -1472,18 +1475,23 @@ static int make_indexed_dir(handle_t *ha
- 		de = de2;
+@@ -1472,19 +1475,23 @@ static int make_indexed_dir(handle_t *ha
  	de->rec_len = ext4_rec_len_to_disk(data1 + blocksize - (char *) de);
+					   blocksize);
  	/* Initialize the root; the dot dirents already exist */
 -	de = (struct ext4_dir_entry_2 *) (&root->dotdot);
--	de->rec_len = ext4_rec_len_to_disk(blocksize - EXT4_DIR_REC_LEN(2));
+-	de->rec_len = ext4_rec_len_to_disk(blocksize - EXT4_DIR_REC_LEN(2),
+-					   blocksize);
 -	memset (&root->info, 0, sizeof(root->info));
 -	root->info.info_length = sizeof(root->info);
 -	root->info.hash_version = EXT4_SB(dir->i_sb)->s_def_hash_version;
@@ -205,7 +206,7 @@ Index: b/fs/ext4/namei.c
 -	dx_set_count(entries, 1);
 -	dx_set_limit(entries, dx_root_limit(dir, sizeof(root->info)));
 +	dotdot_de->rec_len = ext4_rec_len_to_disk(blocksize -
-+			le16_to_cpu(dot_de->rec_len));
++			le16_to_cpu(dot_de->rec_len), blocksize);
 +
 +	/* initialize hashing info */
 +	dx_info = dx_get_dx_info(dot_de);

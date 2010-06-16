@@ -1,15 +1,16 @@
 diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/Makefile linux-2.6.27.21-0.1_2//fs/ext4/Makefile
 --- linux-2.6.27.21-0.1_1//fs/ext4/Makefile	2009-08-21 15:12:51.000000000 +0530
 +++ linux-2.6.27.21-0.1_2//fs/ext4/Makefile	2009-08-21 15:13:23.000000000 +0530
-@@ -6,7 +6,7 @@ obj-$(CONFIG_EXT4DEV_FS) += ext4dev.o
+@@ -6,7 +6,8 @@ obj-$(CONFIG_EXT4DEV_FS) += ext4dev.o
  
- ext4dev-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
--		   ext4_jbd2.o migrate.o mballoc.o
-+		   ext4_jbd2.o migrate.o mballoc.o dynlocks.o
- 
- ext4dev-$(CONFIG_EXT4DEV_FS_XATTR)	+= xattr.o xattr_user.o xattr_trusted.o
- ext4dev-$(CONFIG_EXT4DEV_FS_POSIX_ACL)	+= acl.o
+ ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+		ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
+-		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o
++		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o \
++		dynlocks.o
+
+ ext4-$(CONFIG_EXT4_FS_XATTR)		+= xattr.o xattr_user.o xattr_trusted.o
+ ext4-$(CONFIG_EXT4_FS_POSIX_ACL)	+= acl.o
 diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/super.c linux-2.6.27.21-0.1_2//fs/ext4/super.c
 --- linux-2.6.27.21-0.1_1//fs/ext4/super.c	2009-08-21 15:12:51.000000000 +0530
 +++ linux-2.6.27.21-0.1_2//fs/ext4/super.c	2009-08-21 15:18:18.000000000 +0530

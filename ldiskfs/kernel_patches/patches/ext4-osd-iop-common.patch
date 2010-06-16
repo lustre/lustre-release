@@ -18,9 +18,9 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/ext4.h linux-2.6.27.21-0.1_2//fs/ext4/
 +#define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(dir, &(dentry)->d_name, res_dir)
 +extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +				  struct inode *inode);
+ extern unsigned int ext4_rec_len_from_disk(__le16 dlen, unsigned blocksize);
+ extern __le16 ext4_rec_len_to_disk(unsigned len, unsigned blocksize);
  extern int ext4_orphan_add(handle_t *, struct inode *);
- extern int ext4_orphan_del(handle_t *, struct inode *);
- extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
 diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4/namei.c
 --- linux-2.6.27.21-0.1_1//fs/ext4/namei.c	2009-08-24 15:32:00.000000000 +0530
 +++ linux-2.6.27.21-0.1_2//fs/ext4/namei.c	2009-08-24 15:43:56.000000000 +0530
@@ -104,7 +104,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 +{
 +	struct inode *inode;
 +
-+	inode = ext4_new_inode(handle, dir, mode);
++	inode = ext4_new_inode(handle, dir, mode, NULL, 0);
 +	if (!IS_ERR(inode)) {
 +		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
 +#ifdef CONFIG_LDISKFS_FS_XATTR
@@ -123,7 +123,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1872,39 +1895,31 @@ retry:
+@@ -1872,40 +1895,32 @@ retry:
  	return err;
  }
  
@@ -137,6 +137,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 -	struct inode *inode;
 -	struct buffer_head *dir_block;
 -	struct ext4_dir_entry_2 *de;
+ 	unsigned int blocksize = dir->i_sb->s_blocksize;
 -	int err, retries = 0;
 -
 -	if (EXT4_DIR_LINK_MAX(dir))
@@ -155,8 +156,8 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
  	if (IS_DIRSYNC(dir))
 		ext4_handle_sync(handle);
  
--	inode = ext4_new_inode_goal(handle, dir, S_IFDIR | mode,
--				    ext4_dentry_goal(dir->i_sb, dentry));
+-	inode = ext4_new_inode(handle, dir, S_IFDIR | mode, &dentry->d_name,
+-			       ext4_dentry_goal(dir->i_sb, dentry));
 -	err = PTR_ERR(inode);
 -	if (IS_ERR(inode))
 -		goto out_stop;
@@ -205,8 +206,8 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 +	if (IS_DIRSYNC(dir))
 +		handle->h_sync = 1;
 +
-+	inode = ext4_new_inode_goal(handle, dir, S_IFDIR | mode,
-+				    ext4_dentry_goal(dir->i_sb, dentry));
++	inode = ext4_new_inode(handle, dir, S_IFDIR | mode, &dentry->d_name,
++			       ext4_dentry_goal(dir->i_sb, dentry));
 +	err = PTR_ERR(inode);
 +	if (IS_ERR(inode))
 +		goto out_stop;

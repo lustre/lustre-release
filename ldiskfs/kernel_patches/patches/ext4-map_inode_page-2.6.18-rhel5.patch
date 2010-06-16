@@ -2,7 +2,7 @@ Index: linux-2.6.18.i386/fs/ext4/inode.c
 ===================================================================
 --- linux-2.6.18.i386.orig/fs/ext4/inode.c
 +++ linux-2.6.18.i386/fs/ext4/inode.c
-@@ -3666,3 +3666,66 @@ out_unlock:
+@@ -3666,3 +3666,67 @@ out_unlock:
  	unlock_page(page);
  	return ret;
  }
@@ -44,7 +44,8 @@ Index: linux-2.6.18.i386/fs/ext4/inode.c
 +		if (blocks[i] != 0)
 +			continue;
 +
-+		rc = ext4_get_blocks_handle(handle, inode, iblock, 1, &dummy, 1, 1);
++		rc = ext4_ind_get_blocks(handle, inode, iblock, 1, &dummy,
++					 EXT4_GET_BLOCKS_CREATE);
 +		if (rc < 0) {
 +			printk(KERN_INFO "ext4_map_inode_page: error reading "
 +					"block %ld\n", iblock);
