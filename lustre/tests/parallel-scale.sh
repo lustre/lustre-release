@@ -271,7 +271,7 @@ test_connectathon() {
 
     tests="-b -g -s"
     # Include lock tests unless we're running on nfsv4
-    local fstype=$(df -T $testdir | awk 'NR==2  {print $2}')
+    local fstype=$(df -TP $testdir | awk 'NR==2  {print $2}')
     echo "$testdir: $fstype"
     if [[ $fstype != "nfs4" ]]; then
 	tests="$tests -l"
