@@ -3411,6 +3411,8 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                   * checked here.
                   */
                 if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+                        LASSERTF(rc == 0, "Error occurred but lock handle "
+                                 "is still in use\n");
                         rep->lock_policy_res2 = 0;
                         rc = mdt_intent_lock_replace(info, lockp, NULL, lhc, flags);
                         RETURN(rc);

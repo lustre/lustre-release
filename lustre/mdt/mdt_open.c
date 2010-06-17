@@ -1078,7 +1078,7 @@ static int mdt_open_anon_by_fid(struct mdt_thread_info* info,
                 mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
         rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
 
-        if (!(flags & MDS_OPEN_LOCK))
+        if (!(flags & MDS_OPEN_LOCK) || rc)
                 mdt_object_unlock(info, o, lhc, 1);
 
         GOTO(out, rc);
