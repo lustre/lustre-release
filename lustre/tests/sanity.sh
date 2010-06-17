@@ -3331,8 +3331,7 @@ run_test 56q "check lfs find -gid and ! -gid ==============================="
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
-	local MNTDEV="osd.*MDT*.mntdev"
+	local MNTDEV="osd*.*MDT*.mntdev"
 	DEV=$(do_facet $SINGLEMDS lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
 	for DEV in $(do_facet $SINGLEMDS lctl get_param -n $MNTDEV); do
@@ -6063,7 +6062,7 @@ set_dir_limits () {
         for node in $(mdts_nodes); do
                 devs=$(do_node $node "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
 	        for dev in $devs; do
-		        mntdev=$(do_node $node "lctl get_param -n osd.$dev.mntdev")
+		        mntdev=$(do_node $node "lctl get_param -n osd*.$dev.mntdev")
 		        do_node $node "echo $1 >$LDPROC/\\\$(basename $mntdev)/max_dir_size"
 		done
 	done
