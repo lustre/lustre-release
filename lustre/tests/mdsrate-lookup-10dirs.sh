@@ -40,7 +40,7 @@ check_and_setup_lustre
 mkdir -p $TESTDIR
 chmod 0777 $TESTDIR
 
-IFree=$(inodes_available)
+IFree=$(($(mdsrate_inodes_available) - NUM_DIRS))
 if [ $IFree -lt $((NUM_FILES * NUM_DIRS)) ]; then
     NUM_FILES=$((IFree / NUM_DIRS))
 fi

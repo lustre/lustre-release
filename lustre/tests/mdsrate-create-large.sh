@@ -32,7 +32,7 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
-IFree=$(inodes_available)
+IFree=$(mdsrate_inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
@@ -81,7 +81,7 @@ else
     fi
 fi
 
-IFree=$(inodes_available)
+IFree=$(mdsrate_inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi

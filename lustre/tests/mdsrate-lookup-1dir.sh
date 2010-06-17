@@ -38,7 +38,7 @@ check_and_setup_lustre
 mkdir -p $TESTDIR
 chmod 0777 $TESTDIR
 
-IFree=$(inodes_available)
+IFree=$(mdsrate_inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
