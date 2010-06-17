@@ -768,6 +768,7 @@ static const char *obd_connect_names[] = {
         "skip_orphan",
         "large_ea",
         "full20",
+        "layout_lock",
         NULL
 };
 
