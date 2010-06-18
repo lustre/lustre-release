@@ -1,5 +1,0 @@
-.*.cmd
-.*.flags
-*.ko
-*.c
-.tmp_versions
