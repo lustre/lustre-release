@@ -95,7 +95,7 @@ dist-hook:
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/Makefile build/autoMakefile.am.toplevel build/lbuild	\
-	build/Rules.in build/README.kernel-source			\
+	build/Rules.in 							\
 	build/update_oldconfig						\
 	build/autoconf/lustre-build-linux.m4				\
 	build/autoconf/lustre-build-darwin.m4				\
