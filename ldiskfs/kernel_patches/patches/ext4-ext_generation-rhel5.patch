@@ -14,10 +14,10 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
  static inline void
  ext4_ext_invalidate_cache(struct inode *inode)
  {
-Index: linux-2.6.27.21-0.1/fs/ext4/ext4_i.h
+Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_i.h	2009-07-07 14:47:13.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_i.h	2009-07-07 14:50:07.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-07-07 14:47:13.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-07-07 14:50:07.000000000 +0530
 @@ -114,6 +114,7 @@
  	struct inode vfs_inode;
  	struct jbd2_inode jinode;
