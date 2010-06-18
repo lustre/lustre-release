@@ -88,6 +88,7 @@
 #define INDEX_UNASSIGNED 0xFFFF
 #define MO_IS_LOOP     0x01
 #define MO_FORCEFORMAT 0x02
+#define min(x,y) ((x)<(y) ? (x) : (y))
 
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
@@ -588,6 +589,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         return EINVAL;
                 }
                 block_count = mop->mo_device_sz / (L_BLOCK_SIZE >> 10);
+		/* Create one less block. Bug 22906 */
+                block_count = min(block_count, 4294967295);
         }
 
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
