@@ -1,11 +1,31 @@
---- linux-2.6.27.19-5.orig/include/linux/blkdev.h	2009-03-17 12:48:06.000000000 -0400
-+++ linux-2.6.27.19-5/include/linux/blkdev.h	2009-09-04 18:04:43.000000000 -0400
-@@ -904,7 +904,7 @@ extern void blk_set_cmd_filter_defaults(
- #define MAX_PHYS_SEGMENTS 128
- #define MAX_HW_SEGMENTS 128
+Index: linux-2.6.27.29-0.1/include/linux/blkdev.h
+===================================================================
+--- linux-2.6.27.29-0.1.orig/include/linux/blkdev.h
++++ linux-2.6.27.29-0.1/include/linux/blkdev.h
+@@ -901,10 +901,10 @@ extern int blk_verify_command(struct blk
+ 			      unsigned char *cmd, int has_write_perm);
+ extern void blk_set_cmd_filter_defaults(struct blk_cmd_filter *filter);
+ 
+-#define MAX_PHYS_SEGMENTS 128
+-#define MAX_HW_SEGMENTS 128
++#define MAX_PHYS_SEGMENTS 256
++#define MAX_HW_SEGMENTS 256
  #define SAFE_MAX_SECTORS 255
 -#define BLK_DEF_MAX_SECTORS 1024
 +#define BLK_DEF_MAX_SECTORS 2048
  
  #define MAX_SEGMENT_SIZE	65536
  
+Index: linux-2.6.27.29-0.1/include/scsi/scsi.h
+===================================================================
+--- linux-2.6.27.29-0.1.orig/include/scsi/scsi.h
++++ linux-2.6.27.29-0.1/include/scsi/scsi.h
+@@ -18,7 +18,7 @@
+  * to SG_MAX_SINGLE_ALLOC to pack correctly at the highest order.  The
+  * minimum value is 32
+  */
+-#define SCSI_MAX_SG_SEGMENTS	128
++#define SCSI_MAX_SG_SEGMENTS	256
+ 
+ /*
+  * Like SCSI_MAX_SG_SEGMENTS, but for archs that have sg chaining. This limit
