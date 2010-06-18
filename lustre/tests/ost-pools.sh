@@ -941,7 +941,7 @@ create_perf_one() {
     rm -rf $dir
     sync
     time=$(echo $stat | cut -f 5 -d ' ')
-    echo $stat > /dev/stderr
+    echo $stat >> /dev/stderr
     echo $time
 }
 
