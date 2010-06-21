@@ -590,7 +590,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 }
                 block_count = mop->mo_device_sz / (L_BLOCK_SIZE >> 10);
 		/* Create one less block. Bug 22906 */
-                block_count = min(block_count, 4294967295);
+                block_count = min(block_count, 4294967295U);
         }
 
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
