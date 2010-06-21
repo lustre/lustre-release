@@ -1534,22 +1534,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# from 2.6.24 please use sg_init_table
-AC_DEFUN([LN_SCATTERLIST_INITTABLE],
-[AC_MSG_CHECKING([if sg_init_table is defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/scatterlist.h>
-],[
-        sg_init_table(NULL,0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SCATTERLIST_INITTABLE, 1,
-                  [sg_init_table is defined])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
 #
 # LN_PROG_LINUX
 #
@@ -1597,7 +1581,6 @@ LN_KMEM_CACHE_CREATE_DTOR
 # 2.6.24
 LN_SYSCTL_UNNUMBERED
 LN_SCATTERLIST_SETPAGE
-LN_SCATTERLIST_INITTABLE
 # 2.6.26
 LN_SEM_COUNT
 # 2.6.27
