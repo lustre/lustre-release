@@ -139,7 +139,6 @@ init_test_env() {
     fi
     export RSYNC_RSH=${RSYNC_RSH:-rsh}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
-    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LFS" ] && export LFS=$(which lfs)
