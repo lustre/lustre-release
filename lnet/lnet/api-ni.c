@@ -169,7 +169,7 @@ lnet_get_networks (void)
         return default_networks;
 }
 
-# ifndef HAVE_LIBPTHREAD
+# ifndef HAVE_PTHREAD
 
 void lnet_init_locks(void)
 {
@@ -840,7 +840,7 @@ lnet_count_acceptor_nis (void)
 {
         /* Return the # of NIs that need the acceptor. */
         int            count = 0;
-#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
+#if defined(__KERNEL__) || defined(HAVE_PTHREAD)
         cfs_list_t    *tmp;
         lnet_ni_t     *ni;
 
@@ -854,7 +854,7 @@ lnet_count_acceptor_nis (void)
 
         LNET_UNLOCK();
 
-#endif /* defined(__KERNEL__) || defined(HAVE_LIBPTHREAD) */
+#endif /* defined(__KERNEL__) || defined(HAVE_PTHREAD) */
         return count;
 }
 
@@ -1064,7 +1064,7 @@ lnet_startup_lndnis (void)
                                 the_lnet.ln_eqwaitni = ni;
                         }
                 } else {
-# ifndef HAVE_LIBPTHREAD
+# ifndef HAVE_PTHREAD
                         LCONSOLE_ERROR_MSG(0x106, "LND %s not supported in a "
                                            "single-threaded runtime\n",
                                            libcfs_lnd2str(lnd_type));
@@ -1138,7 +1138,7 @@ LNetInit(void)
 # ifdef CRAY_XT3
         LNET_REGISTER_ULND(the_ptllnd);
 # endif
-# ifdef HAVE_LIBPTHREAD
+# ifdef HAVE_PTHREAD
         LNET_REGISTER_ULND(the_tcplnd);
 # endif
 #endif

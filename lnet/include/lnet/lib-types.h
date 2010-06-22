@@ -366,7 +366,7 @@ typedef struct lnet_lnd
         /* query of peer aliveness */
         void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, cfs_time_t *when);
 
-#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
+#if defined(__KERNEL__) || defined(HAVE_PTHREAD)
         /* accept a new connection */
         int (*lnd_accept)(struct lnet_ni *ni, cfs_socket_t *sock);
 #endif
@@ -538,7 +538,7 @@ typedef struct
         cfs_semaphore_t   ln_api_mutex;
         cfs_semaphore_t   ln_lnd_mutex;
 #else
-# ifndef HAVE_LIBPTHREAD
+# ifndef HAVE_PTHREAD
         int                    ln_lock;
         int                    ln_api_mutex;
         int                    ln_lnd_mutex;

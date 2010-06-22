@@ -196,7 +196,7 @@ AC_ARG_ENABLE([usocklnd],
        	[],[enable_usocklnd='yes'])
 
 if test x$enable_usocklnd = xyes ; then
-	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+	if test "$ax_pthread_ok" = "yes" ; then
 		AC_MSG_RESULT([yes])
       		USOCKLND="usocklnd"
 	else
@@ -1159,6 +1159,7 @@ lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile
 lnet/ulnds/ptllnd/Makefile
 lnet/utils/Makefile
+lnet/utils/pthread/Makefile
 lnet/include/lnet/darwin/Makefile
 ])
 ])

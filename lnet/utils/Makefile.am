@@ -41,6 +41,12 @@
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
 if LIBLUSTRE
+SUBDIRS = . pthread
+endif
+
+DIST_SUBDIRS = pthread
+
+if LIBLUSTRE
 noinst_LIBRARIES = libuptlctl.a
 endif
 
@@ -61,9 +67,6 @@ libptlctl_a_SOURCES = portals.c debug.c
 
 if UTILS
 sbin_PROGRAMS += ptlctl routerstat wirecheck lst
-if LIBLUSTRE
-sbin_PROGRAMS += lstclient
-endif
 
 if BUILD_GMLND
 sbin_PROGRAMS += gmlndnid
@@ -103,10 +106,6 @@ if LIBLUSTRE
 LIB_SELFTEST = $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
 liblst.a : $(LIB_SELFTEST) $(LND_LIBS)
 	sh $(srcdir)/genlib.sh "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
-
-lstclient_SOURCES = lstclient.c
-lstclient_LDADD = -L. -lptlctl -llst $(LIBREADLINE) $(LIBEFENCE) $(PTHREAD_LIBS)
-lstclient_DEPENDENCIES = libptlctl.a liblst.a
 endif
 
 EXTRA_DIST = genlib.sh
