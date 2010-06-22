@@ -2976,7 +2976,7 @@ get_mds_fsstat_proc_path() {
     if [ $major -le 1 -a $minor -le 8 ] ; then
         echo "mds"
     else
-        echo "osd"
+        echo "osd*"
     fi
 }
 
