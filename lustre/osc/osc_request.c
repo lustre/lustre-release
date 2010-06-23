@@ -1177,7 +1177,8 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
                                 struct brw_page **pga,
-                                struct ptlrpc_request **reqp, int pshift)
+                                struct ptlrpc_request **reqp, int pshift,
+                                int resend)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1281,6 +1282,14 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 (void *)(niobuf - niocount));
 
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
+        if (resend) {
+                if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0) {
+                        body->oa.o_valid |= OBD_MD_FLFLAGS;
+                        body->oa.o_flags = 0;
+                }
+                body->oa.o_flags |= OBD_FL_RECOV_RESEND;
+        }
+
         if (osc_should_shrink_grant(cli))
                 osc_shrink_grant_local(cli, &body->oa);
 
@@ -1563,7 +1572,7 @@ static int osc_brw_internal(int cmd, struct obd_export *exp,struct obdo *oa,
 
 restart_bulk:
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
-                                  page_count, pga, &request, 0);
+                                  page_count, pga, &request, 0, resends);
         if (rc != 0)
                 return (rc);
 
@@ -1615,7 +1624,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                                   aa->aa_cli, aa->aa_oa,
                                   NULL /* lsm unused by osc currently */,
                                   aa->aa_page_count, aa->aa_ppga, &new_req,
-                                  aa->aa_pshift);
+                                  aa->aa_pshift, 1);
         if (rc)
                 RETURN(rc);
 
@@ -1689,7 +1698,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
-                                  page_count, pga, &request, pshift);
+                                  page_count, pga, &request, pshift, 0);
 
         CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
 
@@ -2340,7 +2349,8 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         }
 
         sort_brw_pages(pga, page_count);
-        rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count, pga, &req, 0);
+        rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count, pga, &req, 0,
+                                  0);
         if (rc != 0) {
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
