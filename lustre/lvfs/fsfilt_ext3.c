@@ -622,9 +622,21 @@ static int fsfilt_ext3_iocontrol(struct inode *inode, struct file *file,
         ENTRY;
 
         /* FIXME: Can't do this because of nested transaction deadlock */
-        if (cmd == EXT3_IOC_SETFLAGS && (*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
-                CERROR("can't set data journal flag on file\n");
-                RETURN(-EPERM);
+        if (cmd == EXT3_IOC_SETFLAGS) {
+                /* We can't enable data journaling on OST objects, because
+                * this forces the transaction to be closed in order to
+                * flush the journal, but the caller will already have a
+                * compound transaction open to update the last_rcvd file,
+                * and this thread would deadlock trying to set the flag. */
+                if ((*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
+                        CERROR("can't set data journal flag on file\n");
+                        RETURN(-EPERM);
+                }
+                /* Because the MDS does not see the EXTENTS_FL set on the
+                 * OST objects, mask this flag into all set flags.  It is
+                 * not legal to clear this flag in any case, so we are not
+                 * changing the functionality by doing this.  b=22911 */
+                *(int *)arg |= EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL;
         }
 
 #ifdef HAVE_EXT4_LDISKFS
