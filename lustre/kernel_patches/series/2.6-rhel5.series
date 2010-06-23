@@ -20,7 +20,6 @@ md-rebuild-policy.patch
 jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
 md-mmp-unplug-dev.patch
-jbd-slab-race-2.6-rhel5.patch
 mpt-fusion-max-sge.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
