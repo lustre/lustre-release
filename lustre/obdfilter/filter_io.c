@@ -108,7 +108,7 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         fed->fed_grant -= oa->o_dropped;
         fed->fed_dirty = oa->o_dirty;
 
-        if (oa->o_flags & OBD_FL_SHRINK_GRANT) {
+        if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & OBD_FL_SHRINK_GRANT) {
                 obd_size left_space = filter_grant_space_left(exp);
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
 
@@ -395,7 +395,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 spin_lock(&obd->obd_osfs_lock);
                 filter_grant_incoming(exp, oa);
 
-                if (!(oa->o_flags & OBD_FL_SHRINK_GRANT))
+                if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+                    !(oa->o_flags & OBD_FL_SHRINK_GRANT))
                         oa->o_grant = 0;
                 spin_unlock(&obd->obd_osfs_lock);
         }
@@ -749,7 +750,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * so no sense in allocating it some more. We either return the grant
          * back to the client if we have plenty of space or we don't return
          * anything if we are short. This was decided in filter_grant_incoming*/
-        if (oa->o_valid & OBD_MD_FLGRANT &&!(oa->o_valid & OBD_FL_SHRINK_GRANT))
+        if ((oa->o_valid & OBD_MD_FLGRANT) &&
+            (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+             !(oa->o_flags & OBD_FL_SHRINK_GRANT)))
                 oa->o_grant = filter_grant(exp, oa->o_grant, oa->o_undirty,
                                            left, 1);
 
