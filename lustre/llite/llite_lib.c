@@ -1007,7 +1007,9 @@ static struct backing_dev_info ll_backing_dev_info = {
 #endif
 };
 
+#ifdef HAVE_NEW_BACKING_DEV_INFO
 static atomic_t ll_bdi_num = ATOMIC_INIT(0);
+#endif
 
 int ll_fill_super(struct super_block *sb)
 {
