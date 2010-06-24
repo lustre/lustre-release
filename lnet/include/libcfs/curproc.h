@@ -76,6 +76,9 @@ char  *cfs_curproc_comm(void);
 
 typedef __u32 cfs_cap_t;
 
+/* check if task is running in compat mode.*/
+int cfs_curproc_is_32bit(void);
+
 #define CFS_CAP_CHOWN                   0
 #define CFS_CAP_DAC_OVERRIDE            1
 #define CFS_CAP_DAC_READ_SEARCH         2

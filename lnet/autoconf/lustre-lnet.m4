@@ -1535,6 +1535,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LN_HAVE_IS_COMPAT_TASK
+#
+# Added in 2.6.17, it wasn't until 2.6.29 that all
+# Linux architectures have is_compat_task()
+#
+AC_DEFUN([LN_HAVE_IS_COMPAT_TASK],
+[AC_MSG_CHECKING([if is_compat_task() is declared])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/compat.h>
+],[
+        int i = is_compat_task();
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_IS_COMPAT_TASK, 1, [is_compat_task() is available])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -1568,6 +1588,7 @@ LN_LE_TYPES
 LN_TASK_RCU
 # 2.6.18
 LN_TASKLIST_LOCK
+LN_HAVE_IS_COMPAT_TASK
 # 2.6.19
 LN_KMEM_CACHE_DESTROY_INT
 LN_ATOMIC_PANIC_NOTIFIER

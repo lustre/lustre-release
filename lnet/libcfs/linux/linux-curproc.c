@@ -42,6 +42,8 @@
 
 #include <linux/sched.h>
 #include <linux/fs_struct.h>
+#include <linux/compat.h>
+#include <linux/thread_info.h>
 
 #define DEBUG_SUBSYSTEM S_LNET
 
@@ -207,6 +209,22 @@ int cfs_capable(cfs_cap_t cap)
         return capable(cfs_cap_unpack(cap));
 }
 
+/* Check if task is running in 32-bit API mode, for the purpose of
+ * userspace binary interfaces.  On 32-bit Linux this is (unfortunately)
+ * always true, even if the application is using LARGEFILE64 and 64-bit
+ * APIs, because Linux provides no way for the filesystem to know if it
+ * is called via 32-bit or 64-bit APIs.  Other clients may vary.  On
+ * 64-bit systems, this will only be true if the binary is calling a
+ * 32-bit system call. */
+int cfs_curproc_is_32bit(void)
+{
+#ifdef HAVE_IS_COMPAT_TASK
+        return is_compat_task();
+#else
+        return (BITS_PER_LONG == 32);
+#endif
+}
+
 EXPORT_SYMBOL(cfs_curproc_uid);
 EXPORT_SYMBOL(cfs_curproc_pid);
 EXPORT_SYMBOL(cfs_curproc_euid);
@@ -227,6 +245,7 @@ EXPORT_SYMBOL(cfs_kernel_cap_unpack);
 EXPORT_SYMBOL(cfs_curproc_cap_pack);
 EXPORT_SYMBOL(cfs_curproc_cap_unpack);
 EXPORT_SYMBOL(cfs_capable);
+EXPORT_SYMBOL(cfs_curproc_is_32bit);
 
 /*
  * Local variables:
