@@ -493,8 +493,14 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
 
         obdo_from_inode(oa, inode, valid_flags);
         /* Bug11742 - set the OBD_FL_MMAP flag for memory mapped files */
-        if (atomic_read(&(ll_i2info(inode)->lli_mmap_cnt)) != 0) 
-                oa->o_flags |= OBD_FL_MMAP;
+        if (atomic_read(&(ll_i2info(inode)->lli_mmap_cnt)) != 0) {
+                if (!(oa->o_valid & OBD_MD_FLFLAGS)) {
+                        oa->o_valid |= OBD_MD_FLFLAGS;
+                        oa->o_flags = OBD_FL_MMAP;
+                } else {
+                        oa->o_flags |= OBD_FL_MMAP;
+                }
+        }
 }
 
 static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)

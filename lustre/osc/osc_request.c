@@ -1370,7 +1370,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
         }
 
         /* If this is mmaped file - it can be changed at any time */
-        if (oa->o_flags & OBD_FL_MMAP)
+        if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags & OBD_FL_MMAP)
                 return 1;
 
         if (oa->o_valid & OBD_MD_FLFLAGS)
@@ -2255,7 +2255,8 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                  * on the network, that was not caused by mmap() modifying
                  * the page. bug 11742 */
                 if ((rc == -EAGAIN) && (aa->aa_resends > 0) &&
-                    (aa->aa_oa->o_flags & OBD_FL_MMAP)) {
+                    aa->aa_oa->o_valid & OBD_MD_FLFLAGS &&
+                    aa->aa_oa->o_flags & OBD_FL_MMAP) {
                         rc = 0;
                 } else {
                 	rc = osc_brw_redo_request(request, aa);
