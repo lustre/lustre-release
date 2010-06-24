@@ -847,7 +847,7 @@ enum {
         /*
          * This is how may FIDs may be allocated in one sequence.
          */
-        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000004000ULL,
+        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000020000ULL,
 };
 
 enum lu_cli_type {

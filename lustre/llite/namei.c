@@ -61,38 +61,77 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
         RETURN(0);
 }
 
-/* Get an inode by inode number (already instantiated by the intent lookup).
- * Returns inode or NULL
- */
-
+/**
+ * Flatten 128-bit FID values into a 64-bit value for
+ * use as an inode number.  For non-IGIF FIDs this
+ * starts just over 2^32, and continues without conflict
+ * until 2^64, at which point we wrap the high 32 bits
+ * of the SEQ into the range where there may not be many
+ * OID values in use, to minimize the risk of conflict.
+ *
+ * The time between re-used inode numbers is very long -
+ * 2^32 SEQ numbers, or about 2^32 client mounts. */
 static inline __u64 fid_flatten(const struct lu_fid *fid)
-{                      
-        return (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
-}
-/* Build inode number on passed @fid */
-ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
-                       struct ll_fid *fid)
 {
-        ino_t ino;
-        ENTRY;
+        __u64 ino;
+        __u64 seq;
 
-        if (fid_is_igif((struct lu_fid*)fid)) {
-                ino = lu_igif_ino((struct lu_fid*)fid);
+        if (fid_is_igif(fid)) {
+                ino = lu_igif_ino(fid);
                 RETURN(ino);
         }
 
+        seq = fid_seq(fid);
+
+        ino = (seq << 24) + ((seq >> (64-8)) & 0xffffff0000ULL) + fid_oid(fid);
+
+        RETURN(ino ? ino : fid_oid(fid));
+}
+
+/**
+ * map fid to 32 bit value for ino on 32bit systems. */
+static inline __u32 fid_flatten32(const struct lu_fid *fid)
+{
+        __u32 ino;
+        __u64 seq;
+
+        if (fid_is_igif(fid)) {
+                ino = lu_igif_ino(fid);
+                RETURN(ino);
+        }
+
+        seq = fid_seq(fid) - FID_SEQ_START;
+
         /*
-         * Very stupid and having many downsides inode allocation algorithm
-         * based on fid.
-         */
-        ino = fid_flatten((struct lu_fid*)fid) & 0xFFFFFFFF;
+          map the high bits of the OID into higher bits of the inode number so that
+          inodes generated at about the same time have a reduced chance of collisions.
+          This will give a period of 1024 clients and 128 k = 128M inodes without collisions.
+        */
 
-        if (unlikely(ino == 0))
-                /* the first result ino is 0xFFC001, so this is rarely used */
-                ino = 0xffbcde;
-        ino = ino | 0x80000000;
-        RETURN(ino);
+        ino = ((seq & 0x000fffffULL) << 12) + ((seq >> 8) & 0xfffff000) +
+               (seq >> (64 - (40-8)) & 0xffffff00) +
+               (fid_oid(fid) & 0xff000fff) + ((fid_oid(fid) & 0x00fff000) << 16);
 
+        RETURN(ino ? ino : fid_oid(fid));
+}
+
+/**
+ * for 32 bit inode numbers directly map seq+oid to 32bit number.
+ */
+__u32 ll_fid_build_ino32(const struct ll_fid *fid)
+{
+        RETURN(fid_flatten32((struct lu_fid *)fid));
+}
+
+/**
+ * build inode number from passed @fid */
+__u64 ll_fid_build_ino(const struct ll_fid *fid)
+{
+#if BITS_PER_LONG == 32
+        RETURN(fid_flatten32((struct lu_fid *)fid));
+#else
+        RETURN(fid_flatten((struct lu_fid *)fid));
+#endif
 }
 
 __u32 ll_fid_build_gen(struct ll_sb_info *sbi, struct ll_fid *fid)

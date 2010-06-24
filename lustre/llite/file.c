@@ -3399,6 +3399,7 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                   struct lookup_intent *it, struct kstat *stat)
 {
         struct inode *inode = de->d_inode;
+	struct ll_inode_info *lli = ll_i2info(inode);
         int res = 0;
 
         res = ll_inode_revalidate_it(de, it);
@@ -3408,7 +3409,10 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                 return res;
 
         stat->dev = inode->i_sb->s_dev;
-        stat->ino = inode->i_ino;
+        if (cfs_curproc_is_32bit())
+                stat->ino = ll_fid_build_ino32((struct ll_fid *)&lli->lli_fid);
+        else
+                stat->ino = inode->i_ino;
         stat->mode = inode->i_mode;
         stat->nlink = inode->i_nlink;
         stat->uid = inode->i_uid;
