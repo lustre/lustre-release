@@ -666,6 +666,8 @@ struct ptlrpc_request {
          * when request/reply sent (secs), or time when request should be sent
          */
         time_t rq_sent;
+        /** time for request really sent out */
+        time_t rq_real_sent;
 
         /** when request must finish. volatile
          * so that servers' early reply updates to the deadline aren't

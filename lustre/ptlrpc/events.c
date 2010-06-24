@@ -69,6 +69,7 @@ void request_out_callback(lnet_event_t *ev)
                   "type %d, status %d", ev->type, ev->status);
 
         sptlrpc_request_out_callback(req);
+        req->rq_real_sent = cfs_time_current_sec();
 
         if (ev->type == LNET_EVENT_UNLINK || ev->status != 0) {
 
