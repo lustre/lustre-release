@@ -1847,6 +1847,7 @@ enum {
         MDS_CLOSE_CLEANUP = 1 << 6
 };
 
+/* instance of mdt_reint_rec */
 struct mdt_rec_create {
         __u32           cr_opcode;
         __u32           cr_cap;
@@ -1864,15 +1865,16 @@ struct mdt_rec_create {
         __u64           cr_time;
         __u64           cr_rdev;
         __u64           cr_ioepoch;
-        __u64           cr_padding_1; /* pad for 64 bits*/
+        __u64           cr_padding_1;   /* rr_blocks */
         __u32           cr_mode;
         __u32           cr_bias;
-        __u32           cr_flags;     /* for use with open */
-        __u32           cr_padding_2;
-        __u32           cr_padding_3;
-        __u32           cr_padding_4;
+        __u32           cr_flags;       /* for use with open */
+        __u32           cr_padding_2;   /* rr_padding_2 */
+        __u32           cr_padding_3;   /* rr_padding_3 */
+        __u32           cr_padding_4;   /* rr_padding_4 */
 };
 
+/* instance of mdt_reint_rec */
 struct mdt_rec_link {
         __u32           lk_opcode;
         __u32           lk_cap;
@@ -1887,18 +1889,19 @@ struct mdt_rec_link {
         struct lu_fid   lk_fid1;
         struct lu_fid   lk_fid2;
         __u64           lk_time;
-        __u64           lk_padding_1;
-        __u64           lk_padding_2;
-        __u64           lk_padding_3;
-        __u64           lk_padding_4;
+        __u64           lk_padding_1;   /* rr_atime */
+        __u64           lk_padding_2;   /* rr_ctime */
+        __u64           lk_padding_3;   /* rr_size */
+        __u64           lk_padding_4;   /* rr_blocks */
         __u32           lk_bias;
-        __u32           lk_padding_5;
-        __u32           lk_padding_6;
-        __u32           lk_padding_7;
-        __u32           lk_padding_8;
-        __u32           lk_padding_9;
+        __u32           lk_padding_5;   /* rr_mode */
+        __u32           lk_padding_6;   /* rr_flags */
+        __u32           lk_padding_7;   /* rr_padding_2 */
+        __u32           lk_padding_8;   /* rr_padding_3 */
+        __u32           lk_padding_9;   /* rr_padding_4 */
 };
 
+/* instance of mdt_reint_rec */
 struct mdt_rec_unlink {
         __u32           ul_opcode;
         __u32           ul_cap;
@@ -1913,18 +1916,19 @@ struct mdt_rec_unlink {
         struct lu_fid   ul_fid1;
         struct lu_fid   ul_fid2;
         __u64           ul_time;
-        __u64           ul_padding_2;
-        __u64           ul_padding_3;
-        __u64           ul_padding_4;
-        __u64           ul_padding_5;
+        __u64           ul_padding_2;   /* rr_atime */
+        __u64           ul_padding_3;   /* rr_ctime */
+        __u64           ul_padding_4;   /* rr_size */
+        __u64           ul_padding_5;   /* rr_blocks */
         __u32           ul_bias;
         __u32           ul_mode;
-        __u32           ul_padding_6;
-        __u32           ul_padding_7;
-        __u32           ul_padding_8;
-        __u32           ul_padding_9;
+        __u32           ul_padding_6;   /* rr_flags */
+        __u32           ul_padding_7;   /* rr_padding_2 */
+        __u32           ul_padding_8;   /* rr_padding_3 */
+        __u32           ul_padding_9;   /* rr_padding_4 */
 };
 
+/* instance of mdt_reint_rec */
 struct mdt_rec_rename {
         __u32           rn_opcode;
         __u32           rn_cap;
@@ -1939,18 +1943,19 @@ struct mdt_rec_rename {
         struct lu_fid   rn_fid1;
         struct lu_fid   rn_fid2;
         __u64           rn_time;
-        __u64           rn_padding_1;
-        __u64           rn_padding_2;
-        __u64           rn_padding_3;
-        __u64           rn_padding_4;
-        __u32           rn_bias;      /* some operation flags */
-        __u32           rn_mode;      /* cross-ref rename has mode */
-        __u32           rn_padding_5;
-        __u32           rn_padding_6;
-        __u32           rn_padding_7;
-        __u32           rn_padding_8;
+        __u64           rn_padding_1;   /* rr_atime */
+        __u64           rn_padding_2;   /* rr_ctime */
+        __u64           rn_padding_3;   /* rr_size */
+        __u64           rn_padding_4;   /* rr_blocks */
+        __u32           rn_bias;        /* some operation flags */
+        __u32           rn_mode;        /* cross-ref rename has mode */
+        __u32           rn_padding_5;   /* rr_flags */
+        __u32           rn_padding_6;   /* rr_padding_2 */
+        __u32           rn_padding_7;   /* rr_padding_3 */
+        __u32           rn_padding_8;   /* rr_padding_4 */
 };
 
+/* instance of mdt_reint_rec */
 struct mdt_rec_setxattr {
         __u32           sx_opcode;
         __u32           sx_cap;
@@ -1963,22 +1968,30 @@ struct mdt_rec_setxattr {
         __u32           sx_suppgid2;
         __u32           sx_suppgid2_h;
         struct lu_fid   sx_fid;
-        __u64           sx_padding_1; /* These three members are lu_fid size */
+        __u64           sx_padding_1;   /* These three are rr_fid2 */
         __u32           sx_padding_2;
         __u32           sx_padding_3;
         __u64           sx_valid;
         __u64           sx_time;
-        __u64           sx_padding_5;
-        __u64           sx_padding_6;
-        __u64           sx_padding_7;
+        __u64           sx_padding_5;   /* rr_ctime */
+        __u64           sx_padding_6;   /* rr_size */
+        __u64           sx_padding_7;   /* rr_blocks */
         __u32           sx_size;
         __u32           sx_flags;
-        __u32           sx_padding_8;
-        __u32           sx_padding_9;
-        __u32           sx_padding_10;
-        __u32           sx_padding_11;
+        __u32           sx_padding_8;   /* rr_flags */
+        __u32           sx_padding_9;   /* rr_padding_2 */
+        __u32           sx_padding_10;  /* rr_padding_3 */
+        __u32           sx_padding_11;  /* rr_padding_4 */
 };
 
+/*
+ * mdt_rec_reint is the template for all mdt_reint_xxx structures.
+ * Do NOT change the size of various members, otherwise the value
+ * will be broken in lustre_swab_mdt_rec_reint().
+ *
+ * If you add new members in other mdt_reint_xxx structres and need to use the
+ * rr_padding_x fields, then update lustre_swab_mdt_rec_reint() also.
+ */
 struct mdt_rec_reint {
         __u32           rr_opcode;
         __u32           rr_cap;
@@ -1999,7 +2012,7 @@ struct mdt_rec_reint {
         __u64           rr_blocks;
         __u32           rr_bias;
         __u32           rr_mode;
-        __u32           rr_padding_1; /* also fix lustre_swab_mdt_rec_reint */
+        __u32           rr_flags;
         __u32           rr_padding_2; /* also fix lustre_swab_mdt_rec_reint */
         __u32           rr_padding_3; /* also fix lustre_swab_mdt_rec_reint */
         __u32           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */

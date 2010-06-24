@@ -1877,8 +1877,8 @@ void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
         __swab64s (&rr->rr_blocks);
         __swab32s (&rr->rr_bias);
         __swab32s (&rr->rr_mode);
+        __swab32s (&rr->rr_flags);
 
-        CLASSERT(offsetof(typeof(*rr), rr_padding_1) != 0);
         CLASSERT(offsetof(typeof(*rr), rr_padding_2) != 0);
         CLASSERT(offsetof(typeof(*rr), rr_padding_3) != 0);
         CLASSERT(offsetof(typeof(*rr), rr_padding_4) != 0);
