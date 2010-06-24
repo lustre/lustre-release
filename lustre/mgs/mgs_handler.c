@@ -407,12 +407,16 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                  lustre_swab_mgs_target_info);
         LASSERT(mti);
 
+        if (mti->mti_flags & LDD_F_NEED_INDEX)
+                mti->mti_flags |= LDD_F_WRITECONF;
+
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
                 CDEBUG(D_MGS, "Server %s is running on %s\n",
                        mti->mti_svname, obd_export_nid2str(req->rq_export));
                 rc = mgs_check_target(obd, mti);
+
                 /* above will set appropriate mti flags */
                 if (rc <= 0)
                         /* Nothing wrong, or fatal error */

@@ -949,6 +949,8 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 
         mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
         mti->mti_config_ver = 0;
+        if (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF)
+                ldd->ldd_flags |= LDD_F_WRITECONF;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
         memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
@@ -1352,7 +1354,7 @@ out_free:
 
 /* Wait here forever until the mount refcount is 0 before completing umount,
  * else we risk dereferencing a null pointer.
- * LNET may take e.g. 165s before killing zombies. 
+ * LNET may take e.g. 165s before killing zombies.
 */
 static void server_wait_finished(struct vfsmount *mnt)
 {
@@ -1370,16 +1372,16 @@ static void server_wait_finished(struct vfsmount *mnt)
                                        waited);
                 /* Cannot use l_event_wait() for an interruptible sleep. */
                 waited += 3;
-                blocked = l_w_e_set_sigs(sigmask(SIGKILL)); 
+                blocked = l_w_e_set_sigs(sigmask(SIGKILL));
                 rc = cfs_waitq_wait_event_interruptible_timeout(
-                        waitq, 
+                        waitq,
                         (cfs_atomic_read(&mnt->mnt_count) == 1),
                         cfs_time_seconds(3));
                 cfs_block_sigs(blocked);
                 if (rc < 0) {
                         LCONSOLE_EMERG("Danger: interrupted umount %p with "
                                        "%d refs!\n",
-                                       mnt, atomic_read(&mnt->mnt_count)); 
+                                       mnt, atomic_read(&mnt->mnt_count));
                         break;
                 }
         }
@@ -1901,6 +1903,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         clear++;
                 } else if (strncmp(s1, "nomgs", 5) == 0) {
                         lmd->lmd_flags |= LMD_FLG_NOMGS;
+                        clear++;
+                } else if (strncmp(s1, "writeconf", 9) == 0) {
+                        lmd->lmd_flags |= LMD_FLG_WRITECONF;
                         clear++;
                 /* ost exclusion list */
                 } else if (strncmp(s1, "exclude=", 8) == 0) {
