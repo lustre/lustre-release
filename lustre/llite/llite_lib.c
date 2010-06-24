@@ -995,6 +995,20 @@ out:
 }
 /* end COMPAT_146 */
 
+static struct backing_dev_info ll_backing_dev_info = {
+        .ra_pages       = 0,    /* No readahead */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
+        .capabilities   = 0,    /* Does contribute to dirty memory */
+#else
+        .memory_backed  = 0,    /* Does contribute to dirty memory */
+#endif
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+        .wb_cnt = 0,
+#endif
+};
+
+static atomic_t ll_bdi_num = ATOMIC_INIT(0);
+
 int ll_fill_super(struct super_block *sb)
 {
         struct lustre_profile *lprof = NULL;
@@ -1123,6 +1137,22 @@ int ll_fill_super(struct super_block *sb)
 
         /* connections, registrations, sb setup */
         err = client_common_fill_super(sb, mdc, osc);
+        if (err)
+                GOTO(out_free, err);
+
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+        lsi->bdi = ll_backing_dev_info;
+        err = bdi_init(&lsi->bdi);
+        if (err)
+                GOTO(out_free, err);
+
+        err = bdi_register(&lsi->bdi, NULL, "lustre-%d",
+                                atomic_inc_return(&ll_bdi_num));
+        if (err) {
+                bdi_destroy(&lsi->bdi);
+                GOTO(out_free, err);
+        }
+#endif
 
 out_free:
         if (save && lprof)
@@ -1185,6 +1215,11 @@ void ll_put_super(struct super_block *sb)
 
         if (profilenm)
                 class_del_profile(profilenm);
+
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+        if (lsi->bdi.wb_cnt > 0)
+                bdi_destroy(&lsi->bdi);
+#endif
 
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
@@ -1955,15 +1990,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         EXIT;
 }
 
-static struct backing_dev_info ll_backing_dev_info = {
-        .ra_pages       = 0,    /* No readahead */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
-        .capabilities   = 0,    /* Does contribute to dirty memory */
-#else
-        .memory_backed  = 0,    /* Does contribute to dirty memory */
-#endif
-};
-
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct lustre_md *md = opaque;
@@ -2008,7 +2034,11 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
                 /* initializing backing dev info. */
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+                inode->i_mapping->backing_dev_info = &(s2lsi(inode->i_sb)->bdi);
+#else
                 inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
+#endif
                 EXIT;
         }
 }

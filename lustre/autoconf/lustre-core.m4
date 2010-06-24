@@ -1723,6 +1723,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.32 has new BDI interface.
+AC_DEFUN([LC_NEW_BACKING_DEV_INFO],
+[AC_MSG_CHECKING([if backing_dev_info has a bdi_list field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/backing-dev.h>
+],[
+        struct backing_dev_info bdi;
+        memset(&bdi.bdi_list, 0x00, sizeof(bdi.bdi_list));
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_NEW_BACKING_DEV_INFO, 1,
+                  [backing_dev_info has a bdi_list field])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1878,6 +1895,9 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.31
           LC_BLK_QUEUE_LOG_BLK_SIZE
+        
+          # 2.6.32
+          LC_NEW_BACKING_DEV_INFO
 ])
 
 #
