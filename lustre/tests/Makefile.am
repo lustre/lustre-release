@@ -23,6 +23,7 @@ noinst_SCRIPTS += recovery-mds-scale.sh run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
 noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh metadata-updates.sh
 noinst_SCRIPTS += ost-pools.sh rpc.sh lnet-selftest.sh obdfilter-survey.sh mmp.sh
+noinst_SCRIPTS += sgpdd-survey.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_SCRIPTS += racer/dir_create.sh racer/file_create.sh racer/file_list.sh
