@@ -51,18 +51,28 @@
 
 #include "cl_object.h"
 
-struct ll_file_data *ll_file_data_get(void)
+static struct ll_file_data *ll_file_data_get(int is_dir)
 {
         struct ll_file_data *fd;
 
         OBD_SLAB_ALLOC_PTR_GFP(fd, ll_file_data_slab, CFS_ALLOC_IO);
+        if (fd && is_dir) {
+                OBD_ALLOC(fd->fd_dir.lfd_name, LLITE_NAME_LEN);
+                if (unlikely(fd->fd_dir.lfd_name == NULL)) {
+                        OBD_SLAB_FREE_PTR(fd, ll_file_data_slab);
+                        fd = NULL;
+                }
+        }
         return fd;
 }
 
 static void ll_file_data_put(struct ll_file_data *fd)
 {
-        if (fd != NULL)
+        if (fd != NULL) {
+                if (fd->fd_dir.lfd_name)
+                        OBD_FREE(fd->fd_dir.lfd_name, LLITE_NAME_LEN);
                 OBD_SLAB_FREE_PTR(fd, ll_file_data_slab);
+        }
 }
 
 void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
@@ -314,7 +324,7 @@ int ll_file_release(struct inode *inode, struct file *file)
         LASSERT(fd != NULL);
 
         /* The last ref on @file, maybe not the the owner pid of statahead.
-         * Different processes can open the same dir, "ll_opendir_key" means:
+         * Different processes can open the same dir, "lli_opendir_key" means:
          * it is me that should stop the statahead thread. */
         if (lli->lli_opendir_key == fd && lli->lli_opendir_pid != 0)
                 ll_stop_statahead(inode, lli->lli_opendir_key);
@@ -509,7 +519,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         file->private_data = NULL; /* prevent ll_local_open assertion */
 #endif
 
-        fd = ll_file_data_get();
+        fd = ll_file_data_get(S_ISDIR(inode->i_mode));
         if (fd == NULL)
                 RETURN(-ENOMEM);
 
