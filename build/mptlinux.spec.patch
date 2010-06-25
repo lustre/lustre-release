@@ -4,10 +4,10 @@
 +%{!?kernel_obj: %define kernel_obj ""}
 +
  %define name mptlinux
- %define version 4.16.00.00
--%define release 2
+ %define version 4.18.20.04
+-%define release 1
 -Summary: MPT Fusion drivers for 53C1030, FC9XX, and SAS Adapters
-+%define release 2sun1
++%define release 1sun1
 +Summary: Common files for the MPT Fusion drivers for 53C1030, FC9XX, and SAS Adapters
  Name: %{name}
  Version: %{version}
@@ -19,7 +19,7 @@
  Source0: %{name}-%{version}.tar.gz
  Source1: fusion.mptctl
  URL: http://www.lsilogic.com
-@@ -22,228 +24,272 @@
+@@ -22,238 +24,274 @@
  Fibre Channel FC909, FC919, FC929, FC919X, FC929X, and FC949X adapters
  SAS SAS1064, SAS1068, and SAS1078 adapters.
  
@@ -248,7 +248,7 @@
 +		continue
 +	fi
  
--	echo "The mpt driver for kernel ${kernel} is now version 4.16.00.00";
+-	echo "The mpt driver for kernel ${kernel} is now version 4.18.20.04";
 -	#backup original fusion drivers here if not already done
 -	for driver_name in mptbase.ko mptscsih.ko mptctl.ko mptlan.ko mptspi.ko mptfc.ko mptsas.ko; do
 -		if [ ! -e $MPTLINUX_IPATH/${driver_name}.orig ]; then
@@ -257,7 +257,7 @@
 -		fi;
 -		cp -f $MPTLINUX_IPATH/${driver_name}.new $MPTLINUX_IPATH/${driver_name}
 -	done;
-+	echo "The mpt driver for kernel ${kernel} is now version 4.16.00.00"
++	echo "The mpt driver for kernel ${kernel} is now version 4.18.20.04"
  	# Remake the initrd image for the user, depending on their OS
  	if [ -f /etc/redhat-release ]; then
 -
@@ -267,6 +267,12 @@
 -			if [ -e $MPTLINUX_IPATH/${driver_name} ]; then
 -				mv $MPTLINUX_IPATH/${driver_name} \
 -				    $MPTLINUX_IPATH/${driver_name}.orig
+-			fi;
+-		# to handle kmods partially need to handle week updates
+-			MPTLINUX_KPATH=/lib/modules/${kernel}/extra/mptbase
+-			if [ -e $MPTLINUX_KPATH/${driver_name} ]; then
+-				mv $MPTLINUX_KPATH/${driver_name} \
+-				    $MPTLINUX_KPATH/${driver_name}.orig
 -			fi;
 -		done;
 -
@@ -367,6 +373,10 @@
 -			if [ -f $MPTLINUX_IPATH/${driver_name}.orig ]; then
 -				mv -f $MPTLINUX_IPATH/${driver_name}.orig $MPTLINUX_IPATH/${driver_name}
 -			fi;
+-			MPTLINUX_KPATH=/lib/modules/${kernel}/extra/mptbase
+-			if [ -e $MPTLINUX_KPATH/${driver_name}.orig ]; then
+-				mv -f $MPTLINUX_KPATH/${driver_name}.orig $MPTLINUX_KPATH/${driver_name}
+-			fi;
 -		done;
 -
  		# RHEL 4
@@ -413,6 +423,8 @@
  
  # changelog  ###################################################################
  %changelog
++* Fri Jun 11 2010 Brian J. Murrell <brian.murrell@oracle.com>
++ - update to 4.18.20.04
 +* Wed Oct 28 2009 Brian J. Murrell <Brian.Murrell@Sun.COM>
 + - split into modules and non-modules packages so that multiple
 +   modules packages can be installed, for several kernels
