@@ -59,7 +59,7 @@ test_3a() {
     local IFree=$(inodes_available)
     [ $IFree -gt $nfiles ] || nfiles=$IFree
 
-    local dir=$DIR/$tdir
+    local dir=$DIR/d0.$TESTNAME
     mkdir -p $dir
     chmod 0777 $dir
 
