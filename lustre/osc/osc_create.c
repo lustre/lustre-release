@@ -571,6 +571,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 
                         ocd = &imp->imp_connect_data;
                         if (ocd->ocd_connect_flags & OBD_CONNECT_SKIP_ORPHAN) {
+                                /*
+                                 * The OST reports back in oa->o_id from where
+                                 * we should restart in order to skip orphan
+                                 * objects
+                                 */
                                 CDEBUG(D_HA, "%s: Skip orphan set, reset last "
                                        "objid\n", oscc->oscc_obd->obd_name);
                                 oscc->oscc_next_id = oa->o_id + 1;
