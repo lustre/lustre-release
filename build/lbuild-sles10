@@ -53,7 +53,7 @@ unpack_linux_devel_rpm-sles10() {
     # get the Module.symvers out of the kenrel-flavor RPM
     local kernelrpm=${callers_rpm/-source-/-$RPMSMPTYPE-}
 
-    if ! rpm2cpio < "$kernelrpm" | cpio -id ./usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$TARGET_ARCH/$RPMSMPTYPE/Module.symvers ./boot/sym\* > /dev/null 2>&1; then
+    if ! rpm2cpio < "$kernelrpm" | cpio -id ./usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH)/$RPMSMPTYPE/Module.symvers ./boot/sym\* > /dev/null 2>&1; then
         return 255
     fi
 
