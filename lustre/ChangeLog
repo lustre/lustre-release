@@ -418,6 +418,14 @@ Severity   : normal
 Bugzilla   : 21966
 Description: avoid divide-by-zero in lprocfs_rd_import()
 
+Severity   : enhancement
+Bugzilla   : 21452
+Description: "weak-modules" support
+Details    : Implement "weak-modules" support which enables kernel modules
+	     to be used with any kernel that implements the same kABI.  In
+	     order to achieve this modules are now installed in
+	     /lib/modules/$(uname -r)/updates/kernel on all distributions.
+
 Severity   : normal
 Bugzilla   : 21816
 Description: lfs quota failed when OSTs are down
