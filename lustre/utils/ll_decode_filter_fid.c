@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "%s: warning: fid larger than expected "
                                 "(%d bytes), recompile?\n", argv[i], size);
 
-                printf("%s: objid=%llu seq=%llu parent="DFID"\n",
+                printf("%s: objid="LPU64" seq="LPU64" parent="DFID"\n",
                        argv[i], le64_to_cpu(ff->ff_objid),
                        le64_to_cpu(ff->ff_seq),
                        le64_to_cpu(ff->ff_parent.f_seq),
