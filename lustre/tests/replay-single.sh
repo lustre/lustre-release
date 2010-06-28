@@ -2189,6 +2189,7 @@ test_86() {
         umount $MOUNT
 	do_facet mds lctl set_param $dev.${FSNAME}-MDT*.exports.clear=0
 	fail mds
+	mount_client $MOUNT
 }
 run_test 86 "umount server after clear nid_stats should not hit LBUG"
 
