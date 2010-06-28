@@ -1036,8 +1036,6 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         } else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
                 *status = -EIO;
-        } else if (imp->imp_obd->obd_no_recov) {
-                *status = -ESHUTDOWN;
         } else if (ptlrpc_send_limit_expired(req)) {
                 /* probably doesn't need to be a D_ERROR after initial testing */
                 DEBUG_REQ(D_ERROR, req, "send limit expired ");
@@ -1049,7 +1047,7 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                         DEBUG_REQ(D_ERROR, req, "invalidate in flight");
                         *status = -EIO;
                 }
-        } else if (imp->imp_invalid) {
+        } else if (imp->imp_invalid || imp->imp_obd->obd_no_recov) {
                 if (!imp->imp_deactive)
                           DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
                 *status = -ESHUTDOWN; /* bz 12940 */
