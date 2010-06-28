@@ -170,8 +170,8 @@ setup_noconfig() {
 }
 
 cleanup_nocli() {
-	stop_mds || return 201
 	stop_ost || return 202
+	stop_mds || return 201
 	unload_modules || return 203
 }
 
