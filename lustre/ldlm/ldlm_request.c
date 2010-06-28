@@ -1751,7 +1751,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 
         LDLM_RESOURCE_ADDREF(res);
         count = ldlm_cancel_resource_local(res, &cancels, policy, mode,
-                                           0, flags | LCF_BL_AST, opaque);
+                                           0, flags, opaque);
         rc = ldlm_cli_cancel_list(&cancels, count, NULL, flags);
         if (rc != ELDLM_OK)
                 CERROR("ldlm_cli_cancel_unused_resource: %d\n", rc);

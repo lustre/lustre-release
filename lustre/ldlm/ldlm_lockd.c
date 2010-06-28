@@ -2222,15 +2222,14 @@ static int ldlm_bl_thread_main(void *arg)
                 }
 
                 if (blwi->blwi_count) {
-                        int count;
                         /* The special case when we cancel locks in lru
                          * asynchronously, we pass the list of locks here.
                          * Thus locks are marked LDLM_FL_CANCELING, but NOT
                          * canceled locally yet. */
-                        count = ldlm_cli_cancel_list_local(&blwi->blwi_head,
-                                                           blwi->blwi_count,
-                                                           LCF_BL_AST);
-                        ldlm_cli_cancel_list(&blwi->blwi_head, count, NULL, 0);
+                        ldlm_cli_cancel_list_local(&blwi->blwi_head,
+                                                   blwi->blwi_count, 0);
+                        ldlm_cli_cancel_list(&blwi->blwi_head,
+                                             blwi->blwi_count, NULL, 0);
                 } else {
                         ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
                                                 blwi->blwi_lock);
