@@ -621,7 +621,7 @@ int target_recovery_check_and_stop(struct obd_device *obd)
 {
         int abort_recovery = 0;
 
-        if (obd->obd_stopping)
+        if (obd->obd_stopping || !obd->obd_recovering)
                 return 1;
 
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -630,7 +630,7 @@ int target_recovery_check_and_stop(struct obd_device *obd)
         spin_unlock_bh(&obd->obd_processing_task_lock);
         if (!abort_recovery)
                 return 0;
-        /** check is fs version-capable */
+        /** check if fs version-capable */
         if (target_fs_version_capable(obd)) {
                 class_handle_stale_exports(obd);
         } else {
@@ -1261,7 +1261,7 @@ static void abort_recovery_queue(struct obd_device *obd)
         list_for_each_entry_safe(req, n, &abort_list, rq_list) {
                 target_exp_dequeue_req_replay(req);
                 list_del_init(&req->rq_list);
-                DEBUG_REQ(D_ERROR, req, "aborted:");
+                DEBUG_REQ(D_ERROR, req, "%s: aborted:", obd->obd_name);
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
@@ -1556,22 +1556,34 @@ static void process_recovery_queue(struct obd_device *obd)
 
         for (;;) {
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                LASSERT(obd->obd_processing_task == cfs_curproc_pid());
+
+                if (!obd->obd_recovering) {
+                        spin_unlock_bh(&obd->obd_processing_task_lock);
+                        EXIT;
+                        return;
+                }
+
+                LASSERTF(obd->obd_processing_task == cfs_curproc_pid(),
+                         "%s: invalid pid in obd_processing_task (%d != %d)\n",
+                         obd->obd_name, obd->obd_processing_task,
+                         cfs_curproc_pid());
                 req = list_entry(obd->obd_recovery_queue.next,
                                  struct ptlrpc_request, rq_list);
 
                 if (lustre_msg_get_transno(req->rq_reqmsg) !=
                     obd->obd_next_recovery_transno) {
                         spin_unlock_bh(&obd->obd_processing_task_lock);
-                        CDEBUG(D_HA, "Waiting for transno "LPD64" (1st is "
-                               LPD64", x"LPU64")\n",
+                        CDEBUG(D_HA, "%s: waiting for transno "LPD64" (1st is "
+                               LPD64", x"LPU64")\n", obd->obd_name,
                                obd->obd_next_recovery_transno,
                                lustre_msg_get_transno(req->rq_reqmsg),
                                req->rq_xid);
                         l_wait_event(obd->obd_next_transno_waitq,
                                      check_for_next_transno(obd), &lwi);
-                        if (target_recovery_check_and_stop(obd))
+                        if (target_recovery_check_and_stop(obd)) {
+                                EXIT;
                                 return;
+                        }
                         continue;
                 }
                 list_del_init(&req->rq_list);
