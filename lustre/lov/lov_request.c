@@ -1601,14 +1601,12 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
 {
         struct lov_request *lovreq;
         struct obd_statfs *osfs, *lov_sfs;
-        struct obd_device *obd;
         struct lov_obd *lov;
         int success;
         ENTRY;
 
         lovreq = container_of(oinfo, struct lov_request, rq_oi);
         lov = &lovreq->rq_rqset->set_obd->u.lov;
-        obd = class_exp2obd(lov->lov_tgts[lovreq->rq_idx]->ltd_exp);
 
         osfs = lovreq->rq_rqset->set_oi->oi_osfs;
         lov_sfs = oinfo->oi_osfs;
@@ -1625,11 +1623,20 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
                 GOTO(out, rc);
         }
 
-        spin_lock(&obd->obd_osfs_lock);
-        memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
-        if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
-                obd->obd_osfs_age = cfs_time_current_64();
-        spin_unlock(&obd->obd_osfs_lock);
+        obd_getref(lovreq->rq_rqset->set_obd);
+        if (lov->lov_tgts[lovreq->rq_idx] &&
+            lov->lov_tgts[lovreq->rq_idx]->ltd_exp) {
+                /* lov_disconnect() might have already removed the target */
+                struct obd_device *obd;
+
+                obd = class_exp2obd(lov->lov_tgts[lovreq->rq_idx]->ltd_exp);
+                spin_lock(&obd->obd_osfs_lock);
+                memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
+                if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
+                        obd->obd_osfs_age = cfs_time_current_64();
+                spin_unlock(&obd->obd_osfs_lock);
+        }
+        obd_putref(lovreq->rq_rqset->set_obd);
 
         lov_update_statfs(osfs, lov_sfs, success);
         qos_update(lov);
