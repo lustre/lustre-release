@@ -1,6 +1,11 @@
-tbd  Sun Microsystems, Inc.
-        * version 3.1.1
-	
+2010-07-15  Oracle, Inc.
+        * version 3.2.0
+
+Severity   : enhancement
+Bugzilla   : 17670
+Description: FID_in_Dirent feature for OSD.
+Details    : Support for storing the FID in the directory entry has
+             been added to ext3 and ext4.
 
 -------------------------------------------------------------------------------
 	
