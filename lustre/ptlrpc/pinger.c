@@ -626,10 +626,12 @@ static int ping_evictor_main(void *arg)
                                  obd_evict_list);
                 spin_unlock(&pet_lock);
 
-                /* bug 18948: ensure recovery is aborted in a timely fashion */
-                if (target_recovery_check_and_stop(obd) ||
-                    obd->obd_recovering /* no evictor during recovery */)
-                       GOTO(skip, 0);
+                if (obd->obd_recovering) {
+                        /* bug 18948: ensure recovery is aborted in a timely fashion */
+                        target_recovery_check_and_stop(obd);
+                        /* no evictor during recovery */
+                        GOTO(skip, 0);
+                }
 
                 expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
 
