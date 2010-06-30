@@ -691,10 +691,6 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(error_exit, rc);
         }
 
-        /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
-         * targets */
-        obd_notify(obd->u.mds.mds_lov_obd, NULL, OBD_NOTIFY_CREATE, NULL);
-
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 RETURN(-ENOMEM);

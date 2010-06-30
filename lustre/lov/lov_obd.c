@@ -389,6 +389,9 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         *exp = class_conn2export(conn);
 
+        /* generate OBD_NOTIFY_CREATE events for already registered targets */
+        obd_notify(obd, NULL, OBD_NOTIFY_CREATE, NULL);
+
         /* Why should there ever be more than 1 connect? */
         lov->lov_connects++;
         LASSERT(lov->lov_connects == 1);
@@ -675,14 +678,14 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
 
-        rc = obd_notify(obd, tgt_obd, OBD_NOTIFY_CREATE, &index);
-
         if (lov->lov_connects == 0) {
                 /* lov_connect hasn't been called yet. We'll do the
                    lov_connect_obd on this target when that fn first runs,
                    because we don't know the connect flags yet. */
                 RETURN(0);
         }
+
+        rc = obd_notify(obd, tgt_obd, OBD_NOTIFY_CREATE, &index);
 
         obd_getref(obd);
 
