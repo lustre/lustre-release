@@ -15,7 +15,7 @@ LECDATE="2010-02-15"
  
 git ls-files build ldiskfs libcfs lnet lustre snmp |grep -v ${0##*/} | while read FILE; do
     # Pick only files that have changed since LECDATE
-    if true; then
+    if [ -n "$(git log -n1 --since=$LECDATE  $FILE)" ]; then
 	OLDCOPY="$(egrep "$SUNCOPY|$ORACOPY" $FILE | sed 's/.*Copy/Copy/')"
 	if [ -z "$OLDCOPY" ]; then
 	    case $FILE in
@@ -29,7 +29,7 @@ git ls-files build ldiskfs libcfs lnet lustre snmp |grep -v ${0##*/} | while rea
 
 	# Get commit dates
 	git log --follow --pretty=format:%ci $FILE | cut -d- -f1 > $TMPFILE
-	NEWYEAR=2010
+	NEWYEAR=$(head -1 $TMPFILE)
 	OLDYEAR=$(tail -1 $TMPFILE)
 	rm $TMPFILE
 
