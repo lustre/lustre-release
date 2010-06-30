@@ -3029,10 +3029,10 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         RETURN(retval);
 }
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,5)
-int ll_flush(struct file *file)
-#else
+#ifdef HAVE_FLUSH_OWNER_ID
 int ll_flush(struct file *file, fl_owner_t id)
+#else
+int ll_flush(struct file *file)
 #endif
 {
         struct inode *inode = file->f_dentry->d_inode;
