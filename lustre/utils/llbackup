@@ -1,7 +1,7 @@
 #!/bin/bash
 # do a parallel backup and restore of specified files
 #
-#  Copyright (C) 2008 Sun Microsystems, Inc.
+#  Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
 #
 #   This file is part of Lustre, http://www.lustre.org.
 #

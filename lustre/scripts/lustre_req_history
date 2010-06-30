@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2008 Sun Microsystems, Inc.
+# Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 
 # Purpose:
 # This script displays the history of requests from the local client  

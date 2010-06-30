@@ -42,7 +42,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre_aggregate.c adio/ad_lustre/ad_lustre_agg
 + *
 + *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
 + */
 +
 +#include "ad_lustre.h"
@@ -352,7 +352,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre.c adio/ad_lustre/ad_lustre.c
   *
   *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
   */
  
  #include "ad_lustre.h"
@@ -384,7 +384,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre.h adio/ad_lustre/ad_lustre.h
   *
   *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
   */
  
  #ifndef AD_UNIX_INCLUDE
@@ -457,7 +457,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre_hints.c adio/ad_lustre/ad_lustre_hints.c
   *
   *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
   */
  
  #include "ad_lustre.h"
@@ -677,7 +677,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre_open.c adio/ad_lustre/ad_lustre_open.c
   *
   *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
   */
  
  #include "ad_lustre.h"
@@ -713,7 +713,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre_rwcontig.c adio/ad_lustre/ad_lustre_rwco
   *
   *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
   */
  
  #define _XOPEN_SOURCE 600
@@ -754,7 +754,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre_wrcoll.c adio/ad_lustre/ad_lustre_wrcoll
 + *
 + *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
 + */
 +
 +#include "ad_lustre.h"
@@ -1692,7 +1692,7 @@ diff -ruN adio/ad_lustre_orig/ad_lustre_wrstr.c adio/ad_lustre/ad_lustre_wrstr.c
 + *
 + *   Copyright (C) 2007 Oak Ridge National Laboratory
 + *
-+ *   Copyright (C) 2008 Sun Microsystems, Lustre group
++ *   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
 + */
 +
 +#include "ad_lustre.h"

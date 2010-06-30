@@ -3,7 +3,7 @@
  *
  * Modified from NFSv4 project for Lustre
  *
- * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  *
  * Author: Eric Mei <ericm@clusterfs.com>
  */

@@ -1,6 +1,6 @@
 #! /bin/sh
 # nodelustre - Start and stop Lustre on MCR nodes
-# Copyright 2008 Sun Microsystems, Inc.
+# Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
 # Gord Eagle <gord@clusterfs.com>, 2002-09-10
 
 # Set this to the shared config file.
