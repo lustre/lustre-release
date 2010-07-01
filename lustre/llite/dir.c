@@ -394,30 +394,11 @@ fail:
         goto out_unlock;
 }
 
-#define READDIR_ROLLBACK(dp, cur_page, prev_page, cross, cur_ent, first_ent)   \
-do {                                                                           \
-        LASSERT(first_ent != NULL);                                            \
-        cur_ent = first_ent;                                                   \
-        first_ent = NULL;                                                      \
-        if (cross != 0) {                                                      \
-                LASSERT(prev_page != NULL);                                    \
-                ll_put_page(cur_page);                                         \
-                cur_page = prev_page;                                          \
-                prev_page = NULL;                                              \
-                dp = page_address(cur_page);                                   \
-        }                                                                      \
-} while(0)
-
 int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 {
         struct inode         *inode = filp->f_dentry->d_inode;
         struct ll_inode_info *info  = ll_i2info(inode);
         __u64                 pos   = filp->f_pos;
-        int                   cross = 0;
-        struct ll_file_data  *fd    = LUSTRE_FPRIVATE(filp);
-        struct lu_dirent     *first = NULL;
-        struct page          *prev_page = NULL;
-        struct lu_dirent     *prev_ent  = NULL;
         struct page          *page;
         struct ll_dir_chain   chain;
         int rc;
@@ -429,15 +410,6 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu\n",
                inode->i_ino, inode->i_generation, inode,
                (unsigned long)pos, i_size_read(inode));
-
-        /* If someone changed f_pos out of readdir, ignore fd_dir */
-        if (unlikely(fd->fd_dir.lfd_valid && fd->fd_dir.lfd_hash != pos)) {
-                CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) someone changed "
-                       "pos from %llu to %llu, maybe cause misposition\n",
-                       inode->i_ino, inode->i_generation, inode,
-                       fd->fd_dir.lfd_hash, pos);
-                fd->fd_dir.lfd_valid = 0;
-        }
 
         if (pos == DIR_END_OFF)
                 /*
@@ -462,6 +434,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                          * use this value.
                          */
                         __u64 hash = DIR_END_OFF;
+                        __u64 next;
 
                         dp = page_address(page);
                         for (ent = lu_dirent_start(dp); ent != NULL && !done;
@@ -475,8 +448,9 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                  * XXX: implement correct swabbing here.
                                  */
 
-restart:
-                                hash = le64_to_cpu(ent->lde_hash);
+                                hash    = le64_to_cpu(ent->lde_hash);
+                                namelen = le16_to_cpu(ent->lde_namelen);
+
                                 if (hash < pos)
                                         /*
                                          * Skip until we find target hash
@@ -484,142 +458,27 @@ restart:
                                          */
                                         continue;
 
-                                namelen = le16_to_cpu(ent->lde_namelen);
                                 if (namelen == 0)
                                         /*
                                          * Skip dummy record.
                                          */
                                         continue;
 
+                                fid  = ent->lde_fid;
                                 name = ent->lde_name;
-                                fid_le_to_cpu(&fid, &ent->lde_fid);
-
-                                if (unlikely(fd->fd_dir.lfd_valid &&
-                                             hash == pos)) {
-                                        if (fd->fd_dir.lfd_namelen != namelen ||
-                                            memcmp(fd->fd_dir.lfd_name, name,
-                                                   namelen) != 0) {
-                                                if (first == NULL)
-                                                        first = ent;
-                                                /*
-                                                 * It is not the one we want.
-                                                 * Coutinue.
-                                                 */
-                                                continue;
-                                        }
-
-                                        fd->fd_dir.lfd_valid = 0;
-                                        if (!lu_fid_eq(&fid,
-                                                       &fd->fd_dir.lfd_fid)) {
-                                                /*
-                                                 * Someone re-add it.
-                                                 */
-                                                CDEBUG(D_VFSTRACE,"VFS Op:inode"
-                                                       "=%lu/%u(%p) someone "
-                                                       "re-add at pos %llu\n",
-                                                       inode->i_ino,
-                                                       inode->i_generation,
-                                                       inode, pos);
-                                                if (first != NULL) {
-                                                        READDIR_ROLLBACK(dp,
-                                                                page, prev_page,
-                                                                cross, ent,
-                                                                first);
-                                                        goto restart;
-                                                }
-                                        }
-                                }
-
-                                if (unlikely(fd->fd_dir.lfd_valid &&
-                                             hash > pos)) {
-                                        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u"
-                                               "(%p) miss to find pos %llu\n",
-                                               inode->i_ino,inode->i_generation,
-                                               inode, pos);
-                                        fd->fd_dir.lfd_valid = 0;
-                                        if (first != NULL) {
-                                                READDIR_ROLLBACK(dp, page,
-                                                        prev_page, cross,
-                                                        ent, first);
-                                                goto restart;
-                                        }
-                                }
-
-
+                                fid_le_to_cpu(&fid, &fid);
                                 if (cfs_curproc_is_32bit())
                                         ino = cl_fid_build_ino32(&fid);
                                 else
                                         ino = cl_fid_build_ino(&fid);
                                 type = ll_dirent_type_get(ent);
-
-                                if (prev_ent != NULL) {
-                                        if (unlikely(namelen ==
-                                            le16_to_cpu(prev_ent->lde_namelen)&&
-                                            memcmp(name, prev_ent->lde_name,
-                                                   namelen) == 0)) {
-                                                struct lu_fid prev_fid;
-
-                                                fid_le_to_cpu(&prev_fid,
-                                                        &prev_ent->lde_fid);
-                                                CERROR("Pack two entries with "
-                                                       "the same name [%.*s] "
-                                                       "under inode=%lu/%u"
-                                                       "(%p): entry1 [%p], "
-                                                       "hash1 ["LPU64"], "
-                                                       "FID1 ["DFID"], "
-                                                       "entry2 [%p], "
-                                                       "hash2 ["LPU64"], "
-                                                       "FID2 ["DFID"]. (C)\n",
-                                                       namelen, name,
-                                                       inode->i_ino,
-                                                       inode->i_generation,
-                                                       inode, prev_ent,
-                                                       le64_to_cpu(
-                                                         prev_ent->lde_hash),
-                                                       PFID(&prev_fid),
-                                                       ent, hash, PFID(&fid));
-                                                LASSERT(ent != prev_ent);
-                                        }
-                                }
-
                                 done = filldir(cookie, name, namelen,
                                                (loff_t)hash, ino, type);
-                                if (!done)
-                                        prev_ent = ent;
-                        } /* end for */
-
+                        }
+                        next = le64_to_cpu(dp->ldp_hash_end);
+                        ll_put_page(page);
                         if (!done) {
-                                if (unlikely(fd->fd_dir.lfd_valid && first)) {
-                                        if (cross == 0) {
-                                                cross = 1;
-                                        } else {
-                                                /*
-                                                 * At here, we fall into full
-                                                 * page hash collision.
-                                                 * Currently, we can not handle
-                                                 * full page hash collision yet.
-                                                 * Give up search, just pack
-                                                 * from the first.
-                                                 */
-                                                CWARN("Full page hash collision"
-                                                      " for inode=%lu/%u(%p) "
-                                                      "with value ["LPU64"]\n",
-                                                      inode->i_ino,
-                                                      inode->i_generation,
-                                                      inode, hash);
-                                                fd->fd_dir.lfd_valid = 0;
-                                                READDIR_ROLLBACK(dp, page,
-                                                        prev_page, cross,
-                                                        ent, first);
-                                                goto restart;
-                                        }
-                                }
-
-                                if (prev_page != NULL)
-                                        ll_put_page(prev_page);
-                                prev_page = page;
-
-                                pos = le64_to_cpu(dp->ldp_hash_end);
+                                pos = next;
                                 if (pos == DIR_END_OFF)
                                         /*
                                          * End of directory reached.
@@ -637,62 +496,14 @@ restart:
                                          * go into overflow page.
                                          */
                                 }
-                        } else {
+                        } else
                                 pos = hash;
-                                if (unlikely(prev_ent != NULL &&
-                                    le64_to_cpu(prev_ent->lde_hash) == hash)) {
-                                        struct lu_fid prev_fid;
-                                        struct lu_fid fid;
-                                        int namelen =
-                                                le16_to_cpu(ent->lde_namelen);
-
-                                        fid_le_to_cpu(&prev_fid,
-                                                      &prev_ent->lde_fid);
-                                        fid_le_to_cpu(&fid,
-                                                      &ent->lde_fid);
-                                        /* This should replace D_WARNING with
-                                         * D_VFSTRACE after bug 20581 fixed. */
-                                        CDEBUG(D_WARNING, "Hash collision for "
-                                               "inode=%lu/%u(%p) with the "
-                                               "same hash value ["LPU64"] to "
-                                               "be returned to user space "
-                                               "through multiple readdir: "
-                                               "entry1 [%p], name1 [%.*s], "
-                                               "FID1 ["DFID"], "
-                                               "entry2 [%p], name2 [%.*s], "
-                                               "FID2 ["DFID"]\n",
-                                               inode->i_ino,
-                                               inode->i_generation,
-                                               inode, hash, prev_ent,
-                                               le16_to_cpu(
-                                                 prev_ent->lde_namelen),
-                                               prev_ent->lde_name,
-                                               PFID(&prev_fid),
-                                               ent, namelen,
-                                               ent->lde_name,
-                                               PFID(&fid));
-                                        LASSERT(ent != prev_ent);
-                                        fd->fd_dir.lfd_fid = fid;
-                                        fd->fd_dir.lfd_hash = hash;
-                                        fd->fd_dir.lfd_namelen = namelen;
-                                        memcpy(fd->fd_dir.lfd_name,
-                                               ent->lde_name, namelen);
-                                        fd->fd_dir.lfd_valid = 1;
-                                }
-
-                                if (prev_page != NULL)
-                                        ll_put_page(prev_page);
-                                prev_page = page;
-                        }
                 } else {
                         rc = PTR_ERR(page);
                         CERROR("error reading dir "DFID" at %lu: rc %d\n",
                                PFID(&info->lli_fid), (unsigned long)pos, rc);
                 }
         }
-
-        if (prev_page != NULL)
-                ll_put_page(prev_page);
 
         filp->f_pos = (loff_t)pos;
         filp->f_version = inode->i_version;

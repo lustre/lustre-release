@@ -501,18 +501,7 @@ struct ll_readahead_state {
         unsigned long   ras_consecutive_stride_requests;
 };
 
-#define LLITE_NAME_LEN 255
-
 struct ll_file_dir {
-        struct lu_fid lfd_fid;          /* fid of next entry. it can not be
-                                         * used as offset clew independently
-                                         * because of hardlink */
-        __u64         lfd_hash;         /* hash (offset) of next entry */
-        __u16         lfd_valid;        /* If user buffer for readdir is full,
-                                         * and hash collision for next entry,
-                                         * then it is 1, otherwise it is 0. */
-        __u16         lfd_namelen;      /* namelen of next entry */
-        char         *lfd_name;         /* name of next entry */
 };
 
 extern cfs_mem_cache_t *ll_file_data_slab;
@@ -521,8 +510,6 @@ struct ll_file_data {
         struct ll_readahead_state fd_ras;
         int fd_omode;
         struct ccc_grouplock fd_grouplock;
-        /* We assign fd_dir only when user buffer for readdir is full, and hash
-         * collision for next entry is found. */
         struct ll_file_dir fd_dir;
         __u32 fd_flags;
         struct file *fd_file;
@@ -660,6 +647,7 @@ extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
+struct ll_file_data *ll_file_data_get(void);
 #ifndef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
 #else
