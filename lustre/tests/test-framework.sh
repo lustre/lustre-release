@@ -2180,7 +2180,7 @@ get_mnt_devs() {
     *) echo "invalid server type" && return 1 ;;
     esac
 
-    devs=$(do_node $node "lctl get_param -n $obd_type.*.mntdev")
+    devs=$(do_node $node "lctl get_param -n $obd_type*.*.mntdev")
     for dev in $devs; do
         case $dev in
         *loop*) do_node $node "losetup $dev" | \
