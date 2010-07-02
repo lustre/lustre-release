@@ -494,7 +494,8 @@ set_params:
 int main(int argc, char *const argv[])
 {
         char default_options[] = "";
-        char *usource, *source, *target, *ptr;
+        char *usource, *source;
+        char target[PATH_MAX] = {'\0'};
         char *options, *optcopy, *orig_options = default_options;
         int i, nargs = 3, opt, rc, flags, optlen;
         static struct option long_opt[] = {
@@ -562,11 +563,11 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        target = argv[optind + 1];
-        ptr = target + strlen(target) - 1;
-        while ((ptr > target) && (*ptr == '/')) {
-                *ptr = 0;
-                ptr--;
+        if (realpath(argv[optind + 1], target) == NULL) {
+                rc = errno;
+                fprintf(stderr, "warning: %s: cannot resolve: %s\n",
+                        argv[optind + 1], strerror(errno));
+                return rc;
         }
 
         if (verbose) {
