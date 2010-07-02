@@ -230,7 +230,7 @@ static int mdt_som_attr_set(struct mdt_thread_info *info,
                 ma->ma_som->msd_size = la->la_valid & LA_SIZE ? la->la_size : 0;
                 ma->ma_som->msd_blocks = la->la_valid & LA_BLOCKS ?
                                          la->la_blocks : 0;
-                ma->ma_som->msd_mountid = mdt->mdt_lut.lut_mount_count;
+                ma->ma_som->msd_mountid = mdt->mdt_lut.lut_obd->u.obt.obt_mount_count;
                 ma->ma_attr.la_valid &= LA_ATIME | LA_MTIME | LA_CTIME;
         } else {
                 ma->ma_som->msd_ioepoch = IOEPOCH_INVAL;

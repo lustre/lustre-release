@@ -228,8 +228,10 @@ struct brw_page {
 
 struct ost_server_data;
 
+#define OBT_MAGIC       0xBDDECEAE
 /* hold common fields for "target" device */
 struct obd_device_target {
+        __u32                     obt_magic;
         struct super_block       *obt_sb;
         /** last_rcvd file */
         struct file              *obt_rcvd_filp;

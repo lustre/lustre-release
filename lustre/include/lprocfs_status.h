@@ -659,7 +659,8 @@ int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
                                       int count, int *eof, void *data);
 int lprocfs_obd_wr_recovery_time_hard(struct file *file, const char *buffer,
                                       unsigned long count, void *data);
-
+int lprocfs_obd_rd_mntdev(char *page, char **start, off_t off,
+                          int count, int *eof, void *data);
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
                                   int *eof, void *data);

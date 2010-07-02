@@ -5245,7 +5245,8 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         mdt_allow_cli(m, CONFIG_SYNC);
                         if (data)
-                                (*(__u64 *)data) = m->mdt_lut.lut_mount_count;
+                                (*(__u64 *)data) =
+                                      m->mdt_lut.lut_obd->u.obt.obt_mount_count;
                         break;
                 case MD_NO_TRANS:
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);

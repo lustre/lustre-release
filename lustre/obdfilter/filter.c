@@ -892,8 +892,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
         obd->obd_last_committed = le64_to_cpu(lsd->lsd_last_transno);
 out:
-        lut->lut_mount_count = mount_count + 1;
-        lsd->lsd_mount_count = cpu_to_le64(lut->lut_mount_count);
+        obd->u.obt.obt_mount_count = mount_count + 1;
+        lsd->lsd_mount_count = cpu_to_le64(obd->u.obt.obt_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = filter_update_server_data(obd);
@@ -2019,6 +2019,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
 
         obd->u.obt.obt_vfsmnt = mnt;
         obd->u.obt.obt_sb = mnt->mnt_sb;
+        obd->u.obt.obt_magic = OBT_MAGIC;
         filter->fo_fstype = mnt->mnt_sb->s_type->name;
         CDEBUG(D_SUPER, "%s: mnt = %p\n", filter->fo_fstype, mnt);
 

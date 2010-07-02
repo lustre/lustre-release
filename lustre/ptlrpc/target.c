@@ -248,7 +248,7 @@ static int lut_server_data_update(const struct lu_env *env,
 
         CDEBUG(D_SUPER,
                "%s: mount_count is "LPU64", last_transno is "LPU64"\n",
-               lut->lut_lsd.lsd_uuid, lut->lut_mount_count,
+               lut->lut_lsd.lsd_uuid, lut->lut_obd->u.obt.obt_mount_count,
                lut->lut_last_transno);
 
         cfs_spin_lock(&lut->lut_translock);

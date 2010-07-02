@@ -318,7 +318,7 @@ static void mds_init_ctxt(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_obt.obt_vfsmnt = mnt;
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
-
+        obd->u.obt.obt_magic = OBT_MAGIC;
         fsfilt_setup(obd, obd->u.obt.obt_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);

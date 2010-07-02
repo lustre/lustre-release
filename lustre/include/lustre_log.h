@@ -389,6 +389,9 @@ static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
 
+        LASSERTF(obd->u.obt.obt_magic == OBT_MAGIC,
+                 "%s: wrong obt magic %#x\n",
+                 obd->obd_name, obd->u.obt.obt_magic);
         ctxt->loc_gen.mnt_cnt = obd->u.obt.obt_mount_count;
         ctxt->loc_gen.conn_cnt++;
 }

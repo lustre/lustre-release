@@ -57,8 +57,6 @@ struct lu_target {
         cfs_spinlock_t           lut_client_bitmap_lock;
         /** Bitmap of known clients */
         unsigned long           *lut_client_bitmap;
-        /** Number of mounts */
-        __u64                    lut_mount_count;
 };
 
 typedef void (*lut_cb_t)(struct lu_target *lut, __u64 transno,

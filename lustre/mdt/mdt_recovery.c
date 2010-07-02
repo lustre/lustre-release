@@ -472,8 +472,8 @@ static int mdt_server_data_init(const struct lu_env *env,
         obd->obd_last_committed = mdt->mdt_lut.lut_last_transno;
         cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
 
-        mdt->mdt_lut.lut_mount_count = mount_count + 1;
-        lsd->lsd_mount_count = mdt->mdt_lut.lut_mount_count;
+        obd->u.obt.obt_mount_count = mount_count + 1;
+        lsd->lsd_mount_count = obd->u.obt.obt_mount_count;
 
         /* save it, so mount count and last_transno is current */
         rc = mdt_server_data_update(env, mdt);
@@ -503,7 +503,8 @@ static int mdt_server_data_update(const struct lu_env *env,
                 RETURN(PTR_ERR(th));
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
-               mdt->mdt_lut.lut_mount_count, mdt->mdt_lut.lut_last_transno);
+               mdt->mdt_lut.lut_obd->u.obt.obt_mount_count,
+               mdt->mdt_lut.lut_last_transno);
 
         cfs_spin_lock(&mdt->mdt_lut.lut_translock);
         mdt->mdt_lut.lut_lsd.lsd_last_transno = mdt->mdt_lut.lut_last_transno;

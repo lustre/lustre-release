@@ -43,18 +43,6 @@
 #include "mds_internal.h"
 
 #ifdef LPROCFS
-static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
-                                 int *eof, void *data)
-{
-        struct obd_device* obd = (struct obd_device *)data;
-
-        LASSERT(obd != NULL);
-        LASSERT(obd->u.obt.obt_vfsmnt->mnt_devname);
-        *eof = 1;
-
-        return snprintf(page, count, "%s\n",obd->u.obt.obt_vfsmnt->mnt_devname);
-}
-
 static int lprocfs_mds_rd_evictostnids(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 {
@@ -173,7 +161,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "filestotal",      lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",       lprocfs_rd_filesfree,   0, 0 },
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
-        { "mntdev",          lprocfs_mds_rd_mntdev,  0, 0 },
+        { "mntdev",          lprocfs_obd_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
         { "evict_client",    0,                lprocfs_mds_wr_evict_client, 0 },
