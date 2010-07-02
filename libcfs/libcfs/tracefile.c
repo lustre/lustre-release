@@ -71,6 +71,10 @@ static struct cfs_trace_page *cfs_tage_alloc(int gfp)
         cfs_page_t            *page;
         struct cfs_trace_page *tage;
 
+        /* My caller is trying to free memory */
+        if (!cfs_in_interrupt() && cfs_memory_pressure_get())
+                return NULL;
+
         /*
          * Don't spam console with allocation failures: they will be reported
          * by upper layer anyway.

@@ -1039,7 +1039,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if ((body->oa.o_flags & OBD_BRW_MEMALLOC) &&
             (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
-                libcfs_memory_pressure_set();
+                cfs_memory_pressure_set();
 
         objcount = req_capsule_get_size(&req->rq_pill, &RMF_OBD_IOOBJ,
                                         RCL_CLIENT) / sizeof(*ioo);
@@ -1347,7 +1347,7 @@ out:
                       exp->exp_connection->c_remote_uuid.uuid,
                       libcfs_id2str(req->rq_peer));
         }
-        libcfs_memory_pressure_clr();
+        cfs_memory_pressure_clr();
         RETURN(rc);
 }
 

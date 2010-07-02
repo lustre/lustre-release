@@ -181,7 +181,7 @@ static int osc_io_submit(const struct lu_env *env,
                                                                   OSC_FLAGS);
                                 /*
                                  * bug 18881: we can't just break out here when
-                                 * error occurrs after cl_page_prep has been
+                                 * error occurs after cl_page_prep has been
                                  * called against the page. The correct
                                  * way is to call page's completion routine,
                                  * as in osc_oap_interrupted.  For simplicity,

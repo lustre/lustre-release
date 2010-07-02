@@ -1046,7 +1046,7 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
 
                 if (lp->lp_txcredits < 0) {
                         msg->msg_delayed = 1;
-                        cfs_list_add_tail (&msg->msg_list, &lp->lp_txq);
+                        cfs_list_add_tail(&msg->msg_list, &lp->lp_txq);
                         return EAGAIN;
                 }
         }
@@ -1063,7 +1063,7 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
 
                 if (ni->ni_txcredits < 0) {
                         msg->msg_delayed = 1;
-                        cfs_list_add_tail (&msg->msg_list, &ni->ni_txq);
+                        cfs_list_add_tail(&msg->msg_list, &ni->ni_txq);
                         return EAGAIN;
                 }
         }
@@ -2383,6 +2383,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
                        libcfs_id2str(target));
                 return -ENOMEM;
         }
+        msg->msg_vmflush = !!cfs_memory_pressure_get();
 
         LNET_LOCK();
 

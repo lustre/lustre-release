@@ -1438,26 +1438,26 @@ kptllnd_find_target(kptl_net_t *net, lnet_process_id_t target,
         hello_tx->tx_msg->ptlm_u.hello.kptlhm_matchbits = last_matchbits_seen;
         hello_tx->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
                 *kptllnd_tunables.kptl_max_msg_size;
-                
+
         new_peer->peer_state = PEER_STATE_WAITING_HELLO;
         new_peer->peer_last_matchbits_seen = last_matchbits_seen;
-        
+
         kptllnd_peer_add_peertable_locked(new_peer);
 
         cfs_write_unlock_irqrestore(g_lock, flags);
 
-	/* NB someone else could get in now and post a message before I post
-	 * the HELLO, but post_tx/check_sends take care of that! */
+        /* NB someone else could get in now and post a message before I post
+         * the HELLO, but post_tx/check_sends take care of that! */
 
         CDEBUG(D_NETTRACE, "%s: post initial hello %p\n",
                libcfs_id2str(new_peer->peer_id), hello_tx);
 
         kptllnd_post_tx(new_peer, hello_tx, 0);
         kptllnd_peer_check_sends(new_peer);
-       
+
         *peerp = new_peer;
         return 0;
-        
+
  unwind_2:
         kptllnd_peer_unreserve_buffers();
  unwind_1:

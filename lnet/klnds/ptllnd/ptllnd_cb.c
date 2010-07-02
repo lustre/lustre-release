@@ -321,7 +321,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         unsigned int      payload_offset = lntmsg->msg_offset;
         unsigned int      payload_nob = lntmsg->msg_len;
         kptl_net_t       *net = ni->ni_data;
-        kptl_peer_t      *peer;
+        kptl_peer_t      *peer = NULL;
+        int               mpflag = 0;
         kptl_tx_t        *tx;
         int               nob;
         int               nfrag;
@@ -335,10 +336,13 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
         LASSERT (!cfs_in_interrupt());
 
+        if (lntmsg->msg_vmflush)
+                mpflag = cfs_memory_pressure_get_and_set();
+
         rc = kptllnd_find_target(net, target, &peer);
         if (rc != 0)
-                return rc;
-        
+                goto out;
+
         /* NB peer->peer_id does NOT always equal target, be careful with
          * which one to use */
         switch (type) {
@@ -416,7 +420,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         kptllnd_init_rdma_md(tx, lntmsg->msg_md->md_niov,
                                              NULL, lntmsg->msg_md->md_iov.kiov,
                                              0, lntmsg->msg_md->md_length);
-                
+
                 tx->tx_lnet_msg = lntmsg;
                 tx->tx_msg->ptlm_u.rdma.kptlrm_hdr = *hdr;
                 kptllnd_init_msg (tx->tx_msg, PTLLND_MSG_TYPE_GET,
@@ -470,7 +474,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                                                 payload_offset, payload_nob);
 #endif
         }
-        
+
         nob = offsetof(kptl_immediate_msg_t, kptlim_payload[payload_nob]);
         kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_IMMEDIATE, target, nob);
 
@@ -486,7 +490,10 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         kptllnd_tx_launch(peer, tx, nfrag);
 
  out:
-        kptllnd_peer_decref(peer);
+        if (lntmsg->msg_vmflush)
+                cfs_memory_pressure_restore(mpflag);
+        if (peer)
+                kptllnd_peer_decref(peer);
         return rc;
 }
 
