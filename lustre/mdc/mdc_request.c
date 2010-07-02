@@ -1402,7 +1402,8 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         GOTO(out, rc = -EFAULT);
 
                 rc = mdc_statfs(obd, &stat_buf,
-                                cfs_time_current_64() - CFS_HZ, 0);
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+                                0);
                 if (rc != 0)
                         GOTO(out, rc);
 

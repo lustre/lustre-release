@@ -1140,7 +1140,8 @@ static int llu_statfs(struct llu_sb_info *sbi, struct statfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = llu_statfs_internal(sbi, &osfs, cfs_time_current_64() - CFS_HZ);
+        rc = llu_statfs_internal(sbi, &osfs,
+                                 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS));
         if (rc)
                 return rc;
 

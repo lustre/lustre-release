@@ -303,7 +303,8 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
-                                    cfs_time_current_64() - CFS_HZ, 0);
+                                    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+                                    0);
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 

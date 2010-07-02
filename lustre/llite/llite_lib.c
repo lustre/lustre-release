@@ -254,7 +254,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 GOTO(out_md, err);
         }
 
-        err = obd_statfs(obd, &osfs, cfs_time_current_64() - CFS_HZ, 0);
+        err = obd_statfs(obd, &osfs,
+                         cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
         if (err)
                 GOTO(out_md_fid, err);
 
@@ -1372,10 +1373,10 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
         CDEBUG(D_VFSTRACE, "VFS Op: at "LPU64" jiffies\n", get_jiffies_64());
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);
 
-        /* For now we will always get up-to-date statfs values, but in the
-         * future we may allow some amount of caching on the client (e.g.
-         * from QOS or lprocfs updates). */
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - 1, 0);
+        /* Some amount of caching on the client is allowed */
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+                                0);
         if (rc)
                 return rc;
 

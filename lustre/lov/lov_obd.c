@@ -1129,7 +1129,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
          * later in alloc_qos(), we will wait for those rpcs to complete if
          * the osfs age is older than 2 * qos_maxage */
         qos_statfs_update(exp->exp_obd,
-                          cfs_time_shift_64(-lov->desc.ld_qos_maxage) + CFS_HZ,
+                          cfs_time_shift_64(-lov->desc.ld_qos_maxage +
+                                            OBD_STATFS_CACHE_SECONDS),
                           0);
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
@@ -2007,7 +2008,8 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 /* got statfs data */
                 rc = obd_statfs(osc_obd, &stat_buf,
-                                cfs_time_current_64() - CFS_HZ, 0);
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+                                0);
                 if (rc)
                         RETURN(rc);
                 if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,

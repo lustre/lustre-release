@@ -521,7 +521,8 @@ int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
                        int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - CFS_HZ,
+        int rc = obd_statfs(data, &osfs,
+                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 *eof = 1;
@@ -534,7 +535,8 @@ int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - CFS_HZ,
+        int rc = obd_statfs(data, &osfs,
+                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -553,7 +555,8 @@ int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - CFS_HZ,
+        int rc = obd_statfs(data, &osfs,
+                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -572,7 +575,8 @@ int lprocfs_rd_kbytesavail(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - CFS_HZ,
+        int rc = obd_statfs(data, &osfs,
+                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -591,7 +595,8 @@ int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - CFS_HZ,
+        int rc = obd_statfs(data, &osfs,
+                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 *eof = 1;
@@ -605,7 +610,8 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - CFS_HZ,
+        int rc = obd_statfs(data, &osfs,
+                            cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                             OBD_STATFS_NODELAY);
         if (!rc) {
                 *eof = 1;

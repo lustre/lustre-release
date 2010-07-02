@@ -627,6 +627,9 @@ struct lov_qos_rr {
         unsigned long       lqr_dirty:1;     /* recalc round-robin list */
 };
 
+/* allow statfs data caching for 1 second */
+#define OBD_STATFS_CACHE_SECONDS 1
+
 struct lov_statfs_data {
         struct obd_info   lsd_oi;
         struct obd_statfs lsd_statfs;

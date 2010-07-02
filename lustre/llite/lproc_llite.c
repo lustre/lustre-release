@@ -60,7 +60,8 @@ static int ll_rd_blksize(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - CFS_HZ,
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 OBD_STATFS_NODELAY);
         if (!rc) {
               *eof = 1;
@@ -78,7 +79,8 @@ static int ll_rd_kbytestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - CFS_HZ,
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -102,7 +104,8 @@ static int ll_rd_kbytesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - CFS_HZ,
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -125,7 +128,8 @@ static int ll_rd_kbytesavail(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - CFS_HZ,
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 OBD_STATFS_NODELAY);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
@@ -148,7 +152,8 @@ static int ll_rd_filestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - CFS_HZ,
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 OBD_STATFS_NODELAY);
         if (!rc) {
                  *eof = 1;
@@ -165,7 +170,8 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - CFS_HZ,
+        rc = ll_statfs_internal(sb, &osfs,
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 OBD_STATFS_NODELAY);
         if (!rc) {
                  *eof = 1;

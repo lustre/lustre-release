@@ -754,7 +754,8 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                         RETURN(-EFAULT);
 
                 rc = obd_statfs(mdc_obd, &stat_buf,
-                                cfs_time_current_64() - CFS_HZ, 0);
+                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+                                0);
                 if (rc)
                         RETURN(rc);
                 if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,
