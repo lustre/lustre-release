@@ -156,6 +156,7 @@ struct config_llog_data {
         cfs_atomic_t                cld_refcount;
         struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
         struct obd_export          *cld_mgcexp;
+        cfs_mutex_t                 cld_lock;
         unsigned int                cld_stopping:1, /* we were told to stop
                                                      * watching */
                                     cld_lostlock:1, /* lock not requeued */

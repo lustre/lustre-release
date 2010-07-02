@@ -221,6 +221,7 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         strcpy(cld->cld_logname, logname);
         if (cfg)
                 cld->cld_cfg = *cfg;
+        cfs_mutex_init(&cld->cld_lock);
         cld->cld_cfg.cfg_last_idx = 0;
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
@@ -325,7 +326,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         if (IS_ERR(cld))
                 RETURN(PTR_ERR(cld));
 
-        cfs_down(&llog_process_lock);
+        cfs_mutex_lock(&cld->cld_lock);
         /*
          * if cld_stopping is set, it means we didn't start the log thus
          * not owning the start ref. this can happen after previous umount:
@@ -334,14 +335,14 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
          * calling start_log.
          */
         if (unlikely(cld->cld_stopping)) {
-                cfs_up(&llog_process_lock);
+                cfs_mutex_unlock(&cld->cld_lock);
                 /* drop the ref from the find */
                 config_log_put(cld);
                 RETURN(rc);
         }
 
         cld->cld_stopping = 1;
-        cfs_up(&llog_process_lock);
+        cfs_mutex_unlock(&cld->cld_lock);
 
         cfs_spin_lock(&config_list_lock);
         cld_sptlrpc = cld->cld_sptlrpc;
@@ -1264,10 +1265,10 @@ int mgc_process_log(struct obd_device *mgc,
            sounds like badness.  It actually might be fine, as long as
            we're not trying to update from the same log
            simultaneously (in which case we should use a per-log sem.) */
-        cfs_down(&llog_process_lock);
+        cfs_mutex_lock(&cld->cld_lock);
 
         if (cld->cld_stopping) {
-                cfs_up(&llog_process_lock);
+                cfs_mutex_unlock(&cld->cld_lock);
                 RETURN(0);
         }
 
@@ -1282,7 +1283,7 @@ int mgc_process_log(struct obd_device *mgc,
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
                 CERROR("missing llog context\n");
-                cfs_up(&llog_process_lock);
+                cfs_mutex_unlock(&cld->cld_lock);
                 RETURN(-EINVAL);
         }
 
@@ -1369,7 +1370,7 @@ out_pop:
         CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
                mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
 
-        cfs_up(&llog_process_lock);
+        cfs_mutex_unlock(&cld->cld_lock);
 
         RETURN(rc);
 }

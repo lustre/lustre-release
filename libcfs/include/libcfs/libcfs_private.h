@@ -158,7 +158,7 @@ do {                                            \
 # define libcfs_kmem_dec(ptr, size) do {} while (0)
 #endif /* LIBCFS_DEBUG */
 
-#define LIBCFS_VMALLOC_SIZE        16384
+#define LIBCFS_VMALLOC_SIZE        (2 << CFS_PAGE_SHIFT) /* 2 pages */
 
 #define LIBCFS_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
@@ -176,8 +176,7 @@ do {                                                                      \
                 break;                                                    \
         }                                                                 \
         libcfs_kmem_inc((ptr), (size));                                   \
-        if (!((mask) & CFS_ALLOC_ZERO))                                   \
-                memset((ptr), 0, (size));                                 \
+        memset((ptr), 0, (size));                                         \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), cfs_atomic_read (&libcfs_kmemory));    \
 } while (0)
