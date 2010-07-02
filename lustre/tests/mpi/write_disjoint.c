@@ -88,6 +88,7 @@ int main (int argc, char *argv[]) {
         ssize_t ret;
         char *filename = "/mnt/lustre/write_disjoint";
         int numloops = 1000;
+        int random = 0;
 
         error = MPI_Init(&argc, &argv);
         if (error != MPI_SUCCESS)
@@ -133,11 +134,22 @@ int main (int argc, char *argv[]) {
                         if (ret != 0)
                                 rprintf(rank, n, "truncate() returned %s\n",
                                         strerror(errno) );
+                        random = rand();
                 }
-                CHUNK_SIZE(n) = rand() % CHUNK_MAX_SIZE;
+                MPI_Bcast(&random, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                CHUNK_SIZE(n) = random % CHUNK_MAX_SIZE;
 
                 if (n % 1000 == 0 && rank == 0)
                         printf("loop %d: chunk_size %lu\n", n, CHUNK_SIZE(n));
+
+                if (stat(filename, &stat_buf) < 0)
+                        rprintf(rank, n, "error stating %s: %s\n",
+                                filename, strerror(errno));
+
+                if (stat_buf.st_size != 0)
+                        rprintf(rank, n, "filesize = %lu. "
+                                "Should be zero after truncate\n",
+                                stat_buf.st_size);
 
                 MPI_Barrier(MPI_COMM_WORLD);
 
