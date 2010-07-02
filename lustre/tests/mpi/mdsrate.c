@@ -134,15 +134,13 @@ struct stat statbuf;
 #define dmesg if (debug) printf
 
 #define DISPLAY_PROGRESS() {                                                \
-        if ((++nops % CHECK_COUNT) == 0 && verbose) {                       \
-                curTime = time(0);                                          \
+        if (verbose && (nops % CHECK_COUNT == 0)) {                         \
+                curTime = MPI_Wtime();                                      \
                 interval = curTime - lastTime;                              \
                 if (interval > DISPLAY_TIME || nops % DISPLAY_COUNT == 0) { \
-                        rate = (float)(nops - lastOps);                     \
-                        if (interval > 1)                                   \
-                                rate /= (float)interval;                    \
-                        printf("Rank %d: %.2f %ss/sec %lu secs "            \
-                               "(total: %d %ss %lu secs)\n",                \
+                        rate = (double)(nops - lastOps)/interval;           \
+                        printf("Rank %d: %.2f %ss/sec %.2f secs "           \
+                               "(total: %d %ss %.2f secs)\n",               \
                                myrank, rate, cmd, interval,                 \
                                nops, cmd, curTime - startTime);             \
                         lastOps = nops;                                     \
@@ -307,9 +305,9 @@ process_args(int argc, char *argv[])
                         if ((*endptr != 0) || (iters <= 0)) {
                                 fatal(0, "Invalid --iters value.\n");
                         }
-                        if (mode != LOOKUP && mode != OPEN && mode != STAT) {
+                        if (mode != LOOKUP && mode != OPEN) {
                                 usage(stderr, "--iters only makes sense with "
-                                              "--lookup, --open, or --stat.\n");
+                                              "--lookup or --open.\n");
                         }
                         break;
                 case TIME:
@@ -399,9 +397,9 @@ process_args(int argc, char *argv[])
                         break;
                 case RANDOM:
                 case READDIR:
-                        if (mode != LOOKUP && mode != OPEN && mode != STAT)  {
+                        if (mode != LOOKUP && mode != OPEN)  {
                                 fatal(0, "--%s can only be specified with "
-                                         "--lookup, --open, or --stat.\n",
+                                         "--lookup, or --open.\n",
                                       (char *)longOpts[index].name);
                         }
                         order = rc;
@@ -425,7 +423,7 @@ process_args(int argc, char *argv[])
                 usage(stderr, "too many arguments %d >= %d.\n", optind, argc);
         }
 
-        if (mode == CREATE || mode == MKNOD || mode == UNLINK) {
+        if (mode == CREATE || mode == MKNOD || mode == UNLINK || mode == STAT) {
                 if (seconds != 0) {
                         if (nfiles == 0)
                                 nfiles = INT_MAX;
@@ -433,7 +431,7 @@ process_args(int argc, char *argv[])
                         usage(stderr, "--nfiles or --time must be specified "
                                       "with %s.\n", cmd);
                 }
-        } else if (mode == LOOKUP || mode == OPEN || mode == STAT) {
+        } else if (mode == LOOKUP || mode == OPEN) {
                 if (seconds != 0) {
                         if (iters == 0)
                                 iters = INT_MAX;
@@ -546,12 +544,13 @@ static inline char *next_file()
 int
 main(int argc, char *argv[])
 {
-        int    i, j, fd, rc, nops, lastOps, ag_ops;
-        int    ag_interval = 0;
-        float  rate, ag_rate;
-        float  avg_rate = 0;
-        float  effective_rate = 0;
-        time_t startTime, lastTime, curTime, interval;
+        int    i, j, fd, rc, nops, lastOps;
+        int ag_ops = 0;
+        double ag_interval = 0;
+        double ag_rate = 0;
+        double rate, avg_rate, effective_rate;
+        double startTime, curTime, lastTime, interval;
+        time_t timestamp;
         char * file;
 
         rc = MPI_Init(&argc, &argv);
@@ -568,10 +567,10 @@ main(int argc, char *argv[])
 
         process_args(argc, argv);
 
-        startTime = time(0);
+        timestamp = time(0);
         if ((myrank == 0) || debug) {
         	printf("%d: %s starting at %s",
-		       myrank, hostname, ctime(&startTime));
+		       myrank, hostname, ctime(&timestamp));
 	}
 
         /* if we're not measuring creation rates then precreate
@@ -609,10 +608,10 @@ main(int argc, char *argv[])
                               dir, strerror(rc));
                 }
 
-                startTime = time(0);
+                timestamp = time(0);
                 j = random() % nfiles;
                 dmesg("%d: %s initializing dir offset %u: %s",
-                      myrank, hostname, j, ctime(&startTime));
+                      myrank, hostname, j, ctime(&timestamp));
 
                 for (i = 0; i <= j; i++) {
                         if ((dir_entry = readdir(directory)) == NULL) {
@@ -621,16 +620,12 @@ main(int argc, char *argv[])
                         }
                 }
 
-                lastTime = time(0);
+                timestamp = time(0);
                 dmesg("%d: index %d, filename %s, offset %ld: "
                       "%s initialization complete: %s",
                       myrank, i, dir_entry->d_name, telldir(directory),
-                      hostname, ctime(&lastTime));
+                      hostname, ctime(&timestamp));
         }
-
-        rc = MPI_Barrier(MPI_COMM_WORLD);
-        if (rc != MPI_SUCCESS)
-                fatal(myrank, "prep MPI_Barrier failed: %d\n", rc);
 
         if (seconds) {
                 act.sa_handler = sigalrm_handler;
@@ -640,7 +635,11 @@ main(int argc, char *argv[])
                 alarm(seconds);
         }
 
-        startTime = lastTime = time(0);
+        rc = MPI_Barrier(MPI_COMM_WORLD);
+        if (rc != MPI_SUCCESS)
+                fatal(myrank, "prep MPI_Barrier failed: %d\n", rc);
+
+        startTime = lastTime = MPI_Wtime();
         nops = lastOps = 0;
 
         switch (mode) {
@@ -655,6 +654,7 @@ main(int argc, char *argv[])
                         }
 
                         close(fd);
+                        nops++;
                         DISPLAY_PROGRESS();
                 }
 
@@ -679,6 +679,7 @@ main(int argc, char *argv[])
                                       "error: %s\n", filename, strerror(rc));
                         }
 
+                        nops++;
                         DISPLAY_PROGRESS();
                 }
                 break;
@@ -694,6 +695,7 @@ main(int argc, char *argv[])
                                       filename, strerror(rc));
                         }
 
+                        nops++;
                         DISPLAY_PROGRESS();
                 }
                 break;
@@ -709,19 +711,24 @@ main(int argc, char *argv[])
 
                         close(fd);
 
+                        nops++;
                         DISPLAY_PROGRESS();
                 }
                 break;
         case STAT:
-                for (; nops < iters && !alarm_caught;) {
-                        rc = stat(file = next_file(), &statbuf);
+                for (; begin <= end && !alarm_caught; begin += dirthreads) {
+                        sprintf(filename, filefmt, begin);
+                        rc = stat(filename, &statbuf);
                         if (rc) {
                                 if (((rc = errno) == EINTR) && alarm_caught)
                                         break;
+                                if (((rc = errno) == ENOENT) && ignore)
+                                        continue;
                                 fatal(myrank, "stat(%s) error: %s\n",
-                                      file, strerror(rc));
+                                      filename, strerror(rc));
                         }
 
+                        nops++;
                         DISPLAY_PROGRESS();
                 }
                 break;
@@ -738,16 +745,18 @@ main(int argc, char *argv[])
                                       filename, strerror(rc));
                         }
 
+                        nops++;
                         DISPLAY_PROGRESS();
                 }
                 break;
         }
 
-        curTime = time(0);
+        rc = MPI_Barrier(MPI_COMM_WORLD);
+        if (rc != MPI_SUCCESS)
+               fatal(myrank, "prep MPI_Barrier failed: %d\n", rc);
+        curTime = MPI_Wtime();
         interval = curTime - startTime;
-        rate = (float)(nops);
-        if (interval != 0)
-                rate /= (float)interval;
+        rate = (double) (nops) / interval;
 
         rc = MPI_Reduce(&nops, &ag_ops, 1, MPI_INT, MPI_SUM, 0,
                         MPI_COMM_WORLD);
@@ -755,32 +764,29 @@ main(int argc, char *argv[])
                 fatal(myrank, "Failure in MPI_Reduce of total ops.\n");
         }
 
-        rc = MPI_Reduce(&interval, &ag_interval, 1, MPI_INT, MPI_SUM, 0,
+        rc = MPI_Reduce(&interval, &ag_interval, 1, MPI_DOUBLE, MPI_SUM, 0,
                         MPI_COMM_WORLD);
         if (rc != MPI_SUCCESS) {
                 fatal(myrank, "Failure in MPI_Reduce of total interval.\n");
         }
 
-        rc = MPI_Reduce(&rate, &ag_rate, 1, MPI_FLOAT, MPI_SUM, 0,
+        rc = MPI_Reduce(&rate, &ag_rate, 1, MPI_DOUBLE, MPI_SUM, 0,
                         MPI_COMM_WORLD);
         if (rc != MPI_SUCCESS) {
                 fatal(myrank, "Failure in MPI_Reduce of aggregated rate.\n");
         }
 
         if (myrank == 0) {
-                curTime = time(0);
+
+                curTime = MPI_Wtime();
                 interval = curTime - startTime;
-                if (interval != 0)
-                        effective_rate = (float) ag_ops/ (float)interval;
+                effective_rate = (double) ag_ops / interval;
+                avg_rate = (double) ag_ops / ag_interval;
 
-                if (ag_interval > 0)
-                        avg_rate = (float)ag_ops/(float)ag_interval;
-
-
-                printf("Rate: %.2f eff %.2f aggr %.2f client %ss/sec "
-                       "(total: %d threads %d %ss %d dirs %d threads/dir %lu secs)\n",
-                       effective_rate, ag_rate, avg_rate, cmd, nthreads, ag_ops, cmd, 
-                       ndirs, dirthreads, interval);
+                printf("Rate: %.2f eff %.2f aggr %.2f avg client %ss/sec "
+                       "(total: %d threads %d %ss %d dirs %d threads/dir %.2f secs)\n",
+                       effective_rate, ag_rate, avg_rate, cmd, nthreads, ag_ops,
+                       cmd, ndirs, dirthreads, interval);
         }
 
         if (recreate) {
@@ -798,10 +804,10 @@ main(int argc, char *argv[])
                 }
         }
 
-        curTime = time(0);
+        timestamp = time(0);
         if ((myrank == 0) || debug) {
         	printf("%d: %s finished at %s",
-		       myrank, hostname, ctime(&curTime));
+		       myrank, hostname, ctime(&timestamp));
 	}
 
         MPI_Finalize();

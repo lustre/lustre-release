@@ -26,9 +26,6 @@ TESTDIR=$BASEDIR/stat
 NUM_FILES=${NUM_FILES:-1000000}
 TIME_PERIOD=${TIME_PERIOD:-600}                        # seconds
 
-# --random_order (default) -OR- --readdir_order
-DIR_ORDER=${DIR_ORDER:-"--readdir_order"}
-
 LOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 CLIENT=$SINGLECLIENT
 NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
@@ -77,8 +74,7 @@ else
 fi
 
 COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --stat --time ${TIME_PERIOD}
-        --dir ${TESTDIR} --nfiles ${NUM_FILES} --filefmt 'f%%d'
-        ${DIR_ORDER} ${SEED_OPTION}"
+        --dir ${TESTDIR} --nfiles ${NUM_FILES} --filefmt 'f%%d'"
 
 # 1
 if [ -n "$NOSINGLE" ]; then
