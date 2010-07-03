@@ -142,7 +142,8 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
         } else {
                 verrprint("%s: Unable to read %d.%d config %s.\n",
                           progname, LUSTRE_MAJOR, LUSTRE_MINOR, filepnm);
-                goto out_close;
+                ret = 1;
+                goto out_rmdir;
         }
 
 out_close:
