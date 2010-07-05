@@ -1232,15 +1232,20 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
                 GOTO(abort_bulk, rc = 0);
 
-        timeout = (int) req->rq_deadline - cfs_time_current_sec();
-        if (timeout < 0)
-                CERROR("Req deadline already passed %lu (now: %lu)\n",
-                       req->rq_deadline, cfs_time_current_sec());
-        *lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(max(timeout, 1)),
-                                    cfs_time_seconds(1), NULL, NULL);
-        rc = l_wait_event(desc->bd_waitq, !ptlrpc_server_bulk_active(desc) ||
-                          exp->exp_failed || exp->exp_abort_active_req, lwi);
-        LASSERT (rc == 0 || rc == -ETIMEDOUT);
+        do {
+                timeout = (int) req->rq_deadline - cfs_time_current_sec();
+                if (timeout < 0)
+                        CERROR("Req deadline already passed %lu (now: %lu)\n",
+                               req->rq_deadline, cfs_time_current_sec());
+                *lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(max(timeout, 1)),
+                                            cfs_time_seconds(1), NULL, NULL);
+                rc = l_wait_event(desc->bd_waitq,
+                                  !ptlrpc_server_bulk_active(desc) ||
+                                  exp->exp_failed ||
+                                  exp->exp_abort_active_req, lwi);
+                LASSERT (rc == 0 || rc == -ETIMEDOUT);
+        } while ((rc == -ETIMEDOUT) &&
+                 (req->rq_deadline > cfs_time_current_sec()));
 
         if (rc == 0) {
                 if (desc->bd_success &&
