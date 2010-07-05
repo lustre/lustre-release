@@ -4450,6 +4450,9 @@ static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
                         LCONSOLE_INFO("Disabling ACL\n");
                 }
 
+                if (!*p)
+                        break;
+
                 options = ++p;
         }
 }
