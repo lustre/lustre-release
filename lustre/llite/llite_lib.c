@@ -1588,6 +1588,9 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         /* Use old size assignment to avoid
                          * deadlock bz14138 & bz14326 */
                         inode->i_size = body->size;
+
+                        CDEBUG(D_VFSTRACE, "inode=%lu, updating i_size %llu\n",
+                               inode->i_ino, body->size);
                 }
 
                 if (body->valid & OBD_MD_FLBLOCKS)

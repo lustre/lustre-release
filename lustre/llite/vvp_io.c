@@ -984,8 +984,11 @@ static int vvp_io_commit_write(const struct lu_env *env,
 
         ll_inode_size_lock(inode, 0);
         if (result == 0) {
-                if (size > i_size_read(inode))
+                if (size > i_size_read(inode)) {
                         cl_isize_write_nolock(inode, size);
+                        CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
+                               PFID(lu_object_fid(&obj->co_lu)), size);
+                }
                 cl_page_export(env, pg, 1);
         } else {
                 if (size > i_size_read(inode))

@@ -448,6 +448,10 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 
         if (info)
                 mdt_body_reverse_idmap(info, b);
+
+        if (b->valid & OBD_MD_FLSIZE)
+                CDEBUG(D_VFSTRACE, DFID": returning size %llu\n",
+                       PFID(fid), b->size);
 }
 
 static inline int mdt_body_has_lov(const struct lu_attr *la,

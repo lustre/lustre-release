@@ -778,6 +778,9 @@ int ll_merge_lvb(struct inode *inode)
         lvb.lvb_ctime = lli->lli_lvb.lvb_ctime;
         rc = obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
         cl_isize_write_nolock(inode, lvb.lvb_size);
+
+        CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
+               PFID(&lli->lli_fid), lvb.lvb_size);
         inode->i_blocks = lvb.lvb_blocks;
 
         LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
