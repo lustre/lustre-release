@@ -301,6 +301,36 @@ quota_init() {
 }
 quota_init
 
+test_quota_performance() {
+	TESTFILE="$DIR/$tdir/$tfile-0"
+	local size=$1
+	local stime=`date +%s`
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=1M count=$size || quota_error u $TSTUSR "write failure"
+	local etime=`date +%s`
+	delta=$((etime - stime))
+	if [ $delta -gt 0 ]; then
+	    rate=$((size * 1024 / delta))
+	    [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+	fi
+	rm -f $TESTFILE
+}
+
+# test basic quota performance b=21696
+test_0() {
+	mkdir -p $DIR/$tdir
+	chmod 0777 $DIR/$tdir
+	MB=100
+	[ "$SLOW" = "no" ] && MB=10
+
+	test_quota_performance $MB
+
+	$LFS setquota -u $TSTUSR -b 0 -B $((1024*1024)) -i 0 -I 0 $DIR
+	test_quota_performance $MB
+
+	resetquota -u $TSTUSR
+}
+run_test_with_stat 0 "Test basic quota performance ==="
+
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_1_sub() {
         LIMIT=$1
@@ -320,14 +350,7 @@ test_1_sub() {
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Write ..."
-        stime=`date +%s`
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error u $TSTUSR "(usr) write failure, but expect success"
-        etime=`date +%s`
-        delta=$((etime - stime))
-        if [ $delta -gt 0 ]; then
-                rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
-                [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (user): $rate KB/sec"
-        fi
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write,  ignore it's failure
@@ -358,14 +381,7 @@ test_1_sub() {
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Write ..."
-        stime=`date +%s`
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error g $TSTUSR "(grp) write failure, but expect success"
-        etime=`date +%s`
-        delta=$((etime - stime))
-        if [ $delta -gt 0 ]; then
-        	rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
-        	[ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (group): $rate KB/sec"
-	fi
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
