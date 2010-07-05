@@ -1600,18 +1600,10 @@ lqs_key(cfs_hlist_node_t *hnode)
 static int
 lqs_compare(void *key, cfs_hlist_node_t *hnode)
 {
-        struct lustre_qunit_size *q;
-        int rc;
-        ENTRY;
+        struct lustre_qunit_size *q =
+                cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
-        LASSERT(key);
-        q = cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-
-        cfs_spin_lock(&q->lqs_lock);
-        rc = (q->lqs_key == *((unsigned long long *)key));
-        cfs_spin_unlock(&q->lqs_lock);
-
-        RETURN(rc);
+        RETURN(q->lqs_key == *((unsigned long long *)key));
 }
 
 static void *
