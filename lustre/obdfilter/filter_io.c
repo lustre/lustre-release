@@ -553,6 +553,7 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
                                 if (resend) {
                                         /* this is a recoverable resent */
                                         lnb[n].flags |= OBD_BRW_GRANTED;
+                                        lnb[n].lnb_grant_used = 0;
                                         rc = 0;
                                         continue;
                                 } else if (fed->fed_grant < used + bytes) {
