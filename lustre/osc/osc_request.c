@@ -880,7 +880,7 @@ static int osc_shrink_grant_interpret(struct ptlrpc_request *req,
                                 lustre_swab_ost_body);
         osc_update_grant(cli, body);
 out:
-        OBD_FREE_PTR(oa);
+        OBDO_FREE(oa);
         return rc;
 }
 
@@ -1940,7 +1940,12 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                                 GOTO(out, rc = -ENOMEM);
                         }
                         memcpy(oa, oinfo->oi_oa, sizeof(*oa));
-                        oa->o_flags |= OBD_FL_TEMPORARY;
+                        if (oa->o_valid & OBD_MD_FLFLAGS) {
+                                oa->o_flags |= OBD_FL_TEMPORARY;
+                        } else {
+                                oa->o_valid |= OBD_MD_FLFLAGS;
+                                oa->o_flags = OBD_FL_TEMPORARY;
+                        }
                 } else {
                         copy = ppga;
                         oa = oinfo->oi_oa;
@@ -1954,7 +1959,8 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                         if (copy != ppga)
                                 OBD_FREE(copy, pages_per_brw * sizeof(*copy));
 
-                        if (oa->o_flags & OBD_FL_TEMPORARY)
+                        if (oa->o_valid & OBD_MD_FLFLAGS &&
+                            oa->o_flags & OBD_FL_TEMPORARY)
                                 OBDO_FREE(oa);
                         break;
                 }
@@ -2289,7 +2295,8 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                 for (i = 0; i < aa->aa_page_count; i++)
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
 
-                if (aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
+                if (aa->aa_oa->o_valid & OBD_MD_FLFLAGS &&
+                    aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
                         OBDO_FREE(aa->aa_oa);
         }
         osc_wake_cache_waiters(cli);
@@ -4162,7 +4169,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
 
                 CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
                 aa = ptlrpc_req_async_args(req);
-                OBD_ALLOC_PTR(oa);
+                OBDO_ALLOC(oa);
                 if (!oa) {
                         ptlrpc_req_finished(req);
                         RETURN(-ENOMEM);
