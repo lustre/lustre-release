@@ -727,7 +727,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         desc = ptlrpc_prep_bulk_exp(req, npages,
                                      BULK_PUT_SOURCE, OST_BULK_PORTAL);
         if (desc == NULL)
-                GOTO(out_lock, rc = -ENOMEM);
+                GOTO(out_commitrw, rc = -ENOMEM);
 
         if (!lustre_handle_is_used(&lockh))
                 /* no needs to try to prolong lock if server is asked
@@ -846,6 +846,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 no_reply = rc != 0;
         }
 
+ out_commitrw:
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_READ, exp, &body->oa, 1, ioo,
                           remote_nb, npages, local_nb, oti, rc);
@@ -1013,7 +1014,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         desc = ptlrpc_prep_bulk_exp(req, npages,
                                      BULK_GET_SINK, OST_BULK_PORTAL);
         if (desc == NULL)
-                GOTO(out_lock, rc = -ENOMEM);
+                GOTO(skip_transfer, rc = -ENOMEM);
 
         /* NB Having prepped, we must commit... */
 
@@ -1078,6 +1079,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
         no_reply = rc != 0;
 
+skip_transfer:
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
