@@ -1,4 +1,3 @@
-@BUILD_GMLND_TRUE@subdir-m += gmlnd
 @BUILD_MXLND_TRUE@subdir-m += mxlnd
 @BUILD_RALND_TRUE@subdir-m += ralnd
 @BUILD_O2IBLND_TRUE@subdir-m += o2iblnd

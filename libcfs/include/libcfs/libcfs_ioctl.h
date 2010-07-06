@@ -149,9 +149,8 @@ struct libcfs_ioctl_handler {
 #define IOC_LIBCFS_ADD_INTERFACE           _IOWR('e', 78, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_DEL_INTERFACE           _IOWR('e', 79, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_GET_INTERFACE           _IOWR('e', 80, IOCTL_LIBCFS_TYPE)
-#define IOC_LIBCFS_GET_GMID                _IOWR('e', 81, IOCTL_LIBCFS_TYPE)
 
-#define IOC_LIBCFS_MAX_NR                             81
+#define IOC_LIBCFS_MAX_NR                             80
 
 static inline int libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 {

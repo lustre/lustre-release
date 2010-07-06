@@ -85,7 +85,7 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"===== network config =====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0,"run <command> after setting network to <net>\n"
-         "usage: --net <tcp/elan/gm/...> <command>"},
+         "usage: --net <tcp/elan/o2ib/...> <command>"},
         {"network", jt_ptl_network, 0, "configure LNET"
          "usage: network up|down"},
         {"net", jt_ptl_network, 0, "configure LNET"

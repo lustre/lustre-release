@@ -9,7 +9,6 @@ set -e
 export REFORMAT=${REFORMAT:-""}
 export WRITECONF=${WRITECONF:-""}
 export VERBOSE=false
-export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 export GSS=false
 export GSS_KRB5=false
@@ -1396,13 +1395,6 @@ fail_abort() {
 do_lmc() {
     echo There is no lmc.  This is mountconf, baby.
     exit 1
-}
-
-h2gm () {
-    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        ID=`$PDSH $1 $GMNALNID -l | cut -d\  -f2`
-        echo $ID"@gm"
-    fi
 }
 
 h2name_or_ip() {
