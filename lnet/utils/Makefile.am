@@ -67,18 +67,9 @@ libptlctl_a_SOURCES = portals.c debug.c
 
 if UTILS
 sbin_PROGRAMS += ptlctl routerstat wirecheck lst
-
-if BUILD_GMLND
-sbin_PROGRAMS += gmlndnid
-endif
 endif
 
 wirecheck_SOURCES = wirecheck.c
-
-gmlndnid_SOURCES = gmlndnid.c
-gmlndnid_CFLAGS = $(GMCPPFLAGS)
-gmlndnid_LDFLAGS = -static
-gmlndnid_LDADD = $(GMLIBS) -lgm
 
 ptlctl_SOURCES = ptlctl.c
 ptlctl_LDADD =  -L. -lptlctl $(LIBCFSUTIL) $(LIBREADLINE) $(LIBEFENCE)

@@ -427,7 +427,7 @@ enum {
          * network addresses depend on them... */
         QSWLND    = 1,
         SOCKLND   = 2,
-        GMLND     = 3,
+        GMLND     = 3, /* obsolete, keep it so that libcfs_nid2str works */
         PTLLND    = 4,
         O2IBLND   = 5,
         CIBLND    = 6,

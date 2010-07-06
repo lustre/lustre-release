@@ -42,7 +42,6 @@
 #ifndef HAVE_SYSCTL_UNNUMBERED
 
 #define CTL_KRANAL      201
-#define CTL_GMLND       202
 #define CTL_KIBNAL      203
 #define CTL_IIBBLND     204
 #define CTL_O2IBLND     205
@@ -55,7 +54,6 @@
 #else
 
 #define CTL_KRANAL      CTL_UNNUMBERED
-#define CTL_GMLND       CTL_UNNUMBERED
 #define CTL_KIBNAL      CTL_UNNUMBERED
 #define CTL_IIBLND      CTL_UNNUMBERED
 #define CTL_O2IBLND     CTL_UNNUMBERED

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-lnds=$(echo k{sock,qsw,gm,{open,i,v,o2,c}ib,ra,ptl,mx}lnd)
+lnds=$(echo k{sock,qsw,{open,i,v,o2,c}ib,ra,ptl,mx}lnd)
 
 do_rmmod() {
     mod=$1

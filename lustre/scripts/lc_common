@@ -310,10 +310,6 @@ nid2hostname() {
             # FIXME: Parse the /etc/elanhosts configuration file to
             # convert ElanID to hostname
             ;;
-    gm*)    # Myrinet
-            # FIXME: Use /usr/sbin/gmlndnid to find the hostname of
-            # the specified GM Global node ID 
-            ;;
     ptl*)   # Portals
             # FIXME: Convert portal ID to hostname
             ;;
@@ -360,7 +356,7 @@ nids2hostname() {
         [ "${nid}" != "${nid#*@*}" ] && nettype=${nid#*@} || nettype=tcp
 
         case "${nettype}" in
-        lo* | elan* | gm* | ptl*) ;;
+        lo* | elan* | ptl*) ;;
         *)  # tcp, o2ib, cib, openib, iib, vib, ra
             host_name=$(nid2hostname ${nid})
             if [ ${PIPESTATUS[0]} -ne 0 ]; then
@@ -394,7 +390,7 @@ ip2hostname_single_node() {
         [ "${nid}" != "${nid#*@*}" ] && nettype=${nid#*@} || nettype=tcp
 
         case "${nettype}" in
-        lo* | elan* | gm* | ptl*) ;;
+        lo* | elan* | ptl*) ;;
         *)  # tcp, o2ib, cib, openib, iib, vib, ra
             host_name=$(nid2hostname ${nid})
             if [ ${PIPESTATUS[0]} -ne 0 ]; then

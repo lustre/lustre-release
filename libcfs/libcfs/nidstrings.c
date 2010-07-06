@@ -576,7 +576,7 @@ libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
  *                       <number> '-' <number> '/' <number>
  * <net>             :== <netname> | <netname><number>
  * <netname>         :== "lo" | "tcp" | "o2ib" | "cib" | "openib" | "iib" |
- *                       "vib" | "ra" | "elan" | "gm" | "mx" | "ptl"
+ *                       "vib" | "ra" | "elan" | "mx" | "ptl"
  * \endverbatim
  */
 

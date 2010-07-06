@@ -1,6 +1,0 @@
-MODULES := kgmlnd
-kgmlnd-objs := gmlnd_api.o gmlnd_cb.o gmlnd_comm.o gmlnd_utils.o gmlnd_module.o
-
-EXTRA_PRE_CFLAGS := @GMCPPFLAGS@ -DGM_KERNEL
-
-@INCLUDE_RULES@
