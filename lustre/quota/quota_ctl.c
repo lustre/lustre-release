@@ -321,23 +321,19 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         req->rq_no_resend = 1;
 
         rc = ptlrpc_queue_wait(req);
-        if (rc) {
+        if (rc)
                 CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
-                GOTO(out, rc);
-        }
 
-        oqc = NULL;
-        if (req->rq_repmsg)
-                oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-
-        if (oqc == NULL) {
+        if (req->rq_repmsg &&
+            (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
+                *oqctl = *oqc;
+        } else if (!rc) {
                 CERROR ("Can't unpack obd_quotactl\n");
-                GOTO(out, rc = -EPROTO);
+                rc = -EPROTO;
         }
 
-        *oqctl = *oqc;
         EXIT;
-out:
+
         ptlrpc_req_finished(req);
 
         return rc;
