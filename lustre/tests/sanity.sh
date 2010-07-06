@@ -1459,7 +1459,7 @@ test_31f() { # bug 4554
 	$SETSTRIPE $DIR/d31f -s 1048576 -c 1
 	cp /etc/hosts $DIR/d31f
 	ls -l $DIR/d31f
-	$DIR/d31f/hosts
+	$GETSTRIPE $DIR/d31f/hosts
 	multiop_bg_pause $DIR/d31f D_c || return 1
 	MULTIPID2=$!
 
