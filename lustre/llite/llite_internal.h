@@ -307,7 +307,7 @@ enum stats_track_type {
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
 /* default value for lockless_truncate_enable */
-#define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 1
+#define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 0 /* see bug 23175 */
 /* default value for ll_direct_io_default */
 #define SBI_DEFAULT_DIRECT_IO_DEFAULT 0
 
