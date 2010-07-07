@@ -40,10 +40,12 @@ fi
 
 init_logging
 
+#
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
+#
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="30a 31 45"
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a 45"
 
 assert_DIR
 
@@ -51,16 +53,23 @@ reformat() {
         formatall
 }
 
-writeconf() {
-	local facet=$SINGLEMDS
-	local dev=${facet}_dev
-	shift
+writeconf1() {
+	local facet=$1
+	local dev=$2
+
 	stop ${facet} -f
 	rm -f ${facet}active
 	# who knows if/where $TUNEFS is installed?  Better reformat if it fails...
-	do_facet ${facet} "$TUNEFS --writeconf ${!dev}" ||
-		echo "tunefs failed, reformatting instead" && reformat_and_config
+	do_facet ${facet} "$TUNEFS --writeconf $dev" ||
+		{ echo "tunefs failed, reformatting instead" && reformat_and_config && return 1; }
+	return 0
+}
 
+writeconf() {
+	# if writeconf failed, we reformatted
+	writeconf1 mds $MDSDEV || return 0
+	writeconf1 ost1 `ostdevname 1` || return 0
+	writeconf1 ost2 `ostdevname 2` || return 0
 }
 
 gen_config() {
@@ -419,7 +428,6 @@ test_9() {
         fi
         stop_ost || return $?
 }
-
 run_test 9 "test ptldebug and subsystem for mkfs"
 
 # LOGS/PENDING do not exist anymore since CMD3
@@ -1314,6 +1322,8 @@ test_35a() { # bug 12459
 		       }" $TMP/lustre-log-$TESTNAME.log`
 	[ "$NEXTCONN" != "0" ] && log "The client didn't try to reconnect to the last active server (tried ${NEXTCONN} instead)" && return 7
 	cleanup
+	# remove nid settings
+	writeconf
 }
 run_test 35a "Reconnect to the last active server first"
 
@@ -1381,6 +1391,8 @@ test_35b() { # bug 18674
 		return 5
 
         cleanup
+	# remove nid settings
+	writeconf
 }
 run_test 35b "Continue reconnection retries, if the active server is busy"
 
@@ -1747,10 +1759,9 @@ cleanup_46a() {
 		let count=count-1
 	done	
 	stop_mds || rc=$? 
-	# writeconf is needed after the test, otherwise,
-	# we might end up with extra OSTs
-	writeconf || rc=$?
 	cleanup_nocli || rc=$?
+	#writeconf to remove all ost2 traces for subsequent tests
+	writeconf
 	return $rc
 }
 
@@ -2091,6 +2102,7 @@ test_50f() {
 	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
+	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
 }
 run_test 50f "normal statfs one server in down =========================="
@@ -2116,6 +2128,7 @@ test_50g() {
 	stop_ost2 || error "Unable to stop OST2"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
+	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
 }
 run_test 50g "deactivated OST should not cause panic====================="
