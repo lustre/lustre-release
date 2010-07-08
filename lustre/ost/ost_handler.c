@@ -934,10 +934,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
-        if ((body->oa.o_flags & OBD_BRW_MEMALLOC) &&
-            (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
-                libcfs_memory_pressure_set();
-
         objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
                    sizeof(*ioo);
         ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
@@ -949,6 +945,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         remote_nb = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
                                    niocount * sizeof(*remote_nb));
         LASSERT(remote_nb != NULL);
+
+        if ((remote_nb[0].flags & OBD_BRW_MEMALLOC) &&
+            (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
+                libcfs_memory_pressure_set();
 
         size[REPLY_REC_OFF + 1] = niocount * sizeof(*rcs);
         rc = lustre_pack_reply(req, 3, size, NULL);
