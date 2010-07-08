@@ -1114,44 +1114,40 @@ static void lov_lock_delete(const struct lu_env *env,
 {
         struct lov_lock        *lck     = cl2lov_lock(slice);
         struct cl_lock_closure *closure = lov_closure_get(env, slice->cls_lock);
-        int i;
+        struct lov_lock_link   *link;
+        int                     rc;
+        int                     i;
 
         LASSERT(slice->cls_lock->cll_state == CLS_FREEING);
         ENTRY;
 
         for (i = 0; i < lck->lls_nr; ++i) {
-                struct lov_lock_sub *lls;
-                struct lovsub_lock  *lsl;
-                struct cl_lock      *sublock;
-                int rc;
+                struct lov_lock_sub *lls = &lck->lls_sub[i];
+                struct lovsub_lock  *lsl = lls->sub_lock;
 
-                lls = &lck->lls_sub[i];
-                lsl = lls->sub_lock;
-                if (lsl == NULL)
+                if (lsl == NULL) /* already removed */
                         continue;
 
-                sublock = lsl->lss_cl.cls_lock;
                 rc = lov_sublock_lock(env, lck, lls, closure, NULL);
-                if (rc == 0) {
-                        if (lls->sub_flags & LSF_HELD)
-                                lov_sublock_release(env, lck, i, 1, 0);
-                        if (sublock->cll_state < CLS_FREEING) {
-                                struct lov_lock_link *link;
-
-                                link = lov_lock_link_find(env, lck, lsl);
-                                LASSERT(link != NULL);
-                                lov_lock_unlink(env, link, lsl);
-                                LASSERT(lck->lls_sub[i].sub_lock == NULL);
-                        }
-                        lov_sublock_unlock(env, lsl, closure, NULL);
-                } else if (rc == CLO_REPEAT) {
-                        --i; /* repeat with this lock */
-                } else {
-                        CL_LOCK_DEBUG(D_ERROR, env, sublock,
-                                      "Cannot get sub-lock for delete: %i\n",
-                                      rc);
+                if (rc == CLO_REPEAT) {
+                        --i;
+                        continue;
                 }
+
+                LASSERT(rc == 0);
+                LASSERT(lsl->lss_cl.cls_lock->cll_state < CLS_FREEING);
+
+                if (lls->sub_flags & LSF_HELD)
+                        lov_sublock_release(env, lck, i, 1, 0);
+
+                link = lov_lock_link_find(env, lck, lsl);
+                LASSERT(link != NULL);
+                lov_lock_unlink(env, link, lsl);
+                LASSERT(lck->lls_sub[i].sub_lock == NULL);
+
+                lov_sublock_unlock(env, lsl, closure, NULL);
         }
+
         cl_lock_closure_fini(closure);
         EXIT;
 }
