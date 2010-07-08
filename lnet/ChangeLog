@@ -12,6 +12,13 @@ tbd        Oracle, Inc.
 	  mxlnd     - MX 1.2.10 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 23076
+Description: With peer health detection, o2iblnd makes only one attempt to
+	     reconnect which is not enough with nodes running lustre 1.6
+	     because of proto version mismatch. Fix o2iblnd to retry one more
+	     time.
+
 Severity   : enhancement
 Bugzilla   : 16909
 Description: Quiet some LNET messages

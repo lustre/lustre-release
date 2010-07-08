@@ -17,6 +17,16 @@ Bugzilla   : 22514
 Description: Update RHEL5.5 kernel to 2.6.18-194.3.1.el5 and OEL5.5 kernel to
 	     2.6.18-194.3.1.0.1.el5.
 
+Severity   : enhancement
+Bugzilla   : 22514
+Description: using inkernel OFED stack for rhel5 & oel5.
+
+Severity   : enhancement
+Bugzilla   : 22481
+Description: Add "lfs_migrate" script from manual into lustre/scripts and RPMs
+Details    : lfs_migrate does a "poor man's" migration of files from their
+	     current OST layout to a new OST layout as chosen by the MDS.
+
 Severity   : normal
 Bugzilla   : 22679
 Description: mds_orphan_add_link()) error linking orphan to PENDING
@@ -80,6 +90,10 @@ Bugzilla   : 22755
 Description: Don't leak grant space if the write failed with quota exceeded.
 
 Severity   : normal
+Bugzilla   : 22755
+Description: Don't consume grant space twice on recoverable resent.
+
+Severity   : normal
 Bugzilla   : 22610
 Description: a race condition could lead to SIGBUS being sent to an
 	     application using mmap-ped files from Lustre
@@ -101,6 +115,12 @@ Description: Lustre does not do 1MB IOs to HW RAID
 Details    : Bump MAX_PHYS/HW_SEGMENTS and SG_ALL to 256 in the RHEL5 kernel.
 	     This is what we do already for SLES kernels.
 
+Severity   : normal
+Bugzilla   : 22223
+Description: bump maximum number of phys/hw segments in the SLES11 kernel
+	     until s/g chaining works properly.
+
+Severity   : normal
 Severity   : normal
 Bugzilla   : 17086
 Description: LSI Fusion MPT driver hacks to improve performance
@@ -192,6 +212,93 @@ Bugzilla   : 21877
 Description: Protect bitfield access to ptlrpc_request's rq_flags, since
 	     the AT code can access it concurrently while sending early
 	     replies.
+
+Severity   : normal
+Bugzilla   : 23175
+Description: Disable lockless truncate by default since it is sometimes flawed
+	     and causes the write_disjoint test to fail.
+
+Severity   : normal
+Bugzilla   : 23139
+Description: OSSs which don't have the patch from bug 20278 can trigger an
+	     LBUG on 1.8 clients.
+
+Severity   : enhancement
+Bugzilla   : 21528
+Description: don't print message to the console when we have not managed to
+	     cancel all locks.
+
+Severity   : normal
+Bugzilla   : 23131
+Description: The MDS fails to synchronize OSTs which registered with the MGS
+	     after the MDT. The problem is that OBD_NOTIFY_CREATE events are
+	     raised too early and thus discarded by the MDT stack.
+	     The fix consists of issuing OBD_NOTIFY_CREATE event in the lov
+	     layer.
+
+Severity   : normal
+Bugzilla   : 23192
+Description: Fix race when the ping evictor and a service thread execute
+	     target_recovery_check_and_stop() concurrently.
+
+Severity   : normal
+Bugzilla   : 23196
+Description: quota broadcast can trigger a LBUG on the MDT if there are
+	     inactive OSCs.
+
+Severity   : normal
+Bugzilla   : 17485
+Description: Resetting the lov_objid values to last_id reported by the OST
+	     during orphan recovery is incorrect and can cause the same
+	     objects to be allocated twice.
+
+Severity   : enhancement
+Bugzilla   : 21452
+Description: "weak-modules" support
+Details    : Implement "weak-modules" support which enables kernel modules
+	     to be used with any kernel that implements the same kABI.  In
+	     order to achieve this modules are now installed in
+	     /lib/modules/$(uname -r)/updates/kernel on all distributions.
+
+Severity   : enhancement
+Bugzilla   : 22464
+Description: add writeconf as mount option
+
+Severity   : enhancement
+Bugzilla   : 22846
+Description: produce debuginfo packages for SLES.
+
+Severity   : enhancement
+Bugzilla   : 15253
+Description: add failover nidlist to the import proc file.
+
+Severity   : enhancement
+Bugzilla   : 20563
+Description: fix LUSTRE_SEQ_MAX_WIDTH for interoperability between 1.8
+	     clients and 2.0 servers.
+
+Severity   : enhancement
+Bugzilla   : 22938
+Description: lfs find -s does not work correctly because of a bug in
+	     find_value_cmp().
+
+Severity   : normal
+Bugzilla   : 22309
+Description: ll_read_ahead_page() must validate the dlm lock before using
+	     it.
+
+Severity   : normal
+Bugzilla   : 22656
+Description: Prevent failover nids from registering with MGS first.
+
+Severity   : normal
+Bugzilla   : 11063
+Description: fix lock inversion in ll_setattr_raw().
+
+Severity   : normal
+Bugzilla   : 22884
+Description: object allocation is not balanced across OSTs.
+Details    : osc_precreate() should return 0, if there are enough objects left.
 
 -------------------------------------------------------------------------------
 
@@ -417,14 +524,6 @@ Details    : calculate SLV with a greater precision to not lose small
 Severity   : normal
 Bugzilla   : 21966
 Description: avoid divide-by-zero in lprocfs_rd_import()
-
-Severity   : enhancement
-Bugzilla   : 21452
-Description: "weak-modules" support
-Details    : Implement "weak-modules" support which enables kernel modules
-	     to be used with any kernel that implements the same kABI.  In
-	     order to achieve this modules are now installed in
-	     /lib/modules/$(uname -r)/updates/kernel on all distributions.
 
 Severity   : normal
 Bugzilla   : 21816

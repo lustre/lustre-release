@@ -5,6 +5,10 @@ Severity   : normal
 Bugzilla   : 18456
 Description: Reduce group prealloc size and skip groups with little free space.
 
+Severity   : normal
+Bugzilla   : 22237
+Description: Fix issue with proc_remove.
+
 -------------------------------------------------------------------------------
 
 2010-04-30 Oracle, Inc.
