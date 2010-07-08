@@ -1,0 +1,153 @@
+Index: linux-stage/fs/ext3/xattr.c
+===================================================================
+--- linux-stage.orig/fs/ext3/xattr.c
++++ linux-stage/fs/ext3/xattr.c
+@@ -93,7 +93,8 @@
+ # define ea_bdebug(f...)
+ #endif
+ 
+-static void ext3_xattr_cache_insert(struct buffer_head *);
++static void ext3_xattr_cache_insert(struct super_block *,
++				    struct buffer_head *);
+ static struct buffer_head *ext3_xattr_cache_find(struct inode *,
+ 						 struct ext3_xattr_header *,
+ 						 struct mb_cache_entry **);
+@@ -238,7 +239,7 @@ bad_block:	ext3_error(inode->i_sb, __FUN
+ 		error = -EIO;
+ 		goto cleanup;
+ 	}
+-	ext3_xattr_cache_insert(bh);
++	ext3_xattr_cache_insert(inode->i_sb, bh);
+ 	entry = BFIRST(bh);
+ 	error = ext3_xattr_find_entry(&entry, name_index, name, bh->b_size, 1);
+ 	if (error == -EIO)
+@@ -380,7 +381,7 @@ ext3_xattr_block_list(struct inode *inod
+ 		error = -EIO;
+ 		goto cleanup;
+ 	}
+-	ext3_xattr_cache_insert(bh);
++	ext3_xattr_cache_insert(inode->i_sb, bh);
+ 	error = ext3_xattr_list_entries(inode, BFIRST(bh), buffer, buffer_size);
+ 
+ cleanup:
+@@ -479,7 +480,9 @@ ext3_xattr_release_block(handle_t *handl
+ {
+ 	struct mb_cache_entry *ce = NULL;
+ 
+-	ce = mb_cache_entry_get(ext3_xattr_cache, bh->b_bdev, bh->b_blocknr);
++	if (!test_opt(inode->i_sb, NO_MBCACHE))
++		ce = mb_cache_entry_get(ext3_xattr_cache, bh->b_bdev,
++					bh->b_blocknr);
+ 	if (BHDR(bh)->h_refcount == cpu_to_le32(1)) {
+ 		ea_bdebug(bh, "refcount now=0; freeing");
+ 		if (ce)
+@@ -699,8 +702,10 @@ ext3_xattr_block_set(handle_t *handle, s
+ 	if (i->value && i->value_len > sb->s_blocksize)
+ 		return -ENOSPC;
+ 	if (s->base) {
+-		ce = mb_cache_entry_get(ext3_xattr_cache, bs->bh->b_bdev,
+-					bs->bh->b_blocknr);
++		if (!test_opt(inode->i_sb, NO_MBCACHE))
++			ce = mb_cache_entry_get(ext3_xattr_cache,
++						bs->bh->b_bdev,
++						bs->bh->b_blocknr);
+ 		if (header(s->base)->h_refcount == cpu_to_le32(1)) {
+ 			if (ce) {
+ 				mb_cache_entry_free(ce);
+@@ -716,7 +721,7 @@ ext3_xattr_block_set(handle_t *handle, s
+ 				if (!IS_LAST_ENTRY(s->first))
+ 					ext3_xattr_rehash(header(s->base),
+ 							  s->here);
+-				ext3_xattr_cache_insert(bs->bh);
++				ext3_xattr_cache_insert(sb, bs->bh);
+ 			}
+ 			unlock_buffer(bs->bh);
+ 			if (error == -EIO)
+@@ -797,7 +802,8 @@ inserted:
+ 				if (error)
+ 					goto cleanup_dquot;
+ 			}
+-			mb_cache_entry_release(ce);
++			if (ce)
++				mb_cache_entry_release(ce);
+ 			ce = NULL;
+ 		} else if (bs->bh && s->base == bs->bh->b_data) {
+ 			/* We were modifying this block in-place. */
+@@ -832,7 +838,7 @@ getblk_failed:
+ 			memcpy(new_bh->b_data, s->base, new_bh->b_size);
+ 			set_buffer_uptodate(new_bh);
+ 			unlock_buffer(new_bh);
+-			ext3_xattr_cache_insert(new_bh);
++			ext3_xattr_cache_insert(sb, new_bh);
+ 			error = ext3_journal_dirty_metadata(handle, new_bh);
+ 			if (error)
+ 				goto cleanup;
+@@ -1387,12 +1393,15 @@ ext3_xattr_put_super(struct super_block 
+  * Returns 0, or a negative error number on failure.
+  */
+ static void
+-ext3_xattr_cache_insert(struct buffer_head *bh)
++ext3_xattr_cache_insert(struct super_block *sb, struct buffer_head *bh)
+ {
+ 	__u32 hash = le32_to_cpu(BHDR(bh)->h_hash);
+ 	struct mb_cache_entry *ce;
+ 	int error;
+ 
++	if (test_opt(sb, NO_MBCACHE))
++		return;
++
+ 	ce = mb_cache_entry_alloc(ext3_xattr_cache);
+ 	if (!ce) {
+ 		ea_bdebug(bh, "out of memory");
+@@ -1466,6 +1475,8 @@ ext3_xattr_cache_find(struct inode *inod
+ 	__u32 hash = le32_to_cpu(header->h_hash);
+ 	struct mb_cache_entry *ce;
+ 
++	if (test_opt(inode->i_sb, NO_MBCACHE))
++		return NULL;
+ 	if (!header->h_hash)
+ 		return NULL;  /* never share */
+ 	ea_idebug(inode, "looking for cached blocks [%x]", (int)hash);
+Index: linux-stage/fs/ext3/super.c
+===================================================================
+--- linux-stage.orig/fs/ext3/super.c
++++ linux-stage/fs/ext3/super.c
+@@ -722,6 +722,7 @@ enum {
+ 	Opt_grpquota,
+ 	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
+ 	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_maxdirsize, Opt_force_over_8tb,
++	Opt_no_mbcache,
+ };
+ 
+ static match_table_t tokens = {
+@@ -788,6 +789,7 @@ static match_table_t tokens = {
+ 	{Opt_force_over_8tb, "force_over_8tb"},
+ 	{Opt_resize, "resize"},
+ 	{Opt_maxdirsize, "maxdirsize=%u"},
++	{Opt_no_mbcache, "no_mbcache"},
+ 	{Opt_err, NULL}
+ };
+ 
+@@ -1175,6 +1177,9 @@ clear_qf_name:
+ 		case Opt_force_over_8tb:
+ 			force_over_8tb = 1;
+ 			break;
++		case Opt_no_mbcache:
++			set_opt(sbi->s_mount_opt, NO_MBCACHE);
++			break;
+ 		default:
+ 			printk (KERN_ERR
+ 				"EXT3-fs: Unrecognized mount option \"%s\" "
+Index: linux-stage/include/linux/ext3_fs.h
+===================================================================
+--- linux-stage.orig/include/linux/ext3_fs.h
++++ linux-stage/include/linux/ext3_fs.h
+@@ -483,6 +483,8 @@ do {									       \
+ #define EXT3_MOUNT_JOURNAL_ASYNC_COMMIT 0x20000000 /* Journal Async Commit */
+ #endif
+ 
++#define EXT3_MOUNT_NO_MBCACHE           0x40000000 /* Disable mbcache */
++
+ /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
+ #ifndef clear_opt
+ #define clear_opt(o, opt)		o &= ~EXT3_MOUNT_##opt
