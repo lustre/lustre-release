@@ -35,3 +35,4 @@ ext4-hash-indexed-dir-dotdot-update.patch
 ext4-disable-write-bar-by-default.patch
 ext4-mballoc-skip-grps.patch
 ext4-disable-mb-cache-sles11.patch
+ext4-remove-extents-warning-sles11.patch
