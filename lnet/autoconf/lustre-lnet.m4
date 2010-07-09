@@ -1103,6 +1103,7 @@ AC_DEFUN([LN_USER__U64_LONG_LONG],
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
+	#include <stdio.h>
 	#include <linux/types.h>
 	#include <linux/stddef.h>
 	int main(void) {
@@ -1128,6 +1129,7 @@ AC_DEFUN([LN_SIZE_T_LONG],
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
+	#include <stdio.h>
 	#include <linux/types.h>
 	#include <linux/stddef.h>
 	int main(void) {
@@ -1152,6 +1154,7 @@ AC_DEFUN([LN_SSIZE_T_LONG],
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
+	#include <stdio.h>
 	#include <linux/types.h>
 	#include <linux/stddef.h>
 	int main(void) {
