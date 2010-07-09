@@ -229,7 +229,7 @@ Description: don't print message to the console when we have not managed to
 	     cancel all locks.
 
 Severity   : normal
-Bugzilla   : 23131
+Bugzilla   : 23305
 Description: The MDS fails to synchronize OSTs which registered with the MGS
 	     after the MDT. The problem is that OBD_NOTIFY_CREATE events are
 	     raised too early and thus discarded by the MDT stack.
