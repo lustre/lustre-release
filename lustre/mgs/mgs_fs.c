@@ -58,14 +58,15 @@
 #include <libcfs/list.h>
 #include "mgs_internal.h"
 
-static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
-                                 void *localdata)
+int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
+                          int reconnect, void *localdata)
+
 {
         lnet_nid_t *client_nid = localdata;
         int rc, newnid;
         ENTRY;
 
-        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -93,7 +94,7 @@ clean:
 int mgs_client_add(struct obd_device *obd, struct obd_export *exp,
                    void *localdata)
 {
-        return mgs_export_stats_init(obd, exp, localdata);
+        return 0;
 }
 
 /* Remove client export data from the MGS */

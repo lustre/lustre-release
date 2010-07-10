@@ -5030,7 +5030,7 @@ static int mdt_obd_connect(const struct lu_env *env,
                 memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
                 rc = mdt_client_new(env, mdt);
                 if (rc == 0)
-                        mdt_export_stats_init(obd, lexp, localdata);
+                        mdt_export_stats_init(obd, lexp, 0, localdata);
         }
 
 out:
@@ -5069,7 +5069,7 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 
         rc = mdt_connect_internal(exp, mdt_dev(obd->obd_lu_dev), data);
         if (rc == 0)
-                mdt_export_stats_init(obd, exp, localdata);
+                mdt_export_stats_init(obd, exp, 1, localdata);
 
         RETURN(rc);
 }

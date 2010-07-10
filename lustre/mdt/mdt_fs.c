@@ -46,13 +46,14 @@
 
 int mdt_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
+                          int               reconnect,
                           void              *localdata)
 {
         lnet_nid_t *client_nid = localdata;
         int        rc, newnid;
         ENTRY;
 
-        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
