@@ -12,17 +12,17 @@
 \blist_add\b
 \bspin_unlock_irqrestore\b
 \batomic_t\b
-\bup\b
+\bup *\(\b
 \bspin_lock_irqsave\b
 \bspin_lock_init\b
 \blist_for_each_entry\b
 \bwrite_unlock_irqrestore\b
 \batomic_set\b
-\bdown\b
+\bdown *\(\b
 \bhlist_node\b
 \bHZ\b
 \batomic_dec\b
-\bcompletion\b
+\bcompletion *\(\b
 \blist_for_each_safe\b
 \bin_interrupt\b
 \blist_for_each_entry_safe\b
@@ -81,7 +81,8 @@
 \bunlock_kernel\b
 \bschedule_timeout\b
 \brw_semaphore\b
-\bmodule\b
+\bmodule_init\b
+\bmodule_exit\b
 \bhlist_del_init\b
 \batomic_inc_return\b
 \btime_after\b

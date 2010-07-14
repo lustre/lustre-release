@@ -58,15 +58,10 @@ def search_symbol(line, linenum):
 
 		if regex_match:
 			print_symbol = regex_match.group(0)
-			print 'WARNING: Found %s at line %d:' \
+			print 'warning: Found %s at line %d:' \
 				% (print_symbol, linenum)
 			print '%s' % line.rstrip()
 			bad_symbol_cnt += 1
-
-# The main portion of the script
-print '================='
-print 'Starting nn-check'
-print '================='
 
 # Open the nn-final-symbol-list.txt file and pull in the symbols to check into
 # a dictionary object.
@@ -95,7 +90,12 @@ except IOError:
 	print 'Check the path provided for the diff file.'
 	sys.exit(1)
 
-index = re.compile(r'^\+\+\+ b/(.*)')
+# The main portion of the script
+print '==================================================='
+print '%s: starting nn-check' % sys.argv[1]
+print '==================================================='
+
+index = re.compile(r'^\+\+\+ [b/]*([^ \t]*)')
 plus = re.compile(r'^\+')
 for line in f:
 	# Check for the "diff --cc " delimiter in order to grab the file name.
@@ -104,7 +104,7 @@ for line in f:
 	if index_match:
 		# Store the file name
 		filename=index_match.group(1)
-		print '--> Checking File: %s' % filename
+		print '%s: ' % filename
 	else:
 		# Check if the line starts with a "+" character.
 		plus_match = plus.match(line)
