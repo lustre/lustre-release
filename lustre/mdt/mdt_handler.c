@@ -5531,8 +5531,8 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 {
         struct lu_device *ld = md2lu_dev(mdt->mdt_child);
-        struct obd_device *obd = mdt2obd_dev(mdt);
 #ifdef HAVE_QUOTA_SUPPORT
+        struct obd_device *obd = mdt2obd_dev(mdt);
         struct md_device *next = mdt->mdt_child;
 #endif
         int rc;

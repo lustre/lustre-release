@@ -446,7 +446,7 @@ struct lustre_quota_ctxt {
 
 #else
 
-#define LL_DQUOT_OFF(sb, remount) do {} while(0)
+#define LL_DQUOT_OFF(sb) do {} while(0)
 
 struct lustre_quota_info {
 };
