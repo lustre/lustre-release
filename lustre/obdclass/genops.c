@@ -772,7 +772,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
                                     struct obd_uuid *cluuid)
 {
         struct obd_export *export;
-        cfs_hash_t *hash;
+        cfs_hash_t *hash = NULL;
         int rc = 0;
         ENTRY;
 
@@ -828,11 +828,11 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 }
         }
 
-        cfs_hash_putref(hash);
-
         cfs_spin_lock(&obd->obd_dev_lock);
-        if (obd->obd_stopping)
+        if (obd->obd_stopping) {
+                cfs_hash_del(hash, cluuid, &export->exp_uuid_hash);
                 GOTO(exit_unlock, rc = -ENODEV);
+        }
 
         class_incref(obd, "export", export);
         cfs_list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
@@ -840,11 +840,14 @@ struct obd_export *class_new_export(struct obd_device *obd,
                           &export->exp_obd->obd_exports_timed);
         export->exp_obd->obd_num_exports++;
         cfs_spin_unlock(&obd->obd_dev_lock);
+        cfs_hash_putref(hash);
         RETURN(export);
 
 exit_unlock:
         cfs_spin_unlock(&obd->obd_dev_lock);
 exit_err:
+        if (hash)
+                cfs_hash_putref(hash);
         class_handle_unhash(&export->exp_handle);
         LASSERT(cfs_hlist_unhashed(&export->exp_uuid_hash));
         obd_destroy_export(export);
