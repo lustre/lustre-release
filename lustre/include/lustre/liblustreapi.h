@@ -204,6 +204,7 @@ extern int llapi_ls(int argc, char *argv[]);
 extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
                           int pathlen, long long *recno, int *linkno);
 extern int llapi_path2fid(const char *path, lustre_fid *fid);
+extern int llapi_get_version(char *buffer, int buffer_size, char **version);
 
 /* Changelog interface.  priv is private state, managed internally
    by these functions */
