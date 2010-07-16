@@ -185,8 +185,10 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         if (page == NULL)
                 return -ENOMEM;
 
-        if (LPROCFS_ENTRY_AND_CHECK(dp))
-                return -ENOENT;
+        if (LPROCFS_ENTRY_AND_CHECK(dp)) {
+                rc = -ENOENT;
+                goto out;
+        }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
         if (dp->read_proc)
