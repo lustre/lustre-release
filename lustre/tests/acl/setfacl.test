@@ -111,16 +111,16 @@ Setfacl utility tests. Run these tests on a filesystem with ACL support.
 	> 
 	
 	$ setfacl --test -x u: g
-	> setfacl: g: Malformed access ACL `user:root:---,user:daemon:rw-,group::r-x,mask::rwx,other::---': Missing or wrong entry at entry 1
+	> g: Malformed access ACL `user:root:---,user:daemon:rw-,group::r-x,mask::rwx,other::---': Missing or wrong entry at entry 1
 	
 	$ setfacl --test -x u:x
 	> setfacl: Option -x: Invalid argument near character 3
 	
 	$ setfacl -m d:u:root:rwx g
-	> setfacl: g: Only directories can have default ACLs
+	> g: Only directories can have default ACLs
 	
 	$ setfacl -x m g
-	> setfacl: g: Malformed access ACL `user::rwx,user:root:---,user:daemon:rw-,group::r-x,other::---': Missing or wrong entry at entry 5
+	> g: Malformed access ACL `user::rwx,user:root:---,user:daemon:rw-,group::r-x,other::---': Missing or wrong entry at entry 5
 	 setfacl --test -m d:u:daemon:rwx setfacl
 	 setfacl --test -n -m d:u:daemon:rwx setfacl
 	
