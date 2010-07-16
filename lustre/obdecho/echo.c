@@ -53,7 +53,9 @@
 
 #include "echo_internal.h"
 
-#define ECHO_INIT_OBJID      0x1000000000000000ULL
+/* The echo objid needs to be below 2^32, because regular FID numbers are
+ * limited to 2^32 objects in f_oid for the FID_SEQ_ECHO range. b=23335 */
+#define ECHO_INIT_OID        0x10000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
 
 #define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE >> CFS_PAGE_SHIFT)
@@ -162,7 +164,7 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        if (oa->o_id > obd->u.echo.eo_lastino || oa->o_id < ECHO_INIT_OBJID) {
+        if (oa->o_id > obd->u.echo.eo_lastino || oa->o_id < ECHO_INIT_OID) {
                 CERROR("bad destroy objid: "LPX64"\n", oa->o_id);
                 RETURN(-EINVAL);
         }
@@ -553,7 +555,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         ENTRY;
 
         cfs_spin_lock_init(&obd->u.echo.eo_lock);
-        obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
+        obd->u.echo.eo_lastino = ECHO_INIT_OID;
 
         sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
