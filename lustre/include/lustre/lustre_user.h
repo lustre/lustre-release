@@ -122,6 +122,7 @@ struct obd_statfs {
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
 #define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
 #define LL_IOC_RECREATE_OBJ             _IOW ('f', 157, long)
+#define LL_IOC_RECREATE_FID             _IOW ('f', 157, struct lu_fid)
 #define LL_IOC_GROUP_LOCK               _IOW ('f', 158, long)
 #define LL_IOC_GROUP_UNLOCK             _IOW ('f', 159, long)
 #define LL_IOC_QUOTACHECK               _IOW ('f', 160, int)
@@ -226,7 +227,6 @@ struct lov_user_mds_data_v3 {
 
 struct ll_recreate_obj {
         __u64 lrc_id;
-        __u64 lrc_seq;
         __u32 lrc_ost_idx;
 };
 
