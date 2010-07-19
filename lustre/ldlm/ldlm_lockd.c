@@ -2217,12 +2217,15 @@ static int ldlm_bl_thread_main(void *arg)
                         cfs_memory_pressure_set();
 
                 if (blwi->blwi_count) {
+                        int count;
                         /* The special case when we cancel locks in lru
                          * asynchronously, we pass the list of locks here.
-                         * Thus lock is marked LDLM_FL_CANCELING, and already
-                         * canceled locally. */
-                        ldlm_cli_cancel_list(&blwi->blwi_head,
-                                             blwi->blwi_count, NULL, 0);
+                         * Thus locks are marked LDLM_FL_CANCELING, but NOT
+                         * canceled locally yet. */
+                        count = ldlm_cli_cancel_list_local(&blwi->blwi_head,
+                                                           blwi->blwi_count,
+                                                           LCF_BL_AST);
+                        ldlm_cli_cancel_list(&blwi->blwi_head, count, NULL, 0);
                 } else {
                         ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
                                                 blwi->blwi_lock);
@@ -2656,6 +2659,7 @@ EXPORT_SYMBOL(ldlm_namespace_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach_res);
 EXPORT_SYMBOL(ldlm_resource_iterate);
 EXPORT_SYMBOL(ldlm_cancel_resource_local);
+EXPORT_SYMBOL(ldlm_cli_cancel_list_local);
 EXPORT_SYMBOL(ldlm_cli_cancel_list);
 
 /* ldlm_lockd.c */
