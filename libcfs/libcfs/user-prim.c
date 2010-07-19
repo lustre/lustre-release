@@ -195,7 +195,7 @@ cfs_time_t cfs_timer_deadline(cfs_timer_t *l)
 }
 
 
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 
 /*
  * Threads

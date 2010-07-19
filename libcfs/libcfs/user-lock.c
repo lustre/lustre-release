@@ -255,7 +255,7 @@ void cfs_fini_rwsem(cfs_rw_semaphore_t *s)
         (void)s;
 }
 
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 
 /*
  * Multi-threaded user space completion
@@ -356,7 +356,7 @@ void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a)
         pthread_mutex_unlock(&atomic_guard_lock);
 }
 
-#endif /* HAVE_PTHREAD */
+#endif /* HAVE_LIBPTHREAD */
 
 
 /* !__KERNEL__ */

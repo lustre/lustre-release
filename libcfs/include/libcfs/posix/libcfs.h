@@ -75,7 +75,7 @@
 #include <unistd.h>
 #endif
 
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 #endif
 

@@ -37,7 +37,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__) || defined(HAVE_PTHREAD)
+#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
 
 static int   accept_port    = 988;
 static int   accept_backlog = 127;
@@ -594,4 +594,4 @@ void
 lnet_acceptor_stop(void)
 {
 }
-#endif /* defined(__KERNEL__) || defined(HAVE_PTHREAD) */
+#endif /* defined(__KERNEL__) || defined(HAVE_LIBPTHREAD) */

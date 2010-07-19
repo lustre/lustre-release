@@ -145,7 +145,7 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 #define cfs_kernel_thread(l,m,n)        (LBUG(), l, 0)
 #define cfs_kthread_run(fn,d,fmt,...)   LBUG()
 
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);
 int cfs_create_thread(cfs_thread_t func, void *arg);
 #else

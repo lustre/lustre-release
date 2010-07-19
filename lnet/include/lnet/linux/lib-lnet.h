@@ -62,7 +62,7 @@ lnet_page2phys (struct page *p)
         case 8:
                 /* page_to_phys returns a 64 bit physical address :) */
                 return page_to_phys(p);
-
+                
         default:
                 LBUG();
                 return 0;
@@ -72,7 +72,7 @@ lnet_page2phys (struct page *p)
 #else  /* __KERNEL__ */
 # include <libcfs/list.h>
 # include <string.h>
-# ifdef HAVE_PTHREAD
+# ifdef HAVE_LIBPTHREAD
 #  include <pthread.h>
 # endif
 #endif

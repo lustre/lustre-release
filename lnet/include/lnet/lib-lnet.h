@@ -94,7 +94,7 @@ static inline int lnet_md_unlinkable (lnet_libmd_t *md)
 #define LNET_MUTEX_DOWN(m) cfs_mutex_down(m)
 #define LNET_MUTEX_UP(m)   cfs_mutex_up(m)
 #else
-# ifndef HAVE_PTHREAD
+# ifndef HAVE_LIBPTHREAD
 #define LNET_SINGLE_THREADED_LOCK(l)            \
 do {                                            \
         LASSERT ((l) == 0);                     \
@@ -662,7 +662,7 @@ int lnet_acceptor_port(void);
 void lnet_router_checker(void);
 #endif
 
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 int lnet_count_acceptor_nis(void);
 int lnet_acceptor_port(void);
 #endif
