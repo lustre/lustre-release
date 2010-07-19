@@ -930,67 +930,75 @@ test_17() {
 }
 run_test 17 "Referencing an empty pool"
 
-create_perf_one() {
-    local dir=$1/d
+create_perf() {
+    local cdir=$1/d
     local numfiles=$2
     local time
 
-    mkdir -p $dir
+    mkdir -p $cdir
     sync; sleep 5 # give pending IO a chance to go to disk
-    stat=$(createmany -o $dir/${tfile} $numfiles)
-    rm -rf $dir
+    stat=$(createmany -o $cdir/${tfile} $numfiles)
+    rm -rf $cdir
     sync
     time=$(echo $stat | cut -f 5 -d ' ')
     echo $stat >> /dev/stderr
     echo $time
 }
 
-create_perf() {
-    local t1=$(create_perf_one $1 $2)
-    local t2=$(create_perf_one $1 $2)
-    local t3=$(create_perf_one $1 $2)
-    local time=$(echo "scale=2; ( $t1 + $t2 + $t3 ) / 3" | bc)
-
-    echo "$time"
-}
-
 test_18() {
     set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=10000
-    local i=0
-    local time1
-    local time2
-    local time3
-    local dir=$POOL_ROOT/dir
-    local stat
-    local diff
+    local numfiles=9877
+    local plaindir=$POOL_ROOT/plaindir
+    local pooldir=$POOL_ROOT/pooldir
+	local t1=0
+	local t2=0
+	local t3=0
+	local diff
 
-    time1=$(create_perf $dir $numfiles)
+    for i in $(seq 1 3);
+    do
+        echo "Create performance, iteration $i, $numfiles files x 3"
 
-    create_pool_nofail $POOL
+		time1=$(create_perf $plaindir $numfiles)
+		echo "iter $i: $numfiles creates without pool: $time1"
+		t1=$(echo "scale=2; $t1 + $time1" | bc)
 
-    add_pool $POOL $TGT_ALL "$TGT_UUID"
+		create_pool_nofail $POOL > /dev/null
+		add_pool $POOL $TGT_ALL "$TGT_UUID" > /dev/null
+		create_dir $pooldir $POOL
+		time2=$(create_perf $pooldir $numfiles)
+		echo "iter $i: $numfiles creates with pool: $time2"
+		t2=$(echo "scale=2; $t2 + $time2" | bc)
 
-    create_dir $dir $POOL
-    time2=$(create_perf $dir $numfiles)
+		destroy_pool $POOL > /dev/null
+		time3=$(create_perf $pooldir $numfiles)
+		echo "iter $i: $numfiles creates with missing pool: $time3"
+		t3=$(echo "scale=2; $t3 + $time3" | bc)
 
-    destroy_pool $POOL
+		echo
+	done
 
-    time3=$(create_perf $dir $numfiles)
+	time1=$(echo "scale=2; $t1 / $i" | bc)
+	echo Avg time taken for $numfiles creates without pool: $time1
+	time2=$(echo "scale=2; $t2 / $i" | bc)
+	echo Avg time taken for $numfiles creates with pool: $time2
+	time3=$(echo "scale=2; $t3 / $i" | bc)
+	echo Avg time taken for $numfiles creates with missing pool: $time3
 
-    echo Time taken for $numfiles creates without pools: $time1
-    echo Time taken for $numfiles creates with pools: $time2
-    echo Time taken for $numfiles creates without pools: $time3
+	# Set this high until we establish a baseline for what the degradation
+	# is / should be
+	max=15
+    diff=$(echo "scale=2; ($time2 - $time1) * 100 / $time1" | bc)
+    echo  "No pool to wide pool: $diff %."
+    deg=$(echo "scale=2; $diff > $max" | bc)
+    [ "$deg" == "1" ] && error "Degradation with wide pool is $diff % (> $max %)"
 
-    deg=$(echo "scale=2; (($time2 - $time3) * 100 / $time3) > 5" | bc)
-    diff=$(echo "scale=2; ($time2 - $time3) * 100 / $time3" | bc)
+    diff=$(echo "scale=2; ($time3 - $time1) * 100 / $time1" | bc)
+    echo  "No pool to missing pool: $diff %."
+    deg=$(echo "scale=2; $diff > $max" | bc)
+    [ "$deg" == "1" ] && error "Degradation with missing pool is $diff % (> $max %)"
 
-    if [[ "$deg" == "1" ]]; then
-        error "Performance degradation with pools is $diff %."
-    else
-        echo  "Performance degradation with pools is $diff %."
-    fi
     return 0
 }
 run_test 18 "File create in a directory which references a deleted pool"
