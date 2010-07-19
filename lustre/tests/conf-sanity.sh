@@ -430,41 +430,11 @@ test_9() {
 }
 run_test 9 "test ptldebug and subsystem for mkfs"
 
-# LOGS/PENDING do not exist anymore since CMD3
-test_16() {
-        local TMPMTPT="${TMP}/conf16"
-        local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
-
-        if [ ! -e "$MDSDEV" ]; then
-            log "no $MDSDEV existing, so mount Lustre to create one"
-	    setup
-            check_mount || return 41
-            cleanup || return $?
-        fi
-
-        [ -f "$MDSDEV" ] && LOOPOPT="-o loop"
-
-        log "change the mode of $MDSDEV/OBJECTS to 555"
-        do_facet $SINGLEMDS "mkdir -p $TMPMTPT &&
-                      mount $LOOPOPT -t $FSTYPE $MDSDEV $TMPMTPT &&
-                      chmod 555 $TMPMTPT/OBJECTS &&
-                      umount $TMPMTPT" || return $?
-
-        log "mount Lustre to change the mode of OBJECTS, then umount Lustre"
-	setup
-        check_mount || return 41
-        cleanup || return $?
-
-        log "read the mode of OBJECTS and check if they has been changed properly"
-        EXPECTEDOBJECTSMODE=`do_facet $SINGLEMDS "$DEBUGFS -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-
-        if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
-                log "Success:Lustre change the mode of OBJECTS correctly"
-        else
-                error "Lustre does not change mode of OBJECTS properly"
-        fi
-}
-run_test 16 "verify that lustre will correct the mode of OBJECTS"
+#
+# Test 16 was to "verify that lustre will correct the mode of OBJECTS".
+# But with new MDS stack we don't care about the mode of local objects
+# anymore, so this test is removed. See bug 22944 for more details.
+#
 
 test_17() {
         local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
