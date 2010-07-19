@@ -60,7 +60,7 @@ extern void add_history(char *);
 
 #include <errno.h>
 #include <string.h>
-#if HAVE_PTHREAD
+#if HAVE_LIBPTHREAD
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <pthread.h>
@@ -96,18 +96,18 @@ typedef VFunction       rl_voidfunc_t;
  * POSIX compliant inter-process synchronization aren't supported well
  * in Darwin, pthread_mutex_t and pthread_cond_t can only work as
  * inter-thread synchronization, they wouldn't work even being put in
- * shared memory for multi-process. PTHREAD_PROCESS_SHARED is not
- * supported by Darwin also (pthread_mutexattr_setpshared() with the
- * PTHREAD_PROCESS_SHARED attribute will return EINVAL).
+ * shared memory for multi-process. PTHREAD_PROCESS_SHARED is not 
+ * supported by Darwin also (pthread_mutexattr_setpshared() with the 
+ * PTHREAD_PROCESS_SHARED attribute will return EINVAL). 
  *
  * The only inter-process sychronization mechanism can be used in Darwin
  * is POSIX NAMED semaphores and file lock, here we use NAMED semaphore
- * to implement mutex and condition.
+ * to implement mutex and condition. 
  *
  * XXX Liang:
- * They are just proto-type now, more tests are needed.
+ * They are just proto-type now, more tests are needed. 
  */
-#define L_LOCK_DEBUG		(0)
+#define L_LOCK_DEBUG 		(0)		
 
 #define L_SEM_NAMESIZE		32
 
@@ -248,7 +248,7 @@ static inline void l_cond_broadcast(l_cond_t *cond)
 #endif /* HAVE_LIBREADLINE */
 #include <errno.h>
 #include <string.h>
-#if HAVE_PTHREAD
+#if HAVE_LIBPTHREAD
 #ifndef __WINNT__
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -263,7 +263,7 @@ typedef pthread_cond_t	l_cond_t;
 #define l_cond_init(c)		pthread_cond_init(c, NULL)
 #define l_cond_broadcast(c)	pthread_cond_broadcast(c)
 #define l_cond_wait(c, s)	pthread_cond_wait(c, s)
-#endif /* HAVE_PTHREAD */
+#endif /* HAVE_LIBPTHREAD */
 
 #endif /* __linux__  */
 

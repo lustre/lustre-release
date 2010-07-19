@@ -1,6 +1,5 @@
 # Administration utilities Makefile
 
-SUBDIRS =
 if GSS
 SUBDIRS = gss
 endif
@@ -8,10 +7,6 @@ endif
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
-
-DIST_SUBDIRS = gss pthread
-
-SUBDIRS += . pthread
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
@@ -24,16 +19,31 @@ EXTRA_PROGRAMS = wirecheck
 
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
-sbin_PROGRAMS = mkfs.lustre tunefs.lustre wiretest \
+sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getidentity llverfs llverdev \
 	llog_reader lr_reader lshowmount lustre_rsync \
 	ll_recover_lost_found_objs ltrack_stats ll_decode_filter_fid
-bin_PROGRAMS = req_layout
+if LIBPTHREAD
+sbin_PROGRAMS += loadgen
+endif
+bin_PROGRAMS = lfs req_layout
 bin_SCRIPTS = $(bin_scripts)
 sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
 
 lib_LIBRARIES = liblustreapi.a libiam.a
+
+lctl_SOURCES = obd.c lustre_cfg.c lctl.c obdctl.h
+lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+
+lfs_SOURCES = lfs.c obd.c lustre_cfg.c
+lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
+
+loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
+loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
+loadgen_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
 lustre_rsync_LDADD :=  $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
@@ -49,7 +59,7 @@ if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs
 E2PLIB = -le2p
 else
-E2PLIB =
+E2PLIB = 
 EXT2FSLIB =
 endif
 
@@ -112,3 +122,4 @@ newwiretest: wirehdr.c wirecheck
 	LANG=C ./wirecheck >> wiretest.c
 	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
 	LANG=C ./wirecheck >> ../ptlrpc/wiretest.c
+

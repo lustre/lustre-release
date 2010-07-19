@@ -262,14 +262,14 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 #else   /* !__KERNEL__ */
 
 #include <time.h>
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 #else
 struct timespec {
     unsigned long tv_sec;
     unsigned long tv_nsec;
 };
-#endif /* HAVE_THREAD */
+#endif /* HAVE_LIBPTHREAD */
 
 #include "../user-time.h"
 

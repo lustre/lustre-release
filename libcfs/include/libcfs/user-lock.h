@@ -236,7 +236,7 @@ typedef struct { volatile int counter; } cfs_atomic_t;
         ((v)->counter != u ? (v)->counter += a : 0)
 #define cfs_atomic_inc_not_zero(v) cfs_atomic_add_unless((v), 1, 0)
 
-#ifdef HAVE_PTHREAD
+#ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 
 /*
@@ -268,7 +268,7 @@ void cfs_mt_atomic_dec(cfs_mt_atomic_t *a);
 void cfs_mt_atomic_add(int b, cfs_mt_atomic_t *a);
 void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a);
 
-#endif /* HAVE_PTHREAD */
+#endif /* HAVE_LIBPTHREAD */
 
 /**************************************************************************
  *

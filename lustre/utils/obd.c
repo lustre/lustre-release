@@ -75,7 +75,7 @@
 #define MAX_STRING_SIZE 128
 #define DEVICES_LIST "/proc/fs/lustre/devices"
 
-#if HAVE_PTHREAD
+#if HAVE_LIBPTHREAD
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <pthread.h>
