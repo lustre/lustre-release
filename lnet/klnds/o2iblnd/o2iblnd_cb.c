@@ -2377,8 +2377,12 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
         cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         /* retry connection if it's still needed and no other connection
-         * attempts (active or passive) are in progress */
-        if (!cfs_list_empty(&peer->ibp_tx_queue) &&
+         * attempts (active or passive) are in progress
+         * NB: reconnect is still needed even when ibp_tx_queue is
+         * empty if ibp_version != version because reconnect may be
+         * initiated by kiblnd_query() */
+        if ((!cfs_list_empty(&peer->ibp_tx_queue) ||
+             peer->ibp_version != version) &&
             peer->ibp_connecting == 1 &&
             peer->ibp_accepting == 0) {
                 retry = 1;
