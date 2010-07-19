@@ -891,7 +891,9 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2dev=`do_facet $SINGLEMDS "lctl get_param -n devices | grep ${ost2_svc}-osc-MDT0000" | awk '{print $1}'`
+    local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost2_svc)
+    local osc2dev=$(do_facet $SINGLEMDS "lctl get_param -n devices" | \
+        grep $mdtosc | awk '{print $1}')
     [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && lctl get_param -n devices && return 4
     do_facet $SINGLEMDS $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
@@ -1065,7 +1067,9 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`do_facet $SINGLEMDS lctl get_param -n devices | grep ${ost1_svc}-osc-MDT0000 | awk '{print $1}'`
+    local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost1_svc) 
+    local oscdev=$(do_facet $SINGLEMDS "lctl get_param -n devices" | \
+        grep $mdtosc | awk '{print $1}')
     [ "$oscdev" ] || return 1
     do_facet $SINGLEMDS $LCTL --device $oscdev recover || return 2
     do_facet $SINGLEMDS $LCTL --device $oscdev recover || return 3
@@ -1757,9 +1761,11 @@ test_67b() #bug 3055
 
     # exhaust precreations on ost1
     local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
-    local mdtosc=$(get_mdtosc_proc_path $OST)
-    local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
+    local mdtosc=$(get_mdtosc_proc_path mds $OST)
+    local last_id=$(do_facet mds lctl get_param -n \
+        osc.$mdtosc.prealloc_last_id)
+    local next_id=$(do_facet mds lctl get_param -n \
+        osc.$mdtosc.prealloc_next_id)
 
     mkdir -p $DIR/$tdir/${OST}
     lfs setstripe $DIR/$tdir/${OST} -o 0 -c 1 || error "setstripe"

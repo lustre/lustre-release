@@ -1083,7 +1083,9 @@ run_test 60 "Add Changelog entries during MDS failover"
 
 test_61()
 {
-	local cflags='osc.*-OST0000-osc-MDT*.connect_flags'
+	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
+	mdtosc=${mdtosc/-MDT*/-MDT\*}
+	local cflags="osc.$mdtosc.connect_flags"
 	do_facet $SINGLEMDS "lctl get_param -n $cflags" |grep -q skip_orphan
 	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
 

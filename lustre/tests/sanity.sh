@@ -1013,10 +1013,14 @@ exhaust_precreations() {
 			  sed -e 's/_UUID$//;s/^.*-//')
 
 	# on the mdt's osc
-	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_last_id)
-	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_next_id)
+	local mdtosc_proc1=$(get_mdtosc_proc_path mds${MDSIDX} $OST)
+	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+        osc.$mdtosc_proc1.prealloc_last_id)
+	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+        osc.$mdtosc_proc1.prealloc_next_id)
 
-	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
+	local mdtosc_proc2=$(get_mdtosc_proc_path mds${MDSIDX})
+	do_facet mds${MDSIDX} lctl get_param osc.$mdtosc_proc2.prealloc*
 
 	mkdir -p $DIR/$tdir/${OST}
 	$SETSTRIPE $DIR/$tdir/${OST} -i $OSTIDX -c 1
@@ -1025,7 +1029,7 @@ exhaust_precreations() {
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
+	do_facet mds${MDSIDX} lctl get_param osc.$mdtosc_proc2.prealloc*
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=$FAILLOC
 	sleep_maxage
 }
@@ -1238,8 +1242,11 @@ test_27y() {
         [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-        local last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*0000-osc-MDT0000.prealloc_last_id)
-        local next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*0000-osc-MDT0000.prealloc_next_id)
+        local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
+        local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
+            osc.$mdtosc.prealloc_last_id)
+        local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
+            osc.$mdtosc.prealloc_next_id)
         local fcount=$((last_id - next_id))
         [ $fcount -eq 0 ] && skip "not enough space on OST0" && return
         [ $fcount -gt $OSTCOUNT ] && fcount=$OSTCOUNT
@@ -2973,7 +2980,8 @@ test_53() {
 	local ostnum
 
 	# only test MDT0000
-        for value in $(do_facet $SINGLEMDS lctl get_param osc.*-osc-MDT0000.prealloc_last_id) ; do
+        local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS)
+        for value in $(do_facet $SINGLEMDS lctl get_param osc.$mdtosc.prealloc_last_id) ; do
                 param=`echo ${value[0]} | cut -d "=" -f1`
                 ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
                 mds_last=$(do_facet $SINGLEMDS lctl get_param -n $param)

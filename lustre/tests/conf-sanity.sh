@@ -866,7 +866,9 @@ test_29() {
 	fi
 
 	# check MDT too
-	local MPROC="osc.$FSNAME-OST0001-osc-[M]*.active"
+	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0001)
+	mdtosc=${mdtosc/-MDT*/-MDT\*}
+	local MPROC="osc.$mdtosc.active"
 	local MAX=30
 	local WAIT=0
 	while [ 1 ]; do

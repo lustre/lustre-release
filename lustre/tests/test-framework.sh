@@ -1939,12 +1939,11 @@ init_facets_vars () {
 
 osc_ensure_active () {
     local facet=$1
-    local type=$2
-    local timeout=$3
+    local timeout=$2
     local period=0
 
     while [ $period -lt $timeout ]; do
-        count=$(do_facet $facet "lctl dl | grep '${FSNAME}-OST.*-osc-${type}' | grep ' IN ' 2>/dev/null | wc -l")
+        count=$(do_facet $facet "lctl dl | grep ' IN osc ' 2>/dev/null | wc -l")
         if [ $count -eq 0 ]; then
             break
         fi
@@ -1969,8 +1968,8 @@ init_param_vars () {
 
     log "Using TIMEOUT=$TIMEOUT"
 
-    osc_ensure_active $SINGLEMDS M $TIMEOUT
-    osc_ensure_active client c $TIMEOUT
+    osc_ensure_active $SINGLEMDS $TIMEOUT
+    osc_ensure_active client $TIMEOUT
 
     if [ $QUOTA_AUTO -ne 0 ]; then
         if [ "$ENABLE_QUOTA" ]; then
@@ -3414,28 +3413,52 @@ get_clientosc_proc_path() {
 }
 
 get_lustre_version () {
-    local node=${1:-"mds"}    
-    do_facet $node $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
+    local facet=${1:-"$SINGLEMDS"}    
+    do_facet $facet $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
 }
 
 get_mds_version_major () {
-    local version=$(get_lustre_version mds)
+    local facet=${1:-"$SINGLEMDS"}
+    local version=$(get_lustre_version $facet)
     echo $version | awk -F. '{print $1}'
 }
 
 get_mds_version_minor () {
-    local version=$(get_lustre_version mds)
+    local facet=${1:-"$SINGLEMDS"}
+    local version=$(get_lustre_version $facet)
     echo $version | awk -F. '{print $2}'
 }
 
+# If the 2.0 MDS was mounted on 1.8 device, then the OSC and LOV names
+# used by MDT would not be changed.
+# mdt lov: fsname-mdtlov
+# mdt osc: fsname-OSTXXXX-osc
+mds_on_old_device() {
+    local mds=${1:-"$SINGLEMDS"}
+    local major=$(get_mds_version_major $mds)
+    local minor=$(get_mds_version_minor $mds)
+
+    if [ $major -ge 2 ] || [ $major -eq 1 -a $minor -gt 8 ]; then
+        do_facet $mds "lctl list_param osc.$FSNAME-OST*-osc \
+            > /dev/null 2>&1" && return 0
+    fi
+    return 1
+}
+
 get_mdtosc_proc_path() {
-    local ost=$1
-    local major=$(get_mds_version_major)
-    local minor=$(get_mds_version_minor)
-    if [ $major -le 1 -a $minor -le 8 ] ; then
-        echo "${ost}-osc"
+    local mds_facet=$1
+    local ost_label=${2:-"*OST*"}
+
+    [ "$mds_facet" = "mds" ] && mds_facet=$SINGLEMDS
+    local mdt_label=$(convert_facet2label $mds_facet)
+    local mdt_index=$(echo $mdt_label | sed -e 's/^.*-//')
+
+    local major=$(get_mds_version_major $mds_facet)
+    local minor=$(get_mds_version_minor $mds_facet)
+    if [ $major -le 1 -a $minor -le 8 ] || mds_on_old_device $mds_facet; then
+        echo "${ost_label}-osc"
     else
-        echo "${ost}-osc-MDT0000"
+        echo "${ost_label}-osc-${mdt_index}"
     fi
 }
 
@@ -3444,8 +3467,8 @@ get_osc_import_name() {
     local ost=$2
     local label=$(convert_facet2label $ost)
 
-    if [ "$facet" == "mds" ]; then
-        get_mdtosc_proc_path $label
+    if [ "${facet:0:3}" = "mds" ]; then
+        get_mdtosc_proc_path $facet $label
         return 0
     fi
 
@@ -3907,9 +3930,13 @@ flvr_cnt_mdt2ost()
 {
     local flavor=$1
     local cnt=0
+    local mdtosc
 
     for num in `seq $MDSCOUNT`; do
-        output=`do_facet mds$num lctl get_param -n osc.*OST*-osc-MDT*.$PROC_CLI 2>/dev/null`
+        mdtosc=$(get_mdtosc_proc_path mds$num)
+        mdtosc=${mdtosc/-MDT*/-MDT\*}
+        output=$(do_facet mds$num lctl get_param -n \
+            osc.$mdtosc.$PROC_CLI 2>/dev/null)
         tmpcnt=`count_flvr "$output" $flavor`
         cnt=$((cnt + tmpcnt))
     done
