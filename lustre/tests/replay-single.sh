@@ -2088,9 +2088,12 @@ test_85() { # bug 22190
 run_test 85 "ensure there is no reply on bulk write if obd is in rdonly mode"
 
 test_86() {
-        umount $MOUNT
+        local clients=${CLIENTS:-$HOSTNAME}
+
+        zconf_umount_clients $clients $MOUNT
         do_facet $SINGLEMDS lctl set_param mdt.${FSNAME}-MDT*.exports.clear=0
         remount_facet $SINGLEMDS
+        zconf_mount_clients $clients $MOUNT
 }
 run_test 86 "umount server after clear nid_stats should not hit LBUG"
 
