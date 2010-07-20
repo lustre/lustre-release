@@ -3057,17 +3057,6 @@ test_54e() {
 }
 run_test 54e "console/tty device works in lustre ======================"
 
-check_fstype() {
-	grep -q $FSTYPE /proc/filesystems && return 1
-	modprobe $FSTYPE
-	grep -q $FSTYPE /proc/filesystems && return 1
-	insmod ../$FSTYPE/$FSTYPE.o
-	grep -q $FSTYPE /proc/filesystems && return 1
-	insmod ../$FSTYPE/$FSTYPE.ko
-	grep -q $FSTYPE /proc/filesystems && return 1
-	return 0
-}
-
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
