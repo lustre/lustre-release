@@ -1676,10 +1676,21 @@ stopall() {
     return 0
 }
 
+cleanup_echo_devs () {
+    local devs=$($LCTL dl | grep echo | awk '{print $4}')
+
+    for dev in $devs; do
+        $LCTL --device $dev cleanup
+        $LCTL --device $dev detach
+    done
+}
+
 cleanupall() {
     nfs_client_mode && return
 
     stopall $*
+    cleanup_echo_devs
+
     unload_modules
     cleanup_gss
 }
