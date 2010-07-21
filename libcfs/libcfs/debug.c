@@ -65,7 +65,7 @@ CFS_MODULE_PARM(libcfs_debug_mb, "i", uint, 0644,
                 "Total debug buffer size.");
 EXPORT_SYMBOL(libcfs_debug_mb);
 
-unsigned int libcfs_printk = (D_CANTMASK | D_NETERROR);
+unsigned int libcfs_printk = D_CANTMASK;
 CFS_MODULE_PARM(libcfs_printk, "i", uint, 0644,
                 "Lustre kernel debug console mask");
 EXPORT_SYMBOL(libcfs_printk);
