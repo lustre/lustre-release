@@ -7,10 +7,10 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 nobjhi=${nobjhi:-1}
-thrhi=${thrhi:-16} 
+thrhi=${thrhi:-16}
 size=${size:-1024}
 
-# the summary file a bit smaller than OSTSIZE  
+# the summary file a bit smaller than OSTSIZE
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 [ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
@@ -85,7 +85,7 @@ test_3 () {
 	# The Network survey test needs:
 	# Start lctl and check for the device list. The device list must be empty.
 	cleanupall
-	
+
 	local cmd="nobjhi=2 thrhi=4 size=$size targets="$(osts_nodes)" case=network sh $OBDSURVEY"
 	echo + $cmd
 	eval $cmd
