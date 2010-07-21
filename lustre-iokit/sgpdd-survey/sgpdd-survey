@@ -65,7 +65,7 @@ if [ "$scsidevs" ]; then
 	devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
         if [ -z "${devs[i]}" ]; then
             echo "Can't find SG device for $d, testing for partition"
-            pt=`echo $d | sed 's/[0-9]$//'`
+            pt=`echo $d | sed 's/[0-9]*$//'`
             # Try again
             devs[$i]=`sg_map | awk "{if (\\\$2 == \"$pt\") print \\\$1}"`
             if [ -z "${devs[i]}" ]; then
