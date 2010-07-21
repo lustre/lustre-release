@@ -56,9 +56,7 @@ dsh () {
     shift 2
     local command="$@"
 
-    local here=$(pwd)
-
-    command="cd $here; export PATH=/sbin:/usr/sbin:\$PATH; $command"
+    command="export PATH=/sbin:/usr/sbin:\$PATH; $command"
 
     case $DSH in
 	ssh)
