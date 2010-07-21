@@ -1818,9 +1818,11 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         if (req->rq_export == NULL) {
                 struct ldlm_request *dlm_req;
 
-                CERROR("operation %d from %s with bad export cookie "LPU64"\n",
-                       lustre_msg_get_opc(req->rq_reqmsg),
-                       libcfs_id2str(req->rq_peer),
+                CERROR("%s from %s arrived at %lu with bad export cookie "
+                       LPU64"\n",
+                       ll_opcode2str(lustre_msg_get_opc(req->rq_reqmsg)),
+                       libcfs_nid2str(req->rq_peer.nid),
+                       req->rq_arrival_time.tv_sec,
                        lustre_msg_get_handle(req->rq_reqmsg)->cookie);
 
                 if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_CANCEL) {
