@@ -1790,6 +1790,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         struct obd_trans_info   dummy_oti;
         struct oti_req_ack_lock *ack_lock;
         struct obdo            *oa;
+        struct lu_fid           fid;
         int                     rw = OBD_BRW_READ;
         int                     rc = 0;
         int                     i;
@@ -1804,8 +1805,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 oa->o_valid |= OBD_MD_FLGROUP;
                 oa->o_seq = FID_SEQ_ECHO;
         }
-        /* assume we can touch filter native objects with echo device. */
-        /* LASSERT(oa->o_seq == FID_SEQ_ECHO); */
+
+        /* This FID is unpacked just for validation at this point */
+        rc = fid_ostid_unpack(&fid, &oa->o_oi, 0);
+        if (rc < 0)
+                RETURN(rc);
 
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
