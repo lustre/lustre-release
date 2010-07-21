@@ -268,9 +268,8 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
  * as we might end up waiting on a page he sent in the request we're serving.
  * use __GFP_HIGHMEM so that the pages can use all of the available memory
  * on 32-bit machines
- * use more agressive GFP_HIGHUSER flags from non-local clients to be able to
- * generate more memory pressure, but at the same time use __GFP_NOMEMALLOC
- * in order not to exhaust emergency reserves.
+ * use more aggressive GFP_HIGHUSER flags from non-local clients to be able to
+ * generate more memory pressure.
  *
  * See Bug 19529 and Bug 19917 for details.
  */
