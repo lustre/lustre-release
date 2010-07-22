@@ -134,45 +134,6 @@ void cfs_free_page(cfs_page_t *pg)
     cfs_mem_cache_free(cfs_page_t_slab, pg);
 }
 
-cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
-{
-    cfs_page_t *pg;
-    pg = cfs_mem_cache_alloc(cfs_page_t_slab, 0);
-    
-    if (NULL == pg) {
-        cfs_enter_debugger();
-        return NULL;
-    }
-
-    memset(pg, 0, sizeof(cfs_page_t));
-    pg->addr = cfs_alloc((CFS_PAGE_SIZE << order),0);
-    cfs_atomic_set(&pg->count, 1);
-
-    if (pg->addr) {
-        if (cfs_is_flag_set(flags, CFS_ALLOC_ZERO)) {
-            memset(pg->addr, 0, CFS_PAGE_SIZE << order);
-        }
-        cfs_atomic_add(1 << order, &libcfs_total_pages);
-    } else {
-        cfs_enter_debugger();
-        cfs_mem_cache_free(cfs_page_t_slab, pg);
-        pg = NULL;
-    }
-
-    return pg;
-}
-
-void __cfs_free_pages(cfs_page_t *pg, unsigned int order)
-{
-    ASSERT(pg != NULL);
-    ASSERT(pg->addr  != NULL);
-    ASSERT(cfs_atomic_read(&pg->count) <= 1);
-
-    cfs_atomic_sub(1 << order, &libcfs_total_pages);
-    cfs_free(pg->addr);
-    cfs_mem_cache_free(cfs_page_t_slab, pg);
-}
-
 int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
 {
     KdPrint(("cfs_mem_is_in_cache: not implemented. (should maintain a"

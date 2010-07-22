@@ -154,8 +154,6 @@ cfs_page_t *cfs_alloc_page(int flags);
 void cfs_free_page(cfs_page_t *pg);
 void cfs_release_page(cfs_page_t *pg);
 cfs_page_t * virt_to_page(void * addr);
-cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order);
-void __cfs_free_pages(cfs_page_t *page, unsigned int order);
 int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 
 #define page_cache_get(a) do {} while (0)

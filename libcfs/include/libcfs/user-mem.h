@@ -36,15 +36,11 @@ typedef struct page {
 #define CFS_PAGE_SIZE (1UL << CFS_PAGE_SHIFT)
 #define CFS_PAGE_MASK (~((__u64)CFS_PAGE_SIZE-1))
 
-cfs_page_t *cfs_alloc_pages(int mask, unsigned long order);
-void cfs_free_pages(cfs_page_t *pg, int what);
 cfs_page_t *cfs_alloc_page(unsigned int flags);
 void cfs_free_page(cfs_page_t *pg);
 void *cfs_page_address(cfs_page_t *pg);
 void *cfs_kmap(cfs_page_t *pg);
 void cfs_kunmap(cfs_page_t *pg);
-
-#define __cfs_free_pages(pg, what) cfs_free_pages((pg), (what))
 
 #define cfs_get_page(p)			__I_should_not_be_called__(at_all)
 #define cfs_page_count(p)		__I_should_not_be_called__(at_all)

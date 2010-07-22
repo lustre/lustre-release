@@ -639,7 +639,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
 cleanup:
         for (i = 0; i < rdpg->rp_npages; i++)
                 if (rdpg->rp_pages[i] != NULL)
-                        __cfs_free_page(rdpg->rp_pages[i]);
+                        cfs_free_page(rdpg->rp_pages[i]);
         return rc;
 }
 

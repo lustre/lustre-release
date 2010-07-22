@@ -261,18 +261,6 @@ int cfs_daemonize_ctxt(char *str) {
 }
 
 sigset_t
-cfs_get_blockedsigs(void)
-{
-        unsigned long          flags;
-        sigset_t        old;
-
-        SIGNAL_MASK_LOCK(current, flags);
-        old = current->blocked;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        return old;
-}
-
-sigset_t
 cfs_block_allsigs(void)
 {
         unsigned long          flags;
@@ -347,7 +335,6 @@ EXPORT_SYMBOL(cfs_daemonize);
 EXPORT_SYMBOL(cfs_daemonize_ctxt);
 EXPORT_SYMBOL(cfs_block_allsigs);
 EXPORT_SYMBOL(cfs_block_sigs);
-EXPORT_SYMBOL(cfs_get_blockedsigs);
 EXPORT_SYMBOL(cfs_restore_sigs);
 EXPORT_SYMBOL(cfs_signal_pending);
 EXPORT_SYMBOL(cfs_clear_sigpending);

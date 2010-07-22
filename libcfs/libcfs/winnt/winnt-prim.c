@@ -547,11 +547,6 @@ int cfs_daemonize_ctxt(char *str) {
  *  routine related with sigals
  */
 
-cfs_sigset_t cfs_get_blockedsigs()
-{
-        return 0;
-}
-
 cfs_sigset_t cfs_block_allsigs()
 {
         return 0;

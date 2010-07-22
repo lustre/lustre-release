@@ -158,7 +158,9 @@ do {                                            \
 # define libcfs_kmem_dec(ptr, size) do {} while (0)
 #endif /* LIBCFS_DEBUG */
 
+#ifndef LIBCFS_VMALLOC_SIZE
 #define LIBCFS_VMALLOC_SIZE        (2 << CFS_PAGE_SHIFT) /* 2 pages */
+#endif
 
 #define LIBCFS_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \

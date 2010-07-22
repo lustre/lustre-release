@@ -362,10 +362,6 @@ void cfs_daemonize(char *str)
  * These signal functions almost do nothing now, we 
  * need to investigate more about signal in Darwin.
  */
-cfs_sigset_t cfs_get_blockedsigs()
-{
-        return (cfs_sigset_t)0;
-}
 
 extern int block_procsigmask(struct proc *p,  int bit);
 

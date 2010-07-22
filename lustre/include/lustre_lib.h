@@ -694,20 +694,26 @@ do {                                                                           \
                 __blocked = l_w_e_set_sigs(0);                                 \
                                                                                \
         for (;;) {                                                             \
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);                 \
+                unsigned       __wstate;                                       \
+                                                                               \
+                __wstate = info->lwi_on_signal != NULL &&                      \
+                           (__timeout == 0 || __allow_intr) ?                  \
+                        CFS_TASK_INTERRUPTIBLE : CFS_TASK_UNINT;               \
+                                                                               \
+                cfs_set_current_state(__wstate);                               \
                                                                                \
                 if (condition)                                                 \
                         break;                                                 \
                                                                                \
                 if (__timeout == 0) {                                          \
-                        cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);       \
+                        cfs_waitq_wait(&__wait, __wstate);                     \
                 } else {                                                       \
                         cfs_duration_t interval = info->lwi_interval?          \
                                              min_t(cfs_duration_t,             \
                                                  info->lwi_interval,__timeout):\
                                              __timeout;                        \
                         cfs_duration_t remaining = cfs_waitq_timedwait(&__wait,\
-                                                   CFS_TASK_INTERRUPTIBLE,     \
+                                                   __wstate,                   \
                                                    interval);                  \
                         __timeout = cfs_time_sub(__timeout,                    \
                                             cfs_time_sub(interval, remaining));\
