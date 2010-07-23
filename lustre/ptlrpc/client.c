@@ -2307,9 +2307,15 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
                 spin_unlock(&imp->imp_lock);
         } else {
                 /* The transno had better not change over replay. */
-                LASSERT(lustre_msg_get_transno(req->rq_reqmsg) ==
-                        lustre_msg_get_transno(req->rq_repmsg) ||
-                        lustre_msg_get_transno(req->rq_repmsg) == 0);
+                if (unlikely(lustre_msg_get_transno(req->rq_reqmsg) !=
+                             lustre_msg_get_transno(req->rq_repmsg) &&
+                             lustre_msg_get_transno(req->rq_repmsg) != 0)) {
+                        DEBUG_REQ(D_ERROR, req, "Transno has changed over "
+                                  "replay ("LPU64"/"LPU64")\n",
+                                  lustre_msg_get_transno(req->rq_reqmsg),
+                                  lustre_msg_get_transno(req->rq_repmsg));
+                        LBUG();
+                }
         }
 
         spin_lock(&imp->imp_lock);
