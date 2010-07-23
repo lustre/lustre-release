@@ -11,7 +11,17 @@ Description: Fix issue with proc_remove.
 
 Severity   : normal
 Bugzilla   : 22771
-Description: disable mb_cache since it causes slowdown.
+Description: add mount option to disable mb_cache since it can cause slowdown.
+
+Severity   : normal
+Bugzilla   : 23368
+Description: Disable delayed allocation by default for ext4-based ldiskfs on
+	     RHEL5.5
+
+Severity   : normal
+Bugzilla   : 23368
+Description: A mount failure can corrupt the slab. This is a bug in the latest
+	     RHEL5.5 kernel and only ext4-based ldiskfs is impacted.
 
 -------------------------------------------------------------------------------
 
