@@ -49,6 +49,8 @@ void cfs_kunmap(cfs_page_t *pg);
 #define cfs_get_page(p)			__I_should_not_be_called__(at_all)
 #define cfs_page_count(p)		__I_should_not_be_called__(at_all)
 #define cfs_page_index(p)               ((p)->index)
+#define cfs_page_pin(page) do {} while (0)
+#define cfs_page_unpin(page) do {} while (0)
 
 /*
  * Memory allocator

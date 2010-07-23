@@ -213,14 +213,15 @@ static int osc_page_cache_add(const struct lu_env *env,
         struct osc_page   *opg = cl2osc_page(slice);
         struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
         int result;
-        int brw_flags;
+        /* All cacheable IO is async-capable */
+        int brw_flags = OBD_BRW_ASYNC;
         int noquota = 0;
 
         LINVRNT(osc_page_protected(env, opg, CLM_WRITE, 0));
         ENTRY;
 
         /* Set the OBD_BRW_SRVLOCK before the page is queued. */
-        brw_flags = opg->ops_srvlock ? OBD_BRW_SRVLOCK : 0;
+        brw_flags |= opg->ops_srvlock ? OBD_BRW_SRVLOCK : 0;
         if (!client_is_remote(osc_export(obj)) &&
             cfs_capable(CFS_CAP_SYS_RESOURCE)) {
                 brw_flags |= OBD_BRW_NOQUOTA;

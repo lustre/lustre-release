@@ -345,6 +345,9 @@ struct filter_obd {
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
+        unsigned long            fo_syncjournal:1, /* sync journal on writes */
+                                 fo_sync_lock_cancel:2;/* sync on lock cancel */
+
 
         /* sptlrpc stuff */
         cfs_rwlock_t             fo_sptlrpc_lock;
@@ -372,6 +375,14 @@ struct timeout_item {
 #define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
 #define OSC_MAX_DIRTY_MB_MAX   2048     /* arbitrary, but < MAX_LONG bytes */
 #define OSC_DEFAULT_RESENDS      10
+
+/* possible values for fo_sync_lock_cancel */
+enum {
+        NEVER_SYNC_ON_CANCEL = 0,
+        BLOCKING_SYNC_ON_CANCEL = 1,
+        ALWAYS_SYNC_ON_CANCEL = 2,
+        NUM_SYNC_ON_CANCEL_STATES
+};
 
 #define MDC_MAX_RIF_DEFAULT       8
 #define MDC_MAX_RIF_MAX         512
@@ -1140,6 +1151,7 @@ enum obd_cleanup_stage {
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 #define KEY_CONNECT_FLAG        "connect_flags"
+#define KEY_SYNC_LOCK_CANCEL    "sync_lock_cancel"
 
 
 struct lu_context;

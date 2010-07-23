@@ -152,7 +152,8 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti);
 
-struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
+int filter_create(struct obd_export *exp, struct obdo *oa,
+                  struct lov_stripe_md **ea, struct obd_trans_info *oti);
 
 struct obd_llog_group *filter_find_olg(struct obd_device *obd, int seq);
 
@@ -242,5 +243,16 @@ void filter_free_capa_keys(struct filter_obd *filter);
 void blacklist_add(uid_t uid);
 void blacklist_del(uid_t uid);
 int blacklist_display(char *buf, int bufsize);
+
+/* sync on lock cancel is useless when we force a journal flush,
+ * and if we enable async journal commit, we should also turn on
+ * sync on lock cancel if it is not enabled already. */
+static inline void filter_slc_set(struct filter_obd *filter)
+{
+        if (filter->fo_syncjournal == 1)
+                filter->fo_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
+        else if (filter->fo_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
+                filter->fo_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
+}
 
 #endif /* _FILTER_INTERNAL_H */

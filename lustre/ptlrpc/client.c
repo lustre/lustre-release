@@ -194,6 +194,7 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 
         desc->bd_nob += len;
 
+        cfs_page_pin(page);
         ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
 
@@ -203,6 +204,7 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
  */
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 {
+        int i;
         ENTRY;
 
         LASSERT(desc != NULL);
@@ -216,6 +218,9 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
                 class_export_put(desc->bd_export);
         else
                 class_import_put(desc->bd_import);
+
+        for (i = 0; i < desc->bd_iov_count ; i++)
+                cfs_page_unpin(desc->bd_iov[i].kiov_page);
 
         OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
                                 bd_iov[desc->bd_max_iov]));
@@ -1306,6 +1311,10 @@ static int after_reply(struct ptlrpc_request *req)
                                 lustre_msg_get_last_committed(req->rq_repmsg);
                 }
                 ptlrpc_free_committed(imp);
+
+                if (req->rq_transno > imp->imp_peer_committed_transno)
+                        ptlrpc_pinger_commit_expected(imp);
+
                 cfs_spin_unlock(&imp->imp_lock);
         }
 
@@ -2576,8 +2585,6 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
-        /* Not handling automatic bulk replay yet (or ever?) */
-        LASSERT(req->rq_bulk == NULL);
 
         LASSERT (sizeof (*aa) <= sizeof (req->rq_async_args));
         aa = ptlrpc_req_async_args(req);

@@ -98,6 +98,9 @@ static inline int cfs_page_count(cfs_page_t *page)
 
 #define cfs_page_index(p)       ((p)->index)
 
+#define cfs_page_pin(page) page_cache_get(page)
+#define cfs_page_unpin(page) page_cache_release(page)
+
 /*
  * Memory allocator
  * XXX Liang: move these declare to public file

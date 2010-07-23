@@ -2046,6 +2046,8 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
+        filter->fo_syncjournal = 0; /* Don't sync journals on i/o by default */
+        filter_slc_set(filter); /* initialize sync on lock cancel */
 
         rc = filter_prep(obd);
         if (rc)
@@ -3921,8 +3923,8 @@ set_last_id:
         RETURN(rc);
 }
 
-static int filter_create(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md **ea, struct obd_trans_info *oti)
+int filter_create(struct obd_export *exp, struct obdo *oa,
+                  struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_export_data *fed;
@@ -3961,7 +3963,8 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
-                if (oa->o_id > filter_last_id(filter, oa->o_seq)) {
+                if (!obd->obd_recovering ||
+                    oa->o_id > filter_last_id(filter, oa->o_seq)) {
                         CERROR("recreate objid "LPU64" > last id "LPU64"\n",
                                oa->o_id, filter_last_id(filter, oa->o_seq));
                         rc = -EINVAL;
@@ -4335,6 +4338,12 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
 
                 f_dput(dentry);
                 RETURN(rc);
+        }
+
+        if (KEY_IS(KEY_SYNC_LOCK_CANCEL)) {
+                *((__u32 *) val) = obd->u.filter.fo_sync_lock_cancel;
+                *vallen = sizeof(__u32);
+                RETURN(0);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");

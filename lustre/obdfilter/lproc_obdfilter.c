@@ -354,6 +354,79 @@ int lprocfs_filter_wr_degraded(struct file *file, const char *buffer,
         return count;
 }
 
+int lprocfs_filter_rd_syncjournal(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%u\n", obd->u.filter.fo_syncjournal);
+        return rc;
+}
+
+int lprocfs_filter_wr_syncjournal(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val;
+        int rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0)
+                return -EINVAL;
+
+        obd->u.filter.fo_syncjournal = !!val;
+        filter_slc_set(&obd->u.filter);
+
+        return count;
+}
+
+static char *sync_on_cancel_states[] = {"never",
+                                        "blocking",
+                                        "always" };
+
+int lprocfs_filter_rd_sync_lock_cancel(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%s\n",
+                      sync_on_cancel_states[obd->u.filter.fo_sync_lock_cancel]);
+        return rc;
+}
+
+int lprocfs_filter_wr_sync_lock_cancel(struct file *file, const char *buffer,
+                                          unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val = -1;
+        int i;
+
+        for (i = 0 ; i < NUM_SYNC_ON_CANCEL_STATES; i++) {
+                if (memcmp(buffer, sync_on_cancel_states[i],
+                    strlen(sync_on_cancel_states[i])) == 0) {
+                        val = i;
+                        break;
+                }
+        }
+        if (val == -1) {
+                int rc;
+                rc = lprocfs_write_helper(buffer, count, &val);
+                if (rc)
+                        return rc;
+        }
+
+        if (val < 0 || val > 2)
+                return -EINVAL;
+
+        obd->u.filter.fo_sync_lock_cancel = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -400,6 +473,10 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "mds_sync",     lprocfs_filter_rd_mds_sync, 0, 0},
         { "degraded",     lprocfs_filter_rd_degraded,
                           lprocfs_filter_wr_degraded, 0 },
+        { "sync_journal", lprocfs_filter_rd_syncjournal,
+                          lprocfs_filter_wr_syncjournal, 0 },
+        { "sync_on_lock_cancel", lprocfs_filter_rd_sync_lock_cancel,
+                                 lprocfs_filter_wr_sync_lock_cancel, 0 },
         { 0 }
 };
 

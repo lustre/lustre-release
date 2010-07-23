@@ -1515,6 +1515,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
         int                     rc;
         int                     verify;
         int                     gfp_mask;
+        int                     brw_flags = 0;
         ENTRY;
 
         verify = ((oa->o_id) != ECHO_PERSISTENT_OBJID &&
@@ -1533,6 +1534,9 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 
         /* XXX think again with misaligned I/O */
         npages = count >> CFS_PAGE_SHIFT;
+
+        if (rw == OBD_BRW_WRITE)
+                brw_flags = OBD_BRW_ASYNC;
 
         OBD_ALLOC(pga, npages * sizeof(*pga));
         if (pga == NULL)
@@ -1558,7 +1562,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
                 pages[i] = pgp->pg;
                 pgp->count = CFS_PAGE_SIZE;
                 pgp->off = off;
-                pgp->flag = 0;
+                pgp->flag = brw_flags;
 
                 if (verify)
                         echo_client_page_debug_setup(lsm, pgp->pg, rw,

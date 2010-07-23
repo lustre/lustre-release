@@ -254,10 +254,14 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 
         /* XXX Registering the same xid on retried bulk makes my head
          * explode trying to understand how the original request's bulk
-         * might interfere with the retried request -eeb */
-        LASSERTF (!desc->bd_registered || req->rq_xid != desc->bd_last_xid,
-                  "registered: %d  rq_xid: "LPU64" bd_last_xid: "LPU64"\n",
-                  desc->bd_registered, req->rq_xid, desc->bd_last_xid);
+         * might interfere with the retried request -eeb
+         * On the other hand replaying with the same xid is fine, since
+         * we are guaranteed old request have completed. -green */
+        LASSERTF(!(desc->bd_registered &&
+                 req->rq_send_state != LUSTRE_IMP_REPLAY) ||
+                 req->rq_xid != desc->bd_last_xid,
+                 "registered: %d  rq_xid: "LPU64" bd_last_xid: "LPU64"\n",
+                 desc->bd_registered, req->rq_xid, desc->bd_last_xid);
         desc->bd_registered = 1;
         desc->bd_last_xid = req->rq_xid;
 

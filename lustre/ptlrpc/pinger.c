@@ -105,10 +105,10 @@ int ptlrpc_ping(struct obd_import *imp)
         RETURN(0);
 }
 
-void ptlrpc_update_next_ping(struct obd_import *imp)
+void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 {
 #ifdef ENABLE_PINGER
-        int time = PING_INTERVAL;
+        int time = soon ? PING_INTERVAL_SHORT : PING_INTERVAL;
         if (imp->imp_state == LUSTRE_IMP_DISCON) {
                 int dtime = max_t(int, CONNECTION_SWITCH_MIN,
                                   AT_OFF ? 0 :
@@ -296,7 +296,7 @@ static int ptlrpc_pinger_main(void *arg)
                             cfs_time_after(imp->imp_next_ping,
                                            cfs_time_add(this_ping,
                                                         cfs_time_seconds(PING_INTERVAL))))
-                                ptlrpc_update_next_ping(imp);
+                                ptlrpc_update_next_ping(imp, 0);
                 }
                 cfs_mutex_up(&pinger_sem);
                 /* update memory usage info */
@@ -406,7 +406,12 @@ int ptlrpc_stop_pinger(void)
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
-        ptlrpc_update_next_ping(imp);
+        ptlrpc_update_next_ping(imp, 0);
+}
+
+void ptlrpc_pinger_commit_expected(struct obd_import *imp)
+{
+        ptlrpc_update_next_ping(imp, 1);
 }
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)
@@ -420,7 +425,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         /* if we add to pinger we want recovery on this import */
         imp->imp_obd->obd_no_recov = 0;
-        ptlrpc_update_next_ping(imp);
+        ptlrpc_update_next_ping(imp, 0);
         /* XXX sort, blah blah */
         cfs_list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
         class_import_get(imp);
@@ -902,10 +907,25 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
         cfs_mutex_down(&pinger_sem);
-        ptlrpc_update_next_ping(imp);
+        ptlrpc_update_next_ping(imp, 0);
         if (pinger_args.pd_set == NULL &&
             cfs_time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
                 CDEBUG(D_HA, "set next ping to "CFS_TIME_T"(cur "CFS_TIME_T")\n",
+                        imp->imp_next_ping, cfs_time_current());
+                pinger_args.pd_next_ping = imp->imp_next_ping;
+        }
+        cfs_mutex_up(&pinger_sem);
+#endif
+}
+
+void ptlrpc_pinger_commit_expected(struct obd_import *imp)
+{
+#ifdef ENABLE_PINGER
+        cfs_mutex_down(&pinger_sem);
+        ptlrpc_update_next_ping(imp, 1);
+        if (pinger_args.pd_set == NULL &&
+            cfs_time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
+                CDEBUG(D_HA,"set next ping to "CFS_TIME_T"(cur "CFS_TIME_T")\n",
                         imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }

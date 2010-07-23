@@ -1323,14 +1323,6 @@ out_bulk:
         if (desc)
                 ptlrpc_free_bulk(desc);
 out:
-       /* XXX: don't send reply if obd rdonly mode, this can cause data loss
-        * on client, see bug 22190. Remove this when async bulk will be done.
-        * Meanwhile, if this is umount then don't reply anything. */
-        if (req->rq_export->exp_obd->obd_no_transno) {
-                no_reply = req->rq_export->exp_obd->obd_stopping;
-                rc = -EIO;
-        }
-
         if (rc == 0) {
                 oti_to_request(oti, req);
                 target_committed_to_req(req);
@@ -1729,6 +1721,45 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
         }
 
         return rc;
+}
+
+/* Ensure that data and metadata are synced to the disk when lock is cancelled
+ * (if requested) */
+int ost_blocking_ast(struct ldlm_lock *lock,
+                             struct ldlm_lock_desc *desc,
+                             void *data, int flag)
+{
+        __u32 sync_lock_cancel = 0;
+        __u32 len = sizeof(sync_lock_cancel);
+        int rc = 0;
+        ENTRY;
+
+        rc = obd_get_info(lock->l_export, sizeof(KEY_SYNC_LOCK_CANCEL),
+                          KEY_SYNC_LOCK_CANCEL, &len, &sync_lock_cancel, NULL);
+
+        if (!rc && flag == LDLM_CB_CANCELING &&
+            (lock->l_granted_mode & (LCK_PW|LCK_GROUP)) &&
+            (sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
+             (sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
+              lock->l_flags & LDLM_FL_CBPENDING))) {
+                struct obdo *oa;
+                int rc;
+
+                OBDO_ALLOC(oa);
+                oa->o_id = lock->l_resource->lr_name.name[0];
+                oa->o_seq = lock->l_resource->lr_name.name[1];
+                oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
+
+                rc = obd_sync(lock->l_export, oa, NULL,
+                              lock->l_policy_data.l_extent.start,
+                              lock->l_policy_data.l_extent.end, NULL);
+                if (rc)
+                        CERROR("Error %d syncing data on lock cancel\n", rc);
+
+                OBDO_FREE(oa);
+        }
+
+        return ldlm_server_blocking_ast(lock, desc, data, flag);
 }
 
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
@@ -2366,7 +2397,7 @@ int ost_handle(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE))
                         RETURN(0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ldlm_server_blocking_ast,
+                                         ost_blocking_ast,
                                          ldlm_server_glimpse_ast);
                 fail = OBD_FAIL_OST_LDLM_REPLY_NET;
                 break;
