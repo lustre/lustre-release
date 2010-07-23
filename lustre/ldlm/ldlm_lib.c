@@ -987,9 +987,9 @@ dont_check_exports:
                                                        req->rq_self,
                                                        &remote_uuid);
         if (cfs_hlist_unhashed(&export->exp_nid_hash)) {
-                cfs_hash_add_unique(export->exp_obd->obd_nid_hash,
-                                    &export->exp_connection->c_peer.nid,
-                                    &export->exp_nid_hash);
+                cfs_hash_add(export->exp_obd->obd_nid_hash,
+                             &export->exp_connection->c_peer.nid,
+                             &export->exp_nid_hash);
         }
 
         cfs_spin_lock_bh(&target->obd_processing_task_lock);
