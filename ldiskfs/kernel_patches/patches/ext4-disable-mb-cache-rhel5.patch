@@ -73,7 +73,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			ce = NULL;
  		} else if (bs->bh && s->base == bs->bh->b_data) {
  			/* We were modifying this block in-place. */
-@@ -834,7 +840,7 @@ getblk_failed:
+@@ -845,7 +851,7 @@ getblk_failed:
  			memcpy(new_bh->b_data, s->base, new_bh->b_size);
  			set_buffer_uptodate(new_bh);
  			unlock_buffer(new_bh);
@@ -82,7 +82,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			error = ext4_handle_dirty_metadata(handle,
  							   inode, new_bh);
  			if (error)
-@@ -1393,12 +1399,15 @@ ext4_xattr_put_super(struct super_block 
+@@ -1404,12 +1410,15 @@ ext4_xattr_put_super(struct super_block 
   * Returns 0, or a negative error number on failure.
   */
  static void
@@ -99,7 +99,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	ce = mb_cache_entry_alloc(ext4_xattr_cache);
  	if (!ce) {
  		ea_bdebug(bh, "out of memory");
-@@ -1472,6 +1481,8 @@ ext4_xattr_cache_find(struct inode *inod
+@@ -1483,6 +1492,8 @@ ext4_xattr_cache_find(struct inode *inod
  	__u32 hash = le32_to_cpu(header->h_hash);
  	struct mb_cache_entry *ce;
  
@@ -112,7 +112,7 @@ Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -1352,6 +1352,7 @@ enum {
+@@ -1481,6 +1481,7 @@ enum {
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_bigendian_extents,
  	Opt_force_over_16tb,
  	Opt_extents, Opt_noextents,
@@ -120,7 +120,7 @@ Index: linux-stage/fs/ext4/super.c
  };
  
  static match_table_t tokens = {
-@@ -1422,6 +1423,7 @@ static match_table_t tokens = {
+@@ -1554,6 +1555,7 @@ static match_table_t tokens = {
  	{Opt_force_over_16tb, "force_over_16tb"},
  	{Opt_extents, "extents"},
  	{Opt_noextents, "noextents"},
@@ -128,7 +128,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_err, NULL},
  };
  
-@@ -1880,6 +1882,9 @@ set_qf_format:
+@@ -2030,6 +2032,9 @@ set_qf_format:
  			}
  			clear_opt(sbi->s_mount_opt, EXTENTS);
  			break;
@@ -136,17 +136,19 @@ Index: linux-stage/fs/ext4/super.c
 +			set_opt(sbi->s_mount_opt, NO_MBCACHE);
 +			break;
  		default:
- 			printk(KERN_ERR
- 			       "EXT4-fs: Unrecognized mount option \"%s\" "
+ 			ext4_msg(sb, KERN_ERR,
+ 			       "Unrecognized mount option \"%s\" "
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -548,6 +548,7 @@ do {									       \
- #define EXT4_MOUNT_DATA_ERR_ABORT	0x10000000 /* Abort on file data write */
- #define EXT4_MOUNT_IOPEN		0x20000000 /* Allow access via iopen */
- #define EXT4_MOUNT_IOPEN_NOPRIV		0x40000000 /* Make iopen world-readable */
-+#define EXT4_MOUNT_NO_MBCACHE           0x80000000 /* Disable mbcache */
- 
- /* Compatibility, for having both ext2_fs.h and ext4_fs.h included at once */
- #ifndef clear_opt
+@@ -715,7 +715,8 @@ struct ext4_inode_info {
+ /*
+  * Mount flags
+  */
+-#define EXT4_MOUNT_OLDALLOC		0x00002  /* Don't use the new Orlov allocator */
++#define EXT4_MOUNT_NO_MBCACHE           0x00001 /* Disable mbcache */
++#define EXT4_MOUNT_OLDALLOC		0x00002 /* Don't use the new Orlov allocator */
+ #define EXT4_MOUNT_GRPID		0x00004	/* Create files with directory's group */
+ #define EXT4_MOUNT_DEBUG		0x00008	/* Some debugging messages */
+ #define EXT4_MOUNT_ERRORS_CONT		0x00010	/* Continue on errors */

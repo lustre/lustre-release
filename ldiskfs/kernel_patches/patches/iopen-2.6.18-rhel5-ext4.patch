@@ -506,8 +506,8 @@ Index: linux-2.6.18-128.1.6/fs/ext4/ext4.h
  #define EXT4_MOUNT_DELALLOC		0x8000000 /* Delalloc support */
  #define EXT4_MOUNT_DATA_ERR_ABORT	0x10000000 /* Abort on file data write */
  #define EXT4_MOUNT_BLOCK_VALIDITY	0x20000000 /* Block validity checking */
-+#define EXT4_MOUNT_IOPEN		0x20000000 /* Allow access via iopen */
-+#define EXT4_MOUNT_IOPEN_NOPRIV		0x40000000 /* Make iopen world-readable */
++#define EXT4_MOUNT_IOPEN		0x40000000 /* Allow access via iopen */
++#define EXT4_MOUNT_IOPEN_NOPRIV		0x80000000 /* Make iopen world-readable */
  
  /* Compatibility, for having both ext2_fs.h and ext4_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
