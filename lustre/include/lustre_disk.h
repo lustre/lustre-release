@@ -75,11 +75,11 @@
 #define LDD_F_NEED_INDEX    0x0010
 /** never registered */
 #define LDD_F_VIRGIN        0x0020
-/** update the config logs for this server */
+/** update the config logs for this server*/
 #define LDD_F_UPDATE        0x0040
 /** rewrite the LDD */
 #define LDD_F_REWRITE_LDD   0x0080
-/** regenerate config logs for this fs or server */
+/** regenerate all logs for this fs */
 #define LDD_F_WRITECONF     0x0100
 /** COMPAT_14 */
 #define LDD_F_UPGRADE14     0x0200
@@ -194,7 +194,6 @@ struct lustre_mount_data {
                                         no other services */
 #define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
                                         existing MGS services */
-#define LMD_FLG_WRITECONF    0x0040  /* Rewrite config log */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 
