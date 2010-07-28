@@ -99,6 +99,13 @@ stop_mgs() {
 	stop mgs -f  || return 97
 }
 
+start_mgsmds() {
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+	start_mds $@
+}
+
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
 	# These tests all use non-failover stop
@@ -2283,25 +2290,24 @@ test_58() { # bug 22658
 }
 run_test 58 "missing llog files must not prevent MDT from mounting"
 
-if ! combined_mgs_mds ; then
-	stop mgs
-fi
-
-equals_msg `basename $0`: test complete
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
 count_osts() {
 	do_facet mgs $LCTL get_param mgs.MGS.live.$FSNAME | grep OST | wc -l
 }
 
-test_58() {
-	start_mds >> /dev/null
+test_59() {
+	start_mgsmds >> /dev/null
 	local C1=$(count_osts)
+	if [ $C1 -eq 0 ]; then
+		start_ost >> /dev/null
+		C1=$(count_osts)
+	fi
+	stopall
 	echo "original ost count: $C1 (expect > 0)"
-	stop_mds >> /dev/null
-	start_mds -o writeconf >> /dev/null || error "MDT start failed"
+	[ $C1 -gt 0 ] || error "No OSTs in $FSNAME log"
+	start_mgsmds -o writeconf >> /dev/null || error "MDT start failed"
 	local C2=$(count_osts)
 	echo "after mdt writeconf count: $C2 (expect 0)"
-	[ $C1 -gt 0 ] && [ $C2 -gt 0 ] && error "MDT writeconf should erase OST logs"
+	[ $C2 -gt 0 ] && error "MDT writeconf should erase OST logs"
 	echo "OST start without writeconf should fail:"
 	start_ost >> /dev/null && error "OST start without writeconf didn't fail"
 	echo "OST start with writeconf should succeed:"
@@ -2316,5 +2322,13 @@ test_58() {
 	stop_ost2 >> /dev/null
 	cleanup_nocli >> /dev/null
 }
-run_test 58 "writeconf mount option"
+run_test 59 "writeconf mount option"
+
+if ! combined_mgs_mds ; then
+	stop mgs
+fi
+
+equals_msg `basename $0`: test complete
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+
 
