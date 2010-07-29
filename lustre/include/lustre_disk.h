@@ -297,9 +297,7 @@ struct lustre_sb_info {
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         atomic_t                  lsi_mounts;  /* references to the srv_mnt */
-#ifdef HAVE_NEW_BACKING_DEV_INFO
         struct backing_dev_info   bdi;         /* Each client mountpoint needs own backing_dev_info */
-#endif
 };
 
 #define LSI_SERVER                       0x00000001

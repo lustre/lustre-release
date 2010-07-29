@@ -991,18 +991,6 @@ out:
 }
 /* end COMPAT_146 */
 
-static struct backing_dev_info ll_backing_dev_info = {
-        .ra_pages       = 0,    /* No readahead */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
-        .capabilities   = 0,    /* Does contribute to dirty memory */
-#else
-        .memory_backed  = 0,    /* Does contribute to dirty memory */
-#endif
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-        .wb_cnt = 0,
-#endif
-};
-
 #ifdef HAVE_NEW_BACKING_DEV_INFO
 static atomic_t ll_bdi_num = ATOMIC_INIT(0);
 #endif
@@ -1138,8 +1126,10 @@ int ll_fill_super(struct super_block *sb)
         if (err)
                 GOTO(out_free, err);
 
+        memset(&lsi->bdi, 0, sizeof(lsi->bdi));
 #ifdef HAVE_NEW_BACKING_DEV_INFO
-        lsi->bdi = ll_backing_dev_info;
+        lsi->bdi.name = "lustre",
+        lsi->bdi.capabilities   = BDI_CAP_MAP_COPY,
         err = bdi_init(&lsi->bdi);
         if (err)
                 GOTO(out_free, err);
@@ -1150,6 +1140,7 @@ int ll_fill_super(struct super_block *sb)
                 bdi_destroy(&lsi->bdi);
                 GOTO(out_free, err);
         }
+        sb->s_bdi = &lsi->bdi;
 #endif
 
 out_free:
@@ -2013,6 +2004,9 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
         /* OIDEBUG(inode); */
 
+        /* initializing backing dev info. */
+        inode->i_mapping->backing_dev_info = &(s2lsi(inode->i_sb)->bdi);
+
         if (S_ISREG(inode->i_mode)) {
                 struct ll_sb_info *sbi = ll_i2sbi(inode);
                 inode->i_op = &ll_file_inode_operations;
@@ -2031,12 +2025,6 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_op = &ll_special_inode_operations;
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
-                /* initializing backing dev info. */
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-                inode->i_mapping->backing_dev_info = &(s2lsi(inode->i_sb)->bdi);
-#else
-                inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
-#endif
                 EXIT;
         }
 }
