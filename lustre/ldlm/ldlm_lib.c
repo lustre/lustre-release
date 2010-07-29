@@ -1502,7 +1502,7 @@ static int check_for_next_transno(struct obd_device *obd)
         __u64 next_transno, req_transno;
 
         if (obd->obd_stopping) {
-                CDEBUG(D_HA, "waking for stooping device\n");
+                CDEBUG(D_HA, "waking for stopping device\n");
                 return 1;
         }
 
@@ -1537,9 +1537,10 @@ static int check_for_next_transno(struct obd_device *obd)
                 wake_up = 1;
         } else if (queue_len == obd->obd_recoverable_clients) {
                 CDEBUG(D_ERROR,
-                       "waking for skipped transno (skip: "LPD64
+                       "%s: waking for skipped transno (skip: "LPD64
                        ", ql: %d, comp: %d, conn: %d, next: "LPD64")\n",
-                       next_transno, queue_len, completed, max, req_transno);
+                       obd->obd_name, next_transno, queue_len, completed, max,
+                       req_transno);
                 obd->obd_next_recovery_transno = req_transno;
                 wake_up = 1;
         }
@@ -1669,7 +1670,8 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         if (target_exp_enqueue_req_replay(req)) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                DEBUG_REQ(D_ERROR, req, "dropping resent queued req");
+                DEBUG_REQ(D_ERROR, req, "%s: dropping resent queued req",
+                                        obd->obd_name);
                 RETURN(0);
         }
 
@@ -1687,8 +1689,9 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 if (unlikely(lustre_msg_get_transno(reqiter->rq_reqmsg) ==
                              transno)) {
                         spin_unlock_bh(&obd->obd_processing_task_lock);
-                        DEBUG_REQ(D_ERROR, req, "dropping replay: transno "
-                                  "has been claimed by another client");
+                        DEBUG_REQ(D_ERROR, req, "%s: dropping replay: transno "
+                                  "has been claimed by another client",
+                                  obd->obd_name);
                         target_exp_dequeue_req_replay(req);
                         RETURN(0);
                 }
