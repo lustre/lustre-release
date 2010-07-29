@@ -1146,10 +1146,14 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.init_num = bp.num = num;
         bp.create = create;
 
+#if !defined(WALK_SPACE_HAS_DATA_SEM) || !defined(HAVE_EXT4_LDISKFS)
         fsfilt_down_truncate_sem(inode);
+#endif
         err = fsfilt_ext3_ext_walk_space(base, block, num, ext3_ext_new_extent_cb, &bp);
         ext3_ext_invalidate_cache(base);
+#if !defined(WALK_SPACE_HAS_DATA_SEM) || !defined(HAVE_EXT4_LDISKFS)
         fsfilt_up_truncate_sem(inode);
+#endif
 
         return err;
 }
