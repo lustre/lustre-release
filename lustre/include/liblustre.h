@@ -137,8 +137,6 @@ extern int echo_client_init(void);
 
 #define EXPORT_SYMBOL(S)
 
-typedef struct cfs_rcu_head { } cfs_rcu_head_t;
-
 typedef __u64 kdev_t;
 
 #ifndef min

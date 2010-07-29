@@ -376,10 +376,6 @@ int radix_tree_insert(struct radix_tree_root *root, unsigned long index,
                       void *item);
 void *radix_tree_delete(struct radix_tree_root *root, unsigned long index);
 
-typedef struct cfs_rcu_head {
-    int     foo;
-} cfs_rcu_head_t;
-
 #else  /* !__KERNEL__ */
 
 #if !defined(_WINDOWS_)
