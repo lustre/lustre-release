@@ -137,9 +137,11 @@ for NAME in $CONFIGS; do
 
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
+		myGID=$RUNAS_GID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
-		chown $myUID:$myUID $DBENCHDIR
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myGID $myRUNAS || \
+			{ myRUNAS="" && myUID=$UID && myGID=`id -g $USER`; }
+		chown $myUID:$myGID $DBENCHDIR
 		duration=""
 		[ "$SLOW" = "no" ] && duration=" -t 120"
 		if [ "$SLOW" != "no" -o $DB_THREADS -eq 1 ]; then
@@ -172,10 +174,12 @@ for NAME in $CONFIGS; do
 		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
+		myGID=$RUNAS_GID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
-		chown $myUID:$myUID $BONDIR		
-		$myRUNAS bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$myUID:$myUID -d$BONDIR
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myGID $myRUNAS || \
+			{ myRUNAS="" && myUID=$UID && myGID=`id -g $USER`; }
+		chown $myUID:$myGID $BONDIR		
+		$myRUNAS bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$myUID:$myGID -d$BONDIR
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
@@ -202,9 +206,11 @@ for NAME in $CONFIGS; do
 		# $SPACE was calculated with all OSTs
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
+		myGID=$RUNAS_GID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
-		chown $myUID:$myUID $IOZDIR
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myGID $myRUNAS || \
+			{ myRUNAS="" && myUID=$UID && myGID=`id -g $USER`; }
+		chown $myUID:$myGID $IOZDIR
 		$myRUNAS iozone $IOZONE_OPTS -s $SIZE -f $IOZFILE 2>&1 | tee $IOZLOG
 		tail -1 $IOZLOG | grep -q complete || \
 			{ error "iozone (1) failed" && false; }

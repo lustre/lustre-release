@@ -212,7 +212,7 @@ test_0h() {
 
     do_node $CLIENT1 mcreate $file
     pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chown $RUNAS_ID $file
+    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $file
     post=$(get_version $CLIENT1 $file)
     if (($pre == $post)); then
         error "version not changed: pre $pre, post $post"
@@ -227,7 +227,7 @@ test_0i() {
 
     do_node $CLIENT1 mcreate $file
     pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chown :$RUNAS_ID $file
+    do_node $CLIENT1 chgrp $RUNAS_GID $file
     post=$(get_version $CLIENT1 $file)
     if (($pre == $post)); then
         error "version not changed: pre $pre, post $post"
@@ -242,8 +242,8 @@ test_0j() {
     do_node $CLIENT1 mcreate $file
 
     replay_barrier mds
-    do_node $CLIENT2 chown :$RUNAS_ID $file
-    do_node $CLIENT1 chown $RUNAS_ID $file
+    do_node $CLIENT2 chgrp $RUNAS_GID $file
+    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $file
     zconf_umount $CLIENT2 $MOUNT
     facet_failover mds
 
@@ -262,8 +262,8 @@ test_0k() {
     do_node $CLIENT1 mcreate $file
 
     replay_barrier mds
-    do_node $CLIENT2 chown $RUNAS_ID $file
-    do_node $CLIENT1 chown :$RUNAS_ID $file
+    do_node $CLIENT2 chown $RUNAS_ID:$RUNAS_GID $file
+    do_node $CLIENT1 chgrp $RUNAS_GID $file
     zconf_umount $CLIENT2 $MOUNT
     facet_failover mds
 
@@ -297,7 +297,7 @@ test_0m() {
     do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
 
     replay_barrier mds
-    do_node $CLIENT2 chown :$RUNAS_ID $file
+    do_node $CLIENT2 chgrp $RUNAS_GID $file
     do_node $CLIENT1 chmod 666 $file
     zconf_umount $CLIENT2 $MOUNT
     facet_failover mds
@@ -669,11 +669,11 @@ test_2b() {
     replay_barrier mds
     do_node $CLIENT1 chmod 666 $DIR/$tfile-a            # R
     do_node $CLIENT2 chmod 666 $DIR1/$tfile-b           # R
-    do_node $CLIENT2 chown :$RUNAS_ID $DIR2/$tfile-a    # U
-    do_node $CLIENT1 chown $RUNAS_ID $DIR/$tfile-a      # J
+    do_node $CLIENT2 chgrp $RUNAS_GID $DIR2/$tfile-a    # U
+    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-a      # J
     do_node $CLIENT2 truncate $DIR2/$tfile-b 1          # U
-    do_node $CLIENT2 chown :$RUNAS_ID $DIR1/$tfile-b    # R
-    do_node $CLIENT1 chown $RUNAS_ID $DIR/$tfile-b      # R
+    do_node $CLIENT2 chgrp $RUNAS_GID $DIR1/$tfile-b    # R
+    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-b      # R
     zconf_umount $CLIENT2 $MOUNT2
     facet_failover mds
 
@@ -698,7 +698,7 @@ test_2b() {
 
     do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$UID -g \\\#$UID \
             $DIR1/$tfile-a || error "$DIR/$tfile-a: unexpected state"
-    do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$RUNAS_ID -g \\\#$RUNAS_ID \
+    do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$RUNAS_ID -g \\\#$RUNAS_GID \
             $DIR1/$tfile-b || error "$DIR/$tfile-b: unexpected state"
 
     zconf_umount $CLIENT2 $MOUNT1
