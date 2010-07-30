@@ -52,48 +52,54 @@ get_targets () {
 	echo $targets
 }
 
-test_1 () {
+obdflter_survey_targets () {
+	local case=$1
+	local targets
+
+	case $case in
+		disk)    targets=$(get_targets);;
+		netdisk) targets=$(get_targets);;
+		network) targets="$(osts_nodes)";;
+		*) error "unknown obdflter-survey case!" ;;
+	esac
+	echo $targets
+}
+
+obdflter_survey_run () {
+	local case=$1
+
 	rm -f ${TMP}/obdfilter_survey*
 
-	local targets=$(get_targets)
-	local cmd="nobjhi=$nobjhi thrhi=$thrhi size=$size case=disk rslt_loc=${TMP} targets=\"$targets\" sh $OBDSURVEY"
+	local targets=$(obdflter_survey_targets $case)
+	local cmd="thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" sh $OBDSURVEY"
 	echo + $cmd
 	eval $cmd
 
 	cat ${TMP}/obdfilter_survey*
 }
-run_test 1 "Object Storage Targets survey"
-
-test_2 () {
-	rm -f ${TMP}/obdfilter_survey*
-
-	local targets=$(get_targets)
-	local cmd="nobjhi=$nobjhi thrhi=$thrhi size=$size rslt_loc=${TMP} case=netdisk targets=\"$targets\" sh $OBDSURVEY"
-	echo + $cmd
-	eval $cmd
-
-	cat ${TMP}/obdfilter_survey*
+test_1a () {
+	obdflter_survey_run disk
 }
-run_test 2 "Stripe F/S over the Network"
+run_test 1a "Object Storage Targets survey"
+
+test_2a () {
+	obdflter_survey_run netdisk
+}
+run_test 2a "Stripe F/S over the Network"
 
 # README.obdfilter-survey: In network test only automated run is supported.
-test_3 () {
+test_3a () {
 	remote_servers || { skip "Local servers" && return 0; }
 
-
-	rm -f ${TMP}/obdfilter_survey*
 	# The Network survey test needs:
 	# Start lctl and check for the device list. The device list must be empty.
 	cleanupall
 
-	local cmd="nobjhi=2 thrhi=4 size=$size targets="$(osts_nodes)" case=network sh $OBDSURVEY"
-	echo + $cmd
-	eval $cmd
+	obdflter_survey_run network
 
-	cat ${TMP}/obdfilter_survey*
 	setupall
 }
-run_test 3 "Network survey"
+run_test 3a "Network survey"
 
 equals_msg `basename $0`: test complete, cleaning up
 cleanup_echo_devs
