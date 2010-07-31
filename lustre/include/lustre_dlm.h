@@ -368,6 +368,7 @@ struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res, struct ptlrpc_request *r,
                            int buf_idx, int increase);
+        int (*lvbo_free)(struct ldlm_resource *res);
 };
 
 typedef enum {
@@ -608,6 +609,8 @@ struct ldlm_resource {
 
         /* when the resource was considered as contended */
         cfs_time_t             lr_contention_time;
+
+        struct inode          *lr_lvb_inode;
 };
 
 struct ldlm_ast_work {
