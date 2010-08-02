@@ -89,7 +89,7 @@ sub process_test($$$$) {
        my $nmax = (@$out > @$result) ? @$out : @$result;
        for (my $n=0; $n < $nmax; $n++) {
 	 if (!defined($out->[$n]) || !defined($result->[$n]) ||
-	     $out->[$n] ne $result->[$n]) {
+	     ($result->[$n] !~ m/\Q$out->[$n]\E/)) {
 		 $good = 0;
 	 }
        }
