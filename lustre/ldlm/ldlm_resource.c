@@ -168,7 +168,8 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                         canceled = ldlm_cancel_lru(ns, unused, LDLM_SYNC,
                                                    LDLM_CANCEL_PASSED);
                         if (canceled < unused) {
-                                CERROR("not all requested locks are canceled, "
+                                CDEBUG(D_DLMTRACE,
+                                       "not all requested locks are canceled, "
                                        "requested: %d, canceled: %d\n", unused,
                                        canceled);
                                 return -EINVAL;
