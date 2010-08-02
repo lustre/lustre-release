@@ -226,8 +226,7 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                        obd->obd_name, exp->exp_client_uuid.uuid, exp, want);
         } else if (current_grant < want &&
                    current_grant < fed->fed_grant + FILTER_GRANT_CHUNK) {
-                grant = min(want + (1 << blockbits) - 1, 
-                            fs_space_left / (conservative ? 8 : 1));
+                grant = min(want + (1 << blockbits) - 1, fs_space_left / 8);
                 grant &= ~((1ULL << blockbits) - 1);
 
                 if (grant) {
@@ -245,11 +244,6 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                                 LBUG();
                         }
                 }
-
-                LASSERTF(conservative || (fed->fed_grant >= want), "can't get "
-                         "enough grant (want = "LPU64", fs_space_left = "LPU64
-                         ", gotten = %ld)\n", 
-                         want, fs_space_left, fed->fed_grant);
         }
 
         CDEBUG(D_CACHE,
