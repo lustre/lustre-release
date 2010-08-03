@@ -1439,10 +1439,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         if (!ldlm_request_cancel(req, dlm_req, 0))
                 req->rq_status = ESTALE;
 
-        if (ptlrpc_reply(req) != 0)
-                LBUG();
-
-        RETURN(0);
+        RETURN(ptlrpc_reply(req));
 }
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
