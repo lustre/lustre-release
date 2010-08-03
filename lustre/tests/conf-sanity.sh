@@ -534,17 +534,18 @@ is_blkdev () {
 
 test_16() {
         setup
-        # interop 1.8 <-> 2.0: 20: no LOGS
-        local files="{OBJECTS,PENDING}"
-        local lustre_version=$(get_lustre_version mds)
-        if [[ $lustre_version = 1.8* ]]; then
-                files="{OBJECTS,PENDING,LOGS}"
+        # Skip this test if MDS is 2.0+, see bug 22944.
+        if [[ "$(get_mds_version_major)" != "1" ]]; then
+                skip "not running on 2.0 server"
+                cleanup
+                return 0
         fi
-        
+
         check_mount || return 41
         cleanup || return $?
 
         local TMPMTPT="${TMP}/conf16"
+        local files="{OBJECTS,PENDING,LOGS}"
 
         is_blkdev mds $MDSDEV || LOOPOPT="-o loop"
 
