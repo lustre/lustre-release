@@ -801,6 +801,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = cfs_time_current_sec();
         cfs_spin_lock_init(&export->exp_lock);
+        cfs_spin_lock_init(&export->exp_rpc_lock);
         CFS_INIT_HLIST_NODE(&export->exp_uuid_hash);
         CFS_INIT_HLIST_NODE(&export->exp_nid_hash);
 

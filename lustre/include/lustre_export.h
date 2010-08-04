@@ -219,6 +219,8 @@ struct obd_export {
         cfs_list_t                exp_req_replay_queue;
         /** protects exp_flags and exp_outstanding_replies */
         cfs_spinlock_t            exp_lock;
+        /** protects exp_queued_rpc */
+        cfs_spinlock_t            exp_rpc_lock;
         /** Compatibility flags for this export */
         __u64                     exp_connect_flags;
         enum obd_option           exp_flags;

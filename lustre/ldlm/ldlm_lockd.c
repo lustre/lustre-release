@@ -255,7 +255,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
         if (lock->l_export == NULL)
                 return 0;
 
-        cfs_spin_lock(&lock->l_export->exp_lock);
+        cfs_spin_lock_bh(&lock->l_export->exp_rpc_lock);
         cfs_list_for_each_entry(req, &lock->l_export->exp_queued_rpc,
                                 rq_exp_list) {
                 if (req->rq_ops->hpreq_lock_match) {
@@ -264,7 +264,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
                                 break;
                 }
         }
-        cfs_spin_unlock(&lock->l_export->exp_lock);
+        cfs_spin_unlock_bh(&lock->l_export->exp_rpc_lock);
         RETURN(match);
 }
 
@@ -696,14 +696,14 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
                 RETURN_EXIT;
         }
 
-        cfs_spin_lock(&lock->l_export->exp_lock);
+        cfs_spin_lock_bh(&lock->l_export->exp_rpc_lock);
         cfs_list_for_each_entry(req, &lock->l_export->exp_queued_rpc,
                                 rq_exp_list) {
                 if (!req->rq_hp && req->rq_ops->hpreq_lock_match &&
                     req->rq_ops->hpreq_lock_match(req, lock))
                         ptlrpc_hpreq_reorder(req);
         }
-        cfs_spin_unlock(&lock->l_export->exp_lock);
+        cfs_spin_unlock_bh(&lock->l_export->exp_rpc_lock);
         EXIT;
 }
 
