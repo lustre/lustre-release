@@ -19,17 +19,22 @@ ECHO=echo
 LFS=${LFS:-lfs}
 
 usage() {
-    echo "usage: lfs_migrate [-c|-s] [-h] [-l] [-n] [-y] [file|dir ...]" 1>&2
-    echo "    -c compare file data after migrate (default)" 1>&2
-    echo "    -s skip file data comparison after migrate" 1>&2
-    echo "    -h show this usage message" 1>&2
-    echo "    -l migrate files with hard links (skip by default)" 1>&2
-    echo "    -n only print the names of files to be migrated" 1>&2
-    echo "    -y answer 'y' to usage question" 1>&2
-    echo "    if no file or directory is given, file list is read from stdin"
-    echo ""
-    echo "e.g.: lfs_migrate -c /mnt/lustre/file"
-    echo "      lfs find /scratch -O lustre-OST0004 -size +4G | lfs_migrate -y"
+    cat -- <<USAGE 1>&2
+usage: lfs_migrate [-c|-s] [-h] [-l] [-n] [-y] [file|dir ...]
+    -c compare file data after migrate (default)
+    -s skip file data comparison after migrate
+    -h show this usage message
+    -l migrate files with hard links (skip by default)
+    -n only print the names of files to be migrated
+    -q run quietly (don't print filenames or status)
+    -y answer 'y' to usage question
+
+If a directory is an argument, all files in the directory are migrated.
+If no file/directory is given, the file list is read from standard input.
+
+e.g.: lfs_migrate /mnt/lustre/file
+      lfs find /test -O test-OST0004 -size +4G | lfs_migrate -y
+USAGE
     exit 1
 }
 
