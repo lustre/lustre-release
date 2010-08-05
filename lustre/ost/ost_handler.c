@@ -1037,10 +1037,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (body == NULL)
                 GOTO(out, rc = -EFAULT);
 
-        if ((body->oa.o_flags & OBD_BRW_MEMALLOC) &&
-            (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
-                cfs_memory_pressure_set();
-
         objcount = req_capsule_get_size(&req->rq_pill, &RMF_OBD_IOOBJ,
                                         RCL_CLIENT) / sizeof(*ioo);
         ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
@@ -1063,6 +1059,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (remote_nb == NULL || niocount != (req_capsule_get_size(&req->rq_pill,
             &RMF_NIOBUF_REMOTE, RCL_CLIENT) / sizeof(*remote_nb)))
                 GOTO(out, rc = -EFAULT);
+
+        if ((remote_nb[0].flags & OBD_BRW_MEMALLOC) &&
+            (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
+                cfs_memory_pressure_set();
 
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
                 capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
