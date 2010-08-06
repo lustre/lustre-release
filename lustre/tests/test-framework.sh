@@ -141,7 +141,7 @@ init_test_env() {
         export PATH=$PATH:$LUSTRE/utils/gss
     fi
     if ! echo $PATH | grep -q $LUSTRE/tests; then
-        export PATH=$PATH:$LUSTRE/tests
+        export PATH=$LUSTRE/tests:$PATH
     fi
     export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
     [ ! -f "$LST" ] && export LST=$(which lst)
