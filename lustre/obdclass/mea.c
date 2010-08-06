@@ -39,7 +39,6 @@
 #ifdef __KERNEL__
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
-#include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #else

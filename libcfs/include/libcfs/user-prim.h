@@ -200,6 +200,8 @@ typedef struct cfs_group_info {
 # define max(x,y) ((x)>(y) ? (x) : (y))
 #endif
 
+#define cfs_get_random_bytes_prim(val, size)     (*val) = 0
+
 /* utility libcfs init/fini entries */
 #ifdef __WINNT__
 extern int libcfs_arch_init(void);

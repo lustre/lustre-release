@@ -60,11 +60,6 @@
 #error Unsupported operating system.
 #endif
 
-/* prng.c */
-unsigned int ll_rand(void);        /* returns a random 32-bit integer */
-void ll_srand(unsigned int, unsigned int);     /* seed the generator */
-void ll_get_random_bytes(void *buf, int size);
-
 /* target.c */
 struct ptlrpc_request;
 struct obd_export;

@@ -609,7 +609,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 GOTO(out, rc);
 
         if (--lqr->lqr_start_count <= 0) {
-                lqr->lqr_start_idx = ll_rand() % osts->op_count;
+                lqr->lqr_start_idx = cfs_rand() % osts->op_count;
                 lqr->lqr_start_count =
                         (LOV_CREATE_RESEED_MIN / max(osts->op_count, 1U) +
                          LOV_CREATE_RESEED_MULT) * max(osts->op_count, 1U);
@@ -880,23 +880,23 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
                 if (total_weight) {
 #if BITS_PER_LONG == 32
-                        rand = ll_rand() % (unsigned)total_weight;
+                        rand = cfs_rand() % (unsigned)total_weight;
                         /* If total_weight > 32-bit, first generate the high
                          * 32 bits of the random number, then add in the low
                          * 32 bits (truncated to the upper limit, if needed) */
                         if (total_weight > 0xffffffffULL)
-                                rand = (__u64)(ll_rand() %
+                                rand = (__u64)(cfs_rand() %
                                           (unsigned)(total_weight >> 32)) << 32;
                         else
                                 rand = 0;
 
                         if (rand == (total_weight & 0xffffffff00000000ULL))
-                                rand |= ll_rand() % (unsigned)total_weight;
+                                rand |= cfs_rand() % (unsigned)total_weight;
                         else
-                                rand |= ll_rand();
+                                rand |= cfs_rand();
 
 #else
-                        rand = ((__u64)ll_rand() << 32 | ll_rand()) %
+                        rand = ((__u64)cfs_rand() << 32 | cfs_rand()) %
                                 total_weight;
 #endif
                 } else {

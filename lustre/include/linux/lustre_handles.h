@@ -45,7 +45,6 @@
 #include <asm/types.h>
 #include <asm/atomic.h>
 #include <linux/list.h>
-#include <linux/random.h>
 #include <linux/version.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>

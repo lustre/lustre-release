@@ -240,7 +240,7 @@ static inline void read_random(char *buf, int len)
     }
 }
 
-#define cfs_get_random_bytes(buf, len)  read_random(buf, len)
+#define cfs_get_random_bytes_prim(buf, len)  read_random(buf, len)
 
 /* do NOT use function or expression as parameters ... */
 

@@ -48,7 +48,6 @@
 #include <linux/slab.h>
 #include <linux/dcache.h>
 #include <linux/fs.h>
-#include <linux/random.h>
 #include <linux/crypto.h>
 #include <linux/key.h>
 #include <linux/keyctl.h>

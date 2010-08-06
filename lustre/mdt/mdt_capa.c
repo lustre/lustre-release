@@ -57,7 +57,7 @@ static void make_capa_key(struct lustre_capa_key *key,
 {
         key->lk_seq = mdsnum;
         key->lk_keyid = keyid + 1;
-        ll_get_random_bytes(key->lk_key, sizeof(key->lk_key));
+        cfs_get_random_bytes(key->lk_key, sizeof(key->lk_key));
 }
 
 static inline void lck_cpu_to_le(struct lustre_capa_key *tgt,

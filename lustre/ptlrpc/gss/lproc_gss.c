@@ -44,7 +44,6 @@
 #include <linux/slab.h>
 #include <linux/dcache.h>
 #include <linux/fs.h>
-#include <linux/random.h>
 #include <linux/mutex.h>
 #else
 #include <liblustre.h>

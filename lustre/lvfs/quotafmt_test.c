@@ -50,7 +50,6 @@
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
-#include <linux/random.h>
 
 #include <lustre_quota.h>
 #include <obd_class.h>
@@ -230,7 +229,7 @@ static struct lustre_dquot *get_rand_dquot(struct lustre_quota_info *lqi)
         if (dquot == NULL)
                 return NULL;
 
-        ll_get_random_bytes(&rand, sizeof(rand));
+        cfs_get_random_bytes(&rand, sizeof(rand));
         if (!rand)
                 rand = 1000;
 

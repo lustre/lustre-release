@@ -62,6 +62,9 @@
 #include <linux/signal.h>
 #include <linux/sched.h>
 #include <linux/kthread.h>
+#ifdef HAVE_LINUX_RANDOM_H
+#include <linux/random.h>
+#endif
 
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -378,5 +381,5 @@ typedef struct group_info cfs_group_info_t;
 /*
  * Random bytes
  */
-#define cfs_get_random_bytes(buf, nbytes)  get_random_bytes(buf, nbytes)
+#define cfs_get_random_bytes_prim(buf, nbytes)  get_random_bytes(buf, nbytes)
 #endif

@@ -1424,7 +1424,7 @@ int __init gss_init_svc_upcall(void)
          * sequence number checking, thus no chance to sent error notification
          * back to clients.
          */
-        ll_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
+        cfs_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
 
         cache_register(&rsi_cache);

@@ -284,6 +284,16 @@ int cfs_oflags2univ(int flags);
 /* convert universal open flags to local open flags */
 int cfs_univ2oflags(int flags);
 
+/*
+ * Random number handling
+ */
+
+/* returns a random 32-bit integer */
+unsigned int cfs_rand(void);
+/* seed the generator */
+void cfs_srand(unsigned int, unsigned int);
+void cfs_get_random_bytes(void *buf, int size);
+
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
 #include <libcfs/libcfs_ioctl.h>

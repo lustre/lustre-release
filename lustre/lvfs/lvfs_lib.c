@@ -41,7 +41,6 @@
  */
 #ifdef __KERNEL__
 #include <linux/module.h>
-#include <linux/random.h>
 #else
 #include <liblustre.h>
 #endif
@@ -56,7 +55,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                    size_t size, const char *file, int line)
 {
         if (ptr == NULL ||
-            (ll_rand() & OBD_ALLOC_FAIL_MASK) < obd_alloc_fail_rate) {
+            (cfs_rand() & OBD_ALLOC_FAIL_MASK) < obd_alloc_fail_rate) {
                 CERROR("%s%salloc of %s ("LPU64" bytes) failed at %s:%d\n",
                        ptr ? "force " :"", type, name, (__u64)size, file,
                        line);
@@ -87,7 +86,7 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set)
 
         /* Fail 1/obd_fail_val times */
         if (obd_fail_loc & OBD_FAIL_RAND) {
-                if (obd_fail_val < 2 || ll_rand() % obd_fail_val > 0)
+                if (obd_fail_val < 2 || cfs_rand() % obd_fail_val > 0)
                         return 0;
         }
 

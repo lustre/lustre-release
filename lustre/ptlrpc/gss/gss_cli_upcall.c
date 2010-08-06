@@ -49,7 +49,6 @@
 #include <linux/dcache.h>
 #include <linux/fs.h>
 #include <linux/mutex.h>
-#include <linux/random.h>
 #else
 #include <liblustre.h>
 #endif

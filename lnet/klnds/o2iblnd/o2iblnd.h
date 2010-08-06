@@ -65,7 +65,6 @@
 #include <linux/list.h>
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
-#include <linux/random.h>
 #include <linux/pci.h>
 
 #include <net/sock.h>

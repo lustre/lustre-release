@@ -2055,9 +2055,9 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
                 __u32 d[4], s[4];
 
                 s[0] = obj->oo_inode->i_uid;
-                ll_get_random_bytes(&(s[1]), sizeof(__u32));
+                cfs_get_random_bytes(&(s[1]), sizeof(__u32));
                 s[2] = obj->oo_inode->i_gid;
-                ll_get_random_bytes(&(s[3]), sizeof(__u32));
+                cfs_get_random_bytes(&(s[3]), sizeof(__u32));
                 rc = capa_encrypt_id(d, s, key->lk_key, CAPA_HMAC_KEY_MAX_LEN);
                 if (unlikely(rc))
                         RETURN(ERR_PTR(rc));

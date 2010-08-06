@@ -2229,6 +2229,6 @@ int mea_name2idx(struct lmv_stripe_md *mea, const char *name, int namelen);
 int raw_name2idx(int hashtype, int count, const char *name, int namelen);
 
 /* prng.c */
-void ll_generate_random_uuid(class_uuid_t uuid_out);
+#define ll_generate_random_uuid(uuid_out) cfs_get_random_bytes(uuid_out, sizeof(class_uuid_t))
 
 #endif /* __LINUX_OBD_CLASS_H */

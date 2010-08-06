@@ -238,11 +238,11 @@ int class_handle_init(void)
         }
 
         /** bug 21430: add randomness to the initial base */
-        ll_get_random_bytes(seed, sizeof(seed));
+        cfs_get_random_bytes(seed, sizeof(seed));
         cfs_gettimeofday(&tv);
-        ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+        cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
-        ll_get_random_bytes(&handle_base, sizeof(handle_base));
+        cfs_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);
 
         return 0;

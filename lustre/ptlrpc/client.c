@@ -2727,7 +2727,7 @@ void ptlrpc_init_xid(void)
 
         cfs_spin_lock_init(&ptlrpc_last_xid_lock);
         if (now < YEAR_2004) {
-                ll_get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
+                cfs_get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
                 ptlrpc_last_xid >>= 2;
                 ptlrpc_last_xid |= (1ULL << 61);
         } else {

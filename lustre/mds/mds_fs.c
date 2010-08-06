@@ -66,7 +66,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
-        unsigned int tmpname = ll_rand();
+        unsigned int tmpname = cfs_rand();
         struct file *filp;
         struct dentry *new_child;
         struct lvfs_run_ctxt saved;

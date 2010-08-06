@@ -46,7 +46,6 @@
 #include <lustre_mds.h>
 #include <linux/module.h>
 #include <linux/init.h>
-#include <linux/random.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
 #include <linux/smp_lock.h>
