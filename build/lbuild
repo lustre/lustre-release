@@ -1035,7 +1035,9 @@ unpack_linux_devel_rpm() {
 
     # call a distro specific hook, if available
     if type -p unpack_linux_devel_rpm-$DISTRO; then
-        unpack_linux_devel_rpm-$DISTRO "$kernelrpm"
+        if ! unpack_linux_devel_rpm-$DISTRO "$kernelrpm"; then
+            return 255
+        fi
     fi
 
     popd &>/dev/null
