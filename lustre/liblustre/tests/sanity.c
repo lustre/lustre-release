@@ -707,7 +707,7 @@ int t21(char *name)
         }
 
         t_fcntl(fd, F_SETFL, O_APPEND);
-        if (!(ret = t_fcntl(fd, F_GETFL)) & O_APPEND) {
+        if (!((ret = t_fcntl(fd, F_GETFL)) & O_APPEND)) {
                 printf("error get flag: ret %x\n", ret);
                 return(-1);
         }
