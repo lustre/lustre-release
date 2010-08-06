@@ -408,7 +408,7 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
         LASSERT(dlmlock->l_granted_mode == dlmlock->l_req_mode);
 
         ENTRY;
-        if (olck->ols_state != OLS_GRANTED) {
+        if (olck->ols_state < OLS_GRANTED) {
                 lock  = olck->ols_cl.cls_lock;
                 ext   = &dlmlock->l_policy_data.l_extent;
                 descr = &osc_env_info(env)->oti_descr;

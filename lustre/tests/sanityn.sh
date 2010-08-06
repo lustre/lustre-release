@@ -1849,6 +1849,19 @@ test_46h() {
 }
 run_test 46h "pdirops: link vs readdir =============="
 
+test_50() {
+        trunc_size=4096
+        dd if=/dev/zero of=$DIR1/$tfile bs=1K count=10
+#define OBD_FAIL_OSC_CP_ENQ_RACE         0x410
+        do_facet client "lctl set_param fail_loc=0x410"
+        $TRUNCATE $DIR2/$tfile $trunc_size
+        do_facet client "lctl set_param fail_loc=0x0"
+        sleep 3
+        size=`stat -c %s $DIR2/$tfile`
+        [ $size -eq $trunc_size ] || error "wrong size"
+}
+run_test 50 "osc lvb attrs: enqueue vs. CP AST =============="
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2

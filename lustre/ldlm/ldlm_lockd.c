@@ -1561,6 +1561,10 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
         LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
 
+        /* Let Enqueue to call osc_lock_upcall() and initialize
+         * l_ast_data */
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 2);
+
         ldlm_run_ast_work(&ast_list, LDLM_WORK_CP_AST);
 
         LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",

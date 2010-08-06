@@ -3227,6 +3227,9 @@ static int osc_enqueue_interpret(const struct lu_env *env,
          * osc_enqueue_fini(). */
         ldlm_lock_addref(&handle, mode);
 
+        /* Let CP AST to grant the lock first. */
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 1);
+
         /* Complete obtaining the lock procedure. */
         rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, aa->oa_ei->ei_type, 1,
                                    mode, aa->oa_flags, aa->oa_lvb,
