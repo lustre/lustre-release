@@ -198,9 +198,9 @@ command_t cmdlist[] = {
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
          "       -I can be used instead of --inode-hardlimit"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx]\n"
+         "usage: quota [-q] [-v] [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>]\n"
          "             [<-u|-g> <uname>|<uid>|<gname>|<gid>] <filesystem>\n"
-         "       quota [-o obd_uuid|-i mdt_idx|-I ost_idx] -t <-u|-g> <filesystem>"},
+         "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g> <filesystem>"},
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
          "usage: quotainv [-u|-g] <filesystem>"},
 #endif
@@ -1854,7 +1854,6 @@ static inline char *type2name(int check_type)
                 return "unknown";
 }
 
-
 /* Converts seconds value into format string
  * result is returned in buf
  * Notes:
@@ -1862,12 +1861,12 @@ static inline char *type2name(int check_type)
  *        2. zero fields are not filled (except for p. 3): 5d1s
  *        3. zero seconds value is presented as "0s"
  */
-static void sec2str(time_t seconds, char *buf)
+static char * __sec2str(time_t seconds, char *buf)
 {
         const char spec[] = "smhdw";
         const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
         unsigned long c;
-        char* tail = buf;
+        char *tail = buf;
         int i;
 
         for (i = sizeof(mult) / sizeof(mult[0]) - 1 ; i >= 0; i--) {
@@ -1878,8 +1877,24 @@ static void sec2str(time_t seconds, char *buf)
 
                 seconds %= mult[i];
         }
+
+        return tail;
 }
 
+static void sec2str(time_t seconds, char *buf, int rc)
+{
+        char *tail = buf;
+
+        if (rc)
+                *tail++ = '[';
+
+        tail = __sec2str(seconds, tail);
+
+        if (rc && tail - buf < 39) {
+                *tail++ = ']';
+                *tail++ = 0;
+        }
+}
 
 static void diff2str(time_t seconds, char *buf, time_t now)
 {
@@ -1891,7 +1906,7 @@ static void diff2str(time_t seconds, char *buf, time_t now)
                 strcpy(buf, "none");
                 return;
         }
-        sec2str(seconds - now, buf);
+        __sec2str(seconds - now, buf);
 }
 
 static void print_quota_title(char *name, struct if_quotactl *qctl)
@@ -1999,8 +2014,8 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type, int rc)
                 char bgtimebuf[40];
                 char igtimebuf[40];
 
-                sec2str(qctl->qc_dqinfo.dqi_bgrace, bgtimebuf);
-                sec2str(qctl->qc_dqinfo.dqi_igrace, igtimebuf);
+                sec2str(qctl->qc_dqinfo.dqi_bgrace, bgtimebuf, rc);
+                sec2str(qctl->qc_dqinfo.dqi_igrace, igtimebuf, rc);
                 printf("Block grace time: %s; Inode grace time: %s\n",
                        bgtimebuf, igtimebuf);
         }
