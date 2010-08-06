@@ -2227,8 +2227,8 @@ run_e2fsck() {
     df > /dev/null      # update statfs data on disk
     local cmd="$E2FSCK -d -v -f -n $MDSDB_OPT $ostdb_opt $target_dev"
     echo $cmd
-    do_node $node $cmd
-    local rc=${PIPESTATUS[0]}
+    local rc=0
+    do_node $node $cmd || rc =$?
     [ $rc -le $FSCK_MAX_ERR ] || \
         error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
     return 0
@@ -2272,15 +2272,14 @@ generate_db() {
 run_lfsck() {
     local cmd="$LFSCK_BIN -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
     echo $cmd
-    eval $cmd
-    local rc=${PIPESTATUS[0]}
+    local rc=0
+    eval $cmd || rc=$?
     [ $rc -le $FSCK_MAX_ERR ] || \
         error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
     echo "lfsck finished with rc=$rc"
 
     rm -rvf $MDSDB* $OSTDB* || true
-
-    return $rc
+    return 0
 }
 
 check_and_cleanup_lustre() {
@@ -2288,8 +2287,7 @@ check_and_cleanup_lustre() {
         get_svr_devs
         generate_db
         if [ "$SKIP_LFSCK" == "no" ]; then
-            local rc=0
-            run_lfsck || rc=$?
+            run_lfsck
         else
             echo "skip lfsck"
         fi
