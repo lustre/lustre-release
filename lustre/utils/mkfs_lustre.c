@@ -589,8 +589,11 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         return EINVAL;
                 }
                 block_count = mop->mo_device_sz / (L_BLOCK_SIZE >> 10);
-		/* Create one less block. Bug 22906 */
-                block_count = min(block_count, 4294967295U);
+                /* If the LUN size is just over 2^32 blocks, limit the
+                 * filesystem size to 2^32-1 blocks to avoid problems with
+                 * ldiskfs/mkfs not handling this size.  Bug 22906 */
+                if (block_count > 0xffffffffULL && block_count < 0x100002000ULL)
+                        block_count = 0xffffffffULL;
         }
 
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
