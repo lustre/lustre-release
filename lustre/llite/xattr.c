@@ -481,6 +481,8 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
 
         rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
+        if (rc < 0)
+                GOTO(out, rc);
 
         if (S_ISREG(inode->i_mode)) {
                 struct ll_inode_info *lli = ll_i2info(inode);
@@ -494,7 +496,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
         if (rc2 < 0) {
                 GOTO(out, rc2 = 0);
-        } else {
+        } else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
                 const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX) - 1;
                 const size_t name_len   = sizeof("lov") - 1;
                 const size_t total_len  = prefix_len + name_len + 1;
