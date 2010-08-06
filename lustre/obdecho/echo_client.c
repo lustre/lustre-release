@@ -1697,7 +1697,7 @@ static int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_device *ed = obd2echo_dev(obd);
         struct echo_client_obd *ec = ed->ed_ec;
-        struct obd_trans_info dummy_oti = { .oti_thread = NULL };
+        struct obd_trans_info dummy_oti = { 0 };
         struct obdo *oa = &data->ioc_obdo1;
         struct echo_object *eco;
         int rc;
