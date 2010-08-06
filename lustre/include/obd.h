@@ -495,6 +495,7 @@ struct client_obd {
 #define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
 
 struct mgs_obd {
+        struct obd_device_target         mgs_obt;
         struct ptlrpc_service           *mgs_service;
         struct vfsmount                 *mgs_vfsmnt;
         struct super_block              *mgs_sb;

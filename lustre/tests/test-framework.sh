@@ -329,7 +329,7 @@ load_modules_local() {
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
-    [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota
+    [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota $LQUOTAOPTS
     load_module fld/fld
     load_module fid/fid
     load_module lmv/lmv

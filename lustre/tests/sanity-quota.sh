@@ -44,6 +44,11 @@ BUNIT_SZ=${BUNIT_SZ:-1024}	# min block quota unit(kB)
 IUNIT_SZ=${IUNIT_SZ:-10}	# min inode quota unit
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
+SANITY_QUOTA_USERS="quota15_1 quota15_2 quota15_3 quota15_4 quota15_5 quota15_6 \
+                    quota15_7 quota15_8 quota15_9 quota15_10 quota15_11 quota15_12 \
+                    quota15_13 quota15_14 quota15_15 quota15_16 quota15_17 quota15_18 \
+                    quota15_19 quota15_20 quota15_21 quota15_22 quota15_23 quota15_24 \
+                    quota15_25 quota15_26 quota15_27 quota15_28 quota15_29 quota15_30"
 
 TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -2227,6 +2232,80 @@ test_31() {
         resetquota -u $TSTUSR
 }
 run_test_with_stat 31 "test duplicate quota releases ==="
+
+# check hash_cur_bits
+check_quota_hash_cur_bits() {
+        local bits=$1
+
+        # check quota_hash_cur_bits on all obdfilters
+        for num in `seq $OSTCOUNT`; do
+	    cb=`do_facet ost$num "cat /sys/module/lquota/parameters/hash_lqs_cur_bits"`
+	    if [ $cb -gt $bits ]; then
+		echo "hash_lqs_cur_bits of ost$num is too large(cur_bits=$cb)"
+		return 1;
+	    fi
+        done
+        # check quota_hash_cur_bits on mds
+        cb=`do_facet $SINGLEMDS "cat /sys/module/lquota/parameters/hash_lqs_cur_bits"`
+        if [ $cb -gt $bits ]; then
+	    echo "hash_lqs_cur_bits of mds is too large(cur_bits=$cb)"
+	    return 1;
+        fi
+        return 0;
+}
+
+# check lqs hash
+check_lqs_hash() {
+        # check distribution of all obdfilters
+        for num in `seq $OSTCOUNT`; do
+	    do_facet ost$num "lctl get_param obdfilter.${FSNAME}-OST*.hash_stats | grep LQS_HASH" | while read line; do
+		rehash_count=`echo $line | awk '{print $9}'`
+		if [ $rehash_count -eq 0 ]; then
+		    echo -e "ost$num:\n $line"
+		    error "Rehearsh didn't happen"
+		fi
+	    done
+        done
+        # check distribution of mds
+        do_facet $SINGLEMDS "lctl get_param mdt.${FSNAME}-MDT*.hash_stats | grep LQS_HASH" | while read line; do
+	    rehash_count=`echo $line | awk '{print $9}'`
+	    if [ $rehash_count -eq 0 ]; then
+		echo -e "mdt:\n $line"
+		error "Rehearsh didn't happen"
+	    fi
+        done
+}
+
+test_32()
+{
+        # reset system so that quota_hash_cur_bits==3
+        echo "Reset system ..."
+        local LMR_orig=$LOAD_MODULES_REMOTE
+        LOAD_MODULES_REMOTE=true
+        cleanup_and_setup_lustre
+        LOAD_MODULES_REMOTE=$LMR_orig
+
+        for user in $SANITY_QUOTA_USERS; do
+	    check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" >/dev/null 2>/dev/null || \
+		missing_users="$missing_users $user"
+        done
+        [ -n "$missing_users" ] && { skip_env "the following users are missing: $missing_users" ; return 0 ; }
+        check_quota_hash_cur_bits 3 || { skip_env "hash_lqs_cur_bits isn't set properly"; return 0;}
+
+        $LFS quotaoff -ug $DIR
+        $LFS quotacheck -ug $DIR
+
+        for user in $SANITY_QUOTA_USERS; do
+	    $LFS setquota -u $user --block-hardlimit 1048576 $DIR
+        done
+
+        check_lqs_hash
+
+        for user in $SANITY_QUOTA_USERS; do
+	    resetquota -u $user
+        done
+}
+run_test 32 "check lqs hash(bug 21846) =========================================="
 
 # turn off quota
 quota_fini()
