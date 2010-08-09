@@ -3264,12 +3264,14 @@ int ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(-ENOSYS);
 }
 
-int ll_have_md_lock(struct inode *inode, __u64 bits)
+int ll_have_md_lock(struct inode *inode, __u64 bits, ldlm_mode_t l_req_mode)
 {
         struct lustre_handle lockh;
         struct ldlm_res_id res_id;
         struct obd_device *obddev;
         ldlm_policy_data_t policy = { .l_inodebits = {bits}};
+        ldlm_mode_t mode = (l_req_mode == LCK_MINMODE) ?
+                                (LCK_CR|LCK_CW|LCK_PR|LCK_PW) : l_req_mode;
         int flags;
         ENTRY;
 
@@ -3279,14 +3281,15 @@ int ll_have_md_lock(struct inode *inode, __u64 bits)
         obddev = ll_i2mdcexp(inode)->exp_obd;
         fid_build_reg_res_name(ll_inode_lu_fid(inode), &res_id);
 
-        CDEBUG(D_INFO, "trying to match res "LPU64":"LPU64":"LPU64"\n",
+        CDEBUG(D_INFO, "trying to match res "LPU64":"LPU64":"LPU64" mode %s\n",
                 res_id.name[0],
                 res_id.name[1],
-                res_id.name[2]);
+                res_id.name[2],
+                ldlm_lockname[mode]);
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
-                            &policy, LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh)) {
+                            &policy, mode, &lockh)) {
                 RETURN(1);
         }
 
@@ -3370,7 +3373,7 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
                 }
 
                 ll_lookup_finish_locks(&oit, dentry);
-        } else if (!ll_have_md_lock(dentry->d_inode, ibits)) {
+        } else if (!ll_have_md_lock(dentry->d_inode, ibits, LCK_MINMODE)) {
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
                 obd_valid valid = OBD_MD_FLGETATTR;

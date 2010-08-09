@@ -241,6 +241,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 struct inode *inode = ll_inode_from_lock(lock);
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
                 struct lu_fid *fid;
+                ldlm_mode_t mode = lock->l_req_mode;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -249,14 +250,15 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 fid = ll_inode_lu_fid(inode);;
 
                 LASSERT(lock->l_flags & LDLM_FL_CANCELING);
+                /* For OPEN locks we differentiate between lock modes - CR, CW. PR - bug 22891 */
                 if ((bits & MDS_INODELOCK_LOOKUP) &&
-                    ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
+                    ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP, LCK_MINMODE))
                         bits &= ~MDS_INODELOCK_LOOKUP;
                 if ((bits & MDS_INODELOCK_UPDATE) &&
-                    ll_have_md_lock(inode, MDS_INODELOCK_UPDATE))
+                    ll_have_md_lock(inode, MDS_INODELOCK_UPDATE, LCK_MINMODE))
                         bits &= ~MDS_INODELOCK_UPDATE;
                 if ((bits & MDS_INODELOCK_OPEN) &&
-                    ll_have_md_lock(inode, MDS_INODELOCK_OPEN))
+                    ll_have_md_lock(inode, MDS_INODELOCK_OPEN, mode))
                         bits &= ~MDS_INODELOCK_OPEN;
 
                 if (!fid_res_name_eq(fid, &lock->l_resource->lr_name)) {
@@ -555,7 +557,7 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
                    might get picked up later when UPDATE lock will appear */
-                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE)) {
+                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE, LCK_MINMODE)) {
                         spin_lock(&dcache_lock);
                         ll_d_add(*de, inode);
                         spin_unlock(&dcache_lock);
