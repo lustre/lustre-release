@@ -2323,6 +2323,8 @@ debugrestore() {
 error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
+    local tmp=$TMP
+    [ -d "$SHARED_DIR_LOGS" ] && tmp=$SHARED_DIR_LOGS
 
     local dump=true
     # do not dump logs if $1=false
@@ -2334,7 +2336,7 @@ error_noexit() {
     log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
 
     if $dump; then
-        ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
+        ERRLOG=$tmp/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
         echo "Dumping lctl log to $ERRLOG"
         # We need to dump the logs on all nodes
         do_nodes $(comma_list $(nodes_list)) $NODE $LCTL dk $ERRLOG
