@@ -1357,27 +1357,19 @@ retry_get_uuids:
         return ret;
 }
 
-static int cb_ostlist(char *path, DIR *parent, DIR *d, void *data,
-                      struct dirent64 *de)
-{
-        struct find_param *param = (struct find_param *)data;
-        int ret;
-
-        LASSERT(parent != NULL || d != NULL);
-
-        /* Prepare odb. */
-        ret = setup_obd_uuid(d ? d : parent, path, param);
-
-        /* We don't want to actually traverse the directory tree,
-         * so return a positive value from sem_init to terminate
-         * the traversal before it starts.
-         */
-        return ret == 0 ? 1 : ret;
-}
-
 int llapi_ostlist(char *path, struct find_param *param)
 {
-        return param_callback(path, cb_ostlist, cb_common_fini, param);
+        DIR *dir;
+        int ret;
+
+        dir = opendir(path);
+        if (dir == NULL)
+                return -errno;
+
+        ret = setup_obd_uuid(dir, path, param);
+        closedir(dir);
+
+        return ret;
 }
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
