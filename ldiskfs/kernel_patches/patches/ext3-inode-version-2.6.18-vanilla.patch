@@ -118,9 +118,9 @@ Index: linux-2.6.18/include/linux/ext3_fs_i.h
  typedef int ext3_grpblk_t;
  
 @@ -162,6 +164,8 @@ struct ext3_inode_info {
+	/* mballoc */
+	struct list_head i_prealloc_list;
  	spinlock_t i_prealloc_lock;
- 
- 	void *i_filterdata;
 +
 +	__u64 i_fs_version;
  };
