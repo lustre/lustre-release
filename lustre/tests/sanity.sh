@@ -4422,7 +4422,7 @@ test_102k() {
         local default_size=`$GETSTRIPE -s $test_kdir`
         local default_count=`$GETSTRIPE -c $test_kdir`
         local default_offset=`$GETSTRIPE -o $test_kdir`
-        $SETSTRIPE -s 65536 -i 1 -c 2 $test_kdir || error 'dir setstripe failed'
+        $SETSTRIPE -s 65536 -i 1 -c $OSTCOUNT $test_kdir || error 'dir setstripe failed'
         setfattr -n trusted.lov $test_kdir
         local stripe_size=`$GETSTRIPE -s $test_kdir`
         local stripe_count=`$GETSTRIPE -c $test_kdir`
