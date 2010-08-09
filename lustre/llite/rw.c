@@ -638,7 +638,8 @@ static int ras_inside_ra_window(unsigned long idx, struct ra_io_arg *ria)
          * For stride I/O mode, just check whether the idx is inside
          * the ria_pages. */
         return ria->ria_length == 0 || ria->ria_length == ria->ria_pages ||
-               (idx - ria->ria_stoff) % ria->ria_length < ria->ria_pages;
+               (idx >= ria->ria_stoff && (idx - ria->ria_stoff) %
+                ria->ria_length < ria->ria_pages);
 }
 
 static int ll_read_ahead_pages(const struct lu_env *env,
