@@ -988,16 +988,17 @@ test_18() {
 
 	# Set this high until we establish a baseline for what the degradation
 	# is / should be
-	max=15
+	max=30
     diff=$(echo "scale=2; ($time2 - $time1) * 100 / $time1" | bc)
     echo  "No pool to wide pool: $diff %."
     deg=$(echo "scale=2; $diff > $max" | bc)
-    [ "$deg" == "1" ] && error "Degradation with wide pool is $diff % (> $max %)"
+    [ "$deg" == "1" ] && error_ignore 23408  "Degradation with wide pool is $diff % (> $max %)"
 
+	max=15
     diff=$(echo "scale=2; ($time3 - $time1) * 100 / $time1" | bc)
     echo  "No pool to missing pool: $diff %."
     deg=$(echo "scale=2; $diff > $max" | bc)
-    [ "$deg" == "1" ] && error "Degradation with missing pool is $diff % (> $max %)"
+    [ "$deg" == "1" ] && error_ignore 23408 "Degradation with missing pool is $diff % (> $max %)"
 
     return 0
 }
