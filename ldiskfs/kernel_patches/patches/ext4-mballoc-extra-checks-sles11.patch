@@ -260,6 +260,15 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.h
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/fs/ext4/mballoc.h
 +++ linux-2.6.27.21-0.1/fs/ext4/mballoc.h
+@@ -92,7 +92,7 @@
+ /*
+  * for which requests use 2^N search using buddies
+  */
+-#define MB_DEFAULT_ORDER2_REQS		2
++#define MB_DEFAULT_ORDER2_REQS		8
+
+ /*
+  * default group prealloc size 512 blocks
 @@ -219,7 +219,7 @@ struct ext4_mb_history {
  	__u16 tail;	/* what tail broke some buddy */
  	__u16 buddy;	/* buddy the tail ^^^ broke */
