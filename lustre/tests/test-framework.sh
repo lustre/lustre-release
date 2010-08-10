@@ -2228,7 +2228,7 @@ run_e2fsck() {
     local cmd="$E2FSCK -d -v -f -n $MDSDB_OPT $ostdb_opt $target_dev"
     echo $cmd
     local rc=0
-    do_node $node $cmd || rc =$?
+    do_node $node $cmd || rc=$?
     [ $rc -le $FSCK_MAX_ERR ] || \
         error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
     return 0
