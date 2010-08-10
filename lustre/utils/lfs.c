@@ -119,22 +119,22 @@ command_t cmdlist[] = {
          "delete the default striping pattern from an existing directory\n"
          "usage: setstripe [--size|-s stripe_size] [--count|-c stripe_count]\n"
          "                 [--index|-i|--offset|-o start_ost_index]\n"
-         "                 [--pool|-p <pool>] <dir|filename>\n"
+         "                 [--pool|-p <pool>] <directory|filename>\n"
          "       or \n"
-         "       setstripe -d <dir>   (to delete default striping)\n"
+         "       setstripe -d <directory>   (to delete default striping)\n"
          "\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"
          "\t              Can be specified with k, m or g (in KB, MB and GB\n"
          "\t              respectively)\n"
-         "\tstart_ost_index: OST index of first stripe (-1 filesystem default)\n"
+         "\tstart_ost_index: OST index of first stripe (-1 default)\n"
          "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"
-         "\tpool:         Name of OST pool"},
+         "\tpool:         Name of OST pool to use (default none)"},
         {"getstripe", lfs_getstripe, 0,
          "To list the striping info for a given file or files in a\n"
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
-         "                 [--count | -c ] [--index | -i | --offset | -o ]\n"
+         "                 [--count | -c ] [--index | -i | --offset | -o]\n"
          "                 [--size | -s ] [--pool | -p ] [--directory | -d]\n"
-         "                 [--mdt | -M] [--recursive | -r] <dir|file> ..."},
+         "                 [--mdt | -M] [--recursive | -r] <directory|filename> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
          "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
