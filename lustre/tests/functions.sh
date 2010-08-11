@@ -29,6 +29,7 @@ mpi_run () {
     local command="$mpirun $@"
     local mpilog=$TMP/mpi.log
     local rc
+    $LFS df -i
 
     if [ "$MPI_USER" != root -a $mpirun ]; then
         echo "+ chmod 0777 $MOUNT"
@@ -44,6 +45,7 @@ mpi_run () {
     if [ $rc -eq 0 ] && grep -q "p4_error:" $mpilog ; then
        rc=1
     fi
+    $LFS df -i
     return $rc
 }
 
