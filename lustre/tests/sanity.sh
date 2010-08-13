@@ -1362,6 +1362,22 @@ test_27z() {
 }
 run_test 27z "check SEQ/OID on the MDT and OST filesystems"
 
+test_27A() { # b=19102
+        local restore_size=`$GETSTRIPE -s $MOUNT`
+        local restore_count=`$GETSTRIPE -c $MOUNT`
+        local restore_offset=`$GETSTRIPE -o $MOUNT`
+        $SETSTRIPE -c 0 -o -1 -s 0 $MOUNT
+        local default_size=`$GETSTRIPE -s $MOUNT`
+        local default_count=`$GETSTRIPE -c $MOUNT`
+        local default_offset=`$GETSTRIPE -o $MOUNT`
+        local dsize=$((1024 * 1024))
+        [ $default_size -eq $dsize ] || error "stripe size $default_size != $dsize"
+        [ $default_count -eq 1 ] || error "stripe count $default_count != 1"
+        [ $default_offset -eq -1 ] || error "stripe offset $default_offset != -1"
+        $SETSTRIPE -c $restore_count -o $restore_offset -s $restore_size $MOUNT
+}
+run_test 27A "check filesystem-wide default LOV EA values"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
@@ -4772,7 +4788,7 @@ test_102k() {
         local default_size=`$GETSTRIPE -s $test_kdir`
         local default_count=`$GETSTRIPE -c $test_kdir`
         local default_offset=`$GETSTRIPE -o $test_kdir`
-        $SETSTRIPE -s 65536 -i 1 -c 2 $test_kdir || error 'dir setstripe failed'
+        $SETSTRIPE -s 65536 -i 1 -c $OSTCOUNT $test_kdir || error 'dir setstripe failed'
         setfattr -n trusted.lov $test_kdir
         local stripe_size=`$GETSTRIPE -s $test_kdir`
         local stripe_count=`$GETSTRIPE -c $test_kdir`

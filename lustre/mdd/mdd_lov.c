@@ -274,8 +274,8 @@ static int mdd_lov_set_dir_md(const struct lu_env *env,
 
         /* if { size, offset, count } = { 0, -1, 0 } and no pool (i.e. all default
          * values specified) then delete default striping from dir. */
-        if (lum->lmm_stripe_size == 0 && lum->lmm_stripe_count == 0 &&
-            lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1) &&
+        if (LOVEA_DELETE_VALUES(lum->lmm_stripe_size, lum->lmm_stripe_count,
+                                lum->lmm_stripe_offset) &&
             lum->lmm_magic != LOV_USER_MAGIC_V3) {
                 rc = mdd_xattr_set_txn(env, obj, &LU_BUF_NULL,
                                        XATTR_NAME_LOV, 0, handle);
