@@ -2128,11 +2128,11 @@ int ldlm_replay_locks(struct obd_import *imp)
         cfs_list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
                 cfs_list_del_init(&lock->l_pending_chain);
                 if (rc) {
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
                         continue; /* or try to do the rest? */
                 }
                 rc = replay_one_lock(imp, lock);
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
         }
 
         cfs_atomic_dec(&imp->imp_replay_inflight);

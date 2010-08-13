@@ -3897,6 +3897,14 @@ test_74b() { # bug 13310
 }
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
 
+test_74c() {
+#define OBD_FAIL_LDLM_NEW_LOCK
+	lctl set_param fail_loc=0x80000319
+	touch $DIR/$tfile && error "Touch successful"
+	true
+}
+run_test 74c "ldlm_lock_create error path, (shouldn't LBUG)"
+
 num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
 }

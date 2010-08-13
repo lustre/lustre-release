@@ -2622,7 +2622,12 @@ static int ost_cleanup(struct obd_device *obd)
 
         ping_evictor_stop();
 
-        LASSERT(obd->obd_recovering == 0);
+        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_recovering) {
+                target_cancel_recovery_timer(obd);
+                obd->obd_recovering = 0;
+        }
+        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
 
         cfs_down(&ost->ost_health_sem);
         ptlrpc_unregister_service(ost->ost_service);

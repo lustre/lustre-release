@@ -599,7 +599,7 @@ int ping_evictor_wake(struct obd_export *exp)
 
         obd = class_exp2obd(exp);
         if (cfs_list_empty(&obd->obd_evict_list)) {
-                class_incref(obd, __FUNCTION__, cfs_current());
+                class_incref(obd, "evictor", obd);
                 cfs_list_add(&obd->obd_evict_list, &pet_list);
         }
         cfs_spin_unlock(&pet_lock);
@@ -682,7 +682,7 @@ static int ping_evictor_main(void *arg)
                 cfs_list_del_init(&obd->obd_evict_list);
                 cfs_spin_unlock(&pet_lock);
 
-                class_decref(obd, __FUNCTION__, cfs_current());
+                class_decref(obd, "evictor", obd);
         }
         CDEBUG(D_HA, "Exiting Ping Evictor\n");
 

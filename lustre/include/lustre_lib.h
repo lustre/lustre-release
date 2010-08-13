@@ -92,6 +92,9 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 
+void target_cancel_recovery_timer(struct obd_device *obd);
+void target_stop_recovery_thread(struct obd_device *obd);
+void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);

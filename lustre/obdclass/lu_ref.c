@@ -70,8 +70,8 @@
                   lu_ref_print(__ref);                  \
                   cfs_spin_unlock(&__ref->lf_guard);    \
                   lu_ref_print_all();                   \
-                  cfs_spin_lock(&__ref->lf_guard);      \
                   LASSERT(0);                           \
+                  cfs_spin_lock(&__ref->lf_guard);      \
           }                                             \
   } while (0)
 

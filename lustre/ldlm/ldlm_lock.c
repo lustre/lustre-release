@@ -1201,13 +1201,14 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                         GOTO(out, 0);
         }
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_NEW_LOCK))
+                GOTO(out, 0);
+
         RETURN(lock);
 
 out:
-        if (lock->l_lvb_data)
-                OBD_FREE(lock->l_lvb_data, lvb_len);
-        ldlm_interval_free(ldlm_interval_detach(lock));
-        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
+        ldlm_lock_destroy(lock);
+        LDLM_LOCK_RELEASE(lock);
         return NULL;
 }
 
