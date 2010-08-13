@@ -394,7 +394,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 
         /* times */
         if ((ia_valid & (ATTR_MTIME|ATTR_ATIME)) == (ATTR_MTIME|ATTR_ATIME)) {
-                if (current->fsuid != inode->i_uid &&
+                if (current_fsuid() != inode->i_uid &&
                     (error = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                         RETURN(error);
         }
@@ -975,12 +975,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct lustre_handle lockh;
         int rc = 0, err = 0, type = rec->ur_mode & S_IFMT, cleanup_phase = 0;
         int created = 0;
-        unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
+        unsigned int qcids[MAXQUOTAS] = { current_fsuid(), current_fsgid() };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         unsigned int ids[MAXQUOTAS] = { 0, 0 };
         struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
         int quota_pending[2] = {0, 0};
-        unsigned int gid = current->fsgid;
+        unsigned int gid = current_fsgid();
         ENTRY;
 
         LASSERT(offset == REQ_REC_OFF);
@@ -1054,13 +1054,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (dir->i_mode & S_ISGID)
                 gid = dir->i_gid;
         else
-                gid = current->fsgid;
+                gid = current_fsgid();
 
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783
          * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
          * be NULL, b=14840 */
-        ids[0] = current->fsuid;
+        ids[0] = current_fsuid();
         ids[1] = gid;
         lquota_chkquota(mds_quota_interface_ref, req->rq_export, ids[0], ids[1],
                         1, quota_pending, NULL, NULL, 0);
@@ -1141,7 +1141,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_atime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
-                iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
+                iattr.ia_uid = current_fsuid();  /* set by push_ctxt already */
                 iattr.ia_gid = gid;
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
@@ -2901,8 +2901,12 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 #ifdef CRAY_XT3
         if (rec->ur_uc.luc_uce && fsgid != rec->ur_uc.luc_fsgid &&
             in_group_p(fsgid)) {
-                rec->ur_uc.luc_fsgid = fsgid;
-                current->fsgid = saved.luc.luc_fsgid = fsgid;
+                struct cred *cred;
+                rec->ur_uc.luc_fsgid = saved.luc.luc_fsgid = fsgid;
+                if ((cred = prepare_creds())) {
+                        cred->fsgid = fsgid;
+                        commit_creds(cred);
+                }
         }
 #endif
 

@@ -11,7 +11,7 @@ Index: linux-2.6.27.21-0.1/include/linux/mm.h
  	return __va(page_to_pfn(page) << PAGE_SHIFT);
  }
 +/* truncate.c */
-+extern void truncate_complete_page(struct address_space *mapping,struct page *);
++extern int truncate_complete_page(struct address_space *mapping,struct page *);
  
  #if defined(CONFIG_HIGHMEM) && !defined(WANT_PAGE_VIRTUAL)
  #define HASHED_PAGE_VIRTUAL
@@ -23,14 +23,14 @@ Index: linux-2.6.27.21-0.1/mm/truncate.c
   * its lock, b) when a concurrent invalidate_mapping_pages got there first and
   * c) when tmpfs swizzles a page between a tmpfs inode and swapper_space.
   */
--static void
-+void
+-static int
++int
  truncate_complete_page(struct address_space *mapping, struct page *page)
  {
  	if (page->mapping != mapping)
 @@ -107,7 +107,7 @@ truncate_complete_page(struct address_sp
- 	ClearPageMappedToDisk(page);
  	page_cache_release(page);	/* pagecache ref */
+	return 0;
  }
 -
 +EXPORT_SYMBOL_GPL(truncate_complete_page);

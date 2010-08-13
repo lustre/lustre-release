@@ -13,7 +13,7 @@ diff -rupN 2.6.27.21/fs/ext4/dynlocks.c 2.6.27.21_1//fs/ext4/dynlocks.c
 +
 +#include <linux/dynlocks.h>
 +#include <linux/module.h>
-+#include <linux/slab_def.h>
++#include <linux/slab.h>
 +#include <linux/sched.h>
 +
 +#define DYNLOCK_HANDLE_MAGIC	0xd19a10c

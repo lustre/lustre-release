@@ -7,6 +7,7 @@ backfs_extra := $(wildcard @LINUX@/fs/@BACKFS@/Makefile)
 
 backfs_headers := $(wildcard @LINUX@/fs/@BACKFS@/*.h)
 linux_headers := $(wildcard @LINUX@/include/linux/@BACKFS@*.h)
+trace_headers := $(wildcard @LINUX@/include/trace/events/@BACKFS@*.h)
 
 backfs_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/@BACKFS@/*.c))
 

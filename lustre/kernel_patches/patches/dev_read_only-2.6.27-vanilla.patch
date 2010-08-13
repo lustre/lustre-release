@@ -26,7 +26,7 @@ Index: linux-2.6.27.21-0.1/block/blk-core.c
  			goto end_io;
 @@ -2189,6 +2197,91 @@
  }
- EXPORT_SYMBOL(kblockd_flush_work);
+ EXPORT_SYMBOL(kblockd_schedule_work);
  
 + /*
 + * Debug code for turning block devices "read-only" (will discard writes
@@ -115,7 +115,7 @@ Index: linux-2.6.27.21-0.1/block/blk-core.c
 +EXPORT_SYMBOL(dev_check_rdonly);
  int __init blk_dev_init(void)
  {
- 	kblockd_workqueue = create_workqueue("kblockd");
+	BUILD_BUG_ON(__REQ_NR_BITS > 8 *
 Index: linux-2.6.27.21-0.1/fs/block_dev.c
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/fs/block_dev.c	2009-04-23 02:12:56.000000000 -0600

@@ -1,25 +1,23 @@
 diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/ext4.h linux-2.6.27.21-0.1_2//fs/ext4/ext4.h
 --- linux-2.6.27.21-0.1_1//fs/ext4/ext4.h	2009-08-24 15:32:00.000000000 +0530
 +++ linux-2.6.27.21-0.1_2//fs/ext4/ext4.h	2009-08-24 15:32:55.000000000 +0530
-@@ -1171,6 +1171,18 @@ extern int ext4_fiemap(struct inode *, s
- /* migrate.c */
+@@ -1171,6 +1171,16 @@ extern int ext4_fiemap(struct inode *, s
  extern int ext4_ext_migrate(struct inode *);
+ 
  /* namei.c */
-+extern struct inode *ext4_create_inode(handle_t *handle,
-+					  struct inode * dir, int mode);
 +extern int ext4_add_entry(handle_t *handle, struct dentry *dentry,
 +			     struct inode *inode);
 +extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
 +				struct ext4_dir_entry_2 * de_del,
 +				struct buffer_head * bh);
-+extern struct buffer_head * ext4_find_entry (struct inode *dir,
++extern struct buffer_head * ext4_find_entry(struct inode *dir,
 +					    const struct qstr *d_name,
 +					    struct ext4_dir_entry_2 ** res_dir);
 +extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +				  struct inode *inode);
+ extern unsigned int ext4_rec_len_from_disk(__le16 dlen, unsigned blocksize);
+ extern __le16 ext4_rec_len_to_disk(unsigned len, unsigned blocksize);
  extern int ext4_orphan_add(handle_t *, struct inode *);
- extern int ext4_orphan_del(handle_t *, struct inode *);
- extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
 diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4/namei.c
 --- linux-2.6.27.21-0.1_1//fs/ext4/namei.c	2009-08-24 15:32:00.000000000 +0530
 +++ linux-2.6.27.21-0.1_2//fs/ext4/namei.c	2009-08-24 15:43:56.000000000 +0530
@@ -95,34 +93,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
  /*
   * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
   * since this indicates that nlinks count was previously 1.
-@@ -1796,6 +1799,26 @@ static unsigned ext4_dentry_goal(struct
- 	return inum;
- }
- 
-+struct inode * ext4_create_inode(handle_t *handle, struct inode * dir, int mode)
-+{
-+	struct inode *inode;
-+
-+	inode = ext4_new_inode(handle, dir, mode);
-+	if (!IS_ERR(inode)) {
-+		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
-+#ifdef CONFIG_LDISKFS_FS_XATTR
-+			inode->i_op = &ext4_special_inode_operations;
-+#endif
-+		} else {
-+			inode->i_op = &ext4_file_inode_operations;
-+			inode->i_fop = &ext4_file_operations;
-+			ext4_set_aops(inode);
-+		}
-+	}
-+	return inode;
-+}
-+EXPORT_SYMBOL(ext4_create_inode);
-+
- /*
-  * By the time this is called, we already have created
-  * the directory cache entry for the new file, but it
-@@ -1872,51 +1895,43 @@ retry:
+@@ -1872,40 +1895,32 @@ retry:
  	return err;
  }
  
@@ -136,6 +107,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 -	struct inode *inode;
 -	struct buffer_head *dir_block;
 -	struct ext4_dir_entry_2 *de;
+ 	unsigned int blocksize = dir->i_sb->s_blocksize;
 -	int err, retries = 0;
 -
 -	if (EXT4_DIR_LINK_MAX(dir))
@@ -147,15 +119,15 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 -retry:
 -	handle = ext4_journal_start(dir, EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
 -					EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3 +
--					2*EXT4_QUOTA_INIT_BLOCKS(dir->i_sb));
+-					EXT4_MAXQUOTAS_INIT_BLOCKS(dir->i_sb));
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
  
  	if (IS_DIRSYNC(dir))
- 		handle->h_sync = 1;
+		ext4_handle_sync(handle);
  
--	inode = ext4_new_inode_goal(handle, dir, S_IFDIR | mode,
--				    ext4_dentry_goal(dir->i_sb, dentry));
+-	inode = ext4_new_inode(handle, dir, S_IFDIR | mode, &dentry->d_name,
+-			       ext4_dentry_goal(dir->i_sb, dentry));
 -	err = PTR_ERR(inode);
 -	if (IS_ERR(inode))
 -		goto out_stop;
@@ -176,20 +148,6 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
  	BUFFER_TRACE(dir_block, "get_write_access");
  	ext4_journal_get_write_access(handle, dir_block);
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
- 	de->inode = cpu_to_le32(inode->i_ino);
- 	de->name_len = 1;
- 	de->rec_len = ext4_rec_len_to_disk(EXT4_DIR_REC_LEN(de->name_len));
--	strcpy(de->name, ".");
-+	strcpy (de->name, ".");
- 	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
- 	de = ext4_next_entry(de);
- 	de->inode = cpu_to_le32(dir->i_ino);
- 	de->rec_len = ext4_rec_len_to_disk(inode->i_sb->s_blocksize -
--						EXT4_DIR_REC_LEN(1));
-+					      EXT4_DIR_REC_LEN(1));
- 	de->name_len = 2;
- 	strcpy(de->name, "..");
- 	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 @@ -1925,9 +1940,43 @@ retry:
  	ext4_journal_dirty_metadata(handle, dir_block);
  	brelse(dir_block);
@@ -219,8 +177,8 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 +	if (IS_DIRSYNC(dir))
 +		handle->h_sync = 1;
 +
-+	inode = ext4_new_inode_goal(handle, dir, S_IFDIR | mode,
-+				    ext4_dentry_goal(dir->i_sb, dentry));
++	inode = ext4_new_inode(handle, dir, S_IFDIR | mode, &dentry->d_name,
++			       ext4_dentry_goal(dir->i_sb, dentry));
 +	err = PTR_ERR(inode);
 +	if (IS_ERR(inode))
 +		goto out_stop;

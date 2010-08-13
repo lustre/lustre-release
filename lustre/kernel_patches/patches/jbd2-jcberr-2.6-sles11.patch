@@ -61,10 +61,11 @@ Index: linux-2.6.27.21-0.1/include/linux/jbd2.h
   */
  
  struct transaction_s
-@@ -641,6 +672,15 @@ struct transaction_s
- 	 */
- 	int t_handle_count;
- 
+@@ -641,6 +672,16 @@ struct transaction_s
+	 * structures associated with the transaction
+	 */
+	struct list_head	t_private_list;
++
 +	/*
 +	 * Protects the callback list
 +	 */
@@ -152,15 +153,15 @@ Index: linux-2.6.27.21-0.1/fs/jbd2/transaction.c
 --- linux-2.6.27.21-0.1.orig/fs/jbd2/transaction.c
 +++ linux-2.6.27.21-0.1/fs/jbd2/transaction.c
 @@ -50,7 +50,9 @@ jbd2_get_transaction(journal_t *journal,
- 	transaction->t_state = T_RUNNING;
+	transaction->t_start_time = ktime_get();
  	transaction->t_tid = journal->j_transaction_sequence++;
  	transaction->t_expires = jiffies + journal->j_commit_interval;
 +	INIT_LIST_HEAD(&transaction->t_jcb);
  	spin_lock_init(&transaction->t_handle_lock);
 +	spin_lock_init(&transaction->t_jcb_lock);
  	INIT_LIST_HEAD(&transaction->t_inode_list);
+	INIT_LIST_HEAD(&transaction->t_private_list);
  
- 	/* Set up the commit timer for the new transaction. */
 @@ -252,6 +254,7 @@ static handle_t *new_handle(int nblocks)
  	memset(handle, 0, sizeof(*handle));
  	handle->h_buffer_credits = nblocks;

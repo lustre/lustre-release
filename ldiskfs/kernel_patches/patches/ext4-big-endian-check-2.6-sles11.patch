@@ -12,32 +12,32 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  			       struct ext4_group_desc *bg)
  {
 @@ -1291,7 +1293,7 @@ enum {
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
- 	Opt_grpquota, Opt_extents, Opt_noextents, Opt_i_version,
- 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
--	Opt_inode_readahead_blks,
-+	Opt_inode_readahead_blks, Opt_bigendian_extents,
+	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
+	Opt_block_validity, Opt_noblock_validity,
+	Opt_inode_readahead_blks, Opt_journal_ioprio,
+-	Opt_discard, Opt_nodiscard,
++	Opt_discard, Opt_nodiscard, Opt_bigendian_extents,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  };
  
 @@ -1353,6 +1355,7 @@ static const match_table_t tokens = {
- 	{Opt_delalloc, "delalloc"},
- 	{Opt_nodelalloc, "nodelalloc"},
- 	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
+	{Opt_noauto_da_alloc, "noauto_da_alloc"},
+	{Opt_discard, "discard"},
+	{Opt_nodiscard, "nodiscard"},
 +	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_err, NULL},
  };
  
 @@ -1768,6 +1771,9 @@ set_qf_format:
- 				return 0;
- 			sbi->s_inode_readahead_blks = option;
+		case Opt_nodiscard:
+			clear_opt(sbi->s_mount_opt, DISCARD);
  			break;
 +		case Opt_bigendian_extents:
 +			bigendian_extents = 1;
 +			break;
  		default:
- 			printk(KERN_ERR
- 			       "EXT4-fs: Unrecognized mount option \"%s\" "
+			ext4_msg(sb, KERN_ERR,
+			       "Unrecognized mount option \"%s\" "
 @@ -2673,6 +2679,15 @@ static int ext4_fill_super(struct super_
  				 &sbi->s_inode_readahead_blks);
  #endif
@@ -51,6 +51,6 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +	}
 +#endif
 +
- 	bgl_lock_init(&sbi->s_blockgroup_lock);
+ 	bgl_lock_init(sbi->s_blockgroup_lock);
  
- 	sbi->s_last_alloc_group = -1;
+	for (i = 0; i < db_count; i++) {

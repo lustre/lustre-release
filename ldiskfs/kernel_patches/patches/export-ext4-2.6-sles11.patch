@@ -46,9 +46,9 @@ Index: linux-stage/fs/ext4/ext4.h
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
 @@ -1047,6 +1047,8 @@ extern struct inode * ext4_orphan_get(st
- extern unsigned long ext4_count_free_inodes(struct super_block *);
- extern unsigned long ext4_count_dirs(struct super_block *);
- extern void ext4_check_inodes_bitmap(struct super_block *);
+				       ext4_group_t group,
+				       struct ext4_group_desc *desc);
+ extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
 +extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
 +                                                  ext4_group_t block_group);
  

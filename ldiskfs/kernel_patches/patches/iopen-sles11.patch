@@ -345,12 +345,10 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
 +++ linux-2.6.27.21-0.1/fs/ext4/super.c
-@@ -955,7 +955,8 @@ enum {
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
- 	Opt_grpquota, Opt_extents, Opt_noextents, Opt_i_version,
- 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
--	Opt_inode_readahead_blks
-+	Opt_inode_readahead_blks,
+@@ -955,6 +955,7 @@ enum {
+	Opt_block_validity, Opt_noblock_validity,
+	Opt_inode_readahead_blks, Opt_journal_ioprio,
+	Opt_discard, Opt_nodiscard,
 +	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  };
  
@@ -370,16 +368,16 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  				clear_opt(sbi->s_mount_opt, BARRIER);
  			break;
 +		case Opt_iopen:
-+			set_opt (sbi->s_mount_opt, IOPEN);
-+			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
++			set_opt(sbi->s_mount_opt, IOPEN);
++			clear_opt(sbi->s_mount_opt, IOPEN_NOPRIV);
 +			break;
 +		case Opt_noiopen:
-+			clear_opt (sbi->s_mount_opt, IOPEN);
-+			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
++			clear_opt(sbi->s_mount_opt, IOPEN);
++			clear_opt(sbi->s_mount_opt, IOPEN_NOPRIV);
 +			break;
 +		case Opt_iopen_nopriv:
-+			set_opt (sbi->s_mount_opt, IOPEN);
-+			set_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
++			set_opt(sbi->s_mount_opt, IOPEN);
++			set_opt(sbi->s_mount_opt, IOPEN_NOPRIV);
 +			break;
  		case Opt_ignore:
  			break;
@@ -422,18 +420,18 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  		ext4_mark_inode_dirty(handle, inode);
 -		d_instantiate(dentry, inode);
 +		iopen_d_instantiate(dentry, inode);
+		unlock_new_inode(inode);
  		return 0;
  	}
- 	drop_nlink(inode);
 @@ -1876,7 +1881,7 @@ out_clear_inode:
  	ext4_inc_count(handle, dir);
  	ext4_update_dx_flag(dir);
  	ext4_mark_inode_dirty(handle, dir);
 -	d_instantiate(dentry, inode);
 +	iopen_d_instantiate(dentry, inode);
+	unlock_new_inode(inode);
  out_stop:
  	ext4_journal_stop(handle);
- 	if (err == -ENOSPC && ext4_should_retry_alloc(dir->i_sb, &retries))
 @@ -2142,10 +2147,6 @@ static int ext4_rmdir(struct inode *dir,
  			     inode->i_nlink);
  	inode->i_version++;
@@ -469,11 +467,18 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  static int ext4_link(struct dentry *old_dentry,
  		     struct inode *dir, struct dentry *dentry)
  {
-@@ -2301,7 +2319,8 @@ retry:
+@@ -2301,14 +2319,8 @@ retry:
  	ext4_inc_count(handle, inode);
  	atomic_inc(&inode->i_count);
  
--	err = ext4_add_nondir(handle, dentry, inode);
+-	err = ext4_add_entry(handle, dentry, inode);
+-	if (!err) {
+-		ext4_mark_inode_dirty(handle, inode);
+-		d_instantiate(dentry, inode);
+-	} else {
+-		drop_nlink(inode);
+-		iput(inode);
+-	}
 +	err = ext4_add_link(handle, dentry, inode);
 +	ext4_orphan_del(handle, inode);
  	ext4_journal_stop(handle);
@@ -485,23 +490,23 @@ Index: linux-2.6.27.21-0.1/fs/ext4/Makefile
 +++ linux-2.6.27.21-0.1/fs/ext4/Makefile
 @@ -4,7 +4,7 @@
  
- obj-$(CONFIG_EXT4DEV_FS) += ext4dev.o
+ obj-$(CONFIG_EXT4_FS) += ext4.o
  
--ext4dev-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
-+ext4dev-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
- 		   ext4_jbd2.o migrate.o mballoc.o
+-ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
++ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+		ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
+		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o
  
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h
 +++ linux-2.6.27.21-0.1/fs/ext4/ext4.h
 @@ -540,6 +540,8 @@ do {									       \
- #define EXT4_MOUNT_JOURNAL_ASYNC_COMMIT	0x1000000 /* Journal Async Commit */
- #define EXT4_MOUNT_I_VERSION            0x2000000 /* i_version support */
- #define EXT4_MOUNT_DELALLOC		0x8000000 /* Delalloc support */
-+#define EXT4_MOUNT_IOPEN		0x10000000 /* Allow access via iopen */
-+#define EXT4_MOUNT_IOPEN_NOPRIV		0x20000000 /* Make iopen world-readable */
- /* Compatibility, for having both ext2_fs.h and ext4_fs.h included at once */
- #ifndef _LINUX_EXT2_FS_H
+ #define EXT4_MOUNT_DATA_ERR_ABORT	0x10000000 /* Abort on file data write */
+ #define EXT4_MOUNT_BLOCK_VALIDITY	0x20000000 /* Block validity checking */
+ #define EXT4_MOUNT_DISCARD		0x40000000 /* Issue DISCARD requests */
++#define EXT4_MOUNT_IOPEN		0x80000000 /* Allow access via iopen */
++#define EXT4_MOUNT_IOPEN_NOPRIV	0x100000000ULL /* Make iopen world-readable */
+
  #define clear_opt(o, opt)		o &= ~EXT4_MOUNT_##opt
+ #define set_opt(o, opt)			o |= EXT4_MOUNT_##opt

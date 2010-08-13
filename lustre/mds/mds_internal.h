@@ -69,7 +69,7 @@ static inline void mds_export_evict(struct obd_export *exp)
 
 #ifdef __KERNEL__
 /* Open counts for files.  No longer atomic, must hold inode->i_sem */
-# define mds_inode_oatomic(inode)    ((inode)->i_cindex)
+#define mds_inode_oatomic(inode)    (*((long*)&((inode)->i_pipe)))
 
 #define MDS_UP_READ_ORPHAN_SEM(i)          UP_READ_I_ALLOC_SEM(i)
 #define MDS_DOWN_READ_ORPHAN_SEM(i)        DOWN_READ_I_ALLOC_SEM(i)

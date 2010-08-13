@@ -12,22 +12,22 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  			     unsigned long journal_devnum);
  static int ext4_create_journal(struct super_block *, struct ext4_super_block *,
 @@ -1287,7 +1289,7 @@
- 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
- 	Opt_grpquota, Opt_extents, Opt_noextents, Opt_i_version,
--	Opt_mballoc,
-+	Opt_mballoc, Opt_force_over_8tb,
- 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
- 	Opt_inode_readahead_blks, Opt_bigendian_extents,
- 	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+	Opt_inode_readahead_blks, Opt_journal_ioprio,
+	Opt_discard, Opt_nodiscard, Opt_bigendian_extents,
+	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+-	Opt_mballoc, Opt_extents,
++	Opt_mballoc, Opt_force_over_8tb, Opt_extents,
+ };
+
+ static match_table_t tokens = {
 @@ -1349,6 +1351,7 @@
- 	{Opt_stripe, "stripe=%u"},
- 	{Opt_resize, "resize"},
+	{Opt_nodiscard, "nodiscard"},
+	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_mballoc, "mballoc"},
 +	{Opt_force_over_8tb, "force_over_8tb"},
- 	{Opt_delalloc, "delalloc"},
- 	{Opt_nodelalloc, "nodelalloc"},
- 	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
+	{Opt_err, NULL},
+ };
+ 
 @@ -1773,6 +1776,9 @@
  			break;
  		case Opt_mballoc:
@@ -36,8 +36,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +			force_over_8tb = 1;
 +			break;
  		default:
- 			printk(KERN_ERR
- 			       "EXT4-fs: Unrecognized mount option \"%s\" "
+			ext4_msg(sb, KERN_ERR,
+			       "Unrecognized mount option \"%s\" "
 @@ -2634,6 +2640,17 @@
  		goto failed_mount;
  	}

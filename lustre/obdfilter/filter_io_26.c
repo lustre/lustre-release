@@ -377,11 +377,11 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                        "sectors %d(%d) psg %d(%d) hsg %d(%d)\n",
                                        bio->bi_size,
                                        bio->bi_vcnt, bio->bi_max_vecs,
-                                       bio->bi_size >> 9, q->max_sectors,
+                                       bio->bi_size >> 9, queue_max_sectors(q),
                                        bio_phys_segments(q, bio),
-                                       q->max_phys_segments,
+                                       queue_max_phys_segments(q),
                                        bio_hw_segments(q, bio),
-                                       q->max_hw_segments);
+                                       queue_max_hw_segments(q));
 
                                 record_start_io(iobuf, rw, bio->bi_size, exp);
                                 rc = fsfilt_send_bio(rw, obd, inode, bio);
@@ -676,7 +676,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        DQUOT_INIT(inode);
+        ll_vfs_dq_init(inode);
         fsfilt_check_slow(obd, now, "quota init");
 
         LOCK_INODE_MUTEX(inode);

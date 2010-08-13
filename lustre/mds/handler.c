@@ -1221,7 +1221,7 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
 
         CDEBUG(D_INODE, "ino %lu\n", de->d_inode->i_ino);
 
-        file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE);
+        file = ll_dentry_open(de, mnt, O_RDONLY | O_LARGEFILE, current_cred());
         /* note: in case of an error, dentry_open puts dentry */
         if (IS_ERR(file))
                 GOTO(out_pop, rc = PTR_ERR(file));

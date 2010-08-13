@@ -2,10 +2,8 @@ ext4-wantedi-2.6-sles11.patch
 iopen-sles11.patch
 ext4-map_inode_page-sles11.patch
 export-ext4-2.6-sles11.patch
-ext4-include-fixes-2.6-sles11.patch
 ext4-remove-cond_resched-calls-sles11.patch
 ext4-mmp-sles11.patch
-ext4-fiemap-2.6-sles11.patch
 ext4-lookup-dotdot-sles11.patch
 ext4-max-dir-size-sles11.patch
 ext4-print-inum-in-htree-warning-sles11.patch
@@ -19,12 +17,7 @@ ext4-super-warning.patch
 ext4-alloc-policy-2.6-sles11.patch
 ext4-disable-delalloc-sles11.patch
 ext4-lustre-i_version.patch
-ext4-lock-cached_extent.patch
-ext4-convert-group-lock-sles11.patch
 ext4-force_over_8tb-sles11.patch
-ext4-claim_inode-free_inode-race.patch
-ext4_ext_search_right-fix.patch
-ext4-pa_lock-typo.patch
 ext4-pdir-fix.patch
 ext4-osd-iop-common-sles11.patch
 ext4-osd-iam-exports.patch
@@ -34,4 +27,3 @@ ext4-hash-indexed-dir-dotdot-update.patch
 ext4-disable-write-bar-by-default.patch
 ext4-mballoc-skip-grps.patch
 ext4-disable-mb-cache-sles11.patch
-ext4-remove-extents-warning-sles11.patch

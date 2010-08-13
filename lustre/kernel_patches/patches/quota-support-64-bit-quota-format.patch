@@ -14,8 +14,8 @@ Signed-off-by: Andrew Morton <akpm@linux-foundation.org>
  2 files changed, 132 insertions(+), 34 deletions(-)
 
 diff -puN fs/quota_v2.c~quota-support-64-bit-quota-format fs/quota_v2.c
---- a/fs/quota_v2.c~quota-support-64-bit-quota-format
-+++ a/fs/quota_v2.c
+--- a/fs/quota/quota_v2.c~quota-support-64-bit-quota-format
++++ a/fs/quota/quota_v2.c
 @@ -23,14 +23,24 @@ MODULE_LICENSE("GPL");
  
  #define __QUOTA_V2_PARANOIA
@@ -229,8 +229,8 @@ diff -puN fs/quota_v2.c~quota-support-64-bit-quota-format fs/quota_v2.c
  			sb_dqinfo(dquot->dq_sb, dquot->dq_type)->dqi_priv;
  
 diff -puN fs/quotaio_v2.h~quota-support-64-bit-quota-format fs/quotaio_v2.h
---- a/fs/quotaio_v2.h~quota-support-64-bit-quota-format
-+++ a/fs/quotaio_v2.h
+--- a/fs/quota/quotaio_v2.h~quota-support-64-bit-quota-format
++++ a/fs/quota/quotaio_v2.h
 @@ -17,8 +17,8 @@
  }
  
@@ -280,45 +280,3 @@ diff -puN fs/quotaio_v2.h~quota-support-64-bit-quota-format fs/quotaio_v2.h
  struct v2_disk_dqinfo {
  	__le32 dqi_bgrace;	/* Time before block soft limit becomes hard limit */
 _
-diff -puN fs/dquot.c fs/dquot.c
---- a/fs/dquot.c
-+++ b/fs/dquot.c
-@@ -2065,32 +2065,32 @@ static int do_set_dqblk(struct dquot *dq
- 	if (di->dqb_valid & QIF_SPACE) {
- 		dm->dqb_curspace = di->dqb_curspace;
- 		check_blim = 1;
--		__set_bit(DQ_LASTSET_B + QIF_SPACE_B, &dquot->dq_flags);
-+		set_bit(DQ_LASTSET_B + QIF_SPACE_B, &dquot->dq_flags);
- 	}
- 	if (di->dqb_valid & QIF_BLIMITS) {
- 		dm->dqb_bsoftlimit = qbtos(di->dqb_bsoftlimit);
- 		dm->dqb_bhardlimit = qbtos(di->dqb_bhardlimit);
- 		check_blim = 1;
--		__set_bit(DQ_LASTSET_B + QIF_BLIMITS_B, &dquot->dq_flags);
-+		set_bit(DQ_LASTSET_B + QIF_BLIMITS_B, &dquot->dq_flags);
- 	}
- 	if (di->dqb_valid & QIF_INODES) {
- 		dm->dqb_curinodes = di->dqb_curinodes;
- 		check_ilim = 1;
--		__set_bit(DQ_LASTSET_B + QIF_INODES_B, &dquot->dq_flags);
-+		set_bit(DQ_LASTSET_B + QIF_INODES_B, &dquot->dq_flags);
- 	}
- 	if (di->dqb_valid & QIF_ILIMITS) {
- 		dm->dqb_isoftlimit = di->dqb_isoftlimit;
- 		dm->dqb_ihardlimit = di->dqb_ihardlimit;
- 		check_ilim = 1;
--		__set_bit(DQ_LASTSET_B + QIF_ILIMITS_B, &dquot->dq_flags);
-+		set_bit(DQ_LASTSET_B + QIF_ILIMITS_B, &dquot->dq_flags);
- 	}
- 	if (di->dqb_valid & QIF_BTIME) {
- 		dm->dqb_btime = di->dqb_btime;
--		__set_bit(DQ_LASTSET_B + QIF_BTIME_B, &dquot->dq_flags);
-+		set_bit(DQ_LASTSET_B + QIF_BTIME_B, &dquot->dq_flags);
- 	}
- 	if (di->dqb_valid & QIF_ITIME) {
- 		dm->dqb_itime = di->dqb_itime;
--		__set_bit(DQ_LASTSET_B + QIF_ITIME_B, &dquot->dq_flags);
-+		set_bit(DQ_LASTSET_B + QIF_ITIME_B, &dquot->dq_flags);
- 	}
- 
- 	if (check_blim) {

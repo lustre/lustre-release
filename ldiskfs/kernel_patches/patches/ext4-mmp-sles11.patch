@@ -391,9 +391,9 @@ Index: linux-stage/fs/ext4/super.c
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
 @@ -3086,7 +3430,7 @@ static int ext4_remount(struct super_blo
- 	unsigned long old_sb_flags;
  	struct ext4_mount_options old_opts;
  	ext4_group_t g;
+	unsigned int journal_ioprio = DEFAULT_JOURNAL_IOPRIO;
 -	int err;
 +	int err = 0;
  #ifdef CONFIG_QUOTA
@@ -478,14 +478,14 @@ Index: linux-stage/fs/ext4/ext4.h
  
 Index: linux-stage/fs/ext4/ext4_sb.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_sb.h
-+++ linux-stage/fs/ext4/ext4_sb.h
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
 @@ -149,6 +149,8 @@ struct ext4_sb_info {
  
- 	unsigned int s_log_groups_per_flex;
- 	struct flex_groups *s_flex_groups;
+	/* workqueue for dio unwritten */
+	struct workqueue_struct *dio_unwritten_wq;
 +
 +	struct task_struct *s_mmp_tsk;  /* Kernel thread for multiple mount protection */
  };
  
- #endif	/* _EXT4_SB */
+ static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)

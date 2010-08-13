@@ -41,7 +41,7 @@ Index: linux-2.6.22.5/fs/dcache.c
 +	d_rehash_cond(entry, 1);
  }
  
- #define do_switch(x,y) do { \
+ /*
 Index: linux-2.6.22.5/include/linux/dcache.h
 ===================================================================
 --- linux-2.6.22.5.orig/include/linux/dcache.h	2007-08-22 17:23:54.000000000 -0600
@@ -52,5 +52,5 @@ Index: linux-2.6.22.5/include/linux/dcache.h
  #define DCACHE_UNHASHED		0x0010	
 +#define DCACHE_LUSTRE_INVALID	0x0040  /* Lustre invalidated */
  
- #define DCACHE_INOTIFY_PARENT_WATCHED	0x0020 /* Parent inode is watched */
+ #define DCACHE_INOTIFY_PARENT_WATCHED	0x0020 /* Parent inode is watched by inotify */
  

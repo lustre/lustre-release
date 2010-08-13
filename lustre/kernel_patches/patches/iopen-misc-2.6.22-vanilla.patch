@@ -59,9 +59,9 @@ Index: linux-2.6.22.5/include/linux/dcache.h
  /**
   * d_add - add dentry to hash queues
 @@ -286,6 +287,7 @@
- 
  /* used for rename() and baskets */
  extern void d_move(struct dentry *, struct dentry *);
+ extern struct dentry *d_ancestor(struct dentry *, struct dentry *);
 +extern void d_move_locked(struct dentry *, struct dentry *);
  
  /* appendix may either be NULL or be used for transname suffixes */

@@ -1065,12 +1065,17 @@ LB_LINUX_TRY_COMPILE([
 # LN_FUNC_SHOW_TASK
 #
 # we export show_task(), but not all kernels have it (yet)
+# also check sched_show_task() in here, since 2.6.27.
 #
 AC_DEFUN([LN_FUNC_SHOW_TASK],
 [LB_CHECK_SYMBOL_EXPORT([show_task],
 [kernel/ksyms.c kernel/sched.c],[
 AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ],[
+        LB_CHECK_SYMBOL_EXPORT([sched_show_task],
+        [kernel/ksyms.c kernel/sched.c],[
+        AC_DEFINE(HAVE_SCHED_SHOW_TASK, 1, [sched_show_task is exported])
+        ],[])
 ])
 ])
 
@@ -1342,7 +1347,7 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LN_FUNC_DUMP_TRACE],
 [LB_CHECK_SYMBOL_EXPORT([dump_trace],
-[kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
+[kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c arch/x86/kernel/dumpstack_32.c arch/x86/kernel/dumpstack_64.c],[
 	tmp_flags="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="-Werror"
 	AC_MSG_CHECKING([whether we can really use dump_trace])

@@ -60,6 +60,11 @@
 #ifdef HAVE_QUOTAIO_V1_H
 # include <linux/quotaio_v1.h>
 # include <linux/quotaio_v2.h>
+#elif defined(HAVE_FS_QUOTA_QUOTAIO_V1_H)
+# include <quota/quotaio_v1.h>
+# include <quota/quotaio_v2.h>
+# include <quota/quota_tree.h>
+# define V2_DQTREEOFF    QT_TREEOFF
 #else
 # include <quotaio_v1.h>
 # include <quotaio_v2.h>
@@ -883,6 +888,14 @@ static int fsfilt_ext3_sync(struct super_block *sb)
                         ext3_ext_walk_space(tree, block, num, cb);
 #endif
 
+#ifdef EXT_INSERT_EXTENT_WITH_5ARGS
+#define fsfilt_ext3_ext_insert_extent(handle, inode, path, newext, flag) \
+               ext3_ext_insert_extent(handle, inode, path, newext, flag)
+#else
+#define fsfilt_ext3_ext_insert_extent(handle, inode, path, newext, flag) \
+               ext3_ext_insert_extent(handle, inode, path, newext)
+#endif
+
 #include <linux/lustre_version.h>
 
 struct bpointers {
@@ -1478,7 +1491,7 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
                                 struct obd_quotactl *oqc)
 {
         int i, rc = 0, error = 0;
-        struct quotactl_ops *qcop;
+        const struct quotactl_ops *qcop;
         struct if_dqinfo *info;
         struct if_dqblk *dqblk;
         ENTRY;
@@ -1912,7 +1925,7 @@ static int create_new_quota_files(struct qchk_ctxt *qctxt,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                DQUOT_DROP(file->f_dentry->d_inode);
+                ll_vfs_dq_drop(file->f_dentry->d_inode);
 
                 switch (oqc->qc_id) {
                 case LUSTRE_QUOTA_V1 : write_dqheader = v2_write_dqheader;
@@ -2066,14 +2079,27 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         /* we don't really need to take the group lock here,
                          * but it may be useful if one day we support online
                          * quotacheck */
+#ifdef HAVE_EXT4_LDISKFS
+                        ext4_lock_group(sb, group);
+#else
                         spin_lock(sb_bgl_lock(sbi, group));
+#endif
                         if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
                                 /* no inode in use in this group, just skip it */
+#ifdef HAVE_EXT4_LDISKFS
+                                ext3_unlock_group(sb, group);
+#else
                                 spin_unlock(sb_bgl_lock(sbi, group));
+#endif
                                 continue;
                         }
+                        
                         used_count -= ext3_itable_unused_count(sb, desc);
+#ifdef HAVE_EXT4_LDISKFS
+                        ext3_unlock_group(sb, group);
+#else
                         spin_unlock(sb_bgl_lock(sbi, group));
+#endif
                 }
 
                 bitmap_bh = ext3_read_inode_bitmap(sb, group);

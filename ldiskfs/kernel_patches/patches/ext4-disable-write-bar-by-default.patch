@@ -4,8 +4,8 @@ Index: linux-stage/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
 @@ -2457,7 +2457,7 @@ static int ext4_fill_super(struct super_
  	sbi->s_resgid = le16_to_cpu(es->s_def_resgid);
+	sbi->s_max_batch_time = EXT4_DEF_MAX_BATCH_TIME;
  
- 	set_opt(sbi->s_mount_opt, RESERVATION);
 -	set_opt(sbi->s_mount_opt, BARRIER);
 +	/* set_opt(sbi->s_mount_opt, BARRIER); */
  

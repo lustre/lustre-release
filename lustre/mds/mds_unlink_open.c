@@ -226,8 +226,8 @@ int mds_cleanup_pending(struct obd_device *obd)
         if (IS_ERR(mnt))
                 GOTO(err_mntget, rc = PTR_ERR(mnt));
 
-        file = dentry_open(mds->mds_pending_dir, mds->mds_vfsmnt,
-                           O_RDONLY | O_LARGEFILE);
+        file = ll_dentry_open(mds->mds_pending_dir, mds->mds_vfsmnt,
+                           O_RDONLY | O_LARGEFILE, current_cred());
         if (IS_ERR(file))
                 GOTO(err_pop, rc = PTR_ERR(file));
 

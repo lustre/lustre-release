@@ -57,12 +57,12 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
 +static inline void sd_iostats_finish_req(struct scsi_cmnd *SCpnt) {}
 +#endif
 +
- static const char *sd_cache_types[] = {
- 	"write through", "none", "write back",
- 	"write back, no read (daft)"
+ struct kmem_cache *sd_cdb_cache;
+ mempool_t *sd_cdb_pool;
+ 
 @@ -571,6 +589,8 @@
- 	if (sdkp->protection_type || scsi_prot_sg_count(SCpnt))
- 		sd_dif_op(SCpnt, sdkp->protection_type, scsi_prot_sg_count(SCpnt));
+	if (host_dif || scsi_prot_sg_count(SCpnt))
+		sd_prot_op(SCpnt, host_dif);
  
 +	sd_iostats_start_req(SCpnt);
 +
@@ -392,16 +392,16 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
 +	stats->iostat_queue_depth--;
 +
 +	/* update seek stats. XXX: not sure about nr_sectors */
-+	stats->iostat_sectors += rq->nr_sectors;
++	stats->iostat_sectors += blk_rq_sectors(rq);
 +	stats->iostat_reqs++;
-+	if (rq->sector != stats->iostat_next_sector) {
++	if (blk_rq_pos(rq) != stats->iostat_next_sector) {
 +		stats->iostat_seek_sectors +=
-+			rq->sector > stats->iostat_next_sector ?
-+			rq->sector - stats->iostat_next_sector :
-+			stats->iostat_next_sector - rq->sector;
++			blk_rq_pos(rq) > stats->iostat_next_sector ?
++			blk_rq_pos(rq) - stats->iostat_next_sector :
++			stats->iostat_next_sector - blk_rq_pos(rq);
 +		stats->iostat_seeks++;
 +	}
-+	stats->iostat_next_sector = rq->sector + rq->nr_sectors;
++	stats->iostat_next_sector = rq_end_sector(rq);
 +
 +	stats->iostat_queue_stamp = jiffies;
 +
@@ -521,8 +521,8 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.h
 --- linux-2.6.27.21-0.1.orig/drivers/scsi/sd.h	2009-04-23 02:12:56.000000000 -0600
 +++ linux-2.6.27.21-0.1/drivers/scsi/sd.h	2009-05-22 08:38:28.000000000 -0600
 @@ -37,6 +37,46 @@
-  */
- #define SD_LAST_BUGGY_SECTORS	8
+	SD_MEMPOOL_SIZE = 2,	/* CDB pool size */
+ };
  
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +typedef struct {
@@ -568,9 +568,9 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.h
  	struct scsi_driver *driver;	/* always &sd_template */
  	struct scsi_device *device;
 @@ -53,6 +93,9 @@
- 	unsigned	WCE : 1;	/* state of disk WCE bit */
  	unsigned	RCD : 1;	/* state of disk RCD bit, unused */
  	unsigned	DPOFUA : 1;	/* state of disk DPOFUA bit */
+	unsigned	first_scan : 1;
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +	iostat_stats_t	*stats;		/* scsi disk statistics */
 +#endif

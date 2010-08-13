@@ -6,7 +6,7 @@ Index: linux-2.6.27.21-0.1/drivers/md/raid5.c
  		bi->bi_next = *bip;
  	*bip = bi;
  	bi->bi_phys_segments++;
-+	if (bio_sync(bi) && !forwrite)
++	if (bio_rw_flagged(bi, BIO_RW_SYNCIO) && !forwrite)
 +		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags); /* force to read from disk. */
  	spin_unlock_irq(&conf->device_lock);
  	spin_unlock(&sh->lock);
@@ -15,7 +15,7 @@ Index: linux-2.6.27.21-0.1/drivers/md/raid5.c
  
  		bio_endio(bi, 0);
  	}
-+	if (bio_sync(bi))
++	if (bio_rw_flagged(bi, BIO_RW_SYNCIO))
 +		raid5_unplug_device(q);
  	return 0;
  }

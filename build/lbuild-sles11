@@ -10,15 +10,18 @@ source ${0%/*}/lbuild-sles
 
 edit_specs() {
 
+    # sles11 sp1 needs run 'mkspec' first to generated spec files.
+    cd SOURCES; ./mkspec; cd ..
+
     # edit the SPECs with our changes
     local spec
     for spec in $RPMSMPTYPE source; do
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
         sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
-               -e '/^%setup /a\
-cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
-! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
+               -e "/^%setup /a\
+cp %_sourcedir/linux-${lnxmaj}-lustre.patch %_builddir/%{name}-%{version}/lustre.patch;\
+grep -q lustre.patch %_sourcedir/series.conf || echo ' lustre.patch' >> %_sourcedir/series.conf" \
                -e "/flavor=\${config/a\
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
                -e "s/^\(BuildRequires:  kernel-dummy\)/# \1/" \
@@ -76,4 +79,12 @@ unpack_linux_devel_rpm-sles11() {
         fatal 1 "Unpack error for $kernelrpm"
     fi
 
+    # Novell has kernel-default-devel rpm since sles11 sp1.
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-default-devel in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
 }

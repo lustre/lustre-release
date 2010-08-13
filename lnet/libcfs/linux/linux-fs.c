@@ -72,6 +72,10 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 {
 	mm_segment_t fs;
 	ssize_t size = 0;
+ 	loff_t off = 0;
+ 
+ 	if (!offset)
+ 		offset = &off;
 
 	fs = get_fs();
 	set_fs(KERNEL_DS);

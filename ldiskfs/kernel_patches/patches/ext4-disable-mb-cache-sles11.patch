@@ -79,9 +79,9 @@ Index: linux-stage/fs/ext4/xattr.c
  			unlock_buffer(new_bh);
 -			ext4_xattr_cache_insert(new_bh);
 +			ext4_xattr_cache_insert(sb, new_bh);
- 			error = ext4_journal_dirty_metadata(handle, new_bh);
+			error = ext4_handle_dirty_metadata(handle,
+							   inode, new_bh);
  			if (error)
- 				goto cleanup;
 @@ -1390,12 +1396,15 @@ ext4_xattr_put_super(struct super_block 
   * Returns 0, or a negative error number on failure.
   */
@@ -113,31 +113,32 @@ Index: linux-stage/fs/ext4/ext4.h
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
 @@ -550,6 +550,7 @@ do {									       \
- #define EXT4_MOUNT_DELALLOC		0x8000000 /* Delalloc support */
- #define EXT4_MOUNT_IOPEN		0x10000000 /* Allow access via iopen */
- #define EXT4_MOUNT_IOPEN_NOPRIV		0x20000000 /* Make iopen world-readable */
-+#define EXT4_MOUNT_NO_MBCACHE		0x40000000 /* Disable mbcache */
- /* Compatibility, for having both ext2_fs.h and ext4_fs.h included at once */
- #ifndef clear_opt
+ #define EXT4_MOUNT_DISCARD		0x40000000 /* Issue DISCARD requests */
+ #define EXT4_MOUNT_IOPEN		0x80000000 /* Allow access via iopen */
+ #define EXT4_MOUNT_IOPEN_NOPRIV	0x100000000ULL /* Make iopen world-readable */
++#define EXT4_MOUNT_NO_MBCACHE		0x200000000ULL /* Disable mbcache */
+ 
  #define clear_opt(o, opt)		o &= ~EXT4_MOUNT_##opt
+ #define set_opt(o, opt)			o |= EXT4_MOUNT_##opt
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -1333,6 +1333,7 @@ enum {
- 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
- 	Opt_inode_readahead_blks, Opt_bigendian_extents,
- 	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-+	Opt_no_mbcache,
+@@ -1333,7 +1333,7 @@ enum {
+	Opt_inode_readahead_blks, Opt_journal_ioprio,
+	Opt_discard, Opt_nodiscard, Opt_bigendian_extents,
+	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+-	Opt_mballoc, Opt_force_over_8tb, Opt_extents,
++	Opt_mballoc, Opt_force_over_8tb, Opt_no_mbcache, Opt_extents,
  };
  
  static match_table_t tokens = {
 @@ -1396,6 +1397,7 @@ static match_table_t tokens = {
- 	{Opt_nodelalloc, "nodelalloc"},
- 	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
- 	{Opt_bigendian_extents, "bigendian_extents"},
+	{Opt_bigendian_extents, "bigendian_extents"},
+	{Opt_mballoc, "mballoc"},
+	{Opt_force_over_8tb, "force_over_8tb"},
 +	{Opt_no_mbcache, "no_mbcache"},
- 	{Opt_err, NULL},
+	{Opt_err, NULL},
  };
  
 @@ -1819,6 +1821,9 @@ set_qf_format:
