@@ -24,13 +24,13 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs osts
 .br
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
-        \fB[--count | -c ] [--size | -s ] [--index | -i ]
-        \fB[--offset | -o ] [--pool | -p ] [--directory | -d ]
-        \fB[--recursive|-r] <dirname|filename>\fR
+        \fB[--count | -c ] [--index | -i | --offset | -o ]
+        \fB[--size | -s ] [--pool | -p ] [--directory | -d ]
+        \fB[--recursive|-r] <dirname|filename> ...\fR
 .br
 .B lfs setstripe [--size|-s stripe-size] [--count|-c stripe-cnt]
-        \fB[--offset|-o start-ost] [--pool|-p <pool>]
-        \fB<dir|filename>\fR
+        \fB[--index|-i|--offset|-o start_ost_index ] [--pool|-p <pool>]
+        \fB<dirname|filename>\fR
 .br
 .B lfs setstripe -d <dir>
 .br
@@ -105,37 +105,38 @@ To search the directory tree rooted at the given dir/file name for the files tha
 List all the OSTs for the filesystem
 .TP
 .B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
-        \fB[--count | -c ] [--size | -s ] [--index | -i ]
-        \fB[--offset | -o ] [--pool | -p ] [--directory | -d ]
+        \fB[--count | -c ] [--index | -i | --offset | -o  ]
+        \fB[--pool | -p ] [--size | -s ] [--directory | -d ]
         \fB[--recursive|-r] <dirname|filename>\fR
 .br
 To list the striping information for a given filename or directory. By default the stripe count, size, and offset will be returned. If you only want specific striping information then the options of \fB--count\fR,\fB--size\fR,\fB--index\fR or \fB--offset\fR plus various combinations of these options can be used to retrieve only what you want. What pools a file belong to can also be obtained with \fB--pool\fR. In the case where you only want details about the files object id information then the \fB--quiet\fR option is used. Additional information available about striping can be displayed with \fB--verbose\fR. The default behavior of lfs getstripe used to retrieve data about a directory is to list all the contents of that directory. If you wish to inquire only about that directory then \fB--directory\fR,can be used to list directory entries instead of its contents in the same manner as ls -d. This can be expanded with \fB--recursive\fR which will recurse into all subdirectories. You can filter the search to return only files that has a object on a specific OST with \fB--obd\fR.
 .TP
-.B setstripe [--size stripe-size] [--count stripe-cnt] 
-	\fB[--offset start-ost] [--pool <pool>]\fR
+.B setstripe [--count|-c stripe_cnt] [--size|-s stripe_size]
+        \fB[--index|-i|--offset|-o start_ost_index] [--pool <pool>]
+        \fB<dirname|filename>\fR
 .br
 To create a new file, or set the directory default, with the specified striping parameters.  The
-.I stripe-count
+.I stripe_count
 is the number of OSTs to stripe a file over. A
-.I stripe-count
+.I stripe_count
 of 0 means to use the filesystem-wide default stripe count (default 1), and a
-.I stripe-count
+.I stripe_count
 of -1 means to stripe over all available OSTs.  The
-.I stripe-size
+.I stripe_size
 is the number of bytes to store on each OST before moving to the next OST.  A
-.I stripe-size
+.I stripe_size
 of 0 means to use the filesystem-wide default stripe size (default 1MB).  The
-.I start-ost
-is the OST index (base 10, starting at 0) on which to start striping for this file.  A
-.I start-ost
+.I start_ost_index
+is the OST index (starting at 0) on which to start striping for this file.  A
+.I start_ost_index
 of -1 allows the MDS to choose the starting index and it is strongly recommended, as this allows space and load balancing to be done by the MDS as needed.  The
 .I pool
 is the name of a predefined pool of OSTs (see 
-.I lctl
+.B lctl
 ) that will be used for striping. The 
-.I stripe-count, stripe-size, start-ost
+.I stripe_count, stripe_size, and start_ost_index
 will be used as well; the 
-.I start-ost
+.I start_ost_index
 must be part of the pool or an error will be returned. 
 .TP
 .B setstripe -d
