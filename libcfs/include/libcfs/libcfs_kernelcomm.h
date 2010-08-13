@@ -108,7 +108,7 @@ typedef struct lustre_kernelcomm {
 extern int libcfs_ukuc_start(lustre_kernelcomm *l, int groups);
 extern int libcfs_ukuc_stop(lustre_kernelcomm *l);
 extern int libcfs_ukuc_msg_get(lustre_kernelcomm *l, char *buf, int maxsize,
-                        int transport);
+                               int transport);
 
 #endif /* __LIBCFS_KERNELCOMM_H__ */
 

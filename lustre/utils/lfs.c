@@ -2387,10 +2387,14 @@ static int lfs_changelog(int argc, char **argv)
                 time_t secs;
                 struct tm ts;
 
-                if (endrec && rec->cr_index > endrec)
+                if (endrec && rec->cr_index > endrec) {
+                        llapi_changelog_free(&rec);
                         break;
-                if (rec->cr_index < startrec)
+                }
+                if (rec->cr_index < startrec) {
+                        llapi_changelog_free(&rec);
                         continue;
+                }
 
                 secs = rec->cr_time >> 30;
                 gmtime_r(&secs, &ts);
