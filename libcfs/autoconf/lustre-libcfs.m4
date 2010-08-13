@@ -175,6 +175,7 @@ AC_DEFUN([LIBCFS_U64_LONG_LONG],
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
+	#include <stdio.h>
 	#include <linux/types.h>
 	#include <linux/stddef.h>
 	int main(void) {

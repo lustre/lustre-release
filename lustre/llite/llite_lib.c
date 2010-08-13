@@ -1596,7 +1596,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         inode->i_size = body->size;
 
                         CDEBUG(D_VFSTRACE, "inode=%lu, updating i_size %llu\n",
-                               inode->i_ino, body->size);
+                               inode->i_ino, (unsigned long long)body->size);
                 }
 
                 if (body->valid & OBD_MD_FLBLOCKS)

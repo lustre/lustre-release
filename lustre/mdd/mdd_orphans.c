@@ -86,8 +86,8 @@ static struct dt_key* orph_key_fill_18(const struct lu_env *env,
         int rc;
 
         LASSERT(key);
-        rc = snprintf(key, NAME_MAX + 1, ORPHAN_FILE_NAME_FORMAT_18, fid_seq(lf),
-                      fid_oid(lf));
+        rc = snprintf(key, NAME_MAX + 1, ORPHAN_FILE_NAME_FORMAT_18,
+                      (unsigned long long)fid_seq(lf), fid_oid(lf));
         if (rc > 0)
                 return (struct dt_key*) key;
         else

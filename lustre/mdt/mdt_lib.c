@@ -572,10 +572,10 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
         }
 
         CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d"
-                        " MDSCAPA = "LPX64", OSSCAPA = "LPX64"\n",
+                        " MDSCAPA = %llx, OSSCAPA = %llx\n",
                         md_size, acl_size,
-                        body->valid & OBD_MD_FLMDSCAPA,
-                        body->valid & OBD_MD_FLOSSCAPA);
+                        (unsigned long long)(body->valid & OBD_MD_FLMDSCAPA),
+                        (unsigned long long)(body->valid & OBD_MD_FLOSSCAPA));
 /*
             &RMF_MDT_BODY,
             &RMF_MDT_MD,
