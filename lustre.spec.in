@@ -176,6 +176,8 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_mandir}/man?/*
 
 %attr(-, root, root) %{_libexecdir}/lustre/lc_common
+
+%attr(-, root, root) %{_sysconfdir}/udev/rules.d/99-lustre.rules
 EOF
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libcfsutil.a ] ; then

@@ -1,0 +1,1 @@
+KERNEL=="obd", MODE="0666"
