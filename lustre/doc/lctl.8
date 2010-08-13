@@ -203,11 +203,11 @@ Disable printing of the key name when printing values.
 .br
   20
 .TP
-.BI conf_param " [-d] <device|fsname>.<parameter>=<value>"
+.BI conf_param " [-d] <obd>.<device|fsname>.<parameter>=<value>"
 Set a permanent configuration parameter for any device via the MGS.  This
 command must be run on the MGS node.
 .br
-.B -d <device|fsname>.<parameter>
+.B -d <obd>.<device|fsname>.<param>
 Delete a parameter setting (use the default value at the next restart).  A null value for <value> also deletes the parameter setting.
 .br
 .B Parameters:
@@ -218,25 +218,25 @@ All of the writable parameters under
 .I lctl list_param -F osc.*.* | grep =
 ) can be permanently set using
 .B lctl conf_param
-, but the format is slightly different.  For conf_param, the device is specified first, then the obdtype. (See examples below.)  Wildcards are not supported.
+.  The format is similar to set_param, except a single device (or fsname) is specified. Wildcards are not supported.  See examples below.
 .br
-Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout.)  <device> is ignored for system wide parameters.
+Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout.)  Note system wide parameters affect all devices running on a node.
 .br
 .B Examples:
 .br 
-# lctl conf_param testfs.sys.at_max=1200
+# lctl conf_param sys.testfs.at_max=1200
 .br
-# lctl conf_param testfs.llite.max_read_ahead_mb=16 
+# lctl conf_param llite.testfs.max_read_ahead_mb=16
 .br
-# lctl conf_param testfs-MDT0000.lov.stripesize=2M
+# lctl conf_param lov.testfs-MDT0000.stripesize=2M
 .br
-# lctl conf_param lustre-OST0001.osc.active=0 
+# lctl conf_param osc.testfs-OST0001.active=0
 .br
-# lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15 
+# lctl conf_param osc.testfs-OST0000.max_dirty_mb=29.15
 .br
-# lctl conf_param testfs-OST0000.ost.client_cache_seconds=15 
+# lctl conf_param ost.testfs-OST0000.client_cache_seconds=15
 .br
-# lctl conf_param testfs-OST0000.failover.node=1.2.3.4@tcp1
+# lctl conf_param osc.testfs-OST0000.failover.node=1.2.3.4@tcp1
 .TP 
 .BI activate 
 Reactivate an import after deactivating, below.  This setting is only effective until the next restart (see 

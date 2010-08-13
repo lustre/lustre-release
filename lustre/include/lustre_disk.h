@@ -67,10 +67,7 @@
 
 /****************** persistent mount data *********************/
 
-#define LDD_F_SV_TYPE_MDT   0x0001
-#define LDD_F_SV_TYPE_OST   0x0002
-#define LDD_F_SV_TYPE_MGS   0x0004
-#define LDD_F_SV_ALL        0x0008
+/* First 4 bits reserved for SVTYPEs */
 /** need an index assignment */
 #define LDD_F_NEED_INDEX    0x0010
 /** never registered */
@@ -122,7 +119,7 @@ struct lustre_disk_data {
         __u32      ldd_feature_incompat;/* incompatible feature flags */
 
         __u32      ldd_config_ver;      /* config rewrite count - not used */
-        __u32      ldd_flags;           /* LDD_SV_TYPE */
+        __u32      ldd_flags;           /* SVTYPE */
         __u32      ldd_svindex;         /* server index (0001), must match
                                            svname */
         __u32      ldd_mount_type;      /* target fs type LDD_MT_* */
@@ -137,21 +134,21 @@ struct lustre_disk_data {
 /*8192*/char       ldd_params[4096];     /* key=value pairs */
 };
 
-#define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
-#define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
-#define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
+#define IS_MDT(data)   ((data)->ldd_flags & SVTYPE_MDT)
+#define IS_OST(data)   ((data)->ldd_flags & SVTYPE_OST)
+#define IS_MGS(data)  ((data)->ldd_flags & SVTYPE_MGS)
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
 static inline int server_make_name(__u32 flags, __u16 index, char *fs,
                                    char *name)
 {
-        if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
-                if (!(flags & LDD_F_SV_ALL))
+        if (flags & (SVTYPE_MDT | SVTYPE_OST)) {
+                if (!(flags & SVTYPE_ALL))
                         sprintf(name, "%.8s-%s%04x", fs,
-                                (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+                                (flags & SVTYPE_MDT) ? "MDT" : "OST",
                                 index);
-        } else if (flags & LDD_F_SV_TYPE_MGS) {
+        } else if (flags & SVTYPE_MGS) {
                 sprintf(name, "MGS");
         } else {
                 CERROR("unknown server type %#x\n", flags);
@@ -159,9 +156,6 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
         }
         return 0;
 }
-
-/* Get the index from the obd name */
-int server_name2index(char *svname, __u32 *idx, char **endptr);
 
 
 /****************** mount command *********************/

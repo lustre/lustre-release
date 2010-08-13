@@ -132,8 +132,7 @@ command_t cmdlist[] = {
         {"set_timeout", jt_lcfg_set_timeout, 0,
          "usage: conf_param obd_timeout=<secs>\n"},
         {"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
-         "This command must be run on the MGS node\n"
-         "usage: conf_param [-d] <target.keyword=val>\n"
+         "usage: conf_param [-d] <obd>.<devname>.<param>=<val>\n"
          "  -d  Remove the permanent setting."},
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
          "usage: local_param <target.keyword=val>\n"},
@@ -141,8 +140,8 @@ command_t cmdlist[] = {
          "usage: get_param [-n|-N|-F] <param_path1 param_path2 ...>\n"
          "Get the value of Lustre or LNET parameter from the specified path.\n"
          "The path can contain shell-style filename patterns.\n"
-         "  -n  Print only the value and not parameter name.\n"
-         "  -N  Print only matched parameter names and not the values.\n"
+         "  -n  Do not print the parameter name.\n"
+         "  -N  Do not print the parameter values.\n"
          "      (Especially useful when using patterns.)\n"
          "  -F  When -N specified, add '/', '@' or '=' for directories,\n"
          "      symlinks and writeable files, respectively."},
@@ -156,7 +155,9 @@ command_t cmdlist[] = {
          "List the name of Lustre or LNET parameter from the specified path.\n"
          "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files,\n"
                 "respectively.\n"
-         "  -R  Recursively list all parameters under the specified path.\n"},
+         "  -R  Recursively list all parameters under the specified path.\n"
+         "  -q  Quiet.  Just return success or failure for parameter existance."
+                "\n" },
 
         /* Debug commands */
         {"==== debugging control ====", jt_noop, 0, "debug"},

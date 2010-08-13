@@ -827,10 +827,10 @@ test_27b() {
 }
 run_test 27b "Reacquire MGS lock after failover"
 
-test_28() {
+test_28a() {
         setup
 	TEST="lctl get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
-	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
+	PARAM="llite.$FSNAME.max_read_ahead_whole_mb"
 	ORIG=$($TEST)
 	FINAL=$(($ORIG + 1))
 	set_and_check client "$TEST" "$PARAM" $FINAL || return 3
@@ -848,22 +848,58 @@ test_28() {
 	set_and_check client "$TEST" "$PARAM" $ORIG || return 5
 	cleanup
 }
-run_test 28 "permanent parameter setting"
+run_test 28a "permanent parameter setting"
+
+check_28b() {
+	local NODE=$1
+	shift
+	set_and_check $NODE "$LCTL get_param -n $1*.$2 | head -1" "$1.$2" "$3" || \
+		error "conf_param $1.$2 failed"
+}
+
+test_28b() {
+	setup > /dev/null
+	# should error
+	do_facet mgs "$LCTL conf_param foo=1 2>/dev/null" && \
+		error "Bad format should fail"
+	do_facet mgs "$LCTL conf_param osc.notanfs-OST0000.active=0 2>/dev/null" && \
+		error "Setting on unknown fs should fail"
+	do_facet mgs "$LCTL conf_param osc.$FSNAME-OST00000.active=0 2>/dev/null" && \
+		error "Bad target name should fail"
+	# should succeed
+	check_28b mds mdt.$FSNAME-MDT0000 capa_timeout 1500
+	check_28b mds mdt.$FSNAME-MDT* identity_expire 150
+	check_28b mds mdd.$FSNAME-MDT0000 atime_diff 15
+	check_28b mds mdd.$FSNAME-MDT* sync_permission 0
+	check_28b ost1 obdfilter.$FSNAME-OST0000 client_cache_seconds 15
+	check_28b ost1 obdfilter.$FSNAME-OST* client_cache_count 15
+	check_28b mds lov.$FSNAME-MDT0000 qos_maxage "15 Sec"
+	check_28b mds lov.$FSNAME-MDT0000 qos_prio_free "15%"
+	check_28b client mdc.$FSNAME-MDT0000 max_rpcs_in_flight 15
+	check_28b client osc.$FSNAME-OST0000 active 0
+	check_28b client osc.$FSNAME-OST0000 active 1
+	check_28b client osc.$FSNAME-OST0000 max_dirty_mb 15
+	check_28b client llite.$FSNAME max_read_ahead_mb 15
+	set_and_check client "$LCTL get_param -n at_max" "sys.$FSNAME.at_max" 1500 || \
+		error "conf_param sys.fsname.at_max failed"
+	cleanup > /dev/null
+}
+run_test 28b "permanent parameter setting, set_param syntax"
 
 test_29() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
-        setup > /dev/null 2>&1
+	setup > /dev/null 2>&1
 	start_ost2
 	sleep 10
 
-	local PARAM="$FSNAME-OST0001.osc.active"
-        local PROC_ACT="osc.$FSNAME-OST0001-osc-[^M]*.active"
-        local PROC_UUID="osc.$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
+	local PARAM="osc.$FSNAME-OST0001.active"
+	local PROC_ACT="osc.$FSNAME-OST0001-osc-[^M]*.active"
+	local PROC_UUID="osc.$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
 
-        ACTV=$(lctl get_param -n $PROC_ACT)
+	ACTV=$(lctl get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
 	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $DEAC || return 2
-        # also check ost_server_uuid status
+	# also check ost_server_uuid status
 	RESULT=$(lctl get_param -n $PROC_UUID | grep DEACTIV)
 	if [ -z "$RESULT" ]; then
 	    echo "Live client not deactivated: $(lctl get_param -n $PROC_UUID)"
@@ -924,7 +960,7 @@ test_30a() {
 	ORIG=$($TEST)
 	LIST=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
 	for i in ${LIST[@]}; do
-	    set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
+	    set_and_check client "$TEST" "llite.$FSNAME.max_read_ahead_whole_mb" $i || return 3
 	done
 	# make sure client restart still works
  	umount_client $MOUNT
@@ -933,7 +969,7 @@ test_30a() {
 	pass
 
 	echo Erase parameter setting
-	do_facet mgs "$LCTL conf_param -d $FSNAME.llite.max_read_ahead_whole_mb" || return 6
+	do_facet mgs "$LCTL conf_param -d llite.$FSNAME.max_read_ahead_whole_mb" || return 6
 	umount_client $MOUNT
 	mount_client $MOUNT || return 6
 	FINAL=$($TEST)
@@ -958,13 +994,13 @@ test_30b() {
 	echo "Using fake nid $NEW"
 
 	TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
-	set_and_check client "$TEST" "$FSNAME-OST0000.failover.node" $NEW || error "didn't add failover nid $NEW"
+	set_and_check client "$TEST" "osc.$FSNAME-OST0000.failover.node" $NEW || error "didn't add failover nid $NEW"
 	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
 	echo $NIDS
 	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
 	echo "should have 2 failover nids: $NIDCOUNT"
 	[ $NIDCOUNT -eq 2 ] || error "Failover nid not added"
-	do_facet mgs "$LCTL conf_param -d $FSNAME-OST0000.failover.node" || error "conf_param delete failed"
+	do_facet mgs "$LCTL conf_param -d osc.$FSNAME-OST0000.failover.node" || error "conf_param delete failed"
 	umount_client $MOUNT
 	mount_client $MOUNT || return 3
 
@@ -1180,7 +1216,7 @@ test_33a() { # bug 12333, was test_33
 
         start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
-        do_facet $SINGLEMDS "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
+        do_facet mgs "$LCTL conf_param sys.$FSNAME2.timeout=200" || rc=1
         mkdir -p $MOUNT2
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
         echo "ok."
@@ -1222,7 +1258,7 @@ test_34a() {
 	sleep 1
         cleanup
 }
-run_test 34a "umount with opened file should be fail"
+run_test 34a "umount with opened file should fail"
 
 
 test_34b() {
@@ -1266,7 +1302,7 @@ test_35a() { # bug 12459
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet $SINGLEMDS $LCTL conf_param ${device}.failover.node=$FAKENID || return 4
+	do_facet $SINGLEMDS $LCTL conf_param mdc.${device}.failover.node=$FAKENID || return 4
 
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
@@ -1320,7 +1356,7 @@ test_35b() { # bug 18674
 	FAKENID="127.0.0.2"
 	local device=$(do_facet mds "$LCTL get_param -n devices" | \
 			awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet mds "$LCTL conf_param ${device}.failover.node=$FAKENID" || \
+	do_facet mds "$LCTL conf_param mdc.${device}.failover.node=$FAKENID" || \
 		return 1
 
 	local at_max_saved=0
@@ -1577,7 +1613,7 @@ run_test 41 "mount mds with --nosvc and --nomgs"
 test_42() { #bug 14693
         setup
         check_mount || return 2
-        do_facet mgs $LCTL conf_param lustre.llite.some_wrong_param=10
+        do_facet mgs $LCTL conf_param llite.$FSNAME.some_wrong_param=10
         umount_client $MOUNT
         mount_client $MOUNT || return 1
         cleanup
@@ -1591,11 +1627,11 @@ test_43() {
     chmod ugo+x $DIR || error "chmod 0 failed"
     set_and_check mds                                        \
         "lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"  \
-        "$FSNAME.mdt.root_squash"                            \
+        "mdt.$FSNAME-MDT*.root_squash"                       \
         "0:0"
     set_and_check mds                                        \
        "lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids" \
-       "$FSNAME.mdt.nosquash_nids"                           \
+       "mdt.$FSNAME-MDT*.nosquash_nids"                      \
        "NONE"
 
     #
@@ -1619,7 +1655,7 @@ test_43() {
     #
     set_and_check mds                                        \
        "lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"   \
-       "$FSNAME.mdt.root_squash"                             \
+       "mdt.$FSNAME-MDT*.root_squash"                        \
        "$RUNAS_ID:$RUNAS_ID"
 
     ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-userfile)
@@ -1661,7 +1697,7 @@ test_43() {
     NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
     set_and_check mds                                        \
        "lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids" \
-       "$FSNAME-MDTall.mdt.nosquash_nids"                    \
+       "mdt.$FSNAME-MDT*.nosquash_nids"                      \
        "$NIDLIST"
 
     ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
@@ -2289,7 +2325,8 @@ thread_sanity() {
 
         # We need to expand $parampat, but it may match multiple parameters, so
         # we'll pick the first one
-        if ! paramp=$(do_facet $facet "lctl get_param -N ${parampat}.threads_min"|head -1); then
+        paramp=$(do_facet $facet "lctl get_param -N ${parampat}.threads_min"|head -1)
+        if [ -z "$paramp" ]; then
                 error "Couldn't expand ${parampat}.threads_min parameter name"
                 return 22
         fi

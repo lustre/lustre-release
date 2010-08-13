@@ -71,7 +71,7 @@ struct mgs_tgt_srpc_conf {
 
 
 struct fs_db {
-        char              fsdb_name[9];
+        char              fsdb_name[MTI_NAME_MAXLEN];
         cfs_list_t        fsdb_list;           /* list of databases */
         cfs_semaphore_t   fsdb_sem;
         void             *fsdb_ost_index_map;  /* bitmap of used indicies */

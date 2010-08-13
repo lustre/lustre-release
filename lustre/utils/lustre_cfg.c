@@ -364,32 +364,10 @@ int jt_lcfg_del_mount_option(int argc, char **argv)
 
 int jt_lcfg_set_timeout(int argc, char **argv)
 {
-        int rc;
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
-
         fprintf(stderr, "%s has been deprecated. Use conf_param instead.\n"
-                "e.g. conf_param lustre-MDT0000 obd_timeout=50\n",
+                "e.g. conf_param sys.testfs.obd_timeout=50\n",
                 jt_cmdname(argv[0]));
         return CMD_HELP;
-
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-        lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
-        lcfg->lcfg_num = atoi(argv[1]);
-
-        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
-        //rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
-
-        lustre_cfg_free(lcfg);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        }
-        return rc;
 }
 
 int jt_lcfg_add_conn(int argc, char **argv)
@@ -490,6 +468,148 @@ int jt_lcfg_param(int argc, char **argv)
         return rc;
 }
 
+/* Could this element of a parameter be an obd type?
+ * returns boolean
+ */
+static int element_could_be_obd(char *el)
+{
+        char *ptr = el;
+
+        /* Rather than try to enumerate known obd types and risk
+         * becoming stale, I'm just going to check for no wacky chars */
+        while ((*ptr != '\0') && (*ptr != '.')) {
+                if (!isalpha(*ptr++))
+                        return 0;
+        }
+        return 1;
+}
+
+/* Convert set_param into conf_param format.  Examples of differences:
+ * conf_param testfs.sys.at_max=1200
+ * set_param at_max=1200   -- no fsname, but conf_param needs a valid one
+ * conf_param lustre.llite.max_read_ahead_mb=16
+ * set_param llite.lustre-ffff81003f157000.max_read_ahead_mb=16
+ * conf_param lustre-MDT0000.lov.stripesize=2M
+ * set_param lov.lustre-MDT0000-mdtlov.stripesize=2M
+ * set_param lov.lustre-clilov-ffff81003f157000.stripesize=2M  --  clilov
+ * conf_param lustre-OST0001.osc.active=0
+ * set_param osc.lustre-OST0000-osc-ffff81003f157000.active=0
+ * conf_param lustre-OST0000.osc.max_dirty_mb=29.15
+ * set_param osc.lustre-OST0000-osc-ffff81003f157000.max_dirty_mb=16
+ * conf_param lustre-OST0001.ost.client_cache_seconds=15
+ * set_param obdfilter.lustre-OST0001.client_cache_seconds=15  --  obdfilter/ost
+ * conf_param testfs-OST0000.failover.node=1.2.3.4@tcp1
+ * no proc, but osc.testfs-OST0000.failover.node -- would be appropriate
+ */
+static int rearrange_setparam_syntax(char *in)
+{
+        char buf[MGS_PARAM_MAXLEN];
+        char *element[3];
+        int elements = 0;
+        int dev, obd;
+        char *ptr, *value;
+        __u32 index;
+        int type;
+        int rc;
+
+        value = strchr(in, '=');
+        if (!value)
+                return -EINVAL;
+        *value = '\0';
+
+        /* Separate elements 0.1.all_the_rest */
+        element[elements++] = in;
+        for (ptr = in; *ptr != '\0' && (elements < 3); ptr++) {
+                if (*ptr == '.') {
+                        *ptr = '\0';
+                        element[elements++] = ++ptr;
+                }
+        }
+        if (elements != 3) {
+                fprintf(stderr, "error: Parameter format is "
+                        "<obd>.<fsname|devname>.<param>.\n"
+                        "Wildcards are not supported. Examples:\n"
+                        "sys.testfs.at_max=1200\n"
+                        "llite.testfs.max_read_ahead_mb=16\n"
+                        "lov.testfs-MDT0000.qos_threshold_rr=30\n"
+                        "mdc.testfs-MDT0000.max_rpcs_in_flight=6\n"
+                        "osc.testfs-OST0000.active=0\n"
+                        "osc.testfs-OST0000.max_dirty_mb=16\n"
+                        "obdfilter.testfs-OST0001.client_cache_seconds=15\n"
+                        "osc.testfs-OST0000.failover.node=1.2.3.4@tcp\n\n"
+                        );
+                return -EINVAL;
+        }
+
+        /* e.g. testfs-OST003f-junk.ost.param */
+        rc = libcfs_str2server(element[0], &type, &index, &ptr);
+        if (rc == 0) {
+                *ptr = '\0'; /* trunc the junk */
+                goto out0;
+        }
+        /* e.g. ost.testfs-OST003f-junk.param */
+        rc = libcfs_str2server(element[1], &type, &index, &ptr);
+        if (rc == 0) {
+                *ptr = '\0';
+                goto out1;
+        }
+
+        /* llite.fsname.param or fsname.obd.param */
+        if (!element_could_be_obd(element[0]) &&
+            element_could_be_obd(element[1]))
+                /* fsname-junk.obd.param */
+                goto out0;
+        if (element_could_be_obd(element[0]) &&
+            !element_could_be_obd(element[1]))
+                /* obd.fsname-junk.param */
+                goto out1;
+        if (!element_could_be_obd(element[0]) &&
+            !element_could_be_obd(element[1])) {
+                fprintf(stderr, "error: Parameter format is "
+                        "<obd>.<fsname|devname>.<param>\n");
+                return -EINVAL;
+        }
+        /* Either element could be obd.  Assume set_param syntax
+         * (obd.fsname.param) */
+        goto out1;
+
+out0:
+        dev = 0;
+        obd = 1;
+        goto out;
+out1:
+        dev = 1;
+        obd = 0;
+out:
+        /* Don't worry Mom, we'll check it out */
+        if (strncmp(element[2], "failover", 8) != 0) { /* no proc for this */
+                char *argt[3];
+
+                if (strcmp(element[obd], "sys") == 0)
+                        sprintf(buf, "%s", element[2]);
+                else
+                        sprintf(buf, "%s.%s*.%s", element[obd], element[dev],
+                                element[2]);
+                argt[1] = "-q";
+                argt[2] = buf;
+                rc = jt_lcfg_listparam(3, argt);
+                if (rc)
+                        fprintf(stderr, "warning: can't find local param '%s'\n"
+                                "(but that service may not be running locally)."
+                                "\n", buf);
+        }
+
+        /* s/obdfilter/ost/ */
+        if (strcmp(element[obd], "obdfilter") == 0)
+                sprintf(element[obd], "ost");
+
+        sprintf(buf, "%s.%s.%s=%s", element[dev], element[obd],
+                element[2], value + 1);
+        strcpy(in, buf);
+
+        return 0;
+}
+
 /* Param set in config log on MGS */
 /* conf_param key=value */
 /* Note we can actually send mgc conf_params from clients, but currently
@@ -503,7 +623,7 @@ int jt_lcfg_mgsparam(int argc, char **argv)
         int del = 0;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
-        char *buf = NULL;
+        char buf[MGS_PARAM_MAXLEN];
 
         /* mgs_setparam processes only lctl buf #1 */
         if ((argc > 3) || (argc <= 1))
@@ -519,32 +639,44 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 }
         }
 
-        lustre_cfg_bufs_reset(&bufs, NULL);
         if (del) {
                 char *ptr;
 
                 /* for delete, make it "<param>=\0" */
-                buf = malloc(strlen(argv[optind]) + 2);
                 /* put an '=' on the end in case it doesn't have one */
                 sprintf(buf, "%s=", argv[optind]);
                 /* then truncate after the first '=' */
                 ptr = strchr(buf, '=');
                 *(++ptr) = '\0';
-                lustre_cfg_bufs_set_string(&bufs, 1, buf);
         } else {
-                lustre_cfg_bufs_set_string(&bufs, 1, argv[optind]);
+                sprintf(buf, "%s", argv[optind]);
         }
+
+        rc = rearrange_setparam_syntax(buf);
+        if (rc)
+                return CMD_HELP;
+
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 1, buf);
 
         /* We could put other opcodes here. */
         lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
 
         rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
-        if (buf)
-                free(buf);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
+                if (rc == ENOENT) {
+                        char *argt[3];
+                        fprintf(stderr, "Does this filesystem/target exist on "
+                                "the MGS?\n");
+                        printf("Known targets:\n");
+                        sprintf(buf, "mgs.MGS.live.*");
+                        argt[1] = "-n";
+                        argt[2] = buf;
+                        jt_lcfg_getparam(3, argt);
+                }
         }
 
         return rc;
@@ -662,13 +794,16 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
         popt->show_type = 0;
         popt->recursive = 0;
 
-        while ((ch = getopt(argc, argv, "FR")) != -1) {
+        while ((ch = getopt(argc, argv, "FRq")) != -1) {
                 switch (ch) {
                 case 'F':
                         popt->show_type = 1;
                         break;
                 case 'R':
                         popt->recursive = 1;
+                        break;
+                case 'q':
+                        popt->show_path = 0;
                         break;
                 default:
                         return -1;
@@ -688,31 +823,34 @@ static int listparam_display(struct param_opts *popt, char *pattern)
         rc = glob(pattern, GLOB_BRACE | (popt->recursive ? GLOB_MARK : 0),
                   NULL, &glob_info);
         if (rc) {
-                fprintf(stderr, "error: list_param: %s: %s\n",
-                        pattern, globerrstr(rc));
+                if (popt->show_path) /* when quiet, don't show errors */
+                        fprintf(stderr, "error: list_param: %s: %s\n",
+                                pattern, globerrstr(rc));
                 return -ESRCH;
         }
 
-        for (i = 0; i  < glob_info.gl_pathc; i++) {
-                char *valuename = NULL;
-                int last;
+        if (popt->show_path) {
+                for (i = 0; i  < glob_info.gl_pathc; i++) {
+                        char *valuename = NULL;
+                        int last;
 
-                /* Trailing '/' will indicate recursion into directory */
-                last = strlen(glob_info.gl_pathv[i]) - 1;
+                        /* Trailing '/' will indicate recursion into directory */
+                        last = strlen(glob_info.gl_pathv[i]) - 1;
 
-                /* Remove trailing '/' or it will be converted to '.' */
-                if (last > 0 && glob_info.gl_pathv[i][last] == '/')
-                        glob_info.gl_pathv[i][last] = '\0';
-                else
-                        last = 0;
-                strcpy(filename, glob_info.gl_pathv[i]);
-                valuename = display_name(filename, popt->show_type);
-                if (valuename)
-                        printf("%s\n", valuename);
-                if (last) {
+                        /* Remove trailing '/' or it will be converted to '.' */
+                        if (last > 0 && glob_info.gl_pathv[i][last] == '/')
+                                glob_info.gl_pathv[i][last] = '\0';
+                        else
+                                last = 0;
                         strcpy(filename, glob_info.gl_pathv[i]);
-                        strcat(filename, "/*");
-                        listparam_display(popt, filename);
+                        valuename = display_name(filename, popt->show_type);
+                        if (valuename)
+                                printf("%s\n", valuename);
+                        if (last) {
+                                strcpy(filename, glob_info.gl_pathv[i]);
+                                strcat(filename, "/*");
+                                listparam_display(popt, filename);
+                        }
                 }
         }
 
@@ -834,7 +972,7 @@ static int getparam_display(struct param_opts *popt, char *pattern)
                                 break;
                         }
                         /* Print the output in the format path=value if the
-                         * value contains no new line character or cab be
+                         * value contains no new line character or can be
                          * occupied in a line, else print value on new line */
                         if (valuename && popt->show_path) {
                                 int longbuf = strnchr(buf, rc - 1, '\n') != NULL
