@@ -633,7 +633,10 @@ static int mdd_changelog_ns_store(const struct lu_env  *env,
         int rc;
         ENTRY;
 
+        /* Not recording */
         if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+                RETURN(0);
+        if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
                 RETURN(0);
 
         LASSERT(parent != NULL);

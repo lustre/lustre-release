@@ -478,7 +478,9 @@ enum changelog_rec_type {
         CL_SETATTR  = 14,
         CL_XATTR    = 15,
         CL_HSM      = 16, /* HSM specific events, see flags */
-        CL_TIME     = 17, /* mtime, atime, ctime change only */
+        CL_MTIME    = 17, /* Precedence: setattr > mtime > ctime > atime */
+        CL_CTIME    = 18,
+        CL_ATIME    = 19,
         CL_LAST
 };
 
@@ -486,7 +488,7 @@ static inline const char *changelog_type2str(int type) {
         static const char *changelog_str[] = {
                 "MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
                 "RMDIR", "RNMFM", "RNMTO", "OPEN",  "CLOSE", "IOCTL", "TRUNC",
-                "SATTR", "XATTR", "HSM",   "TIME"  };
+                "SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME"  };
         if (type >= 0 && type < CL_LAST)
                 return changelog_str[type];
         return NULL;

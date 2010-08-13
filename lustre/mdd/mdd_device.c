@@ -312,9 +312,6 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         struct llog_ctxt *ctxt;
         int rc;
 
-        if ((mdd->mdd_cl.mc_mask & (1 << rec->cr.cr_type)) == 0)
-                return 0;
-
         rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
         /* llog_lvfs_write_rec sets the llog tail len */
         rec->cr_hdr.lrh_type = CHANGELOG_REC;
@@ -412,7 +409,8 @@ int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
         /* Status and action flags */
         rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
 
-        rc = mdd_changelog_llog_write(mdd, rec, NULL);
+        rc = (mdd->mdd_cl.mc_mask & (1 << CL_MARK)) ?
+                mdd_changelog_llog_write(mdd, rec, NULL) : 0;
 
         /* assume on or off event; reset repeat-access time */
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
