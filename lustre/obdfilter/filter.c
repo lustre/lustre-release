@@ -4474,7 +4474,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         switch (cmd) {
         case OBD_IOC_ABORT_RECOVERY: {
                 LCONSOLE_WARN("%s: Aborting recovery.\n", obd->obd_name);
-                target_stop_recovery_thread(obd);
+                target_recovery_fini(obd);
                 RETURN(0);
         }
 

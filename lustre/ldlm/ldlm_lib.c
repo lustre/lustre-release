@@ -1254,7 +1254,13 @@ static void abort_lock_replay_queue(struct obd_device *obd)
                 target_request_copy_put(req);
         }
 }
-#endif
+
+/* obd_processing_task_lock should be held */
+static void target_cancel_recovery_timer(struct obd_device *obd)
+{
+        CDEBUG(D_HA, "%s: cancel recovery timer\n", obd->obd_name);
+        cfs_timer_disarm(&obd->obd_recovery_timer);
+}
 
 /* Called from a cleanup function if the device is being cleaned up
    forcefully.  The exports should all have been disconnected already,
@@ -1265,7 +1271,7 @@ static void abort_lock_replay_queue(struct obd_device *obd)
    Because the obd_stopping flag is set, no new requests should be received.
 
 */
-void target_cleanup_recovery(struct obd_device *obd)
+static void target_cleanup_recovery(struct obd_device *obd)
 {
         struct ptlrpc_request *req, *n;
         cfs_list_t clean_list;
@@ -1302,13 +1308,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 
         EXIT;
 }
-
-/* obd_processing_task_lock should be held */
-void target_cancel_recovery_timer(struct obd_device *obd)
-{
-        CDEBUG(D_HA, "%s: cancel recovery timer\n", obd->obd_name);
-        cfs_timer_disarm(&obd->obd_recovery_timer);
-}
+#endif
 
 /* extend = 1 means require at least "duration" seconds left in the timer,
    extend = 0 means set the total duration (start_recovery_timer) */
@@ -1840,7 +1840,7 @@ static int target_start_recovery_thread(struct lu_target *lut,
         return rc;
 }
 
-void target_stop_recovery_thread(struct obd_device *obd)
+static void target_stop_recovery_thread(struct obd_device *obd)
 {
         cfs_spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovery_data.trd_processing_task > 0) {
