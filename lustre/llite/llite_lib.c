@@ -413,7 +413,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
         sb->s_op = &lustre_super_operations;
+#if THREAD_SIZE >= 8192
         sb->s_export_op = &lustre_export_operations;
+#endif
 
         /* make root inode
          * XXX: move this to after cbd setup? */
