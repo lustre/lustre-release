@@ -180,6 +180,11 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                                   policy.l_extent.end);
                         descr->cld_enq_flags = flags;
                         result = cl_io_lock_alloc_add(env, io, descr);
+
+                        CDEBUG(D_VFSTRACE, "lock: %i: [%lu, %lu]\n",
+                               descr->cld_mode, descr->cld_start,
+                               descr->cld_end);
+
                         if (result < 0)
                                 RETURN(result);
 
