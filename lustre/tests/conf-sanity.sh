@@ -101,7 +101,14 @@ start_mds() {
 	local num=$(echo $facet | tr -d "mds")
 	local dev=$(mdsdevname $num)
 	echo "start mds service on `facet_active_host $facet`"
-	start $facet ${dev} $MDS_MOUNT_OPTS || return 94
+	start $facet ${dev} $MDS_MOUNT_OPTS $@ || return 94
+}
+
+start_mgsmds() {
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+	start_mds $@
 }
 
 stop_mds() {
@@ -112,7 +119,7 @@ stop_mds() {
 
 start_ost() {
 	echo "start ost1 service on `facet_active_host ost1`"
-	start ost1 `ostdevname 1` $OST_MOUNT_OPTS || return 95
+	start ost1 `ostdevname 1` $OST_MOUNT_OPTS $@ || return 95
 }
 
 stop_ost() {
@@ -123,7 +130,7 @@ stop_ost() {
 
 start_ost2() {
 	echo "start ost2 service on `facet_active_host ost2`"
-	start ost2 `ostdevname 2` $OST_MOUNT_OPTS || return 92
+	start ost2 `ostdevname 2` $OST_MOUNT_OPTS $@ || return 92
 }
 
 stop_ost2() {
@@ -2439,6 +2446,40 @@ test_56() {
 	reformat
 }
 run_test 56 "check big indexes"
+
+count_osts() {
+        do_facet mgs $LCTL get_param mgs.MGS.live.$FSNAME | grep OST | wc -l
+}
+
+test_59() {
+	start_mgsmds >> /dev/null
+	local C1=$(count_osts)
+	if [ $C1 -eq 0 ]; then
+		start_ost >> /dev/null
+		C1=$(count_osts)
+	fi
+	stopall
+	echo "original ost count: $C1 (expect > 0)"
+	[ $C1 -gt 0 ] || error "No OSTs in $FSNAME log"
+	start_mgsmds -o writeconf >> /dev/null || error "MDT start failed"
+	local C2=$(count_osts)
+	echo "after mdt writeconf count: $C2 (expect 0)"
+	[ $C2 -gt 0 ] && error "MDT writeconf should erase OST logs"
+	echo "OST start without writeconf should fail:"
+	start_ost >> /dev/null && error "OST start without writeconf didn't fail"
+	echo "OST start with writeconf should succeed:"
+	start_ost -o writeconf >> /dev/null || error "OST1 start failed"
+	local C3=$(count_osts)
+	echo "after ost writeconf count: $C3 (expect 1)"
+	[ $C3 -eq 1 ] || error "new OST writeconf should add:"
+	start_ost2 -o writeconf >> /dev/null || error "OST2 start failed"
+	local C4=$(count_osts)
+	echo "after ost2 writeconf count: $C4 (expect 2)"
+	[ $C4 -eq 2 ] || error "OST2 writeconf should add log"
+	stop_ost2 >> /dev/null
+	cleanup_nocli >> /dev/null
+}
+run_test 59 "writeconf mount option"
 
 cleanup_gss
 equals_msg `basename $0`: test complete

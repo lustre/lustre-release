@@ -998,6 +998,8 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 
         mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
         mti->mti_config_ver = 0;
+        if (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF)
+                ldd->ldd_flags |= LDD_F_WRITECONF;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
         memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
@@ -1982,6 +1984,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         clear++;
                 } else if (strncmp(s1, "nomgs", 5) == 0) {
                         lmd->lmd_flags |= LMD_FLG_NOMGS;
+                        clear++;
+                } else if (strncmp(s1, "writeconf", 9) == 0) {
+                        lmd->lmd_flags |= LMD_FLG_WRITECONF;
                         clear++;
                 } else if (strncmp(s1, "mgssec=", 7) == 0) {
                         rc = lmd_parse_mgssec(lmd, s1 + 7);

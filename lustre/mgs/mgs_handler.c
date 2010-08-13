@@ -413,6 +413,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
 
         mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+
+        if (mti->mti_flags & LDD_F_NEED_INDEX)
+                mti->mti_flags |= LDD_F_WRITECONF;
+
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
