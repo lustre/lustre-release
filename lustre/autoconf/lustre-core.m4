@@ -1649,6 +1649,16 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.27 has bdi_init()/bdi_destroy() functions.
+AC_DEFUN([LC_EXPORT_BDI_INIT],
+[LB_CHECK_SYMBOL_EXPORT([bdi_init],
+[mm/backing-dev.c],[
+        AC_DEFINE(HAVE_BDI_INIT, 1,
+                [bdi_init/bdi_destroy functions are present])
+],[
+])
+])
+
 # 2.6.29 change prepare/commit_write to write_begin/end
 AC_DEFUN([LC_WRITE_BEGIN_END],
 [AC_MSG_CHECKING([if kernel has .write_begin/end])
@@ -1967,6 +1977,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VFS_SYMLINK_5ARGS
           LC_SB_ANY_QUOTA_ACTIVE
           LC_SB_HAS_QUOTA_ACTIVE
+          LC_EXPORT_BDI_INIT
 
           #2.6.29
           LC_WRITE_BEGIN_END

@@ -1131,20 +1131,16 @@ int ll_fill_super(struct super_block *sb)
         if (err)
                 GOTO(out_free, err);
 
-        memset(&lsi->bdi, 0, sizeof(lsi->bdi));
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-        lsi->bdi.name = "lustre",
-        lsi->bdi.capabilities   = BDI_CAP_MAP_COPY,
+#ifdef HAVE_BDI_INIT
         err = bdi_init(&lsi->bdi);
         if (err)
                 GOTO(out_free, err);
-
+#endif
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+        lsi->bdi.name = "lustre";
+        lsi->bdi.capabilities = BDI_CAP_MAP_COPY;
         err = bdi_register(&lsi->bdi, NULL, "lustre-%d",
                                 atomic_inc_return(&ll_bdi_num));
-        if (err) {
-                bdi_destroy(&lsi->bdi);
-                GOTO(out_free, err);
-        }
         sb->s_bdi = &lsi->bdi;
 #endif
 
@@ -1211,8 +1207,13 @@ void ll_put_super(struct super_block *sb)
                 class_del_profile(profilenm);
 
 #ifdef HAVE_NEW_BACKING_DEV_INFO
-        if (lsi->bdi.wb_cnt > 0)
+        if (lsi->bdi.wb_cnt > 0) {
+#endif
+#ifdef HAVE_BDI_INIT
                 bdi_destroy(&lsi->bdi);
+#endif
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+        }
 #endif
 
         ll_free_sbi(sb);
