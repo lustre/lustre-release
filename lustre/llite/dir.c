@@ -399,17 +399,19 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         struct inode         *inode = filp->f_dentry->d_inode;
         struct ll_inode_info *info  = ll_i2info(inode);
         __u64                 pos   = filp->f_pos;
+        struct ll_sb_info    *sbi  = ll_i2sbi(inode);
         struct page          *page;
         struct ll_dir_chain   chain;
-        int rc;
+        int rc, need_32bit;
         int done;
         int shift;
         __u16 type;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu\n",
+        need_32bit = ll_need_32bit_api(sbi);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu 32bit_api %d\n",
                inode->i_ino, inode->i_generation, inode,
-               (unsigned long)pos, i_size_read(inode));
+               (unsigned long)pos, i_size_read(inode), need_32bit);
 
         if (pos == DIR_END_OFF)
                 /*
@@ -467,7 +469,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 fid  = ent->lde_fid;
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
-                                if (cfs_curproc_is_32bit())
+                                if (need_32bit)
                                         ino = cl_fid_build_ino32(&fid);
                                 else
                                         ino = cl_fid_build_ino(&fid);

@@ -771,6 +771,11 @@ static int ll_options(char *options, int *flags)
                         *flags |= tmp;
                         goto next;
                 }
+                tmp = ll_set_opt("32bitapi", s1, LL_SBI_32BIT_API);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
 
                 LCONSOLE_ERROR_MSG(0x152, "Unknown option '%s', won't mount.\n",
                                    s1);

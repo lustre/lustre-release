@@ -312,6 +312,7 @@ enum stats_track_type {
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
 #define LL_SBI_LAZYSTATFS       0x800 /* lazystatfs mount option */
 #define LL_SBI_SOM_PREVIEW      0x1000 /* SOM preview mount option */
+#define LL_SBI_32BIT_API        0x2000 /* generate 32 bit inodes. */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -536,6 +537,15 @@ struct it_cb_data {
 
 __u32 ll_i2suppgid(struct inode *i);
 void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
+
+static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
+{
+#if BITS_PER_LONG == 32
+        return 1;
+#else
+        return unlikely(cfs_curproc_is_32bit() || (sbi->ll_flags & LL_SBI_32BIT_API));
+#endif
+}
 
 #define LLAP_MAGIC 98764321
 
