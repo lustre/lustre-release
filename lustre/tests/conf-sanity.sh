@@ -2363,10 +2363,6 @@ test_53b() {
 }
 run_test 53b "check MDT thread count params"
 
-if ! combined_mgs_mds ; then
-	stop mgs
-fi
-
 run_llverfs()
 {
         local dir=$1
@@ -2447,6 +2443,20 @@ test_56() {
 }
 run_test 56 "check big indexes"
 
+test_57() { # bug 22656
+	local NID=$($LCTL list_nids | head -1)
+	writeconf
+	do_facet ost1 "$TUNEFS --failnode=$NID `ostdevname 1`" || error "tunefs failed"
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+	start_mds
+	start_ost && error "OST registration from failnode should fail"
+	stop_mds
+	reformat
+}
+run_test 57 "initial registration from failnode should fail (should return errs)"
+
 count_osts() {
         do_facet mgs $LCTL get_param mgs.MGS.live.$FSNAME | grep OST | wc -l
 }
@@ -2481,6 +2491,10 @@ test_59() {
 }
 run_test 59 "writeconf mount option"
 
+
+if ! combined_mgs_mds ; then
+	stop mgs
+fi
 cleanup_gss
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

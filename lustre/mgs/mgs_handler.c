@@ -59,7 +59,7 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 #include "mgs_internal.h"
-
+#include <lustre_param.h>
 
 /* Establish a connection to the MGS.*/
 static int mgs_connect(const struct lu_env *env,
@@ -401,6 +401,30 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         RETURN(rc);
 }
 
+/* Ensure this is not a failover node that is connecting first*/
+static int mgs_check_failover_reg(struct mgs_target_info *mti)
+{
+        lnet_nid_t nid;
+        char *ptr;
+        int i;
+
+        ptr = mti->mti_params;
+        while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
+                while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+                        for (i = 0; i < mti->mti_nid_count; i++) {
+                                if (nid == mti->mti_nids[i]) {
+                                        LCONSOLE_WARN("Denying initial registra"
+                                                      "tion attempt from nid %s"
+                                                      ", specified as failover"
+                                                      "\n",libcfs_nid2str(nid));
+                                        return -EADDRNOTAVAIL;
+                                }
+                        }
+                }
+        }
+        return 0;
+}
+
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
 static int mgs_handle_target_reg(struct ptlrpc_request *req)
 {
@@ -426,6 +450,9 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 /* above will set appropriate mti flags */
                 if (rc <= 0)
                         /* Nothing wrong, or fatal error */
+                        GOTO(out_nolock, rc);
+        } else {
+                if ((rc = mgs_check_failover_reg(mti)))
                         GOTO(out_nolock, rc);
         }
 
