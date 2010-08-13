@@ -491,7 +491,7 @@ download_file() {
             touch $semaphore
             if ! wget -nv "$from" -O "$to" || [ ! -s "$to" ]; then
                 # the trap will remove the files via the fatal below
-                fatal 1 "Could not download ${to##*/} from ${from%%/*}/."
+                fatal 1 "Could not download ${to##*/} from ${from%/*}/."
             fi
             rm -f $semaphore
             delete_exit_trap "download"
@@ -554,7 +554,7 @@ download_mptlinux() {
         return 0
     fi
 
-    file="MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip"
+    file="SUN_MPTLINUX_RHEL5_PH16-${MPTLINUX_VERSION}.tar.gz"
     download_file "$location/$file" "$KERNELTREE" "$force"
 
 }
@@ -682,10 +682,12 @@ tarflags() {
 }
 
 untar() {
-    local file="$1"
+    local tarfile="$1"
+    shift
+    local extractfile="$@"
 
-    echo "Untarring ${file##*/}..."
-    tar $(tarflags "$file") "$file"
+    echo "Untarring ${tarfile##*/}..."
+    tar $(tarflags "$tarfile") "$tarfile" $extractfile
 
 }
 
@@ -709,10 +711,10 @@ unpack_rdac() {
 
 unpack_mptlinux() {
 
-    if ! unzip -p $KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-4.16.00.00-2.zip | tar xzvf - srpms-2/mptlinux-4.16.00.00-2.src.rpm; then
+    if ! untar $KERNELTREE/SUN_MPTLINUX_RHEL5_PH16-${MPTLINUX_VERSION}.tar.gz pkg1-rhel5/srpms-1/mptlinux-${MPTLINUX_VERSION}-1.src.rpm; then
         return 1
     fi
-    mv srpms-2/mptlinux-4.16.00.00-2.src.rpm .
+    mv pkg1-rhel5/srpms-1/mptlinux-${MPTLINUX_VERSION}-1.src.rpm .
 
 }
 
