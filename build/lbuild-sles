@@ -1,6 +1,7 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 DEVEL_KERNEL_TYPE="source"
+RPM_HELPERS_DIR="/usr/lib/rpm"
 
 prepare_and_build_srpm() {
 
