@@ -100,6 +100,7 @@ OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID -
 
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
+mgs_MOUNT_OPTS=${mgs_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
 
 #client
 MOUNT=${MOUNT:-/mnt/${FSNAME}}
