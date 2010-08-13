@@ -965,6 +965,10 @@ set_rpm_smp_type() {
         [ $infact_arch == $smp_type ] && RPMSMPTYPE=bigsmp && break
     done
 
+    for smp_type in $PPC64_ARCHS; do
+        [ $infact_arch == $smp_type ] && RPMSMPTYPE=ppc64 && break
+    done
+
     for smp_type in $DEFAULT_ARCHS; do
         [ $infact_arch == $smp_type ] && RPMSMPTYPE=default && break
     done

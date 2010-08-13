@@ -84,25 +84,32 @@ rpm_BUILD_kernel_dirname() {
     echo kernel${lustre}-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
 }
 
+resolve_arch() {
+    local arch="$1"
+
+    case $arch in
+        ppc64)	arch=powerpc
+                ;;
+        i686)	arch=i386
+                ;;
+    esac
+
+    echo "$arch"
+
+}
+
 find_linux_devel_paths() {
     local path="$1"
 
     LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
-
-    local objects=$TARGET_ARCH/$RPMSMPTYPE
-    if [ -d $path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/powerpc ]; then
-        objects="powerpc/$TARGET_ARCH"
-    elif [ $TARGET_ARCH == 'i686' ]; then
-        objects="i386/$RPMSMPTYPE"
-    fi
-
-    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$objects
-    LINUXRELEASE=$(find_linux_release "$LINUXOBJ")
-
-    if [ -z "$LINUXRELEASE" ]; then
-        echo "Failed to find linux release in $LINUXOBJ"
-        return 255
-    fi
+    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH)/$RPMSMPTYPE
+    # XXX this has been commented out in th rhel5 build file for a while
+    # as it says there, it's probably not needed anymore and can be deleted
+    #LINUXRELEASE=$(find_linux_release "$LINUXOBJ")
+    #if [ -z "$LINUXRELEASE" ]; then
+    #    echo "Failed to find linux release in $LINUXOBJ"
+    #    return 255
+    #fi
 
     return 0
 }
