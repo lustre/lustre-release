@@ -179,8 +179,4 @@ int proc_call_handler(void *data, int write,
                       int (*handler)(void *data, int write,
                                      loff_t pos, void *buffer, int len));
 
-#ifndef HAVE_SCATTERLIST_INITTABLE
-#define sg_init_table(sgl, n) memset(sgl, 0, sizeof(*sgl) * n)
-#endif
-
 #endif /* _PORTALS_COMPAT_H */

@@ -452,22 +452,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# from 2.6.24 please use sg_init_table
-AC_DEFUN([LIBCFS_SCATTERLIST_INITTABLE],
-[AC_MSG_CHECKING([if sg_init_table is defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/scatterlist.h>
-],[
-       sg_init_table(NULL,0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SCATTERLIST_INITTABLE, 1,
-                  [sg_init_table is defined])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
 # 2.6.24 
 AC_DEFUN([LIBCFS_NETWORK_NAMESPACE],
 [AC_MSG_CHECKING([for network stack has namespaces])
@@ -730,7 +714,6 @@ LIBCFS_NETLINK_CBMUTEX
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
 LIBCFS_SCATTERLIST_SETPAGE
-LIBCFS_SCATTERLIST_INITTABLE
 LIBCFS_NL_BROADCAST_GFP
 LIBCFS_NETWORK_NAMESPACE
 LIBCFS_NETLINK_NETNS

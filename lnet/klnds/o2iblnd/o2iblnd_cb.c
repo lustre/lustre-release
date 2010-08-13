@@ -713,28 +713,6 @@ kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
         return kiblnd_map_tx(ni, tx, rd, sg - tx->tx_frags);
 }
 
-static inline int
-get_kiov_length (int nkiov, lnet_kiov_t *kiov, int offset, int nob)
-{
-        int fragnob;
-        int count = 0;
-
-        do {
-                LASSERT (nkiov > 0);
-
-                fragnob = min((int)(kiov->kiov_len - offset), nob);
-
-                count++;
-
-                offset = 0;
-                kiov++;
-                nkiov--;
-                nob -= fragnob;
-        } while (nob > 0);
-
-        return count;
-}
-
 int
 kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                       int nkiov, lnet_kiov_t *kiov, int offset, int nob)
@@ -757,13 +735,12 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
         }
 
         sg = tx->tx_frags;
-        tx->tx_nfrags = get_kiov_length(nkiov, kiov, offset, nob);
-        sg_init_table(sg, tx->tx_nfrags);
         do {
                 LASSERT (nkiov > 0);
 
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
 
+                memset(sg, 0, sizeof(*sg));
                 sg_set_page(sg, kiov->kiov_page, fragnob,
                             kiov->kiov_offset + offset);
                 sg++;
