@@ -136,8 +136,16 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
-        if (bio->bi_size)                       /* Not complete */
-                return 1;
+#ifdef HAVE_BIO_ENDIO_2ARG
+       /* The "bi_size" check was needed for kernels < 2.6.24 in order to
+        * handle the case where a SCSI request error caused this callback
+        * to be called before all of the biovecs had been processed.
+        * Without this check the server thread will hang.  In newer kernels
+        * the bio_end_io routine is never called for partial completions,
+        * so this check is no longer needed. */
+        if (bio->bi_size)                      /* Not complete */
+                DIO_RETURN(1);
+#endif
 
         if (unlikely(iobuf == NULL)) {
                 CERROR("***** bio->bi_private is NULL!  This should never "
