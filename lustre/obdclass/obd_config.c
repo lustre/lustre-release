@@ -171,7 +171,7 @@ static int parse_nid(char *buf, void *value)
 
 static int parse_net(char *buf, void *value)
 {
-        __u32 *net = (__u32 *)net;
+        __u32 *net = (__u32 *)value;
 
         *net = libcfs_str2net(buf);
         CDEBUG(D_INFO, "Net %s\n", libcfs_net2str(*net));
