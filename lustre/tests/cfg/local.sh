@@ -66,7 +66,7 @@ if [[ $mds_HOST == $mgs_HOST ]] && [[ $MDSDEV == $MGSDEV ]]; then
     MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
 else
     MDS_MKFS_OPTS="--mgsnode=$MGSNID $MDS_MKFS_OPTS"
-    mgs_MKFS_OPTS="--mgs --device-size=$MGSSIZE"
+    MGS_MKFS_OPTS="--mgs --device-size=$MGSSIZE"
 fi
 
 MKFSOPT=""
@@ -80,7 +80,7 @@ OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID -
 
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
-mgs_MOUNT_OPTS=${mgs_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
+MGS_MOUNT_OPTS=${MGS_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
 
 #client
 MOUNT=${MOUNT:-/mnt/${FSNAME}}

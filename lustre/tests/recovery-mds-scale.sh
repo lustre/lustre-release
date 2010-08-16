@@ -223,11 +223,10 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     fi
 
     log "Wait $SERVERFACET recovery complete before doing next failover ...."
-    if [[ $(server_numfailovers $SERVERFACET) != 0 ]]; then
-        if ! wait_recovery_complete $SERVERFACET ; then
-            echo "$SERVERFACET recovery is not completed!"
-            exit 7
-        fi
+
+    if ! wait_recovery_complete $SERVERFACET ; then
+        echo "$SERVERFACET recovery is not completed!"
+        exit 7
     fi
 
     log "Checking clients are in FULL state before doing next failover"

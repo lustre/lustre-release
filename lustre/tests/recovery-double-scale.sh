@@ -76,7 +76,7 @@ reboot_recover_node () {
     # MDS, OST item contains the facet
     case $nodetype in
        MDS|OST )    facet_failover $item
-                [ "$SERIAL" ] && wait_recovery_complete $item $((timeout * 4)) || true
+                [ "$SERIAL" ] && wait_recovery_complete $item || true
                 ;;
        clients) for c in ${item//,/ }; do
                       shutdown_client $c

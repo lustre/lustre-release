@@ -710,12 +710,18 @@ fi
 fi"
 }
 
-shudown_node_hard () {
+shutdown_node () {
+    local node=$1
+    echo + $POWER_DOWN $node
+    $POWER_DOWN $node
+}
+
+shutdown_node_hard () {
     local host=$1
     local attempts=3
 
     for i in $(seq $attempts) ; do
-        $POWER_DOWN $host
+        shutdown_node $host
         sleep 1
         ping -w 3 -c 1 $host > /dev/null 2>&1 || return 0
         echo "waiting for $host to fail attempts=$attempts"
@@ -730,25 +736,48 @@ shutdown_client() {
     local attempts=3
 
     if [ "$FAILURE_MODE" = HARD ]; then
-        shudown_node_hard $client
+        shutdown_node_hard $client
     else
        zconf_umount_clients $client $mnt -f
     fi
 }
 
+facets_on_host () {
+    local host=$1
+    local facets="$(get_facets OST),$(get_facets MDS)"
+    local affected
+
+    combined_mgs_mds || facets="$facets,mgs"
+
+    for facet in ${facets//,/ }; do
+        if [ $(facet_active_host $facet) == $host ]; then
+           affected="$affected $facet"
+        fi
+    done
+
+    echo $(comma_list $affected)
+}
+
 shutdown_facet() {
     local facet=$1
+
     if [ "$FAILURE_MODE" = HARD ]; then
-        shudown_node_hard $(facet_active_host $facet)
-    elif [ "$FAILURE_MODE" = SOFT ]; then
+        shutdown_node_hard $(facet_active_host $facet)
+    else
         stop $facet
     fi
 }
 
+reboot_node() {
+    local node=$1
+    echo + $POWER_UP $node
+    $POWER_UP $node
+}
+
 reboot_facet() {
-    facet=$1
+    local facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
-        $POWER_UP `facet_active_host $facet`
+        reboot_node $(facet_active_host $facet)
     else
         sleep 10
     fi
@@ -757,7 +786,7 @@ reboot_facet() {
 boot_node() {
     local node=$1
     if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_UP $node
+       reboot_node $node
        wait_for_host $node
     fi
 }
@@ -983,37 +1012,66 @@ wait_delete_completed () {
 }
 
 wait_for_host() {
-    local host=$1
-    check_network "$host" 900
-    while ! do_node $host hostname  > /dev/null; do sleep 5; done
+    local hostlist=$1
+
+    # we can use "for" here because we are waiting the slowest
+    for host in ${hostlist//,/ }; do
+        check_network "$host" 900
+    done
+    while ! do_nodes $hostlist hostname  > /dev/null; do sleep 5; done
 }
 
-wait_for() {
-    local facet=$1
-    local host=`facet_active_host $facet`
-    wait_for_host $host
+wait_for_facet() {
+    local facetlist=$1
+    local hostlist
+
+    for facet in ${facetlist//,/ }; do
+        hostlist=$(expand_list $hostlist $(facet_active_host $facet))
+    done
+    wait_for_host $hostlist
+}
+
+_wait_recovery_complete () {
+    local param=$1
+
+    # Use default policy if $2 is not passed by caller.
+    local MAX=${2:-$(max_recovery_time)}
+
+    local WAIT=0
+    local STATUS=
+
+    while [ $WAIT -lt $MAX ]; do
+        STATUS=$(lctl get_param -n $param | grep status)
+        echo $param $STATUS
+        [[ $STATUS = "status: COMPLETE" || $STATUS = "status: INACTIVE" ]] && return 0
+        sleep 5
+        WAIT=$((WAIT + 5))
+        echo "Waiting $((MAX - WAIT)) secs for $param recovery done. $STATUS"
+    done
+    echo "$param recovery not done in $MAX sec. $STATUS"
+    return 1
 }
 
 wait_recovery_complete () {
     local facet=$1
 
-    # Use default policy if $2 is not passed by caller.
+    # with an assumption that at_max is the same on all nodes
     local MAX=${2:-$(max_recovery_time)}
 
-    local var_svc=${facet}_svc
-    local procfile="*.${!var_svc}.recovery_status"
-    local WAIT=0
-    local STATUS=
+    local facets=$facet
+    if [ "$FAILURE_MODE" = HARD ]; then
+        facets=$(facets_on_host $(facet_active_host $facet))
+    fi
+    echo affected facets: $facets
 
-    while [ $WAIT -lt $MAX ]; do
-        STATUS=$(do_facet $facet lctl get_param -n $procfile | grep status)
-        [[ $STATUS = "status: COMPLETE" ]] && return 0
-        sleep 5
-        WAIT=$((WAIT + 5))
-        echo "Waiting $((MAX - WAIT)) secs for $facet recovery done. $STATUS"
+    # we can use "for" here because we are waiting the slowest
+    for facet in ${facets//,/ }; do
+        local var_svc=${facet}_svc
+        local param="*.${!var_svc}.recovery_status"
+
+        local host=$(facet_active_host $facet)
+        do_rpc_nodes $host _wait_recovery_complete $param $MAX
     done
-    echo "$facet recovery not done in $MAX sec. $STATUS"
-    return 1
 }
 
 wait_mds_ost_sync () {
@@ -1161,19 +1219,40 @@ client_reconnect() {
 facet_failover() {
     local facet=$1
     local sleep_time=$2
-    echo "Failing $facet on node `facet_active_host $facet`"
+    local host=$(facet_active_host $facet)
+
+    echo "Failing $facet on node $host"
+
+    local affected=$facet
+
+    if [ "$FAILURE_MODE" = HARD ]; then
+        affected=$(facets_on_host $host)
+    fi
+
     shutdown_facet $facet
+
+    echo affected facets: $affected
+
     [ -n "$sleep_time" ] && sleep $sleep_time
+
     reboot_facet $facet
     clients_up &
-    DFPID=$!
+    local dfpid=$!
     RECOVERY_START_TIME=`date +%s`
-    echo "df pid is $DFPID"
-    change_active $facet
-    local TO=`facet_active_host $facet`
-    echo "Failover $facet to $TO"
-    wait_for $facet
-    mount_facet $facet || error "Restart of $facet failed"
+    echo "df pid is $dfpid"
+
+    change_active $affected
+
+    wait_for_facet $affected
+    # start mgs first if it is affected
+    if ! combined_mgs_mds && list_member $affected mgs; then
+        mount_facet mgs || error "Restart of mgs failed"
+    fi
+    # FIXME; has to be changed to mount all facets concurrently 
+    affected=$(exclude_items_from_list $affected mgs)
+    for facet in ${affected//,/ }; do
+        mount_facet $facet || error "Restart of $facet on node $host failed!"
+    done
 }
 
 obd_name() {
@@ -1334,10 +1413,16 @@ facet_active_host() {
 }
 
 change_active() {
-    local facet=$1
+    local facetlist=$1
+    local facet
+
+    facetlist=$(exclude_items_from_list $facetlist mgs)
+
+    for facet in ${facetlist//,/ }; do
     local failover=${facet}failover
-    host=`facet_host $failover`
+    local host=`facet_host $failover`
     [ -z "$host" ] && return
+
     local curactive=`facet_active $facet`
     if [ -z "${curactive}" -o "$curactive" == "$failover" ] ; then
         eval export ${facet}active=$facet
@@ -1347,6 +1432,9 @@ change_active() {
     # save the active host for this facet
     local activevar=${facet}active
     echo "$activevar=${!activevar}" > $TMP/$activevar
+    local TO=`facet_active_host $facet`
+    echo "Failover $facet to $TO"
+    done
 }
 
 do_node() {
@@ -1540,6 +1628,53 @@ combined_mgs_mds () {
     [[ $MDSDEV = $MGSDEV ]] && [[ $mds_HOST = $mgs_HOST ]]
 }
 
+mkfs_opts () {
+    local facet=$1
+
+    local tgt=$(echo $facet | tr -d [:digit:] | tr "[:lower:]" "[:upper:]")
+    local optvar=${tgt}_MKFS_OPTS
+    local opt=${!optvar}
+
+    # FIXME: ! combo  mgs/mds + mgsfailover is not supported yet
+    [[ $facet = mgs ]] && echo $opt && return
+
+    # 1.
+    # --failnode options 
+    local var=${facet}failover_HOST
+    if [ x"${!var}" != x ] && [ x"${!var}" != x$(facet_host $facet) ] ; then
+        local failnode=$(h2$NETTYPE ${!var})
+        failnode="--failnode=$failnode"
+        # options does not contain 
+        # or contains wrong --failnode=
+        if [[ $opt != *${failnode}* ]]; then
+            opt=$(echo $opt | sed 's/--failnode=.* / /')
+            opt="$opt $failnode"
+        fi
+    fi
+
+    # 2.
+    # --mgsnode options
+    # no additional mkfs mds "--mgsnode" option for this configuration
+    if [[ $facet = mds ]] && combined_mgs_mds; then
+        echo $opt
+        return
+    fi
+
+    # additional mkfs "--mgsnode"
+    local mgsnode="--mgsnode=$MGSNID"
+    opt=${opt//$mgsnode }
+    for nid in ${MGSNID//:/ }; do
+        local mgsnode="--mgsnode=$nid"
+        # options does not contain
+        # --mgsnode=$nid
+        if [[ $opt != *${mgsnode}" "* ]]; then
+            opt="$opt --mgsnode=$nid"
+        fi
+    done
+
+    echo $opt
+}
+
 formatall() {
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
 
@@ -1549,20 +1684,22 @@ formatall() {
     [ "$CLIENTONLY" ] && return
     echo Formatting mgs, mds, osts
     if ! combined_mgs_mds ; then
-        add mgs $mgs_MKFS_OPTS $FSTYPE_OPT --reformat $MGSDEV || exit 10
+        add mgs $(mkfs_opts mgs) $FSTYPE_OPT --reformat $MGSDEV || exit 10
     fi
 
     if $VERBOSE; then
-        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
+        add mds $(mkfs_opts mds) $FSTYPE_OPT --reformat $MDSDEV || exit 10
     else
-        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV > /dev/null || exit 10
+        add mds $(mkfs_opts mds) $FSTYPE_OPT --reformat $MDSDEV > /dev/null || exit 10
     fi
 
+    # the ost-s could have different OST_MKFS_OPTS
+    # because of different failnode-s
     for num in `seq $OSTCOUNT`; do
         if $VERBOSE; then
-            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` || exit 10
+            add ost$num $(mkfs_opts ost${num}) $FSTYPE_OPT --reformat `ostdevname $num` || exit 10
         else
-            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
+            add ost$num $(mkfs_opts ost${num}) $FSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
         fi
     done
 }
@@ -1607,7 +1744,7 @@ setupall() {
             writeconf_all
 
         if ! combined_mgs_mds ; then
-            start mgs $MGSDEV $mgs_MOUNT_OPTS
+            start mgs $MGSDEV $MGS_MOUNT_OPTS
         fi
 
         start mds $MDSDEV $MDS_MOUNT_OPTS
@@ -1691,6 +1828,8 @@ init_facet_vars () {
 init_facets_vars () {
     remote_mds_nodsh ||
         init_facet_vars mds $MDSDEV $MDS_MOUNT_OPTS
+
+    combined_mgs_mds || init_facet_vars mgs $MGSDEV $MGS_MOUNT_OPTS
 
     remote_ost_nodsh && return
 
@@ -2076,6 +2215,12 @@ comma_list() {
     echo "$*" | tr -s " " "\n" | sort -b -u | tr "\n" " " | sed 's/ \([^$]\)/,\1/g'
 }
 
+list_member () {
+    local list=$1
+    local item=$2
+    echo $list | grep -qw $item  
+}
+
 # list, excluded are the comma separated lists
 exclude_items_from_list () {
     local list=$1
@@ -2124,19 +2269,22 @@ absolute_path() {
 }
 
 get_facets () {
-    local name=$(echo $1 | tr "[:upper:]" "[:lower:]")
-    local type=$(echo $1 | tr "[:lower:]" "[:upper:]")
+    local types=${1:-"OST MDS MGS"}
 
     local list=""
+    for entry in $types; do
+        local name=$(echo $entry | tr "[:upper:]" "[:lower:]")
+        local type=$(echo $entry | tr "[:lower:]" "[:upper:]")
 
-    case $type in
-        MDS )    list=mds;;
-        OST )    for ((i=1; i<=$OSTCOUNT; i++)) do
-                    list="$list ${name}$i"
-                 done;;
-          * )    error "Invalid facet type"
+        case $type in
+            MDS|MGS ) list="$list $name";;
+                OST ) for ((i=1; i<=$OSTCOUNT; i++)) do
+                          list="$list ${name}$i"
+                      done;;
+                  * ) error "Invalid facet type"
                  exit 1;;
-    esac
+        esac
+    done
     echo $(comma_list $list)
 }
 
@@ -2644,17 +2792,28 @@ local_mode ()
         $(single_local_node $(comma_list $(nodes_list)))
 }
 
-osts_nodes () {
-    local OSTNODES=$(facet_host ost1)
+facets_nodes () {
+    local facets=$1
+    local nodes
     local NODES_sort
 
-    for num in `seq $OSTCOUNT`; do
-        local myOST=$(facet_host ost$num)
-        OSTNODES="$OSTNODES $myOST"
+    for facet in ${facets//,/ }; do
+        if [ "$FAILURE_MODE" = HARD ]; then
+            nodes="$nodes $(facet_active_host $facet)"
+        else
+            nodes="$nodes $(facet_host $facet)"
+        fi
     done
-    NODES_sort=$(for i in $OSTNODES; do echo $i; done | sort -u)
+    NODES_sort=$(for i in $nodes; do echo $i; done | sort -u)
 
     echo $NODES_sort
+}
+
+osts_nodes () {
+    local facets=$(get_facets OST)
+    local nodes=$(facets_nodes $facets)
+
+    echo $nodes
 }
 
 nodes_list () {
@@ -2666,7 +2825,7 @@ nodes_list () {
     [ -n "$CLIENTS" ] && myNODES=${CLIENTS//,/ }
 
     if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
-        myNODES="$myNODES $(osts_nodes) $mds_HOST"
+        myNODES="$myNODES $(facets_nodes $(get_facets))"
     fi
 
     myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
@@ -3040,7 +3199,7 @@ convert_facet2label() {
 get_clientosc_proc_path() {
     local ost=$1
 
-    echo "{$1}-osc-*"
+    echo "${1}-osc-*"
 }
 
 get_osc_import_name() {
@@ -3057,33 +3216,37 @@ get_osc_import_name() {
     return 0
 }
 
-wait_import_state () {
+_wait_import_state () {
     local expected=$1
     local CONN_PROC=$2
+    local maxtime=${3:-max_recovery_time}
     local CONN_STATE
     local i=0
 
     CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
-        if [ "${expected}" == "DISCONN" ]; then
-            # for disconn we can check after proc entry is removed
-            [ "x${CONN_STATE}" == "x" ] && return 0
-            #  with AT we can have connect request timeout ~ reconnect timeout
-            # and test can't see real disconnect
-            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
-        fi
-        # disconnect rpc should be wait not more obd_timeout
-        [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
-            error "can't put import for $CONN_PROC into ${expected} state" && return 1
+        [ $i -ge $maxtime ] && \
+            error "can't put import for $CONN_PROC into ${expected} state after $i sec, have ${CONN_STATE}" && \
+            return 1
         sleep 1
         CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
         i=$(($i + 1))
     done
 
-    log "$CONN_PROC now in ${CONN_STATE} state"
+    log "$CONN_PROC in ${CONN_STATE} state after $i sec"
     return 0
 }
 
+wait_import_state() {
+    local state=$1
+    local params=$2
+    local maxtime=${3:-max_recovery_time}
+    local param
+
+    for param in ${params//,/ }; do
+        _wait_import_state $state $param $maxtime || return
+    done
+}
 wait_osc_import_state() {
     local facet=$1
     local ost_facet=$2
@@ -3130,8 +3293,14 @@ wait_clients_import_state () {
     local list=$1
     local facet=$2
     local expected=$3
-    shift
 
+    local facets=$facet
+
+    if [ "$FAILURE_MODE" = HARD ]; then
+        facets=$(facets_on_host $(facet_active_host $facet))
+    fi
+
+    for facet in ${facets//,/ }; do
     local label=$(convert_facet2label $facet)
     local proc_path
     case $facet in
@@ -3139,8 +3308,10 @@ wait_clients_import_state () {
         mds* ) proc_path="mdc.$(get_clientmdc_proc_path $label).mds_server_uuid" ;;
         *) error "unknown facet!" ;;
     esac
+    local params=$(expand_list $params $proc_path)
+    done
 
-    if ! do_rpc_nodes $list wait_import_state $expected $proc_path; then
+    if ! do_rpc_nodes $list wait_import_state $expected $params; then
         error "import is not in ${expected} state"
         return 1
     fi

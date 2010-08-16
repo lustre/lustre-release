@@ -244,7 +244,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     log "Starting failover on $SERVERFACET"
 
     facet_failover "$SERVERFACET" || exit 1
-    if ! wait_recovery_complete $SERVERFACET $((TIMEOUT * 10)); then 
+    if ! wait_recovery_complete $SERVERFACET ; then 
         echo "$SERVERFACET recovery is not completed!"
         exit 7
     fi

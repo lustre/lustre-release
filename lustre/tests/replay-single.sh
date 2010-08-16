@@ -22,13 +22,6 @@ remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 # bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
 
-if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
-    CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
-    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
-    echo "Except the tests: $CONFIG_EXCEPTIONS"
-    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
-fi
-
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a     44b    65 66 67 68"
 
@@ -1482,9 +1475,9 @@ test_61d() { # bug 16002
 #define OBD_FAIL_OBD_LLOG_SETUP        0x605
     stop mgs
     do_facet mgs "lctl set_param fail_loc=0x80000605"
-    start mgs $MGSDEV $mgs_MOUNT_OPTS && error "mgs start should have failed"
+    start mgs $MGSDEV $MGS_MOUNT_OPTS && error "mgs start should have failed"
     do_facet mgs "lctl set_param fail_loc=0"
-    start mgs $MGSDEV $mgs_MOUNT_OPTS || error "cannot restart mgs"
+    start mgs $MGSDEV $MGS_MOUNT_OPTS || error "cannot restart mgs"
 }
 run_test 61d "error in llog_setup should cleanup the llog context correctly"
 
@@ -2222,12 +2215,12 @@ test_87() { #bug 17485
 
     reboot_facet mds
     change_active mds
-    wait_for mds
+    wait_for_facet mds
     mount_facet mds || error "Restart of mds failed"
 
     reboot_facet ost1
     change_active ost1
-    wait_for ost1
+    wait_for_facet ost1
     mount_facet ost1 || error "Restart of ost1 failed"
 
     clients_up

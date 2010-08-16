@@ -85,7 +85,7 @@ reformat_and_config() {
 
 start_mgs () {
 	echo "start mgs"
-	start mgs $MGSDEV $mgs_MOUNT_OPTS
+	start mgs $MGSDEV $MGS_MOUNT_OPTS
 }
 
 start_mds() {
