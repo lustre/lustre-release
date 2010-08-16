@@ -2,16 +2,19 @@
 	* version 1.8.5
 	* Support for kernels:
 	  2.6.16.60-0.42.8 (SLES 10),
-	  2.6.27.39-0.3.1 (SLES11),
+	  2.6.32.13-0.5.1 (SLES11),
 	  2.6.18-194.8.1.el5 (RHEL 5)
 	  2.6.18-194.8.1.0.1.el5 (OEL 5)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.30 vanilla (kernel.org)
+	  2.6.16 - 2.6.32 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.10-sun2
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : enhancement
+Bugzilla   : 21610
+Description: Update SLES11 SP1 kernel to 2.6.32.13-0.5.1.
 
 -------------------------------------------------------------------------------
 
