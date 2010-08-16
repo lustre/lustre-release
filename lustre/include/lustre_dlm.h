@@ -373,6 +373,7 @@ struct ldlm_valblock_ops {
         int (*lvbo_update)(struct ldlm_resource *res,
                            struct ptlrpc_request *r,
                            int increase);
+        int (*lvbo_free)(struct ldlm_resource *res);
 };
 
 typedef enum {
@@ -768,6 +769,8 @@ struct ldlm_resource {
          * List of references to this resource. For debugging.
          */
         struct lu_ref          lr_reference;
+
+        struct inode          *lr_lvb_inode;
 };
 
 struct ldlm_ast_work {

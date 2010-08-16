@@ -54,6 +54,18 @@
 
 #include "filter_internal.h"
 
+static int filter_lvbo_free(struct ldlm_resource *res) {
+        if (res->lr_lvb_inode) {
+                iput(res->lr_lvb_inode);
+                res->lr_lvb_inode = NULL;
+        }
+
+        if (res->lr_lvb_data)
+                OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+
+        return 0;
+}
+
 /* Called with res->lr_lvb_sem held */
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
@@ -103,6 +115,8 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
+        res->lr_lvb_inode = igrab(dentry->d_inode);
+
         EXIT;
 out_dentry:
         f_dput(dentry);
@@ -126,7 +140,7 @@ static int filter_lvbo_update(struct ldlm_resource *res,
         int rc = 0;
         struct ost_lvb *lvb;
         struct obd_device *obd;
-        struct dentry *dentry;
+        struct inode *inode;
         ENTRY;
 
         LASSERT(res);
@@ -179,49 +193,56 @@ static int filter_lvbo_update(struct ldlm_resource *res,
         /* Update the LVB from the disk inode */
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd);
-        
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
-                                              res->lr_name.name[0]);
-        if (IS_ERR(dentry))
-                GOTO(out, rc = PTR_ERR(dentry));
 
-        if (dentry->d_inode == NULL)
-                GOTO(out_dentry, rc = -ENOENT);
+        inode = res->lr_lvb_inode;
+        /* filter_fid2dentry could fail */
+        if (unlikely(!inode)) {
+                struct dentry *dentry;
 
-        if (i_size_read(dentry->d_inode) > lvb->lvb_size || !increase_only) {
+                dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
+                                           res->lr_name.name[0]);
+                if (IS_ERR(dentry))
+                        GOTO(out, rc = PTR_ERR(dentry));
+
+                if (dentry->d_inode)
+                        inode = res->lr_lvb_inode = igrab(dentry->d_inode);
+                f_dput(dentry);
+        }
+
+        if (!inode || !inode->i_nlink)
+                GOTO(out, rc = -ENOENT);
+
+        if (i_size_read(inode) > lvb->lvb_size || !increase_only) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
-                       lvb->lvb_size, i_size_read(dentry->d_inode));
-                lvb->lvb_size = i_size_read(dentry->d_inode);
+                       lvb->lvb_size, i_size_read(inode));
+                lvb->lvb_size = i_size_read(inode);
         }
 
-        if (LTIME_S(dentry->d_inode->i_mtime) >lvb->lvb_mtime|| !increase_only){
+        if (LTIME_S(inode->i_mtime) >lvb->lvb_mtime|| !increase_only){
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
-                       lvb->lvb_mtime, LTIME_S(dentry->d_inode->i_mtime));
-                lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
+                       lvb->lvb_mtime, LTIME_S(inode->i_mtime));
+                lvb->lvb_mtime = LTIME_S(inode->i_mtime);
         }
-        if (LTIME_S(dentry->d_inode->i_atime) >lvb->lvb_atime|| !increase_only){
+        if (LTIME_S(inode->i_atime) >lvb->lvb_atime|| !increase_only){
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
-                       lvb->lvb_atime, LTIME_S(dentry->d_inode->i_atime));
-                lvb->lvb_atime = LTIME_S(dentry->d_inode->i_atime);
+                       lvb->lvb_atime, LTIME_S(inode->i_atime));
+                lvb->lvb_atime = LTIME_S(inode->i_atime);
         }
-        if (LTIME_S(dentry->d_inode->i_ctime) >lvb->lvb_ctime|| !increase_only){
+        if (LTIME_S(inode->i_ctime) >lvb->lvb_ctime|| !increase_only){
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
-                       lvb->lvb_ctime, LTIME_S(dentry->d_inode->i_ctime));
-                lvb->lvb_ctime = LTIME_S(dentry->d_inode->i_ctime);
+                       lvb->lvb_ctime, LTIME_S(inode->i_ctime));
+                lvb->lvb_ctime = LTIME_S(inode->i_ctime);
         }
-        if (lvb->lvb_blocks != dentry->d_inode->i_blocks) {
+        if (lvb->lvb_blocks != inode->i_blocks) {
                 CDEBUG(D_DLMTRACE,"res: "LPU64" updating lvb blocks from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
-                       lvb->lvb_blocks, (unsigned long long)dentry->d_inode->i_blocks);
-                lvb->lvb_blocks = dentry->d_inode->i_blocks;
+                       lvb->lvb_blocks, (unsigned long long)inode->i_blocks);
+                lvb->lvb_blocks = inode->i_blocks;
         }
-
-out_dentry:
-        f_dput(dentry);
 
 out:
         cfs_up(&res->lr_lvb_sem);
@@ -230,5 +251,6 @@ out:
 
 struct ldlm_valblock_ops filter_lvbo = {
         lvbo_init: filter_lvbo_init,
-        lvbo_update: filter_lvbo_update
+        lvbo_update: filter_lvbo_update,
+        lvbo_free: filter_lvbo_free
 };

@@ -988,11 +988,9 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
                 cfs_waitq_signal(&ns->ns_waitq);
 }
 
-/* Returns 1 if the resource was freed, 0 if it remains. */
-int ldlm_resource_putref(struct ldlm_resource *res)
+int ldlm_resource_putref_internal(struct ldlm_resource *res, int locked)
 {
         struct ldlm_namespace *ns = res->lr_namespace;
-        int rc = 0;
         ENTRY;
 
         CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
@@ -1002,39 +1000,33 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         LASSERTF(cfs_atomic_read(&res->lr_refcount) < LI_POISON, "%d",
                  cfs_atomic_read(&res->lr_refcount));
 
-        if (cfs_atomic_dec_and_lock(&res->lr_refcount, &ns->ns_hash_lock)) {
-                __ldlm_resource_putref_final(res);
-                cfs_spin_unlock(&ns->ns_hash_lock);
-                if (res->lr_lvb_data)
-                        OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
-                OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
-                rc = 1;
-        }
+        if (locked && !cfs_atomic_dec_and_test(&res->lr_refcount))
+                RETURN(0);
+        if (!locked && !cfs_atomic_dec_and_lock(&res->lr_refcount,
+                                            &ns->ns_hash_lock))
+                RETURN(0);
 
-        RETURN(rc);
+        __ldlm_resource_putref_final(res);
+
+        if (!locked)
+                cfs_spin_unlock(&ns->ns_hash_lock);
+
+        if (ns->ns_lvbo && ns->ns_lvbo->lvbo_free)
+                ns->ns_lvbo->lvbo_free(res);
+
+        OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
+
+        RETURN(1);
 }
 
-/* Returns 1 if the resource was freed, 0 if it remains. */
+int ldlm_resource_putref(struct ldlm_resource *res)
+{
+        return ldlm_resource_putref_internal(res, 0);
+}
+
 int ldlm_resource_putref_locked(struct ldlm_resource *res)
 {
-        int rc = 0;
-        ENTRY;
-
-        CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
-               cfs_atomic_read(&res->lr_refcount) - 1);
-        LASSERT(cfs_atomic_read(&res->lr_refcount) > 0);
-        LASSERT(cfs_atomic_read(&res->lr_refcount) < LI_POISON);
-
-        LASSERT(cfs_atomic_read(&res->lr_refcount) >= 0);
-        if (cfs_atomic_dec_and_test(&res->lr_refcount)) {
-                __ldlm_resource_putref_final(res);
-                if (res->lr_lvb_data)
-                        OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
-                OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
-                rc = 1;
-        }
-
-        RETURN(rc);
+        return ldlm_resource_putref_internal(res, 1);
 }
 
 void ldlm_resource_add_lock(struct ldlm_resource *res, cfs_list_t *head,
