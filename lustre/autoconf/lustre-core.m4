@@ -636,6 +636,29 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_FLUSH_OWNER_ID
+# starting from 2.6.18 the file_operations .flush
+# method has a new "fl_owner_t id" parameter
+#
+AC_DEFUN([LC_FLUSH_OWNER_ID],
+[AC_MSG_CHECKING([if file_operations .flush has an fl_owner_t id])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct file_operations *fops = NULL;
+        fl_owner_t id;
+        int i;
+
+        i = fops->flush(NULL, id);
+],[
+        AC_DEFINE(HAVE_FLUSH_OWNER_ID, 1,
+                [file_operations .flush method has an fl_owner_t id])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_STATFS_DENTRY_PARAM
 # starting from 2.6.18 linux kernel uses dentry instead of
@@ -1921,6 +1944,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
          LC_SEQ_LOCK
          LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
+         LC_FLUSH_OWNER_ID
          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES
          fi
