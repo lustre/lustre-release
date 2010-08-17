@@ -99,7 +99,7 @@ test_smoke_sub () {
 
     echo $LST run b
     echo sleep 1
-    echo "$LST stat --delay 10 c s &"
+    echo "$LST stat --delay 10 --timeout 10 c s &"
     echo 'pid=$!'
     echo 'trap "cleanup $pid" INT TERM'
     echo sleep $smoke_DURATION
