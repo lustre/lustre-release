@@ -303,11 +303,7 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                        vfs_symlink(dir, dentry, path)
 #endif
-#endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
-#define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
-#else
 #define ll_set_dflags(dentry, flags) do { \
                 cfs_spin_lock(&dentry->d_lock); \
                 dentry->d_flags |= flags; \

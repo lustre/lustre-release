@@ -178,9 +178,6 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                 GOTO(out, rc);
         }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8))
-        rc = vfs_follow_link(nd, symname);
-#else
 #ifdef HAVE_COOKIE_FOLLOW_LINK
         nd_set_link(nd, symname);
         /* @symname may contain a pointer to the request message buffer,
@@ -195,7 +192,6 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
         }
         nd_set_link(nd, symname);
         RETURN(0);
-#endif
 #endif
 out:
         ptlrpc_req_finished(request);

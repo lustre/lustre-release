@@ -72,28 +72,11 @@
 #ifdef HAVE_MM_INLINE
 # include <linux/mm_inline.h>
 #endif
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-# include <linux/kallsyms.h>
-# include <linux/moduleparam.h>
-#endif
+#include <linux/kallsyms.h>
+#include <linux/moduleparam.h>
 #include <linux/scatterlist.h>
 
 #include <libcfs/linux/portals_compat25.h>
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define schedule_work schedule_task
-#define prepare_work(wq,cb,cbdata)                                            \
-do {                                                                          \
-        INIT_TQUEUE((wq), 0, 0);                                              \
-        PREPARE_TQUEUE((wq), (cb), (cbdata));                                 \
-} while (0)
-
-#define PageUptodate Page_Uptodate
-#define our_recalc_sigpending(current) recalc_sigpending(current)
-#define cfs_num_online_cpus() smp_num_cpus
-#define work_struct_t                   struct tq_struct
-#define cfs_get_work_data(type,field,data)   (data)
-#else
 
 #ifdef HAVE_3ARGS_INIT_WORK
 
@@ -121,8 +104,6 @@ do {                                                                          \
 #define strtok(a,b) strpbrk(a, b)
 #define work_struct_t      struct work_struct
 
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
-
 #ifdef CONFIG_SMP
 #define LASSERT_SPIN_LOCKED(lock) LASSERT(spin_is_locked(lock))
 #define LINVRNT_SPIN_LOCKED(lock) LINVRNT(spin_is_locked(lock))
@@ -142,18 +123,6 @@ do {                                                                          \
 
 /* ------------------------------------------------------------------- */
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
-#define PORTAL_SYMBOL_REGISTER(x) inter_module_register(#x, THIS_MODULE, &x)
-#define PORTAL_SYMBOL_UNREGISTER(x) inter_module_unregister(#x)
-
-#define PORTAL_SYMBOL_GET(x) ((typeof(&x))inter_module_get(#x))
-#define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
-
-#define PORTAL_MODULE_USE       MOD_INC_USE_COUNT
-#define PORTAL_MODULE_UNUSE     MOD_DEC_USE_COUNT
-#else
-
 #define PORTAL_SYMBOL_REGISTER(x)
 #define PORTAL_SYMBOL_UNREGISTER(x)
 
@@ -163,26 +132,15 @@ do {                                                                          \
 #define PORTAL_MODULE_USE       try_module_get(THIS_MODULE)
 #define PORTAL_MODULE_UNUSE     module_put(THIS_MODULE)
 
-#endif
 
 /******************************************************************************/
 /* Module parameter support */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define CFS_MODULE_PARM(name, t, type, perm, desc) \
-        MODULE_PARM(name, t);\
-        MODULE_PARM_DESC(name, desc)
-
-#else
-# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+#define CFS_MODULE_PARM(name, t, type, perm, desc) \
         module_param(name, type, perm);\
         MODULE_PARM_DESC(name, desc)
-#endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9))
-# define CFS_SYSFS_MODULE_PARM  0 /* no sysfs module parameters */
-#else
-# define CFS_SYSFS_MODULE_PARM  1 /* module parameters accessible via sysfs */
-#endif
+#define CFS_SYSFS_MODULE_PARM  1 /* module parameters accessible via sysfs */
+
 /******************************************************************************/
 
 #if (__GNUC__)
@@ -206,10 +164,6 @@ do {                                                                          \
 #else
 #define cfs_num_possible_cpus() num_possible_cpus()
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-#define i_size_read(a) ((a)->i_size)
-#endif
-
 
 /******************************************************************************/
 /* Light-weight trace

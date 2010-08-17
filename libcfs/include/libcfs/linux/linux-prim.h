@@ -143,13 +143,6 @@ LL_PROC_PROTO(name)                                     \
 /*
  * Symbol register
  */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define cfs_symbol_register(s, p)       inter_module_register(s, THIS_MODULE, p)
-#define cfs_symbol_unregister(s)        inter_module_unregister(s)
-#define cfs_symbol_get(s)               inter_module_get(s)
-#define cfs_symbol_put(s)               inter_module_put(s)
-#define cfs_module_get()                MOD_INC_USE_COUNT
-#else
 #define cfs_symbol_register(s, p)       do {} while(0)
 #define cfs_symbol_unregister(s)        do {} while(0)
 #define cfs_symbol_get(s)               symbol_get(s)
@@ -159,7 +152,6 @@ LL_PROC_PROTO(name)                                     \
 #define __cfs_module_get(m)             __module_get(m)
 #define cfs_module_put(m)               module_put(m)
 #define cfs_module_refcount(m)          module_refcount(m)
-#endif
 
 typedef struct module cfs_module_t;
 

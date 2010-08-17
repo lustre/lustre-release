@@ -1086,12 +1086,7 @@ ksocknal_lib_setup_sock (struct socket *sock)
         return (0);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-struct tcp_opt *sock2tcp_opt(struct sock *sk)
-{
-        return &(sk->tp_pinfo.af_tcp);
-}
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
 #define sock2tcp_opt(sk) tcp_sk(sk)
 #else
 struct tcp_opt *sock2tcp_opt(struct sock *sk)

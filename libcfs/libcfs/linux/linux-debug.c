@@ -73,9 +73,7 @@
 
 #include "tracefile.h"
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #include <linux/kallsyms.h>
-#endif
 
 char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
 char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";

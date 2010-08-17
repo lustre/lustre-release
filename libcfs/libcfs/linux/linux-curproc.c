@@ -94,28 +94,18 @@ int    cfs_curproc_groups_nr(void)
 {
         int nr;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         task_lock(current);
         nr = current_cred()->group_info->ngroups;
         task_unlock(current);
-#else
-        nr = current->ngroups;
-#endif
         return nr;
 }
 
 void   cfs_curproc_groups_dump(gid_t *array, int size)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         task_lock(current);
         size = min_t(int, size, current_cred()->group_info->ngroups);
         memcpy(array, current_cred()->group_info->blocks[0], size * sizeof(__u32));
         task_unlock(current);
-#else
-        LASSERT(size <= NGROUPS);
-        size = min_t(int, size, current->ngroups);
-        memcpy(array, current->groups, size * sizeof(__u32));
-#endif
 }
 
 

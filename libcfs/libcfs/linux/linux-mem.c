@@ -45,16 +45,6 @@ static unsigned int cfs_alloc_flags_to_gfp(u_int32_t flags)
 {
 	unsigned int mflags = 0;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        if (flags & CFS_ALLOC_ATOMIC)
-                mflags |= __GFP_HIGH;
-        else if (flags & CFS_ALLOC_WAIT)
-                mflags |= __GFP_WAIT;
-        else
-                mflags |= (__GFP_HIGH | __GFP_WAIT);
-        if (flags & CFS_ALLOC_IO)
-                mflags |= __GFP_IO | __GFP_HIGHIO;
-#else
         if (flags & CFS_ALLOC_ATOMIC)
                 mflags |= __GFP_HIGH;
         else
@@ -63,7 +53,6 @@ static unsigned int cfs_alloc_flags_to_gfp(u_int32_t flags)
                 mflags |= __GFP_NOWARN;
         if (flags & CFS_ALLOC_IO)
                 mflags |= __GFP_IO;
-#endif
         if (flags & CFS_ALLOC_FS)
                 mflags |= __GFP_FS;
         if (flags & CFS_ALLOC_HIGH)

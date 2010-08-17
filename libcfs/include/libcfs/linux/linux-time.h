@@ -109,37 +109,6 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
-/*
- * old kernels---CURRENT_TIME is struct timeval
- */
-typedef struct timeval cfs_fs_time_t;
-
-static inline void cfs_fs_time_usec(cfs_fs_time_t *t, struct timeval *v)
-{
-        *v = *t;
-}
-
-static inline void cfs_fs_time_nsec(cfs_fs_time_t *t, struct timespec *s)
-{
-        s->tv_sec  = t->tv_sec;
-        s->tv_nsec = t->tv_usec * 1000;
-}
-
-/*
- * internal helper function used by cfs_fs_time_before*()
- */
-static inline unsigned long long __cfs_fs_time_flat(cfs_fs_time_t *t)
-{
-        return (unsigned long long)t->tv_sec * ONE_MILLION + t->tv_usec;
-}
-
-#define CURRENT_KERN_TIME        xtime
-
-#else
-/* (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)) */
-
 /*
  * post 2.5 kernels.
  */
@@ -169,9 +138,6 @@ static inline unsigned long long __cfs_fs_time_flat(cfs_fs_time_t *t)
 
 #define CURRENT_KERN_TIME        CURRENT_TIME
 
-/* (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)) */
-#endif
-
 /*
  * Generic kernel stuff
  */
@@ -181,12 +147,12 @@ typedef long cfs_duration_t;
 typedef cycles_t cfs_cycles_t;
 
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
-{       
+{
         return time_before(t1, t2);
 }
 
 static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
-{       
+{
         return time_before_eq(t1, t2);
 }
 
@@ -277,8 +243,6 @@ static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 #endif
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-
 #define cfs_time_current_64 get_jiffies_64
 
 static inline __u64 cfs_time_add_64(__u64 t, __u64 d)
@@ -302,13 +266,6 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
         return (__s64)t2 - (__s64)t1 >= 0;
 }
 
-#else
-#define cfs_time_current_64 cfs_time_current
-#define cfs_time_add_64     cfs_time_add
-#define cfs_time_shift_64   cfs_time_shift
-#define cfs_time_before_64  cfs_time_before
-#define cfs_time_beforeq_64 cfs_time_beforeq
-#endif
 
 /*
  * One jiffy

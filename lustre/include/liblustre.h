@@ -65,9 +65,9 @@ typedef unsigned short cfs_umode_t;
 
 #endif
 
-/* always adopt 2.5 definitions */
+/* always adopt 2.6.9 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE KERNEL_VERSION(2,6,5)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,6,9)
 
 #ifndef page_private
 #define page_private(page) ((page)->private)

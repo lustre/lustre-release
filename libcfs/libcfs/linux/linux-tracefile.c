@@ -197,13 +197,7 @@ cfs_set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 	header->ph_stack = stack;
 	header->ph_pid = current->pid;
 	header->ph_line_num = line;
-#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-	header->ph_extern_pid = current->thread.extern_pid;
-#elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	header->ph_extern_pid = current->thread.mode.tt.extern_pid;
-#else
 	header->ph_extern_pid = 0;
-#endif
 	return;
 }
 
