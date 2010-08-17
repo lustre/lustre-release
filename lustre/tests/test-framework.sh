@@ -774,6 +774,13 @@ reboot_node() {
     $POWER_UP $node
 }
 
+remount_facet() {
+    local facet=$1
+
+    stop $facet
+    mount_facet $facet
+}
+
 reboot_facet() {
     local facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
