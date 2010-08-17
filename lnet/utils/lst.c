@@ -1996,7 +1996,7 @@ jt_lst_show_error(int argc, char **argv)
         cfs_list_for_each_entry_typed(srp, &head, lst_stat_req_param_t,
                                       srp_link) {
                 rc = lst_stat_ioctl(srp->srp_name, srp->srp_count,
-                                    srp->srp_ids, 5, &srp->srp_result[0]);
+                                    srp->srp_ids, 10, &srp->srp_result[0]);
 
                 if (rc == -1) {
                         lst_print_error(srp->srp_name, "Failed to show errors of %s: %s\n",
