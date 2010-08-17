@@ -1,7 +1,7 @@
 m4_define([LUSTRE_MAJOR],[2])
 m4_define([LUSTRE_MINOR],[0])
-m4_define([LUSTRE_PATCH],[0])
-m4_define([LUSTRE_FIX],[51])
+m4_define([LUSTRE_PATCH],[50])
+m4_define([LUSTRE_FIX],[0])
 
 dnl # don't forget to update the service tags info
 m4_define([CLIENT_URN],["LUSTRE-210-CLT"])
