@@ -555,6 +555,39 @@ lnet_invalidate_handle (lnet_libhandle_t *lh)
         cfs_list_del (&lh->lh_hash_chain);
 }
 
+cfs_list_t *
+lnet_portal_mhash_alloc(void)
+{
+        cfs_list_t       *mhash;
+        int               i;
+
+        LIBCFS_ALLOC(mhash, sizeof(cfs_list_t) * LNET_PORTAL_HASH_SIZE);
+        if (mhash == NULL)
+                return NULL;
+
+        for (i = 0; i < LNET_PORTAL_HASH_SIZE; i++)
+                CFS_INIT_LIST_HEAD(&mhash[i]);
+
+        return mhash;
+}
+
+void
+lnet_portal_mhash_free(cfs_list_t *mhash)
+{
+        int     i;
+
+        for (i = 0; i < LNET_PORTAL_HASH_SIZE; i++) {
+                while (!cfs_list_empty(&mhash[i])) {
+                        lnet_me_t *me = cfs_list_entry(mhash[i].next,
+                                                       lnet_me_t, me_list);
+                        CERROR ("Active ME %p on exit portal mhash\n", me);
+                        cfs_list_del(&me->me_list);
+                        lnet_me_free(me);
+                }
+        }
+        LIBCFS_FREE(mhash, sizeof(cfs_list_t) * LNET_PORTAL_HASH_SIZE);
+}
+
 int
 lnet_init_finalizers(void)
 {
@@ -681,7 +714,7 @@ lnet_prepare(lnet_pid_t requested_pid)
         }
 
         for (i = 0; i < the_lnet.ln_nportals; i++) {
-                CFS_INIT_LIST_HEAD(&(the_lnet.ln_portals[i].ptl_ml));
+                CFS_INIT_LIST_HEAD(&(the_lnet.ln_portals[i].ptl_mlist));
                 CFS_INIT_LIST_HEAD(&(the_lnet.ln_portals[i].ptl_msgq));
                 the_lnet.ln_portals[i].ptl_options = 0;
         }
@@ -718,15 +751,21 @@ lnet_unprepare (void)
         LASSERT (the_lnet.ln_nzombie_nis == 0);
 
         for (idx = 0; idx < the_lnet.ln_nportals; idx++) {
-                LASSERT (cfs_list_empty(&the_lnet.ln_portals[idx].ptl_msgq));
+                lnet_portal_t *ptl = &the_lnet.ln_portals[idx];
 
-                while (!cfs_list_empty (&the_lnet.ln_portals[idx].ptl_ml)) {
-                        lnet_me_t *me = cfs_list_entry (the_lnet.ln_portals[idx].ptl_ml.next,
-                                                        lnet_me_t, me_list);
+                LASSERT (cfs_list_empty(&ptl->ptl_msgq));
 
-                        CERROR ("Active me %p on exit\n", me);
+                while (!cfs_list_empty(&ptl->ptl_mlist)) {
+                        lnet_me_t *me = cfs_list_entry(ptl->ptl_mlist.next,
+                                                       lnet_me_t, me_list);
+                        CERROR ("Active ME %p on exit\n", me);
                         cfs_list_del (&me->me_list);
                         lnet_me_free (me);
+                }
+
+                if (ptl->ptl_mhash != NULL) {
+                        LASSERT (lnet_portal_is_unique(ptl));
+                        lnet_portal_mhash_free(ptl->ptl_mhash);
                 }
         }
 
@@ -734,7 +773,7 @@ lnet_unprepare (void)
                 lnet_libmd_t *md = cfs_list_entry (the_lnet.ln_active_mds.next,
                                                    lnet_libmd_t, md_list);
 
-                CERROR ("Active md %p on exit\n", md);
+                CERROR ("Active MD %p on exit\n", md);
                 cfs_list_del_init (&md->md_list);
                 lnet_md_free (md);
         }
@@ -743,7 +782,7 @@ lnet_unprepare (void)
                 lnet_eq_t *eq = cfs_list_entry (the_lnet.ln_active_eqs.next,
                                                 lnet_eq_t, eq_list);
 
-                CERROR ("Active eq %p on exit\n", eq);
+                CERROR ("Active EQ %p on exit\n", eq);
                 cfs_list_del (&eq->eq_list);
                 lnet_eq_free (eq);
         }

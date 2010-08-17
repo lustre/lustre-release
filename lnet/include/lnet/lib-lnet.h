@@ -88,6 +88,13 @@ static inline int lnet_md_unlinkable (lnet_libmd_t *md)
                 lnet_md_exhausted(md));
 }
 
+static inline unsigned int
+lnet_match_to_hash(lnet_process_id_t id, __u64 mbits)
+{
+        mbits += id.nid + id.pid;
+        return cfs_hash_long((unsigned long)mbits, LNET_PORTAL_HASH_BITS);
+}
+
 #ifdef __KERNEL__
 #define LNET_LOCK()        cfs_spin_lock(&the_lnet.ln_lock)
 #define LNET_UNLOCK()      cfs_spin_unlock(&the_lnet.ln_lock)
@@ -428,6 +435,62 @@ lnet_handle2me (lnet_handle_me_t *handle)
 
         return (lh_entry (lh, lnet_me_t, me_lh));
 }
+
+static inline int
+lnet_portal_is_lazy(lnet_portal_t *ptl)
+{
+        return !!(ptl->ptl_options & LNET_PTL_LAZY);
+}
+
+static inline int
+lnet_portal_is_unique(lnet_portal_t *ptl)
+{
+        return !!(ptl->ptl_options & LNET_PTL_MATCH_UNIQUE); 
+}
+
+static inline int
+lnet_portal_is_wildcard(lnet_portal_t *ptl)
+{
+        return !!(ptl->ptl_options & LNET_PTL_MATCH_WILDCARD);
+}
+
+static inline void
+lnet_portal_setopt(lnet_portal_t *ptl, int opt)
+{
+        ptl->ptl_options |= opt;
+}
+
+static inline void
+lnet_portal_unsetopt(lnet_portal_t *ptl, int opt)
+{
+        ptl->ptl_options &= ~opt;
+}
+
+static inline int
+lnet_match_is_unique(lnet_process_id_t match_id,
+                     __u64 match_bits, __u64 ignore_bits)
+{
+        return ignore_bits == 0 &&
+               match_id.nid != LNET_NID_ANY &&
+               match_id.pid != LNET_PID_ANY;
+}
+
+static inline cfs_list_t *
+lnet_portal_me_head(int index, lnet_process_id_t id, __u64 mbits)
+{
+        lnet_portal_t *ptl = &the_lnet.ln_portals[index];
+
+        if (lnet_portal_is_wildcard(ptl)) {
+                return &ptl->ptl_mlist;
+        } else if (lnet_portal_is_unique(ptl)) {
+                LASSERT (ptl->ptl_mhash != NULL);
+                return &ptl->ptl_mhash[lnet_match_to_hash(id, mbits)];
+        }
+        return NULL;
+}
+
+cfs_list_t *lnet_portal_mhash_alloc(void);
+void lnet_portal_mhash_free(cfs_list_t *mhash);
 
 static inline void
 lnet_peer_addref_locked(lnet_peer_t *lp)
