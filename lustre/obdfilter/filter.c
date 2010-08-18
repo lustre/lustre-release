@@ -1487,8 +1487,8 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         if (dir_dentry == NULL)
                 filter_parent_unlock(dparent);
         if (IS_ERR(dchild)) {
-                CERROR("%s: child lookup error %ld\n", obd->obd_name,
-                       PTR_ERR(dchild));
+                CERROR("%s: object "LPU64":"LPU64" lookup error: rc %ld\n",
+                       obd->obd_name, id, group, PTR_ERR(dchild));
                 RETURN(dchild);
         }
 
