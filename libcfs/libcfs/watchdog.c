@@ -83,7 +83,7 @@ static unsigned long lcw_flags = 0;
 /*
  * Number of outstanding watchdogs.
  * When it hits 1, we start the dispatcher.
- * When it hits 0, we stop the distpatcher.
+ * When it hits 0, we stop the dispatcher.
  */
 static __u32         lcw_refcount = 0;
 static CFS_DECLARE_MUTEX(lcw_refcount_sem);

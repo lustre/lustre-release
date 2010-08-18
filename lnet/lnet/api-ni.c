@@ -633,7 +633,9 @@ lnet_fini_finalizers(void)
 }
 
 #ifndef __KERNEL__
-/* Temporary workaround to allow uOSS and test programs force server
+/**
+ * Reserved API - do not use.
+ * Temporary workaround to allow uOSS and test programs force server
  * mode in userspace. See comments near ln_server_mode_flag in
  * lnet/lib-types.h */
 
@@ -1152,6 +1154,16 @@ lnet_startup_lndnis (void)
         return -ENETDOWN;
 }
 
+/**
+ * Initialize LNet library.
+ *
+ * Only userspace program needs to call this function - it's automatically
+ * called in the kernel at module loading time. Caller has to call LNetFini()
+ * after a call to LNetInit(), if and only if the latter returned 0. It must
+ * be called exactly once.
+ *
+ * \return 0 on success, and -ve on failures.
+ */
 int
 LNetInit(void)
 {
@@ -1185,6 +1197,15 @@ LNetInit(void)
         return 0;
 }
 
+/**
+ * Finalize LNet library.
+ *
+ * Only userspace program needs to call this function. It can be called
+ * at most once.
+ *
+ * \pre LNetInit() called with success.
+ * \pre All LNet users called LNetNIFini() for matching LNetNIInit() calls.
+ */
 void
 LNetFini(void)
 {
@@ -1199,6 +1220,22 @@ LNetFini(void)
         the_lnet.ln_init = 0;
 }
 
+/**
+ * Set LNet PID and start LNet interfaces, routing, and forwarding.
+ *
+ * Userspace program should call this after a successful call to LNetInit().
+ * Users must call this function at least once before any other functions.
+ * For each successful call there must be a corresponding call to
+ * LNetNIFini(). For subsequent calls to LNetNIInit(), \a requested_pid is
+ * ignored.
+ *
+ * The PID used by LNet may be different from the one requested.
+ * See LNetGetId().
+ *
+ * \param requested_pid PID requested by the caller.
+ *
+ * \return 0 on success, and non-zero error code on failures.
+ */
 int
 LNetNIInit(lnet_pid_t requested_pid)
 {
@@ -1280,6 +1317,15 @@ LNetNIInit(lnet_pid_t requested_pid)
         return rc;
 }
 
+/**
+ * Stop LNet interfaces, routing, and forwarding.
+ *
+ * Users must call this function once for each successful call to LNetNIInit().
+ * Once the LNetNIFini() operation has been started, the results of pending
+ * API operations are undefined.
+ *
+ * \return always 0 for current implementation.
+ */
 int
 LNetNIFini()
 {
@@ -1310,6 +1356,19 @@ LNetNIFini()
         return 0;
 }
 
+/**
+ * This is an ugly hack to export IOC_LIBCFS_DEBUG_PEER and
+ * IOC_LIBCFS_PORTALS_COMPATIBILITY commands to users, by tweaking the LNet
+ * internal ioctl handler.
+ *
+ * IOC_LIBCFS_PORTALS_COMPATIBILITY is now deprecated, don't use it.
+ *
+ * \param cmd IOC_LIBCFS_DEBUG_PEER to print debugging data about a peer.
+ * The data will be printed to system console. Don't use it excessively.
+ * \param arg A pointer to lnet_process_id_t, process ID of the peer.
+ *
+ * \return Always return 0 when called by users directly (i.e., not via ioctl).
+ */
 int
 LNetCtl(unsigned int cmd, void *arg)
 {
@@ -1416,6 +1475,17 @@ LNetCtl(unsigned int cmd, void *arg)
         /* not reached */
 }
 
+/**
+ * Retrieve the lnet_process_id_t ID of LNet interface at \a index. Note that
+ * all interfaces share a same PID, as requested by LNetNIInit().
+ *
+ * \param index Index of the interface to look up.
+ * \param id On successful return, this location will hold the
+ * lnet_process_id_t ID of the interface.
+ *
+ * \retval 0 If an interface exists at \a index.
+ * \retval -ENOENT If no interface has been found.
+ */
 int
 LNetGetId(unsigned int index, lnet_process_id_t *id)
 {
@@ -1445,6 +1515,10 @@ LNetGetId(unsigned int index, lnet_process_id_t *id)
         return rc;
 }
 
+/**
+ * Print a string representation of handle \a h into buffer \a str of
+ * \a len bytes.
+ */
 void
 LNetSnprintHandle(char *str, int len, lnet_handle_any_t h)
 {

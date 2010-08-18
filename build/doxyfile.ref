@@ -103,9 +103,16 @@ INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          = *.h \
                          *.c
 RECURSIVE              = YES
-EXCLUDE                =
+EXCLUDE                = lnet/klnds/ciblnd/ \
+			 lnet/klnds/gmlnd/ \
+			 lnet/klnds/iiblnd/ \
+			 lnet/klnds/mxlnd/ \
+			 lnet/klnds/openiblnd/ \
+			 lnet/klnds/qswlnd/ \
+			 lnet/klnds/ralnd/ \
+			 lnet/klnds/viblnd/
 EXCLUDE_SYMLINKS       = NO
-EXCLUDE_PATTERNS       =
+EXCLUDE_PATTERNS       = */darwin/*
 EXCLUDE_SYMBOLS        = EXPORT_SYMBOL*
 EXAMPLE_PATH           =
 EXAMPLE_PATTERNS       = *

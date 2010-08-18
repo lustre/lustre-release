@@ -1567,6 +1567,34 @@ lnet_drop_delayed_put(lnet_msg_t *msg, char *reason)
         LNET_UNLOCK();
 }
 
+/**
+ * Turn on the lazy portal attribute. Use with caution!
+ *
+ * This portal attribute only affects incoming PUT requests to the portal,
+ * and is off by default. By default, if there's no matching MD for an
+ * incoming PUT request, it is simply dropped. With the lazy attribute on,
+ * such requests are queued indefinitely until either a matching MD is
+ * posted to the portal or the lazy attribute is turned off.
+ *
+ * It would prevent dropped requests, however it should be regarded as the
+ * last line of defense - i.e. users must keep a close watch on active
+ * buffers on a lazy portal and once it becomes too low post more buffers as
+ * soon as possible. This is because delayed requests usually have detrimental
+ * effects on underlying network connections. A few delayed requests often
+ * suffice to bring an underlying connection to a complete halt, due to flow
+ * control mechanisms.
+ *
+ * There's also a DOS attack risk. If users don't post match-all MDs on a
+ * lazy portal, a malicious peer can easily stop a service by sending some
+ * PUT requests with match bits that won't match any MD. A routed server is
+ * especially vulnerable since the connections to its neighbor routers are
+ * shared among all clients.
+ *
+ * \param portal Index of the portal to enable the lazy attribute on.
+ *
+ * \retval 0       On success.
+ * \retval -EINVAL If \a portal is not a valid index.
+ */
 int
 LNetSetLazyPortal(int portal)
 {
@@ -1584,6 +1612,15 @@ LNetSetLazyPortal(int portal)
         return 0;
 }
 
+/**
+ * Turn off the lazy portal attribute. Delayed requests on the portal,
+ * if any, will be all dropped when this function returns.
+ *
+ * \param portal Index of the portal to disable the lazy attribute on.
+ *
+ * \retval 0       On success.
+ * \retval -EINVAL If \a portal is not a valid index.
+ */
 int
 LNetClearLazyPortal(int portal)
 {
@@ -2361,6 +2398,50 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         return 0;
 }
 
+/**
+ * Initiate an asynchronous PUT operation.
+ *
+ * There are several events associated with a PUT: completion of the send on
+ * the initiator node (LNET_EVENT_SEND), and when the send completes
+ * successfully, the receipt of an acknowledgment (LNET_EVENT_ACK) indicating
+ * that the operation was accepted by the target. The event LNET_EVENT_PUT is
+ * used at the target node to indicate the completion of incoming data
+ * delivery.
+ *
+ * The local events will be logged in the EQ associated with the MD pointed to
+ * by \a mdh handle. Using a MD without an associated EQ results in these
+ * events being discarded. In this case, the caller must have another
+ * mechanism (e.g., a higher level protocol) for determining when it is safe
+ * to modify the memory region associated with the MD.
+ *
+ * Note that LNet does not guarantee the order of LNET_EVENT_SEND and
+ * LNET_EVENT_ACK, though intuitively ACK should happen after SEND.
+ *
+ * \param self Indicates the NID of a local interface through which to send
+ * the PUT request. Use LNET_NID_ANY to let LNet choose one by itself.
+ * \param mdh A handle for the MD that describes the memory to be sent. The MD
+ * must be "free floating" (See LNetMDBind()).
+ * \param ack Controls whether an acknowledgment is requested.
+ * Acknowledgments are only sent when they are requested by the initiating
+ * process and the target MD enables them.
+ * \param target A process identifier for the target process.
+ * \param portal The index in the \a target's portal table.
+ * \param match_bits The match bits to use for MD selection at the target
+ * process.
+ * \param offset The offset into the target MD (only used when the target
+ * MD has the LNET_MD_MANAGE_REMOTE option set).
+ * \param hdr_data 64 bits of user data that can be included in the message
+ * header. This data is written to an event queue entry at the target if an
+ * EQ is present on the matching MD.
+ *
+ * \retval  0      Success, and only in this case events will be generated
+ * and logged to EQ (if it exists).
+ * \retval -EIO    Simulated failure.
+ * \retval -ENOMEM Memory allocation failure.
+ * \retval -ENOENT Invalid MD object.
+ *
+ * \see lnet_event_t::hdr_data and lnet_event_kind_t.
+ */
 int
 LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         lnet_process_id_t target, unsigned int portal,
@@ -2548,6 +2629,26 @@ lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *reply, unsigned int len)
         reply->msg_ev.mlength = len;
 }
 
+/**
+ * Initiate an asynchronous GET operation.
+ *
+ * On the initiator node, an LNET_EVENT_SEND is logged when the GET request
+ * is sent, and an LNET_EVENT_REPLY is logged when the data returned from
+ * the target node in the REPLY has been written to local MD.
+ *
+ * On the target node, an LNET_EVENT_GET is logged when the GET request
+ * arrives and is accepted into a MD.
+ *
+ * \param self,target,portal,match_bits,offset See the discussion in LNetPut().
+ * \param mdh A handle for the MD that describes the memory into which the
+ * requested data will be received. The MD must be "free floating" (See LNetMDBind()).
+ *
+ * \retval  0      Success, and only in this case events will be generated
+ * and logged to EQ (if it exists) of the MD.
+ * \retval -EIO    Simulated failure.
+ * \retval -ENOMEM Memory allocation failure.
+ * \retval -ENOENT Invalid MD object.
+ */
 int
 LNetGet(lnet_nid_t self, lnet_handle_md_t mdh, 
         lnet_process_id_t target, unsigned int portal, 
@@ -2639,6 +2740,20 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         return 0;
 }
 
+/**
+ * Calculate distance to node at \a dstnid.
+ *
+ * \param dstnid Target NID.
+ * \param srcnidp If not NULL, NID of the local interface to reach \a dstnid
+ * is saved here.
+ * \param orderp If not NULL, order of the route to reach \a dstnid is saved
+ * here.
+ *
+ * \retval 0 If \a dstnid belongs to a local interface, and reserved option
+ * local_nid_dist_zero is set, which is the default.
+ * \retval positives Distance to target NID, i.e. number of hops plus one.
+ * \retval -EHOSTUNREACH If \a dstnid is not reachable.
+ */
 int
 LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
@@ -2720,6 +2835,23 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
         return -EHOSTUNREACH;
 }
 
+/**
+ * Set the number of asynchronous messages expected from a target process.
+ *
+ * This function is only meaningful for userspace callers. It's a no-op when
+ * called from kernel.
+ *
+ * Asynchronous messages are those that can come from a target when the
+ * userspace process is not waiting for IO to complete; e.g., AST callbacks
+ * from Lustre servers. Specifying the expected number of such messages
+ * allows them to be eagerly received when user process is not running in
+ * LNet; otherwise network errors may occur.
+ *
+ * \param id Process ID of the target process.
+ * \param nasync Number of asynchronous messages expected from the target.
+ *
+ * \return 0 on success, and an error code otherwise.
+ */
 int
 LNetSetAsync(lnet_process_id_t id, int nasync)
 {
@@ -2737,7 +2869,6 @@ LNetSetAsync(lnet_process_id_t id, int nasync)
         int               rc2;
 
         /* Target on a local network? */
-
         ni = lnet_net2ni(LNET_NIDNET(id.nid));
         if (ni != NULL) {
                 if (ni->ni_lnd->lnd_setasync != NULL) 

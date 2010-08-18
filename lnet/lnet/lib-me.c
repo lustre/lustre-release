@@ -96,6 +96,36 @@ lnet_me_match_portal(lnet_portal_t *ptl, lnet_process_id_t id,
         return 0;
 }
 
+/**
+ * Create and attach a match entry to the match list of \a portal. The new
+ * ME is empty, i.e. not associated with a memory descriptor. LNetMDAttach()
+ * can be used to attach a MD to an empty ME.
+ *
+ * \param portal The portal table index where the ME should be attached.
+ * \param match_id Specifies the match criteria for the process ID of
+ * the requester. The constants LNET_PID_ANY and LNET_NID_ANY can be
+ * used to wildcard either of the identifiers in the lnet_process_id_t
+ * structure.
+ * \param match_bits,ignore_bits Specify the match criteria to apply
+ * to the match bits in the incoming request. The ignore bits are used
+ * to mask out insignificant bits in the incoming match bits. The resulting
+ * bits are then compared to the ME's match bits to determine if the
+ * incoming request meets the match criteria.
+ * \param unlink Indicates whether the ME should be unlinked when the memory
+ * descriptor associated with it is unlinked (Note that the check for
+ * unlinking a ME only occurs when the memory descriptor is unlinked.).
+ * Valid values are LNET_RETAIN and LNET_UNLINK.
+ * \param pos Indicates whether the new ME should be prepended or
+ * appended to the match list. Allowed constants: LNET_INS_BEFORE,
+ * LNET_INS_AFTER.
+ * \param handle On successful returns, a handle to the newly created ME
+ * object is saved here. This handle can be used later in LNetMEInsert(),
+ * LNetMEUnlink(), or LNetMDAttach() functions.
+ *
+ * \retval 0       On success.
+ * \retval -EINVAL If \a portal is invalid.
+ * \retval -ENOMEM If new ME object cannot be allocated.
+ */
 int
 LNetMEAttach(unsigned int portal,
              lnet_process_id_t match_id,
@@ -148,6 +178,23 @@ LNetMEAttach(unsigned int portal,
         return 0;
 }
 
+/**
+ * Create and a match entry and insert it before or after the ME pointed to by
+ * \a current_meh. The new ME is empty, i.e. not associated with a memory
+ * descriptor. LNetMDAttach() can be used to attach a MD to an empty ME.
+ *
+ * This function is identical to LNetMEAttach() except for the position
+ * where the new ME is inserted.
+ *
+ * \param current_meh A handle for a ME. The new ME will be inserted
+ * immediately before or immediately after this ME.
+ * \param match_id,match_bits,ignore_bits,unlink,pos,handle See the discussion
+ * for LNetMEAttach().
+ *
+ * \retval 0       On success.
+ * \retval -ENOMEM If new ME object cannot be allocated.
+ * \retval -ENOENT If \a current_meh does not point to a valid match entry.
+ */
 int
 LNetMEInsert(lnet_handle_me_t current_meh,
              lnet_process_id_t match_id,
@@ -207,6 +254,20 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         return 0;
 }
 
+/**
+ * Unlink a match entry from its match list.
+ *
+ * This operation also releases any resources associated with the ME. If a
+ * memory descriptor is attached to the ME, then it will be unlinked as well
+ * and an unlink event will be generated. It is an error to use the ME handle
+ * after calling LNetMEUnlink().
+ *
+ * \param meh A handle for the ME to be unlinked.
+ *
+ * \retval 0       On success.
+ * \retval -ENOENT If \a meh does not point to a valid ME.
+ * \see LNetMDUnlink() for the discussion on delivering unlink event.
+ */
 int
 LNetMEUnlink(lnet_handle_me_t meh)
 {

@@ -324,14 +324,20 @@ void        cfs_free_nidlist(cfs_list_t *list);
 int         cfs_parse_nidlist(char *str, int len, cfs_list_t *list);
 int         cfs_match_nid(lnet_nid_t nid, cfs_list_t *list);
 
+/** \addtogroup lnet_addr
+ * @{ */
 /* how an LNET NID encodes net:address */
+/** extract the address part of an lnet_nid_t */
 #define LNET_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
+/** extract the network part of an lnet_nid_t */
 #define LNET_NIDNET(nid)       ((__u32)(((nid) >> 32)) & 0xffffffff)
+/** make an lnet_nid_t from a network part and an address part */
 #define LNET_MKNID(net,addr)   ((((__u64)(net))<<32)|((__u64)(addr)))
 /* how net encodes type:number */
 #define LNET_NETNUM(net)       ((net) & 0xffff)
 #define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
 #define LNET_MKNET(typ,num)    ((((__u32)(typ))<<16)|((__u32)(num)))
+/** @} lnet_addr */
 
 /* max value for numeric network address */
 #define MAX_NUMERIC_VALUE 0xffffffff

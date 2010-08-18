@@ -72,7 +72,7 @@ lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
 
         /* There is no race since both event consumers and event producers
          * take the LNET_LOCK, so we don't screw around with memory
-         * barriers, setting the sequence number last or wierd structure
+         * barriers, setting the sequence number last or weird structure
          * layout assertions. */
         *eq_slot = *ev;
 
