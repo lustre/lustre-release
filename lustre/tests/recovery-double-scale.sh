@@ -44,6 +44,9 @@ remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
 check_timeout || exit 1
 
+[[ $FAILURE_MODE = SOFT ]] && \
+    log "WARNING: $0 is not functional with FAILURE_MODE = SOFT, bz22797"
+
 build_test_filter
 
 check_and_setup_lustre

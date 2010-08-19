@@ -43,6 +43,9 @@ LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
+[[ $FAILURE_MODE = SOFT ]] && \
+    log "WARNING: $0 is not functional with FAILURE_MODE = SOFT, bz22797"
+
 build_test_filter
 
 check_and_setup_lustre
