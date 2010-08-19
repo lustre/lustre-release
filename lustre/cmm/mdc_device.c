@@ -53,15 +53,18 @@
 #include "mdc_internal.h"
 
 static const struct lu_device_operations mdc_lu_ops;
-
-static inline int lu_device_is_mdc(struct lu_device *ld)
-{
-	return ergo(ld != NULL && ld->ld_ops != NULL,
-                    ld->ld_ops == &mdc_lu_ops);
-}
-
+/**
+ * \addtogroup cmm_mdc
+ * @{
+ */
+/**
+ * The md_device_operation for mdc. It is empty.
+ */
 static const struct md_device_operations mdc_md_ops = { 0 };
 
+/**
+ * Upcall handler in mdc. Analog of obd_device::o_notify().
+ */
 static int mdc_obd_update(struct obd_device *host,
                           struct obd_device *watched,
                           enum obd_notify_event ev, void *owner, void *data)
@@ -92,10 +95,14 @@ static int mdc_obd_update(struct obd_device *host,
 
         RETURN(rc);
 }
-/* MDC OBD is set up already and connected to the proper MDS
+/**
+ * Add new mdc device.
+ * Invoked by configuration command LCFG_ADD_MDC.
+ *
+ * MDC OBD is set up already and connected to the proper MDS
  * mdc_add_obd() find that obd by uuid and connects to it.
- * Local MDT uuid is used for connection
- * */
+ * Local MDT uuid is used for connection.
+ */
 static int mdc_obd_add(const struct lu_env *env,
                        struct mdc_device *mc, struct lustre_cfg *cfg)
 {
@@ -182,6 +189,12 @@ static int mdc_obd_add(const struct lu_env *env,
         RETURN(rc);
 }
 
+/**
+ * Delete mdc device.
+ * Called when configuration command LCFG_CLEANUP is issued.
+ *
+ * This disconnects MDC OBD and cleanup it.
+ */
 static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
                        struct lustre_cfg *cfg)
 {
@@ -223,6 +236,10 @@ static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
         RETURN(0);
 }
 
+/**
+ * Process config command. Passed to the mdc from mdt.
+ * Supports two commands only - LCFG_ADD_MDC and LCFG_CLEANUP
+ */
 static int mdc_process_config(const struct lu_env *env,
                               struct lu_device *ld,
                               struct lustre_cfg *cfg)
@@ -244,11 +261,17 @@ static int mdc_process_config(const struct lu_env *env,
         RETURN(rc);
 }
 
+/**
+ * lu_device_operations instance for mdc.
+ */
 static const struct lu_device_operations mdc_lu_ops = {
         .ldo_object_alloc   = mdc_object_alloc,
         .ldo_process_config = mdc_process_config
 };
 
+/**
+ * Initialize proper easize and cookie size.
+ */
 void cmm_mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc,
                       int max_mdsize, int max_cookiesize)
 {
@@ -258,12 +281,14 @@ void cmm_mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc,
         obd->u.cli.cl_max_mds_cookiesize = max_cookiesize;
 }
 
+/** Start mdc device */
 static int mdc_device_init(const struct lu_env *env, struct lu_device *ld,
                            const char *name, struct lu_device *next)
 {
         return 0;
 }
 
+/** Stop mdc device. */
 static struct lu_device *mdc_device_fini(const struct lu_env *env,
                                          struct lu_device *ld)
 {
@@ -271,6 +296,7 @@ static struct lu_device *mdc_device_fini(const struct lu_env *env,
         RETURN (NULL);
 }
 
+/** Allocate new mdc device */
 static struct lu_device *mdc_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *ldt,
                                           struct lustre_cfg *cfg)
@@ -293,6 +319,7 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
         RETURN (ld);
 }
 
+/** Free mdc device */
 static struct lu_device *mdc_device_free(const struct lu_env *env,
                                          struct lu_device *ld)
 {
@@ -306,13 +333,13 @@ static struct lu_device *mdc_device_free(const struct lu_env *env,
         return NULL;
 }
 
-/* context key constructor/destructor: mdc_key_init, mdc_key_fini */
+/** context key constructor/destructor: mdc_key_init, mdc_key_fini */
 LU_KEY_INIT_FINI(mdc, struct mdc_thread_info);
 
-/* context key: mdc_thread_key */
+/** context key: mdc_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdc, LCT_MD_THREAD|LCT_CL_THREAD);
 
-/* type constructor/destructor: mdc_type_init, mdc_type_fini */
+/** type constructor/destructor: mdc_type_init, mdc_type_fini */
 LU_TYPE_INIT_FINI(mdc, &mdc_thread_key);
 
 static struct lu_device_type_operations mdc_device_type_ops = {
@@ -335,3 +362,4 @@ struct lu_device_type mdc_device_type = {
         .ldt_ops      = &mdc_device_type_ops,
         .ldt_ctx_tags = LCT_MD_THREAD|LCT_CL_THREAD
 };
+/** @} */

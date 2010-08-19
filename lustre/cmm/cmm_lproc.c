@@ -56,7 +56,10 @@
 #include <lustre/lustre_idl.h>
 
 #include "cmm_internal.h"
-
+/**
+ * \addtogroup cmm
+ * @{
+ */
 static const char *cmm_counter_names[LPROC_CMM_NR] = {
         [LPROC_CMM_SPLIT_CHECK] = "split_check",
         [LPROC_CMM_SPLIT]       = "split",
@@ -116,7 +119,8 @@ void cmm_lprocfs_time_start(const struct lu_env *env)
 }
 
 void cmm_lprocfs_time_end(const struct lu_env *env, struct cmm_device *cmm,
-			  int idx)
+                          int idx)
 {
         lu_lprocfs_time_end(env, cmm->cmm_stats, idx);
 }
+/** @} */

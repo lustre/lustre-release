@@ -57,35 +57,45 @@ static const struct md_dir_operations mdc_dir_ops;
 static const struct lu_object_operations mdc_obj_ops;
 
 extern struct lu_context_key mdc_thread_key;
-
+/**
+ * \addtogroup cmm_mdc
+ * @{
+ */
+/**
+ * Allocate new mdc object.
+ */
 struct lu_object *mdc_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *ld)
 {
-	struct mdc_object *mco;
+        struct mdc_object *mco;
         ENTRY;
 
-	OBD_ALLOC_PTR(mco);
-	if (mco != NULL) {
-		struct lu_object *lo;
+        OBD_ALLOC_PTR(mco);
+        if (mco != NULL) {
+                struct lu_object *lo;
 
-		lo = &mco->mco_obj.mo_lu;
+                lo = &mco->mco_obj.mo_lu;
                 lu_object_init(lo, NULL, ld);
                 mco->mco_obj.mo_ops = &mdc_mo_ops;
                 mco->mco_obj.mo_dir_ops = &mdc_dir_ops;
                 lo->lo_ops = &mdc_obj_ops;
                 RETURN(lo);
-	} else
-		RETURN(NULL);
+        } else
+                RETURN(NULL);
 }
 
+/** Free current mdc object */
 static void mdc_object_free(const struct lu_env *env, struct lu_object *lo)
 {
         struct mdc_object *mco = lu2mdc_obj(lo);
-	lu_object_fini(lo);
+        lu_object_fini(lo);
         OBD_FREE_PTR(mco);
 }
 
+/**
+ * Initialize mdc object. All of them have loh_attr::LOHA_REMOTE set.
+ */
 static int mdc_object_init(const struct lu_env *env, struct lu_object *lo,
                            const struct lu_object_conf *unused)
 {
@@ -94,12 +104,21 @@ static int mdc_object_init(const struct lu_env *env, struct lu_object *lo,
         RETURN(0);
 }
 
+/**
+ * Instance of lu_object_operations for mdc.
+ */
 static const struct lu_object_operations mdc_obj_ops = {
         .loo_object_init    = mdc_object_init,
         .loo_object_free    = mdc_object_free,
 };
 
-/* md_object_operations */
+/**
+ * \name The set of md_object_operations.
+ * @{
+ */
+/**
+ * Get mdc_thread_info from lu_context
+ */
 static
 struct mdc_thread_info *mdc_info_get(const struct lu_env *env)
 {
@@ -110,6 +129,9 @@ struct mdc_thread_info *mdc_info_get(const struct lu_env *env)
         return mci;
 }
 
+/**
+ * Initialize mdc_thread_info.
+ */
 static
 struct mdc_thread_info *mdc_info_init(const struct lu_env *env)
 {
@@ -118,6 +140,9 @@ struct mdc_thread_info *mdc_info_init(const struct lu_env *env)
         return mci;
 }
 
+/**
+ * Convert attributes from mdt_body to the md_attr.
+ */
 static void mdc_body2attr(struct mdt_body *body, struct md_attr *ma)
 {
         struct lu_attr *la = &ma->ma_attr;
@@ -149,6 +174,9 @@ static void mdc_body2attr(struct mdt_body *body, struct md_attr *ma)
         ma->ma_valid = MA_INODE;
 }
 
+/**
+ * Fill the md_attr \a ma with attributes from request.
+ */
 static int mdc_req2attr_update(const struct lu_env *env,
                                struct md_attr *ma)
 {
@@ -242,6 +270,9 @@ static int mdc_req2attr_update(const struct lu_env *env,
         RETURN(0);
 }
 
+/**
+ * The md_object_operations::moo_attr_get() in mdc.
+ */
 static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
                         struct md_attr *ma)
 {
@@ -272,6 +303,9 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+/**
+ * Helper to init timspec \a t.
+ */
 static inline struct timespec *mdc_attr_time(struct timespec *t, __u64 seconds)
 {
         t->tv_sec = seconds;
@@ -279,8 +313,10 @@ static inline struct timespec *mdc_attr_time(struct timespec *t, __u64 seconds)
         return t;
 }
 
-/*
- * XXX: It is only used for set ctime when rename's source on remote MDS.
+/**
+ * The md_object_operations::moo_attr_set() in mdc.
+ *
+ * \note It is only used for set ctime when rename's source on remote MDS.
  */
 static int mdc_attr_set(const struct lu_env *env, struct md_object *mo,
                         const struct md_attr *ma)
@@ -331,6 +367,9 @@ static int mdc_attr_set(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+/**
+ * The md_object_operations::moo_object_create() in mdc.
+ */
 static int mdc_object_create(const struct lu_env *env,
                              struct md_object *mo,
                              const struct md_op_spec *spec,
@@ -408,6 +447,9 @@ static int mdc_object_create(const struct lu_env *env,
         RETURN(rc);
 }
 
+/**
+ * The md_object_operations::moo_ref_add() in mdc.
+ */
 static int mdc_ref_add(const struct lu_env *env, struct md_object *mo,
                        const struct md_attr *ma)
 {
@@ -453,6 +495,9 @@ static int mdc_ref_add(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+/**
+ * The md_object_operations::moo_ref_del() in mdc.
+ */
 static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
                        struct md_attr *ma)
 {
@@ -500,6 +545,7 @@ static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
 }
 
 #ifdef HAVE_SPLIT_SUPPORT
+/** Send page with directory entries to another MDS. */
 int mdc_send_page(struct cmm_device *cm, const struct lu_env *env,
                   struct md_object *mo, struct page *page, __u32 offset)
 {
@@ -515,6 +561,9 @@ int mdc_send_page(struct cmm_device *cm, const struct lu_env *env,
 }
 #endif
 
+/**
+ * Instance of md_object_operations for mdc.
+ */
 static const struct md_object_operations mdc_mo_ops = {
         .moo_attr_get       = mdc_attr_get,
         .moo_attr_set       = mdc_attr_set,
@@ -522,8 +571,15 @@ static const struct md_object_operations mdc_mo_ops = {
         .moo_ref_add        = mdc_ref_add,
         .moo_ref_del        = mdc_ref_del,
 };
+/** @} */
 
-/* md_dir_operations */
+/**
+ * \name The set of md_dir_operations.
+ * @{
+ */
+/**
+ * The md_dir_operations::mdo_rename_tgt in mdc.
+ */
 static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
                           struct md_object *mo_t, const struct lu_fid *lf,
                           const struct lu_name *lname, struct md_attr *ma)
@@ -576,10 +632,13 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
 
         RETURN(rc);
 }
-/*
- * Return resulting fid in sfid
- * 0: fids are not relatives
- * fid: fid at which search stopped
+/**
+ * Check the fids are not relatives.
+ * The md_dir_operations::mdo_is_subdir() in mdc.
+ *
+ * Return resulting fid in sfid.
+ * \retval \a sfid = 0 fids are not relatives
+ * \retval \a sfid = FID at which search stopped
  */
 static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
                          const struct lu_fid *fid, struct lu_fid *sfid)
@@ -607,7 +666,9 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+/** Instance of md_dir_operations for mdc. */
 static const struct md_dir_operations mdc_dir_ops = {
         .mdo_is_subdir   = mdc_is_subdir,
         .mdo_rename_tgt  = mdc_rename_tgt
 };
+/** @} */

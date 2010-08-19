@@ -39,7 +39,10 @@
  *
  * Author: Mike Pershin <tappro@clusterfs.com>
  */
-
+/**
+ * \addtogroup cmm
+ * @{
+ */
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -143,6 +146,10 @@ static int cmm_llog_ctxt_get(const struct lu_env *env, struct md_device *m,
 }
 
 #ifdef HAVE_QUOTA_SUPPORT
+/**
+ * \name Quota functions
+ * @{
+ */
 static int cmm_quota_notify(const struct lu_env *env, struct md_device *m)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(m);
@@ -375,6 +382,7 @@ static int cmm_quota_finvalidate(const struct lu_env *env, struct md_device *m,
                                                                type);
         RETURN(rc);
 }
+/** @} */
 #endif
 
 int cmm_iocontrol(const struct lu_env *env, struct md_device *m,
@@ -419,7 +427,9 @@ static const struct md_device_operations cmm_md_ops = {
 };
 
 extern struct lu_device_type mdc_device_type;
-
+/**
+ * Init MDC.
+ */
 static int cmm_post_init_mdc(const struct lu_env *env,
                              struct cmm_device *cmm)
 {
@@ -869,6 +879,7 @@ static void lprocfs_cmm_init_vars(struct lprocfs_static_vars *lvars)
     lvars->module_vars  = lprocfs_cmm_module_vars;
     lvars->obd_vars     = lprocfs_cmm_obd_vars;
 }
+/** @} */
 
 static int __init cmm_mod_init(void)
 {

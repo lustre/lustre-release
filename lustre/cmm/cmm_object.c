@@ -49,7 +49,13 @@
 #include <lustre_fid.h>
 #include "cmm_internal.h"
 #include "mdc_internal.h"
-
+/**
+ * \ingroup cmm
+ * Lookup MDS number \a mds by FID \a fid.
+ *
+ * \param fid FID of object to find MDS
+ * \param mds mds number to return.
+ */
 int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
                    mdsno_t *mds, const struct lu_env *env)
 {
@@ -77,6 +83,10 @@ int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
         RETURN (rc);
 }
 
+/**
+ * \addtogroup cml
+ * @{
+ */
 static const struct md_object_operations cml_mo_ops;
 static const struct md_dir_operations    cml_dir_ops;
 static const struct lu_object_operations cml_obj_ops;
@@ -85,6 +95,10 @@ static const struct md_object_operations cmr_mo_ops;
 static const struct md_dir_operations    cmr_dir_ops;
 static const struct lu_object_operations cmr_obj_ops;
 
+/**
+ * \ingroup cmm
+ * Allocate CMM object.
+ */
 struct lu_object *cmm_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *loh,
                                    struct lu_device *ld)
@@ -139,18 +153,17 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
         RETURN(lo);
 }
 
-/*
- * CMM has two types of objects - local and remote. They have different set
- * of operations so we are avoiding multiple checks in code.
+/**
+ * Get local child device.
  */
-
-/* get local child device */
 static struct lu_device *cml_child_dev(struct cmm_device *d)
 {
         return &d->cmm_child->md_lu_dev;
 }
 
-/* lu_object operations */
+/**
+ * Free cml_object.
+ */
 static void cml_object_free(const struct lu_env *env,
                             struct lu_object *lo)
 {
@@ -159,6 +172,9 @@ static void cml_object_free(const struct lu_env *env,
         OBD_FREE_PTR(clo);
 }
 
+/**
+ * Initialize cml_object.
+ */
 static int cml_object_init(const struct lu_env *env, struct lu_object *lo,
                            const struct lu_object_conf *unused)
 {
@@ -204,7 +220,11 @@ static const struct lu_object_operations cml_obj_ops = {
         .loo_object_print   = cml_object_print
 };
 
-/* CMM local md_object operations */
+/**
+ * \name CMM local md_object operations.
+ * All of them call just corresponding operations on next layer.
+ * @{
+ */
 static int cml_object_create(const struct lu_env *env,
                              struct md_object *mo,
                              const struct md_op_spec *spec,
@@ -395,8 +415,16 @@ static const struct md_object_operations cml_mo_ops = {
         .moo_version_set   = cml_version_set,
         .moo_path          = cml_path,
 };
+/** @} */
 
-/* md_dir operations */
+/**
+ * \name CMM local md_dir_operations.
+ * @{
+ */
+/**
+ * cml lookup object fid by name.
+ * This returns only FID by name.
+ */
 static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
                       const struct lu_name *lname, struct lu_fid *lf,
                       struct md_op_spec *spec)
@@ -416,6 +444,9 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 
 }
 
+/**
+ * Helper to return lock mode. Used in split cases only.
+ */
 static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
@@ -429,6 +460,17 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
         RETURN(rc);
 }
 
+/**
+ * Create operation for cml.
+ * Objects are local, but split can happen.
+ * If split is not needed this will call next layer mdo_create().
+ *
+ * \param mo_p Parent directory. Local object.
+ * \param lname name of file to create.
+ * \param mo_c Child object. It has no real inode yet.
+ * \param spec creation specification.
+ * \param ma child object attributes.
+ */
 static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                       const struct lu_name *lname, struct md_object *mo_c,
                       struct md_op_spec *spec, struct md_attr *ma)
@@ -457,11 +499,13 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
          * lock.
          */
         if (spec->sp_cr_mode == MDL_EX) {
-                /*
-                 * Try to split @mo_p. If split is ok, -ERESTART is returned and
-                 * current thread will not peoceed with create. Instead it sends
-                 * -ERESTART to client to let it know that correct MDT should be
-                 * chosen.
+                /**
+                 * Split cases:
+                 * - Try to split \a mo_p upon each create operation.
+                 *   If split is ok, -ERESTART is returned and current thread
+                 *   will not peoceed with create. Instead it sends -ERESTART
+                 *   to client to let it know that correct MDT must be chosen.
+                 * \see cmm_split_dir()
                  */
                 rc = cmm_split_dir(env, mo_p);
                 if (rc)
@@ -473,10 +517,11 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
         }
 
         if (spec != NULL && spec->sp_ck_split) {
-                /*
-                 * Check for possible split directory and let caller know that
+                /**
+                 * - Directory is split already. Let the caller know that
                  * it should tell client that directory is split and operation
                  * should repeat to correct MDT.
+                 * \see cmm_split_check()
                  */
                 rc = cmm_split_check(env, mo_p, lname->ln_name);
                 if (rc)
@@ -494,6 +539,7 @@ out:
         return rc;
 }
 
+/** Call mdo_create_data() on next layer. All objects are local. */
 static int cml_create_data(const struct lu_env *env, struct md_object *p,
                            struct md_object *o,
                            const struct md_op_spec *spec,
@@ -506,6 +552,7 @@ static int cml_create_data(const struct lu_env *env, struct md_object *p,
         RETURN(rc);
 }
 
+/** Call mdo_link() on next layer. All objects are local. */
 static int cml_link(const struct lu_env *env, struct md_object *mo_p,
                     struct md_object *mo_s, const struct lu_name *lname,
                     struct md_attr *ma)
@@ -517,6 +564,7 @@ static int cml_link(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
+/** Call mdo_unlink() on next layer. All objects are local. */
 static int cml_unlink(const struct lu_env *env, struct md_object *mo_p,
                       struct md_object *mo_c, const struct lu_name *lname,
                       struct md_attr *ma)
@@ -528,6 +576,11 @@ static int cml_unlink(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
+/**
+ * \ingroup cmm
+ * Get mode of object.
+ * Used in both cml and cmr hence can produce RPC to another server.
+ */
 static int cmm_mode_get(const struct lu_env *env, struct md_device *md,
                         const struct lu_fid *lf, struct md_attr *ma,
                         int *remote)
@@ -561,6 +614,11 @@ static int cmm_mode_get(const struct lu_env *env, struct md_device *md,
         RETURN(rc);
 }
 
+/**
+ * \ingroup cmm
+ * Set ctime for object.
+ * Used in both cml and cmr hence can produce RPC to another server.
+ */
 static int cmm_rename_ctime(const struct lu_env *env, struct md_device *md,
                             const struct lu_fid *lf, struct md_attr *ma)
 {
@@ -578,6 +636,7 @@ static int cmm_rename_ctime(const struct lu_env *env, struct md_device *md,
         RETURN(rc);
 }
 
+/** Helper to output debug information about rename operation. */
 static inline void cml_rename_warn(const char *fname,
                                   struct md_object *mo_po,
                                   struct md_object *mo_pn,
@@ -606,6 +665,20 @@ static inline void cml_rename_warn(const char *fname,
                       t_name, err);
 }
 
+/**
+ * Rename operation for cml.
+ *
+ * This is the most complex cross-reference operation. It may consist of up to 4
+ * MDS server and require several RPCs to be sent.
+ *
+ * \param mo_po Old parent object.
+ * \param mo_pn New parent object.
+ * \param lf FID of object to rename.
+ * \param ls_name Source file name.
+ * \param mo_t target object. Should be NULL here.
+ * \param lt_name Name of target file.
+ * \param ma object attributes.
+ */
 static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
                       struct md_object *mo_pn, const struct lu_fid *lf,
                       const struct lu_name *ls_name, struct md_object *mo_t,
@@ -622,8 +695,10 @@ static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
                 RETURN(rc);
 
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
-                /* XXX: mo_t is remote object and there is RPC to unlink it.
-                 * before that, do local sanity check for rename first. */
+                /**
+                 * \note \a mo_t is remote object and there is RPC to unlink it.
+                 * Before that, do local sanity check for rename first.
+                 */
                 if (!remote) {
                         struct md_object *mo_s = md_object_find_slice(env,
                                                         md_obj2dev(mo_po), lf);
@@ -650,8 +725,8 @@ static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
                         RETURN(rc);
 
                 /*
-                 * XXX: @ma will be changed after mo_ref_del, but we will use
-                 * it for mdo_rename later, so save it before mo_ref_del.
+                 * /note \a ma will be changed after mo_ref_del(), but we will use
+                 * it for mdo_rename() later, so save it before mo_ref_del().
                  */
                 cmi = cmm_env_info(env);
                 tmp_ma = &cmi->cmi_ma;
@@ -664,8 +739,10 @@ static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
                 mo_t = NULL;
         }
 
-        /* XXX: for src on remote MDS case, change its ctime before local
-         * rename. Firstly, do local sanity check for rename if necessary. */
+        /**
+         * \note for src on remote MDS case, change its ctime before local
+         * rename. Firstly, do local sanity check for rename if necessary.
+         */
         if (remote) {
                 if (!tmp_ma) {
                         rc = mo_permission(env, NULL, md_object_next(mo_po),
@@ -723,6 +800,10 @@ static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
         RETURN(rc);
 }
 
+/**
+ * Rename target partial operation.
+ * Used for cross-ref rename.
+ */
 static int cml_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
                           struct md_object *mo_t, const struct lu_fid *lf,
                           const struct lu_name *lname, struct md_attr *ma)
@@ -734,7 +815,11 @@ static int cml_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
                             md_object_next(mo_t), lf, lname, ma);
         RETURN(rc);
 }
-/* used only in case of rename_tgt() when target is not exist */
+
+/**
+ * Name insert only operation.
+ * used only in case of rename_tgt() when target doesn't exist.
+ */
 static int cml_name_insert(const struct lu_env *env, struct md_object *p,
                            const struct lu_name *lname, const struct lu_fid *lf,
                            const struct md_attr *ma)
@@ -747,6 +832,10 @@ static int cml_name_insert(const struct lu_env *env, struct md_object *p,
         RETURN(rc);
 }
 
+/**
+ * \ingroup cmm
+ * Check two fids are not subdirectories.
+ */
 static int cmm_is_subdir(const struct lu_env *env, struct md_object *mo,
                          const struct lu_fid *fid, struct lu_fid *sfid)
 {
@@ -778,24 +867,37 @@ static const struct md_dir_operations cml_dir_ops = {
         .mdo_rename_tgt  = cml_rename_tgt,
         .mdo_create_data = cml_create_data
 };
+/** @} */
+/** @} */
 
-/* -------------------------------------------------------------------
- * remote CMM object operations. cmr_...
+/**
+ * \addtogroup cmr
+ * @{
  */
+/**
+ * \name cmr helpers
+ * @{
+ */
+/** Get cmr_object from lu_object. */
 static inline struct cmr_object *lu2cmr_obj(struct lu_object *o)
 {
         return container_of0(o, struct cmr_object, cmm_obj.cmo_obj.mo_lu);
 }
+/** Get cmr_object from md_object. */
 static inline struct cmr_object *md2cmr_obj(struct md_object *mo)
 {
         return container_of0(mo, struct cmr_object, cmm_obj.cmo_obj);
 }
+/** Get cmr_object from cmm_object. */
 static inline struct cmr_object *cmm2cmr_obj(struct cmm_object *co)
 {
         return container_of0(co, struct cmr_object, cmm_obj);
 }
+/** @} */
 
-/* get proper child device from MDCs */
+/**
+ * Get proper child device from MDCs.
+ */
 static struct lu_device *cmr_child_dev(struct cmm_device *d, __u32 num)
 {
         struct lu_device *next = NULL;
@@ -812,7 +914,9 @@ static struct lu_device *cmr_child_dev(struct cmm_device *d, __u32 num)
         return next;
 }
 
-/* lu_object operations */
+/**
+ * Free cmr_object.
+ */
 static void cmr_object_free(const struct lu_env *env,
                             struct lu_object *lo)
 {
@@ -821,6 +925,9 @@ static void cmr_object_free(const struct lu_env *env,
         OBD_FREE_PTR(cro);
 }
 
+/**
+ * Initialize cmr object.
+ */
 static int cmr_object_init(const struct lu_env *env, struct lu_object *lo,
                            const struct lu_object_conf *unused)
 {
@@ -848,6 +955,9 @@ static int cmr_object_init(const struct lu_env *env, struct lu_object *lo,
         RETURN(rc);
 }
 
+/**
+ * Output lu_object data.
+ */
 static int cmr_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
@@ -855,13 +965,25 @@ static int cmr_object_print(const struct lu_env *env, void *cookie,
         return (*p)(env, cookie, "[remote](mds_num=%d)", cro->cmo_num);
 }
 
+/**
+ * Cmr instance of lu_object_operations.
+ */
 static const struct lu_object_operations cmr_obj_ops = {
         .loo_object_init    = cmr_object_init,
         .loo_object_free    = cmr_object_free,
         .loo_object_print   = cmr_object_print
 };
 
-/* CMM remote md_object operations. All are invalid */
+/**
+ * \name cmr remote md_object operations.
+ * All operations here are invalid and return errors. There is no local object
+ * so these operations return two kinds of error:
+ * -# -EFAULT if operation is prohibited.
+ * -# -EREMOTE if operation can be done just to notify upper level about remote
+ *  object.
+ *
+ * @{
+ */
 static int cmr_object_create(const struct lu_env *env,
                              struct md_object *mo,
                              const struct md_op_spec *spec,
@@ -967,20 +1089,29 @@ static int cmr_object_sync(const struct lu_env *env, struct md_object *mo)
         return -EFAULT;
 }
 
+/**
+ * cmr moo_version_get().
+ */
 static dt_obj_version_t cmr_version_get(const struct lu_env *env,
                                         struct md_object *mo)
 {
-        /* Don't check remote object version */
+        /** Don't check remote object version */
         return 0;
 }
 
+
+/**
+ * cmr moo_version_set().
+ * No need to update remote object version here, it is done as a part
+ * of reintegration of partial operation on the remote server.
+ */
 static void cmr_version_set(const struct lu_env *env, struct md_object *mo,
                             dt_obj_version_t version)
 {
-        /* No need to update remote object version here, it is done as a part
-         * of reintegration of partial operation on the remote server */
+        return;
 }
 
+/** Set of md_object_operations for cmr. */
 static const struct md_object_operations cmr_mo_ops = {
         .moo_permission    = cmr_permission,
         .moo_attr_get      = cmr_attr_get,
@@ -1002,8 +1133,20 @@ static const struct md_object_operations cmr_mo_ops = {
         .moo_version_set   = cmr_version_set,
         .moo_path          = cmr_path,
 };
+/** @} */
 
-/* remote part of md_dir operations */
+/**
+ * \name cmr md_dir operations.
+ *
+ * All methods below are cross-ref by nature. They consist of remote call and
+ * local operation. Due to future rollback functionality there are several
+ * limitations for such methods:
+ * -# remote call should be done at first to do epoch negotiation between all
+ * MDS involved and to avoid the RPC inside transaction.
+ * -# only one RPC can be sent - also due to epoch negotiation.
+ * For more details see rollback HLD/DLD.
+ * @{
+ */
 static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
                       const struct lu_name *lname, struct lu_fid *lf,
                       struct md_op_spec *spec)
@@ -1016,20 +1159,22 @@ static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
         return -EREMOTE;
 }
 
+/** Return lock mode. */
 static mdl_mode_t cmr_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
         return MDL_MINMODE;
 }
 
-/*
- * All methods below are cross-ref by nature. They consist of remote call and
- * local operation. Due to future rollback functionality there are several
- * limitations for such methods:
- * 1) remote call should be done at first to do epoch negotiation between all
- * MDS involved and to avoid the RPC inside transaction.
- * 2) only one RPC can be sent - also due to epoch negotiation.
- * For more details see rollback HLD/DLD.
+/**
+ * Create operation for cmr.
+ * Remote object creation and local name insert.
+ *
+ * \param mo_p Parent directory. Local object.
+ * \param lchild_name name of file to create.
+ * \param mo_c Child object. It has no real inode yet.
+ * \param spec creation specification.
+ * \param ma child object attributes.
  */
 static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                       const struct lu_name *lchild_name, struct md_object *mo_c,
@@ -1091,10 +1236,9 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         if (rc)
                 RETURN(rc);
 
-        /* Remote object creation and local name insert. */
-        /*
-         * XXX: @ma will be changed after mo_object_create, but we will use
-         * it for mdo_name_insert later, so save it before mo_object_create.
+        /**
+         * \note \a ma will be changed after mo_object_create(), but we will use
+         * it for mdo_name_insert() later, so save it before mo_object_create().
          */
         *tmp_ma = *ma;
         rc = mo_object_create(env, md_object_next(mo_c), spec, ma);
@@ -1115,6 +1259,18 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
+/**
+ * Link operations for cmr.
+ *
+ * The link RPC is always issued to the server where source parent is living.
+ * The first operation to do is object nlink increment on remote server.
+ * Second one is local mdo_name_insert().
+ *
+ * \param mo_p parent directory. It is local.
+ * \param mo_s source object to link. It is remote.
+ * \param lname Name of link file.
+ * \param ma object attributes.
+ */
 static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
                     struct md_object *mo_s, const struct lu_name *lname,
                     struct md_attr *ma)
@@ -1153,6 +1309,18 @@ static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
+/**
+ * Unlink operations for cmr.
+ *
+ * The unlink RPC is always issued to the server where parent is living. Hence
+ * the first operation to do is object unlink on remote server. Second one is
+ * local mdo_name_remove().
+ *
+ * \param mo_p parent md_object. It is local.
+ * \param mo_c child object to be unlinked. It is remote.
+ * \param lname Name of file to unlink.
+ * \param ma object attributes.
+ */
 static int cmr_unlink(const struct lu_env *env, struct md_object *mo_p,
                       struct md_object *mo_c, const struct lu_name *lname,
                       struct md_attr *ma)
@@ -1169,8 +1337,8 @@ static int cmr_unlink(const struct lu_env *env, struct md_object *mo_p,
                 RETURN(rc);
 
         /*
-         * XXX: @ma will be changed after mo_ref_del, but we will use
-         * it for mdo_name_remove later, so save it before mo_ref_del.
+         * \note \a ma will be changed after mo_ref_del, but we will use
+         * it for mdo_name_remove() later, so save it before mo_ref_del().
          */
         cmi = cmm_env_info(env);
         tmp_ma = &cmi->cmi_ma;
@@ -1192,6 +1360,7 @@ static int cmr_unlink(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
+/** Helper which outputs error message during cmr_rename() */
 static inline void cmr_rename_warn(const char *fname,
                                   struct md_object *mo_po,
                                   struct md_object *mo_pn,
@@ -1208,6 +1377,20 @@ static inline void cmr_rename_warn(const char *fname,
               PFID(lf), s_name, t_name, err);
 }
 
+/**
+ * Rename operation for cmr.
+ *
+ * This is the most complex cross-reference operation. It may consist of up to 4
+ * MDS server and require several RPCs to be sent.
+ *
+ * \param mo_po Old parent object.
+ * \param mo_pn New parent object.
+ * \param lf FID of object to rename.
+ * \param ls_name Source file name.
+ * \param mo_t target object. Should be NULL here.
+ * \param lt_name Name of target file.
+ * \param ma object attributes.
+ */
 static int cmr_rename(const struct lu_env *env,
                       struct md_object *mo_po, struct md_object *mo_pn,
                       const struct lu_fid *lf, const struct lu_name *ls_name,
@@ -1232,16 +1415,18 @@ static int cmr_rename(const struct lu_env *env,
         if (rc)
                 RETURN(rc);
 
-        /*
-         * XXX: @ma maybe changed after mdo_rename_tgt, but we will use it
-         * for mdo_name_remove later, so save it before mdo_rename_tgt.
+        /**
+         * \todo \a ma maybe changed after mdo_rename_tgt(), but we will use it
+         * for mdo_name_remove() later, so save it before mdo_rename_tgt.
          */
         cmi = cmm_env_info(env);
         tmp_ma = &cmi->cmi_ma;
         *tmp_ma = *ma;
-        /* the mo_pn is remote directory, so we cannot even know if there is
-         * mo_t or not. Therefore mo_t is NULL here but remote server should do
-         * lookup and process this further */
+        /**
+         * \note The \a mo_pn is remote directory, so we cannot even know if there is
+         * \a mo_t or not. Therefore \a mo_t is NULL here but remote server should do
+         * lookup and process this further.
+         */
         rc = mdo_rename_tgt(env, md_object_next(mo_pn),
                             NULL/* mo_t */, lf, lt_name, ma);
         if (rc)
@@ -1268,8 +1453,10 @@ static int cmr_rename(const struct lu_env *env,
         RETURN(rc);
 }
 
-/* part of cross-ref rename(). Used to insert new name in new parent
- * and unlink target */
+/**
+ * Part of cross-ref rename().
+ * Used to insert new name in new parent and unlink target.
+ */
 static int cmr_rename_tgt(const struct lu_env *env,
                           struct md_object *mo_p, struct md_object *mo_t,
                           const struct lu_fid *lf, const struct lu_name *lname,
@@ -1313,7 +1500,10 @@ static int cmr_rename_tgt(const struct lu_env *env,
         }
         RETURN(rc);
 }
-
+/** @} */
+/**
+ * The md_dir_operations for cmr.
+ */
 static const struct md_dir_operations cmr_dir_ops = {
         .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cmr_lookup,
@@ -1324,3 +1514,4 @@ static const struct md_dir_operations cmr_dir_ops = {
         .mdo_rename      = cmr_rename,
         .mdo_rename_tgt  = cmr_rename_tgt
 };
+/** @} */

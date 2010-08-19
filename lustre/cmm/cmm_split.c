@@ -55,14 +55,21 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
+/**
+ * \addtogroup split
+ * @{
+ */
 enum {
         CMM_SPLIT_SIZE =  128 * 1024
 };
 
-/*
- * This function checks if passed @name come to correct server (local MDT). If
- * not - return -ERESTART and let client know that dir was split and client
- * needs to chose correct stripe.
+/**
+ * This function checks if passed \a name come to correct server (local MDT).
+ *
+ * \param mp Parent directory
+ * \param name Name to lookup
+ * \retval  -ERESTART Let client know that dir was split and client needs to
+ * chose correct stripe.
  */
 int cmm_split_check(const struct lu_env *env, struct md_object *mp,
                     const char *name)
@@ -108,17 +115,16 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
         if (ma->ma_lmv->mea_count != 0) {
                 int idx;
 
-                /*
-                 * Get stripe by name to check the name belongs to master dir,
-                 * otherwise return the -ERESTART
+                /**
+                 * This gets stripe by name to check the name belongs to master
+                 * dir, otherwise return the -ERESTART
                  */
                 idx = mea_name2idx(ma->ma_lmv, name, strlen(name));
 
-                /*
-                 * Check if name came to correct MDT server. We suppose that if
-                 * client does not know about split, it sends create operation
-                 * to master MDT. And this is master job to say it that dir got
-                 * split and client should orward request to correct MDT. This
+                /**
+                 * When client does not know about split, it sends create() to
+                 * the master MDT and master replay back if directory is split.
+                 * So client should orward request to correct MDT. This
                  * is why we check here if stripe zero or not. Zero stripe means
                  * master stripe. If stripe calculated from name is not zero -
                  * return -ERESTART.
@@ -141,9 +147,9 @@ out:
         return rc;
 }
 
-/*
- * Return preferable access mode to caller taking into account possible split
- * and the fact of existing not splittable dirs in principle.
+/**
+ * Return preferable access mode to the caller taking into account the split
+ * case and the fact of existing not splittable dirs.
  */
 int cmm_split_access(const struct lu_env *env, struct md_object *mo,
                      mdl_mode_t lm)
@@ -181,7 +187,13 @@ int cmm_split_access(const struct lu_env *env, struct md_object *mo,
         RETURN(MDL_MINMODE);
 }
 
-/* Check if split is expected for current thread. */
+/**
+ * Check if split is expected for current thread.
+ *
+ * \param mo Directory to split.
+ * \param ma md attributes.
+ * \param split Flag to save split information.
+ */
 int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
                      struct md_attr *ma, int *split)
 {
@@ -250,9 +262,9 @@ static inline void cmm_object_put(const struct lu_env *env,
         lu_object_put(env, &o->cmo_obj.mo_lu);
 }
 
-/*
- * Allocate new on passed @mc for slave object which is going to create there
- * soon.
+/**
+ * Allocate new FID on passed \a mc for slave object which is going to
+ * create there soon.
  */
 static int cmm_split_fid_alloc(const struct lu_env *env,
                                struct cmm_device *cmm,
@@ -266,7 +278,7 @@ static int cmm_split_fid_alloc(const struct lu_env *env,
 
         cfs_down(&mc->mc_fid_sem);
 
-        /* Alloc new fid on @mc. */
+        /* Alloc new fid on \a mc. */
         rc = obd_fid_alloc(mc->mc_desc.cl_exp, fid, NULL);
         if (rc > 0)
                 rc = 0;
@@ -275,7 +287,9 @@ static int cmm_split_fid_alloc(const struct lu_env *env,
         RETURN(rc);
 }
 
-/* Allocate new slave object on passed @mc */
+/**
+ * Allocate new slave object on passed \a mc.
+ */
 static int cmm_split_slave_create(const struct lu_env *env,
                                   struct cmm_device *cmm,
                                   struct mdc_device *mc,
@@ -313,9 +327,9 @@ static int cmm_split_slave_create(const struct lu_env *env,
         RETURN(rc);
 }
 
-/*
- * Create so many slaves as number of stripes. This is called in split time
- * before sending pages to slaves.
+/**
+ * Create so many slaves as number of stripes.
+ * This is called in split time before sending pages to slaves.
  */
 static int cmm_split_slaves_create(const struct lu_env *env,
                                    struct md_object *mo,
@@ -366,6 +380,9 @@ static inline int cmm_split_special_entry(struct lu_dirent *ent)
         return 0;
 }
 
+/**
+ * Convert string to the lu_name structure.
+ */
 static inline struct lu_name *cmm_name(const struct lu_env *env,
                                        char *name, int buflen)
 {
@@ -383,9 +400,9 @@ static inline struct lu_name *cmm_name(const struct lu_env *env,
         return lname;
 }
 
-/*
- * Remove one entry from local MDT. Do not corrupt byte order in page, it will
- * be sent to remote MDT.
+/**
+ * Helper for cmm_split_remove_page(). It removes one entry from local MDT.
+ * Do not corrupt byte order in page, it will be sent to remote MDT.
  */
 static int cmm_split_remove_entry(const struct lu_env *env,
                                   struct md_object *mo,
@@ -414,8 +431,8 @@ static int cmm_split_remove_entry(const struct lu_env *env,
         if (lu_object_exists(&obj->cmo_obj.mo_lu) > 0)
                 is_dir = S_ISDIR(lu_object_attr(&obj->cmo_obj.mo_lu));
         else
-                /*
-                 * XXX: These days only cross-ref dirs are possible, so for the
+                /**
+                 * \note These days only cross-ref dirs are possible, so for the
                  * sake of simplicity, in split, we suppose that all cross-ref
                  * names point to directory and do not do additional getattr to
                  * remote MDT.
@@ -428,8 +445,8 @@ static int cmm_split_remove_entry(const struct lu_env *env,
 
         memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
         lname = cmm_name(env, name, le16_to_cpu(ent->lde_namelen) + 1);
-        /*
-         * When split, no need update parent's ctime,
+        /**
+         * \note When split, no need update parent's ctime,
          * and no permission check for name_remove.
          */
         ma->ma_attr.la_ctime = 0;
@@ -446,11 +463,10 @@ static int cmm_split_remove_entry(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        /*
-         * This @ent will be transferred to slave MDS and insert there, so in
-         * the slave MDS, we should know whether this object is dir or not, so
-         * use the highest bit of the hash to indicate that (because we do not
-         * use highest bit of hash).
+        /**
+         * \note For each entry transferred to the slave MDS we should know
+         * whether this object is dir or not. Therefore the highest bit of the
+         * hash is used to indicate that (it is unused for hash purposes anyway).
          */
         if (is_dir) {
                 ent->lde_hash = le64_to_cpu(ent->lde_hash);
@@ -462,9 +478,9 @@ cleanup:
         return rc;
 }
 
-/*
- * Remove all entries from passed page. These entries are going to remote MDT
- * and thus should be removed locally.
+/**
+ * Remove all entries from passed page.
+ * These entries are going to remote MDT and thus should be removed locally.
  */
 static int cmm_split_remove_page(const struct lu_env *env,
                                  struct md_object *mo,
@@ -506,7 +522,10 @@ unmap:
         return rc;
 }
 
-/* Send one page to remote MDT for creating entries there. */
+/**
+ * Send one page of entries to the slave MDT.
+ * This page contains entries to be created there.
+ */
 static int cmm_split_send_page(const struct lu_env *env,
                                struct md_object *mo,
                                struct lu_rdpg *rdpg,
@@ -527,7 +546,7 @@ static int cmm_split_send_page(const struct lu_env *env,
         RETURN(rc);
 }
 
-/* Read one page of entries from local MDT. */
+/** Read one page of entries from local MDT. */
 static int cmm_split_read_page(const struct lu_env *env,
                                struct md_object *mo,
                                struct lu_rdpg *rdpg)
@@ -540,9 +559,8 @@ static int cmm_split_read_page(const struct lu_env *env,
         RETURN(rc);
 }
 
-/*
- * This function performs migration of all pages with entries which fit into one
- * stripe and one hash segment.
+/**
+ * This function performs migration of each directory stripe to its MDS.
  */
 static int cmm_split_process_stripe(const struct lu_env *env,
                                     struct md_object *mo,
@@ -558,21 +576,24 @@ static int cmm_split_process_stripe(const struct lu_env *env,
                 struct lu_dirpage *ldp;
                 __u32 len = 0;
 
-                /* Read one page from local MDT. */
+                /** - Read one page of entries from local MDT. */
                 rc = cmm_split_read_page(env, mo, rdpg);
                 if (rc) {
                         CERROR("Error in readpage: %d\n", rc);
                         RETURN(rc);
                 }
 
-                /* Remove local entries which are going to remite MDT. */
+                /** - Remove local entries which are going to remite MDT. */
                 rc = cmm_split_remove_page(env, mo, rdpg, end, &len);
                 if (rc) {
                         CERROR("Error in remove stripe entries: %d\n", rc);
                         RETURN(rc);
                 }
 
-                /* Send entries page to slave MDT. */
+                /**
+                 * - Send entries page to slave MDT and repeat while there are
+                 * more pages.
+                 */
                 if (len > 0) {
                         rc = cmm_split_send_page(env, mo, rdpg, lf, len);
                         if (rc) {
@@ -593,6 +614,11 @@ static int cmm_split_process_stripe(const struct lu_env *env,
         RETURN(rc);
 }
 
+/**
+ * Directory scanner for split operation.
+ *
+ * It calculates hashes for names and organizes files to stripes.
+ */
 static int cmm_split_process_dir(const struct lu_env *env,
                                  struct md_object *mo,
                                  struct md_attr *ma)
@@ -615,7 +641,12 @@ static int cmm_split_process_dir(const struct lu_env *env,
         }
 
         hash_segment = MAX_HASH_SIZE;
+        /** Whole hash range is divided on segments by number of MDS-es. */
         do_div(hash_segment, cmm->cmm_tgt_count + 1);
+        /**
+         * For each segment the cmm_split_process_stripe() is called to move
+         * entries on new server.
+         */
         for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;
                 __u64 hash_end;
@@ -643,6 +674,11 @@ cleanup:
         return rc;
 }
 
+/**
+ * Directory splitting.
+ *
+ * Big directory can be split eventually.
+ */
 int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
@@ -656,7 +692,7 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         memset(ma, 0, sizeof(*ma));
 
-        /* Step1: Checking whether the dir needs to be split. */
+        /** - Step1: Checking whether the dir needs to be split. */
         rc = cmm_split_expect(env, mo, ma, &split);
         if (rc)
                 GOTO(out, rc);
@@ -670,8 +706,8 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
         CWARN("Dir "DFID" is going to split (size: "LPU64")\n",
               PFID(lu_object_fid(&mo->mo_lu)), ma->ma_attr.la_size);
 
-        /*
-         * Disable transacrions for split, since there will be so many trans in
+        /**
+         * /note Disable transactions for split, since there will be so many trans in
          * this one ops, conflict with current recovery design.
          */
         rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS, NULL);
@@ -680,27 +716,27 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
                 GOTO(out, rc);
         }
 
-        /* Step2: Prepare the md memory */
+        /** - Step2: Prepare the md memory */
         ma->ma_lmv_size = CMM_MD_SIZE(cmm->cmm_tgt_count + 1);
         OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
         if (ma->ma_lmv == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        /* Step3: Create slave objects and fill the ma->ma_lmv */
+        /** - Step3: Create slave objects and fill the ma->ma_lmv */
         rc = cmm_split_slaves_create(env, mo, ma);
         if (rc) {
                 CERROR("Can't create slaves for split, rc %d\n", rc);
                 GOTO(cleanup, rc);
         }
 
-        /* Step4: Scan and split the object. */
+        /** - Step4: Scan and split the object. */
         rc = cmm_split_process_dir(env, mo, ma);
         if (rc) {
                 CERROR("Can't scan and split, rc %d\n", rc);
                 GOTO(cleanup, rc);
         }
 
-        /* Step5: Set mea to the master object. */
+        /** - Step5: Set mea to the master object. */
         buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
         rc = mo_xattr_set(env, md_object_next(mo), buf,
                           MDS_LMV_MD_NAME, 0);
@@ -712,8 +748,8 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
         /* set flag in cmm_object */
         md2cml_obj(mo)->clo_split = CMM_SPLIT_DONE;
 
-        /*
-         * Finally, split succeed, tell client to repeat opetartion on correct
+        /**
+         * - Finally, split succeed, tell client to repeat opetartion on correct
          * MDT.
          */
         CWARN("Dir "DFID" has been split\n", PFID(lu_object_fid(&mo->mo_lu)));
@@ -725,3 +761,4 @@ out:
         cmm_lprocfs_time_end(env, cmm, LPROC_CMM_SPLIT);
         return rc;
 }
+/** @} */

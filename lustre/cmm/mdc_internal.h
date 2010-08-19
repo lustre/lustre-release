@@ -48,59 +48,91 @@
 #include <lustre_net.h>
 #include <obd.h>
 #include <md_object.h>
-
+/**
+ * \addtogroup cmm
+ * @{
+ */
+/**
+ * \defgroup cmm_mdc cmm_mdc
+ *
+ * This is mdc wrapper device to work with old MDC obd-based devices.
+ * @{
+ */
+/**
+ * MDC client description.
+ */
 struct mdc_cli_desc {
-        /* uuid of remote MDT to connect */
+        /** uuid of remote MDT to connect */
         struct obd_uuid          cl_srv_uuid;
-        /* mdc uuid */
+        /** mdc uuid */
         struct obd_uuid          cl_cli_uuid;
-        /* export of mdc obd */
+        /** export of mdc obd */
         struct obd_export        *cl_exp;
 };
 
+/**
+ * MDC device.
+ */
 struct mdc_device {
+        /** md_device instance for MDC */
         struct md_device        mc_md_dev;
-        /* other MD servers in cluster */
+        /** other MD servers in cluster */
         cfs_list_t              mc_linkage;
+        /** number of current device */
         mdsno_t                 mc_num;
+        /** mdc client description */
         struct mdc_cli_desc     mc_desc;
+        /** Protects ??*/
         cfs_semaphore_t         mc_fid_sem;
 };
 
+/**
+ * mdc thread info. Local storage for varios data.
+ */
 struct mdc_thread_info {
+        /** Storage for md_op_data */
         struct md_op_data       mci_opdata;
+        /** Storage for ptlrpc request */
         struct ptlrpc_request  *mci_req;
 };
 
+/** mdc object. */
 struct mdc_object {
+        /** md_object instance for mdc_object */
         struct md_object        mco_obj;
 };
 
+/** Get lu_device from mdc_device. */
 static inline struct lu_device *mdc2lu_dev(struct mdc_device *mc)
 {
         return (&mc->mc_md_dev.md_lu_dev);
 }
 
+/** Get mdc_device from md_device. */
 static inline struct mdc_device *md2mdc_dev(struct md_device *md)
 {
         return container_of0(md, struct mdc_device, mc_md_dev);
 }
 
+/** Get mdc_device from mdc_object. */
 static inline struct mdc_device *mdc_obj2dev(struct mdc_object *mco)
 {
         return (md2mdc_dev(md_obj2dev(&mco->mco_obj)));
 }
 
+/** Get mdc_object from lu_object. */
 static inline struct mdc_object *lu2mdc_obj(struct lu_object *lo)
 {
         return container_of0(lo, struct mdc_object, mco_obj.mo_lu);
 }
 
+/** Get mdc_object from md_object. */
 static inline struct mdc_object *md2mdc_obj(struct md_object *mo)
 {
         return container_of0(mo, struct mdc_object, mco_obj);
 }
 
+/** Get mdc_device from lu_device. */
 static inline struct mdc_device *lu2mdc_dev(struct lu_device *ld)
 {
         return container_of0(ld, struct mdc_device, mc_md_dev.md_lu_dev);
@@ -116,6 +148,7 @@ void cmm_mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc,
 int mdc_send_page(struct cmm_device *cmm, const struct lu_env *env,
                   struct md_object *mo, struct page *page, __u32 end);
 #endif
-
+/** @} */
+/** @} */
 #endif /* __KERNEL__ */
 #endif /* _CMM_MDC_INTERNAL_H */
