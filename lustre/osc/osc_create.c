@@ -336,8 +336,9 @@ static int oscc_in_sync(struct osc_creator *oscc)
 }
 
 /* decide if the OST has remaining object, return value :
-        0 : the OST has remaining object, and don't need to do precreate.
-        1 : the OST has no remaining object, and will send a RPC for precreate.
+        0 : the OST has remaining objects, may or may not send precreation RPC.
+        1 : the OST has no remaining object, and the sent precreation RPC
+            has not been completed yet.
         2 : the OST has no remaining object, and will not get any for
             a potentially very long time
      1000 : unusable
@@ -346,43 +347,44 @@ int osc_precreate(struct obd_export *exp)
 {
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         struct obd_import *imp = exp->exp_imp_reverse;
+        int rc;
         ENTRY;
 
         LASSERT(oscc != NULL);
         if (imp != NULL && imp->imp_deactive)
-                RETURN(1000);
+                GOTO(out_nolock, rc = 1000);
 
         /* Handle critical states first */
         cfs_spin_lock(&oscc->oscc_lock);
         if (oscc->oscc_flags & OSCC_FLAG_NOSPC ||
             oscc->oscc_flags & OSCC_FLAG_RDONLY ||
-            oscc->oscc_flags & OSCC_FLAG_EXITING) {
-                cfs_spin_unlock(&oscc->oscc_lock);
-                RETURN(1000);
-        }
+            oscc->oscc_flags & OSCC_FLAG_EXITING)
+                GOTO(out, rc = 1000);
 
         if ((oscc->oscc_flags & OSCC_FLAG_RECOVERING) ||
-            (oscc->oscc_flags & OSCC_FLAG_DEGRADED)) {
-                cfs_spin_unlock(&oscc->oscc_lock);
-                RETURN(2);
-        }
+            (oscc->oscc_flags & OSCC_FLAG_DEGRADED))
+                GOTO(out, rc = 2);
 
-        if (oscc_has_objects_nolock(oscc, oscc->oscc_grow_count / 2)) {
-                cfs_spin_unlock(&oscc->oscc_lock);
-                RETURN(0);
-        }
+        if (oscc_has_objects_nolock(oscc, oscc->oscc_grow_count / 2))
+                GOTO(out, rc = 0);
+
+        /* Return 0, if we have at least one object - bug 22884 */
+        rc = oscc_has_objects_nolock(oscc, 1) ? 0 : 1;
 
         /* Do not check for OSCC_FLAG_CREATING flag here, let
          * osc_precreate() call oscc_internal_create() and
          * adjust oscc_grow_count bug21563 */
-        if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
-                cfs_spin_unlock(&oscc->oscc_lock);
-                RETURN(1);
-        }
+        if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS)
+                GOTO(out, rc);
 
         if (oscc_internal_create(oscc))
-                RETURN(1000);
-        RETURN(1);
+                GOTO(out_nolock, rc = 1000);
+
+        RETURN(rc);
+out:
+        cfs_spin_unlock(&oscc->oscc_lock);
+out_nolock:
+        return rc;
 }
 
 static int handle_async_create(struct ptlrpc_request *req, int rc)
