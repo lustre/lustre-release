@@ -54,9 +54,6 @@
 
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_MIN_NR       20
-/* Moved to lustre_user.h
-#define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_ioctl_data *)
-#define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *) */
 #define IOC_MDC_MAX_NR       50
 
 #include <lustre/lustre_idl.h>

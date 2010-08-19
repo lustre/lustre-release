@@ -489,20 +489,18 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_CHANGELOG_SEND         _IOW ('f', 148, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_FID2PATH               _IOWR ('f', 150, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_CHANGELOG_REG          _IOW ('f', 151, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_CHANGELOG_DEREG        _IOW ('f', 152, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_CHANGELOG_CLEAR        _IOW ('f', 153, OBD_IOC_DATA_TYPE)
-
+/* see <lustre/lustre_user.h> for ioctls 151-153 */
 #define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LOV_SETEA              _IOW ('f', 156, OBD_IOC_DATA_TYPE)
-
+/* see <lustre/lustre_user.h> for ioctls 157-159 */
 #define OBD_IOC_QUOTACHECK             _IOW ('f', 160, int)
 #define OBD_IOC_POLL_QUOTACHECK        _IOR ('f', 161, struct if_quotacheck *)
 #define OBD_IOC_QUOTACTL               _IOWR('f', 162, struct if_quotactl *)
-
-#define OBD_IOC_MOUNTOPT               _IOWR('f', 170, OBD_IOC_DATA_TYPE)
-
+/* see <lustre/lustre_user.h> for ioctls 163-175 */
+#define OBD_IOC_CHANGELOG_REG          _IOW ('f', 177, struct obd_ioctl_data)
+#define OBD_IOC_CHANGELOG_DEREG        _IOW ('f', 178, struct obd_ioctl_data)
+#define OBD_IOC_CHANGELOG_CLEAR        _IOW ('f', 179, struct obd_ioctl_data)
 #define OBD_IOC_RECORD                 _IOWR('f', 180, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ENDRECORD              _IOWR('f', 181, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PARSE                  _IOWR('f', 182, OBD_IOC_DATA_TYPE)
