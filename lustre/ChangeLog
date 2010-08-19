@@ -259,6 +259,14 @@ Severity   : normal
 Bugzilla   : 20482
 Description: Conf-sanity.sh 50g test - deactivated OST should not cause a panic.
 
+Severity   : enhancement
+Bugzilla   : 21452
+Description: "weak-modules" support
+Details    : Implement "weak-modules" support which enables kernel modules
+	     to be used with any kernel that implements the same kABI.  In
+	     order to achieve this modules are now installed in
+	     /lib/modules/$(uname -r)/updates/kernel on all distributions.
+
 Severity   : normal
 Bugzilla   : 18674
 Description: client could not reconnect to OST because of an active request.

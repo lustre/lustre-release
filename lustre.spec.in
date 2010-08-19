@@ -29,6 +29,12 @@
 # for those uses that don't want the -smp/-bigsmp on the end of %kversion
 %define krequires %(bash -c "echo %{kversion} | sed -e 's/.x86_64$//' -e 's/.i586$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
 
+%define sles10 %(bash -c "if [ "%sles_version" = "10" ]; then echo -n '1'; else echo -n '0'; fi")
+
+%if %sles10
+%define flavor %(bash -c "echo %{kversion} | sed -e 's/^.*-//'")
+%endif
+
 Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}
@@ -48,7 +54,11 @@ Userspace tools and files for the Lustre file system.
 
 %package modules
 Summary: Kernel Lustre modules for Linux %{kversion}
-Requires: modutils >= 2.4.10, kernel = %{krequires}
+# for RHEL5 and SLES11, we need nothing here
+# for SLES10, we need (where %{flavor} is, i.e. smp):
+%if %sles10
+Requires: kernel-%{flavor}
+%endif
 Group: Development/Kernel
 
 %description modules
@@ -144,14 +154,14 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # hack to avoid changing the libsysio code for "make install"
 rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 # Remove ldiskfs module(s) - they are packaged by the ldiskfs .spec.
-rm -rf $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre-ldiskfs
+rm -rf $RPM_BUILD_ROOT/lib/modules/%{kversion}/updates/kernel/fs/lustre-ldiskfs
 
 # hack to include the llog_test module in lustre-tests
 llog_base=$RPM_BUILD_DIR/lustre-%{version}/lustre/obdclass/llog_test
 if [ -e ${llog_base}.ko ]; then
-  cp ${llog_base}.ko $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre
+  cp ${llog_base}.ko $RPM_BUILD_ROOT/lib/modules/%{kversion}/updates/kernel/fs/lustre
 elif [ -e ${llog_base}.o ]; then
-  cp ${llog_base}.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre
+  cp ${llog_base}.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/updates/kernel/fs/lustre
 fi
 
 # Create the pristine source directory.
@@ -211,7 +221,7 @@ fi
 
 %if %{build_lustre_tests}
 echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
-echo '%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
+echo '%attr(-, root, root) /lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
 modules_excludes="|llog_test"
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
   echo '%attr(-, root, root) %{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
@@ -219,7 +229,7 @@ fi
 %endif
 
 pushd $RPM_BUILD_ROOT >/dev/null
-find lib/modules/%{kversion}/kernel -type f | awk "!/(ZZZZZZZZZZ$modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
+find lib/modules/%{kversion}/updates -type f | awk "!/(ZZZZZZZZZZ$modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
 popd >/dev/null
 
 %files -f lustre.files
@@ -246,9 +256,22 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
+
+# "weak modules" support
+# Suse
+if [ -x /usr/lib/module-init-tools/weak-modules ]; then
+    rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' |
+        /usr/lib/module-init-tools/weak-modules --add-modules
+fi
+# RedHat
+if [ -x /sbin/weak-modules ]; then
+    rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' |
+        /sbin/weak-modules --add-modules
+fi
+
 cat <<EOF
-Congratulations on finishing your Lustre installation!  To register  
-your copy of Lustre and find out more about Lustre Support, Service,  
+Congratulations on finishing your Lustre installation!  To register
+your copy of Lustre and find out more about Lustre Support, Service,
 and Training offerings please visit
 
 http://www.sun.com/software/products/lustre/lustre_reg.jsp
@@ -291,12 +314,28 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
      into /etc/modprobe.d/unsupported_modules"
 fi
 
+%preun modules
+rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' > /var/run/%{name}-modules
+
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
 	depmod -ae %{kversion} || exit 0
 fi
+
+# "weak modules" support
+# Suse
+if [ -x /usr/lib/module-init-tools/weak-modules ]; then
+    cat /var/run/%{name}-modules | grep '\.ko$' |
+        /usr/lib/module-init-tools/weak-modules --remove-modules
+fi
+# RedHat
+if [ -x /sbin/weak-modules ]; then
+    cat /var/run/%{name}-modules | grep '\.ko$' |
+        /sbin/weak-modules --remove-modules
+fi
+rm /var/run/%{name}-modules
 
 %if %{build_lustre_tests}
 %post tests

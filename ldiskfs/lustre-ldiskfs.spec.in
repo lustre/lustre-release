@@ -45,7 +45,7 @@ make -j $RPM_BUILD_NCPUS -s
 make install DESTDIR=$RPM_BUILD_ROOT
 
 %files
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre-ldiskfs
+%attr(-, root, root) /lib/modules/%{kversion}/updates/kernel/fs/lustre-ldiskfs
 
 %post
 if [ -f /boot/System.map-%{kversion} ]; then
