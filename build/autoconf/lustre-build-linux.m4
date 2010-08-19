@@ -333,18 +333,6 @@ AC_SUBST(UML_CFLAGS)
 # these are like AC_TRY_COMPILE, but try to build modules against the
 # kernel, inside the build directory
 
-#
-# LB_LINUX_CONFTEST
-#
-# create a conftest.c file
-#
-AC_DEFUN([LB_LINUX_CONFTEST],
-[cat >conftest.c <<_ACEOF
-$1
-_ACEOF
-])
-
-
 # LB_LANG_PROGRAM(C)([PROLOGUE], [BODY])
 # --------------------------------------
 m4_define([LB_LANG_PROGRAM],
@@ -365,7 +353,7 @@ $2
 # like AC_COMPILE_IFELSE
 #
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
-[m4_ifvaln([$1], [LB_LINUX_CONFTEST([$1])])dnl
+[m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
 AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`uname -m|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
