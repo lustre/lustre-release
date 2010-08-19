@@ -1282,6 +1282,8 @@ out:
         if (cs->cs_buf)
                 OBD_FREE(cs->cs_buf, CR_MAXSIZE);
         OBD_FREE_PTR(cs);
+        /* detach from parent process so we get cleaned up */
+        cfs_daemonize("cl_send");
         return rc;
 }
 
