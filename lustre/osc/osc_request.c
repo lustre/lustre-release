@@ -943,7 +943,7 @@ static int osc_shrink_grant_interpret(const struct lu_env *env,
         LASSERT(body);
         osc_update_grant(cli, body);
 out:
-        OBD_FREE_PTR(oa);
+        OBDO_FREE(oa);
         return rc;
 }
 
@@ -2229,9 +2229,6 @@ static int brw_interpret(const struct lu_env *env,
                 obd_count i;
                 for (i = 0; i < aa->aa_page_count; i++)
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
-
-                if (aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
-                        OBDO_FREE(aa->aa_oa);
         }
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(env, cli);
@@ -4089,7 +4086,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
 
                 CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
                 aa = ptlrpc_req_async_args(req);
-                OBD_ALLOC_PTR(oa);
+                OBDO_ALLOC(oa);
                 if (!oa) {
                         ptlrpc_req_finished(req);
                         RETURN(-ENOMEM);

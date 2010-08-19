@@ -1188,8 +1188,6 @@ enum obdo_flags {
 
         /* mask for local-only flag, which won't be sent over network */
         OBD_FL_LOCAL_MASK   = 0xF0000000,
-        /* temporary OBDO used by osc_brw_async (see bug 18364) */
-        OBD_FL_TEMPORARY    = 0x10000000,
 };
 
 #define LOV_MAGIC_V1      0x0BD10BD0
