@@ -60,14 +60,16 @@ writeconf1() {
 	stop ${facet} -f
 	rm -f ${facet}active
 	# who knows if/where $TUNEFS is installed?  Better reformat if it fails...
-	do_facet ${facet} "$TUNEFS --writeconf $dev" ||
+	do_facet ${facet} "$TUNEFS --quiet --writeconf $dev" ||
 		{ echo "tunefs failed, reformatting instead" && reformat_and_config && return 1; }
 	return 0
 }
 
 writeconf() {
-	# if writeconf failed, we reformatted
-	writeconf1 mds $MDSDEV || return 0
+	# we need ldiskfs
+	load_modules
+	# if writeconf fails anywhere, we reformat everything
+	writeconf1 mds `mdsdevname 1` || return 0
 	writeconf1 ost1 `ostdevname 1` || return 0
 	writeconf1 ost2 `ostdevname 2` || return 0
 }
