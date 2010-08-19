@@ -65,8 +65,7 @@ void request_out_callback(lnet_event_t *ev)
                  ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
-                  "type %d, status %d", ev->type, ev->status);
+        DEBUG_REQ(D_NET, req, "type %d, status %d", ev->type, ev->status);
 
         sptlrpc_request_out_callback(req);
         req->rq_real_sent = cfs_time_current_sec();
@@ -97,8 +96,7 @@ void reply_in_callback(lnet_event_t *ev)
         struct ptlrpc_request *req = cbid->cbid_arg;
         ENTRY;
 
-        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
-                  "type %d, status %d", ev->type, ev->status);
+        DEBUG_REQ(D_NET, req, "type %d, status %d", ev->type, ev->status);
 
         LASSERT (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->md.start == req->rq_repbuf);
