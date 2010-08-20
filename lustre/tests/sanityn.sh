@@ -65,7 +65,7 @@ rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 build_test_filter
 
@@ -473,13 +473,13 @@ test_25() {
 	chmod 0755 $DIR1/$tdir/f1 || error "chmod 0755 $DIR1/$tdir/f1"
 
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #1"
-	setfacl -m u:$RUNAS_ID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #1"
+	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #1"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #2"
-	setfacl -m u:$RUNAS_ID:r-x $DIR1/$tdir || error "setfacl $DIR2/$tdir #2"
+	setfacl -m u:$RUNAS_ID:r-x -m g:$RUNAS_GID:r-x $DIR1/$tdir || error "setfacl $DIR2/$tdir #2"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #3"
-	setfacl -m u:$RUNAS_ID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #3"
+	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #3"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #4"
-	setfacl -x u:$RUNAS_ID: $DIR1/$tdir || error "setfacl $DIR2/$tdir #4"
+	setfacl -x u:$RUNAS_ID: -x g:$RUNAS_GID: $DIR1/$tdir || error "setfacl $DIR2/$tdir #4"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #5"
 
 	rm -rf $DIR1/$tdir

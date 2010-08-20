@@ -127,7 +127,7 @@ rm -rf $DIR/[Rdfs][0-9]*
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 build_test_filter
 
@@ -301,16 +301,16 @@ test_6g() {
         $RUNAS mkdir $DIR/d6g/d || error
         chmod g+s $DIR/d6g/d || error
         mkdir $DIR/d6g/d/subdir
-	$CHECKSTAT -g \#$RUNAS_ID $DIR/d6g/d/subdir || error
+	$CHECKSTAT -g \#$RUNAS_GID $DIR/d6g/d/subdir || error
 }
 run_test 6g "Is new dir in sgid dir inheriting group?"
 
 test_6h() { # bug 7331
 	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6h || error "touch failed"
-	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
-	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
-	$CHECKSTAT -t file -u \#$RUNAS_ID -g \#$RUNAS_ID $DIR/f6h || error
+	chown $RUNAS_ID:$RUNAS_GID $DIR/f6h || error "initial chown failed"
+	$RUNAS -G$RUNAS_GID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
+	$CHECKSTAT -t file -u \#$RUNAS_ID -g \#$RUNAS_GID $DIR/f6h || error
 }
 run_test 6h "$RUNAS chown RUNAS_ID.0 .../f6h (should return error)"
 
@@ -562,13 +562,13 @@ run_test 21 "write to dangling link ============================"
 test_22() {
 	WDIR=$DIR/$tdir
 	mkdir -p $WDIR
-	chown $RUNAS_ID $WDIR
+	chown $RUNAS_ID:$RUNAS_GID $WDIR
 	(cd $WDIR || error "cd $WDIR failed";
 	$RUNAS tar cf - /etc/hosts /etc/sysconfig/network | \
 	$RUNAS tar xf -)
 	ls -lR $WDIR/etc || error "ls -lR $WDIR/etc failed"
 	$CHECKSTAT -t dir $WDIR/etc || error "checkstat -t dir failed"
-	$CHECKSTAT -u \#$RUNAS_ID $WDIR/etc || error "checkstat -u failed"
+	$CHECKSTAT -u \#$RUNAS_ID -g \#$RUNAS_GID $WDIR/etc || error "checkstat -u failed"
 }
 run_test 22 "unpack tar archive as non-root user ==============="
 
@@ -3335,14 +3335,14 @@ test_56q() {
 
 	setup_56 $NUMFILES $NUMDIRS
 
-	chgrp $RUNAS_ID $TDIR/file* || error "chown $DIR/${tdir}g/file$i failed"
+	chgrp $RUNAS_GID $TDIR/file* || error "chown $DIR/${tdir}g/file$i failed"
 	EXPECTED=$NUMFILES
-	NUMS="`$LFIND -gid $RUNAS_ID $TDIR | wc -l`"
+	NUMS="`$LFIND -gid $RUNAS_GID $TDIR | wc -l`"
 	[ $NUMS -eq $EXPECTED ] || \
 		error "lfs find -gid $TDIR wrong: found $NUMS, expected $EXPECTED"
 
 	EXPECTED=$(( ($NUMFILES+1) * $NUMDIRS + 1))
-	NUMS="`$LFIND ! -gid $RUNAS_ID $TDIR | wc -l`"
+	NUMS="`$LFIND ! -gid $RUNAS_GID $TDIR | wc -l`"
 	[ $NUMS -eq $EXPECTED ] || \
 		error "lfs find ! -gid $TDIR wrong: found $NUMS, expected $EXPECTED"
 
@@ -3847,7 +3847,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	[ "$RUNAS_ID" = "$UID" ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
         # Check that testing environment is properly set up. Skip if not
-        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
+        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_GID $RUNAS || {
                 skip_env "User $RUNAS_ID does not exist - skipping"
                 return 0
         }

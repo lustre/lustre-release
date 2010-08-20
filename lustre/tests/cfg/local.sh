@@ -114,10 +114,12 @@ DIR2=${DIR2:-$MOUNT2}
 if [ $UID -ne 0 ]; then
         log "running as non-root uid $UID"
         RUNAS_ID="$UID"
+        RUNAS_GID=`id -g $USER`
         RUNAS=""
 else
         RUNAS_ID=${RUNAS_ID:-500}
-        RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+        RUNAS_GID=${RUNAS_GID:-$RUNAS_ID}
+        RUNAS=${RUNAS:-"runas -u $RUNAS_ID -g $RUNAS_GID"}
 fi
 
 PDSH=${PDSH:-no_dsh}
