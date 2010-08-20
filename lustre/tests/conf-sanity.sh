@@ -2249,6 +2249,7 @@ test_56() {
 	start_ost
 	start_ost2 || error "Unable to start second ost"
 	mount_client $MOUNT || error "Unable to mount client"
+	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ;
 
 	stopall
 	reformat

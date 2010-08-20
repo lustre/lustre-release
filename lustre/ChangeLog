@@ -16,6 +16,10 @@ Severity   : enhancement
 Bugzilla   : 21610
 Description: Update SLES11 SP1 kernel to 2.6.32.13-0.5.1.
 
+Severity   : normal
+Bugzilla   : 21174
+Description: Enabling quotas fails with non-consecutive OST numbering.
+
 -------------------------------------------------------------------------------
 
 2010-07-31 Oracle, Inc.
