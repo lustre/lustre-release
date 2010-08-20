@@ -2534,7 +2534,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
 
         rc = lnet_send(self, msg);
         if (rc != 0) {
-                CERROR("Error sending PUT to %s: %d\n",
+                CNETERR( "Error sending PUT to %s: %d\n",
                        libcfs_id2str(target), rc);
                 lnet_finalize (NULL, msg, rc);
         }
@@ -2731,7 +2731,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
 
         rc = lnet_send(self, msg);
         if (rc < 0) {
-                CERROR("error sending GET to %s: %d\n",
+                CNETERR( "Error sending GET to %s: %d\n",
                        libcfs_id2str(target), rc);
                 lnet_finalize (NULL, msg, rc);
         }
