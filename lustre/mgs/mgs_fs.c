@@ -82,7 +82,6 @@ int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
         }
         RETURN(0);
 clean:
-        lprocfs_exp_cleanup(exp);
         return rc;
 }
 

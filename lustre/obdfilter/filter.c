@@ -290,7 +290,6 @@ static int filter_export_stats_init(struct obd_device *obd,
 
         RETURN(0);
  clean:
-        lprocfs_exp_cleanup(exp);
         return rc;
 }
 
@@ -2808,7 +2807,6 @@ static int filter_connect(const struct lu_env *env,
 cleanup:
         if (rc) {
                 class_disconnect(lexp);
-                lprocfs_exp_cleanup(lexp);
                 *exp = NULL;
         } else {
                 *exp = lexp;
