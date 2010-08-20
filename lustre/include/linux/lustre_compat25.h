@@ -627,7 +627,10 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
 #ifndef HAVE_SYNCHRONIZE_RCU
+/* Linux 2.6.32 provides define when !CONFIG_TREE_PREEMPT_RCU */
+#ifndef synchronize_rcu
 #define synchronize_rcu() synchronize_kernel()
+#endif
 #endif
 
 #ifdef HAVE_FILE_REMOVE_SUID
