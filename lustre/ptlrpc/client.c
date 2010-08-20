@@ -2285,7 +2285,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
             imp->imp_generation == imp->imp_last_generation_checked) {
-                CDEBUG(D_RPCTRACE, "%s: skip recheck: last_committed "LPU64"\n",
+                CDEBUG(D_INFO, "%s: skip recheck: last_committed "LPU64"\n",
                        imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
                 EXIT;
                 return;
@@ -2324,7 +2324,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
                         break;
                 }
 
-                DEBUG_REQ(D_RPCTRACE, req, "commit (last_committed "LPU64")",
+                DEBUG_REQ(D_INFO, req, "commit (last_committed "LPU64")",
                           imp->imp_peer_committed_transno);
 free_req:
                 cfs_spin_lock(&req->rq_lock);

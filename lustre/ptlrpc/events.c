@@ -117,7 +117,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         if (ev->type == LNET_EVENT_UNLINK) {
                 LASSERT(ev->unlinked);
-                DEBUG_REQ(D_RPCTRACE, req, "unlink");
+                DEBUG_REQ(D_NET, req, "unlink");
                 goto out_wake;
         }
 
@@ -280,7 +280,7 @@ void request_in_callback(lnet_event_t *ev)
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
         cfs_atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
-                CDEBUG(D_RPCTRACE, "incoming req@%p x"LPU64" msgsize %u\n",
+                CDEBUG(D_INFO, "incoming req@%p x"LPU64" msgsize %u\n",
                        req, req->rq_xid, ev->mlength);
 
         CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
