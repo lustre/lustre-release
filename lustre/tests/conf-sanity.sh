@@ -2491,13 +2491,10 @@ test_56() {
 run_test 56 "check big indexes"
 
 test_57() { # bug 22656
-	local NID=$($LCTL list_nids | head -1)
+	local NID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
 	writeconf
 	do_facet ost1 "$TUNEFS --failnode=$NID `ostdevname 1`" || error "tunefs failed"
-	if ! combined_mgs_mds ; then
-		start_mgs
-	fi
-	start_mds
+	start_mgsmds
 	start_ost && error "OST registration from failnode should fail"
 	stop_mds
 	reformat
