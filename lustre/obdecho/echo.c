@@ -420,6 +420,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
+        struct niobuf_remote *rbc = rb;
         int i, vrc = 0;
         ENTRY;
 
@@ -452,33 +453,36 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                               (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
-                        cfs_page_t *page = r->page;
-                        void *addr;
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, rbc++) {
+                        long l;
+                        for (l = rbc->len; l>0; l-=r->len, r++) {
+                                cfs_page_t *page = r->page;
+                                void *addr;
 
-                        if (page == NULL) {
-                                CERROR("null page objid "LPU64":%p, buf %d/%d\n",
-                                       obj->ioo_id, page, j, obj->ioo_bufcnt);
-                                GOTO(commitrw_cleanup, rc = -EFAULT);
+                                if (page == NULL) {
+                                        CERROR("null page objid "LPU64":%p, buf %d/%d\n",
+                                        obj->ioo_id, page, j, obj->ioo_bufcnt);
+                                        GOTO(commitrw_cleanup, rc = -EFAULT);
+                                }
+
+                                addr = cfs_kmap(page);
+
+                                CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
+                                r->page, addr, r->offset);
+
+                                if (verify) {
+                                        vrc = echo_page_debug_check(page, obj->ioo_id,
+                                                                r->offset, r->len);
+                                        /* check all the pages always */
+                                        if (vrc != 0 && rc == 0)
+                                                rc = vrc;
+                                }
+
+                                cfs_kunmap(page);
+                                /* NB see comment above regarding persistent pages */
+                                OBD_PAGE_FREE(page);
+                                atomic_dec(&obd->u.echo.eo_prep);
                         }
-
-                        addr = cfs_kmap(page);
-
-                        CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
-                               r->page, addr, r->offset);
-
-                        if (verify) {
-                                vrc = echo_page_debug_check(page, obj->ioo_id,
-                                                            r->offset, r->len);
-                                /* check all the pages always */
-                                if (vrc != 0 && rc == 0)
-                                        rc = vrc;
-                        }
-
-                        cfs_kunmap(page);
-                        /* NB see comment above regarding persistent pages */
-                        OBD_PAGE_FREE(page);
-                        atomic_dec(&obd->u.echo.eo_prep);
                 }
         }
         CDEBUG(D_PAGE, "%d pages remain after commit\n",
