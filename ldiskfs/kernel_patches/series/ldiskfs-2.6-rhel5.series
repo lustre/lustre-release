@@ -9,7 +9,6 @@ ext3-mballoc3-core.patch
 ext3-mballoc3-2.6.18.patch
 ext3-nlinks-2.6-rhel5.patch
 ext3-remove-cond_resched-calls-2.6.12.patch
-ext3-filterdata-sles10.patch
 ext3-uninit-2.6.18.patch
 ext3-nanosecond-2.6.18-vanilla.patch
 ext3-inode-version-2.6.18-vanilla.patch

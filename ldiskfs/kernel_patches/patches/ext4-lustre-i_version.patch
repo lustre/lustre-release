@@ -12,9 +12,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_i.h
   * storage for cached extent
   */
 @@ -138,6 +140,8 @@ struct ext4_inode_info {
- 	spinlock_t i_block_reservation_lock;
+	__u16 i_extra_isize;
  
- 	void *i_filterdata;
+ 	spinlock_t i_block_reservation_lock;
 +
 +	__u64 i_fs_version;
  };
