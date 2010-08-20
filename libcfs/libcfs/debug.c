@@ -316,6 +316,8 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 
         if ((t = sscanf(str, "%i%n", &m, &matched)) >= 1 &&
             matched == n) {
+                CWARN("You are trying to use a numerical value for the mask -"
+                      " this will be deprecated in a future release.\n");
                 *mask = m;
                 return 0;
         }
