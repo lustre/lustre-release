@@ -87,7 +87,6 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 #else
         clear_page_dirty(page);
 #endif
-        ClearPageUptodate(page);
         ClearPageMappedToDisk(page);
         ll_remove_from_page_cache(page);
         page_cache_release(page);       /* pagecache ref */
