@@ -503,7 +503,7 @@ static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
  */
 static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
                               struct cl_page_list *queue,
-                              int index, struct address_space *mapping)
+                              pgoff_t index, struct address_space *mapping)
 {
         struct page      *vmpage;
         struct cl_object *clob  = ll_i2info(mapping->host)->lli_clob;
