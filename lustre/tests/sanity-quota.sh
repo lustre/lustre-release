@@ -1024,64 +1024,8 @@ test_9() {
 }
 run_test_with_stat 9 "run for fixing bug10707(64bit) ==========="
 
-# run for fixing bug10707, it need a big room. test for 32bit
-# 2.0 version does not support 32 bit qd_count, so such test is obsolete.
-test_10() {
-	mkdir -p $DIR/$tdir
-	chmod 0777 $DIR/$tdir
-	check_whether_skip && return 0
-
-	wait_delete_completed
-
-	set_blk_tunesz 512
-	set_blk_unitsz 1024
-
-	# make qd_count 32 bit
-	lustre_fail mds_ost 0xA00
-
-	TESTFILE="$DIR/$tdir/$tfile-0"
-
-	BLK_LIMIT=$((100 * KB * KB)) # 100G
-	FILE_LIMIT=1000000
-
-	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
-	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
-
-        quota_show_check a u $TSTUSR
-        quota_show_check a g $TSTUSR
-
-	echo "  Set stripe"
-	$LFS setstripe $TESTFILE -c 1
-	touch $TESTFILE
-	chown $TSTUSR.$TSTUSR $TESTFILE
-
-        log "    Write the big file of 4.5 G ..."
-        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
-		quota_error a $TSTUSR "(usr) write 4.5 G file failure, but expect success"
-
-        $SHOW_QUOTA_USER
-        $SHOW_QUOTA_GROUP
-
-        log "    delete the big file of 4.5 G..."
-        $RUNAS rm -f $TESTFILE
-	sync; sleep 3; sync;
-
-        $SHOW_QUOTA_USER
-        $SHOW_QUOTA_GROUP
-
-	RC=$?
-
-	# make qd_count 64 bit
-	lustre_fail mds_ost 0
-
-	set_blk_unitsz $((128 * 1024))
-	set_blk_tunesz $((128 * 1024 / 2))
-
-	return $RC
-}
-#run_test_with_stat 10 "run for fixing bug10707(32bit) ==========="
+# 2.0 version does not support 32 bit qd_count,
+# test_10 "run for fixing bug10707(32bit) " is obsolete
 
 # test a deadlock between quota and journal b=11693
 test_12() {
@@ -1310,67 +1254,8 @@ test_15(){
 }
 run_test_with_stat 15 "set block quota more than 4T ==="
 
-# $1=u/g $2=with qunit adjust or not
-test_16_tub() {
-	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 4))
-	TESTFILE="$DIR/$tdir/$tfile"
-	mkdir -p $DIR/$tdir
-
-	wait_delete_completed
-
-	echo "  User quota (limit: $LIMIT kbytes)"
-	if [ $1 == "u" ]; then
-	    $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-            quota_show_check b u $TSTUSR
-	else
-	    $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-            quota_show_check b g $TSTUSR
-	fi
-
-	$LFS setstripe $TESTFILE -c 1
-	chown $TSTUSR.$TSTUSR $TESTFILE
-
-	echo "    Write ..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((BUNIT_SZ * 4)) || \
-	    quota_error a $TSTUSR "(usr) write failure, but expect success"
-	echo "    Done"
-	echo "    Write out of block quota ..."
-	# this time maybe cache write,  ignore it's failure
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) || true
-	# flush cache, ensure noquota flag is setted on client
-        cancel_lru_locks osc
-	if [ $2 -eq 1 ]; then
-	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) || \
-		quota_error a $TSTUSR "(write failure, but expect success"
-	else
-	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) && \
-		quota_error a $TSTUSR "(write success, but expect EDQUOT"
-	fi
-
-	rm -f $TESTFILE
-	sync; sleep 3; sync;
-	resetquota -$1 $TSTUSR
-}
-
-# test without adjusting qunit
-# 2.0 version does not support WITHOUT_CHANGE_QS, so such test is obsolete
-test_16 () {
-	set_blk_tunesz $((BUNIT_SZ * 2))
-	set_blk_unitsz $((BUNIT_SZ * 4))
-	for i in u g; do
-	    for j in 0 1; do
-                # define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
-		echo " grp/usr: $i, adjust qunit: $j"
-		echo "-------------------------------"
-		[ $j -eq 1 ] && lustre_fail mds_ost 0
-		[ $j -eq 0 ] && lustre_fail mds_ost 0xA01
-		test_16_tub $i $j
-	    done
-	done
-	set_blk_unitsz $((128 * 1024))
-	set_blk_tunesz $((128 * 1024 / 2))
-}
-#run_test_with_stat 16 "test without adjusting qunit"
+# 2.0 version does not support WITHOUT_CHANGE_QS,
+# test_16 "test without adjusting qunit" is obsolete
 
 # run for fixing bug14526, failed returned quota reqs shouldn't ruin lustre.
 test_17() {
