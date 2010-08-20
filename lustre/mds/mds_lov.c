@@ -482,7 +482,6 @@ static int mds_lov_get_objid(struct obd_device * obd,
         unsigned int page;
         unsigned int off;
         obd_id *data;
-        __u64 connect_flags;
         __u32 size;
         int rc = 0;
         ENTRY;
@@ -491,14 +490,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
         off = idx % OBJID_PER_PAGE();
         data = mds->mds_lov_page_array[page];
 
-        size = sizeof(__u64);
-        connect_flags = idx;
-        rc = obd_get_info(lov_exp, sizeof(KEY_CONNECT_FLAG), KEY_CONNECT_FLAG,
-                          &size, &connect_flags, NULL);
-        if (rc)
-                GOTO(out, rc);
-
-        if (data[off] < 2 || connect_flags & OBD_CONNECT_SKIP_ORPHAN) {
+        if (data[off] < 2) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
 

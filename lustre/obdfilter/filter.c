@@ -3541,7 +3541,14 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                 filter_set_last_id(filter, id, doa.o_seq);
                 rc = filter_update_last_objid(exp->exp_obd, doa.o_seq, 1);
         } else {
-                /* don't reuse orphan object, return last used objid */
+                /*
+                 * We have destroyed orphan objects, but don't want to reuse
+                 * them. Therefore we don't reset last_id to the last created
+                 * objects. Instead, we report back to the MDS the object id
+                 * of the last orphan, so that the MDS can restart allocating
+                 * objects from this id + 1 and thus skip the whole orphan
+                 * object id range
+                 */
                 oa->o_id = last;
                 rc = 0;
         }
