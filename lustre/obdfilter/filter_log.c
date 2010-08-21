@@ -267,9 +267,9 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 RETURN(LLOG_PROC_BREAK);
 
         if (rec == NULL) {
-                cfs_spin_lock_bh(&ctxt->loc_obd->obd_processing_task_lock);
+                cfs_spin_lock(&ctxt->loc_obd->u.filter.fo_flags_lock);
                 ctxt->loc_obd->u.filter.fo_mds_ost_sync = 0;
-                cfs_spin_unlock_bh(&ctxt->loc_obd->obd_processing_task_lock);
+                cfs_spin_unlock(&ctxt->loc_obd->u.filter.fo_flags_lock);
                 RETURN(0);
         }
 

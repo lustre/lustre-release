@@ -145,7 +145,9 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                 LBUG();
         }
 
+        cfs_spin_lock(&obd->obd_dev_lock);
         obd->obd_recovering = 1;
+        cfs_spin_unlock(&obd->obd_dev_lock);
         obd->u.mds.mds_id = mds_id;
         rc = class_setup(obd, lcfg);
         if (rc)

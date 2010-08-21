@@ -300,6 +300,7 @@ struct filter_obd {
         int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
+        cfs_spinlock_t       fo_flags_lock;
         int                  fo_read_cache:1,   /**< enable read-only cache */
                              fo_writethrough_cache:1,/**< read cache writes */
                              fo_mds_ost_sync:1, /**< MDS-OST orphan recovery*/
@@ -977,6 +978,7 @@ struct obd_llog_group {
 #define MAX_OBD_NAME 128
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
 #define OBD_DEV_BY_DEVNAME      0xffffd0de
+
 struct obd_device {
         struct obd_type        *obd_type;
         __u32                   obd_magic;
@@ -988,16 +990,15 @@ struct obd_device {
         struct lu_device       *obd_lu_dev;
 
         int                     obd_minor;
+        /* bitfield modification is protected by obd_dev_lock */
         unsigned long obd_attached:1,      /* finished attach */
                       obd_set_up:1,        /* finished setup */
                       obd_recovering:1,    /* there are recoverable clients */
                       obd_abort_recovery:1,/* recovery expired */
                       obd_version_recov:1, /* obd uses version checking */
-                      obd_recovery_expired:1,
                       obd_replayable:1,    /* recovery is enabled; inform clients */
                       obd_no_transno:1,    /* no committed-transno notification */
                       obd_no_recov:1,      /* fail instead of retry messages */
-                      obd_req_replaying:1, /* replaying requests */
                       obd_stopping:1,      /* started cleanup */
                       obd_starting:1,      /* started setup */
                       obd_force:1,         /* cleanup with > 0 obd refcount */
@@ -1007,6 +1008,9 @@ struct obd_device {
                       obd_inactive:1,      /* device active/inactive
                                            * (for /proc/status only!!) */
                       obd_process_conf:1;  /* device is processing mgs config */
+        /* use separate field as it is set in interrupt to don't mess with
+         * protection of other bits using _bh lock */
+        unsigned long obd_recovery_expired:1;
         /* uuid-export hash body */
         cfs_hash_t             *obd_uuid_hash;
         /* nid-export hash body */
@@ -1024,7 +1028,7 @@ struct obd_device {
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
-        cfs_spinlock_t          obd_dev_lock;
+        cfs_spinlock_t          obd_dev_lock; /* protects obd bitfield above */
         cfs_semaphore_t         obd_dev_sem;
         __u64                   obd_last_committed;
         struct fsfilt_operations *obd_fsops;
@@ -1045,11 +1049,14 @@ struct obd_device {
         int                              obd_connected_clients;
         int                              obd_stale_clients;
         int                              obd_delayed_clients;
-        cfs_spinlock_t                   obd_processing_task_lock; /* BH lock (timer) */
+        /* this lock protects all recovery list_heads, timer and
+         * obd_next_recovery_transno value */
+        cfs_spinlock_t                   obd_recovery_task_lock;
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;
         cfs_waitq_t                      obd_next_transno_waitq;
+        /* protected by obd_recovery_task_lock */
         cfs_timer_t                      obd_recovery_timer;
         time_t                           obd_recovery_start; /* seconds */
         time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
@@ -1061,6 +1068,7 @@ struct obd_device {
         int                              obd_replayed_locks;
         cfs_atomic_t                     obd_req_replay_clients;
         cfs_atomic_t                     obd_lock_replay_clients;
+        /* all lists are protected by obd_recovery_task_lock */
         cfs_list_t                       obd_req_replay_queue;
         cfs_list_t                       obd_lock_replay_queue;
         cfs_list_t                       obd_final_req_queue;

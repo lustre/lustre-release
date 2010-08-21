@@ -5232,9 +5232,9 @@ static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
  
                 /* Open for clients */
                 if (obd->obd_no_conn) {
-                        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
+                        cfs_spin_lock(&obd->obd_dev_lock);
                         obd->obd_no_conn = 0;
-                        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
+                        cfs_spin_unlock(&obd->obd_dev_lock);
                 }
         }
 }

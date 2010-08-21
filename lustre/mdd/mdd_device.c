@@ -1058,7 +1058,9 @@ static int mdd_recovery_complete(const struct lu_env *env,
                     OBD_NOTIFY_SYNC_NONBLOCK : OBD_NOTIFY_SYNC), NULL);
 
         /* Drop obd_recovering to 0 and call o_postrecov to recover mds_lov */
+        cfs_spin_lock(&obd->obd_dev_lock);
         obd->obd_recovering = 0;
+        cfs_spin_unlock(&obd->obd_dev_lock);
         obd->obd_type->typ_dt_ops->o_postrecov(obd);
 
         /* XXX: orphans handling. */

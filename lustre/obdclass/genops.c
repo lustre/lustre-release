@@ -1079,7 +1079,7 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
 
-        cfs_spin_lock_bh(&obd->obd_processing_task_lock);
+        cfs_spin_lock(&obd->obd_recovery_task_lock);
         if (exp->exp_delayed)
                 obd->obd_delayed_clients--;
         if (obd->obd_recovering && exp->exp_in_recovery) {
@@ -1089,6 +1089,7 @@ void class_export_recovery_cleanup(struct obd_export *exp)
                 LASSERT(obd->obd_connected_clients);
                 obd->obd_connected_clients--;
         }
+        cfs_spin_unlock(&obd->obd_recovery_task_lock);
         /** Cleanup req replay fields */
         if (exp->exp_req_replay_needed) {
                 cfs_spin_lock(&exp->exp_lock);
@@ -1105,7 +1106,6 @@ void class_export_recovery_cleanup(struct obd_export *exp)
                 LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
                 cfs_atomic_dec(&obd->obd_lock_replay_clients);
         }
-        cfs_spin_unlock_bh(&obd->obd_processing_task_lock);
 }
 
 /* This function removes 1-3 references from the export:
