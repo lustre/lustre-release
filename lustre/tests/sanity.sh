@@ -7594,6 +7594,19 @@ test_216() { # bug 20317
 }
 run_test 216 "check lockless direct write works and updates file size and kms correctly"
 
+test_217() { # bug 22430
+	local node
+	for node in $(nodes_list); do
+		if [[ $node = *-* ]] ; then
+			echo "lctl ping $node@$NETTYPE"
+			lctl ping $node@$NETTYPE
+		else
+			echo "skipping $node (no hiphen detected)"
+		fi
+	done
+}
+run_test 217 "check lctl ping for hostnames with hiphen ('-')"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
