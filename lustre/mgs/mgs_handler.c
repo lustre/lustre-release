@@ -530,6 +530,7 @@ out:
 out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
                mti->mti_stripe_index, rc);
+        req->rq_status = rc;
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
