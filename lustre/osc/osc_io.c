@@ -127,7 +127,7 @@ static int osc_io_submit(const struct lu_env *env,
 
         LASSERT(qin->pl_nr > 0);
 
-        CDEBUG(D_INFO, "%i %i\n", qin->pl_nr, crt);
+        CDEBUG(D_INFO, "%d %d\n", qin->pl_nr, crt);
         /*
          * NOTE: here @page is a top-level page. This is done to avoid
          *       creation of sub-page-list.
@@ -221,7 +221,7 @@ static int osc_io_submit(const struct lu_env *env,
 
         if (queued > 0)
                 osc_io_unplug(env, osc, cli);
-        CDEBUG(D_INFO, "%i/%i %i\n", qin->pl_nr, qout->pl_nr, result);
+        CDEBUG(D_INFO, "%d/%d %d\n", qin->pl_nr, qout->pl_nr, result);
         return qout->pl_nr > 0 ? 0 : result;
 }
 
@@ -344,7 +344,7 @@ static int osc_io_fault_start(const struct lu_env *env,
 
         io  = ios->cis_io;
         fio = &io->u.ci_fault;
-        CDEBUG(D_INFO, "%lu %i %i\n",
+        CDEBUG(D_INFO, "%lu %d %d\n",
                fio->ft_index, fio->ft_writable, fio->ft_nob);
         /*
          * If mapping is writeable, adjust kms to cover this page,
@@ -415,7 +415,7 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
                         /*
                          * XXX Linux specific debugging stuff.
                          */
-                        CL_PAGE_DEBUG(D_ERROR, env, page, "%s/%i %lu\n",
+                        CL_PAGE_DEBUG(D_ERROR, env, page, "%s/%d %lu\n",
                                       submitter->comm, submitter->pid, start);
                         libcfs_debug_dumpstack(submitter);
                 }

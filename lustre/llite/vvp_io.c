@@ -181,7 +181,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
                         descr->cld_enq_flags = flags;
                         result = cl_io_lock_alloc_add(env, io, descr);
 
-                        CDEBUG(D_VFSTRACE, "lock: %i: [%lu, %lu]\n",
+                        CDEBUG(D_VFSTRACE, "lock: %d: [%lu, %lu]\n",
                                descr->cld_mode, descr->cld_start,
                                descr->cld_end);
 
@@ -773,7 +773,7 @@ static int vvp_io_read_page(const struct lu_env *env,
         /* Sanity check whether the page is protected by a lock. */
         rc = cl_page_is_under_lock(env, io, page);
         if (rc != -EBUSY) {
-                CL_PAGE_HEADER(D_WARNING, env, page, "%s: %i\n",
+                CL_PAGE_HEADER(D_WARNING, env, page, "%s: %d\n",
                                rc == -ENODATA ? "without a lock" :
                                "match failed", rc);
                 if (rc != -ENODATA)

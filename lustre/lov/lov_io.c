@@ -392,7 +392,7 @@ static int lov_io_iter_init(const struct lu_env *env,
                                            start, end);
                         rc = cl_io_iter_init(sub->sub_env, sub->sub_io);
                         lov_sub_put(sub);
-                        CDEBUG(D_VFSTRACE, "shrink: %i ["LPU64", "LPU64")\n",
+                        CDEBUG(D_VFSTRACE, "shrink: %d ["LPU64", "LPU64")\n",
                                stripe, start, end);
                 } else
                         rc = PTR_ERR(sub);

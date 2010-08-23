@@ -345,7 +345,7 @@ static int cl_queue_merge(const cfs_list_t *queue,
                if (cl_lock_descr_cmp(&scan->cill_descr, need))
                        continue;
                cl_lock_descr_merge(&scan->cill_descr, need);
-               CDEBUG(D_VFSTRACE, "lock: %i: [%lu, %lu]\n",
+               CDEBUG(D_VFSTRACE, "lock: %d: [%lu, %lu]\n",
                       scan->cill_descr.cld_mode, scan->cill_descr.cld_start,
                       scan->cill_descr.cld_end);
                RETURN(+1);

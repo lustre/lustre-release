@@ -214,7 +214,7 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
                 lcc = ERR_PTR(result);
         }
 
-        CDEBUG(D_VFSTRACE, "%lu@"DFID" -> %i %p %p\n",
+        CDEBUG(D_VFSTRACE, "%lu@"DFID" -> %d %p %p\n",
                vmpage->index, PFID(lu_object_fid(&clob->co_lu)), result,
                env, io);
         return lcc;

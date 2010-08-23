@@ -2397,7 +2397,7 @@ int ldlm_error2errno(ldlm_error_t error)
                 if (((int)error) < 0)  /* cast to signed type */
                         result = error; /* as ldlm_error_t can be unsigned */
                 else {
-                        CERROR("Invalid DLM result code: %i\n", error);
+                        CERROR("Invalid DLM result code: %d\n", error);
                         result = -EPROTO;
                 }
         }

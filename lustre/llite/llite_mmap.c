@@ -166,7 +166,7 @@ int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
         vma->vm_flags &= ~VM_SEQ_READ;
         vma->vm_flags |= VM_RAND_READ;
 
-        CDEBUG(D_INFO, "vm_flags: %lx (%lu %i %i)\n", vma->vm_flags,
+        CDEBUG(D_INFO, "vm_flags: %lx (%lu %d %d)\n", vma->vm_flags,
                fio->ft_index, fio->ft_writable, fio->ft_executable);
 
         if (cl_io_init(env, io, CIT_FAULT, io->ci_obj) == 0) {

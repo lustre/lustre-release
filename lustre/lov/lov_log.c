@@ -119,7 +119,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                                numcookies - cookies);
                 llog_ctxt_put(cctxt);
                 if (rc < 0) {
-                        CERROR("Can't add llog (rc = %d) for stripe %i\n",
+                        CERROR("Can't add llog (rc = %d) for stripe %d\n",
                                rc, cookies);
                         memset(logcookies + cookies, 0,
                                sizeof(struct llog_cookie));

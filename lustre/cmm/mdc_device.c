@@ -326,7 +326,7 @@ static struct lu_device *mdc_device_free(const struct lu_env *env,
         struct mdc_device *mc = lu2mdc_dev(ld);
 
         LASSERTF(cfs_atomic_read(&ld->ld_ref) == 0,
-                 "Refcount = %i\n", cfs_atomic_read(&ld->ld_ref));
+                 "Refcount = %d\n", cfs_atomic_read(&ld->ld_ref));
         LASSERT(cfs_list_empty(&mc->mc_linkage));
         md_device_fini(&mc->mc_md_dev);
         OBD_FREE_PTR(mc);

@@ -239,7 +239,7 @@ static struct lu_ref_link *lu_ref_find(struct lu_ref *ref, const char *scope,
                 ++iterations;
                 if (lu_ref_link_eq(link, scope, source)) {
                         if (iterations > lu_ref_chain_max_length) {
-                                CWARN("Long lu_ref chain %i \"%s\":%p\n",
+                                CWARN("Long lu_ref chain %d \"%s\":%p\n",
                                       iterations, scope, source);
                                 lu_ref_chain_max_length = iterations * 3 / 2;
                         }

@@ -411,7 +411,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         hdr = cl_object_header(o);
         cfs_atomic_inc(&site->cs_pages.cs_lookup);
 
-        CDEBUG(D_PAGE, "%lu@"DFID" %p %lu %i\n",
+        CDEBUG(D_PAGE, "%lu@"DFID" %p %lu %d\n",
                idx, PFID(&hdr->coh_lu.loh_fid), vmpage, vmpage->private, type);
         /* fast path. */
         if (type == CPT_CACHEABLE) {
@@ -610,7 +610,7 @@ static void cl_page_state_set0(const struct lu_env *env,
         ENTRY;
         old = page->cp_state;
         PASSERT(env, page, allowed_transitions[old][state]);
-        CL_PAGE_HEADER(D_TRACE, env, page, "%i -> %i\n", old, state);
+        CL_PAGE_HEADER(D_TRACE, env, page, "%d -> %d\n", old, state);
         for (; page != NULL; page = page->cp_child) {
                 PASSERT(env, page, page->cp_state == old);
                 PASSERT(env, page,
@@ -664,7 +664,7 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
         PASSERT(env, page, cfs_atomic_read(&page->cp_ref) > !!page->cp_parent);
 
         ENTRY;
-        CL_PAGE_HEADER(D_TRACE, env, page, "%i\n",
+        CL_PAGE_HEADER(D_TRACE, env, page, "%d\n",
                        cfs_atomic_read(&page->cp_ref));
 
         hdr = cl_object_header(cl_object_top(page->cp_obj));
@@ -1335,7 +1335,7 @@ int cl_page_prep(const struct lu_env *env, struct cl_io *io,
         KLASSERT(ergo(crt == CRT_WRITE && pg->cp_type == CPT_CACHEABLE,
                       equi(result == 0,
                            PageWriteback(cl_page_vmpage(env, pg)))));
-        CL_PAGE_HEADER(D_TRACE, env, pg, "%i %i\n", crt, result);
+        CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, result);
         return result;
 }
 EXPORT_SYMBOL(cl_page_prep);
@@ -1367,7 +1367,7 @@ void cl_page_completion(const struct lu_env *env,
         PINVRNT(env, pg, cl_page_invariant(pg));
 
         ENTRY;
-        CL_PAGE_HEADER(D_TRACE, env, pg, "%i %i\n", crt, ioret);
+        CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, ioret);
         if (crt == CRT_READ && ioret == 0) {
                 PASSERT(env, pg, !(pg->cp_flags & CPF_READ_COMPLETED));
                 pg->cp_flags |= CPF_READ_COMPLETED;
@@ -1417,7 +1417,7 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
                 PASSERT(env, pg, pg->cp_state == CPS_CACHED);
                 cl_page_io_start(env, pg, crt);
         }
-        CL_PAGE_HEADER(D_TRACE, env, pg, "%i %i\n", crt, result);
+        CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, result);
         RETURN(result);
 }
 EXPORT_SYMBOL(cl_page_make_ready);
@@ -1450,7 +1450,7 @@ int cl_page_cache_add(const struct lu_env *env, struct cl_io *io,
                 cl_page_owner_clear(pg);
                 cl_page_state_set(env, pg, CPS_CACHED);
         }
-        CL_PAGE_HEADER(D_TRACE, env, pg, "%i %i\n", crt, result);
+        CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, result);
         RETURN(result);
 }
 EXPORT_SYMBOL(cl_page_cache_add);
@@ -1539,7 +1539,7 @@ void cl_page_clip(const struct lu_env *env, struct cl_page *pg,
 {
         PINVRNT(env, pg, cl_page_invariant(pg));
 
-        CL_PAGE_HEADER(D_TRACE, env, pg, "%i %i\n", from, to);
+        CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", from, to);
         CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_clip),
                        (const struct lu_env *,
                         const struct cl_page_slice *,int, int),

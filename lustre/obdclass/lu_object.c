@@ -1510,7 +1510,7 @@ void lu_context_keys_dump(void)
 
                 key = lu_keys[i];
                 if (key != NULL) {
-                        CERROR("[%i]: %p %x (%p,%p,%p) %i %i \"%s\"@%p\n",
+                        CERROR("[%d]: %p %x (%p,%p,%p) %d %d \"%s\"@%p\n",
                                i, key, key->lct_tags,
                                key->lct_init, key->lct_fini, key->lct_exit,
                                key->lct_index, cfs_atomic_read(&key->lct_used),

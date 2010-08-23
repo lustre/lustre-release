@@ -64,13 +64,13 @@ static int vvp_object_print(const struct lu_env *env, void *cookie,
         struct inode         *inode = obj->cob_inode;
         struct ll_inode_info *lli;
 
-        (*p)(env, cookie, "(%s %i %i) inode: %p ",
+        (*p)(env, cookie, "(%s %d %d) inode: %p ",
              cfs_list_empty(&obj->cob_pending_list) ? "-" : "+",
              obj->cob_transient_pages, cfs_atomic_read(&obj->cob_mmap_cnt),
              inode);
         if (inode) {
                 lli = ll_i2info(inode);
-                (*p)(env, cookie, "%lu/%u %o %u %i %p "DFID,
+                (*p)(env, cookie, "%lu/%u %o %u %d %p "DFID,
                      inode->i_ino, inode->i_generation, inode->i_mode,
                      inode->i_nlink, atomic_read(&inode->i_count),
                      lli->lli_clob, PFID(&lli->lli_fid));

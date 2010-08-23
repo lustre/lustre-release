@@ -1643,7 +1643,7 @@ static int iam_shift_entries(struct iam_path *path,
         count2 = count - count1;
         dx_get_ikey(path, iam_entry_shift(path, entries, count1), pivot);
 
-        dxtrace(printk("Split index %i/%i\n", count1, count2));
+        dxtrace(printk("Split index %d/%d\n", count1, count2));
 
         memcpy((char *) iam_entry_shift(path, entries2, delta),
                (char *) iam_entry_shift(path, entries, count1),

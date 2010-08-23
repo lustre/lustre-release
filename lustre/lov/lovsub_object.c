@@ -101,7 +101,7 @@ static int lovsub_object_print(const struct lu_env *env, void *cookie,
 {
         struct lovsub_object *los = lu2lovsub(obj);
 
-        return (*p)(env, cookie, "[%i]", los->lso_index);
+        return (*p)(env, cookie, "[%d]", los->lso_index);
 }
 
 static int lovsub_attr_set(const struct lu_env *env, struct cl_object *obj,

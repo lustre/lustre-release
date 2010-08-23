@@ -748,7 +748,7 @@ struct lu_env *cl_env_peek(int *refcheck)
                 env = &cle->ce_lu;
                 *refcheck = ++cle->ce_ref;
         }
-        CDEBUG(D_OTHER, "%i@%p\n", cle ? cle->ce_ref : 0, cle);
+        CDEBUG(D_OTHER, "%d@%p\n", cle ? cle->ce_ref : 0, cle);
         return env;
 }
 EXPORT_SYMBOL(cl_env_peek);
@@ -779,7 +779,7 @@ struct lu_env *cl_env_get(int *refcheck)
                         cle = cl_env_container(env);
                         cl_env_attach(cle);
                         *refcheck = cle->ce_ref;
-                        CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
+                        CDEBUG(D_OTHER, "%d@%p\n", cle->ce_ref, cle);
                 }
         }
         return env;
@@ -802,7 +802,7 @@ struct lu_env *cl_env_alloc(int *refcheck, __u32 tags)
 
                 cle = cl_env_container(env);
                 *refcheck = cle->ce_ref;
-                CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
+                CDEBUG(D_OTHER, "%d@%p\n", cle->ce_ref, cle);
         }
         return env;
 }
@@ -858,7 +858,7 @@ void cl_env_put(struct lu_env *env, int *refcheck)
         LASSERT(cle->ce_ref > 0);
         LASSERT(ergo(refcheck != NULL, cle->ce_ref == *refcheck));
 
-        CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
+        CDEBUG(D_OTHER, "%d@%p\n", cle->ce_ref, cle);
         if (--cle->ce_ref == 0) {
                 CL_ENV_DEC(cs_busy);
                 cl_env_detach(cle);
@@ -919,7 +919,7 @@ void cl_env_implant(struct lu_env *env, int *refcheck)
 
         cl_env_attach(cle);
         cl_env_get(refcheck);
-        CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
+        CDEBUG(D_OTHER, "%d@%p\n", cle->ce_ref, cle);
 }
 EXPORT_SYMBOL(cl_env_implant);
 
@@ -932,7 +932,7 @@ void cl_env_unplant(struct lu_env *env, int *refcheck)
 
         LASSERT(cle->ce_ref > 1);
 
-        CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
+        CDEBUG(D_OTHER, "%d@%p\n", cle->ce_ref, cle);
 
         cl_env_detach(cle);
         cl_env_put(env, refcheck);

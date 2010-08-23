@@ -1050,7 +1050,7 @@ static int lov_lock_fits_into(const struct lu_env *env,
                  * match against original lock extent.
                  */
                 result = cl_lock_ext_match(&lov->lls_orig, need);
-        CDEBUG(D_DLMTRACE, DDESCR"/"DDESCR" %i %i/%i: %i\n",
+        CDEBUG(D_DLMTRACE, DDESCR"/"DDESCR" %d %d/%d: %d\n",
                PDESCR(&lov->lls_orig), PDESCR(&lov->lls_sub[0].sub_got),
                lov->lls_sub[0].sub_stripe, lov->lls_nr, lov_r0(obj)->lo_nr,
                result);

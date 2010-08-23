@@ -682,7 +682,7 @@ void ccc_lock_state(const struct lu_env *env,
                         cl_inode_atime(inode) = attr->cat_atime;
                         cl_inode_ctime(inode) = attr->cat_ctime;
                 } else {
-                        CL_LOCK_DEBUG(D_INFO, env, lock, "attr_get: %i\n", rc);
+                        CL_LOCK_DEBUG(D_INFO, env, lock, "attr_get: %d\n", rc);
                 }
                 cl_object_attr_unlock(obj);
                 cl_isize_unlock(inode, 0);
@@ -714,7 +714,7 @@ int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "lock: %i [%lu, %lu]\n", mode, start, end);
+        CDEBUG(D_VFSTRACE, "lock: %d [%lu, %lu]\n", mode, start, end);
 
         memset(&cio->cui_link, 0, sizeof cio->cui_link);
 

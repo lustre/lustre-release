@@ -152,7 +152,7 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
                 r0->lo_sub[idx]->lso_index = idx;
                 result = 0;
         } else {
-                CERROR("Stripe is already owned by other file (%i).\n", idx);
+                CERROR("Stripe is already owned by other file (%d).\n", idx);
                 LU_OBJECT_DEBUG(D_ERROR, env, &stripe->co_lu, "\n");
                 LU_OBJECT_DEBUG(D_ERROR, env, lu_object_top(&parent->coh_lu),
                                 "old\n");

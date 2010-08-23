@@ -313,7 +313,7 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
 
                 max_nob = CFS_PAGE_SIZE - tage->used - known_size;
                 if (max_nob <= 0) {
-                        printk(CFS_KERN_EMERG "negative max_nob: %i\n",
+                        printk(CFS_KERN_EMERG "negative max_nob: %d\n",
                                max_nob);
                         mask |= D_ERROR;
                         cfs_trace_put_tcd(tcd);

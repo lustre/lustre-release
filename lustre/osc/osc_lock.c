@@ -506,7 +506,7 @@ static int osc_lock_upcall(void *cookie, int errcode)
                 } else if (olck->ols_state == OLS_CANCELLED) {
                         rc = -EIO;
                 } else {
-                        CERROR("Impossible state: %i\n", olck->ols_state);
+                        CERROR("Impossible state: %d\n", olck->ols_state);
                         LBUG();
                 }
                 if (rc) {

@@ -293,7 +293,7 @@ void lut_boot_epoch_update(struct lu_target *lut)
 
         rc = lu_env_init(&env, LCT_DT_THREAD);
         if (rc) {
-                CERROR("Can't initialize environment rc=%i\n", rc);
+                CERROR("Can't initialize environment rc=%d\n", rc);
                 return;
         }
 

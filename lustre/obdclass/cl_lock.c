@@ -132,8 +132,8 @@ static void cl_lock_trace0(int level, const struct lu_env *env,
                            const char *func, const int line)
 {
         struct cl_object_header *h = cl_object_header(lock->cll_descr.cld_obj);
-        CDEBUG(level, "%s: %p@(%i %p %i %d %d %d %d %lx)"
-                      "(%p/%d/%i) at %s():%d\n",
+        CDEBUG(level, "%s: %p@(%d %p %d %d %d %d %d %lx)"
+                      "(%p/%d/%d) at %s():%d\n",
                prefix, lock, cfs_atomic_read(&lock->cll_ref),
                lock->cll_guarder, lock->cll_depth,
                lock->cll_state, lock->cll_error, lock->cll_holds,
@@ -519,7 +519,7 @@ static struct cl_lock *cl_lock_lookup(const struct lu_env *env,
                           lock->cll_error == 0 &&
                           !(lock->cll_flags & CLF_CANCELLED) &&
                           cl_lock_fits_into(env, lock, need, io);
-                CDEBUG(D_DLMTRACE, "has: "DDESCR"(%i) need: "DDESCR": %d\n",
+                CDEBUG(D_DLMTRACE, "has: "DDESCR"(%d) need: "DDESCR": %d\n",
                        PDESCR(&lock->cll_descr), lock->cll_state, PDESCR(need),
                        matched);
                 if (matched) {
