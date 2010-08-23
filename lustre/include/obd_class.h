@@ -1626,7 +1626,8 @@ static inline int obd_quotactl(struct obd_export *exp,
 
 static inline int obd_quota_adjust_qunit(struct obd_export *exp,
                                          struct quota_adjust_qunit *oqaq,
-                                         struct lustre_quota_ctxt *qctxt)
+                                         struct lustre_quota_ctxt *qctxt,
+                                         struct ptlrpc_request_set *set)
 {
 #if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         struct timeval work_start;
@@ -1643,7 +1644,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
         EXP_CHECK_DT_OP(exp, quota_adjust_qunit);
         EXP_COUNTER_INCREMENT(exp, quota_adjust_qunit);
 
-        rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq, qctxt);
+        rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq, qctxt, set);
 
 #if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt) {

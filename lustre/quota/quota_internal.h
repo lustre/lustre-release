@@ -176,7 +176,8 @@ extern int quote_copy_qdata(struct ptlrpc_request *req, struct qunit_data *qdata
                             int is_req, int is_exp);
 int filter_quota_adjust_qunit(struct obd_export *exp,
                               struct quota_adjust_qunit *oqaq,
-                              struct lustre_quota_ctxt *qctxt);
+                              struct lustre_quota_ctxt *qctxt,
+                              struct ptlrpc_request_set *rqset);
 int lquota_proc_setup(struct obd_device *obd, int is_master);
 int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt);
 void build_lqs(struct obd_device *obd);
@@ -195,10 +196,13 @@ extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #endif
 int client_quota_adjust_qunit(struct obd_export *exp,
                               struct quota_adjust_qunit *oqaq,
-                              struct lustre_quota_ctxt *qctxt);
+                              struct lustre_quota_ctxt *qctxt,
+                              struct ptlrpc_request_set *set);
+
 int lov_quota_adjust_qunit(struct obd_export *exp,
                            struct quota_adjust_qunit *oqaq,
-                           struct lustre_quota_ctxt *qctxt);
+                           struct lustre_quota_ctxt *qctxt,
+                           struct ptlrpc_request_set *rqset);
 int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                      struct obd_quotactl *oqctl);
 int lmv_quota_ctl(struct obd_device *unused, struct obd_export *exp,

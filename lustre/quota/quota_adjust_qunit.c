@@ -265,7 +265,8 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
 
 int filter_quota_adjust_qunit(struct obd_export *exp,
                               struct quota_adjust_qunit *oqaq,
-                              struct lustre_quota_ctxt *qctxt)
+                              struct lustre_quota_ctxt *qctxt,
+                              struct ptlrpc_request_set *rqset)
 {
         struct obd_device *obd = exp->exp_obd;
         unsigned int id[MAXQUOTAS] = { 0, 0 };
@@ -301,7 +302,8 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
 
 int client_quota_adjust_qunit(struct obd_export *exp,
                               struct quota_adjust_qunit *oqaq,
-                              struct lustre_quota_ctxt *qctxt)
+                              struct lustre_quota_ctxt *qctxt,
+                              struct ptlrpc_request_set *rqset)
 {
         struct ptlrpc_request *req;
         struct quota_adjust_qunit *oqa;
@@ -317,6 +319,8 @@ int client_quota_adjust_qunit(struct obd_export *exp,
         if (strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME))
                 RETURN(-EINVAL);
 
+        LASSERT(rqset);
+
         req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
                                         &RQF_OST_QUOTA_ADJUST_QUNIT,
                                         LUSTRE_OST_VERSION,
@@ -329,21 +333,19 @@ int client_quota_adjust_qunit(struct obd_export *exp,
 
         ptlrpc_request_set_replen(req);
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                CERROR("%s: %s failed: rc = %d\n", exp->exp_obd->obd_name,
-                       __FUNCTION__, rc);
-        ptlrpc_req_finished(req);
+        ptlrpc_set_add_req(rqset, req);
         RETURN (rc);
 }
 
 int lov_quota_adjust_qunit(struct obd_export *exp,
                            struct quota_adjust_qunit *oqaq,
-                           struct lustre_quota_ctxt *qctxt)
+                           struct lustre_quota_ctxt *qctxt,
+                           struct ptlrpc_request_set *rqset)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0;
+        int i, err, rc = 0;
+        unsigned no_set = 0;
         ENTRY;
 
         if (!QAQ_IS_ADJBLK(oqaq)) {
@@ -351,9 +353,16 @@ int lov_quota_adjust_qunit(struct obd_export *exp,
                 RETURN(-EFAULT);
         }
 
+
+        if (rqset == NULL) {
+                rqset = ptlrpc_prep_set();
+                if (!rqset)
+                        RETURN(-ENOMEM);
+                no_set = 1;
+        }
+
         obd_getref(obd);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
 
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         CDEBUG(D_HA, "ost %d is inactive\n", i);
@@ -361,13 +370,22 @@ int lov_quota_adjust_qunit(struct obd_export *exp,
                 }
 
                 err = obd_quota_adjust_qunit(lov->lov_tgts[i]->ltd_exp, oqaq,
-                                             NULL);
+                                             NULL, rqset);
                 if (err) {
                         if (lov->lov_tgts[i]->ltd_active && !rc)
                                 rc = err;
                         continue;
                 }
         }
+
+        err = ptlrpc_set_wait(rqset);
+        if (!rc)
+                rc = err;
+
+        /* Destroy the set if none was provided by the caller */
+        if (no_set)
+                ptlrpc_set_destroy(rqset);
+
         obd_putref(obd);
         RETURN(rc);
 }

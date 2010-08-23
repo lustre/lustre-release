@@ -1389,7 +1389,8 @@ struct obd_ops {
                           struct obd_quotactl *);
         int (*o_quota_adjust_qunit)(struct obd_export *exp,
                                     struct quota_adjust_qunit *oqaq,
-                                    struct lustre_quota_ctxt *qctxt);
+                                    struct lustre_quota_ctxt *qctxt,
+                                    struct ptlrpc_request_set *rqset);
 
 
         int (*o_ping)(struct obd_export *exp);

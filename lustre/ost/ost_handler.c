@@ -1528,7 +1528,7 @@ static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
                 GOTO(out, rc);
 
         repoqa = req_capsule_server_get(&req->rq_pill, &RMF_QUOTA_ADJUST_QUNIT);
-        req->rq_status = obd_quota_adjust_qunit(req->rq_export, oqaq, qctxt);
+        req->rq_status = obd_quota_adjust_qunit(req->rq_export, oqaq, qctxt, NULL);
         *repoqa = *oqaq;
 
  out:

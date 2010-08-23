@@ -559,7 +559,8 @@ typedef struct {
          */
         int (*quota_adjust_qunit) (struct obd_export *exp,
                                    struct quota_adjust_qunit *oqaq,
-                                   struct lustre_quota_ctxt *qctxt);
+                                   struct lustre_quota_ctxt *qctxt,
+                                   struct ptlrpc_request_set *rqset);
 
 } quota_interface_t;
 

@@ -324,7 +324,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         /* only when block qunit is reduced, boardcast to osts */
         if ((adjust_res & LQS_BLK_DECREASE) && QAQ_IS_ADJBLK(oqaq))
-                rc = obd_quota_adjust_qunit(mds->mds_lov_exp, oqaq, qctxt);
+                rc = obd_quota_adjust_qunit(mds->mds_lov_exp, oqaq, qctxt, NULL);
 
 out:
         lustre_dqput(dquot);
@@ -1254,7 +1254,7 @@ static void adjust_lqs(struct obd_device *obd, struct quota_adjust_qunit *qaq)
 
         /* adjust remote lqs */
         if (QAQ_IS_ADJBLK(qaq)) {
-                rc = obd_quota_adjust_qunit(obd->u.mds.mds_lov_exp, qaq, qctxt);
+                rc = obd_quota_adjust_qunit(obd->u.mds.mds_lov_exp, qaq, qctxt, NULL);
                 if (rc < 0)
                         CERROR("adjust slaves' qunit size failed!(rc=%d)\n", rc);
 
