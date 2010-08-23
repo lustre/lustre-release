@@ -530,6 +530,7 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, msp->mgs_param);
         lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+        req->rq_status = rc;
         rc = mgs_setparam(obd, lcfg, fsname);
         if (rc) {
                 CERROR("Error %d in setting the parameter %s for fs %s\n",
