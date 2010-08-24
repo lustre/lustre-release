@@ -14,10 +14,8 @@ init_logging
 ALWAYS_EXCEPT="10  $INSANITY_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
-    mixed_ost_devs && CONFIG_EXCEPTIONS="0 2 4 5 6 8" && \
-        echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. " && \
-        echo "Except the tests: $CONFIG_EXCEPTIONS" && \
-        ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+        skip_env "$0: is not functional with FAILURE_MODE = HARD, please use recovery-double-scale, bz20407"
+        exit 0
 fi
 
 #
@@ -191,10 +189,10 @@ test_2() {
 
     echo "Reintegrating OST"
     reboot_facet ost1
-    wait_for ost1
+    wait_for_facet ost1
     start_ost 1 || return 2
 
-    wait_for $SINGLEMDS
+    wait_for_facet $SINGLEMDS
     start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS || return $?
 
     #Check FS
@@ -267,10 +265,10 @@ test_4() {
     #Reintegration
     echo "Reintegrating OST"
     reboot_facet ost1
-    wait_for ost1
+    wait_for_facet ost1
     start_ost 1
-    
-    wait_for $SINGLEMDS
+
+    wait_for_facet $SINGLEMDS
     start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS
     #Check FS
     
@@ -317,9 +315,9 @@ test_5() {
 
     #Reintegration
     echo "Reintegrating OSTs"
-    wait_for ost1
+    wait_for_facet ost1
     start_ost 1
-    wait_for ost2
+    wait_for_facet ost2
     start_ost 2
     
     clients_recover_osts ost1
@@ -368,7 +366,7 @@ test_6() {
     
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
-    wait_for ost1
+    wait_for_facet ost1
     start_ost 1
     reintegrate_clients || return 1
     sleep 5 
@@ -485,7 +483,7 @@ test_8() {
     #Reintegration
     echo "Reintegrating CLIENTs/OST"
     reintegrate_clients || return 3
-    wait_for ost1
+    wait_for_facet ost1
     start_ost 1
     wait $DFPID
     clients_up || return 1

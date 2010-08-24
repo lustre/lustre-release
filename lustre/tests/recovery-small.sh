@@ -12,13 +12,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
-    CONFIG_EXCEPTIONS="52"
-    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
-    echo "Except the tests: $CONFIG_EXCEPTIONS"
-    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
-fi
-
 require_dsh_mds || exit 0
 
 # also long tests: 19, 21a, 21e, 21f, 23, 27

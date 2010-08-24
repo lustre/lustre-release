@@ -75,15 +75,13 @@ MKFSOPT=""
 [ "x$L_GETIDENTITY" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.identity_upcall=$L_GETIDENTITY"
 
-MDSn_MKFS_OPTS=$MDS_MKFS_OPTS
 MDS_MKFS_OPTS="--mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
 if [[ $mds1_HOST == $mgs_HOST ]] && [[ $MDSDEV1 == $MGSDEV ]]; then
     MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
 else
     MDS_MKFS_OPTS="--mgsnode=$MGSNID $MDS_MKFS_OPTS"
-    mgs_MKFS_OPTS="--mgs --device-size=$MGSSIZE"
+    MGS_MKFS_OPTS="--mgs --device-size=$MGSSIZE"
 fi
-MDSn_MKFS_OPTS="--mgsnode=$MGSNID --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDSn_MKFS_OPTS"
 
 MKFSOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&
@@ -100,7 +98,7 @@ OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID -
 
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
-mgs_MOUNT_OPTS=${mgs_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
+MGS_MOUNT_OPTS=${MGS_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
 
 #client
 MOUNT=${MOUNT:-/mnt/${FSNAME}}

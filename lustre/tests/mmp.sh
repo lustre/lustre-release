@@ -348,7 +348,7 @@ mount_after_reboot() {
     if [ "$FAILURE_MODE" = "HARD" ]; then
         shutdown_facet $facet
         reboot_facet $facet
-        wait_for $facet
+        wait_for_facet $facet
     else
         replay_barrier_nodf $facet
     fi

@@ -16,6 +16,12 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+if [ "$FAILURE_MODE" = "HARD" ]; then
+	CONFIG_EXCEPTIONS="24a " && \
+	echo "Except the tests: $CONFIG_EXCEPTIONS for FAILURE_MODE=$FAILURE_MODE, bug 23573" && \
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -94,7 +100,7 @@ reformat_and_config() {
 
 start_mgs () {
 	echo "start mgs"
-	start mgs $MGSDEV $mgs_MOUNT_OPTS
+	start mgs $MGSDEV $MGS_MOUNT_OPTS
 }
 
 start_mds() {
