@@ -312,8 +312,12 @@ enum {
         LPROC_MDS_MKDIR,
         LPROC_MDS_RMDIR,
         LPROC_MDS_RENAME,
+        LPROC_MDS_GETATTR,
+        LPROC_MDS_SETATTR,
         LPROC_MDS_GETXATTR,
         LPROC_MDS_SETXATTR,
+        LPROC_MDS_STATFS,
+        LPROC_MDS_SYNC,
         LPROC_MDS_LAST,
 };
 void mds_counter_incr(struct obd_export *exp, int opcode);

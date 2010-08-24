@@ -1048,7 +1048,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         int rc = 0;
         ENTRY;
 
-        OBD_COUNTER_INCREMENT(obd, getattr);
+        mds_counter_incr(req->rq_export, LPROC_MDS_GETATTR);
 
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
@@ -1120,7 +1120,7 @@ static int mds_statfs(struct ptlrpc_request *req)
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
                          (MDS_SERVICE_WATCHDOG_FACTOR *
                           at_get(&svc->srv_at_estimate)) + 1);
-        OBD_COUNTER_INCREMENT(obd, statfs);
+        mds_counter_incr(req->rq_export, LPROC_MDS_STATFS);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK))
                 GOTO(out, rc = -ENOMEM);
@@ -1158,6 +1158,8 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
                 GOTO(out, rc = -ENOMEM);
+        mds_counter_incr(req->rq_export, LPROC_MDS_SYNC);
+
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -2457,7 +2459,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                         getattr_part = MDS_INODELOCK_LOOKUP;
         case IT_GETATTR:
                         getattr_part |= MDS_INODELOCK_LOOKUP;
-                        OBD_COUNTER_INCREMENT(req->rq_export->exp_obd, getattr);
+                        mds_counter_incr(req->rq_export, LPROC_MDS_GETATTR);
         case IT_READDIR:
                 fixup_handle_for_resent_req(req, DLM_LOCKREQ_OFF, lock,
                                             &new_lock, &lockh);

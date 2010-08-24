@@ -686,7 +686,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x", rec->ur_fid1->id,
                   rec->ur_fid1->generation, rec->ur_iattr.ia_valid);
-        OBD_COUNTER_INCREMENT(obd, setattr);
+        mds_counter_incr(req->rq_export, LPROC_MDS_SETATTR);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
 
