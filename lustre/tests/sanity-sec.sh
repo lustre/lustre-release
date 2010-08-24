@@ -24,7 +24,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-RUNAS=${RUNAS:-"$LUSTRE/tests/runas"}
+RUNAS="runas"
+
 WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
 
 CONFDIR=/etc/lustre
