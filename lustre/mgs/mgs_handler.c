@@ -501,7 +501,8 @@ out:
 out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
                mti->mti_stripe_index, rc);
-        lustre_pack_reply(req, 2, rep_size, NULL);
+        req->rq_status = rc;
+        rc = lustre_pack_reply(req, 2, rep_size, NULL);
         /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*rep_mti));
@@ -530,7 +531,6 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, msp->mgs_param);
         lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-        req->rq_status = rc;
         rc = mgs_setparam(obd, lcfg, fsname);
         if (rc) {
                 CERROR("Error %d in setting the parameter %s for fs %s\n",
