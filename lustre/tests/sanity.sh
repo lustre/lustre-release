@@ -5962,6 +5962,100 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
+check_stats() {
+	local res
+	local count
+	case $1 in
+	mds) res=`do_facet mds $LCTL get_param mds.$FSNAME-MDT0000.stats | grep "$2"`
+		 ;;
+	ost) res=`do_facet ost0 $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$2"`
+		 ;;
+	*) error "Wrong argument $1" ;;
+	esac
+	echo $res
+	count=`echo $res | awk '{print $2}'`
+	[ -z "$res" ] && error "The counter for $2 on $1 was not incremented"
+	# if the argument $3 is zero, it means any stat increment is ok.
+	if [ $3 -gt 0 ] ; then
+		[ $count -ne $3 ] && error "The $2 counter on $1 is wrong - expected $3"
+	fi
+}
+
+test_133a() {
+	local testdir=$DIR/${tdir}/stats_testdir
+	mkdir -p $DIR/${tdir}
+
+	# clear stats.
+	do_facet mds $LCTL set_param mds.*.stats=clear
+	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+
+	# verify mdt stats first.
+	mkdir ${testdir} || error "mkdir failed"
+	check_stats mds "mkdir" 1
+	touch ${testdir}/${tfile} || "touch failed"
+	# LPROC_MDS_OPEN is incremented by 2 - in mds_open() and mds_intent_policy()
+	check_stats mds "open" 2
+	check_stats mds "close" 1
+	mknod ${testdir}/${tfile}-pipe p || "mknod failed"
+	check_stats mds "mknod" 1
+	rm -f ${testdir}/${tfile}-pipe || "pipe remove failed"
+	check_stats mds "unlink" 1
+	rm -f ${testdir}/${tfile} || error "file remove failed"
+	check_stats mds "unlink" 2
+
+	# remove working dir and check mdt stats again.
+	rmdir ${testdir} || error "rmdir failed"
+	check_stats mds "rmdir" 1
+
+	rm -rf $DIR/${tdir}
+}
+run_test 133a "Verifying MDT stats ========================================"
+
+test_133b() {
+	local testdir=$DIR/${tdir}/stats_testdir
+	mkdir -p ${testdir} || error "mkdir failed"
+	touch ${testdir}/${tfile} || "touch failed"
+
+	# clear stats.
+	do_facet mds $LCTL set_param mds.*.stats=clear
+	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+
+	# extra mdt stats verification.
+	stat ${testdir}/${tfile} || error "stat failed"
+	check_stats mds "getattr" 1
+	chmod 444 ${testdir}/${tfile} || error "chmod failed"
+	check_stats mds "setattr" 1
+	$LFS df || error "lfs failed"
+	check_stats mds "statfs" 1
+
+	rm -rf $DIR/${tdir}
+}
+run_test 133b "Verifying extra MDT stats =================================="
+
+test_133c() {
+	local testdir=$DIR/${tdir}/stats_testdir
+	mkdir -p ${testdir} || error "mkdir failed"
+
+	# clear stats.
+	do_facet mds $LCTL set_param mds.*.stats=clear
+	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+
+	# verify obdfilter stats.
+	$LFS setstripe -c 1 -o 0 ${testdir}/${tfile}
+	dd if=/dev/zero of=${testdir}/${tfile} bs=1024k count=1 || error "dd failed"
+	sync
+	check_stats ost "write" 1
+	> ${testdir}/${tfile} || error "truncate failed"
+	check_stats ost "punch" 1
+	dd if=${testdir}/${tfile} of=/dev/null bs=1k count=1 || error "dd failed"
+	check_stats ost "read" 1
+	rm -f ${testdir}/${tfile} || error "file remove failed"
+	check_stats ost "destroy" 1
+
+	rm -rf $DIR/${tdir}
+}
+run_test 133c "Verifying OST stats ========================================"
+
 test_140() { #bug-17379
         mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"
