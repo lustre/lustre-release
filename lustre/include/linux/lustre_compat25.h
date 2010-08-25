@@ -452,7 +452,10 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #endif
 
 #ifndef HAVE_SYNCHRONIZE_RCU
+/* Linux 2.6.32 provides define when !CONFIG_TREE_PREEMPT_RCU */
+#ifndef synchronize_rcu
 #define synchronize_rcu() synchronize_kernel()
+#endif
 #endif
 
 #ifdef HAVE_SECURITY_PLUG
