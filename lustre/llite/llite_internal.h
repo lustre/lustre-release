@@ -303,6 +303,7 @@ enum stats_track_type {
 #define LL_SBI_LRU_RESIZE       0x80 /* support lru resize */
 #define LL_SBI_LLITE_CHECKSUM  0x100 /* checksum each page in memory */
 #define LL_SBI_LAZYSTATFS      0x200 /* lazystatfs mount option */
+#define LL_SBI_32BIT_API       0x400 /* generate 32 bit inodes. */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -310,6 +311,15 @@ enum stats_track_type {
 #define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 0 /* see bug 23175 */
 /* default value for ll_direct_io_default */
 #define SBI_DEFAULT_DIRECT_IO_DEFAULT 0
+
+static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
+{
+#if BITS_PER_LONG == 32
+        return 1;
+#else
+        return unlikely(cfs_curproc_is_32bit() || (sbi->ll_flags & LL_SBI_32BIT_API));
+#endif
+}
 
 /* percpu data structure for lustre lru page list */
 struct ll_pglist_data {
