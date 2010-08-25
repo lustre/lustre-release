@@ -304,53 +304,7 @@ do {                                                             \
 #define cfs_waitq_wait_event_timeout  wait_event_timeout
 #endif
 
-#ifndef wait_event_interruptible_timeout /* Only for RHEL3 2.4.21 kernel */
-#define __wait_event_interruptible_timeout(wq, condition, timeout, ret)   \
-do {                                                           \
-	int __ret = 0;                                         \
-	if (!(condition)) {                                    \
-		wait_queue_t __wait;                           \
-		unsigned long expire;                          \
-                                                               \
-		init_waitqueue_entry(&__wait, current);        \
-		expire = timeout + jiffies;                    \
-		add_wait_queue(&wq, &__wait);                  \
-		for (;;) {                                     \
-			set_current_state(TASK_INTERRUPTIBLE); \
-			if (condition)                         \
-				break;                         \
-			if (jiffies > expire) {                \
-				ret = jiffies - expire;        \
-				break;                         \
-			}                                      \
-			if (!signal_pending(current)) {        \
-				schedule_timeout(timeout);     \
-				continue;                      \
-			}                                      \
-			ret = -ERESTARTSYS;                    \
-			break;                                 \
-		}                                              \
-		current->state = TASK_RUNNING;                 \
-		remove_wait_queue(&wq, &__wait);               \
-	}                                                      \
-} while (0)
-
-/*
-   retval == 0; condition met; we're good.
-   retval < 0; interrupted by signal.
-   retval > 0; timed out.
-*/
-#define cfs_waitq_wait_event_interruptible_timeout(wq, condition, timeout) \
-({                                                                \
-	int __ret = 0;                                            \
-	if (!(condition))                                         \
-		__wait_event_interruptible_timeout(wq, condition, \
-						timeout, __ret);  \
-	__ret;                                                    \
-})
-#else
 #define cfs_waitq_wait_event_interruptible_timeout wait_event_interruptible_timeout
-#endif
 
 #define cfs_wait_event_interruptible_exclusive(wq, condition, rc)       \
 ({                                                                      \
