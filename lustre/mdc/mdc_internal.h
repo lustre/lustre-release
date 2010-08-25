@@ -79,7 +79,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
                     struct obdo *oa,
                     __u64 valid, struct obd_client_handle *och);
 void mdc_exit_request(struct client_obd *cli);
-void mdc_enter_request(struct client_obd *cli);
+int mdc_enter_request(struct client_obd *cli);
 
 int seq_client_init(struct lu_client_seq *seq,
                     struct obd_export *exp,

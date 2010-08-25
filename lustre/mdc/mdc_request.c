@@ -148,7 +148,9 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 
         ptlrpc_req_set_repsize(req, bufcount, size);
 
-        mdc_enter_request(&obddev->u.cli);
+        rc = mdc_enter_request(&obddev->u.cli);
+        if (rc != 0)
+                RETURN(rc);
         rc = ptlrpc_queue_wait(req);
         mdc_exit_request(&obddev->u.cli);
         if (rc != 0)
@@ -271,7 +273,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                         [REQ_REC_OFF + 1] = 0, /* capa */
                         [REQ_REC_OFF + 2] = 0, /* name */
                         [REQ_REC_OFF + 3] = 0 };
-        int rc, xattr_namelen = 0, bufcnt = 2, offset = REQ_REC_OFF + 1;
+        int rc = 0, xattr_namelen = 0, bufcnt = 2, offset = REQ_REC_OFF + 1;
         void *tmp;
         ENTRY;
 
@@ -348,8 +350,11 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
         /* make rpc */
         if (opcode == MDS_SETXATTR || opcode == MDS_REINT)
                 mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        else
-                mdc_enter_request(&obddev->u.cli);
+        else {
+                rc = mdc_enter_request(&obddev->u.cli);
+                if (rc != 0)
+                        GOTO(err_out, rc);
+        }
 
         rc = ptlrpc_queue_wait(req);
 

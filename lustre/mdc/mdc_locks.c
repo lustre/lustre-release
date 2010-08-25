@@ -637,10 +637,12 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
           * threads that are serialised with rpc_lock are not polluting our
           * rpcs in flight counter */
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-        mdc_enter_request(&obddev->u.cli);
-        rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, &policy, &flags, NULL,
-                              0, NULL, lockh, 0);
-        mdc_exit_request(&obddev->u.cli);
+        rc = mdc_enter_request(&obddev->u.cli);
+        if (rc == 0) {
+                rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, &policy, &flags,
+                                      NULL, 0, NULL, lockh, 0);
+                mdc_exit_request(&obddev->u.cli);
+        }
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         if (rc < 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
@@ -945,7 +947,9 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         if (!req)
                 RETURN(-ENOMEM);
 
-        mdc_enter_request(&obddev->u.cli);
+        rc = mdc_enter_request(&obddev->u.cli);
+        if (rc)
+                RETURN(rc);
         rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, &policy, &flags, NULL,
                               0, NULL, &minfo->mi_lockh, 1);
         if (rc < 0) {
