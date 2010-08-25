@@ -386,7 +386,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
         struct inode *parent = de->d_parent->d_inode;
-        int first = 0, rc;
+        int first = -1, rc;
 
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,

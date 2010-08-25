@@ -993,97 +993,14 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
         RETURN(rc);
 }
 
-/**
- * Start statahead thread if this is the first dir entry.
- * Otherwise if a thread is started already, wait it until it is ahead of me.
- * \retval 0       -- stat ahead thread process such dentry, for lookup, it miss
- * \retval 1       -- stat ahead thread process such dentry, for lookup, it hit
- * \retval -EEXIST -- stat ahead thread started, and this is the first dentry
- * \retval -EBADFD -- statahead thread exit and not dentry available
- * \retval -EAGAIN -- try to stat by caller
- * \retval others  -- error
- */
-int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
+static int trigger_statahead(struct inode *dir, struct dentry **dentryp)
 {
-        struct ll_inode_info     *lli;
+        struct ll_inode_info     *lli = ll_i2info(dir);
+        struct l_wait_info        lwi = { 0 };
         struct ll_statahead_info *sai;
         struct dentry            *parent;
-        struct l_wait_info        lwi = { 0 };
-        int                       rc = 0;
+        int                       rc;
         ENTRY;
-
-        LASSERT(dir != NULL);
-        lli = ll_i2info(dir);
-        LASSERT(lli->lli_opendir_pid == cfs_curproc_pid());
-        sai = lli->lli_sai;
-
-        if (sai) {
-                struct ll_sb_info *sbi;
-
-                if (unlikely(sa_is_stopped(sai) &&
-                             list_empty(&sai->sai_entries_stated)))
-                        RETURN(-EBADFD);
-
-                if ((*dentryp)->d_name.name[0] == '.') {
-                        if (likely(sai->sai_ls_all ||
-                            sai->sai_miss_hidden >= sai->sai_skip_hidden)) {
-                                /*
-                                 * Hidden dentry is the first one, or statahead
-                                 * thread does not skip so many hidden dentries
-                                 * before "sai_ls_all" enabled as below.
-                                 */
-                        } else {
-                                if (!sai->sai_ls_all)
-                                        /*
-                                         * It maybe because hidden dentry is not
-                                         * the first one, "sai_ls_all" was not
-                                         * set, then "ls -al" missed. Enable
-                                         * "sai_ls_all" for such case.
-                                         */
-                                        sai->sai_ls_all = 1;
-
-                                /*
-                                 * Such "getattr" has been skipped before
-                                 * "sai_ls_all" enabled as above.
-                                 */
-                                sai->sai_miss_hidden++;
-                                RETURN(-ENOENT);
-                        }
-                }
-
-                sbi = ll_i2sbi(dir);
-                if (ll_sai_entry_stated(sai)) {
-                        sbi->ll_sa_cached++;
-                } else {
-                        sbi->ll_sa_blocked++;
-                        /*
-                         * thread started already, avoid double-stat.
-                         */
-                        lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-                        rc = l_wait_event(sai->sai_waitq,
-                                          ll_sai_entry_stated(sai) ||
-                                          sa_is_stopped(sai),
-                                          &lwi);
-                }
-
-                if (lookup) {
-                        struct dentry *result;
-
-                        result = d_lookup((*dentryp)->d_parent,
-                                          &(*dentryp)->d_name);
-                        if (result) {
-                                LASSERT(result != *dentryp);
-                                /* BUG 16303: do not drop reference count for
-                                 * "*dentryp", VFS will do that by itself. */
-                                *dentryp = result;
-                                RETURN(1);
-                        }
-                }
-                /*
-                 * do nothing for revalidate.
-                 */
-                RETURN(rc);
-        }
 
          /* I am the "lli_opendir_pid" owner, only me can set "lli_sai". */
         rc = is_first_dirent(dir, *dentryp);
@@ -1131,13 +1048,10 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         }
 
         l_wait_event(sai->sai_thread.t_ctl_waitq,
-                     sa_is_running(sai) || sa_is_stopped(sai),
-                     &lwi);
+                     sa_is_running(sai) || sa_is_stopped(sai), &lwi);
 
-        /*
-         * We don't stat-ahead for the first dirent since we are already in
-         * lookup, and -EEXIST also indicates that this is the first dirent.
-         */
+        /* We don't stat-ahead for the first dirent since we are already in
+         * lookup, and -EEXIST also indicates that this is the first dirent. */
         RETURN(-EEXIST);
 
 out:
@@ -1149,21 +1063,115 @@ out:
 }
 
 /**
+ * Start statahead thread if this is the first dir entry.
+ * Otherwise if a thread is started already, wait it until it is ahead of me.
+ * \retval 0       -- stat ahead thread process such dentry, for lookup, it miss
+ * \retval 1       -- stat ahead thread process such dentry, for lookup, it hit
+ * \retval -EEXIST -- stat ahead thread started, and this is the first dentry
+ * \retval -EBADFD -- statahead thread exit and not dentry available
+ * \retval -EAGAIN -- try to stat by caller
+ * \retval others  -- error
+ */
+int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
+{
+        struct ll_inode_info     *lli = ll_i2info(dir);
+        struct ll_statahead_info *sai;
+        struct ll_sb_info        *sbi;
+        int                       rc  = 0;
+        ENTRY;
+
+        spin_lock(&lli->lli_lock);
+        if (unlikely(lli->lli_opendir_pid != cfs_curproc_pid())) {
+                spin_unlock(&lli->lli_lock);
+                RETURN(-EAGAIN);
+        }
+
+        if (likely(lli->lli_sai)) {
+                sai = ll_sai_get(lli->lli_sai);
+                spin_unlock(&lli->lli_lock);
+        } else {
+                spin_unlock(&lli->lli_lock);
+                RETURN(trigger_statahead(dir, dentryp));
+        }
+
+        if (unlikely(sa_is_stopped(sai) &&
+                     list_empty(&sai->sai_entries_stated)))
+                GOTO(out, rc = -EBADFD);
+
+        if ((*dentryp)->d_name.name[0] == '.') {
+                if (likely(sai->sai_ls_all ||
+                           sai->sai_miss_hidden >= sai->sai_skip_hidden)) {
+                        /* Hidden dentry is the first one, or statahead thread
+                         * does not skip so many hidden dentries before
+                         * "sai_ls_all" enabled as below. */
+                } else {
+                        if (!sai->sai_ls_all)
+                                /* It maybe because hidden dentry is not the
+                                 * first one, "sai_ls_all" was not set, then
+                                 * "ls -al" missed. Enable "sai_ls_all" for
+                                 * such case. */
+                                sai->sai_ls_all = 1;
+
+                        /* Such "getattr" has been skipped before "sai_ls_all"
+                         * enabled as above. */
+                        sai->sai_miss_hidden++;
+                        GOTO(out, rc = -ENOENT);
+                }
+        }
+
+        sbi = ll_i2sbi(dir);
+        if (ll_sai_entry_stated(sai)) {
+                sbi->ll_sa_cached++;
+        } else {
+                struct l_wait_info lwi =LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+
+                sbi->ll_sa_blocked++;
+                /* thread started already, avoid double-stat. */
+                rc = l_wait_event(sai->sai_waitq,
+                                  ll_sai_entry_stated(sai) || sa_is_stopped(sai),
+                                  &lwi);
+        }
+
+        if (lookup) {
+                struct dentry *result;
+
+                result = d_lookup((*dentryp)->d_parent, &(*dentryp)->d_name);
+                if (result) {
+                        LASSERT(result != *dentryp);
+                        /* BUG 16303: do not drop reference count for "*dentryp",
+                         * VFS will do that by itself. */
+                        *dentryp = result;
+                        GOTO(out, rc = 1);
+                }
+        }
+        /* do nothing for revalidate. */
+        EXIT;
+
+out:
+        ll_sai_put(sai);
+        return rc;
+}
+
+/**
  * update hit/miss count.
  */
 void ll_statahead_exit(struct inode *dir, struct dentry *dentry, int result)
 {
-        struct ll_inode_info     *lli;
+        struct ll_inode_info     *lli = ll_i2info(dir);
         struct ll_statahead_info *sai;
         struct ll_sb_info        *sbi;
         struct ll_dentry_data    *ldd = ll_d2d(dentry);
         ENTRY;
 
-        LASSERT(dir != NULL);
-        lli = ll_i2info(dir);
-        LASSERT(lli->lli_opendir_pid == cfs_curproc_pid());
-        sai = lli->lli_sai;
-        LASSERT(sai != NULL);
+        spin_lock(&lli->lli_lock);
+        if (unlikely(lli->lli_opendir_pid != cfs_curproc_pid())) {
+                spin_unlock(&lli->lli_lock);
+                EXIT;
+                return;
+        } else {
+                sai = ll_sai_get(lli->lli_sai);
+                spin_unlock(&lli->lli_lock);
+        }
         sbi = ll_i2sbi(dir);
 
         if (result >= 1) {
@@ -1196,5 +1204,6 @@ void ll_statahead_exit(struct inode *dir, struct dentry *dentry, int result)
         if (likely(ldd != NULL))
                 ldd->lld_sa_generation = sai->sai_generation;
 
+        ll_sai_put(sai);
         EXIT;
 }
