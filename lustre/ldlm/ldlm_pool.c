@@ -1064,7 +1064,8 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
         struct ldlm_namespace *ns;
         void *cookie;
 
-        if (nr != 0 && !(gfp_mask & __GFP_FS))
+        if (client == LDLM_NAMESPACE_CLIENT && nr != 0 &&
+            !(gfp_mask & __GFP_FS))
                 return -1;
 
         CDEBUG(D_DLMTRACE, "Request to shrink %d %s locks from all pools\n",
