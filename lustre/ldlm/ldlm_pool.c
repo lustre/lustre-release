@@ -238,6 +238,9 @@ static inline void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
         grant_step = ldlm_pool_t2gsp(pl->pl_recalc_period);
         grant_step = ((limit - granted) * grant_step) / 100;
         pl->pl_grant_plan = granted + grant_step;
+        limit = (limit * 5) >> 2;
+        if (pl->pl_grant_plan > limit)
+                pl->pl_grant_plan = limit;
 }
 
 /**
@@ -273,10 +276,6 @@ static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
          */
         slv_factor = (grant_usage << LDLM_POOL_SLV_SHIFT);
         do_div(slv_factor, limit);
-        if (2 * abs(granted - limit) > limit) {
-                slv_factor *= slv_factor;
-                slv_factor = dru(slv_factor, LDLM_POOL_SLV_SHIFT, round_up);
-        }
         slv = slv * slv_factor;
         slv = dru(slv, LDLM_POOL_SLV_SHIFT, round_up);
 
