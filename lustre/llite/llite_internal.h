@@ -312,15 +312,6 @@ enum stats_track_type {
 /* default value for ll_direct_io_default */
 #define SBI_DEFAULT_DIRECT_IO_DEFAULT 0
 
-static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
-{
-#if BITS_PER_LONG == 32
-        return 1;
-#else
-        return unlikely(cfs_curproc_is_32bit() || (sbi->ll_flags & LL_SBI_32BIT_API));
-#endif
-}
-
 /* percpu data structure for lustre lru page list */
 struct ll_pglist_data {
         spinlock_t                llpd_lock; /* lock to protect llpg_list */
@@ -644,6 +635,15 @@ void ll_ra_read_init(struct file *f, struct ll_ra_read *rar,
                      loff_t offset, size_t count);
 void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar);
 struct ll_ra_read *ll_ra_read_get(struct file *f);
+
+static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
+{
+#if BITS_PER_LONG == 32
+        return 1;
+#else
+        return unlikely(cfs_curproc_is_32bit() || (sbi->ll_flags & LL_SBI_32BIT_API));
+#endif
+}
 
 /* llite/lproc_llite.c */
 #ifdef LPROCFS
