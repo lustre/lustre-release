@@ -771,8 +771,8 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         dput(dentry);
 
-        dentry = lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
-                                strlen("__iopen__"));
+        dentry = ll_lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
+                                   strlen("__iopen__"));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
