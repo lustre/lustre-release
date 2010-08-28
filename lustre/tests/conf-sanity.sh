@@ -2098,6 +2098,8 @@ test_50g() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
 	setup
 	start_ost2 || error "Unable to start OST2"
+        wait_osc_import_state mds ost2 FULL
+        wait_osc_import_state client ost2 FULL
 
 	local PARAM="${FSNAME}-OST0001.osc.active"
 

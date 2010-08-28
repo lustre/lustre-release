@@ -3385,8 +3385,10 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
                         RETURN(-ENOMEM);
 
                 rc = ldlm_prep_enqueue_req(exp, req, &cancels, 0);
-                if (rc)
+                if (rc) {
+                        ptlrpc_request_free(req);
                         RETURN(rc);
+                }
 
                 req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
                                      sizeof *lvb);
