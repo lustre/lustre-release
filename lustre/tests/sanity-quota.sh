@@ -267,7 +267,7 @@ getquota() {
 
         [ "$uuid" = "global" ] && uuid=$DIR
 
-        $LFS quota -v "$1" "$2" $DIR | awk 'BEGIN { num='$spec' } { if ($1 == "'$uuid'") { if (NF == 1) { getline } else { num++ } ; print $num;} }'
+        $LFS quota -v "$1" "$2" $DIR | awk 'BEGIN { num='$spec' } { if ($1 == "'$uuid'") { if (NF == 1) { getline } else { num++ } ; print $num;} }' | tr -d "*"
 }
 
 quota_show_check() {
