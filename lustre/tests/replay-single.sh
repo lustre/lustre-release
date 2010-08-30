@@ -2194,6 +2194,28 @@ test_88() { #bug 17485
 }
 run_test 88 "MDS should not assign same objid to different files "
 
+test_89() {
+        mkdir -p $DIR/$tdir
+        rm -f $DIR/$tdir/$tfile
+        sleep 2
+        BLOCKS1=$(df $MOUNT | tail -n 1 | awk '{ print $3 }')
+        lfs setstripe -i 0 -c 1 $DIR/$tdir/$tfile
+        dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
+        sync
+        stop ost1
+        facet_failover $SINGLEMDS
+        rm $DIR/$tdir/$tfile
+        umount $MOUNT
+        mount_facet ost1
+        zconf_mount $(hostname) $MOUNT
+	wait_mds_ost_sync
+        df $MOUNT
+        BLOCKS2=$(df $MOUNT | tail -n 1 | awk '{ print $3 }')
+        [ "$BLOCKS1" == "$BLOCKS2" ] || error $((BLOCKS2 - BLOCKS1)) blocks leaked
+}
+
+run_test 89 "no disk space leak on late ost connection"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
