@@ -212,7 +212,8 @@ static int capa_thread_main(void *unused)
                             !S_ISDIR(ocapa->u.cli.inode->i_mode) &&
                             obd_capa_open_count(ocapa) == 0 &&
                             !ll_have_md_lock(ocapa->u.cli.inode,
-                                             MDS_INODELOCK_LOOKUP)) {
+                                             MDS_INODELOCK_LOOKUP,
+                                             LCK_MINMODE)) {
                                 DEBUG_CAPA(D_SEC, &ocapa->c_capa,
                                            "skip renewal for");
                                 sort_add_capa(ocapa, &ll_idle_capas);

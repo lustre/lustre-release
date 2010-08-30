@@ -624,7 +624,7 @@ extern struct file_operations ll_file_operations_flock;
 extern struct file_operations ll_file_operations_noflock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
-extern int ll_have_md_lock(struct inode *inode, __u64 bits);
+extern int ll_have_md_lock(struct inode *inode, __u64 bits, ldlm_mode_t l_req_mode);
 extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
                                    struct lustre_handle *lockh);
 int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,  __u64 bits);

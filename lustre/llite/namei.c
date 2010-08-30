@@ -200,20 +200,22 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 struct ll_inode_info *lli;
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
                 struct lu_fid *fid;
+                ldlm_mode_t mode = lock->l_req_mode;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
                         break;
 
                 LASSERT(lock->l_flags & LDLM_FL_CANCELING);
+                /* For OPEN locks we differentiate between lock modes - CR, CW. PR - bug 22891 */
                 if ((bits & MDS_INODELOCK_LOOKUP) &&
-                    ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
+                    ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP, LCK_MINMODE))
                         bits &= ~MDS_INODELOCK_LOOKUP;
                 if ((bits & MDS_INODELOCK_UPDATE) &&
-                    ll_have_md_lock(inode, MDS_INODELOCK_UPDATE))
+                    ll_have_md_lock(inode, MDS_INODELOCK_UPDATE, LCK_MINMODE))
                         bits &= ~MDS_INODELOCK_UPDATE;
                 if ((bits & MDS_INODELOCK_OPEN) &&
-                    ll_have_md_lock(inode, MDS_INODELOCK_OPEN))
+                    ll_have_md_lock(inode, MDS_INODELOCK_OPEN, mode))
                         bits &= ~MDS_INODELOCK_OPEN;
 
                 fid = ll_inode2fid(inode);
@@ -505,7 +507,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
                    might get picked up later when UPDATE lock will appear */
-                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE)) {
+                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE, LCK_MINMODE)) {
                         spin_lock(&dcache_lock);
                         ll_d_add(*de, NULL);
                         spin_unlock(&dcache_lock);

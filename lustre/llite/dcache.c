@@ -411,7 +411,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 if (de->d_flags & DCACHE_LUSTRE_INVALID)
                         RETURN(0);
 
-                rc = ll_have_md_lock(parent, MDS_INODELOCK_UPDATE);
+                rc = ll_have_md_lock(parent, MDS_INODELOCK_UPDATE, LCK_MINMODE);
                 GOTO(out_sa, rc);
         }
 
@@ -471,7 +471,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                         och_usecount = &lli->lli_open_fd_read_count;
                 }
                 /* Check for the proper lock. */
-                if (!ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
+                if (!ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP, LCK_MINMODE))
                         goto do_lock;
                 cfs_down(&lli->lli_och_sem);
                 if (*och_p) { /* Everything is open already, do nothing */
