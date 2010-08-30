@@ -159,13 +159,15 @@ mmp_init() {
     # Otherwise, the Lustre administrator has to manually enable
     # this feature when the file system is unmounted.
 
-    if [ -z "$mdsfailover_HOST" ]; then
+    local var=${MMP_MDS}failover_HOST
+    if [ -z "${!var}" ]; then
         log "Failover is not used on MDS, enabling MMP manually..."
         enable_mmp $MMP_MDS $MMP_MDSDEV || \
             error "failed to enable MMP on $MMP_MDSDEV on $MMP_MDS"
     fi
 
-    if [ -z "$ostfailover_HOST" ]; then
+    var=${MMP_OSS}failover_HOST
+    if [ -z "${!var}" ]; then
         log "Failover is not used on OSS, enabling MMP manually..."
         enable_mmp $MMP_OSS $MMP_OSTDEV || \
             error "failed to enable MMP on $MMP_OSTDEV on $MMP_OSS"
