@@ -132,7 +132,12 @@ struct find_param {
                         check_gid:1,
                         check_uid:1,
                         check_pool:1,
+                        check_size:1,
                         exclude_pool:1,
+                        exclude_size:1,
+                        exclude_atime:1,
+                        exclude_mtime:1,
+                        exclude_ctime:1,
                         get_mdt_index:1;
 
         int     verbose;

@@ -3350,6 +3350,39 @@ test_56q() {
 }
 run_test 56q "check lfs find -gid and ! -gid ==============================="
 
+test_56r() {
+	setup_56 $NUMFILES $NUMDIRS
+	TDIR=$DIR/${tdir}g
+	
+	EXPECTED=12
+	NUMS=`$LFIND -size 0 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR -size 0 wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=0
+	NUMS=`$LFIND ! -size 0 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR ! -size 0 wrong: found $NUMS, expected $EXPECTED"
+	echo "test" > $TDIR/56r && sync
+	EXPECTED=1
+	NUMS=`$LFIND -size 5 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR -size 5 wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=1
+	NUMS=`$LFIND -size +5 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR -size +5 wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=13
+	NUMS=`$LFIND -size +0 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR -size +0 wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=0
+	NUMS=`$LFIND ! -size -5 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR ! -size -5 wrong: found $NUMS, expected $EXPECTED"
+}
+
+run_test 56r "check lfs find -size works =========================="
+
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return

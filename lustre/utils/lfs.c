@@ -499,7 +499,6 @@ static int lfs_find(int argc, char **argv)
         int c, ret;
         time_t t;
         struct find_param param = { .maxdepth = -1 };
-        char str[1024];
         struct option long_opts[] = {
                 /* New find options. */
                 {"atime",     required_argument, 0, 'A'},
@@ -581,29 +580,20 @@ static int lfs_find(int argc, char **argv)
                 case 'A':
                         xtime = &param.atime;
                         xsign = &param.asign;
+                        param.exclude_atime = !!neg_opt;
                 case 'C':
                         if (c == 'C') {
                                 xtime = &param.ctime;
                                 xsign = &param.csign;
+                                param.exclude_ctime = !!neg_opt;
                         }
                 case 'M':
                         if (c == 'M') {
                                 xtime = &param.mtime;
                                 xsign = &param.msign;
+                                param.exclude_mtime = !!neg_opt;
                         }
                         new_fashion = 1;
-                        if (neg_opt) {
-                                if (optarg[0] == '-')
-                                        optarg[0] = '+';
-                                else if (optarg[0] == '+')
-                                        optarg[0] = '-';
-                                else {
-                                        str[0] = '-';
-                                        str[1] = '\0';
-                                        strcat(str, optarg);
-                                        optarg = str;
-                                }
-                        }
                         ret = set_time(&t, xtime, optarg);
                         if (ret == INT_MAX)
                                 return -1;
@@ -734,18 +724,6 @@ static int lfs_find(int argc, char **argv)
                         };
                         break;
                 case 's':
-                        if (neg_opt) {
-                                if (optarg[0] == '-')
-                                        optarg[0] = '+';
-                                else if (optarg[0] == '+')
-                                        optarg[0] = '-';
-                                else {
-                                        str[0] = '-';
-                                        str[1] = '\0';
-                                        strcat(str, optarg);
-                                        optarg = str;
-                                }
-                        }
                         if (optarg[0] == '+')
                                 param.size_sign = -1;
                         else if (optarg[0] == '-')
@@ -760,6 +738,8 @@ static int lfs_find(int argc, char **argv)
                                         optarg);
                                 return ret;
                         }
+                        param.check_size = 1;
+                        param.exclude_size = !!neg_opt;
                         break;
                 case 'v':
                         new_fashion = 0;
