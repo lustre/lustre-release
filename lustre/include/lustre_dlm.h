@@ -203,6 +203,10 @@ typedef enum {
  * emulation + race with upcoming bl_ast.  */
 #define LDLM_FL_FAIL_LOC       0x100000000ULL
 
+/* Used while processing the unused list to know that we have already
+ * handled this lock and decided to skip it */
+#define LDLM_FL_SKIPPED        0x200000000ULL
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
@@ -368,6 +372,8 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
                                void *req_cookie, ldlm_mode_t mode, int flags,
                                void *data);
 
+typedef int (*ldlm_cancel_for_recovery)(struct ldlm_lock *lock);
+
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res,
@@ -484,6 +490,9 @@ struct ldlm_namespace {
         struct obd_device     *ns_obd;
 
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
+
+        /* callback to cancel locks before replaying it during recovery */
+        ldlm_cancel_for_recovery ns_cancel_for_recovery;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -510,6 +519,13 @@ static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)
 {
         LASSERT(ns != NULL);
         return !!(ns->ns_connect_flags & OBD_CONNECT_LRU_RESIZE);
+}
+
+static inline void ns_register_cancel(struct ldlm_namespace *ns,
+                                      ldlm_cancel_for_recovery arg)
+{
+        LASSERT(ns != NULL);
+        ns->ns_cancel_for_recovery = arg;
 }
 
 /*

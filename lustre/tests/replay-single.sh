@@ -2073,6 +2073,30 @@ test_84a() {
 }
 run_test 84a "stale open during export disconnect"
 
+test_85a() { #bug 16774
+    lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+
+    for i in `seq 100`; do
+        echo "tag-$i" > $DIR/$tfile-$i
+        grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
+    done
+
+    lov_id=`lctl dl | grep "clilov"`
+    addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
+    count=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
+    echo "before recovery: unused locks count = $count"
+
+    fail $SINGLEMDS
+
+    count2=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
+    echo "after recovery: unused locks count = $count2"
+
+    if [ $count2 -ge $count ]; then
+        error "unused locks are not canceled"
+    fi
+}
+run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
+
 test_86() {
         local clients=${CLIENTS:-$HOSTNAME}
 
