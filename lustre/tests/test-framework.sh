@@ -129,7 +129,7 @@ init_test_env() {
     fi
     export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
     [ ! -f "$LST" ] && export LST=$(which lst)
-    export SGPDDSURVEY=${OBDSURVEY:-$(which sgpdd-survey)}
+    export SGPDDSURVEY=${SGPDDSURVEY:-$(which sgpdd-survey)}
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mpi/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     if ! echo $PATH | grep -q $LUSTRE/tests/racer; then

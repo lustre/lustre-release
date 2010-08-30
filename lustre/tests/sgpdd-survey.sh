@@ -19,7 +19,7 @@ size=${size:-1024}
 # Skip these tests
 ALWAYS_EXCEPT="$SGPDD_SURVEY_EXCEPT"
 
-SGPDDSURVEY=${OBDSURVEY:-$(which sgpdd-survey)}
+SGPDDSURVEY=${SGPDDSURVEY:-$(which sgpdd-survey)}
 
 build_test_filter
 
