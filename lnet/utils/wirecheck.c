@@ -227,7 +227,6 @@ main (int argc, char **argv)
 
         COMMENT ("Constants...");
 
-        CHECK_DEFINE (LNET_PROTO_OPENIB_MAGIC);
         CHECK_DEFINE (LNET_PROTO_RA_MAGIC);
 
         CHECK_DEFINE (LNET_PROTO_TCP_MAGIC);

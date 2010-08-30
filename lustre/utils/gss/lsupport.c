@@ -301,12 +301,8 @@ static struct convert_struct converter[] = {
         [GMLND]         = { "GMLND",    external_nid2hostname},
         [PTLLND]        = { "PTLLND",   external_nid2hostname },
         [O2IBLND]       = { "O2IBLND",  ipv4_nid2hostname },
-        [CIBLND]        = { "CIBLND",   external_nid2hostname },
-        [OPENIBLND]     = { "OPENIBLND",external_nid2hostname },
-        [IIBLND]        = { "IIBLND",   external_nid2hostname },
         [LOLND]         = { "LOLND",    lolnd_nid2hostname },
         [RALND]         = { "RALND",    external_nid2hostname },
-        [VIBLND]        = { "VIBLND",   external_nid2hostname },
         [MXLND]         = { "MXLND",    external_nid2hostname },
 };
 

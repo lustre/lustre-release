@@ -153,9 +153,6 @@ typedef struct {
 
 /* PROTO MAGIC for LNDs */
 #define LNET_PROTO_IB_MAGIC                 0x0be91b91
-#define LNET_PROTO_OPENIB_MAGIC             LNET_PROTO_IB_MAGIC
-#define LNET_PROTO_IIB_MAGIC                LNET_PROTO_IB_MAGIC
-#define LNET_PROTO_VIB_MAGIC                LNET_PROTO_IB_MAGIC
 #define LNET_PROTO_RA_MAGIC                 0x0be91b92
 #define LNET_PROTO_QSW_MAGIC                0x0be91b93
 #define LNET_PROTO_TCP_MAGIC                0xeebc0ded

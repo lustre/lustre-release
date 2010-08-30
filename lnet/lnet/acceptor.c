@@ -311,8 +311,6 @@ lnet_accept(cfs_socket_t *sock, __u32 magic)
                         str = "'old' socknal/tcpnal";
                 else if (lnet_accept_magic(magic, LNET_PROTO_RA_MAGIC))
                         str = "'old' ranal";
-                else if (lnet_accept_magic(magic, LNET_PROTO_OPENIB_MAGIC))
-                        str = "'old' openibnal";
                 else
                         str = "unrecognised";
 

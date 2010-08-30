@@ -1511,11 +1511,6 @@ h2elan() {
 }
 declare -fx h2elan
 
-h2openib() {
-    h2name_or_ip "$1" "openib"
-}
-declare -fx h2openib
-
 h2o2ib() {
     h2name_or_ip "$1" "o2ib"
 }

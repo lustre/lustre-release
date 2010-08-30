@@ -1028,6 +1028,15 @@ lnet_startup_lndnis (void)
 
                 LASSERT (libcfs_isknown_lnd(lnd_type));
 
+                if (lnd_type == CIBLND    ||
+                    lnd_type == OPENIBLND ||
+                    lnd_type == IIBLND    ||
+                    lnd_type == VIBLND) {
+                        CERROR("LND %s obsoleted\n",
+                               libcfs_lnd2str(lnd_type));
+                        goto failed;
+                }
+
                 LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
                 lnd = lnet_find_lnd_by_type(lnd_type);
 

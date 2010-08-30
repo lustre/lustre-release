@@ -306,6 +306,14 @@ int jt_ptl_network(int argc, char **argv)
                 return -1;
         }
 
+        if (LNET_NETTYP(net) == CIBLND    ||
+            LNET_NETTYP(net) == OPENIBLND ||
+            LNET_NETTYP(net) == IIBLND    ||
+            LNET_NETTYP(net) == VIBLND) {
+                fprintf(stderr, "Net %s obsoleted\n", libcfs_lnd2str(net));
+                return -1;
+        }
+
         g_net_set = 1;
         g_net = net;
         return 0;
@@ -557,7 +565,7 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      rc;
 
         if (!g_net_is_compatible (argv[0], SOCKLND, RALND, PTLLND, MXLND,
-                                  OPENIBLND, CIBLND, IIBLND, VIBLND, O2IBLND, 0))
+                                  O2IBLND, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -598,7 +606,7 @@ jt_ptl_print_peers (int argc, char **argv)
                                 data.ioc_u32[5] & 0xffff, /* nactiveq */
                                 data.ioc_u32[6] >> 16, /* credits */
                                 data.ioc_u32[6] & 0xffff); /* outstanding_credits */
-                } else if (g_net_is_compatible(NULL, RALND, OPENIBLND, CIBLND, VIBLND, 0)) {
+                } else if (g_net_is_compatible(NULL, RALND, 0)) {
                         printf ("%-20s [%d]@%s:%d\n",
                                 libcfs_nid2str(data.ioc_nid), /* peer nid */
                                 data.ioc_count,   /* peer persistence */
@@ -631,24 +639,12 @@ jt_ptl_add_peer (int argc, char **argv)
         int                      port = 0;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND,
-                                  OPENIBLND, CIBLND, IIBLND, VIBLND, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 0))
                 return -1;
 
-        if (g_net_is_compatible(NULL, SOCKLND, OPENIBLND, CIBLND, RALND, 0)) {
-                if (argc != 4) {
-                        fprintf (stderr, "usage(tcp,openib,cib,ra): %s nid ipaddr port\n",
-                                 argv[0]);
-                        return 0;
-                }
-        } else if (g_net_is_compatible(NULL, VIBLND, 0)) {
-                if (argc != 3) {
-                        fprintf (stderr, "usage(vib): %s nid ipaddr\n",
-                                 argv[0]);
-                        return 0;
-                }
-        } else if (argc != 2) {
-                fprintf (stderr, "usage(iib): %s nid\n", argv[0]);
+        if (argc != 4) {
+                fprintf (stderr, "usage(tcp,ra): %s nid ipaddr port\n",
+                         argv[0]);
                 return 0;
         }
 
@@ -658,14 +654,12 @@ jt_ptl_add_peer (int argc, char **argv)
                 return -1;
         }
 
-        if (g_net_is_compatible (NULL, SOCKLND, OPENIBLND, CIBLND, VIBLND, RALND, 0) &&
-            lnet_parse_ipaddr (&ip, argv[2]) != 0) {
+        if (lnet_parse_ipaddr (&ip, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
                 return -1;
         }
 
-        if (g_net_is_compatible (NULL, SOCKLND, OPENIBLND, CIBLND, RALND, 0) &&
-            lnet_parse_port (&port, argv[3]) != 0) {
+        if (lnet_parse_port (&port, argv[3]) != 0) {
                 fprintf (stderr, "Can't parse port: %s\n", argv[3]);
                 return -1;
         }
@@ -697,7 +691,7 @@ jt_ptl_del_peer (int argc, char **argv)
         int                      rc;
 
         if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND, PTLLND,
-                                  OPENIBLND, CIBLND, IIBLND, VIBLND, O2IBLND, 0))
+                                  O2IBLND, 0))
                 return -1;
 
         if (g_net_is_compatible(NULL, SOCKLND, 0)) {
@@ -766,8 +760,7 @@ jt_ptl_print_connections (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND,
-                                  OPENIBLND, CIBLND, IIBLND, VIBLND, O2IBLND, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND, O2IBLND, 0))
                 return -1;
 
         for (index = 0; ; index++) {
@@ -832,8 +825,7 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible (NULL, SOCKLND, RALND, MXLND,
-                                  OPENIBLND, CIBLND, IIBLND, VIBLND, O2IBLND, 0))
+        if (!g_net_is_compatible (NULL, SOCKLND, RALND, MXLND, O2IBLND, 0))
                 return 0;
 
         if (argc >= 2 &&

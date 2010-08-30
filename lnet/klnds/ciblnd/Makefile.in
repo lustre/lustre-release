@@ -1,8 +1,0 @@
-MODULES := kciblnd
-kciblnd-objs := ciblnd.o ciblnd_cb.o ciblnd_modparams.o
-
-default: all
-
-EXTRA_POST_CFLAGS := @CIBCPPFLAGS@ -I@LUSTRE@/../lnet/klnds/openiblnd
-
-@INCLUDE_RULES@
