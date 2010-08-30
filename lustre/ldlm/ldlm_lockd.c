@@ -133,6 +133,9 @@ struct ldlm_bl_work_item {
         struct ldlm_lock        *blwi_lock;
         struct list_head        blwi_head;
         int                     blwi_count;
+        struct completion       blwi_comp;
+        int                     blwi_mode;
+        int                     blwi_mem_pressure;
 };
 
 #ifdef __KERNEL__
@@ -1580,22 +1583,46 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 }
 
 #ifdef __KERNEL__
-static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
-                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock,
-                             struct list_head *cancels, int count)
+static int __ldlm_bl_to_thread(struct ldlm_bl_work_item *blwi, int mode)
 {
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
-        struct ldlm_bl_work_item *blwi;
         ENTRY;
 
-        if (cancels && count == 0)
-                RETURN(0);
+        spin_lock(&blp->blp_lock);
+        if (blwi->blwi_lock && blwi->blwi_lock->l_flags & LDLM_FL_DISCARD_DATA) {
+                /* add LDLM_FL_DISCARD_DATA requests to the priority list */
+                list_add_tail(&blwi->blwi_entry, &blp->blp_prio_list);
+        } else {
+                /* other blocking callbacks are added to the regular list */
+                list_add_tail(&blwi->blwi_entry, &blp->blp_list);
+        }
+        spin_unlock(&blp->blp_lock);
 
-        OBD_ALLOC(blwi, sizeof(*blwi));
-        if (blwi == NULL)
-                RETURN(-ENOMEM);
+        cfs_waitq_signal(&blp->blp_waitq);
+
+        /* can not use blwi->blwi_mode as blwi could be already freed in
+           LDLM_ASYNC mode */
+        if (mode == LDLM_SYNC)
+                wait_for_completion(&blwi->blwi_comp);
+
+        RETURN(0);
+}
+
+static inline void init_blwi(struct ldlm_bl_work_item *blwi,
+                             struct ldlm_namespace *ns,
+                             struct ldlm_lock_desc *ld,
+                             struct list_head *cancels, int count,
+                             struct ldlm_lock *lock,
+                             int mode)
+{
+        init_completion(&blwi->blwi_comp);
+        INIT_LIST_HEAD(&blwi->blwi_head);
+
+        if (libcfs_memory_pressure_get())
+                blwi->blwi_mem_pressure = 1;
 
         blwi->blwi_ns = ns;
+        blwi->blwi_mode = mode;
         if (ld != NULL)
                 blwi->blwi_ld = *ld;
         if (count) {
@@ -1605,18 +1632,34 @@ static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
         } else {
                 blwi->blwi_lock = lock;
         }
-        spin_lock(&blp->blp_lock);
-        if (lock && lock->l_flags & LDLM_FL_DISCARD_DATA) {
-                /* add LDLM_FL_DISCARD_DATA requests to the priority list */
-                list_add_tail(&blwi->blwi_entry, &blp->blp_prio_list);
-        } else {
-                /* other blocking callbacks are added to the regular list */
-                list_add_tail(&blwi->blwi_entry, &blp->blp_list);
-        }
-        cfs_waitq_signal(&blp->blp_waitq);
-        spin_unlock(&blp->blp_lock);
+}
 
-        RETURN(0);
+static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
+                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock,
+                             struct list_head *cancels, int count, int mode)
+{
+        ENTRY;
+
+        if (cancels && count == 0)
+                RETURN(0);
+
+        if (mode == LDLM_SYNC) {
+                /* if it is synchronous call do minimum mem alloc, as it could
+                 * be triggered from kernel shrinker
+                 */
+                struct ldlm_bl_work_item blwi;
+                memset(&blwi, 0, sizeof(blwi));
+                init_blwi(&blwi, ns, ld, cancels, count, lock, LDLM_SYNC);
+                RETURN(__ldlm_bl_to_thread(&blwi, LDLM_SYNC));
+        } else {
+                struct ldlm_bl_work_item *blwi;
+                OBD_ALLOC(blwi, sizeof(*blwi));
+                if (blwi == NULL)
+                        RETURN(-ENOMEM);
+                init_blwi(blwi, ns, ld, cancels, count, lock, LDLM_ASYNC);
+
+                RETURN(__ldlm_bl_to_thread(blwi, LDLM_ASYNC));
+        }
 }
 #endif
 
@@ -1624,17 +1667,17 @@ int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
                            struct ldlm_lock *lock)
 {
 #ifdef __KERNEL__
-        RETURN(ldlm_bl_to_thread(ns, ld, lock, NULL, 0));
+        RETURN(ldlm_bl_to_thread(ns, ld, lock, NULL, 0, LDLM_ASYNC));
 #else
         RETURN(-ENOSYS);
 #endif
 }
 
 int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
-                           struct list_head *cancels, int count)
+                           struct list_head *cancels, int count, int mode)
 {
 #ifdef __KERNEL__
-        RETURN(ldlm_bl_to_thread(ns, ld, NULL, cancels, count));
+        RETURN(ldlm_bl_to_thread(ns, ld, NULL, cancels, count, mode));
 #else
         RETURN(-ENOSYS);
 #endif
@@ -1967,6 +2010,8 @@ static int ldlm_bl_thread_main(void *arg)
                                 /* added by ldlm_cleanup() */
                                 break;
                 }
+                if (blwi->blwi_mem_pressure)
+                        libcfs_memory_pressure_set();
 
                 if (blwi->blwi_count) {
                         /* The special case when we cancel locks in lru
@@ -1979,7 +2024,13 @@ static int ldlm_bl_thread_main(void *arg)
                         ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
                                                 blwi->blwi_lock);
                 }
-                OBD_FREE(blwi, sizeof(*blwi));
+                if (blwi->blwi_mem_pressure)
+                        libcfs_memory_pressure_clr();
+
+                if (blwi->blwi_mode == LDLM_ASYNC)
+                        OBD_FREE(blwi, sizeof(*blwi));
+                else
+                        complete(&blwi->blwi_comp);
         }
 
         atomic_dec(&blp->blp_busy_threads);
