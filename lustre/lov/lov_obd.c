@@ -476,29 +476,30 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 /* NULL watched means all osc's in the lov (only for syncs) */
                 /* sync event should be send lov idx as data */
                 struct lov_obd *lov = &obd->u.lov;
-                struct obd_device *tgt_obd;
-                int i;
+                int i, is_sync;
+
+                data = &i;
+                is_sync = (ev == OBD_NOTIFY_SYNC) ||
+                          (ev == OBD_NOTIFY_SYNC_NONBLOCK);
+
                 obd_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        if (!lov->lov_tgts[i])
+                                continue;
+
                         /* don't send sync event if target not
                          * connected/activated */
-                        if (!lov->lov_tgts[i] ||
-                            !lov->lov_tgts[i]->ltd_active)
-                                 continue;
+                        if (is_sync &&  !lov->lov_tgts[i]->ltd_active)
+                                continue;
 
-                        if ((ev == OBD_NOTIFY_SYNC) ||
-                            (ev == OBD_NOTIFY_SYNC_NONBLOCK))
-                                data = &i;
-
-                        tgt_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
-
-                        rc = obd_notify_observer(obd, tgt_obd, ev, data);
+                        rc = obd_notify_observer(obd, lov->lov_tgts[i]->ltd_obd,
+                                                 ev, data);
                         if (rc) {
                                 CERROR("%s: notify %s of %s failed %d\n",
                                        obd->obd_name,
                                        obd->obd_observer->obd_name,
-                                       tgt_obd->obd_name, rc);
-                                break;
+                                       lov->lov_tgts[i]->ltd_obd->obd_name,
+                                       rc);
                         }
                 }
                 obd_putref(obd);
@@ -586,7 +587,6 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 RETURN(rc);
         }
 
-        memset(tgt, 0, sizeof(*tgt));
         tgt->ltd_uuid = *uuidp;
         tgt->ltd_obd = tgt_obd;
         /* XXX - add a sanity check on the generation number. */
@@ -601,6 +601,8 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
+
+        rc = obd_notify(obd, tgt_obd, OBD_NOTIFY_CREATE, &index);
 
         if (lov->lov_connects == 0) {
                 /* lov_connect hasn't been called yet. We'll do the

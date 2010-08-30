@@ -217,6 +217,15 @@ static int mds_lov_update_max_ost(struct mds_obd *mds, obd_id index)
         return 0;
 }
 
+static int mds_lov_objinit(struct mds_obd *mds, __u32 index)
+{
+        __u32 page = index / OBJID_PER_PAGE();
+        __u32 off = index % OBJID_PER_PAGE();
+        obd_id *data =  mds->mds_lov_page_array[page];
+
+        return (data[off] > 0);
+}
+
 int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         struct lov_ost_data_v1 *data;
@@ -562,7 +571,7 @@ static int mds_lov_set_one_nextid(struct obd_device *obd, __u32 idx, obd_id *id)
 
 /* Update the lov desc for a new size lov. */
 static int mds_lov_update_desc(struct obd_device *obd, int idx,
-                               struct obd_uuid *uuid, enum obd_notify_event ev)
+                               struct obd_uuid *uuid)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld;
@@ -598,13 +607,6 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         if (rc)
                 GOTO(out, rc);
 
-        /*XXX this notifies the MDD until lov handling use old mds code */
-        if (obd->obd_upcall.onu_owner) {
-                 LASSERT(obd->obd_upcall.onu_upcall != NULL);
-                 rc = obd->obd_upcall.onu_upcall(obd, NULL, ev,
-                                                 obd->obd_upcall.onu_owner,
-                                                 &mds->mds_obt.obt_mount_count);
-        }
 out:
         OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);
@@ -613,20 +615,16 @@ out:
 /* Inform MDS about new/updated target */
 static int mds_lov_update_mds(struct obd_device *obd,
                               struct obd_device *watched,
-                              __u32 idx, enum obd_notify_event ev)
+                              __u32 idx)
 {
         struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
         int page;
         int off;
         obd_id *data;
-
         ENTRY;
 
-        /* Don't let anyone else mess with mds_lov_objids now */
-        rc = mds_lov_update_desc(obd, idx, &watched->u.cli.cl_target_uuid, ev);
-        if (rc)
-                GOTO(out, rc);
+        LASSERT(mds_lov_objinit(mds, idx));
 
         CDEBUG(D_CONFIG, "idx=%d, recov=%d/%d, cnt=%d\n",
                idx, obd->obd_recovering, obd->obd_async_recov,
@@ -701,10 +699,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_exit, rc);
         }
 
-        /* try init too early */
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
-        if (rc)
-                GOTO(err_exit, rc);
+        /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
+         * targets */
+        obd_notify(mds->mds_lov_obd, NULL, OBD_NOTIFY_CREATE, NULL);
 
         mds->mds_lov_obd->u.lov.lov_sp_me = LUSTRE_SP_MDT;
 
@@ -779,7 +776,6 @@ struct mds_lov_sync_info {
         struct obd_device    *mlsi_obd;     /* the lov device to sync */
         struct obd_device    *mlsi_watched; /* target osc */
         __u32                 mlsi_index;   /* index of target */
-        enum obd_notify_event mlsi_ev;      /* event type */
 };
 
 static int mds_propagate_capa_keys(struct mds_obd *mds, struct obd_uuid *uuid)
@@ -824,7 +820,6 @@ static int __mds_lov_synchronize(void *data)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
-        enum obd_notify_event ev = mlsi->mlsi_ev;
         struct mds_group_info mgi;
         struct llog_ctxt *ctxt;
         int rc = 0;
@@ -842,7 +837,7 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc = -ENODEV);
 
         OBD_RACE(OBD_FAIL_MDS_LOV_SYNC_RACE);
-        rc = mds_lov_update_mds(obd, watched, idx, ev);
+        rc = mds_lov_update_mds(obd, watched, idx);
         if (rc != 0) {
                 CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
@@ -874,6 +869,7 @@ static int __mds_lov_synchronize(void *data)
 
         LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, obd_uuid2str(uuid));
+
         rc = mds_lov_clear_orphans(mds, uuid);
         if (rc != 0) {
                 CERROR("%s failed at mds_lov_clear_orphans: %d\n",
@@ -882,7 +878,7 @@ static int __mds_lov_synchronize(void *data)
         }
 
 #ifdef HAVE_QUOTA_SUPPORT
-        if (obd->obd_upcall.onu_owner) { 
+        if (obd->obd_upcall.onu_owner) {
                 /*
                  * This is a hack for mds_notify->mdd_notify. When the mds obd
                  * in mdd is removed, This hack should be removed.
@@ -940,7 +936,6 @@ int mds_lov_start_synchronize(struct obd_device *obd,
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_watched = watched;
         mlsi->mlsi_index = *(__u32 *)data;
-        mlsi->mlsi_ev = ev;
 
         /* Although class_export_get(obd->obd_self_export) would lock
            the MDS in place, since it's only a self-export
@@ -976,13 +971,38 @@ int mds_lov_start_synchronize(struct obd_device *obd,
 int mds_notify(struct obd_device *obd, struct obd_device *watched,
                enum obd_notify_event ev, void *data)
 {
+        struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
         ENTRY;
 
         CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
 
+        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) != 0) {
+                CERROR("unexpected notification of %s %s!\n",
+                       watched->obd_type->typ_name, watched->obd_name);
+                RETURN(-EINVAL);
+        }
+
+        /*XXX this notifies the MDD until lov handling use old mds code
+         * must non block!
+         */
+        if (obd->obd_upcall.onu_owner) {
+                 LASSERT(obd->obd_upcall.onu_upcall != NULL);
+                 rc = obd->obd_upcall.onu_upcall(obd, NULL, ev,
+                                                 obd->obd_upcall.onu_owner,
+                                                 &mds->mds_obt.obt_mount_count);
+        }
+
         switch (ev) {
         /* We only handle these: */
+        case OBD_NOTIFY_CREATE:
+                CWARN("MDS %s: add target %s\n",obd->obd_name,
+                      obd_uuid2str(&watched->u.cli.cl_target_uuid));
+                /* We still have to fix the lov descriptor for ost's */
+                LASSERT(data);
+                rc = mds_lov_update_desc(obd, *(__u32 *)data,
+                                          &watched->u.cli.cl_target_uuid);
+                RETURN(rc);
         case OBD_NOTIFY_ACTIVE:
                 /* lov want one or more _active_ targets for work */
                 /* activate event should be pass lov idx as argument */
@@ -994,12 +1014,6 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 RETURN(0);
         }
 
-        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) != 0) {
-                CERROR("unexpected notification of %s %s!\n",
-                       watched->obd_type->typ_name, watched->obd_name);
-                RETURN(-EINVAL);
-        }
-
         if (obd->obd_recovering) {
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name,
@@ -1008,7 +1022,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
                 rc = mds_lov_update_desc(obd, *(__u32 *)data,
-                                         &watched->u.cli.cl_target_uuid, ev);
+                                         &watched->u.cli.cl_target_uuid);
         } else {
                 rc = mds_lov_start_synchronize(obd, watched, data, ev);
         }
