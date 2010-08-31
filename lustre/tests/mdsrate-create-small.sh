@@ -1,4 +1,4 @@
-#!/bin/bash
+ #!/bin/bash
 #
 # This test was used in a set of CMD3 tests (cmd3-3 test). 
 
@@ -78,7 +78,7 @@ else
         log "===== $0 ### 1 NODE UNLINK ###"
 
         if [ -f "$LOG" ]; then
-            CREATED=$(awk '/total:/ { print $7 }' $LOG)
+            CREATED=$(sed -n '/^Rate:/s/^.* \([0-9]*\) creates .*/\1/p' $LOG)
            [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
         fi
 
@@ -126,7 +126,7 @@ else
         log "===== $0 ### $NUM_CLIENTS NODES UNLINK with $THREADS_PER_CLIENT threads per client ###"
 
         if [ -f "$LOG" ]; then
-            CREATED=$(awk '/total:/ { print $7 }' $LOG)
+            CREATED=$(sed -n '/^Rate:/s/^.* \([0-9]*\) creates .*/\1/p' $LOG)
             [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
         fi
 

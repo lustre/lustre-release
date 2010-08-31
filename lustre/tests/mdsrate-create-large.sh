@@ -66,7 +66,7 @@ else
     log "===== $0 ### 1 NODE UNLINK ###"
 
     if [ -f "$LOG" ]; then
-        CREATED=$(awk '/total:/ { print $7 }' $LOG)
+        CREATED=$(sed -n '/^Rate:/s/^.* \([0-9]*\) creates .*/\1/p' $LOG)
         [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
     fi
 
@@ -107,7 +107,7 @@ else
     log "===== $0 ### $NUM_CLIENTS NODES UNLINK ###"
 
     if [ -f "$LOG" ]; then
-        CREATED=$(awk '/total:/ { print $7 }' $LOG)
+        CREATED=$(sed -n '/^Rate:/s/^.* \([0-9]*\) creates .*/\1/p' $LOG)
         [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
     fi
 
