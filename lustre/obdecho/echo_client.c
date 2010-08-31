@@ -863,15 +863,17 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 out:
         if (aps != NULL) {
                 for (i = 0; i < npages; ++ i) {
-                        cfs_page_t *page;
-
                         eap = aps[i];
-                        page = eap->eap_page;
-                        if (eap->eap_cookie != NULL)
-                                obd_teardown_async_page(exp, lsm, NULL,
-                                                        eap->eap_cookie);
-                        OBD_FREE(eap, sizeof(*eap));
-                        OBD_PAGE_FREE(page);
+                        if (eap != NULL) {
+                                cfs_page_t *page;
+
+                                page = eap->eap_page;
+                                if (eap->eap_cookie != NULL)
+                                        obd_teardown_async_page(exp, lsm, NULL,
+                                                                eap->eap_cookie);
+                                OBD_FREE(eap, sizeof(*eap));
+                                OBD_PAGE_FREE(page);
+                        }
                 }
                 OBD_FREE(aps, npages * sizeof aps[0]);
         }
