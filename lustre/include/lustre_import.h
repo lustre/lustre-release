@@ -320,8 +320,9 @@ static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
         at->at_flags = flags;
         cfs_spin_lock_init(&at->at_lock);
 }
+extern unsigned int at_min;
 static inline int at_get(struct adaptive_timeout *at) {
-        return at->at_current;
+        return (at->at_current > at_min) ? at->at_current : at_min;
 }
 int at_measured(struct adaptive_timeout *at, unsigned int val);
 int import_at_get_index(struct obd_import *imp, int portal);
