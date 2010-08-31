@@ -316,6 +316,10 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
         if (rc) {
                 CERROR("Cannot find handle for log "LPX64"\n",
                        lir->lid_id.lgl_oid);
+                if (rc == -ENOENT) {
+                        index = rec->lrh_index;
+                        goto cat_cleanup;
+                }
                 RETURN(rc);
         }
 
@@ -329,6 +333,7 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 index = loghandle->u.phd.phd_cookie.lgc_index;
                 llog_free_handle(loghandle);
 
+cat_cleanup:
                 LASSERT(index);
                 llog_cat_set_first_idx(cathandle, index);
                 rc = llog_cancel_rec(cathandle, index);
