@@ -883,8 +883,8 @@ int write_local_files(struct mkfs_opts *mop)
         /* COMPAT_146 */
 #ifdef TUNEFS
         /* Check for upgrade */
-        if ((mop->mo_ldd.ldd_flags & (LDD_F_UPGRADE14 | SVTYPE_MGS))
-            == (LDD_F_UPGRADE14 | SVTYPE_MGS)) {
+        if ((mop->mo_ldd.ldd_flags & (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS))
+            == (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) {
                 char cmd[128];
                 char *term;
                 int cmdsz = sizeof(cmd);
@@ -1042,7 +1042,7 @@ int read_local_files(struct mkfs_opts *mop)
 
                 if ((lsd.lsd_feature_compat & OBD_COMPAT_OST) ||
                     (lsd.lsd_feature_incompat & OBD_INCOMPAT_OST)) {
-                        mop->mo_ldd.ldd_flags = SVTYPE_OST;
+                        mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                         mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
                 } else if ((lsd.lsd_feature_compat & OBD_COMPAT_MDT) ||
                            (lsd.lsd_feature_incompat & OBD_INCOMPAT_MDT)) {
@@ -1050,7 +1050,7 @@ int read_local_files(struct mkfs_opts *mop)
                            If user doesn't want this, they can copy the old
                            logs manually and re-tunefs. */
                         mop->mo_ldd.ldd_flags =
-                                SVTYPE_MDT | SVTYPE_MGS;
+                                LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_MGS;
                         mop->mo_ldd.ldd_svindex = lsd.lsd_mdt_index;
                 } else  {
                         /* If neither is set, we're pre-1.4.6, make a guess. */
@@ -1061,21 +1061,21 @@ int read_local_files(struct mkfs_opts *mop)
 
                         sprintf(filepnm, "%s/%s", tmpdir, MDT_LOGS_DIR);
                         if (lsd.lsd_ost_index > 0) {
-                                mop->mo_ldd.ldd_flags = SVTYPE_OST;
+                                mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                                 mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
                         } else {
                                 /* If there's a LOGS dir, it's an MDT */
                                 if ((ret = access(filepnm, F_OK)) == 0) {
                                         mop->mo_ldd.ldd_flags =
-                                        SVTYPE_MDT |
-                                        SVTYPE_MGS;
+                                        LDD_F_SV_TYPE_MDT |
+                                        LDD_F_SV_TYPE_MGS;
                                         /* Old MDT's are always index 0
                                            (pre CMD) */
                                         mop->mo_ldd.ldd_svindex = 0;
                                 } else {
                                         /* The index may not be correct */
                                         mop->mo_ldd.ldd_flags =
-                                        SVTYPE_OST | LDD_F_NEED_INDEX;
+                                        LDD_F_SV_TYPE_OST | LDD_F_NEED_INDEX;
                                         verrprint("OST with unknown index\n");
                                 }
                         }
@@ -1286,7 +1286,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 }
                 case 'G':
-                        mop->mo_ldd.ldd_flags |= SVTYPE_MGS;
+                        mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGS;
                         break;
                 case 'h':
                         usage(stdout);
@@ -1348,19 +1348,19 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 }
                 case 'M':
-                        mop->mo_ldd.ldd_flags |= SVTYPE_MDT;
+                        mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MDT;
                         break;
                 case 'n':
                         print_only++;
                         break;
                 case 'N':
-                        mop->mo_ldd.ldd_flags &= ~SVTYPE_MGS;
+                        mop->mo_ldd.ldd_flags &= ~LDD_F_SV_TYPE_MGS;
                         break;
                 case 'o':
                         *mountopts = optarg;
                         break;
                 case 'O':
-                        mop->mo_ldd.ldd_flags |= SVTYPE_OST;
+                        mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_OST;
                         break;
                 case 'p':
                         rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
@@ -1593,7 +1593,7 @@ int main(int argc, char *const argv[])
         if (IS_MDT(ldd) && !IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
                 verrprint("No management node specified, adding MGS to this "
                           "MDT\n");
-                ldd->ldd_flags |= SVTYPE_MGS;
+                ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
         }
         if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
                 fatal();

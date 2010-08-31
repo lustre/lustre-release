@@ -459,7 +459,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
-                if (mti->mti_flags & SVTYPE_MDT &&
+                if (mti->mti_flags & LDD_F_SV_TYPE_MDT &&
                     mti->mti_stripe_index == 0) {
                         rc = mgs_erase_logs(obd, mti->mti_fsname);
                         LCONSOLE_WARN("%s: Logs for fs %s were removed by user "
@@ -467,7 +467,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                       "in order to regenerate the logs."
                                       "\n", obd->obd_name, mti->mti_fsname);
                 } else if (mti->mti_flags &
-                           (SVTYPE_OST | SVTYPE_MDT)) {
+                           (LDD_F_SV_TYPE_OST | LDD_F_SV_TYPE_MDT)) {
                         rc = mgs_erase_log(obd, mti->mti_svname);
                         LCONSOLE_WARN("%s: Regenerating %s log by user "
                                       "request.\n",

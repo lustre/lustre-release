@@ -612,12 +612,12 @@ quota_save_version() {
 
     [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
-    do_facet mgs "lctl conf_param mdd.${fsname}-MDT*.quota_type=$spec"
+    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
         varsvc=${ost}_svc
-        do_facet mgs "lctl conf_param ost.${!varsvc}.quota_type=$spec"
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$spec"
     done
 }
 

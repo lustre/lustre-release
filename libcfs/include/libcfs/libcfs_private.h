@@ -318,7 +318,6 @@ __u32       libcfs_str2net(const char *str);
 lnet_nid_t  libcfs_str2nid(const char *str);
 int         libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 char       *libcfs_id2str(lnet_process_id_t id);
-int         libcfs_str2server(char *name, int *type, __u32 *idx, char **endptr);
 int         cfs_iswhite(char c);
 void        cfs_free_nidlist(cfs_list_t *list);
 int         cfs_parse_nidlist(char *str, int len, cfs_list_t *list);
@@ -342,7 +341,6 @@ int         cfs_match_nid(lnet_nid_t nid, cfs_list_t *list);
 /* max value for numeric network address */
 #define MAX_NUMERIC_VALUE 0xffffffff
 
-
 /* implication */
 #define ergo(a, b) (!(a) || (b))
 /* logical equivalence */
@@ -351,12 +349,6 @@ int         cfs_match_nid(lnet_nid_t nid, cfs_list_t *list);
 #ifndef CFS_CURRENT_TIME
 # define CFS_CURRENT_TIME time(0)
 #endif
-
-/* Server types */
-#define SVTYPE_MDT   0x0001
-#define SVTYPE_OST   0x0002
-#define SVTYPE_MGS   0x0004
-#define SVTYPE_ALL   0x0008
 
 /* --------------------------------------------------------------------
  * Light-weight trace

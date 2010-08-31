@@ -557,54 +557,6 @@ libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
         return *nidp != LNET_NID_ANY;
 }
 
-/* parse server details from name */
-int libcfs_str2server(char *name, int *type, __u32 *idx, char **endptr)
-{
-        char *ptr;
-        int i;
-
-        ptr = strstr(name, "-MDT");
-        if (ptr) {
-                *type = SVTYPE_MDT;
-        } else {
-                ptr = strstr(name, "-OST");
-                if (ptr)
-                        *type = SVTYPE_OST;
-                else
-                        return -EINVAL;
-        }
-        ptr += 4;
-
-        if (strncmp(ptr, "all", 3) == 0) {
-                ptr += 3;
-                *type |= SVTYPE_ALL;
-                goto out;
-        }
-        if (*ptr == '*') {
-                ptr++;
-                *type |= SVTYPE_ALL;
-                goto out;
-        }
-
-#if __KERNEL__
-        *idx = simple_strtoul(ptr, NULL, 16);
-#else
-        *idx = strtoul(ptr, NULL, 16);
-#endif
-        /* Require 4 hex digits */
-        for (i = 0; i < 4; i++)
-                if (!isxdigit(*ptr++))
-                        return -EINVAL;
-out:
-        /* Only acceptable garbage at the end of name is [-.:,] etc. */
-        if (isalnum(*ptr))
-                return -EINVAL;
-
-        if (endptr)
-                *endptr = ptr;
-        return 0;
-}
-
 /**
  * Nid range list syntax.
  * \verbatim
@@ -1322,7 +1274,6 @@ EXPORT_SYMBOL(libcfs_str2net);
 EXPORT_SYMBOL(libcfs_str2nid);
 EXPORT_SYMBOL(libcfs_id2str);
 EXPORT_SYMBOL(libcfs_str2anynid);
-EXPORT_SYMBOL(libcfs_str2server);
 EXPORT_SYMBOL(cfs_iswhite);
 EXPORT_SYMBOL(cfs_free_nidlist);
 EXPORT_SYMBOL(cfs_parse_nidlist);

@@ -6438,11 +6438,11 @@ som_mode_switch() {
         if [ x$som = x"enabled" ]; then
                 [ $((gl2 - gl1)) -gt 0 ] && error "no glimpse RPC is expected"
                 MOUNTOPT=`echo $MOUNTOPT | sed 's/som_preview//g'`
-                do_facet mgs "$LCTL conf_param mdt.$FSNAME.som=disabled"
+                do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=disabled"
         else
                 [ $((gl2 - gl1)) -gt 0 ] || error "some glimpse RPC is expected"
                 MOUNTOPT="$MOUNTOPT,som_preview"
-                do_facet mgs "$LCTL conf_param mdt.$FSNAME.som=enabled"
+                do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=enabled"
         fi
 
         # do remount to make new mount-conf parameters actual

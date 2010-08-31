@@ -923,13 +923,13 @@ static int server_stop_servers(int lddflags, int lsiflags)
 
         /* Either an MDT or an OST or neither  */
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
-        if ((lddflags & SVTYPE_MDT) &&
+        if ((lddflags & LDD_F_SV_TYPE_MDT) &&
             (obd = class_name2obd(LUSTRE_MDS_OBDNAME))) {
                 /*FIXME pre-rename, should eventually be LUSTRE_MDT_NAME*/
                 type = class_search_type(LUSTRE_MDS_NAME);
         }
         /* if this was an OST, and there are no more OST's, clean up the OSS */
-        if ((lddflags & SVTYPE_OST) &&
+        if ((lddflags & LDD_F_SV_TYPE_OST) &&
             (obd = class_name2obd(LUSTRE_OSS_OBDNAME))) {
                 type = class_search_type(LUSTRE_OST_NAME);
         }
@@ -1095,7 +1095,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 #if 0
         /* If we're an MDT, make sure the global MDS is running */
-        if (lsi->lsi_ldd->ldd_flags & SVTYPE_MDT) {
+        if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
                 /* make sure the MDS is started */
                 cfs_mutex_down(&server_start_lock);
                 obd = class_name2obd(LUSTRE_MDS_OBDNAME);
@@ -1116,7 +1116,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 #endif
 
         /* If we're an OST, make sure the global OSS is running */
-        if (lsi->lsi_ldd->ldd_flags & SVTYPE_OST) {
+        if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
                 /* make sure OSS is started */
                 cfs_mutex_down(&server_start_lock);
                 obd = class_name2obd(LUSTRE_OSS_OBDNAME);
@@ -1729,6 +1729,41 @@ out_mnt:
         return rc;
 }
 
+/* Get the index from the obd name.
+   rc = server type, or
+   rc < 0  on error
+   if endptr isn't NULL it is set to end of name */
+int server_name2index(char *svname, __u32 *idx, char **endptr)
+{
+        unsigned long index;
+        int rc;
+        char *dash = strrchr(svname, '-');
+        if (!dash)
+                return(-EINVAL);
+
+        /* intepret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
+         * in the fsname, then determine the server index */
+        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
+                dash--;
+                for (; dash > svname && *dash != '-'; dash--);
+                if (dash == svname)
+                        return(-EINVAL);
+        }
+
+        if (strncmp(dash + 1, "MDT", 3) == 0)
+                rc = LDD_F_SV_TYPE_MDT;
+        else if (strncmp(dash + 1, "OST", 3) == 0)
+                rc = LDD_F_SV_TYPE_OST;
+        else
+                return(-EINVAL);
+        if (strcmp(dash + 4, "all") == 0)
+                return rc | LDD_F_SV_ALL;
+
+        index = simple_strtoul(dash + 4, endptr, 16);
+        *idx = index;
+        return rc;
+}
+
 /*************** mount common betweeen server and client ***************/
 
 /* Common umount */
@@ -1792,8 +1827,8 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
         int i, rc;
         ENTRY;
 
-        rc = libcfs_str2server(svname, &i, &index, NULL);
-        if (rc ||  i != SVTYPE_OST)
+        rc = server_name2index(svname, &index, NULL);
+        if (rc != LDD_F_SV_TYPE_OST)
                 /* Only exclude OSTs */
                 RETURN(0);
 
@@ -1814,7 +1849,7 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
 {
         char *s1 = ptr, *s2;
         __u32 index, *exclude_list;
-        int rc = 0, devmax, type;
+        int rc = 0, devmax;
         ENTRY;
 
         /* The shortest an ost name can be is 8 chars: -OST0000.
@@ -1830,12 +1865,12 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
         /* we enter this fn pointing at the '=' */
         while (*s1 && *s1 != ' ' && *s1 != ',') {
                 s1++;
-                rc = libcfs_str2server(s1, &type, &index, &s2);
+                rc = server_name2index(s1, &index, &s2);
                 if (rc < 0) {
                         CERROR("Can't parse server name '%s'\n", s1);
                         break;
                 }
-                if (type == SVTYPE_OST)
+                if (rc == LDD_F_SV_TYPE_OST)
                         exclude_list[lmd->lmd_exclude_count++] = index;
                 else
                         CDEBUG(D_MOUNT, "ignoring exclude %.7s\n", s1);
@@ -2186,5 +2221,6 @@ EXPORT_SYMBOL(server_get_mount_2);
 EXPORT_SYMBOL(server_put_mount);
 EXPORT_SYMBOL(server_put_mount_2);
 EXPORT_SYMBOL(server_register_target);
+EXPORT_SYMBOL(server_name2index);
 EXPORT_SYMBOL(server_mti_print);
 EXPORT_SYMBOL(do_lcfg);
