@@ -20,6 +20,7 @@
 /ltrack_stats
 /obdio
 /obdbarrier
+/ll_decode_filter_fid
 /ll_recover_lost_found_objs
 /lload
 /llverfs
