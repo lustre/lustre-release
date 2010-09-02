@@ -2349,6 +2349,56 @@ test_39k() {
 }
 run_test 39k "write, utime, close, stat ========================"
 
+# this should be set to future
+TEST_39_ATIME=`date -d "1 year" +%s`
+
+test_39l() {
+	local atime_diff=$(do_facet $SINGLEMDS lctl get_param -n mdd.*.atime_diff)
+
+	mkdir -p $DIR/$tdir
+
+	# test setting directory atime to future
+	touch -a -d @$TEST_39_ATIME $DIR/$tdir
+	local atime=$(stat -c %X $DIR/$tdir)
+	[ "$atime" = $TEST_39_ATIME ] || \
+		error "atime is not set to future: $atime, should be $TEST_39_ATIME"
+
+	# test setting directory atime from future to now
+	local d1=$(date +%s)
+	ls $DIR/$tdir
+	local d2=$(date +%s)
+
+	cancel_lru_locks mdc
+	atime=$(stat -c %X $DIR/$tdir)
+	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
+		error "atime is not updated from future: $atime, should be $d1<atime<$d2"
+
+	do_facet $SINGLEMDS lctl set_param -n mdd.*.atime_diff=2
+	sleep 3
+
+	# test setting directory atime when now > dir atime + atime_diff
+	d1=$(date +%s)
+	ls $DIR/$tdir
+	d2=$(date +%s)
+	cancel_lru_locks mdc
+	atime=$(stat -c %X $DIR/$tdir)
+	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
+		error "atime is not updated  : $atime, should be $d2"
+
+	do_facet $SINGLEMDS lctl set_param -n mdd.*.atime_diff=60
+	sleep 3
+
+	# test not setting directory atime when now < dir atime + atime_diff
+	ls $DIR/$tdir
+	cancel_lru_locks mdc
+	atime=$(stat -c %X $DIR/$tdir)
+	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
+		error "atime is updated to $atime, should remain $d1<atime<$d2"
+
+	do_facet $SINGLEMDS lctl set_param -n mdd.*.atime_diff=$atime_diff
+}
+run_test 39l "directory atime update ==========================="
+
 test_40() {
 	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error
