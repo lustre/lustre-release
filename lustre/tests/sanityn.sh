@@ -773,13 +773,22 @@ run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 
 # End commit on sharing tests
 
+get_ost_lock_timeouts() {
+    local nodes=${1:-$(comma_list $(osts_nodes))}
+
+    local locks=$(do_nodes $nodes \
+        "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
+
+    echo $locks
+}
+
 test_34() { #16129
         local OPER
         local lock_in
         local lock_out
         for OPER in notimeout timeout ; do
                 rm $DIR1/$tfile 2>/dev/null
-                lock_in=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
+                lock_in=$(get_ost_lock_timeouts)
                 if [ $OPER == "timeout" ] ; then
                         for j in `seq $OSTCOUNT`; do
                                 #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
@@ -800,7 +809,7 @@ test_34() { #16129
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout
                 sleep 4
-                lock_out=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
+                lock_out=$(get_ost_lock_timeouts)
                 if [ $OPER == "timeout" ] ; then
                         if [ $lock_in == $lock_out ]; then
                                 error "no lock timeout happened"
