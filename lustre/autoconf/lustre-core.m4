@@ -2258,7 +2258,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_QUOTA64],
 [AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
 tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-I $LINUX/fs"
+EXTRA_KCFLAGS="-I$LINUX/fs"
 LB_LINUX_TRY_COMPILE([
         #include <linux/kernel.h>
         #include <linux/fs.h>
