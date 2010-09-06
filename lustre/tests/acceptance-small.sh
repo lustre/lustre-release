@@ -14,7 +14,7 @@ DEFAULT_SUITES="runtests sanity sanity-benchmark sanityn lfsck liblustre
                 sanity-gss performance-sanity large-scale recovery-mds-scale 
                 recovery-double-scale recovery-random-scale parallel-scale 
                 lustre_rsync-test metadata-updates ost-pools lnet-selftest
-                mmp obdfilter-survey"
+                mmp obdfilter-survey sgpdd-survey"
 
 if [[ -n $@ ]]; then
     ACC_SM_ONLY="${ACC_SM_ONLY} $@"
@@ -162,7 +162,8 @@ run_suite() {
         log_test_status $duration $status
 
         $CLEANUP
-        $SETUP
+        [ x$suite = xSGPDD_SURVEY ] || $SETUP
+
         eval ${suite}="done"
     else
         echo "Skipping $suite_name"

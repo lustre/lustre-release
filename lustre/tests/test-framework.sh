@@ -145,6 +145,7 @@ init_test_env() {
     fi
     export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
     [ ! -f "$LST" ] && export LST=$(which lst)
+    export SGPDDSURVEY=${SGPDDSURVEY:-$(which sgpdd-survey)}
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mpi/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     if ! echo $PATH | grep -q $LUSTRE/tests/racer; then
@@ -4352,3 +4353,18 @@ duplicate_mdt_files() {
     done
     do_umount
 }
+
+run_sgpdd () {
+    local devs=${1//,/ }
+    shift
+    local params=$@
+    local rslt=$TMP/sgpdd_survey
+
+    # sgpdd-survey cleanups ${rslt}.* files
+
+    local cmd="rslt=$rslt $params scsidevs=\"$devs\" $SGPDDSURVEY"
+    echo + $cmd
+    eval $cmd
+    cat ${rslt}.detail
+}
+
