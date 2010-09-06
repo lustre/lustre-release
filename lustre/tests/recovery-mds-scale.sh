@@ -28,11 +28,13 @@ echo "--- env ---" >&2
 set -x
 
 [ "$SHARED_DIRECTORY" ] || \
-    { skip "$0: Empty SHARED_DIRECTORY" && exit 0; }
+    { FAIL_ON_ERROR=true skip_env "$0 Empty SHARED_DIRECTORY" && exit 0; }
 
-[ -n "$CLIENTS" ] || { skip "$0 Need two or more remote clients" && exit 0; }
+[ -n "$CLIENTS" ] || \
+    { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients" && exit 0; }
+
 [ $CLIENTCOUNT -ge 3 ] || \
-    { skip "$0 Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
+    { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients, have $((CLIENTCOUNT - 1))" && exit 0; }
 
 END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
 LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
