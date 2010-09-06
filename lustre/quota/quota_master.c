@@ -1690,6 +1690,9 @@ int mds_quota_recovery(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
+        if (!ll_sb_any_quota_active(obd->u.obt.obt_qctxt.lqc_sb))
+                RETURN(0);
+
         if (unlikely(!mds->mds_quota || obd->obd_stopping))
                 RETURN(rc);
 
