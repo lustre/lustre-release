@@ -49,6 +49,7 @@ declare -a do_unload_echo
 
 
 DSH=${DSH:-"ssh"}
+NETTYPE=${NETTYPE:-tcp}
 
 dsh () {
     local node="$1"
@@ -306,7 +307,7 @@ ec_using_srv_nid () {
     local server_nid=$1
     local ocsname=$2
     local oscuuid=$3
-    $lctl add_uuid echo_UUID $server_nid@tcp >/dev/null 2>&1
+    $lctl add_uuid echo_UUID $server_nid@$NETTYPE >/dev/null 2>&1
     $lctl <<EOF
         attach osc $ocsname $oscuuid
         cfg_device $ocsname
@@ -322,7 +323,7 @@ setup_osc_for_remote_ost () {
     local ost_nid=$1
     local obdfilter_name=$2
     local host_name=host_$3
-    $lctl add_uuid ${host_name}_UUID $ost_nid@tcp >/dev/null 2>&1
+    $lctl add_uuid ${host_name}_UUID $ost_nid@$NETTYPE >/dev/null 2>&1
     $lctl <<EOF
         attach osc ${obdfilter_name}_osc ${obdfilter_name}_osc_UUID
         cfg_device ${obdfilter_name}_osc 

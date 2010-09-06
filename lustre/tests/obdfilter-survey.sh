@@ -71,7 +71,7 @@ obdflter_survey_run () {
 	rm -f ${TMP}/obdfilter_survey*
 
 	local targets=$(obdflter_survey_targets $case)
-	local cmd="thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" sh $OBDSURVEY"
+	local cmd="NETTYPE=$NETTYPE thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" sh $OBDSURVEY"
 	echo + $cmd
 	eval $cmd
 
@@ -104,4 +104,4 @@ run_test 3a "Network survey"
 equals_msg `basename $0`: test complete, cleaning up
 cleanup_echo_devs
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
