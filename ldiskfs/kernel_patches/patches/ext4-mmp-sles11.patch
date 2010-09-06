@@ -2,25 +2,25 @@ Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -41,6 +41,8 @@
+@@ -39,6 +39,8 @@
+ #include <linux/log2.h>
  #include <linux/crc16.h>
- #include <linux/precache.h>
  #include <asm/uaccess.h>
 +#include <linux/kthread.h>
 +#include <linux/utsname.h>
  
  #include "ext4.h"
  #include "ext4_jbd2.h"
-@@ -666,6 +668,8 @@ static void ext4_put_super(struct super_
+@@ -600,6 +602,8 @@ static void ext4_put_super(struct super_
  		invalidate_bdev(sbi->journal_bdev);
  		ext4_blkdev_remove(sbi);
  	}
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
  	sb->s_fs_info = NULL;
- 	/*
- 	 * Now that we are completely done shutting down the
-@@ -886,7 +890,6 @@ static int ext4_show_options(struct seq_
+ 	kfree(sbi);
+ 	return;
+@@ -808,7 +812,6 @@ static int ext4_show_options(struct seq_
  	if (!test_opt(sb, DELALLOC))
  		seq_puts(seq, ",nodelalloc");
  
@@ -28,9 +28,9 @@ Index: linux-stage/fs/ext4/super.c
  	if (sbi->s_stripe)
  		seq_printf(seq, ",stripe=%lu", sbi->s_stripe);
  	/*
-@@ -921,6 +924,350 @@ static int ext4_show_options(struct seq_
- 	return 0;
+@@ -831,6 +834,340 @@ static int ext4_show_options(struct seq_
  }
+ 
  
 +
 +/*
@@ -110,9 +110,9 @@ Index: linux-stage/fs/ext4/super.c
 + */
 +static int kmmpd(void *data)
 +{
-+	struct super_block *sb = ((struct mmpd_data *) data)->sb;
-+	struct buffer_head *bh = ((struct mmpd_data *) data)->bh;
++	struct super_block *sb = (struct super_block *) data;
 +	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
++	struct buffer_head *bh = NULL;
 +	struct mmp_struct *mmp;
 +	unsigned long mmp_block;
 +	u32 seq = 0;
@@ -124,13 +124,17 @@ Index: linux-stage/fs/ext4/super.c
 +	int retval;
 +
 +	mmp_block = le64_to_cpu(es->s_mmp_block);
++	retval = read_mmp_block(sb, &bh, mmp_block);
++	if (retval)
++		goto failed;
++
 +	mmp = (struct mmp_struct *)(bh->b_data);
 +	mmp->mmp_time = cpu_to_le64(get_seconds());
 +	/*
 +	 * Start with the higher mmp_check_interval and reduce it if
 +	 * the MMP block is being updated on time.
 +	 */
-+	mmp_check_interval = max(5UL * mmp_update_interval,
++	mmp_check_interval = max(5 * mmp_update_interval,
 +				 EXT4_MMP_MIN_CHECK_INTERVAL);
 +	mmp->mmp_check_interval = cpu_to_le16(mmp_check_interval);
 +	bdevname(bh->b_bdev, mmp->mmp_bdevname);
@@ -161,7 +165,7 @@ Index: linux-stage/fs/ext4/super.c
 +		    EXT4_FEATURE_INCOMPAT_MMP)) {
 +			ext4_warning(sb, __func__, "kmmpd being stopped "
 +				     "since MMP feature has been disabled.");
-+			EXT4_SB(sb)->s_mmp_tsk = NULL;
++			EXT4_SB(sb)->s_mmp_tsk = 0;
 +			goto failed;
 +		}
 +
@@ -169,7 +173,7 @@ Index: linux-stage/fs/ext4/super.c
 +			ext4_warning(sb, __func__, "kmmpd being stopped "
 +				     "since filesystem has been remounted as "
 +				     "readonly.");
-+			EXT4_SB(sb)->s_mmp_tsk = NULL;
++			EXT4_SB(sb)->s_mmp_tsk = 0;
 +			goto failed;
 +		}
 +
@@ -190,24 +194,19 @@ Index: linux-stage/fs/ext4/super.c
 +
 +			retval = read_mmp_block(sb, &bh_check, mmp_block);
 +			if (retval) {
-+				ext4_error(sb, __func__, "error reading MMP"
-+					   "data: %d", retval);
-+
-+				EXT4_SB(sb)->s_mmp_tsk = NULL;
++				EXT4_SB(sb)->s_mmp_tsk = 0;
 +				goto failed;
 +			}
 +
 +			mmp_check = (struct mmp_struct *)(bh_check->b_data);
-+			if (mmp->mmp_seq != mmp_check->mmp_seq ||
++			if (mmp->mmp_time != mmp_check->mmp_time ||
 +			    memcmp(mmp->mmp_nodename, mmp_check->mmp_nodename,
-+				   sizeof(mmp->mmp_nodename))) {
++				   sizeof(mmp->mmp_nodename)))
 +				dump_mmp_msg(sb, mmp_check, __func__,
 +					     "Error while updating MMP info. "
 +					     "The filesystem seems to have "
 +					     "been multiply mounted.");
-+				ext4_error(sb, __func__, "abort");
-+				goto failed;
-+			}
++
 +			put_bh(bh_check);
 +		}
 +
@@ -215,9 +214,8 @@ Index: linux-stage/fs/ext4/super.c
 +		 * Adjust the mmp_check_interval depending on how much time
 +		 * it took for the MMP block to be written.
 +		 */
-+		mmp_check_interval = max(min(5 * diff / HZ,
-+					     EXT4_MMP_MAX_CHECK_INTERVAL),
-+					 EXT4_MMP_MIN_CHECK_INTERVAL);
++		mmp_check_interval = max(5 * diff / HZ,
++				 (unsigned long) EXT4_MMP_MIN_CHECK_INTERVAL);
 +		mmp->mmp_check_interval = cpu_to_le16(mmp_check_interval);
 +	}
 +
@@ -258,7 +256,6 @@ Index: linux-stage/fs/ext4/super.c
 +	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
 +	struct buffer_head *bh = NULL;
 +	struct mmp_struct *mmp = NULL;
-+	struct mmpd_data *mmpd_data;
 +	u32 seq;
 +	unsigned int mmp_check_interval = le16_to_cpu(es->s_mmp_update_interval);
 +	unsigned int wait_time = 0;
@@ -348,27 +345,20 @@ Index: linux-stage/fs/ext4/super.c
 +		goto failed;
 +	}
 +
-+	mmpd_data = kmalloc(sizeof(struct mmpd_data *), GFP_KERNEL);
-+	if (!mmpd_data) {
-+		ext4_warning(sb, KERN_ERR, "not enough memory for mmpd_data");
-+		goto failed;
-+	}
-+	mmpd_data->sb = sb;
-+	mmpd_data->bh = bh;
-+
 +	/*
 +	 * Start a kernel thread to update the MMP block periodically.
 +	 */
-+	EXT4_SB(sb)->s_mmp_tsk = kthread_run(kmmpd, mmpd_data, "kmmpd-%s",
-+					     bdevname(bh->b_bdev,
-+						      mmp->mmp_bdevname));
++	EXT4_SB(sb)->s_mmp_tsk = kthread_run(kmmpd, sb, "kmmpd-%02x:%02x",
++					     MAJOR(sb->s_dev),
++					     MINOR(sb->s_dev));
 +	if (IS_ERR(EXT4_SB(sb)->s_mmp_tsk)) {
-+		EXT4_SB(sb)->s_mmp_tsk = NULL;
++		EXT4_SB(sb)->s_mmp_tsk = 0;
 +		ext4_warning(sb, __func__, "Unable to create kmmpd thread "
 +			     "for %s.", sb->s_id);
 +		goto failed;
 +	}
 +
++	brelse(bh);
 +	return 0;
 +
 +failed:
@@ -377,9 +367,9 @@ Index: linux-stage/fs/ext4/super.c
 +}
 +
  static struct inode *ext4_nfs_get_inode(struct super_block *sb,
- 					u64 ino, u32 generation)
+ 		u64 ino, u32 generation)
  {
-@@ -2767,6 +3114,11 @@ static int ext4_fill_super(struct super_
+@@ -2371,6 +2708,11 @@ static int ext4_fill_super(struct super_
  			  EXT4_HAS_INCOMPAT_FEATURE(sb,
  				    EXT4_FEATURE_INCOMPAT_RECOVER));
  
@@ -391,7 +381,7 @@ Index: linux-stage/fs/ext4/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -3003,6 +3355,8 @@ failed_mount3:
+@@ -2571,6 +2913,8 @@ failed_mount3:
  	percpu_counter_destroy(&sbi->s_freeinodes_counter);
  	percpu_counter_destroy(&sbi->s_dirs_counter);
  	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
@@ -400,16 +390,16 @@ Index: linux-stage/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3512,7 +3866,7 @@ static int ext4_remount(struct super_blo
+@@ -3086,7 +3430,7 @@ static int ext4_remount(struct super_blo
  	struct ext4_mount_options old_opts;
  	ext4_group_t g;
- 	unsigned int journal_ioprio = DEFAULT_JOURNAL_IOPRIO;
+	unsigned int journal_ioprio = DEFAULT_JOURNAL_IOPRIO;
 -	int err;
 +	int err = 0;
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -3634,6 +3988,13 @@ static int ext4_remount(struct super_blo
+@@ -3211,6 +3555,13 @@ static int ext4_remount(struct super_blo
  				goto restore_opts;
  			if (!ext4_setup_super(sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -422,12 +412,12 @@ Index: linux-stage/fs/ext4/super.c
 +				}
  		}
  	}
- 	ext4_setup_system_zone(sb);
+ #ifdef CONFIG_QUOTA
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -875,7 +875,7 @@ struct ext4_super_block {
+@@ -660,7 +660,7 @@ struct ext4_super_block {
  	__le16	s_want_extra_isize; 	/* New inodes should reserve # bytes */
  	__le32	s_flags;		/* Miscellaneous flags */
  	__le16  s_raid_stride;		/* RAID stride */
@@ -436,17 +426,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	__le64  s_mmp_block;            /* Block for multi-mount protection */
  	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
  	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
-@@ -1022,6 +1022,9 @@ struct ext4_sb_info {
- 
- 	/* workqueue for dio unwritten */
- 	struct workqueue_struct *dio_unwritten_wq;
-+
-+	 /* Kernel thread for multiple mount protection */
-+	struct task_struct *s_mmp_tsk;
- };
- 
- static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
-@@ -1130,7 +1133,8 @@ static inline int ext4_valid_inum(struct
+@@ -777,7 +777,8 @@ static inline int ext4_valid_inum(struct
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
@@ -456,8 +436,8 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -1312,6 +1316,50 @@ void ext4_get_group_no_and_offset(struct
- extern struct proc_dir_entry *ext4_proc_root;
+@@ -981,6 +982,39 @@ do {									\
+ #endif
  
  /*
 + * This structure will be used for multiple mount protection. It will be
@@ -482,12 +462,6 @@ Index: linux-stage/fs/ext4/ext4.h
 +	__le32	mmp_pad2[227];
 +};
 +
-+/* arguments passed to the mmp thread */
-+struct mmpd_data {
-+	struct buffer_head *bh; /* bh from initial read_mmp_block() */
-+	struct super_block *sb;  /* super block of the fs */
-+};
-+
 +/*
 + * Default interval in seconds to update the MMP sequence number.
 + */
@@ -496,14 +470,22 @@ Index: linux-stage/fs/ext4/ext4.h
 +/*
 + * Minimum interval for MMP checking in seconds.
 + */
-+#define EXT4_MMP_MIN_CHECK_INTERVAL	5UL
-+
-+/*
-+ * Maximum interval for MMP checking in seconds.
-+ */
-+#define EXT4_MMP_MAX_CHECK_INTERVAL	300UL
++#define EXT4_MMP_MIN_CHECK_INTERVAL	5
 +
 +/*
   * Function prototypes
   */
  
+Index: linux-stage/fs/ext4/ext4_sb.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -149,6 +149,8 @@ struct ext4_sb_info {
+ 
+	/* workqueue for dio unwritten */
+	struct workqueue_struct *dio_unwritten_wq;
++
++	struct task_struct *s_mmp_tsk;  /* Kernel thread for multiple mount protection */
+ };
+ 
+ static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
