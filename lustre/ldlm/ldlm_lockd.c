@@ -584,18 +584,28 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                         ldlm_failed_ast(lock, rc, ast_type);
                 }
         } else if (rc) {
-                if (rc == -EINVAL)
+                if (rc == -EINVAL) {
+                        struct ldlm_resource *res = lock->l_resource;
+
                         LDLM_DEBUG(lock, "client (nid %s) returned %d"
                                    " from %s AST - normal race",
                                    libcfs_nid2str(peer.nid),
                                    lustre_msg_get_status(req->rq_repmsg),
                                    ast_type);
-                else
+                        if (res) {
+                                /* update lvbo to return proper attributes.
+                                 * see bug 23174 */
+                                ldlm_resource_getref(res);
+                                ldlm_res_lvbo_update(res, NULL, 0, 1);
+                                ldlm_resource_putref(res);
+                        }
+                } else {
                         LDLM_ERROR(lock, "client (nid %s) returned %d "
                                    "from %s AST", libcfs_nid2str(peer.nid),
                                    (req->rq_repmsg != NULL) ?
                                    lustre_msg_get_status(req->rq_repmsg) : 0,
                                    ast_type);
+                }
                 ldlm_lock_cancel(lock);
                 /* Server-side AST functions are called from ldlm_reprocess_all,
                  * which needs to be told to please restart its reprocessing. */
@@ -617,12 +627,6 @@ static int ldlm_cb_interpret(struct ptlrpc_request *req, void *data, int rc)
         lock = req->rq_async_args.pointer_arg[1];
         LASSERT(lock != NULL);
         if (rc != 0) {
-                /* If client canceled the lock but the cancel has not
-                 * been recieved yet, we need to update lvbo to have the
-                 * proper attributes cached. */
-                if (rc == -EINVAL && arg->type == LDLM_BL_CALLBACK)
-                        ldlm_res_lvbo_update(lock->l_resource, NULL,
-                                             0, 1);
                 rc = ldlm_handle_ast_error(lock, req, rc,
                                            arg->type == LDLM_BL_CALLBACK
                                            ? "blocking" : "completion");
