@@ -316,9 +316,9 @@ struct ptlrpc_cb_id {
         void    *cbid_arg;                      /* additional arg */
 };
 
-/** Maximum number of locks to fit into reply state */ 
+/** Maximum number of locks to fit into reply state */
 #define RS_MAX_LOCKS 8
-#define RS_DEBUG     1
+#define RS_DEBUG     0
 
 /**
  * Structure to define reply state on the server

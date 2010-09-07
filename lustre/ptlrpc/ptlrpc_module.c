@@ -51,7 +51,9 @@
 #include "ptlrpc_internal.h"
 
 extern cfs_spinlock_t ptlrpc_last_xid_lock;
+#if RS_DEBUG
 extern cfs_spinlock_t ptlrpc_rs_debug_lock;
+#endif
 extern cfs_spinlock_t ptlrpc_all_services_lock;
 extern cfs_semaphore_t pinger_sem;
 extern cfs_semaphore_t ptlrpcd_sem;
@@ -62,7 +64,9 @@ __init int ptlrpc_init(void)
         ENTRY;
 
         lustre_assert_wire_constants();
+#if RS_DEBUG
         cfs_spin_lock_init(&ptlrpc_rs_debug_lock);
+#endif
         cfs_spin_lock_init(&ptlrpc_all_services_lock);
         cfs_init_mutex(&pinger_sem);
         cfs_init_mutex(&ptlrpcd_sem);
