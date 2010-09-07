@@ -621,8 +621,6 @@ void plain_free_reqbuf(struct ptlrpc_sec *sec,
                 req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
-
-        req->rq_reqmsg = NULL;
         EXIT;
 }
 
@@ -666,8 +664,6 @@ void plain_free_repbuf(struct ptlrpc_sec *sec,
         OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
-
-        req->rq_repmsg = NULL;
         EXIT;
 }
 

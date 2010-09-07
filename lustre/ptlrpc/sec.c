@@ -307,9 +307,10 @@ void sptlrpc_cli_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync)
 }
 EXPORT_SYMBOL(sptlrpc_cli_ctx_put);
 
-/*
- * expire the context immediately.
- * the caller must hold at least 1 ref on the ctx.
+/**
+ * Expire the client context immediately.
+ *
+ * \pre Caller must hold at least 1 reference on the \a ctx.
  */
 void sptlrpc_cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
 {
@@ -318,6 +319,10 @@ void sptlrpc_cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
 }
 EXPORT_SYMBOL(sptlrpc_cli_ctx_expire);
 
+/**
+ * To wake up the threads who are waiting for this client context. Called
+ * after some status change happened on \a ctx.
+ */
 void sptlrpc_cli_ctx_wakeup(struct ptlrpc_cli_ctx *ctx)
 {
         struct ptlrpc_request *req, *next;
@@ -388,6 +393,13 @@ static int import_sec_validate_get(struct obd_import *imp,
         return 0;
 }
 
+/**
+ * Given a \a req, find or allocate a appropriate context for it.
+ * \pre req->rq_cli_ctx == NULL.
+ *
+ * \retval 0 succeed, and req->rq_cli_ctx is set.
+ * \retval -ev error number, and req->rq_cli_ctx == NULL.
+ */
 int sptlrpc_req_get_ctx(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
@@ -414,9 +426,14 @@ int sptlrpc_req_get_ctx(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-/*
- * if @sync == 0, this function should return quickly without sleep;
- * otherwise might trigger ctx destroying rpc to server.
+/**
+ * Drop the context for \a req.
+ * \pre req->rq_cli_ctx != NULL.
+ * \post req->rq_cli_ctx == NULL.
+ *
+ * If \a sync == 0, this function should return quickly without sleep;
+ * otherwise it might trigger and wait for the whole process of sending
+ * an context-destroying rpc to server.
  */
 void sptlrpc_req_put_ctx(struct ptlrpc_request *req, int sync)
 {
@@ -497,12 +514,12 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
 }
 
 /**
- * if current context has died, or if we resend after flavor switched,
- * call this func to switch context. if no switch is needed, request
- * will end up with the same context.
+ * If current context of \a req is dead somehow, e.g. we just switched flavor
+ * thus marked original contexts dead, we'll find a new context for it. if
+ * no switch is needed, \a req will end up with the same context.
  *
- * request must have a context. in any case of failure, restore the
- * restore the old one - a request must have a context.
+ * \note a request must have a context, to keep other parts of code happy.
+ * In any case of failure during the switching, we must restore the old one.
  */
 int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 {
@@ -607,17 +624,19 @@ void req_off_ctx_list(struct ptlrpc_request *req, struct ptlrpc_cli_ctx *ctx)
         cfs_spin_unlock(&ctx->cc_lock);
 }
 
-/*
- * the status of context could be subject to be changed by other threads at any
- * time. we allow this race. but once we return with 0, the caller will
+/**
+ * To refresh the context of \req, if it's not up-to-date.
+ * \param timeout
+ * - < 0: don't wait
+ * - = 0: wait until success or fatal error occur
+ * - > 0: timeout value (in seconds)
+ *
+ * The status of the context could be subject to be changed by other threads
+ * at any time. We allow this race, but once we return with 0, the caller will
  * suppose it's uptodated and keep using it until the owning rpc is done.
  *
- * @timeout:
- *    < 0  - don't wait
- *    = 0  - wait until success or fatal error occur
- *    > 0  - timeout value
- *
- * return 0 only if the context is uptodated.
+ * \retval 0 only if the context is uptodated.
+ * \retval -ev error number.
  */
 int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
 {
@@ -634,7 +653,7 @@ int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
 
         /*
          * during the process a request's context might change type even
-         * (e.g. from gss ctx to plain ctx), so each loop we need to re-check
+         * (e.g. from gss ctx to null ctx), so each loop we need to re-check
          * everything
          */
 again:
@@ -674,24 +693,27 @@ again:
                 RETURN(-EPERM);
         }
 
-        /* This is subtle. For resent message we have to keep original
-         * context to survive following situation:
-         *  1. the request sent to server
-         *  2. recovery was kick start
-         *  3. recovery finished, the request marked as resent
-         *  4. resend the request
-         *  5. old reply from server received (because xid is the same)
-         *  6. verify reply (has to be success)
-         *  7. new reply from server received, lnet drop it
+        /*
+         * There's a subtle issue for resending RPCs, suppose following
+         * situation:
+         *  1. the request was sent to server.
+         *  2. recovery was kicked start, after finished the request was
+         *     marked as resent.
+         *  3. resend the request.
+         *  4. old reply from server received, we accept and verify the reply.
+         *     this has to be success, otherwise the error will be aware
+         *     by application.
+         *  5. new reply from server received, dropped by LNet.
          *
-         * Note we can't simply change xid for resent request because
-         * server reply on it for reply reconstruction.
+         * Note the xid of old & new request is the same. We can't simply
+         * change xid for the resent request because the server replies on
+         * it for reply reconstruction.
          *
          * Commonly the original context should be uptodate because we
-         * have a expiry nice time; And server will keep their half part
-         * context because we at least hold a ref of old context which
-         * prevent the context destroy RPC be sent. So server still can
-         * accept the request and finish RPC. Two cases:
+         * have a expiry nice time; server will keep its context because
+         * we at least hold a ref of old context which prevent context
+         * destroying RPC being sent. So server still can accept the request
+         * and finish the RPC. But if that's not the case:
          *  1. If server side context has been trimmed, a NO_CONTEXT will
          *     be returned, gss_cli_ctx_verify/unseal will switch to new
          *     context by force.
@@ -732,7 +754,8 @@ again:
                 goto again;
         }
 
-        /* Now we're sure this context is during upcall, add myself into
+        /*
+         * Now we're sure this context is during upcall, add myself into
          * waiting list
          */
         cfs_spin_lock(&ctx->cc_lock);
@@ -756,9 +779,10 @@ again:
                                ctx_refresh_interrupt, req);
         rc = l_wait_event(req->rq_reply_waitq, ctx_check_refresh(ctx), &lwi);
 
-        /* following cases we could be here:
+        /*
+         * following cases could lead us here:
          * - successfully refreshed;
-         * - interruptted;
+         * - interrupted;
          * - timedout, and we don't want recover from the failure;
          * - timedout, and waked up upon recovery finished;
          * - someone else mark this ctx dead by force;
@@ -776,8 +800,10 @@ again:
         goto again;
 }
 
-/*
- * Note this could be called in two situations:
+/**
+ * Initialize flavor settings for \a req, according to \a opcode.
+ *
+ * \note this could be called in two situations:
  * - new request from ptlrpc_pre_req(), with proper @opcode
  * - old request which changed ctx in the middle, with @opcode == 0
  */
@@ -855,10 +881,10 @@ void sptlrpc_request_out_callback(struct ptlrpc_request *req)
         req->rq_reqbuf_len = 0;
 }
 
-/*
- * check whether current user have valid context for an import or not.
- * might repeatedly try in case of non-fatal errors.
- * return 0 on success, < 0 on failure
+/**
+ * Given an import \a imp, check whether current user has a valid context
+ * or not. We may create a new context and try to refresh it, and try
+ * repeatedly try in case of non-fatal errors. Return 0 means success.
  */
 int sptlrpc_import_check_ctx(struct obd_import *imp)
 {
@@ -909,6 +935,11 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
         RETURN(rc);
 }
 
+/**
+ * Used by ptlrpc client, to perform the pre-defined security transformation
+ * upon the request message of \a req. After this function called,
+ * req->rq_reqmsg is still accessible as clear text.
+ */
 int sptlrpc_cli_wrap_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
@@ -1013,9 +1044,13 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-/*
- * upon this be called, the reply buffer should have been un-posted,
- * so nothing is going to change.
+/**
+ * Used by ptlrpc client, to perform security transformation upon the reply
+ * message of \a req. After return successfully, req->rq_repmsg points to
+ * the reply message in clear text.
+ *
+ * \pre the reply buffer should have been un-posted from LNet, so nothing is
+ * going to change.
  */
 int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
 {
@@ -1043,14 +1078,19 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
 }
 
 /**
- * Upon called, the receive buffer might be still posted, so the reply data
- * might be changed at any time, no matter we're holding rq_lock or not. we
- * expect the rq_reply_off be 0, rq_nob_received is the early reply size.
- *
- * we allocate separate ptlrpc_request and reply buffer for early reply
- * processing, return 0 and \a req_ret is a duplicated ptlrpc_request. caller
- * must call sptlrpc_cli_finish_early_reply() on the returned request to
- * release it. if anything goes wrong \a req_ret will not be set.
+ * Used by ptlrpc client, to perform security transformation upon the early
+ * reply message of \a req. We expect the rq_reply_off is 0, and
+ * rq_nob_received is the early reply size.
+ * 
+ * Because the receive buffer might be still posted, the reply data might be
+ * changed at any time, no matter we're holding rq_lock or not. For this reason
+ * we allocate a separate ptlrpc_request and reply buffer for early reply
+ * processing.
+ * 
+ * \retval 0 success, \a req_ret is filled with a duplicated ptlrpc_request.
+ * Later the caller must call sptlrpc_cli_finish_early_reply() on the returned
+ * \a *req_ret to release it.
+ * \retval -ev error number, and \a req_ret will not be set.
  */
 int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
                                    struct ptlrpc_request **req_ret)
@@ -1137,6 +1177,11 @@ err_req:
         RETURN(rc);
 }
 
+/**
+ * Used by ptlrpc client, to release a processed early reply \a early_req.
+ *
+ * \pre \a early_req was obtained from calling sptlrpc_cli_unwrap_early_reply().
+ */
 void sptlrpc_cli_finish_early_reply(struct ptlrpc_request *early_req)
 {
         LASSERT(early_req->rq_repbuf);
@@ -1351,9 +1396,12 @@ static void sptlrpc_import_sec_adapt_inplace(struct obd_import *imp,
         cfs_spin_unlock(&sec->ps_lock);
 }
 
-/*
- * for normal import, @svc_ctx should be NULL and @flvr is ignored;
- * for reverse import, @svc_ctx and @flvr is from incoming request.
+/**
+ * To get an appropriate ptlrpc_sec for the \a imp, according to the current
+ * configuration. Upon called, imp->imp_sec may or may not be NULL.
+ *
+ *  - regular import: \a svc_ctx should be NULL and \a flvr is ignored;
+ *  - reverse import: \a svc_ctx and \a flvr are obtained from incoming request.
  */
 int sptlrpc_import_sec_adapt(struct obd_import *imp,
                              struct ptlrpc_svc_ctx *svc_ctx,
@@ -1491,9 +1539,9 @@ void sptlrpc_import_flush_all_ctx(struct obd_import *imp)
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_all_ctx);
 
-/*
- * when complete successfully, req->rq_reqmsg should point to the
- * right place.
+/**
+ * Used by ptlrpc client to allocate request buffer of \a req. Upon return
+ * successfully, req->rq_reqmsg points to a buffer with size \a msgsize.
  */
 int sptlrpc_cli_alloc_reqbuf(struct ptlrpc_request *req, int msgsize)
 {
@@ -1521,6 +1569,10 @@ int sptlrpc_cli_alloc_reqbuf(struct ptlrpc_request *req, int msgsize)
         return rc;
 }
 
+/**
+ * Used by ptlrpc client to free request buffer of \a req. After this
+ * req->rq_reqmsg is set to NULL and should not be accessed anymore.
+ */
 void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
@@ -1536,6 +1588,7 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req)
 
         policy = ctx->cc_sec->ps_policy;
         policy->sp_cops->free_reqbuf(ctx->cc_sec, req);
+        req->rq_reqmsg = NULL;
 }
 
 /*
@@ -1582,13 +1635,14 @@ void _sptlrpc_enlarge_msg_inplace(struct lustre_msg *msg,
 }
 EXPORT_SYMBOL(_sptlrpc_enlarge_msg_inplace);
 
-/*
- * enlarge @segment of upper message req->rq_reqmsg to @newsize, all data
- * will be preserved after enlargement. this must be called after rq_reqmsg has
- * been intialized at least.
+/**
+ * Used by ptlrpc client to enlarge the \a segment of request message pointed
+ * by req->rq_reqmsg to size \a newsize, all previously filled-in data will be
+ * preserved after the enlargement. this must be called after original request
+ * buffer being allocated.
  *
- * caller's attention: upon return, rq_reqmsg and rq_reqlen might have
- * been changed.
+ * \note after this be called, rq_reqmsg and rq_reqlen might have been changed,
+ * so caller should refresh its local pointers if needed.
  */
 int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
                                int segment, int newsize)
@@ -1611,6 +1665,11 @@ int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_cli_enlarge_reqbuf);
 
+/**
+ * Used by ptlrpc client to allocate reply buffer of \a req.
+ *
+ * \note After this, req->rq_repmsg is still not accessible.
+ */
 int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
@@ -1629,6 +1688,10 @@ int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize)
         RETURN(policy->sp_cops->alloc_repbuf(ctx->cc_sec, req, msgsize));
 }
 
+/**
+ * Used by ptlrpc client to free reply buffer of \a req. After this
+ * req->rq_repmsg is set to NULL and should not be accessed anymore.
+ */
 void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
@@ -1646,6 +1709,7 @@ void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
 
         policy = ctx->cc_sec->ps_policy;
         policy->sp_cops->free_repbuf(ctx->cc_sec, req);
+        req->rq_repmsg = NULL;
         EXIT;
 }
 
@@ -1692,6 +1756,11 @@ static int flavor_allowed(struct sptlrpc_flavor *exp,
 
 #define EXP_FLVR_UPDATE_EXPIRE      (OBD_TIMEOUT_DEFAULT + 10)
 
+/**
+ * Given an export \a exp, check whether the flavor of incoming \a req
+ * is allowed by the export \a exp. Main logic is about taking care of
+ * changing configurations. Return 0 means success.
+ */
 int sptlrpc_target_export_check(struct obd_export *exp,
                                 struct ptlrpc_request *req)
 {
@@ -1952,6 +2021,17 @@ static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
         return svc_rc;
 }
 
+/**
+ * Used by ptlrpc server, to perform transformation upon request message of
+ * incoming \a req. This must be the first thing to do with a incoming
+ * request in ptlrpc layer.
+ *
+ * \retval SECSVC_OK success, and req->rq_reqmsg point to request message in
+ * clear text, size is req->rq_reqlen; also req->rq_svc_ctx is set.
+ * \retval SECSVC_COMPLETE success, the request has been fully processed, and
+ * reply message has been prepared.
+ * \retval SECSVC_DROP failed, this request should be dropped.
+ */
 int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_sec_policy *policy;
@@ -2007,8 +2087,12 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-int sptlrpc_svc_alloc_rs(struct ptlrpc_request *req,
-                         int msglen)
+/**
+ * Used by ptlrpc server, to allocate reply buffer for \a req. If succeed,
+ * req->rq_reply_state is set, and req->rq_reply_state->rs_msg point to
+ * a buffer of \a msglen size.
+ */
+int sptlrpc_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 {
         struct ptlrpc_sec_policy *policy;
         struct ptlrpc_reply_state *rs;
@@ -2042,6 +2126,12 @@ int sptlrpc_svc_alloc_rs(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
+/**
+ * Used by ptlrpc server, to perform transformation upon reply message.
+ *
+ * \post req->rq_reply_off is set to approriate server-controlled reply offset.
+ * \post req->rq_repmsg and req->rq_reply_state->rs_msg becomes inaccessible.
+ */
 int sptlrpc_svc_wrap_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_sec_policy *policy;
@@ -2060,6 +2150,9 @@ int sptlrpc_svc_wrap_reply(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+/**
+ * Used by ptlrpc server, to free reply_state.
+ */
 void sptlrpc_svc_free_rs(struct ptlrpc_reply_state *rs)
 {
         struct ptlrpc_sec_policy *policy;
@@ -2123,6 +2216,10 @@ EXPORT_SYMBOL(sptlrpc_svc_ctx_invalidate);
  * bulk security                        *
  ****************************************/
 
+/**
+ * Perform transformation upon bulk data pointed by \a desc. This is called
+ * before transforming the request message.
+ */
 int sptlrpc_cli_wrap_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {
@@ -2140,7 +2237,8 @@ int sptlrpc_cli_wrap_bulk(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_cli_wrap_bulk);
 
-/*
+/**
+ * This is called after unwrap the reply message.
  * return nob of actual plain text size received, or error code.
  */
 int sptlrpc_cli_unwrap_bulk_read(struct ptlrpc_request *req,
@@ -2165,7 +2263,8 @@ int sptlrpc_cli_unwrap_bulk_read(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_cli_unwrap_bulk_read);
 
-/*
+/**
+ * This is called after unwrap the reply message.
  * return 0 for success or error code.
  */
 int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
@@ -2200,6 +2299,9 @@ int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_cli_unwrap_bulk_write);
 
+/**
+ * Performe transformation upon outgoing bulk read.
+ */
 int sptlrpc_svc_wrap_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {
@@ -2218,6 +2320,9 @@ int sptlrpc_svc_wrap_bulk(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_svc_wrap_bulk);
 
+/**
+ * Performe transformation upon incoming bulk write.
+ */
 int sptlrpc_svc_unwrap_bulk(struct ptlrpc_request *req,
                             struct ptlrpc_bulk_desc *desc)
 {
@@ -2254,6 +2359,9 @@ int sptlrpc_svc_unwrap_bulk(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_svc_unwrap_bulk);
 
+/**
+ * Prepare buffers for incoming bulk write.
+ */
 int sptlrpc_svc_prep_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {

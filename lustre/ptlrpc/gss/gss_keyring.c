@@ -925,8 +925,7 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
 
 static
 int gss_sec_flush_ctx_cache_kr(struct ptlrpc_sec *sec,
-                               uid_t uid,
-                               int grace, int force)
+                               uid_t uid, int grace, int force)
 {
         ENTRY;
 

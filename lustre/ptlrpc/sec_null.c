@@ -201,11 +201,9 @@ void null_free_reqbuf(struct ptlrpc_sec *sec,
                          req, req->rq_reqlen, req->rq_reqbuf_len);
 
                 OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
-                req->rq_reqmsg = req->rq_reqbuf = NULL;
+                req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
-
-        req->rq_reqmsg = NULL;
 }
 
 static
@@ -235,8 +233,6 @@ void null_free_repbuf(struct ptlrpc_sec *sec,
         OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
-
-        req->rq_repmsg = NULL;
 }
 
 static

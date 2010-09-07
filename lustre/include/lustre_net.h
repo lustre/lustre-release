@@ -558,11 +558,11 @@ struct ptlrpc_request {
         /**
          * security and encryption data
          * @{ */
-        struct ptlrpc_cli_ctx   *rq_cli_ctx;     /* client's half ctx */
-        struct ptlrpc_svc_ctx   *rq_svc_ctx;     /* server's half ctx */
-        cfs_list_t               rq_ctx_chain;   /* link to waited ctx */
+        struct ptlrpc_cli_ctx   *rq_cli_ctx;     /**< client's half ctx */
+        struct ptlrpc_svc_ctx   *rq_svc_ctx;     /**< server's half ctx */
+        cfs_list_t               rq_ctx_chain;   /**< link to waited ctx */
 
-        struct sptlrpc_flavor    rq_flvr;        /* client & server */
+        struct sptlrpc_flavor    rq_flvr;        /**< for client & server */
         enum lustre_sec_part     rq_sp_from;
 
         unsigned long            /* client/server security flags */
@@ -588,8 +588,6 @@ struct ptlrpc_request {
         /* (server side), pointed directly into req buffer */
         struct ptlrpc_user_desc *rq_user_desc;
 
-        /** @} */
-
         /** early replies go to offset 0, regular replies go after that */
         unsigned int             rq_reply_off;
 
@@ -604,6 +602,8 @@ struct ptlrpc_request {
         struct lustre_msg       *rq_clrbuf;      /* only in priv mode */
         int                      rq_clrbuf_len;  /* only in priv mode */
         int                      rq_clrdata_len; /* only in priv mode */
+
+        /** @} */
 
         /** Fields that help to see if request and reply were swabbed or not */
         __u32 rq_req_swab_mask;
