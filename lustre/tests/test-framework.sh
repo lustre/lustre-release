@@ -3849,11 +3849,6 @@ gather_logs () {
     local list=$1
 
     local ts=$(date +%s)
-
-    # bug 20237, comment 11
-    # It would also be useful to provide the option
-    # of writing the file to an NFS directory so it doesn't need to be copied.
-    local tmp=$TMP
     local docp=true
     [ -f $LOGDIR/shared ] && docp=false
  
