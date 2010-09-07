@@ -993,7 +993,7 @@ int iam_lvar_create(struct inode *obj,
 #endif
 
 #define BH_DXLock        25
-#define DX_DEBUG (1)
+#define DX_DEBUG (0)
 #if DX_DEBUG
 static struct iam_lock_stats {
         unsigned dls_bh_lock;
