@@ -217,6 +217,7 @@ init_test_env() {
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
     if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
+        ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mds.ko -a \
         ! -f `dirname $0`/../mds/mds.ko ]; then
         export CLIENTMODSONLY=yes
     fi
