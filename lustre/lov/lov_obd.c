@@ -508,8 +508,8 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         RETURN(rc);
 }
 
-int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
-                   __u32 index, int gen, int active)
+static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
+                          __u32 index, int gen, int active)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
