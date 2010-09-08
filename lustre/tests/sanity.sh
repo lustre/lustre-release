@@ -805,6 +805,17 @@ test_24v() {
 }
 run_test 24v "list directory with large files (handle hash collision, bug: 17560)"
 
+test_24w() { # bug21506
+        SZ1=234852
+        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=4096 || return 1
+        dd if=/dev/zero bs=$SZ1 count=1 >> $DIR/$tfile || return 2
+        dd if=$DIR/$tfile of=$DIR/${tfile}_left bs=1M skip=4097 || return 3
+        SZ2=`ls -l $DIR/${tfile}_left | awk '{print $5}'`
+        [ "$SZ1" = "$SZ2" ] || \
+                error "Error reading at the end of the file $tfile"
+}
+run_test 24w "Reading a file larger than 4Gb"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 
