@@ -195,7 +195,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         __u16 lmm_stripe_count;   /* num stripes in use for this object */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
-} __attribute__((packed));
+} __attribute__((packed,  __may_alias__));
 
 struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
         __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
