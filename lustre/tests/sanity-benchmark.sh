@@ -14,6 +14,9 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+# bug number:
+ALWAYS_EXCEPT="$SANITY_BENCHMARK_EXCEPT"
+
 MAX_THREADS=${MAX_THREADS:-20}
 RAMKB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
 if [ -z "$THREADS" ]; then
@@ -215,22 +218,39 @@ iterpr_KMGT () {
     echo $num
 }
 
-space_check () {
-    # space estimation
+pios_file_size () {
+    # pios.c: check_device_size ()
     # /* Adding 10% to total test size for filesystem overhead */
-    #  size = size + (double)(size) * (double) (0.1);
-    # 
-    #  total_test_size = runarg->stream[n - 1].max_offset +
-    #                            runarg->regionsize;
+    # size = size + (double)(size) * (double) (0.1);
+    # pios.c: set_actual_streams ()
+    #  total_test_size = runarg->regioncount * runarg->regionsize
 
-    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
     local size=$(($(iterpr_KMGT $pios_REGIONCOUNT) * \
-                  $(iterpr_KMGT $pios_OFFSET) + \
                   $(iterpr_KMGT $pios_REGIONSIZE) ))
+    echo $size
+}
+
+space_check () {
+    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+    local size=$(pios_file_size)
     size=$(( size + size / 10 ))
-    if [ $((space * 1024)) -le $size ]; then 
-        echo "Need free space atleast $size, have $((space * 1024))"
-        return 10
+    # we can not use pios --cleanup|-x because we need the files exist for pios --verify,
+    # so, we need space available for each of pios_THREADCOUNT value run
+    local num_runs=$(echo ${pios_THREADCOUNT//,/ } | wc -w)
+    size=$(( size * $num_runs))
+    space=$((space * 1024))
+    echo size=$size space=$space
+    if [ $space -le $size ]; then
+        local ratio=$(( size / space + 1 ))
+        echo "Need free space atleast $size, available $space, ratio=$ratio"
+        local rgcount=$(( pios_REGIONCOUNT / ratio ))
+        echo "reducing pios_REGIONCOUNT=$pios_REGIONCOUNT on $ratio"
+        if [ $rgcount -eq 0 ]; then
+            echo "fs is too small, reduced pios_REGIONCOUNT=$rgcount"
+            return 10
+        fi
+        pios_REGIONCOUNT=$(( pios_REGIONCOUNT / ratio ))
+        echo using pios_REGIONCOUNT=$pios_REGIONCOUNT size=$(pios_file_size)
     fi
 }
 
@@ -241,20 +261,24 @@ pios_setup() {
     stripes=1
     [ "$1" == "--stripe" ] && stripes=-1
     $LFS setstripe $testdir -c $stripes
-    echo "Test directory stripe count: $stripes"
+    echo "Test directory $testdir stripe count: $stripes"
 }
 
 pios_cleanup() {
     local rc=$1
     local testdir=$DIR/$tdir
-    [ $rc = 0 ] && rm -rf $testdir
+    if [ $rc -eq 0 ]; then
+        echo cleanup: testdir=$testdir rc=$rc
+        rm -rf $testdir
+        wait_delete_completed || true
+    fi
 }
 
 run_pios () {
     local testdir=$DIR/$tdir
     local cmd="$PIOSBIN  -t $pios_THREADCOUNT -n $pios_REGIONCOUNT \
                          -c $pios_CHUNKSIZE -s $pios_REGIONSIZE    \
-                         -o $pios_OFFSET  $@ -p $testdir"
+                         -o $pios_OFFSET $@ -p $testdir"
     
     if [ ! -d $testdir ]; then  
         error "No test directory created, setup_pios must have failed"
