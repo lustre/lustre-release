@@ -6036,19 +6036,26 @@ test_133c() {
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
 
+	# verify obdfilter stats.
+	$LFS setstripe -c 1 -o 0 ${testdir}/${tfile}
+	sync
+	cancel_lru_locks osc
+
 	# clear stats.
 	do_facet mds $LCTL set_param mds.*.stats=clear
 	do_facet ost $LCTL set_param obdfilter.*.stats=clear
 
-	# verify obdfilter stats.
-	$LFS setstripe -c 1 -o 0 ${testdir}/${tfile}
 	dd if=/dev/zero of=${testdir}/${tfile} bs=1024k count=1 || error "dd failed"
 	sync
+	cancel_lru_locks osc
 	check_stats ost "write" 1
-	> ${testdir}/${tfile} || error "truncate failed"
-	check_stats ost "punch" 1
+
 	dd if=${testdir}/${tfile} of=/dev/null bs=1k count=1 || error "dd failed"
 	check_stats ost "read" 1
+
+	> ${testdir}/${tfile} || error "truncate failed"
+	check_stats ost "punch" 1
+
 	rm -f ${testdir}/${tfile} || error "file remove failed"
 	check_stats ost "destroy" 1
 
