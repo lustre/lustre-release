@@ -1177,7 +1177,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         /*Step 3: If the child was negative, and we're supposed to, create it.*/
         if (dchild->d_inode == NULL) {
                 unsigned long ino = rec->ur_fid2->id;
-                struct iattr iattr;
+                struct iattr *iattr;
                 struct inode *inode;
 
                 if (!(rec->ur_flags & MDS_OPEN_CREAT)) {
@@ -1254,25 +1254,31 @@ int mds_open(struct mds_update_record *rec, int offset,
                                inode->i_ino, inode->i_generation);
                 }
 
-                LTIME_S(iattr.ia_atime) = rec->ur_time;
-                LTIME_S(iattr.ia_ctime) = rec->ur_time;
-                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                OBD_ALLOC_PTR(iattr);
+                if (iattr == NULL)
+                        GOTO(cleanup, rc = -ENOMEM);
 
-                iattr.ia_uid = current_fsuid();  /* set by push_ctxt already */
-                iattr.ia_gid = gid;
+                LTIME_S(iattr->ia_atime) = rec->ur_time;
+                LTIME_S(iattr->ia_ctime) = rec->ur_time;
+                LTIME_S(iattr->ia_mtime) = rec->ur_time;
 
-                iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
+                iattr->ia_uid = current_fsuid();  /* set by push_ctxt already */
+                iattr->ia_gid = gid;
+
+                iattr->ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
 
-                rc = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
+                rc = fsfilt_setattr(obd, dchild, handle, iattr, 0);
                 if (rc)
                         CERROR("error on child setattr: rc = %d\n", rc);
 
-                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                iattr->ia_valid = ATTR_MTIME | ATTR_CTIME;
 
-                rc = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
+                rc = fsfilt_setattr(obd, dparent, handle, iattr, 0);
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
+
+                OBD_FREE_PTR(iattr);
 
                 rc = fsfilt_commit(obd, dchild->d_inode, handle, 0);
                 handle = NULL;
