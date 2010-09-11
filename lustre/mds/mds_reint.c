@@ -2859,12 +2859,18 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved;
         int rc;
 #ifdef CRAY_XT3
         gid_t fsgid = rec->ur_uc.luc_fsgid;
 #endif
         ENTRY;
+
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
 
 #ifdef CRAY_XT3
         if (req->rq_uid != LNET_UID_ANY) {
@@ -2885,7 +2891,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         if (IS_ERR(rec->ur_uc.luc_uce)) {
                 rc = PTR_ERR(rec->ur_uc.luc_uce);
                 rec->ur_uc.luc_uce = NULL;
-                RETURN(rc);
+                goto out;
         }
 
         /* checked by unpacker */
@@ -2896,13 +2902,13 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                 rec->ur_uc.luc_fsgid = rec->ur_uc.luc_uce->ue_primary;
 #endif
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
 #ifdef CRAY_XT3
         if (rec->ur_uc.luc_uce && fsgid != rec->ur_uc.luc_fsgid &&
             in_group_p(fsgid)) {
                 struct cred *cred;
-                rec->ur_uc.luc_fsgid = saved.luc.luc_fsgid = fsgid;
+                rec->ur_uc.luc_fsgid = saved->luc.luc_fsgid = fsgid;
                 if ((cred = prepare_creds())) {
                         cred->fsgid = fsgid;
                         commit_creds(cred);
@@ -2911,8 +2917,11 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 #endif
 
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
-
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         upcall_cache_put_entry(mds->mds_group_hash, rec->ur_uc.luc_uce);
+
+out:
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
+
         RETURN(rc);
 }
