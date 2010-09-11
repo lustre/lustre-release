@@ -1,0 +1,84 @@
+From 731eb1a03a8445cde2cb23ecfb3580c6fa7bb690 Mon Sep 17 00:00:00 2001
+From: Akinobu Mita <akinobu.mita@gmail.com>
+Date: Wed, 3 Mar 2010 23:55:01 -0500
+Subject: [PATCH] ext4: consolidate in_range() definitions
+
+There are duplicate macro definitions of in_range() in mballoc.h and
+balloc.c.  This consolidates these two definitions into ext4.h, and
+changes extents.c to use in_range() as well.
+
+Signed-off-by: Akinobu Mita <akinobu.mita@gmail.com>
+Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+Cc: Andreas Dilger <adilger@sun.com>
+---
+ fs/ext4/balloc.c  |    3 ---
+ fs/ext4/ext4.h    |    2 ++
+ fs/ext4/extents.c |    4 ++--
+ fs/ext4/mballoc.h |    2 --
+ 4 files changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/fs/ext4/balloc.c b/fs/ext4/balloc.c
+index fadbc4d..d2f37a5 100644
+--- a/fs/ext4/balloc.c
++++ b/fs/ext4/balloc.c
+@@ -188,9 +188,6 @@ unsigned ext4_init_block_bitmap(struct super_block *sb, struct buffer_head *bh,
+  * when a file system is mounted (see ext4_fill_super).
+  */
+ 
+-
+-#define in_range(b, first, len)	((b) >= (first) && (b) <= (first) + (len) - 1)
+-
+ /**
+  * ext4_get_group_desc() -- load group descriptor from disk
+  * @sb:			super block
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 3d85bbb..9b17916 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1819,6 +1819,8 @@ static inline void set_bitmap_uptodate(struct buffer_head *bh)
+ 	set_bit(BH_BITMAP_UPTODATE, &(bh)->b_state);
+ }
+ 
++#define in_range(b, first, len)	((b) >= (first) && (b) <= (first) + (len) - 1)
++
+ #endif	/* __KERNEL__ */
+ 
+ #endif	/* _EXT4_H */
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index 3c0bae1..94c8ee8 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -2051,7 +2051,7 @@ ext4_ext_in_cache(struct inode *inode, ext4_lblk_t block,
+ 
+ 	BUG_ON(cex->ec_type != EXT4_EXT_CACHE_GAP &&
+ 			cex->ec_type != EXT4_EXT_CACHE_EXTENT);
+-	if (block >= cex->ec_block && block < cex->ec_block + cex->ec_len) {
++	if (in_range(block, cex->ec_block, cex->ec_len)) {
+ 		ex->ee_block = cpu_to_le32(cex->ec_block);
+ 		ext4_ext_store_pblock(ex, cex->ec_start);
+ 		ex->ee_len = cpu_to_le16(cex->ec_len);
+@@ -3364,7 +3364,7 @@ int ext4_ext_get_blocks(handle_t *handle, struct inode *inode,
+ 		 */
+ 		ee_len = ext4_ext_get_actual_len(ex);
+ 		/* if found extent covers block, simply return it */
+-		if (iblock >= ee_block && iblock < ee_block + ee_len) {
++		if (in_range(iblock, ee_block, ee_len)) {
+ 			newblock = iblock - ee_block + ee_start;
+ 			/* number of remaining blocks in the extent */
+ 			allocated = ee_len - (iblock - ee_block);
+diff --git a/fs/ext4/mballoc.h b/fs/ext4/mballoc.h
+index 9b2deed..b619322 100644
+--- a/fs/ext4/mballoc.h
++++ b/fs/ext4/mballoc.h
+@@ -220,8 +220,6 @@ struct ext4_buddy {
+ #define EXT4_MB_BITMAP(e4b)	((e4b)->bd_bitmap)
+ #define EXT4_MB_BUDDY(e4b)	((e4b)->bd_buddy)
+ 
+-#define in_range(b, first, len)	((b) >= (first) && (b) <= (first) + (len) - 1)
+-
+ static inline ext4_fsblk_t ext4_grp_offs_to_block(struct super_block *sb,
+ 					struct ext4_free_extent *fex)
+ {
+-- 
+1.7.2.2
+
