@@ -1585,6 +1585,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                                     &lockh, 0);
                                 LOCK_INODE_MUTEX(inode);
                                 if (rc) {
+                                        OBDO_FREE(oa);
                                         OBD_FREE_PTR(oinfo);
                                         RETURN(rc);
                                 }
