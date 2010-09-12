@@ -6178,6 +6178,7 @@ set_dir_limits () {
                 devs=$(do_node $node "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
 	        for dev in $devs; do
 		        mntdev=$(do_node $node "lctl get_param -n osd*.$dev.mntdev")
+		        do_node $node "test -e $LDPROC/\\\$(basename $mntdev)/max_dir_size" || LDPROC=/sys/fs/ldiskfs
 		        do_node $node "echo $1 >$LDPROC/\\\$(basename $mntdev)/max_dir_size"
 		done
 	done

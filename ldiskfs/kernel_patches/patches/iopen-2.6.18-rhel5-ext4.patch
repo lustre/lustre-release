@@ -345,9 +345,9 @@ Index: linux-2.6.18-128.1.6/fs/ext4/super.c
 --- linux-2.6.18-128.1.6.orig/fs/ext4/super.c
 +++ linux-2.6.18-128.1.6/fs/ext4/super.c
 @@ -888,7 +888,8 @@ enum {
-
 	Opt_usrquota, Opt_grpquota, Opt_i_version,
 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
+	Opt_block_validity, Opt_noblock_validity,
 -	Opt_inode_readahead_blks, Opt_journal_ioprio
 +	Opt_inode_readahead_blks, Opt_journal_ioprio,
 +	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
@@ -491,22 +491,21 @@ Index: linux-2.6.18-128.1.6/fs/ext4/Makefile
 +++ linux-2.6.18-128.1.6/fs/ext4/Makefile
 @@ -4,7 +4,7 @@
  
- obj-$(CONFIG_EXT4DEV_FS) += ext4dev.o
+ obj-$(CONFIG_EXT4_FS) += ext4.o
  
 -ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 +ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
- 		   ext4_jbd2.o migrate.o mballoc.o
+		ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
+		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o
  
 Index: linux-2.6.18-128.1.6/fs/ext4/ext4.h
 ===================================================================
 --- linux-2.6.18-128.1.6.orig/fs/ext4/ext4.h
 +++ linux-2.6.18-128.1.6/fs/ext4/ext4.h
 @@ -537,6 +538,8 @@ do {									       \
- #define EXT4_MOUNT_JOURNAL_ASYNC_COMMIT	0x1000000 /* Journal Async Commit */
- #define EXT4_MOUNT_I_VERSION            0x2000000 /* i_version support */
  #define EXT4_MOUNT_DELALLOC		0x8000000 /* Delalloc support */
  #define EXT4_MOUNT_DATA_ERR_ABORT	0x10000000 /* Abort on file data write */
+ #define EXT4_MOUNT_BLOCK_VALIDITY	0x20000000 /* Block validity checking */
 +#define EXT4_MOUNT_IOPEN		0x20000000 /* Allow access via iopen */
 +#define EXT4_MOUNT_IOPEN_NOPRIV		0x40000000 /* Make iopen world-readable */
  

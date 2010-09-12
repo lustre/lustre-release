@@ -174,7 +174,7 @@ diff -pur b/drivers/md/raid5.c a/drivers/md/raid5.c
  	release_stripe(sh);
  
  	return STRIPE_SECTORS;
-@@ -3091,9 +3128,11 @@ static void raid5d (mddev_t *mddev)
+@@ -3091,7 +3128,7 @@ static void raid5d (mddev_t *mddev)
  		
  		handled++;
  		atomic_inc(&conf->handled_in_raid5d);
@@ -182,8 +182,4 @@ diff -pur b/drivers/md/raid5.c a/drivers/md/raid5.c
 +		handle_stripe(sh, conf->spare_page, NULL);
  		release_stripe(sh);
  
-+		cond_resched();
-+
- 		spin_lock_irq(&conf->device_lock);
- 	}
- 	PRINTK("%d stripes handled\n", handled);
+ 		cond_resched();

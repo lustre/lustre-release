@@ -82,12 +82,10 @@ extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, 
 #include <linux/lustre_compat25.h>
 #include <linux/lprocfs_status.h>
 
-#ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #ifdef HAVE_EXT4_LDISKFS
 #include <ext4/ext4_extents.h>
 #else
 #include <linux/ext3_extents.h>
-#endif
 #endif
 
 #include "lustre_quota_fmt.h"
@@ -106,6 +104,15 @@ extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, 
 #else
 #define FSFILT_SINGLEDATA_TRANS_BLOCKS(sb) EXT3_SINGLEDATA_TRANS_BLOCKS
 #endif
+
+#ifdef EXT_INSERT_EXTENT_WITH_5ARGS
+#define fsfilt_ext3_ext_insert_extent(handle, inode, path, newext, flag) \
+               ext3_ext_insert_extent(handle, inode, path, newext, flag)
+#else
+#define fsfilt_ext3_ext_insert_extent(handle, inode, path, newext, flag) \
+               ext3_ext_insert_extent(handle, inode, path, newext)
+#endif
+
 
 static cfs_mem_cache_t *fcb_cache;
 
@@ -817,15 +824,10 @@ static int fsfilt_ext3_sync(struct super_block *sb)
         return ext3_force_commit(sb);
 }
 
-#if defined(EXT3_MULTIBLOCK_ALLOCATOR) && (!defined(EXT3_EXT_CACHE_NO) || defined(EXT_CACHE_MARK))
-#warning "kernel code has old extents/mballoc patch, disabling"
-#undef EXT3_MULTIBLOCK_ALLOCATOR
-#endif
 #ifndef EXT3_EXTENTS_FL
 #define EXT3_EXTENTS_FL                 0x00080000 /* Inode uses extents */
 #endif
 
-#ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
 #define fsfilt_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
 #define fsfilt_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
@@ -1037,7 +1039,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         nex.ee_block = cpu_to_le32(cex->ec_block);
         ext3_ext_store_pblock(&nex, pblock);
         nex.ee_len = cpu_to_le16(count);
-        err = ext3_ext_insert_extent(handle, base, path, &nex);
+        err = fsfilt_ext3_ext_insert_extent(handle, base, path, &nex, 0);
         if (err) {
                 /* free data blocks we just allocated */
                 /* not a good idea to call discard here directly,
@@ -1184,7 +1186,6 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
 cleanup:
         return rc;
 }
-#endif /* EXT3_MULTIBLOCK_ALLOCATOR */
 
 extern int ext3_map_inode_page(struct inode *inode, struct page *page,
                                unsigned long *blocks, int *created, int create);
@@ -1216,13 +1217,12 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 cfs_semaphore_t *optional_sem)
 {
         int rc;
-#ifdef EXT3_MULTIBLOCK_ALLOCATOR
+
         if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
                 rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
                                                      blocks, created, create);
                 return rc;
         }
-#endif
         if (optional_sem != NULL)
                 cfs_down(optional_sem);
         rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,

@@ -2332,7 +2332,7 @@ AC_DEFUN([LC_QUOTA64],
                 AC_MSG_RESULT([yes])
         ],[
         tmp_flags="$EXTRA_KCFLAGS"
-        EXTRA_KCFLAGS="-I $LINUX/fs"
+        EXTRA_KCFLAGS="-I$LINUX/fs"
         LB_LINUX_TRY_COMPILE([
                 #include <linux/kernel.h>
                 #include <linux/fs.h>

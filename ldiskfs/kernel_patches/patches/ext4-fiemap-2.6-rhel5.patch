@@ -6,9 +6,9 @@ diff -rupN linux-2.6.18-164.6.1_1/fs/ext4/ext4.h linux-2.6.18-164.6.1_2/fs/ext4/
  #define EXT4_IOC_GROUP_ADD		_IOW('f', 8, struct ext4_new_group_input)
  #define EXT4_IOC_MIGRATE		_IO('f', 9)
 +#define EXT4_IOC_FIEMAP		_IOWR('f', 11, struct fiemap)
+  /* note ioctl 10 reserved for an early version of the FIEMAP ioctl */
   /* note ioctl 11 reserved for filesystem-independent FIEMAP ioctl */
  
- /*
 diff -rupN linux-2.6.18-164.6.1_1/fs/ext4/ioctl.c linux-2.6.18-164.6.1_2/fs/ext4/ioctl.c
 --- linux-2.6.18-164.6.1_1/fs/ext4/ioctl.c	2009-12-22 13:06:51.000000000 +0530
 +++ linux-2.6.18-164.6.1_2/fs/ext4/ioctl.c	2009-12-22 13:09:45.000000000 +0530

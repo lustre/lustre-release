@@ -1,6 +1,5 @@
 lustre_version.patch
 vfs_races-2.6-rhel5.patch
-i_filter_data.patch
 jbd-jcberr-2.6.18-vanilla.patch
 export_symbols-2.6.12.patch
 dev_read_only-2.6.18-vanilla.patch
@@ -21,7 +20,6 @@ jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
 raid5-mmp-unplug-dev.patch
 small-fixes-about-jbd.patch
-jbd-slab-race-2.6-rhel5.patch
 mpt-fusion-max-sge.patch
 prune-icache-use-trylock-rhel5.patch
 jbd2-jcberr-2.6-rhel5.patch

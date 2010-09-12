@@ -77,9 +77,9 @@ diff -pru linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/rai
  						set_bit(STRIPE_DELAYED, &sh->state);
  						set_bit(STRIPE_HANDLE, &sh->state);
 @@ -1870,6 +1885,7 @@ static void handle_stripe5(struct stripe
- 		bi->bi_next = NULL;
- 		bi->bi_size = 0;
- 		bi->bi_end_io(bi, bytes, 0);
+		bi->bi_end_io(bi, bytes,
+			      test_bit(BIO_UPTODATE, &bi->bi_flags)
+			        ? 0 : -EIO);
 +		atomic_dec(&conf->in_reqs_in_queue);
  	}
  	for (i=disks; i-- ;) {
@@ -126,9 +126,9 @@ diff -pru linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/rai
  						PRINTK("Request delayed stripe %llu block %d for Reconstruct\n",
  						       (unsigned long long)sh->sector, i);
 @@ -2423,6 +2446,7 @@ static void handle_stripe6(struct stripe
- 		bi->bi_next = NULL;
- 		bi->bi_size = 0;
- 		bi->bi_end_io(bi, bytes, 0);
+		bi->bi_end_io(bi, bytes,
+			      test_bit(BIO_UPTODATE, &bi->bi_flags)
+			        ? 0 : -EIO);
 +		atomic_dec(&conf->in_reqs_in_queue);
  	}
  	for (i=disks; i-- ;) {

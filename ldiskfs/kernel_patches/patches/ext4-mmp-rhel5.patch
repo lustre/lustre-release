@@ -481,14 +481,14 @@ Index: linux-stage/fs/ext4/ext4.h
   * Function prototypes
   */
  
-Index: linux-stage/fs/ext4/ext4_sb.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_sb.h
-+++ linux-stage/fs/ext4/ext4_sb.h
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
 @@ -149,6 +149,8 @@ struct ext4_sb_info {
- 
- 	unsigned int s_log_groups_per_flex;
- 	struct flex_groups *s_flex_groups;
+
+	/* workqueue for dio unwritten */
+	struct workqueue_struct *dio_unwritten_wq;
 +
 +	struct task_struct *s_mmp_tsk;  /* Kernel thread for multiple mount protection */
  };
