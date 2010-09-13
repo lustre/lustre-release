@@ -2450,6 +2450,7 @@ test_56() {
 	mount_client $MOUNT || error "Unable to mount client"
 	echo ok
 	$LFS osts
+	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
 	stopall
 	reformat
 }
