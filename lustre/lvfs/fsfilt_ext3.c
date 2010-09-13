@@ -829,16 +829,21 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
-#define fsfilt_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
-#define fsfilt_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
+# define fsfilt_up_truncate_sem(inode)  up(&LDISKFS_I(inode)->truncate_sem);
+# define fsfilt_down_truncate_sem(inode)  down(&LDISKFS_I(inode)->truncate_sem);
 #else
-#ifdef HAVE_EXT4_LDISKFS
-#define fsfilt_up_truncate_sem(inode) up_write((&EXT4_I(inode)->i_data_sem));
-#define fsfilt_down_truncate_sem(inode) down_write((&EXT4_I(inode)->i_data_sem));
-#else
-#define fsfilt_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
-#define fsfilt_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
-#endif
+# ifdef HAVE_EXT4_LDISKFS
+#  ifdef WALK_SPACE_HAS_DATA_SEM /* We only use it in fsfilt_map_nblocks() for now */
+#   define fsfilt_up_truncate_sem(inode) do{ }while(0)
+#   define fsfilt_down_truncate_sem(inode) do{ }while(0)
+#  else
+#   define fsfilt_up_truncate_sem(inode) up_write((&EXT4_I(inode)->i_data_sem))
+#   define fsfilt_down_truncate_sem(inode) down_write((&EXT4_I(inode)->i_data_sem))
+#  endif
+# else
+#  define fsfilt_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex)
+#  define fsfilt_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex)
+# endif
 #endif
 
 #ifndef EXT_ASSERT
