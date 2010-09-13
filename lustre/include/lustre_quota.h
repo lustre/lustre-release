@@ -162,10 +162,6 @@ struct lustre_quota_info {
         lustre_quota_version_t qi_version;
 };
 
-#define DQ_STATUS_AVAIL         0x0     /* Available dquot */
-#define DQ_STATUS_SET           0x01    /* Sombody is setting dquot */
-#define DQ_STATUS_RECOVERY      0x02    /* dquot is in recovery */
-
 struct lustre_mem_dqblk {
         __u64 dqb_bhardlimit;	/**< absolute limit on disk blks alloc */
         __u64 dqb_bsoftlimit;	/**< preferred limit on disk blks */
@@ -183,7 +179,7 @@ struct lustre_dquot {
         /** Protect the data in lustre_dquot */
         cfs_semaphore_t dq_sem;
         /** Use count */
-        int dq_refcnt;
+        cfs_atomic_t dq_refcnt;
         /** Pointer of quota info it belongs to */
         struct lustre_quota_info *dq_info;
         /** Offset of dquot on disk */
@@ -192,8 +188,6 @@ struct lustre_dquot {
         unsigned int dq_id;
         /** Type fo quota (USRQUOTA, GRPQUOUTA) */
         int dq_type;
-        /** See DQ_STATUS_ */
-        unsigned short dq_status;
         /** See DQ_ in quota.h */
         unsigned long dq_flags;
         /** Diskquota usage */
@@ -381,13 +375,20 @@ struct lustre_qunit_size {
         struct lustre_quota_ctxt *lqs_ctxt; /** quota ctxt */
 };
 
-#define LQS_IS_GRP(lqs)    ((lqs)->lqs_flags & LQUOTA_FLAGS_GRP)
-#define LQS_IS_ADJBLK(lqs) ((lqs)->lqs_flags & LQUOTA_FLAGS_ADJBLK)
-#define LQS_IS_ADJINO(lqs) ((lqs)->lqs_flags & LQUOTA_FLAGS_ADJINO)
+#define LQS_IS_GRP(lqs)      ((lqs)->lqs_flags & LQUOTA_FLAGS_GRP)
+#define LQS_IS_ADJBLK(lqs)   ((lqs)->lqs_flags & LQUOTA_FLAGS_ADJBLK)
+#define LQS_IS_ADJINO(lqs)   ((lqs)->lqs_flags & LQUOTA_FLAGS_ADJINO)
+#define LQS_IS_RECOVERY(lqs) ((lqs)->lqs_flags & LQUOTA_FLAGS_RECOVERY)
+#define LQS_IS_SETQUOTA(lqs) ((lqs)->lqs_flags & LQUOTA_FLAGS_SETQUOTA)
 
-#define LQS_SET_GRP(lqs)    ((lqs)->lqs_flags |= LQUOTA_FLAGS_GRP)
-#define LQS_SET_ADJBLK(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJBLK)
-#define LQS_SET_ADJINO(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJINO)
+#define LQS_SET_GRP(lqs)       ((lqs)->lqs_flags |= LQUOTA_FLAGS_GRP)
+#define LQS_SET_ADJBLK(lqs)    ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJBLK)
+#define LQS_SET_ADJINO(lqs)    ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJINO)
+#define LQS_SET_RECOVERY(lqs)  ((lqs)->lqs_flags |= LQUOTA_FLAGS_RECOVERY)
+#define LQS_SET_SETQUOTA(lqs)  ((lqs)->lqs_flags |= LQUOTA_FLAGS_SETQUOTA)
+
+#define LQS_CLEAR_RECOVERY(lqs)  ((lqs)->lqs_flags &= ~LQUOTA_FLAGS_RECOVERY)
+#define LQS_CLEAR_SETQUOTA(lqs)  ((lqs)->lqs_flags &= ~LQUOTA_FLAGS_SETQUOTA)
 
 /* In the hash for lustre_qunit_size, the key is decided by
  * grp_or_usr and uid/gid, in here, I combine these two values,

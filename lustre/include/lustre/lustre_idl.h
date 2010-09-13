@@ -1679,6 +1679,8 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 #define LQUOTA_FLAGS_ADJINO    8UL   /* adjust the inode qunit size */
 #define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
                                       * OBD_CONNECT_CHANGE_QS */
+#define LQUOTA_FLAGS_RECOVERY 32UL   /* recovery is going on a uid/gid */
+#define LQUOTA_FLAGS_SETQUOTA 64UL   /* being setquota on a uid/gid */
 
 /* flags is specific for quota_adjust_qunit */
 #define LQUOTA_QAQ_CREATE_LQS  (1 << 31) /* when it is set, need create lqs */

@@ -54,7 +54,7 @@
 #define DQUOT_DEBUG(dquot, fmt, arg...)                                       \
         CDEBUG(D_QUOTA, "refcnt(%u) id(%u) type(%u) off(%llu) flags(%lu) "    \
                "bhardlimit("LPU64") curspace("LPU64") ihardlimit("LPU64") "   \
-               "curinodes("LPU64"): " fmt, dquot->dq_refcnt,                  \
+               "curinodes("LPU64"): " fmt, cfs_atomic_read(&dquot->dq_refcnt),\
                dquot->dq_id, dquot->dq_type, dquot->dq_off,  dquot->dq_flags, \
                dquot->dq_dqb.dqb_bhardlimit, dquot->dq_dqb.dqb_curspace,      \
                dquot->dq_dqb.dqb_ihardlimit, dquot->dq_dqb.dqb_curinodes,     \
