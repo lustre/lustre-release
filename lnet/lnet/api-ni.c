@@ -513,7 +513,7 @@ lnet_setup_handle_hash (void)
 
         /* Arbitrary choice of hash table size */
 #ifdef __KERNEL__
-        the_lnet.ln_lh_hash_size = CFS_PAGE_SIZE / sizeof (struct list_head);
+        the_lnet.ln_lh_hash_size = (2 * CFS_PAGE_SIZE) / sizeof (struct list_head);
 #else
         the_lnet.ln_lh_hash_size = (MAX_MES + MAX_MDS + MAX_EQS)/4;
 #endif
@@ -551,7 +551,7 @@ lnet_lookup_cookie (__u64 cookie, int type)
         if ((cookie & (LNET_COOKIE_TYPES - 1)) != type)
                 return (NULL);
 
-        hash = ((unsigned int)cookie) % the_lnet.ln_lh_hash_size;
+        hash = ((unsigned int)(cookie >> LNET_COOKIE_TYPE_BITS)) % the_lnet.ln_lh_hash_size;
         list = &the_lnet.ln_lh_hash_table[hash];
 
         list_for_each (el, list) {
@@ -575,7 +575,7 @@ lnet_initialise_handle (lnet_libhandle_t *lh, int type)
         lh->lh_cookie = the_lnet.ln_next_object_cookie | type;
         the_lnet.ln_next_object_cookie += LNET_COOKIE_TYPES;
 
-        hash = ((unsigned int)lh->lh_cookie) % the_lnet.ln_lh_hash_size;
+        hash = ((unsigned int)(lh->lh_cookie >> LNET_COOKIE_TYPE_BITS)) % the_lnet.ln_lh_hash_size;
         list_add (&lh->lh_hash_chain, &the_lnet.ln_lh_hash_table[hash]);
 }
 

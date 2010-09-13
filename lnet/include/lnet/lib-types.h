@@ -304,7 +304,8 @@ typedef struct {
 #define LNET_COOKIE_TYPE_MD    1
 #define LNET_COOKIE_TYPE_ME    2
 #define LNET_COOKIE_TYPE_EQ    3
-#define LNET_COOKIE_TYPES      4
+#define LNET_COOKIE_TYPE_BITS  2
+#define LNET_COOKIE_TYPES      (1 << LNET_COOKIE_TYPE_BITS)
 /* LNET_COOKIE_TYPES must be a power of 2, so the cookie type can be
  * extracted by masking with (LNET_COOKIE_TYPES - 1) */
 
