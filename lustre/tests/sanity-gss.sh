@@ -390,17 +390,24 @@ test_8()
 {
     local ATHISTORY=$(do_facet mds "find /sys/ -name at_history")
     local ATOLDBASE=$(do_facet mds "cat $ATHISTORY")
+    local REQ_DELAY
     do_facet mds "echo 8 >> $ATHISTORY"
+
+    mkdir -p $DIR/d8
+    chmod a+w $DIR/d8
 
     $LCTL dk > /dev/null
     debugsave
     sysctl -w lnet.debug="+other"
 
-    mkdir -p $DIR/d8
-    chmod a+w $DIR/d8
-
-    REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
-               awk '/portal 12/ {print $5}' | tail -1`
+    # wait for the at estimation come down, this is faster
+    while [ true ]; do
+        REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
+                   awk '/portal 12/ {print $5}' | tail -1`
+        [ $REQ_DELAY -le 5 ] && break
+        echo "current AT estimation is $REQ_DELAY, wait a little bit"
+        sleep 8
+    done
     REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
     # sleep sometime in ctx handle
