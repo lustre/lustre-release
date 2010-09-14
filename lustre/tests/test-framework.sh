@@ -99,13 +99,13 @@ init_test_env() {
     export E2LABEL=${E2LABEL:-e2label}
     export DUMPE2FS=${DUMPE2FS:-dumpe2fs}
     export E2FSCK=${E2FSCK:-e2fsck}
-    export LFSCK1=${LFSCK1:-lfsck}
+    export LFSCK_BIN=${LFSCK_BIN:-lfsck}
     export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check filesystem after each test suit
     export SKIP_LFSCK=${SKIP_LFSCK:-"yes"} # bug 13698, change to "no" when fixed
     export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
     export FSCK_MAX_ERR=4   # File system errors left uncorrected
     if [ "$SKIP_LFSCK" == "no" ]; then
-	if [ ! -x `which $LFSCK1` ]; then
+	if [ ! -x `which $LFSCK_BIN` ]; then
 	    log "$($E2FSCK -V)"
 	    error_exit "$E2FSCK does not support lfsck"
 	fi
@@ -2099,10 +2099,10 @@ run_e2fsck() {
     df > /dev/null	# update statfs data on disk
     local cmd="$E2FSCK -d -v -f -n $MDSDB_OPT $ostdb_opt $target_dev"
     echo $cmd
-    do_node $node $cmd
-    local rc=${PIPESTATUS[0]}
+    local rc=0
+    do_node $node $cmd || rc=$?
     [ $rc -le $FSCK_MAX_ERR ] || \
-        error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
+        error_exit "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
     return 0
 }
 
@@ -2114,14 +2114,14 @@ generate_db() {
     local tmp_file
 
     tmp_file=$(mktemp -p $SHARED_DIRECTORY || 
-        error "fail to create file in $SHARED_DIRECTORY")
+        error_exit "fail to create file in $SHARED_DIRECTORY")
 
     # make sure everything gets to the backing store
     local list=$(comma_list $CLIENTS $(facet_host mds) $(osts_nodes))
     do_nodes $list "sync; sleep 2; sync"
 
     do_nodes $list ls $tmp_file || \
-        error "$SHARED_DIRECTORY is not a shared directory"
+        error_exit "$SHARED_DIRECTORY is not a shared directory"
     rm $tmp_file
 
     run_e2fsck $(facet_host mds) $MDSDEV
@@ -2141,17 +2141,16 @@ generate_db() {
 }
 
 run_lfsck() {
-    local cmd="$LFSCK1 -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
+    local cmd="$LFSCK_BIN -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
     echo $cmd
-    eval $cmd
-    local rc=${PIPESTATUS[0]}
+    local rc=0
+    eval $cmd || rc=$?
     [ $rc -le $FSCK_MAX_ERR ] || \
-        error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
+        error_exit "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
     echo "lfsck finished with rc=$rc"
 
     rm -rvf $MDSDB* $OSTDB* || true
-
-    return $rc
+    return 0
 }
 
 check_and_cleanup_lustre() {
@@ -2159,8 +2158,7 @@ check_and_cleanup_lustre() {
         get_svr_devs
         generate_db
         if [ "$SKIP_LFSCK" == "no" ]; then
-	    local rc=0
-	    run_lfsck || rc=$?
+	    run_lfsck
 	else
 	    echo "skip lfsck"
         fi
