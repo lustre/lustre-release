@@ -60,6 +60,10 @@
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
 #endif
 
+#ifndef XATTR_NAME_ACL_DEFAULT
+#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#endif
+
 static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                                  struct dentry *de,
                                  struct mds_body *body)
@@ -270,7 +274,9 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         }
 
         /* currently lustre limit xattr size */
-        if (body->valid & OBD_MD_FLXATTR && !strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))  {
+        if (body->valid & OBD_MD_FLXATTR &&
+            (strcmp(xattr_name, XATTR_NAME_ACL_ACCESS) == 0 ||
+             strcmp(xattr_name, XATTR_NAME_ACL_DEFAULT) == 0 ))  {
                 xattrlen = lustre_msg_buflen(req->rq_reqmsg,
                                              REQ_REC_OFF + 2);
 
@@ -278,7 +284,12 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                         GOTO(out, -ERANGE);
         }
 
-
+        /* Revoke all clients' lookup lock, since the access
+         * permissions for this inode is changed when ACL_ACCESS is
+         * set. This isn't needed for ACL_DEFAULT, since that does
+         * not change the access permissions of this inode, nor any
+         * other existing inodes. It is setting the ACLs inherited 
+         * by new directories/files at create time. */
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
