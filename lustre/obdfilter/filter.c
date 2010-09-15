@@ -937,6 +937,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                                        "bug 10479.\n");
                                 lcd->lcd_uuid[0] = '\0';
                         } else {
+                                OBD_FREE_PTR(lcd);
                                 GOTO(err_client, rc = PTR_ERR(exp));
                         }
                 } else {
