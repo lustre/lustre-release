@@ -5966,7 +5966,8 @@ check_stats() {
 	local res
 	local count
 	case $1 in
-	mds) res=`do_facet mds $LCTL get_param mds.$FSNAME-MDT0000.stats | grep "$2"`
+	mds) local dev=$(get_mds_mdt_device_proc_path)
+	     res=`do_facet mds $LCTL get_param $dev.$FSNAME-MDT0000.stats | grep "$2"`
 		 ;;
 	ost) res=`do_facet ost0 $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$2"`
 		 ;;
@@ -5982,11 +5983,19 @@ check_stats() {
 }
 
 test_133a() {
+	# interop 18 <-> 20
+	local lustre_version=$(get_lustre_version mds)
+	if [[ $lustre_version != 1.8* ]]; then
+		skip mds running $lustre_version, no stats, bz22378
+		return 0
+	fi
+
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p $DIR/${tdir}
 
 	# clear stats.
-	do_facet mds $LCTL set_param mds.*.stats=clear
+	local dev=$(get_mds_mdt_device_proc_path)
+	do_facet mds $LCTL set_param $dev.*.stats=clear
 	do_facet ost $LCTL set_param obdfilter.*.stats=clear
 
 	# verify mdt stats first.
@@ -6012,12 +6021,20 @@ test_133a() {
 run_test 133a "Verifying MDT stats ========================================"
 
 test_133b() {
+	# interop 18 <-> 20
+	local lustre_version=$(get_lustre_version mds)
+	if [[ $lustre_version != 1.8* ]]; then
+		skip mds running $lustre_version, no stats, bz22378
+		return 0
+	fi
+
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
 	touch ${testdir}/${tfile} || "touch failed"
 
 	# clear stats.
-	do_facet mds $LCTL set_param mds.*.stats=clear
+	local dev=$(get_mds_mdt_device_proc_path)
+	do_facet mds $LCTL set_param $dev.*.stats=clear
 	do_facet ost $LCTL set_param obdfilter.*.stats=clear
 
 	# extra mdt stats verification.
@@ -6033,6 +6050,13 @@ test_133b() {
 run_test 133b "Verifying extra MDT stats =================================="
 
 test_133c() {
+	# interop 18 <-> 20
+	local lustre_version=$(get_lustre_version mds)
+	if [[ $lustre_version != 1.8* ]]; then
+		skip mds running $lustre_version, no stats, bz22378
+		return 0
+	fi
+
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
 
@@ -6042,7 +6066,8 @@ test_133c() {
 	cancel_lru_locks osc
 
 	# clear stats.
-	do_facet mds $LCTL set_param mds.*.stats=clear
+	local dev=$(get_mds_mdt_device_proc_path)
+	do_facet mds $LCTL set_param $dev.*.stats=clear
 	do_facet ost $LCTL set_param obdfilter.*.stats=clear
 
 	dd if=/dev/zero of=${testdir}/${tfile} bs=1024k count=1 || error "dd failed"
