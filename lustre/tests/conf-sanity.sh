@@ -68,7 +68,7 @@ writeconf() {
 	# we need ldiskfs
 	load_modules
 	# if writeconf fails anywhere, we reformat everything
-	writeconf1 mds `mdsdevname 1` || return 0
+	writeconf1 mds $MDSDEV || return 0
 	writeconf1 ost1 `ostdevname 1` || return 0
 	writeconf1 ost2 `ostdevname 2` || return 0
 }
