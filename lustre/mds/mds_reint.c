@@ -223,7 +223,6 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
         __u64 transno, prev_transno;
         int err;
         loff_t off;
-        int log_pri = D_RPCTRACE;
         struct inode *inode = inodes ? inodes[0] : NULL;
         int version_set = handle ? 1 : 0;
         ENTRY;
@@ -335,23 +334,21 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                         mds_commit_cb(obd, transno, exp, err);
         }
 
-        if (err) {
-                log_pri = D_ERROR;
-                if (rc == 0)
-                        rc = err;
-        }
-
-        DEBUG_REQ(log_pri, req,
+        DEBUG_REQ(err ? D_ERROR : D_INFO, req,
                   "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
                   transno, rc, lcd->lcd_uuid, med->med_lr_idx, err);
 
-        err = mds_lov_write_objids(obd);
         if (err) {
-                log_pri = D_ERROR;
                 if (rc == 0)
                         rc = err;
         }
-        CDEBUG(log_pri, "wrote objids: err = %d\n", err);
+
+        err = mds_lov_write_objids(obd);
+        if (err) {
+                CERROR("wrote objids: err = %d\n", err);
+                if (rc == 0)
+                        rc = err;
+        }
 
 commit:
         err = fsfilt_commit(obd, inode, handle, 0);

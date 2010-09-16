@@ -111,7 +111,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         if (ev->type == LNET_EVENT_UNLINK) {
                 LASSERT(ev->unlinked);
-                DEBUG_REQ(D_RPCTRACE, req, "unlink");
+                DEBUG_REQ(D_NET, req, "unlink");
                 goto out_wake;
         }
 
@@ -285,7 +285,7 @@ void request_in_callback(lnet_event_t *ev)
         CFS_INIT_LIST_HEAD(&req->rq_exp_list);
         atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
-                DEBUG_REQ(D_RPCTRACE, req, "incoming req");
+                DEBUG_REQ(D_NET, req, "incoming req");
 
         spin_lock(&service->srv_lock);
 
