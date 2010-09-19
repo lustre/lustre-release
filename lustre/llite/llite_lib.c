@@ -115,7 +115,7 @@ static struct ll_sb_info *ll_init_sbi(void)
         cfs_list_add_tail(&sbi->ll_list, &ll_super_blocks);
         cfs_spin_unlock(&ll_sb_lock);
 
-#ifdef ENABLE_LLITE_CHECKSUM
+#ifdef ENABLE_CHECKSUM
         sbi->ll_flags |= LL_SBI_CHECKSUM;
 #endif
 
