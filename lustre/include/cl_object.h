@@ -2795,11 +2795,12 @@ int   cl_lock_user_del  (const struct lu_env *env, struct cl_lock *lock);
 
 enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
                                      struct cl_lock *lock);
-
 void cl_lock_extransit(const struct lu_env *env, struct cl_lock *lock,
                        enum cl_lock_state state);
-
 int cl_lock_is_intransit(struct cl_lock *lock);
+
+int cl_lock_enqueue_wait(const struct lu_env *env, struct cl_lock *lock,
+                         int keep_mutex);
 
 /** \name statemachine statemachine
  * Interface to lock state machine consists of 3 parts:
@@ -2842,6 +2843,7 @@ int   cl_enqueue_try(const struct lu_env *env, struct cl_lock *lock,
 int   cl_unuse_try  (const struct lu_env *env, struct cl_lock *lock);
 int   cl_wait_try   (const struct lu_env *env, struct cl_lock *lock);
 int   cl_use_try    (const struct lu_env *env, struct cl_lock *lock, int atomic);
+
 /** @} statemachine */
 
 void cl_lock_signal      (const struct lu_env *env, struct cl_lock *lock);

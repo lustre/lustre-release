@@ -1225,6 +1225,51 @@ int cl_enqueue_try(const struct lu_env *env, struct cl_lock *lock,
 }
 EXPORT_SYMBOL(cl_enqueue_try);
 
+/**
+ * Cancel the conflicting lock found during previous enqueue.
+ *
+ * \retval 0 conflicting lock has been canceled.
+ * \retval -ve error code.
+ */
+int cl_lock_enqueue_wait(const struct lu_env *env,
+                         struct cl_lock *lock,
+                         int keep_mutex)
+{
+        struct cl_lock  *conflict;
+        int              rc = 0;
+        ENTRY;
+
+        LASSERT(cl_lock_is_mutexed(lock));
+        LASSERT(lock->cll_state == CLS_QUEUING);
+        LASSERT(lock->cll_conflict != NULL);
+
+        conflict = lock->cll_conflict;
+        lock->cll_conflict = NULL;
+
+        cl_lock_mutex_put(env, lock);
+        LASSERT(cl_lock_nr_mutexed(env) == 0);
+
+        cl_lock_mutex_get(env, conflict);
+        cl_lock_cancel(env, conflict);
+        cl_lock_delete(env, conflict);
+
+        while (conflict->cll_state != CLS_FREEING) {
+                rc = cl_lock_state_wait(env, conflict);
+                if (rc != 0)
+                        break;
+        }
+        cl_lock_mutex_put(env, conflict);
+        lu_ref_del(&conflict->cll_reference, "cancel-wait", lock);
+        cl_lock_put(env, conflict);
+
+        if (keep_mutex)
+                cl_lock_mutex_get(env, lock);
+
+        LASSERT(rc <= 0);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(cl_lock_enqueue_wait);
+
 static int cl_enqueue_locked(const struct lu_env *env, struct cl_lock *lock,
                              struct cl_io *io, __u32 enqflags)
 {
@@ -1240,7 +1285,10 @@ static int cl_enqueue_locked(const struct lu_env *env, struct cl_lock *lock,
         do {
                 result = cl_enqueue_try(env, lock, io, enqflags);
                 if (result == CLO_WAIT) {
-                        result = cl_lock_state_wait(env, lock);
+                        if (lock->cll_conflict != NULL)
+                                result = cl_lock_enqueue_wait(env, lock, 1);
+                        else
+                                result = cl_lock_state_wait(env, lock);
                         if (result == 0)
                                 continue;
                 }
