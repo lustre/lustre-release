@@ -622,16 +622,21 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
 int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
                          int *eof,  void *data)
 {
-        struct obd_device *obd = (struct obd_device*)data;
+        struct obd_device *obd = data;
         struct ptlrpc_connection *conn;
         int rc = 0;
 
         LASSERT(obd != NULL);
+
         LPROCFS_CLIMP_CHECK(obd);
         conn = obd->u.cli.cl_import->imp_connection;
-        LASSERT(conn != NULL);
         *eof = 1;
-        rc = snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
+        if (conn) {
+                rc = snprintf(page, count, "%s\n",
+                              conn->c_remote_uuid.uuid);
+        } else {
+                rc = snprintf(page, count, "%s\n", "<none>");
+        }
 
         LPROCFS_CLIMP_EXIT(obd);
         return rc;
