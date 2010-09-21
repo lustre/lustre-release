@@ -4179,7 +4179,7 @@ restore_to_default_flavor()
         for rule in `do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor."`; do
             echo "remove rule: $rule"
             spec=`echo $rule | awk -F = '{print $1}'`
-            do_facet mgs "$LCTL conf_param $spec="
+            do_facet mgs "$LCTL conf_param -d $spec"
         done
     fi
 

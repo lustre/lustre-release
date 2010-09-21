@@ -2051,13 +2051,12 @@ static int mgs_srpc_set_param_disk(struct obd_device *obd,
         /* obsolete old one */
         mgs_modify(obd, fsdb, mti, logname, mti->mti_svname, comment, CM_SKIP);
 
-        if (!mgs_param_empty(param)) {
-                /* write the new one */
-                rc = mgs_write_log_direct(obd, fsdb, logname, lcfg,
-                                          mti->mti_svname, comment);
-                if (rc)
-                        CERROR("err %d writing log %s\n", rc, logname);
-        }
+        /* write the new one */
+        rc = mgs_write_log_direct(obd, fsdb, logname, lcfg,
+                                  mti->mti_svname, comment);
+        if (rc)
+                CERROR("err %d writing log %s\n", rc, logname);
+
 out:
         name_destroy(&logname);
 out_lcfg:
@@ -2193,7 +2192,7 @@ static int mgs_srpc_set_param(struct obd_device *obd,
                               char *param)
 {
         char                   *copy;
-        int                     rc, copy_size, del;
+        int                     rc, copy_size;
         ENTRY;
 
 #ifndef HAVE_GSS
@@ -2207,12 +2206,9 @@ static int mgs_srpc_set_param(struct obd_device *obd,
                 return -ENOMEM;
         memcpy(copy, param, copy_size);
 
-        del = mgs_param_empty(param);
-        if (!del) {
-                rc = mgs_srpc_set_param_mem(fsdb, mti->mti_svname, param);
-                if (rc)
-                        goto out_free;
-        }
+        rc = mgs_srpc_set_param_mem(fsdb, mti->mti_svname, param);
+        if (rc)
+                goto out_free;
 
         /* previous steps guaranteed the syntax is correct */
         rc = mgs_srpc_set_param_disk(obd, fsdb, mti, copy);
