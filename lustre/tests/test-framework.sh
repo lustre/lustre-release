@@ -4154,16 +4154,11 @@ wait_flavor()
     local res=0
 
     for ((i=0;i<20;i++)); do
-        echo -n "checking..."
+        echo -n "checking $dir..."
         res=$(do_check_flavor $dir $flavor)
-        if [ $res -eq $expect ]; then
-            echo "found $res $flavor connections of $dir, OK"
-            return 0
-        else
-            echo "found $res $flavor connections of $dir, not ready ($expect)"
-            return 0
-            sleep 4
-        fi
+        echo "found $res/$expect $flavor connections"
+        [ $res -eq $expect ] && return 0
+        sleep 4
     done
 
     echo "Error checking $flavor of $dir: expect $expect, actual $res"
