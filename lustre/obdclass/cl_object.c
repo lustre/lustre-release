@@ -519,6 +519,24 @@ EXPORT_SYMBOL(cl_site_stats_print);
  *
  */
 
+/**
+ * The most efficient way is to store cl_env pointer in task specific
+ * structures. On Linux, it wont' be easy to use task_struct->journal_info
+ * because Lustre code may call into other fs which has certain assumptions
+ * about journal_info. Currently following fields in task_struct are identified
+ * can be used for this purpose:
+ *  - cl_env: for liblustre.
+ *  - tux_info: ony on RedHat kernel.
+ *  - ...
+ * \note As long as we use task_struct to store cl_env, we assume that once
+ * called into Lustre, we'll never call into the other part of the kernel
+ * which will use those fields in task_struct without explicitly exiting
+ * Lustre.
+ *
+ * If there's no space in task_struct is available, hash will be used.
+ * bz20044, bz22683.
+ */
+
 static CFS_LIST_HEAD(cl_envs);
 static unsigned cl_envs_cached_nr  = 0;
 static unsigned cl_envs_cached_max = 128; /* XXX: prototype: arbitrary limit
@@ -529,19 +547,29 @@ struct cl_env {
         void             *ce_magic;
         struct lu_env     ce_lu;
         struct lu_context ce_ses;
+
+#ifdef LL_TASK_CL_ENV
+        void             *ce_prev;
+#else
         /**
          * This allows cl_env to be entered into cl_env_hash which implements
          * the current thread -> client environment lookup.
          */
         cfs_hlist_node_t  ce_node;
+#endif
         /**
-         * Owner for the current cl_env, the key for cfs_hash.
+         * Owner for the current cl_env.
+         *
+         * If LL_TASK_CL_ENV is defined, this point to the owning cfs_current(),
+         * only for debugging purpose ;
+         * Otherwise hash is used, and this is the key for cfs_hash.
          * Now current thread pid is stored. Note using thread pointer would
          * lead to unbalanced hash because of its specific allocation locality
          * and could be varied for different platforms and OSes, even different
          * OS versions.
          */
         void             *ce_owner;
+
         /*
          * Linkage into global list of all client environments. Used for
          * garbage collection.
@@ -566,14 +594,24 @@ struct cl_env {
                 cfs_atomic_dec(&cl_env_stats.counter);                  \
         } while (0)
 
-/*****************************************************************************
- * Routins to use cfs_hash functionality to bind the current thread
- * to cl_env
+static void cl_env_init0(struct cl_env *cle, void *debug)
+{
+        LASSERT(cle->ce_ref == 0);
+        LASSERT(cle->ce_magic == &cl_env_init0);
+        LASSERT(cle->ce_debug == NULL && cle->ce_owner == NULL);
+
+        cle->ce_ref = 1;
+        cle->ce_debug = debug;
+        CL_ENV_INC(cs_busy);
+}
+
+
+#ifndef LL_TASK_CL_ENV
+/*
+ * The implementation of using hash table to connect cl_env and thread
  */
 
-/** lustre hash to manage the cl_env for current thread */
 static cfs_hash_t *cl_env_hash;
-static void cl_env_init0(struct cl_env *cle, void *debug);
 
 static unsigned cl_env_hops_hash(cfs_hash_t *lh, void *key, unsigned mask)
 {
@@ -610,6 +648,7 @@ static cfs_hash_ops_t cl_env_hops = {
 static inline struct cl_env *cl_env_fetch(void)
 {
         struct cl_env *cle;
+
         cle = cfs_hash_lookup(cl_env_hash, (void *) (long) cfs_current()->pid);
         LASSERT(ergo(cle, cle->ce_magic == &cl_env_init0));
         return cle;
@@ -619,6 +658,7 @@ static inline void cl_env_attach(struct cl_env *cle)
 {
         if (cle) {
                 int rc;
+
                 LASSERT(cle->ce_owner == NULL);
                 cle->ce_owner = (void *) (long) cfs_current()->pid;
                 rc = cfs_hash_add_unique(cl_env_hash, cle->ce_owner,
@@ -627,31 +667,74 @@ static inline void cl_env_attach(struct cl_env *cle)
         }
 }
 
+static inline void cl_env_do_detach(struct cl_env *cle)
+{
+        void *cookie;
+
+        LASSERT(cle->ce_owner == (void *) (long) cfs_current()->pid);
+        cookie = cfs_hash_del(cl_env_hash, cle->ce_owner,
+                              &cle->ce_node);
+        LASSERT(cookie == cle);
+        cle->ce_owner = NULL;
+}
+
+static int cl_env_store_init(void) {
+        cl_env_hash = cfs_hash_create("cl_env", 8, 10, &cl_env_hops,
+                                      CFS_HASH_REHASH);
+        return cl_env_hash != NULL ? 0 :-ENOMEM;
+}
+
+static void cl_env_store_fini(void) {
+        cfs_hash_putref(cl_env_hash);
+}
+
+#else /* LL_TASK_CL_ENV */
+/*
+ * The implementation of store cl_env directly in thread structure.
+ */
+
+static inline struct cl_env *cl_env_fetch(void)
+{
+        struct cl_env *cle;
+
+        cle = cfs_current()->LL_TASK_CL_ENV;
+        if (cle && cle->ce_magic != &cl_env_init0)
+                cle = NULL;
+        return cle;
+}
+
+static inline void cl_env_attach(struct cl_env *cle)
+{
+        if (cle) {
+                LASSERT(cle->ce_owner == NULL);
+                cle->ce_owner = cfs_current();
+                cle->ce_prev = cfs_current()->LL_TASK_CL_ENV;
+                cfs_current()->LL_TASK_CL_ENV = cle;
+        }
+}
+
+static inline void cl_env_do_detach(struct cl_env *cle)
+{
+        LASSERT(cle->ce_owner == cfs_current());
+        LASSERT(cfs_current()->LL_TASK_CL_ENV == cle);
+        cfs_current()->LL_TASK_CL_ENV = cle->ce_prev;
+        cle->ce_owner = NULL;
+}
+
+static int cl_env_store_init(void) { return 0; }
+static void cl_env_store_fini(void) { }
+
+#endif /* LL_TASK_CL_ENV */
+
 static inline struct cl_env *cl_env_detach(struct cl_env *cle)
 {
         if (cle == NULL)
                 cle = cl_env_fetch();
-        if (cle && cle->ce_owner) {
-                void *cookie;
-                LASSERT(cle->ce_owner == (void *) (long) cfs_current()->pid);
-                cookie = cfs_hash_del(cl_env_hash, cle->ce_owner,
-                                      &cle->ce_node);
-                cle->ce_owner = NULL;
-                LASSERT(cookie == cle);
-        }
+
+        if (cle && cle->ce_owner)
+                cl_env_do_detach(cle);
+
         return cle;
-}
-/* ----------------------- hash routines end ---------------------------- */
-
-static void cl_env_init0(struct cl_env *cle, void *debug)
-{
-        LASSERT(cle->ce_ref == 0);
-        LASSERT(cle->ce_magic == &cl_env_init0);
-        LASSERT(cle->ce_debug == NULL && cle->ce_owner == NULL);
-
-        cle->ce_ref = 1;
-        cle->ce_debug = debug;
-        CL_ENV_INC(cs_busy);
 }
 
 static struct lu_env *cl_env_new(__u32 tags, void *debug)
@@ -1142,10 +1225,9 @@ int cl_global_init(void)
 {
         int result;
 
-        cl_env_hash = cfs_hash_create("cl_env", 8, 10, &cl_env_hops,
-                                      CFS_HASH_REHASH);
-        if (cl_env_hash == NULL)
-                return -ENOMEM;
+        result = cl_env_store_init();
+        if (result)
+                return result;
 
         result = lu_kmem_init(cl_object_caches);
         if (result == 0) {
@@ -1158,7 +1240,7 @@ int cl_global_init(void)
                 }
         }
         if (result)
-                cfs_hash_putref(cl_env_hash);
+                cl_env_store_fini();
         return result;
 }
 
@@ -1171,5 +1253,5 @@ void cl_global_fini(void)
         cl_page_fini();
         lu_context_key_degister(&cl_key);
         lu_kmem_fini(cl_object_caches);
-        cfs_hash_putref(cl_env_hash);
+        cl_env_store_fini();
 }

@@ -1912,6 +1912,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_COOKIE_FOLLOW_LINK
          LC_FUNC_RCU
          LC_PERCPU_COUNTER
+         LC_TASK_CLENV_STORE
          LC_QUOTA64
          LC_4ARGS_VFS_SYMLINK
 
@@ -2397,6 +2398,30 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([no])
 ])
+])
+
+AC_DEFUN([LC_TASK_CLENV_TUX_INFO],
+[AC_MSG_CHECKING([tux_info])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/sched.h>
+],[
+        struct task_struct task;
+        &task.tux_info;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(LL_TASK_CL_ENV, tux_info, [have tux_info])
+        have_task_clenv_store='yes'
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_TASK_CLENV_STORE],
+[
+        AC_MSG_CHECKING([if we can store cl_env in task_struct])
+        if test x$have_task_clenv_store != xyes ; then
+                LC_TASK_CLENV_TUX_INFO
+        fi
 ])
 
 #

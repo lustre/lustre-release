@@ -262,6 +262,9 @@ struct signal {
         int signal;
 };
 
+#undef  LL_TASK_CL_ENV
+#define LL_TASK_CL_ENV          cl_env
+
 struct task_struct {
         int state;
         struct signal pending;
@@ -274,6 +277,7 @@ struct task_struct {
         int max_groups;
         int ngroups;
         gid_t *groups;
+        void  *cl_env;
         __u32 cap_effective;
 };
 
