@@ -1512,7 +1512,6 @@ int cl_wait(const struct lu_env *env, struct cl_lock *lock)
         LASSERTF(lock->cll_state == CLS_ENQUEUED || lock->cll_state == CLS_HELD,
                  "Wrong state %d \n", lock->cll_state);
         LASSERT(lock->cll_holds > 0);
-        cl_lock_trace(D_DLMTRACE, env, "wait lock", lock);
 
         do {
                 result = cl_wait_try(env, lock);
@@ -1528,6 +1527,7 @@ int cl_wait(const struct lu_env *env, struct cl_lock *lock)
                 cl_lock_error(env, lock, result);
                 cl_lock_lockdep_release(env, lock);
         }
+        cl_lock_trace(D_DLMTRACE, env, "wait lock", lock);
         cl_lock_mutex_put(env, lock);
         LASSERT(ergo(result == 0, lock->cll_state == CLS_HELD));
         RETURN(result);
