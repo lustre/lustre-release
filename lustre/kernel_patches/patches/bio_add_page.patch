@@ -1,0 +1,12 @@
+--- linux-2.6.32.13-0.5.orig/fs/bio.c	2010-08-13 04:22:33.000000000 -0400
++++ linux-2.6.32.13-0.5/fs/bio.c	2010-09-08 15:35:44.000000000 -0400
+@@ -575,8 +575,7 @@ static int __bio_add_page(struct request
+ 	 * make this too complex.
+ 	 */
+ 
+-	while (bio->bi_phys_segments >= queue_max_phys_segments(q)
+-	       || bio->bi_phys_segments >= queue_max_hw_segments(q)) {
++	while (bio->bi_phys_segments >= queue_max_phys_segments(q)) {
+ 
+ 		if (retried_segments)
+ 			return 0;
