@@ -54,6 +54,8 @@
  *  @{ 
  */
 
+#define _PAGEREF_MAGIC  (-10000000)
+
 /*****************************************************************************
  *
  * Type conversions.
@@ -223,6 +225,8 @@ static void osc_lock_fini(const struct lu_env *env,
          */
         osc_lock_unhold(ols);
         LASSERT(ols->ols_lock == NULL);
+        LASSERT(cfs_atomic_read(&ols->ols_pageref) == 0 ||
+                cfs_atomic_read(&ols->ols_pageref) == _PAGEREF_MAGIC);
 
         OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
 }
@@ -1599,6 +1603,7 @@ int osc_lock_init(const struct lu_env *env,
         OBD_SLAB_ALLOC_PTR_GFP(clk, osc_lock_kmem, CFS_ALLOC_IO);
         if (clk != NULL) {
                 osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
+                cfs_atomic_set(&clk->ols_pageref, 0);
                 clk->ols_state = OLS_NEW;
                 cl_lock_slice_add(lock, &clk->ols_cl, obj, &osc_lock_ops);
                 result = 0;
@@ -1607,5 +1612,26 @@ int osc_lock_init(const struct lu_env *env,
         return result;
 }
 
+int osc_dlm_lock_pageref(struct ldlm_lock *dlm)
+{
+        struct osc_lock *olock;
+        int              rc = 0;
+
+        cfs_spin_lock(&osc_ast_guard);
+        olock = dlm->l_ast_data;
+        /*
+         * there's a very rare race with osc_page_addref_lock(), but that
+         * doesn't matter because in the worst case we don't cancel a lock
+         * which we actually can, that's no harm.
+         */
+        if (olock != NULL &&
+            cfs_atomic_add_return(_PAGEREF_MAGIC,
+                                  &olock->ols_pageref) != _PAGEREF_MAGIC) {
+                cfs_atomic_sub(_PAGEREF_MAGIC, &olock->ols_pageref);
+                rc = 1;
+        }
+        cfs_spin_unlock(&osc_ast_guard);
+        return rc;
+}
 
 /** @} osc */

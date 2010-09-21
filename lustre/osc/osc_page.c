@@ -162,6 +162,7 @@ static void osc_page_fini(const struct lu_env *env,
 {
         struct osc_page *opg = cl2osc_page(slice);
         CDEBUG(D_TRACE, "%p\n", opg);
+        LASSERT(opg->ops_lock == NULL);
         OBD_SLAB_FREE_PTR(opg, osc_page_kmem);
 }
 
@@ -247,6 +248,48 @@ void osc_index2policy(ldlm_policy_data_t *policy, const struct cl_object *obj,
         policy->l_extent.end   = cl_offset(obj, end + 1) - 1;
 }
 
+static int osc_page_addref_lock(const struct lu_env *env,
+                                struct osc_page *opg,
+                                struct cl_lock *lock)
+{
+        struct osc_lock *olock;
+        int              rc;
+
+        LASSERT(opg->ops_lock == NULL);
+
+        olock = osc_lock_at(lock);
+        if (cfs_atomic_inc_return(&olock->ols_pageref) <= 0) {
+                cfs_atomic_dec(&olock->ols_pageref);
+                cl_lock_put(env, lock);
+                rc = 1;
+        } else {
+                opg->ops_lock = lock;
+                rc = 0;
+        }
+        return rc;
+}
+
+static void osc_page_putref_lock(const struct lu_env *env,
+                                 struct osc_page *opg)
+{
+        struct cl_lock  *lock = opg->ops_lock;
+        struct osc_lock *olock;
+
+        LASSERT(lock != NULL);
+        olock = osc_lock_at(lock);
+
+        cfs_atomic_dec(&olock->ols_pageref);
+        opg->ops_lock = NULL;
+
+        /*
+         * Note: usually this won't be the last reference of the lock, but if
+         * it is, then all the lock_put do is at most just freeing some memory,
+         * so it would be OK that caller is holding spinlocks.
+         */
+        LASSERT(cfs_atomic_read(&lock->cll_ref) > 1 || olock->ols_hold == 0);
+        cl_lock_put(env, lock);
+}
+
 static int osc_page_is_under_lock(const struct lu_env *env,
                                   const struct cl_page_slice *slice,
                                   struct cl_io *unused)
@@ -257,12 +300,32 @@ static int osc_page_is_under_lock(const struct lu_env *env,
         ENTRY;
         lock = cl_lock_at_page(env, slice->cpl_obj, slice->cpl_page,
                                NULL, 1, 0);
-        if (lock != NULL) {
-                cl_lock_put(env, lock);
+        if (lock != NULL &&
+            osc_page_addref_lock(env, cl2osc_page(slice), lock) == 0)
                 result = -EBUSY;
-        } else
+        else
                 result = -ENODATA;
         RETURN(result);
+}
+
+static void osc_page_disown(const struct lu_env *env,
+                            const struct cl_page_slice *slice,
+                            struct cl_io *io)
+{
+        struct osc_page *opg = cl2osc_page(slice);
+
+        if (unlikely(opg->ops_lock))
+                osc_page_putref_lock(env, opg);
+}
+
+static void osc_page_completion_read(const struct lu_env *env,
+                                     const struct cl_page_slice *slice,
+                                     int ioret)
+{
+        struct osc_page *opg = cl2osc_page(slice);
+
+        if (likely(opg->ops_lock))
+                osc_page_putref_lock(env, opg);
 }
 
 static int osc_page_fail(const struct lu_env *env,
@@ -410,12 +473,14 @@ static const struct cl_page_operations osc_page_ops = {
         .cpo_print         = osc_page_print,
         .cpo_delete        = osc_page_delete,
         .cpo_is_under_lock = osc_page_is_under_lock,
+        .cpo_disown        = osc_page_disown,
         .io = {
                 [CRT_READ] = {
-                        .cpo_cache_add = osc_page_fail
+                        .cpo_cache_add  = osc_page_fail,
+                        .cpo_completion = osc_page_completion_read
                 },
                 [CRT_WRITE] = {
-                        .cpo_cache_add = osc_page_cache_add
+                        .cpo_cache_add  = osc_page_cache_add
                 }
         },
         .cpo_clip           = osc_page_clip,

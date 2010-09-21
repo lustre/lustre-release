@@ -2097,6 +2097,37 @@ test_85a() { #bug 16774
 }
 run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
 
+test_85b() { #bug 16774
+    lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+
+    lfs setstripe -o 0 -c 1 $DIR
+
+    for i in `seq 100`; do
+        dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 count=32 >/dev/null 2>&1
+    done
+
+    cancel_lru_locks osc
+
+    for i in `seq 100`; do
+        dd if=$DIR/$tfile-$i of=/dev/null bs=4096 count=32 >/dev/null 2>&1
+    done
+
+    lov_id=`lctl dl | grep "clilov"`
+    addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
+    count=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
+    echo "before recovery: unused locks count = $count"
+
+    fail ost1
+
+    count2=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
+    echo "after recovery: unused locks count = $count2"
+
+    if [ $count2 -ge $count ]; then
+        error "unused locks are not canceled"
+    fi
+}
+run_test 85b "check the cancellation of unused locks during recovery(EXTENT)"
+
 test_86() {
         local clients=${CLIENTS:-$HOSTNAME}
 
