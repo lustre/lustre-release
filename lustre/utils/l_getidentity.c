@@ -89,11 +89,10 @@ static void errlog(const char *fmt, ...)
 {
         va_list args;
 
-        openlog(progname, LOG_PERROR, LOG_AUTHPRIV);
+        openlog(progname, LOG_PERROR | LOG_PID, LOG_AUTHPRIV);
 
         va_start(args, fmt);
         vsyslog(LOG_NOTICE, fmt, args);
-        fprintf(stderr, fmt, args);
         va_end(args);
 
         closelog();
