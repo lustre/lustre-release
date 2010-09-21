@@ -2106,11 +2106,11 @@ test_39() {
 	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/${tfile}2
 	if [ ! $DIR/${tfile}2 -nt $DIR/$tfile ]; then
 		echo "mtime"
-		ls -l  $DIR/$tfile $DIR/${tfile}2
+		ls -l --full-time $DIR/$tfile $DIR/${tfile}2
 		echo "atime"
-		ls -lu  $DIR/$tfile $DIR/${tfile}2
+		ls -lu --full-time $DIR/$tfile $DIR/${tfile}2
 		echo "ctime"
-		ls -lc  $DIR/$tfile $DIR/${tfile}2
+		ls -lc --full-time $DIR/$tfile $DIR/${tfile}2
 		error "O_TRUNC didn't change timestamps"
 	fi
 }

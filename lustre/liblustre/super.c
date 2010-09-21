@@ -767,13 +767,15 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
 
         if (ia_valid & ATTR_SIZE)
                 attr->ia_valid |= ATTR_SIZE;
-        if ((ia_valid & ATTR_SIZE) | 
-            ((ia_valid | ATTR_ATIME | ATTR_ATIME_SET) &&
-             LTIME_S(attr->ia_atime) < LTIME_S(attr->ia_ctime)) ||
-            ((ia_valid | ATTR_MTIME | ATTR_MTIME_SET) &&
-             LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)))
-                /* perform truncate and setting mtime/atime to past under PW
-                 * 0:EOF extent lock (new_size:EOF for truncate) */
+        if ((ia_valid & ATTR_SIZE) ||
+            (ia_valid | ATTR_ATIME | ATTR_ATIME_SET) ||
+            (ia_valid | ATTR_MTIME | ATTR_MTIME_SET))
+                /* on truncate and utimes send attributes to osts, setting
+                 * mtime/atime to past will be performed under PW 0:EOF extent
+                 * lock (new_size:EOF for truncate)
+                 * it may seem excessive to send mtime/atime updates to osts
+                 * when not setting times to past, but it is necessary due to
+                 * possible time de-synchronization */
                 rc = cl_setattr_ost(inode, attr, NULL);
         EXIT;
 out:

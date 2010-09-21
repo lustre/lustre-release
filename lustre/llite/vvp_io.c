@@ -306,10 +306,11 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
                 if (new_size == 0)
                         enqflags = CEF_DISCARD_DATA;
         } else {
-                LASSERT((io->u.ci_setattr.sa_attr.lvb_mtime <
-                         io->u.ci_setattr.sa_attr.lvb_ctime) ||
-                        (io->u.ci_setattr.sa_attr.lvb_atime <
-                         io->u.ci_setattr.sa_attr.lvb_ctime));
+                if ((io->u.ci_setattr.sa_attr.lvb_mtime >=
+                     io->u.ci_setattr.sa_attr.lvb_ctime) ||
+                    (io->u.ci_setattr.sa_attr.lvb_atime >=
+                     io->u.ci_setattr.sa_attr.lvb_ctime))
+                        return 0;
                 new_size = 0;
         }
         cio->u.setattr.cui_local_lock = SETATTR_EXTENT_LOCK;
