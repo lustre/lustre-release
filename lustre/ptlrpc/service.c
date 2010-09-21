@@ -2158,7 +2158,7 @@ static int ptlrpc_main(void *arg)
                 ptlrpc_check_rqbd_pool(svc);
 
                 if (svc->srv_threads_started < svc->srv_threads_max &&
-                    svc->srv_n_active_reqs >= (svc->srv_threads_started - 1)) 
+                    svc->srv_n_active_reqs >= (svc->srv_threads_started - 2))
                         /* Ignore return code - we tried... */
                         ptlrpc_start_thread(dev, svc);
 
