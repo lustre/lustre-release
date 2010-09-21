@@ -519,7 +519,7 @@ cfg_keyutils() {
 
     echo "+++ Updating $REQUEST_KEY_CONF"
 
-    for node in $MY_MGSNODE $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
         is_part_of $node $checked && continue
         lgss_keyring=$(my_do_node $node "which lgss_keyring") || \
             return ${PIPESTATUS[0]}
