@@ -48,11 +48,13 @@
 #include "osd_internal.h"
 
 #ifdef LPROCFS
-enum {
-        LPROC_OSD_NR
-};
 
 static const char *osd_counter_names[LPROC_OSD_NR] = {
+#if OSD_THANDLE_STATS
+        [LPROC_OSD_THANDLE_STARTING] = "thandle starting",
+        [LPROC_OSD_THANDLE_OPEN]     = "thandle open",
+        [LPROC_OSD_THANDLE_CLOSING]  = "thandle closing"
+#endif
 };
 
 int osd_procfs_init(struct osd_device *osd, const char *name)

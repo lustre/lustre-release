@@ -133,6 +133,13 @@ struct osd_thandle {
         /* Link to the device, for debugging. */
         struct lu_ref_link     *ot_dev_link;
 
+#if OSD_THANDLE_STATS
+        /** time when this handle was allocated */
+        cfs_time_t oth_alloced;
+
+        /** time when this thanle was started */
+        cfs_time_t oth_started;
+#endif
 };
 
 /*
@@ -500,6 +507,83 @@ enum {
  * Journal
  */
 
+#if OSD_THANDLE_STATS
+/**
+ * Set time when the handle is allocated
+ */
+static void osd_th_alloced(struct osd_thandle *oth)
+{
+        oth->oth_alloced = cfs_time_current();
+}
+
+/**
+ * Set time when the handle started
+ */
+static void osd_th_started(struct osd_thandle *oth)
+{
+        oth->oth_started = cfs_time_current();
+}
+
+/**
+ * Helper function to convert time interval to microseconds packed in
+ * long int (default time units for the counter in "stats" initialized
+ * by lu_time_init() )
+ */
+static long interval_to_usec(cfs_time_t start, cfs_time_t end)
+{
+        struct timeval val;
+
+        cfs_duration_usec(cfs_time_sub(end, start), &val);
+        return val.tv_sec * 1000000 + val.tv_usec;
+}
+
+/**
+ * Check whether the we deal with this handle for too long.
+ */
+static void __osd_th_check_slow(const struct osd_thandle *oth,
+                                struct osd_device *dev,
+                                cfs_time_t closed)
+{
+        cfs_time_t now = cfs_time_current();
+
+        LASSERT(dev != NULL);
+
+        lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_STARTING,
+                            interval_to_usec(oth->oth_alloced, oth->oth_started));
+        lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_OPEN,
+                            interval_to_usec(oth->oth_started, closed));
+        lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_CLOSING,
+                            interval_to_usec(closed, now));
+
+        if (cfs_time_before(cfs_time_add(oth->oth_alloced, cfs_time_seconds(30)),
+                            now)) {
+                CWARN("transaction handle %p was open for too long: "
+                      "now "CFS_TIME_T" ,"
+                      "alloced "CFS_TIME_T" ,"
+                      "started "CFS_TIME_T" ,"
+                      "closed "CFS_TIME_T"\n",
+                      oth, now, oth->oth_alloced,
+                      oth->oth_started, closed);
+                libcfs_debug_dumpstack(NULL);
+        }
+}
+
+#define OSD_CHECK_SLOW_TH(oth, dev, expr)               \
+{                                                       \
+        cfs_time_t __closed = cfs_time_current();       \
+                                                        \
+        expr;                                           \
+        __osd_th_check_slow(oth, dev, __closed);        \
+}
+
+#else /* OSD_THANDLE_STATS */
+
+#define osd_th_alloced(h)                  do {} while(0)
+#define osd_th_started(h)                  do {} while(0)
+#define OSD_CHECK_SLOW_TH(oth, dev, expr)  expr
+
+#endif /* OSD_THANDLE_STATS */
+
 /*
  * Concurrency: doesn't access mutable data.
  */
@@ -572,8 +656,10 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                          * XXX temporary stuff. Some abstraction layer should
                          * be used.
                          */
-
+                        oti->oti_dev = dev;
+                        osd_th_alloced(oh);
                         jh = ldiskfs_journal_start_sb(osd_sb(dev), p->tp_credits);
+                        osd_th_started(oh);
                         if (!IS_ERR(jh)) {
                                 oh->ot_handle = jh;
                                 th = &oh->ot_super;
@@ -630,7 +716,8 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
                 oh->ot_handle = NULL;
-                result = ldiskfs_journal_stop(hdl);
+                OSD_CHECK_SLOW_TH(oh, oti->oti_dev,
+                                  result = ldiskfs_journal_stop(hdl));
                 if (result != 0)
                         CERROR("Failure to stop transaction: %d\n", result);
         }
