@@ -507,10 +507,10 @@ download_file() {
 download_ofed() {
     local force="${1:-false}"
 
-    local location="http://downloads.lustre.org/public/OFED/"
+    local location="http://www.openfabrics.org/downloads/OFED/ofed-${OFED_VERSION}/"
 
-    local Mmv daily
     if [[ $OFED_VERSION = daily-* ]]; then
+        local Mmv daily
         OFED_VERSION=${OFED_VERSION/daily-/}
         Mmv=${OFED_VERSION%%-*}
         daily=${OFED_VERSION##$Mmv-}
@@ -527,34 +527,6 @@ download_ofed() {
     fi
 
     local file="OFED-${OFED_VERSION}.tgz"
-    download_file "$location/$file" "$KERNELTREE" "$force"
-
-}
-
-download_rdac() {
-    local force="${1:-false}"
-
-    local location="http://downloads.lustre.org/public/RDAC/"
-
-    if [ -z "$RDAC_VERSION" -o "$RDAC_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    local file="rdac-LINUX-${RDAC_VERSION}-source.tar.gz"
-    download_file "$location/$file" "$KERNELTREE" "$force"
-
-}
-
-download_mptlinux() {
-    local force="${1:-false}"
-
-    local location="http://downloads.lustre.org/public/MPTLINUX/"
-
-    if [ -z "$MPTLINUX_VERSION" -o "$MPTLINUX_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    file="SUN_MPTLINUX_RHEL5_PH16-${MPTLINUX_VERSION}.tar.gz"
     download_file "$location/$file" "$KERNELTREE" "$force"
 
 }
@@ -697,24 +669,6 @@ unpack_ofed() {
         return 1
     fi
     [ -d OFED ] || ln -sf OFED-[0-9].[0-9]* OFED
-
-}
-
-unpack_rdac() {
-
-    if ! untar "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz"; then
-        return 1
-    fi
-    [ -d rdac-LINUX ] || ln -sf rdac-LINUX-[0-9][0-9].* rdac-LINUX
-
-}
-
-unpack_mptlinux() {
-
-    if ! untar $KERNELTREE/SUN_MPTLINUX_RHEL5_PH16-${MPTLINUX_VERSION}.tar.gz pkg1-rhel5/srpms-1/mptlinux-${MPTLINUX_VERSION}-1.src.rpm; then
-        return 1
-    fi
-    mv pkg1-rhel5/srpms-1/mptlinux-${MPTLINUX_VERSION}-1.src.rpm .
 
 }
 
@@ -1366,131 +1320,6 @@ build_kernel_with_srpm() {
 
 }
 
-build_mptlinux() {
-    local linux="$1"
-    local version="$2"
-
-    if [ -z "$version" -o "$version" = "inkernel" ]; then
-        return 0
-    fi
-
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-    fi
-
-    # if only we could just rebuild the src.rpm.  but the included spec
-    # is a real pig's breakfast.  just check out the patch we need to
-    # apply to it to make it useful.
-    #$RPMBUILD --rebuild \
-    #          --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
-    #          ${TOPDIR}/mptlinux-*.src.rpm
-    rpm -ivh --define "_topdir ${TOPDIR}" ${TOPDIR}/mptlinux-*.src.rpm
-
-    # now the big honkin' patch to the spec file
-    pushd ${TOPDIR}/SPECS
-    # to regen this patch use:
-    # !!cd ~/rpm/SPECS/ && diff -u mptlinux.spec{.dist,}
-    patch -p0 < ${TOPDIR}/lustre/build/mptlinux.spec.patch || fatal 1 "failed to patch mptlinux.spec"
-    popd
-
-    local targets arch
-        for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-    fi
-
-    if ! $RPMBUILD $targets $rpmbuildopt \
-                  ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
-                  --define "_tmppath /var/tmp" \
-                  --define "_topdir ${TOPDIR}" \
-                  --define "kernel_obj $linux" \
-                  ${TOPDIR}/SPECS/mptlinux.spec 2>&1; then
-        return 1
-    fi
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs \
-                      ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
-                      --define "_tmppath /var/tmp" \
-                      --define "_topdir ${TOPDIR}" \
-                      --define "kernel_obj $linux" \
-                      ${TOPDIR}/SPECS/mptlinux.spec 2>&1; then
-            return 1
-        fi
-    fi
-
-    return 0
-
-}
-
-# build RDAC
-build_rdac() {
-    local linux="$1"
-    local version="$2"
-
-    if [ -z "$version" -o "$version" = "inkernel" ]; then
-        return 0
-    fi
-
-    # note that we use an _, not a . before the spec on purpose.  we are not
-    # allowed to have more than one file with a .spec trailer in a tarball
-    # that is supposed to be usable with rpmbuild
-    cp lustre/build/rdac_spec ${TOPDIR}/SPECS/rdac.spec || fatal 1 "Could not find rdac.spec in lustre/build" 
-
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-    fi
-
-    local distro
-    case $DISTRO in
-     rhel5)     distro="REDHAT"
-                ;;
-    sles1*)     distro="SUSE"
-                ;;
-         *)     echo "$DISTRO not supported by RDAC, skipping"
-                return 0
-                ;;
-    esac
-    if ! $RPMBUILD $targets $rpmbuildopt --define "dist $distro" \
-                  ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
-                  --define "_tmppath /var/tmp" \
-                  --define "_topdir ${TOPDIR}" \
-                  --define "kernel_obj $linux" \
-                  ${TOPDIR}/SPECS/rdac.spec 2>&1; then
-        return 1
-    fi
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs --define "dist $distro" \
-                      ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
-                      --define "_tmppath /var/tmp" \
-                      --define "_topdir ${TOPDIR}" \
-                      --define "kernel_obj $linux" \
-                      ${TOPDIR}/SPECS/rdac.spec 2>&1; then
-            return 1
-        fi
-    fi
-
-    return 0
-}
-
 # build OFED
 # globals used:
 #    TOPDIR
@@ -1638,15 +1467,6 @@ EOF
 
     build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
         fatal 1 "error building OFED"
-
-    if ! $PATCHLESS; then
-        # only need RDAC for the server
-        build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
-            fatal 1 "error building RDAC"
-    fi
-
-    build_mptlinux "${LINUXOBJ:-$LINUX}" "$MPTLINUX_VERSION" ||
-        fatal 1 "error building mptlinux"
 
     # now build Lustre
     if build_lustre "$LINUX" "$LINUXOBJ"; then
@@ -1963,33 +1783,14 @@ if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     unpack_ofed || fatal 1 "Error unpacking OFED tarball"
 fi
 
-if [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ]; then
-    download_mptlinux
-    unpack_mptlinux || fatal 1 "Error unpacking MPTLINUX distribution"
-fi
-
 # make sure the RPM build environment is set up
 create_rpmbuild_dirs
-
-if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
-    download_rdac
-    # we don't actually need to unpack this.  just put it in the SOURCES dir
-    #unpack_rdac || fatal 1 "Error unpacking RDAC tarball"
-    cp "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ${TOPDIR}/SOURCES/ ||
-        fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
-fi
 
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
 if [ -n "$LINUX" ]; then
-    build_mptlinux "${LINUXOBJ:-$LINUX}" "$MPTLINUX_VERSION" ||
-        fatal 1 "error building mptlinux"
     build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
         fatal 1 "error building OFED"
-    if ! $PATCHLESS; then
-        build_rdac "${LINUXOBJ:-$LINUX}" "$RDAC_VERSION" ||
-            fatal 1 "error building RDAC"
-    fi
     build_lustre "$LINUX" "$LINUXOBJ"
 else
     if [ -f "${0%/*}/lbuild-$DISTRO" ]; then
