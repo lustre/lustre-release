@@ -115,7 +115,12 @@ OS=`uname`
 if test x$OS = xAIX; then
 $LD -shared -o $CWD/liblustre.so $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
 else
-$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
+# using -nostdlib on Ubuntu causes errors such as:
+#./llite_lib.o: In function `liblustre_process_log':
+#/home/brian/rpm/BUILD/lustre-1.8.2.50/lustre/liblustre/llite_lib.c:234: undefined reference to `__stack_chk_fail_local'
+# due to the use of SSP
+#$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
+$LD -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
 fi
 
 rm -rf $sysio_tmp
