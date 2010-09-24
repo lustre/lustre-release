@@ -3,6 +3,11 @@
 	* Support for kernel:
 	 2.6.18-128.1.14.el5 (RHEL 5)
 
+Severity   : normal
+Bugzilla   : 20456
+Description: ASSERTION(atomic_read(&imp->imp_inflight) == 0) failed
+Details    : unregistering should be zero if no RPC inflight.
+
 Severity   : major
 Bugzilla   : 20892
 Description: bad entry in directory xxx: inode out of bounds
