@@ -3132,6 +3132,21 @@ get_mds_version_fix () {
     echo $version | awk -F. '{print $4}'
 }
 
+get_kernel_version () {
+    local facet=${1:-"mds"}
+    do_facet $facet uname -r | awk -F "-" '{print $1}'
+}
+
+get_mds_kernel_major () {
+    local version=$(get_kernel_version mds)
+    echo $version | awk -F. '{print $1"."$2}'
+}
+
+get_mds_kernel_minor () {
+    local version=$(get_kernel_version mds)
+    echo $version | awk -F. '{print $3}'
+}
+
 get_mds_fsstat_proc_path() {
     local major=$(get_mds_version_major)
     local minor=$(get_mds_version_minor)

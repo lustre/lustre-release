@@ -129,6 +129,10 @@ check_jbd_values_facets () {
 }
 
 test_1b () {
+	local major=$(get_mds_kernel_major)
+	local minor=$(get_mds_kernel_minor)
+	[ "$major"=="2.6" -a $minor -eq 32 ]  && \
+		skip "There is no jbd history in this kernel version." && return
 	local param_file=$TMP/$tfile-params
 
 	do_nodesv $(comma_list $(osts_nodes)) lctl get_param obdfilter.${FSNAME}-*.sync_journal
@@ -153,6 +157,10 @@ test_2a () {
 run_test 2a "Stripe F/S over the Network"
 
 test_2b () {
+	local major=$(get_mds_kernel_major)
+	local minor=$(get_mds_kernel_minor)
+	[ "$major"=="2.6" -a $minor -eq 32 ]  && \
+		skip "There is no jbd history in this kernel version." && return
 	local param_file=$TMP/$tfile-params
 
 	do_nodesv $(comma_list $(osts_nodes)) lctl get_param obdfilter.${FSNAME}-*.sync_journal
