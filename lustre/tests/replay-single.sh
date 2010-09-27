@@ -1561,7 +1561,7 @@ at_cleanup () {
     echo "Cleaning up AT ..."
     if [ -n "$ATOLDBASE" ]; then
         local at_history=$($LCTL get_param -n at_history)
-        do_facet mds "lctl set_param at_history=$at_history" || true
+        do_facet $SINGLEMDS "lctl set_param at_history=$at_history" || true
         do_facet ost1 "lctl set_param at_history=$at_history" || true
     fi
 
@@ -1601,9 +1601,9 @@ at_start()
     done
 
     if [ -z "$ATOLDBASE" ]; then
-	ATOLDBASE=$(do_facet mds "lctl get_param -n at_history")
+	ATOLDBASE=$(do_facet $SINGLEMDS "lctl get_param -n at_history")
         # speed up the timebase so we can check decreasing AT
-        do_facet mds "lctl set_param at_history=8" || true
+        do_facet $SINGLEMDS "lctl set_param at_history=8" || true
         do_facet ost1 "lctl set_param at_history=8" || true
 
 	# sleep for a while to cool down, should be > 8s and also allow
@@ -1626,9 +1626,9 @@ test_65a() #bug 3055
                awk '/portal 12/ {print $5}'`
     REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
-    do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
+    do_facet $SINGLEMDS lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
-    do_facet mds sysctl -w lustre.fail_loc=0x8000050a
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
@@ -1683,18 +1683,18 @@ test_66a() #bug 3055
     at_start || return 0
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
     # adjust 5s at a time so no early reply is sent (within deadline)
-    do_facet mds "sysctl -w lustre.fail_val=5000"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_val=5000"
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000050a"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000050a"
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
-    do_facet mds "sysctl -w lustre.fail_val=10000"
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000050a"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_val=10000"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000050a"
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     sleep 9
     createmany -o $DIR/$tfile 20 > /dev/null
     unlinkmany $DIR/$tfile 20 > /dev/null
@@ -1755,9 +1755,9 @@ test_67b() #bug 3055
     # exhaust precreations on ost1
     local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
     local mdtosc=$(get_mdtosc_proc_path mds $OST)
-    local last_id=$(do_facet mds lctl get_param -n \
+    local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
         osc.$mdtosc.prealloc_last_id)
-    local next_id=$(do_facet mds lctl get_param -n \
+    local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
         osc.$mdtosc.prealloc_next_id)
 
     mkdir -p $DIR/$tdir/${OST}

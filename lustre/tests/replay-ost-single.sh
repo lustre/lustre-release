@@ -191,7 +191,7 @@ test_6() {
     sleep 2 # ensure we have a fresh statfs
     sync
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "lctl set_param fail_loc=0x80000119"
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000119"
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1

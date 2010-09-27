@@ -477,7 +477,7 @@ test_17h() { #bug 17378
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c -1
 #define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
-        do_facet mds lctl set_param fail_loc=0x80000141
+        do_facet $SINGLEMDS lctl set_param fail_loc=0x80000141
         touch $DIR/$tdir/$tfile || true
 }
 run_test 17h "create objects: lov_free_memmd() doesn't lbug"
@@ -487,7 +487,7 @@ test_17i() { #bug 20018
 	local foo=$DIR/$tdir/$tfile
 	ln -s $foo $foo || error "create symlink failed"
 #define OBD_FAIL_MDS_READLINK_EPROTO     0x143
-	do_facet mds lctl set_param fail_loc=0x80000143
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000143
 	ls -l $foo && error "error not detected"
 	return 0
 }
@@ -1004,7 +1004,7 @@ test_27m() {
 run_test 27m "create file while OST0 was full =================="
 
 sleep_maxage() {
-        local DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | head -n 1 | awk '{print $1 * 2}')
+        local DELAY=$(do_facet $SINGLEMDS lctl get_param -n lov.*.qos_maxage | head -n 1 | awk '{print $1 * 2}')
         sleep $DELAY
 }
 
@@ -1273,7 +1273,7 @@ test_27y() {
         [ $fcount -eq 0 ] && skip "not enough space on OST0" && return
         [ $fcount -gt $OSTCOUNT ] && fcount=$OSTCOUNT
 
-        MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
+        MDS_OSCS=`do_facet $SINGLEMDS lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
         OFFSET=$(($OSTCOUNT-1))
         OST=-1
         for OSC in $MDS_OSCS; do
@@ -1281,7 +1281,7 @@ test_27y() {
                         OST=`osc_to_ost $OSC`
                 } else {
                         echo $OSC "is Deactivate:"
-                        do_facet mds lctl --device  %$OSC deactivate
+                        do_facet $SINGLEMDS lctl --device  %$OSC deactivate
                 } fi
         done
 
@@ -1301,7 +1301,7 @@ test_27y() {
         for OSC in $MDS_OSCS; do
                 [ `osc_to_ost $OSC` != $OST  ] && {
                         echo $OSC "is activate"
-                        do_facet mds lctl --device %$OSC activate
+                        do_facet $SINGLEMDS lctl --device %$OSC activate
                 }
         done
 }
@@ -3780,7 +3780,7 @@ test_65k() { # bug11679
                         STRIPE_INDEX=`do_facet $SINGLEMDS lctl get_param -n lov.*md*.target_obd |
                                       grep $STRIPE_OST | awk -F: '{print $1}' | head -n 1`
 
-			[ -f $DIR/$tdir/${STRIPE_INDEX} ] && continue
+                [ -f $DIR/$tdir/${STRIPE_INDEX} ] && continue
                         echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1"
                         do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1
                         RC=$?
@@ -7150,7 +7150,7 @@ test_163() {
 	sleep 1
 	local uuid=$($LCTL get_param -n mdc.${FSNAME}-MDT0000-mdc-*.uuid)
 	# this proc file is temporary and linux-only
-	do_facet mds lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid ||\
+	do_facet $SINGLEMDS lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid ||\
          error "kernel->userspace send failed"
 	kill -INT $!
 }

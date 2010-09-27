@@ -388,10 +388,10 @@ run_test 7 "exercise enlarge_reqbuf()"
 
 test_8()
 {
-    local ATHISTORY=$(do_facet mds "find /sys/ -name at_history")
-    local ATOLDBASE=$(do_facet mds "cat $ATHISTORY")
+    local ATHISTORY=$(do_facet $SINGLEMDS "find /sys/ -name at_history")
+    local ATOLDBASE=$(do_facet $SINGLEMDS "cat $ATHISTORY")
     local REQ_DELAY
-    do_facet mds "echo 8 >> $ATHISTORY"
+    do_facet $SINGLEMDS "echo 8 >> $ATHISTORY"
 
     mkdir -p $DIR/d8
     chmod a+w $DIR/d8
@@ -411,9 +411,9 @@ test_8()
     REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
     # sleep sometime in ctx handle
-    do_facet mds lctl set_param fail_val=$REQ_DELAY
+    do_facet $SINGLEMDS lctl set_param fail_val=$REQ_DELAY
 #define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
-    do_facet mds lctl set_param fail_loc=0x1204
+    do_facet $SINGLEMDS lctl set_param fail_loc=0x1204
 
     $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
 
@@ -421,13 +421,13 @@ test_8()
     TOUCHPID=$!
     echo "waiting for touch (pid $TOUCHPID) to finish..."
     sleep 2 # give it a chance to really trigger context init rpc
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
     wait $TOUCHPID || error "touch should have succeeded"
 
     $LCTL dk | grep "Early reply #" || error "No early reply"
 
     debugrestore
-    do_facet mds "echo $ATOLDBASE >> $ATHISTORY" || true
+    do_facet $SINGLEMDS "echo $ATOLDBASE >> $ATHISTORY" || true
 }
 run_test 8 "Early reply sent for slow gss context negotiation"
 

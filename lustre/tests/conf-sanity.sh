@@ -514,7 +514,7 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        local FOUNDSIZE=`do_facet $SINGLEMDS "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
@@ -1326,9 +1326,9 @@ test_35b() { # bug 18674
 
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
-	local device=$(do_facet mds "$LCTL get_param -n devices" | \
+	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" | \
 			awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet mds "$LCTL conf_param ${device}.failover.node=$FAKENID" || \
+	do_facet $SINGLEMDS "$LCTL conf_param ${device}.failover.node=$FAKENID" || \
 		return 1
 
 	local at_max_saved=0
@@ -1343,13 +1343,13 @@ test_35b() { # bug 18674
 
 	log "Injecting EBUSY on MDS"
 	# Setting OBD_FAIL_MDS_RESEND=0x136
-	do_facet mds "$LCTL set_param fail_loc=0x80000136" || return 2
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x80000136" || return 2
 
 	log "Stat on a test file"
 	stat $MOUNT/testdir/test
 
 	log "Stop injecting EBUSY on MDS"
-	do_facet mds "$LCTL set_param fail_loc=0" || return 3
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0" || return 3
 	rm -f $MOUNT/testdir/test
 
 	log "done"
@@ -1702,7 +1702,7 @@ test_44() { # 16317
         check_mount || return 2
         UUID=$($LCTL get_param llite.${FSNAME}*.uuid | cut -d= -f2)
         STATS_FOUND=no
-        UUIDS=$(do_facet mds "$LCTL get_param mdt.${FSNAME}*.exports.*.uuid")
+        UUIDS=$(do_facet $SINGLEMDS "$LCTL get_param mdt.${FSNAME}*.exports.*.uuid")
         for VAL in $UUIDS; do
                 NID=$(echo $VAL | cut -d= -f1)
                 CLUUID=$(echo $VAL | cut -d= -f2)
@@ -1881,7 +1881,7 @@ test_49() { # bug 17710
 	check_mount || return 1
 
 	echo "check ldlm_timout..."
-	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
+	LDLM_MDS="`do_facet $SINGLEMDS lctl get_param -n ldlm_timeout`"
 	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
 	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
 
@@ -1903,7 +1903,7 @@ test_49() { # bug 17710
 	setup_noconfig
 	check_mount || return 7
 
-	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
+	LDLM_MDS="`do_facet $SINGLEMDS lctl get_param -n ldlm_timeout`"
 	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
 	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
 
