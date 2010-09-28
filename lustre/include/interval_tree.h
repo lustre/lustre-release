@@ -109,6 +109,10 @@ void interval_erase(struct interval_node *node, struct interval_node **root);
 enum interval_iter interval_search(struct interval_node *root,
                                    struct interval_node_extent *ex,
                                    interval_callback_t func, void *data);
+enum interval_iter interval_search_expand_extent(struct interval_node *root,
+                                   struct interval_node_extent *ex,
+                                   struct interval_node_extent *result_ext,
+                                   interval_callback_t func, void *data);
 
 /* Iterate every node in the tree - by reverse order or regular order. */
 enum interval_iter interval_iterate(struct interval_node *root, 
