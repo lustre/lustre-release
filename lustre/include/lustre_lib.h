@@ -697,7 +697,7 @@ do {                                                                           \
                            (__timeout == 0 || __allow_intr) ?                  \
                         CFS_TASK_INTERRUPTIBLE : CFS_TASK_UNINT;               \
                                                                                \
-                cfs_set_current_state(__wstate);                               \
+                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);                 \
                                                                                \
                 if (condition)                                                 \
                         break;                                                 \
