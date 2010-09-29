@@ -3183,6 +3183,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                         *fcc = oa->o_lcookie;
         }
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
+                unsigned long now = jiffies;
                 DQUOT_INIT(inode);
                 /* Filter truncates and writes are serialized by
                  * i_alloc_sem, see the comment in
@@ -3190,6 +3191,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 if (ia_valid & ATTR_SIZE)
                         down_write(&inode->i_alloc_sem);
                 LOCK_INODE_MUTEX(inode);
+                fsfilt_check_slow(exp->exp_obd, now, "i_alloc_sem and i_mutex");
                 old_size = i_size_read(inode);
         }
 
@@ -3386,7 +3388,9 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
          */
         if (oa->o_valid &
             (OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME)) {
+                unsigned long now = jiffies;
                 down_write(&dentry->d_inode->i_alloc_sem);
+                fsfilt_check_slow(exp->exp_obd, now, "i_alloc_sem");
                 fmd = filter_fmd_get(exp, oa->o_id, oa->o_seq);
                 if (fmd && fmd->fmd_mactime_xid < oti->oti_xid)
                         fmd->fmd_mactime_xid = oti->oti_xid;
@@ -4006,6 +4010,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         struct llog_cookie *fcc = NULL;
         int rc, rc2, cleanup_phase = 0, sync = 0;
         struct iattr iattr;
+        unsigned long now;
         ENTRY;
 
         rc = filter_auth_capa(exp, NULL, oa->o_seq,
@@ -4074,8 +4079,10 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
          * between page lock, i_mutex & starting new journal handle.
          * (see bug 20321) -johann
          */
+        now = jiffies;
         down_write(&dchild->d_inode->i_alloc_sem);
         LOCK_INODE_MUTEX(dchild->d_inode);
+        fsfilt_check_slow(exp->exp_obd, now, "i_alloc_sem and i_mutex");
 
         /* VBR: version recovery check */
         rc = filter_version_get_check(exp, oti, dchild->d_inode);

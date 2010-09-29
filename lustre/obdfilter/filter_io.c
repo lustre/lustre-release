@@ -733,6 +733,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * filter truncates are serialized by i_alloc_sem, allowing
          * multiple writes or single truncate. */
         down_read(&dentry->d_inode->i_alloc_sem);
+        fsfilt_check_slow(obd, now, "i_alloc_sem");
 
         /* Don't update inode timestamps if this write is older than a
          * setattr which modifies the timestamps. b=10150 */
