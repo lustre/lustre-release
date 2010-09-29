@@ -815,12 +815,10 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lov->lov_pool_count = 0;
         rc = lov_ost_pool_init(&lov->lov_packed, 0);
         if (rc)
-                RETURN(rc);
+                GOTO(out_free_statfs, rc);
         rc = lov_ost_pool_init(&lov->lov_qos.lq_rr.lqr_pool, 0);
-        if (rc) {
-                lov_ost_pool_free(&lov->lov_packed);
-                RETURN(rc);
-        }
+        if (rc)
+                GOTO(out_free_lov_packed, rc);
 
         lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -839,6 +837,12 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                                     NULL, NULL);
 
         RETURN(0);
+
+out_free_lov_packed:
+        lov_ost_pool_free(&lov->lov_packed);
+out_free_statfs:
+        OBD_FREE_PTR(lov->lov_qos.lq_statfs_data);
+        return rc;
 }
 
 static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
