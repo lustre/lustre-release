@@ -540,8 +540,8 @@ static long interval_to_usec(cfs_time_t start, cfs_time_t end)
 /**
  * Check whether the we deal with this handle for too long.
  */
-static void __osd_th_check_slow(const struct osd_thandle *oth,
-                                struct osd_device *dev,
+static void __osd_th_check_slow(void *oth, struct osd_device *dev,
+                                cfs_time_t alloced, cfs_time_t started,
                                 cfs_time_t closed)
 {
         cfs_time_t now = cfs_time_current();
@@ -549,31 +549,31 @@ static void __osd_th_check_slow(const struct osd_thandle *oth,
         LASSERT(dev != NULL);
 
         lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_STARTING,
-                            interval_to_usec(oth->oth_alloced, oth->oth_started));
+                            interval_to_usec(alloced, started));
         lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_OPEN,
-                            interval_to_usec(oth->oth_started, closed));
+                            interval_to_usec(started, closed));
         lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_CLOSING,
                             interval_to_usec(closed, now));
 
-        if (cfs_time_before(cfs_time_add(oth->oth_alloced, cfs_time_seconds(30)),
-                            now)) {
+        if (cfs_time_before(cfs_time_add(alloced, cfs_time_seconds(30)), now)) {
                 CWARN("transaction handle %p was open for too long: "
                       "now "CFS_TIME_T" ,"
                       "alloced "CFS_TIME_T" ,"
                       "started "CFS_TIME_T" ,"
                       "closed "CFS_TIME_T"\n",
-                      oth, now, oth->oth_alloced,
-                      oth->oth_started, closed);
+                      oth, now, alloced, started, closed);
                 libcfs_debug_dumpstack(NULL);
         }
 }
 
-#define OSD_CHECK_SLOW_TH(oth, dev, expr)               \
-{                                                       \
-        cfs_time_t __closed = cfs_time_current();       \
-                                                        \
-        expr;                                           \
-        __osd_th_check_slow(oth, dev, __closed);        \
+#define OSD_CHECK_SLOW_TH(oth, dev, expr)                               \
+{                                                                       \
+        cfs_time_t __closed = cfs_time_current();                       \
+        cfs_time_t __alloced = oth->oth_alloced;                        \
+        cfs_time_t __started = oth->oth_started;                        \
+                                                                        \
+        expr;                                                           \
+        __osd_th_check_slow(oth, dev, __alloced, __started, __closed);  \
 }
 
 #else /* OSD_THANDLE_STATS */
