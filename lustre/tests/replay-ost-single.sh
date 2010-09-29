@@ -17,11 +17,6 @@ init_logging
 
 require_dsh_ost || exit 0
 
-if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
-    skip_env "$0: Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
-    exit 0
-fi
-
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 6"
