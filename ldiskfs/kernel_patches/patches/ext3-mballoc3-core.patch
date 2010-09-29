@@ -1369,9 +1369,9 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			unlock_page(page);
 +		}
 +	}
++	e3b->bd_bitmap_page = page;
 +	if (page == NULL || !PageUptodate(page))
 +		goto err;
-+	e3b->bd_bitmap_page = page;
 +	e3b->bd_bitmap = page_address(page) + (poff * sb->s_blocksize);
 +	mark_page_accessed(page);
 +
@@ -1392,9 +1392,9 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			unlock_page(page);
 +		}
 +	}
++	e3b->bd_buddy_page = page;
 +	if (page == NULL || !PageUptodate(page))
 +		goto err;
-+	e3b->bd_buddy_page = page;
 +	e3b->bd_buddy = page_address(page) + (poff * sb->s_blocksize);
 +	mark_page_accessed(page);
 +
