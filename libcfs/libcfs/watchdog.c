@@ -368,7 +368,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
                 RETURN(ERR_PTR(-ENOMEM));
         }
 
-        spin_lock_init(&lcw->lcw_lock);
+        cfs_spin_lock_init(&lcw->lcw_lock);
         lcw->lcw_refcount = 1; /* refcount for owner */
         lcw->lcw_task     = cfs_current();
         lcw->lcw_pid      = cfs_curproc_pid();
