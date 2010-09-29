@@ -1202,13 +1202,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         sizeof(lumv3p->lmm_objects[0]));
 
                 /* first try with v1 which is smaller than v3 */
-                rc = copy_from_user(lumv1, lumv1p, sizeof(*lumv1));
-                if (rc)
-                        return(-EFAULT);
+                if (copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
+                        RETURN(-EFAULT);
 
                 if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
-                        rc = copy_from_user(&lumv3, lumv3p, sizeof(lumv3));
-                        if (rc)
+                        if (copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))
                                 RETURN(-EFAULT);
                 }
 
@@ -1271,9 +1269,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lmdp = (struct lov_user_mds_data *)arg;
                         lump = &lmdp->lmd_lmm;
                 }
-                rc = copy_to_user(lump, lmm, lmmsize);
-                if (rc)
-                        GOTO(out_lmm, rc = -EFAULT);
+                if (copy_to_user(lump, lmm, lmmsize) != 0) {
+                        if (copy_to_user(lump, lmm, sizeof(*lump)) != 0)
+                                GOTO(out_lmm, rc = -EFAULT);
+                        rc = -EOVERFLOW;
+                }
         skip_lmm:
                 if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO) {
                         struct lov_user_mds_data *lmdp;
@@ -1294,8 +1294,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         st.st_ino     = body->ino;
 
                         lmdp = (struct lov_user_mds_data *)arg;
-                        rc = copy_to_user(&lmdp->lmd_st, &st, sizeof(st));
-                        if (rc)
+                        if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
                                 GOTO(out_lmm, rc = -EFAULT);
                 }
 
@@ -1326,8 +1325,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(rc);
 
                 OBD_ALLOC(lmm, lmmsize);
-                rc = copy_from_user(lmm, lum, lmmsize);
-                if (rc)
+                if (copy_from_user(lmm, lum, lmmsize))
                         GOTO(free_lmm, rc = -EFAULT);
 
                 if (LOV_USER_MAGIC != cpu_to_le32(LOV_USER_MAGIC)) {
@@ -1356,8 +1354,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         GOTO(free_lsm, rc);
 
-                rc = copy_to_user(&lumd->lmd_st, &st, sizeof(st));
-                if (rc)
+                if (copy_to_user(&lumd->lmd_st, &st, sizeof(st)))
                         GOTO(free_lsm, rc = -EFAULT);
 
                 EXIT;
@@ -1408,7 +1405,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 str = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF,
                                         data->ioc_plen1);
                 if (!rc)
-                        rc = copy_to_user(data->ioc_pbuf1, str,data->ioc_plen1);
+                        if (copy_to_user(data->ioc_pbuf1, str,data->ioc_plen1))
+                                rc = -EFAULT;
                 ptlrpc_req_finished(req);
         out_catinfo:
                 obd_ioctl_freedata(buf, len);
@@ -1454,7 +1452,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc) {
                         CDEBUG(D_QUOTA, "mdc ioctl %d failed: %d\n", cmd, rc);
                         if (copy_to_user((void *)arg, check, sizeof(*check)))
-                                rc = -EFAULT;
+                                CDEBUG(D_QUOTA, "copy_to_user failed\n");
                         GOTO(out_poll, rc);
                 }
 
@@ -1463,7 +1461,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc) {
                         CDEBUG(D_QUOTA, "osc ioctl %d failed: %d\n", cmd, rc);
                         if (copy_to_user((void *)arg, check, sizeof(*check)))
-                                rc = -EFAULT;
+                                CDEBUG(D_QUOTA, "copy_to_user failed\n");
                         GOTO(out_poll, rc);
                 }
         out_poll:
