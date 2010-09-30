@@ -806,7 +806,11 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         lov->lov_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
                                                    HASH_POOLS_MAX_BITS,
-                                                   &pool_hash_operations, CFS_HASH_REHASH);
+                                                   HASH_POOLS_BKT_BITS, 0,
+                                                   CFS_HASH_MIN_THETA,
+                                                   CFS_HASH_MAX_THETA,
+                                                   &pool_hash_operations,
+                                                   CFS_HASH_DEFAULT);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
         rc = lov_ost_pool_init(&lov->lov_packed, 0);

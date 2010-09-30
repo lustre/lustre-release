@@ -145,7 +145,10 @@ int ptlrpc_connection_init(void)
         conn_hash = cfs_hash_create("CONN_HASH",
                                     HASH_CONN_CUR_BITS,
                                     HASH_CONN_MAX_BITS,
-                                    &conn_hash_ops, CFS_HASH_REHASH);
+                                    HASH_CONN_BKT_BITS, 0,
+                                    CFS_HASH_MIN_THETA,
+                                    CFS_HASH_MAX_THETA,
+                                    &conn_hash_ops, CFS_HASH_DEFAULT);
         if (!conn_hash)
                 RETURN(-ENOMEM);
 
@@ -168,7 +171,7 @@ conn_hashfn(cfs_hash_t *hs,  void *key, unsigned mask)
 }
 
 static int
-conn_compare(void *key, cfs_hlist_node_t *hnode)
+conn_keycmp(void *key, cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
         lnet_process_id_t *conn_key;
@@ -190,6 +193,12 @@ conn_key(cfs_hlist_node_t *hnode)
 }
 
 static void *
+conn_object(cfs_hlist_node_t *hnode)
+{
+        return cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+}
+
+static void *
 conn_get(cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
@@ -201,7 +210,7 @@ conn_get(cfs_hlist_node_t *hnode)
 }
 
 static void *
-conn_put(cfs_hlist_node_t *hnode)
+conn_put_locked(cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 
@@ -229,10 +238,11 @@ conn_exit(cfs_hlist_node_t *hnode)
 }
 
 static cfs_hash_ops_t conn_hash_ops = {
-        .hs_hash    = conn_hashfn,
-        .hs_compare = conn_compare,
-        .hs_key     = conn_key,
-        .hs_get     = conn_get,
-        .hs_put     = conn_put,
-        .hs_exit    = conn_exit,
+        .hs_hash        = conn_hashfn,
+        .hs_keycmp      = conn_keycmp,
+        .hs_key         = conn_key,
+        .hs_object      = conn_object,
+        .hs_get         = conn_get,
+        .hs_put_locked  = conn_put_locked,
+        .hs_exit        = conn_exit,
 };

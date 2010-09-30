@@ -629,7 +629,7 @@ static void *cl_env_hops_obj(cfs_hlist_node_t *hn)
         return (void *)cle;
 }
 
-static int cl_env_hops_compare(void *key, cfs_hlist_node_t *hn)
+static int cl_env_hops_keycmp(void *key, cfs_hlist_node_t *hn)
 {
         struct cl_env *cle = cl_env_hops_obj(hn);
 
@@ -638,11 +638,12 @@ static int cl_env_hops_compare(void *key, cfs_hlist_node_t *hn)
 }
 
 static cfs_hash_ops_t cl_env_hops = {
-        .hs_hash    = cl_env_hops_hash,
-        .hs_compare = cl_env_hops_compare,
-        .hs_key     = cl_env_hops_obj,
-        .hs_get     = cl_env_hops_obj,
-        .hs_put     = cl_env_hops_obj,
+        .hs_hash        = cl_env_hops_hash,
+        .hs_key         = cl_env_hops_obj,
+        .hs_keycmp      = cl_env_hops_keycmp,
+        .hs_object      = cl_env_hops_obj,
+        .hs_get         = cl_env_hops_obj,
+        .hs_put_locked  = cl_env_hops_obj,
 };
 
 static inline struct cl_env *cl_env_fetch(void)
@@ -679,8 +680,13 @@ static inline void cl_env_do_detach(struct cl_env *cle)
 }
 
 static int cl_env_store_init(void) {
-        cl_env_hash = cfs_hash_create("cl_env", 8, 10, &cl_env_hops,
-                                      CFS_HASH_REHASH);
+        cl_env_hash = cfs_hash_create("cl_env",
+                                      HASH_CL_ENV_BITS, HASH_CL_ENV_BITS,
+                                      HASH_CL_ENV_BKT_BITS, 0,
+                                      CFS_HASH_MIN_THETA,
+                                      CFS_HASH_MAX_THETA,
+                                      &cl_env_hops,
+                                      CFS_HASH_RW_BKTLOCK);
         return cl_env_hash != NULL ? 0 :-ENOMEM;
 }
 

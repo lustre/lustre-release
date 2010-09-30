@@ -1653,15 +1653,18 @@ lprocfs_exp_rd_cb_data_init(struct exp_uuid_cb_data *cb_data, char *page,
         cb_data->len = len;
 }
 
-void lprocfs_exp_print_uuid(void *obj, void *cb_data)
+int lprocfs_exp_print_uuid(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                           cfs_hlist_node_t *hnode, void *cb_data)
+
 {
-        struct obd_export *exp = (struct obd_export *)obj;
+        struct obd_export *exp = cfs_hash_object(hs, hnode);
         struct exp_uuid_cb_data *data = (struct exp_uuid_cb_data *)cb_data;
 
         if (exp->exp_nid_stats)
                 *data->len += snprintf((data->page + *data->len),
                                        data->count, "%s\n",
                                        obd_uuid2str(&exp->exp_client_uuid));
+        return 0;
 }
 
 int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
@@ -1680,21 +1683,21 @@ int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
         return (*cb_data.len);
 }
 
-void lprocfs_exp_print_hash(void *obj, void *cb_data)
+int lprocfs_exp_print_hash(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                           cfs_hlist_node_t *hnode, void *cb_data)
+
 {
         struct exp_uuid_cb_data *data = cb_data;
-        struct obd_export       *exp = obj;
-        cfs_hash_t              *hs;
+        struct obd_export       *exp = cfs_hash_object(hs, hnode);
 
-        hs = exp->exp_lock_hash;
-        if (hs) {
-                if (!*data->len)
-                        *data->len += cfs_hash_debug_header(data->page,
-                                                            data->count);
-
-                *data->len += cfs_hash_debug_str(hs, data->page + *data->len,
-                                                 data->count);
+        LASSERT(hs == exp->exp_lock_hash);
+        if (!*data->len) {
+                *data->len += cfs_hash_debug_header(data->page,
+                                                    data->count);
         }
+        *data->len += cfs_hash_debug_str(hs, data->page + *data->len,
+                                         data->count);
+        return 0;
 }
 
 int lprocfs_exp_rd_hash(char *page, char **start, off_t off, int count,
@@ -1750,7 +1753,7 @@ int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
 }
 
 int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
-                                         unsigned long count, void *data)
+                                  unsigned long count, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct nid_stat *client_stat;

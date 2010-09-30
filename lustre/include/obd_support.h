@@ -95,20 +95,29 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                    size_t size, const char *file, int line);
 
 /* Some hash init argument constants */
+#define HASH_POOLS_BKT_BITS 3
 #define HASH_POOLS_CUR_BITS 3
 #define HASH_POOLS_MAX_BITS 7
+#define HASH_UUID_BKT_BITS 5
 #define HASH_UUID_CUR_BITS 7
 #define HASH_UUID_MAX_BITS 12
+#define HASH_NID_BKT_BITS 5
 #define HASH_NID_CUR_BITS 7
 #define HASH_NID_MAX_BITS 12
+#define HASH_NID_STATS_BKT_BITS 5
 #define HASH_NID_STATS_CUR_BITS 7
 #define HASH_NID_STATS_MAX_BITS 12
+#define HASH_LQS_BKT_BITS 5
 #define HASH_LQS_CUR_BITS 7
 #define HASH_LQS_MAX_BITS 12
+#define HASH_CONN_BKT_BITS 5
 #define HASH_CONN_CUR_BITS 5
 #define HASH_CONN_MAX_BITS 15
+#define HASH_EXP_LOCK_BKT_BITS  5
 #define HASH_EXP_LOCK_CUR_BITS  7
 #define HASH_EXP_LOCK_MAX_BITS  16
+#define HASH_CL_ENV_BKT_BITS    5
+#define HASH_CL_ENV_BITS        10
 
 /* Timeout definitions */
 #define OBD_TIMEOUT_DEFAULT             100

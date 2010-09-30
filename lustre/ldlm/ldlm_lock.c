@@ -1673,10 +1673,12 @@ int ldlm_lock_set_data(struct lustre_handle *lockh, void *data)
         RETURN(0);
 }
 
-void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
+int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                                    cfs_hlist_node_t *hnode, void *data)
+
 {
-        struct obd_export    *exp = data;
-        struct ldlm_lock     *lock = obj;
+        struct obd_export    *exp  = data;
+        struct ldlm_lock     *lock = cfs_hash_object(hs, hnode);
         struct ldlm_resource *res;
 
         res = ldlm_resource_getref(lock->l_resource);
@@ -1688,6 +1690,7 @@ void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
         ldlm_reprocess_all(res);
         ldlm_resource_putref(res);
         LDLM_LOCK_RELEASE(lock);
+        return 0;
 }
 
 void ldlm_cancel_locks_for_export(struct obd_export *exp)

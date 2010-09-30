@@ -484,7 +484,6 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         int is_replay = *flags & LDLM_FL_REPLAY;
-        struct lustre_handle old_hash_key;
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
         int cleanup_phase = 1;
@@ -532,14 +531,15 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         cleanup_phase = 0;
 
         lock_res_and_lock(lock);
-        old_hash_key = lock->l_remote_handle;
-        lock->l_remote_handle = reply->lock_handle;
-
         /* Key change rehash lock in per-export hash with new key */
-        if (exp->exp_lock_hash)
-                cfs_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+        if (exp->exp_lock_hash) {
+                cfs_hash_rehash_key(exp->exp_lock_hash,
                                     &lock->l_remote_handle,
+                                    &reply->lock_handle,
                                     &lock->l_exp_hash);
+        } else {
+                lock->l_remote_handle = reply->lock_handle;
+        }
 
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
@@ -2038,7 +2038,6 @@ static int replay_lock_interpret(const struct lu_env *env,
                                  struct ptlrpc_request *req,
                                  struct ldlm_async_args *aa, int rc)
 {
-        struct lustre_handle  old_hash_key;
         struct ldlm_lock     *lock;
         struct ldlm_reply    *reply;
         struct obd_export    *exp;
@@ -2063,15 +2062,16 @@ static int replay_lock_interpret(const struct lu_env *env,
                 GOTO(out, rc = -ESTALE);
         }
 
-        old_hash_key = lock->l_remote_handle;
-        lock->l_remote_handle = reply->lock_handle;
-
         /* Key change rehash lock in per-export hash with new key */
         exp = req->rq_export;
-        if (exp && exp->exp_lock_hash)
-                cfs_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+        if (exp && exp->exp_lock_hash) {
+                cfs_hash_rehash_key(exp->exp_lock_hash,
                                     &lock->l_remote_handle,
+                                    &reply->lock_handle,
                                     &lock->l_exp_hash);
+        } else {
+                lock->l_remote_handle = reply->lock_handle;
+        }
 
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);

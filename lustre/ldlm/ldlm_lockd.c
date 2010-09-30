@@ -2064,28 +2064,30 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-void ldlm_revoke_lock_cb(void *obj, void *data)
+int ldlm_revoke_lock_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                        cfs_hlist_node_t *hnode, void *data)
+
 {
         cfs_list_t         *rpc_list = data;
-        struct ldlm_lock   *lock = obj;
+        struct ldlm_lock   *lock = cfs_hash_object(hs, hnode);
 
         lock_res_and_lock(lock);
 
         if (lock->l_req_mode != lock->l_granted_mode) {
                 unlock_res_and_lock(lock);
-                return;
+                return 0;
         }
 
         LASSERT(lock->l_resource);
         if (lock->l_resource->lr_type != LDLM_IBITS &&
             lock->l_resource->lr_type != LDLM_PLAIN) {
                 unlock_res_and_lock(lock);
-                return;
+                return 0;
         }
 
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 unlock_res_and_lock(lock);
-                return;
+                return 0;
         }
 
         LASSERT(lock->l_blocking_ast);
@@ -2100,6 +2102,7 @@ void ldlm_revoke_lock_cb(void *obj, void *data)
         LDLM_LOCK_GET(lock);
 
         unlock_res_and_lock(lock);
+        return 0;
 }
 
 void ldlm_revoke_export_locks(struct obd_export *exp)
@@ -2310,11 +2313,26 @@ ldlm_export_lock_key(cfs_hlist_node_t *hnode)
         RETURN(&lock->l_remote_handle);
 }
 
+static void
+ldlm_export_lock_keycpy(cfs_hlist_node_t *hnode, void *key)
+{
+        struct ldlm_lock     *lock;
+
+        lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
+        lock->l_remote_handle = *(struct lustre_handle *)key;
+}
+
 static int
-ldlm_export_lock_compare(void *key, cfs_hlist_node_t *hnode)
+ldlm_export_lock_keycmp(void *key, cfs_hlist_node_t *hnode)
 {
         ENTRY;
         RETURN(lustre_handle_equal(ldlm_export_lock_key(hnode), key));
+}
+
+static void *
+ldlm_export_lock_object(cfs_hlist_node_t *hnode)
+{
+        return cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
 }
 
 static void *
@@ -2342,11 +2360,14 @@ ldlm_export_lock_put(cfs_hlist_node_t *hnode)
 }
 
 static cfs_hash_ops_t ldlm_export_lock_ops = {
-        .hs_hash    = ldlm_export_lock_hash,
-        .hs_key     = ldlm_export_lock_key,
-        .hs_compare = ldlm_export_lock_compare,
-        .hs_get     = ldlm_export_lock_get,
-        .hs_put     = ldlm_export_lock_put
+        .hs_hash        = ldlm_export_lock_hash,
+        .hs_key         = ldlm_export_lock_key,
+        .hs_keycmp      = ldlm_export_lock_keycmp,
+        .hs_keycpy      = ldlm_export_lock_keycpy,
+        .hs_object      = ldlm_export_lock_object,
+        .hs_get         = ldlm_export_lock_get,
+        .hs_put         = ldlm_export_lock_put,
+        .hs_put_locked  = ldlm_export_lock_put,
 };
 
 int ldlm_init_export(struct obd_export *exp)
@@ -2355,8 +2376,13 @@ int ldlm_init_export(struct obd_export *exp)
 
         exp->exp_lock_hash =
                 cfs_hash_create(obd_uuid2str(&exp->exp_client_uuid),
-                                HASH_EXP_LOCK_CUR_BITS, HASH_EXP_LOCK_MAX_BITS,
-                                &ldlm_export_lock_ops, CFS_HASH_REHASH);
+                                HASH_EXP_LOCK_CUR_BITS,
+                                HASH_EXP_LOCK_MAX_BITS,
+                                HASH_EXP_LOCK_BKT_BITS, 0,
+                                CFS_HASH_MIN_THETA, CFS_HASH_MAX_THETA,
+                                &ldlm_export_lock_ops,
+                                CFS_HASH_DEFAULT | CFS_HASH_REHASH_KEY |
+                                CFS_HASH_NBLK_CHANGE);
 
         if (!exp->exp_lock_hash)
                 RETURN(-ENOMEM);

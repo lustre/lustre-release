@@ -73,6 +73,13 @@ void lov_pool_putref(struct pool_desc *pool)
         }
 }
 
+void lov_pool_putref_locked(struct pool_desc *pool)
+{
+        CDEBUG(D_INFO, "pool %p\n", pool);
+        LASSERT(cfs_atomic_read(&pool->pool_refcount) > 1);
+
+        cfs_atomic_dec(&pool->pool_refcount);
+}
 
 /*
  * hash function using a Rotating Hash algorithm
@@ -105,16 +112,19 @@ static void *pool_key(cfs_hlist_node_t *hnode)
         return (pool->pool_name);
 }
 
-static int pool_hashkey_compare(void *key, cfs_hlist_node_t *compared_hnode)
+static int pool_hashkey_keycmp(void *key, cfs_hlist_node_t *compared_hnode)
 {
         char *pool_name;
         struct pool_desc *pool;
-        int rc;
 
         pool_name = (char *)key;
         pool = cfs_hlist_entry(compared_hnode, struct pool_desc, pool_hash);
-        rc = strncmp(pool_name, pool->pool_name, LOV_MAXPOOLNAME);
-        return (!rc);
+        return !strncmp(pool_name, pool->pool_name, LOV_MAXPOOLNAME);
+}
+
+static void *pool_hashobject(cfs_hlist_node_t *hnode)
+{
+        return cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
 }
 
 static void *pool_hashrefcount_get(cfs_hlist_node_t *hnode)
@@ -126,21 +136,23 @@ static void *pool_hashrefcount_get(cfs_hlist_node_t *hnode)
         return (pool);
 }
 
-static void *pool_hashrefcount_put(cfs_hlist_node_t *hnode)
+static void *pool_hashrefcount_put_locked(cfs_hlist_node_t *hnode)
 {
         struct pool_desc *pool;
 
         pool = cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
-        lov_pool_putref(pool);
+        lov_pool_putref_locked(pool);
         return (pool);
 }
 
 cfs_hash_ops_t pool_hash_operations = {
         .hs_hash        = pool_hashfn,
         .hs_key         = pool_key,
-        .hs_compare     = pool_hashkey_compare,
+        .hs_keycmp      = pool_hashkey_keycmp,
+        .hs_object      = pool_hashobject,
         .hs_get         = pool_hashrefcount_get,
-        .hs_put         = pool_hashrefcount_put,
+        .hs_put_locked  = pool_hashrefcount_put_locked,
+
 };
 
 #ifdef LPROCFS

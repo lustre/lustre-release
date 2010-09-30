@@ -1273,7 +1273,11 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         qctxt->lqc_lqs_hash = cfs_hash_create("LQS_HASH",
                                               hash_lqs_cur_bits,
                                               HASH_LQS_MAX_BITS,
-                                              &lqs_hash_ops, CFS_HASH_REHASH);
+                                              min(hash_lqs_cur_bits,
+                                                  HASH_LQS_BKT_BITS),
+                                              0, CFS_HASH_MIN_THETA,
+                                              CFS_HASH_MAX_THETA,
+                                              &lqs_hash_ops, CFS_HASH_DEFAULT);
         if (!qctxt->lqc_lqs_hash) {
                 CERROR("initialize hash lqs for %s error!\n", obd->obd_name);
                 RETURN(-ENOMEM);
@@ -1299,9 +1303,12 @@ static int check_lqs(struct lustre_quota_ctxt *qctxt)
 }
 
 
-void hash_put_lqs(void *obj, void *data)
+int hash_put_lqs(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                 cfs_hlist_node_t *hnode, void *data)
+
 {
-        lqs_putref((struct lustre_qunit_size *)obj);
+        lqs_putref((struct lustre_qunit_size *)cfs_hash_object(hs, hnode));
+        return 0;
 }
 
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
@@ -1602,12 +1609,18 @@ lqs_key(cfs_hlist_node_t *hnode)
 }
 
 static int
-lqs_compare(void *key, cfs_hlist_node_t *hnode)
+lqs_keycmp(void *key, cfs_hlist_node_t *hnode)
 {
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
         RETURN(q->lqs_key == *((unsigned long long *)key));
+}
+
+static void *
+lqs_object(cfs_hlist_node_t *hnode)
+{
+        return cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 }
 
 static void *
@@ -1623,7 +1636,7 @@ lqs_get(cfs_hlist_node_t *hnode)
 }
 
 static void *
-lqs_put(cfs_hlist_node_t *hnode)
+lqs_put_locked(cfs_hlist_node_t *hnode)
 {
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
@@ -1654,11 +1667,12 @@ lqs_exit(cfs_hlist_node_t *hnode)
 }
 
 static cfs_hash_ops_t lqs_hash_ops = {
-        .hs_hash    = lqs_hash,
-        .hs_key     = lqs_key,
-        .hs_compare = lqs_compare,
-        .hs_get     = lqs_get,
-        .hs_put     = lqs_put,
-        .hs_exit    = lqs_exit
+        .hs_hash        = lqs_hash,
+        .hs_key         = lqs_key,
+        .hs_keycmp      = lqs_keycmp,
+        .hs_object      = lqs_object,
+        .hs_get         = lqs_get,
+        .hs_put_locked  = lqs_put_locked,
+        .hs_exit        = lqs_exit
 };
 #endif /* HAVE_QUOTA_SUPPORT */
