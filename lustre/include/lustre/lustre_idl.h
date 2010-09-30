@@ -174,7 +174,7 @@ typedef __u32 mdsno_t;
 typedef __u64 seqno_t;
 typedef __u64 obd_id;
 typedef __u64 obd_seq;
-typedef __u64 obd_time;
+typedef __s64 obd_time;
 typedef __u64 obd_size;
 typedef __u64 obd_off;
 typedef __u64 obd_blocks;
