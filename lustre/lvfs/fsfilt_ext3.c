@@ -1602,8 +1602,8 @@ struct chk_dqblk{
         qsize_t                 dqb_ihardlimit;  /** inode hard limit */
         qsize_t                 dqb_isoftlimit;  /** inode soft limit */
         qsize_t                 dqb_curinodes;   /** current inodes */
-        __u64                   dqb_btime;       /** block grace time */
-        __u64                   dqb_itime;       /** inode grace time */
+        obd_time                dqb_btime;       /** block grace time */
+        obd_time                dqb_itime;       /** inode grace time */
         __u32                   dqb_valid;       /** flag for above fields */
 };
 

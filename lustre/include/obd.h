@@ -1183,7 +1183,7 @@ struct md_op_data {
         struct lu_fid           op_fid4; /* to the operation locks. */
         mdsno_t                 op_mds;  /* what mds server open will go to */
         struct lustre_handle    op_handle;
-        __u64                   op_mod_time;
+        obd_time                op_mod_time;
         const char             *op_name;
         int                     op_namelen;
         __u32                   op_mode;

@@ -306,7 +306,7 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
 /**
  * Helper to init timspec \a t.
  */
-static inline struct timespec *mdc_attr_time(struct timespec *t, __u64 seconds)
+static inline struct timespec *mdc_attr_time(struct timespec *t, obd_time seconds)
 {
         t->tv_sec = seconds;
         t->tv_nsec = 0;

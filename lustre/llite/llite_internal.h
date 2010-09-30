@@ -962,12 +962,6 @@ struct vm_area_struct *our_vma(unsigned long addr, size_t count);
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
-static inline __u64 ll_ts2u64(struct timespec *time)
-{
-        __u64 t = time->tv_sec;
-        return t;
-}
-
 /* don't need an addref as the sb_info should be holding one */
 static inline struct obd_export *ll_s2dtexp(struct super_block *sb)
 {
