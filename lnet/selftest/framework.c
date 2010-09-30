@@ -319,7 +319,7 @@ sfw_server_rpc_done (srpc_server_rpc_t *rpc)
                 "Incoming framework RPC done: "
                 "service %s, peer %s, status %s:%d\n",
                 sv->sv_name, libcfs_id2str(rpc->srpc_peer),
-                swi_state2str(rpc->srpc_wi.wi_state),
+                swi_state2str(rpc->srpc_wi.swi_state),
                 status);
 
         if (rpc->srpc_bulk != NULL)
@@ -341,7 +341,7 @@ sfw_client_rpc_fini (srpc_client_rpc_t *rpc)
                 "Outgoing framework RPC done: "
                 "service %d, peer %s, status %s:%d:%d\n",
                 rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
-                swi_state2str(rpc->crpc_wi.wi_state),
+                swi_state2str(rpc->crpc_wi.swi_state),
                 rpc->crpc_aborted, rpc->crpc_status);
 
         cfs_spin_lock(&sfw_data.fw_lock);
@@ -925,7 +925,7 @@ sfw_create_test_rpc (sfw_test_unit_t *tsu, lnet_process_id_t peer,
 int
 sfw_run_test (swi_workitem_t *wi)
 {
-        sfw_test_unit_t     *tsu = wi->wi_data;
+        sfw_test_unit_t     *tsu = wi->swi_workitem.wi_data;
         sfw_test_instance_t *tsi = tsu->tsu_instance;
         srpc_client_rpc_t   *rpc = NULL;
 
@@ -1000,7 +1000,8 @@ sfw_run_batch (sfw_batch_t *tsb)
                         cfs_atomic_inc(&tsi->tsi_nactive);
                         tsu->tsu_loop = tsi->tsi_loop;
                         wi = &tsu->tsu_worker;
-                        swi_init_workitem(wi, tsu, sfw_run_test);
+                        swi_init_workitem(wi, tsu, sfw_run_test,
+                                          CFS_WI_SCHED_ANY);
                         swi_schedule_workitem(wi);
                 }
         }

@@ -75,57 +75,9 @@
 #define SWI_STATE_DONE                     10
 
 /* forward refs */
-struct swi_workitem;
 struct srpc_service;
 struct sfw_test_unit;
 struct sfw_test_instance;
-
-/*
- * A workitems is deferred work with these semantics:
- * - a workitem always runs in thread context.
- * - a workitem can be concurrent with other workitems but is strictly
- *   serialized with respect to itself.
- * - no CPU affinity, a workitem does not necessarily run on the same CPU
- *   that schedules it. However, this might change in the future.
- * - if a workitem is scheduled again before it has a chance to run, it
- *   runs only once.
- * - if a workitem is scheduled while it runs, it runs again after it
- *   completes; this ensures that events occurring while other events are
- *   being processed receive due attention. This behavior also allows a
- *   workitem to reschedule itself.
- *
- * Usage notes:
- * - a workitem can sleep but it should be aware of how that sleep might
- *   affect others.
- * - a workitem runs inside a kernel thread so there's no user space to access.
- * - do not use a workitem if the scheduling latency can't be tolerated.
- *
- * When wi_action returns non-zero, it means the workitem has either been
- * freed or reused and workitem scheduler won't touch it any more.
- */
-typedef int (*swi_action_t) (struct swi_workitem *);
-typedef struct swi_workitem {
-        cfs_list_t       wi_list;        /* chain on runq */
-        int              wi_state;
-        swi_action_t     wi_action;
-        void            *wi_data;
-        unsigned int     wi_running:1;
-        unsigned int     wi_scheduled:1;
-} swi_workitem_t;
-
-static inline void
-swi_init_workitem (swi_workitem_t *wi, void *data, swi_action_t action)
-{
-        CFS_INIT_LIST_HEAD(&wi->wi_list);
-
-        wi->wi_running   = 0;
-        wi->wi_scheduled = 0;
-        wi->wi_data      = data;
-        wi->wi_action    = action;
-        wi->wi_state     = SWI_STATE_NEWBORN;
-}
-
-#define SWI_RESCHED    128         /* # workitem scheduler loops before reschedule */
 
 /* services below SRPC_FRAMEWORK_SERVICE_MAX_ID are framework
  * services, e.g. create/modify session.
@@ -230,6 +182,15 @@ typedef struct {
         lnet_nid_t           buf_self;
         lnet_process_id_t    buf_peer;
 } srpc_buffer_t;
+
+struct swi_workitem;
+typedef int (*swi_action_t) (struct swi_workitem *);
+
+typedef struct swi_workitem {
+        cfs_workitem_t       swi_workitem;
+        swi_action_t         swi_action;
+        int                  swi_state;
+} swi_workitem_t;
 
 /* server-side state of a RPC */
 typedef struct srpc_server_rpc {
@@ -417,7 +378,6 @@ typedef struct {
         sfw_test_client_ops_t  *tsc_cli_ops;      /* ops of test client */
 } sfw_test_case_t;
 
-
 srpc_client_rpc_t *
 sfw_create_rpc(lnet_process_id_t peer, int service, int nbulkiov, int bulklen,
                void (*done) (srpc_client_rpc_t *), void *priv);
@@ -453,13 +413,45 @@ void srpc_service_remove_buffers(srpc_service_t *sv, int nbuffer);
 void srpc_get_counters(srpc_counters_t *cnt);
 void srpc_set_counters(const srpc_counters_t *cnt);
 
-void swi_kill_workitem(swi_workitem_t *wi);
-void swi_schedule_workitem(swi_workitem_t *wi);
-void swi_schedule_serial_workitem(swi_workitem_t *wi);
-int swi_startup(void);
+static inline int
+swi_wi_action(cfs_workitem_t *wi)
+{
+        swi_workitem_t *swi = container_of(wi, swi_workitem_t, swi_workitem);
+
+        return swi->swi_action(swi);
+}
+
+static inline void
+swi_init_workitem (swi_workitem_t *swi, void *data,
+                   swi_action_t action, short sched_id)
+{
+        swi->swi_action = action;
+        swi->swi_state  = SWI_STATE_NEWBORN;
+        cfs_wi_init(&swi->swi_workitem, data, swi_wi_action, sched_id);
+}
+
+static inline void
+swi_schedule_workitem(swi_workitem_t *wi)
+{
+        cfs_wi_schedule(&wi->swi_workitem);
+}
+
+static inline void
+swi_kill_workitem(swi_workitem_t *swi)
+{
+        cfs_wi_exit(&swi->swi_workitem);
+}
+
+#ifndef __KERNEL__
+static inline int
+swi_check_events(void)
+{
+        return cfs_wi_check_events();
+}
+#endif
+
 int sfw_startup(void);
 int srpc_startup(void);
-void swi_shutdown(void);
 void sfw_shutdown(void);
 void srpc_shutdown(void);
 
@@ -494,7 +486,8 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
                                 crpc_bulk.bk_iovs[nbulkiov]));
 
         CFS_INIT_LIST_HEAD(&rpc->crpc_list);
-        swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc);
+        swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc,
+                          CFS_WI_SCHED_ANY);
         cfs_spin_lock_init(&rpc->crpc_lock);
         cfs_atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
 
@@ -547,7 +540,6 @@ int stt_poll_interval(void);
 int sfw_session_removed(void);
 
 int stt_check_events(void);
-int swi_check_events(void);
 int srpc_check_event(int timeout);
 
 int lnet_selftest_init(void);

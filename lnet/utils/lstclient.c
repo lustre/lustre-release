@@ -202,9 +202,17 @@ main(int argc, char **argv)
                 return -1;
         }
 
+        rc = cfs_wi_startup();
+        if (rc != 0) {
+                CERROR("cfs_wi_startup() failed: %d\n", rc);
+                libcfs_debug_cleanup();
+                return -1;
+        }
+
         rc = LNetInit();
         if (rc != 0) {
                 CERROR("LNetInit() failed: %d\n", rc);
+                cfs_wi_shutdown();
                 libcfs_debug_cleanup();
                 return -1;
         }
@@ -216,8 +224,8 @@ main(int argc, char **argv)
         if (rc != 0) {
                 fprintf(stderr, "Can't startup selftest\n");
                 LNetFini();
+                cfs_wi_shutdown();
                 libcfs_debug_cleanup();
-
                 return -1;
         }
 
@@ -243,6 +251,8 @@ out:
         lnet_selftest_fini();
 
         LNetFini();
+
+        cfs_wi_shutdown();
 
         libcfs_debug_cleanup();
 

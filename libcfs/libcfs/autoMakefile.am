@@ -43,7 +43,8 @@ DIST_SUBDIRS := linux util posix darwin
 if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
 libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c \
-                  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c
+                  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c \
+                  workitem.c
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
 endif
@@ -89,5 +90,5 @@ EXTRA_DIST := Info.plist
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o darwin/*.o libcfs
 DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h user-prim.c prng.c \
-      user-lock.c user-tcpip.c user-bitops.c\
+      user-lock.c user-tcpip.c user-bitops.c workitem.c \
       user-mem.c kernel_user_comm.c linux/linux-tracefile.h

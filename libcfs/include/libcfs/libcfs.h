@@ -301,6 +301,7 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_time.h>
 #include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs_kernelcomm.h>
+#include <libcfs/libcfs_workitem.h>
 #include <libcfs/libcfs_hash.h>
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */

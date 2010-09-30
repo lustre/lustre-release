@@ -47,7 +47,6 @@ typedef enum {
         SRPC_STATE_NONE,
         SRPC_STATE_NI_INIT,
         SRPC_STATE_EQ_INIT,
-        SRPC_STATE_WI_INIT,
         SRPC_STATE_RUNNING,
         SRPC_STATE_STOPPING,
 } srpc_state_t;
@@ -190,7 +189,9 @@ srpc_init_server_rpc (srpc_server_rpc_t *rpc,
                       srpc_service_t *sv, srpc_buffer_t *buffer)
 {
         memset(rpc, 0, sizeof(*rpc));
-        swi_init_workitem(&rpc->srpc_wi, rpc, srpc_handle_rpc);
+        swi_init_workitem(&rpc->srpc_wi, rpc, srpc_handle_rpc,
+                          sv->sv_id <= SRPC_FRAMEWORK_SERVICE_MAX_ID ?
+                          CFS_WI_SCHED_SERIAL : CFS_WI_SCHED_ANY);
 
         rpc->srpc_ev.ev_fired = 1; /* no event expected now */
 
@@ -520,9 +521,9 @@ srpc_finish_service (srpc_service_t *sv)
                                 "wi %s scheduled %d running %d, "
                                 "ev fired %d type %d status %d lnet %d\n",
                                 rpc, sv->sv_name, libcfs_id2str(rpc->srpc_peer),
-                                swi_state2str(rpc->srpc_wi.wi_state),
-                                rpc->srpc_wi.wi_scheduled,
-                                rpc->srpc_wi.wi_running,
+                                swi_state2str(rpc->srpc_wi.swi_state),
+                                rpc->srpc_wi.swi_workitem.wi_scheduled,
+                                rpc->srpc_wi.swi_workitem.wi_running,
                                 rpc->srpc_ev.ev_fired,
                                 rpc->srpc_ev.ev_type,
                                 rpc->srpc_ev.ev_status,
@@ -584,14 +585,7 @@ free:
 inline void
 srpc_schedule_server_rpc (srpc_server_rpc_t *rpc)
 {
-        srpc_service_t *sv = rpc->srpc_service;
-
-        if (sv->sv_id > SRPC_FRAMEWORK_SERVICE_MAX_ID)
-                swi_schedule_workitem(&rpc->srpc_wi);
-        else    /* framework RPCs are handled one by one */
-                swi_schedule_serial_workitem(&rpc->srpc_wi);
-
-        return;
+        swi_schedule_workitem(&rpc->srpc_wi);
 }
 
 void
@@ -764,14 +758,14 @@ srpc_server_rpc_done (srpc_server_rpc_t *rpc, int status)
         srpc_service_t *sv = rpc->srpc_service;
         srpc_buffer_t  *buffer;
 
-        LASSERT (status != 0 || rpc->srpc_wi.wi_state == SWI_STATE_DONE);
+        LASSERT (status != 0 || rpc->srpc_wi.swi_state == SWI_STATE_DONE);
 
         rpc->srpc_status = status;
 
         CDEBUG (status == 0 ? D_NET : D_NETERROR,
                 "Server RPC %p done: service %s, peer %s, status %s:%d\n",
                 rpc, sv->sv_name, libcfs_id2str(rpc->srpc_peer),
-                swi_state2str(rpc->srpc_wi.wi_state), status);
+                swi_state2str(rpc->srpc_wi.swi_state), status);
 
         if (status != 0) {
                 cfs_spin_lock(&srpc_data.rpc_glock);
@@ -823,7 +817,7 @@ srpc_server_rpc_done (srpc_server_rpc_t *rpc, int status)
 int
 srpc_handle_rpc (swi_workitem_t *wi)
 {
-        srpc_server_rpc_t *rpc = wi->wi_data;
+        srpc_server_rpc_t *rpc = wi->swi_workitem.wi_data;
         srpc_service_t    *sv = rpc->srpc_service;
         srpc_event_t      *ev = &rpc->srpc_ev;
         int                rc = 0;
@@ -848,7 +842,7 @@ srpc_handle_rpc (swi_workitem_t *wi)
 
         cfs_spin_unlock(&sv->sv_lock);
 
-        switch (wi->wi_state) {
+        switch (wi->swi_state) {
         default:
                 LBUG ();
         case SWI_STATE_NEWBORN: {
@@ -878,7 +872,7 @@ srpc_handle_rpc (swi_workitem_t *wi)
                         return 1;
                 }
 
-                wi->wi_state = SWI_STATE_BULK_STARTED;
+                wi->swi_state = SWI_STATE_BULK_STARTED;
 
                 if (rpc->srpc_bulk != NULL) {
                         rc = srpc_do_bulk(rpc);
@@ -904,7 +898,7 @@ srpc_handle_rpc (swi_workitem_t *wi)
                         }
                 }
 
-                wi->wi_state = SWI_STATE_REPLY_SUBMITTED;
+                wi->swi_state = SWI_STATE_REPLY_SUBMITTED;
                 rc = srpc_send_reply(rpc);
                 if (rc == 0)
                         return 0; /* wait for reply */
@@ -920,7 +914,7 @@ srpc_handle_rpc (swi_workitem_t *wi)
                         LASSERT (ev->ev_fired);
                 }
 
-                wi->wi_state = SWI_STATE_DONE;
+                wi->swi_state = SWI_STATE_DONE;
                 srpc_server_rpc_done(rpc, ev->ev_status);
                 return 1;
         }
@@ -1000,7 +994,7 @@ srpc_client_rpc_done (srpc_client_rpc_t *rpc, int status)
 {
         swi_workitem_t *wi = &rpc->crpc_wi;
 
-        LASSERT (status != 0 || wi->wi_state == SWI_STATE_DONE);
+        LASSERT (status != 0 || wi->swi_state == SWI_STATE_DONE);
 
         cfs_spin_lock(&rpc->crpc_lock);
 
@@ -1013,7 +1007,7 @@ srpc_client_rpc_done (srpc_client_rpc_t *rpc, int status)
         CDEBUG ((status == 0) ? D_NET : D_NETERROR,
                 "Client RPC done: service %d, peer %s, status %s:%d:%d\n",
                 rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
-                swi_state2str(wi->wi_state), rpc->crpc_aborted, status);
+                swi_state2str(wi->swi_state), rpc->crpc_aborted, status);
 
         /*
          * No one can schedule me now since:
@@ -1037,7 +1031,7 @@ int
 srpc_send_rpc (swi_workitem_t *wi)
 {
         int                rc = 0;
-        srpc_client_rpc_t *rpc = wi->wi_data;
+        srpc_client_rpc_t *rpc = wi->swi_workitem.wi_data;
         srpc_msg_t        *reply = &rpc->crpc_replymsg;
         int                do_bulk = rpc->crpc_bulk.bk_niov > 0;
 
@@ -1053,7 +1047,7 @@ srpc_send_rpc (swi_workitem_t *wi)
 
         cfs_spin_unlock(&rpc->crpc_lock);
 
-        switch (wi->wi_state) {
+        switch (wi->swi_state) {
         default:
                 LBUG ();
         case SWI_STATE_NEWBORN:
@@ -1068,7 +1062,7 @@ srpc_send_rpc (swi_workitem_t *wi)
                 rc = srpc_prepare_bulk(rpc);
                 if (rc != 0) break;
 
-                wi->wi_state = SWI_STATE_REQUEST_SUBMITTED;
+                wi->swi_state = SWI_STATE_REQUEST_SUBMITTED;
                 rc = srpc_send_request(rpc);
                 break;
 
@@ -1081,7 +1075,7 @@ srpc_send_rpc (swi_workitem_t *wi)
                 rc = rpc->crpc_reqstev.ev_status;
                 if (rc != 0) break;
 
-                wi->wi_state = SWI_STATE_REQUEST_SENT;
+                wi->swi_state = SWI_STATE_REQUEST_SENT;
                 /* perhaps more events, fall thru */
         case SWI_STATE_REQUEST_SENT: {
                 srpc_msg_type_t type = srpc_service2reply(rpc->crpc_service);
@@ -1112,7 +1106,7 @@ srpc_send_rpc (swi_workitem_t *wi)
                         LNetMDUnlink(rpc->crpc_bulk.bk_mdh);
                 }
 
-                wi->wi_state = SWI_STATE_REPLY_RECEIVED;
+                wi->swi_state = SWI_STATE_REPLY_RECEIVED;
         }
         case SWI_STATE_REPLY_RECEIVED:
                 if (do_bulk && !rpc->crpc_bulkev.ev_fired) break;
@@ -1127,7 +1121,7 @@ srpc_send_rpc (swi_workitem_t *wi)
                     rpc->crpc_status == 0 && reply->msg_body.reply.status != 0)
                         rc = 0;
 
-                wi->wi_state = SWI_STATE_DONE;
+                wi->swi_state = SWI_STATE_DONE;
                 srpc_client_rpc_done(rpc, rc);
                 return 1;
         }
@@ -1183,7 +1177,7 @@ srpc_abort_rpc (srpc_client_rpc_t *rpc, int why)
         CDEBUG (D_NET,
                 "Aborting RPC: service %d, peer %s, state %s, why %d\n",
                 rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
-                swi_state2str(rpc->crpc_wi.wi_state), why);
+                swi_state2str(rpc->crpc_wi.swi_state), why);
 
         rpc->crpc_aborted = 1;
         rpc->crpc_status  = why;
@@ -1491,12 +1485,6 @@ srpc_startup (void)
 
         srpc_data.rpc_state = SRPC_STATE_EQ_INIT;
 
-        rc = swi_startup();
-        if (rc != 0)
-                goto bail;
-
-        srpc_data.rpc_state = SRPC_STATE_WI_INIT;
-
         rc = stt_startup();
 
 bail:
@@ -1535,9 +1523,6 @@ srpc_shutdown (void)
                 cfs_spin_unlock(&srpc_data.rpc_glock);
 
                 stt_shutdown();
-
-        case SRPC_STATE_WI_INIT:
-                swi_shutdown();
 
         case SRPC_STATE_EQ_INIT:
                 rc = LNetClearLazyPortal(SRPC_FRAMEWORK_REQUEST_PORTAL);
