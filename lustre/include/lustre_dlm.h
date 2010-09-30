@@ -694,10 +694,6 @@ struct ldlm_lock {
         void                 *l_lvb_data;
 
         void                 *l_ast_data;
-        cfs_spinlock_t        l_extents_list_lock;
-        cfs_list_t            l_extents_list;
-
-        cfs_list_t            l_cache_locks_list;
 
         /*
          * Server-side-only members.
@@ -757,8 +753,6 @@ struct ldlm_resource {
 
         /* protected by ns_hash_lock */
         cfs_list_t             lr_hash;
-        struct ldlm_resource  *lr_parent;   /* 0 for a root resource */
-        cfs_list_t             lr_children; /* list head for child resources */
         cfs_list_t             lr_childof;  /* part of ns_root_list if root res,
                                              * part of lr_children if child */
         cfs_spinlock_t         lr_lock;

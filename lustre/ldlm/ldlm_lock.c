@@ -371,9 +371,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
         class_handle_hash(&lock->l_handle, lock_handle_addref);
 
-        CFS_INIT_LIST_HEAD(&lock->l_extents_list);
-        cfs_spin_lock_init(&lock->l_extents_list_lock);
-        CFS_INIT_LIST_HEAD(&lock->l_cache_locks_list);
         lu_ref_init(&lock->l_reference);
         lu_ref_add(&lock->l_reference, "hash", lock);
         lock->l_callback_timeout = 0;

@@ -797,7 +797,6 @@ static struct ldlm_resource *ldlm_resource_new(void)
 
         memset(res, 0, sizeof(*res));
 
-        CFS_INIT_LIST_HEAD(&res->lr_children);
         CFS_INIT_LIST_HEAD(&res->lr_childof);
         CFS_INIT_LIST_HEAD(&res->lr_granted);
         CFS_INIT_LIST_HEAD(&res->lr_converting);
@@ -886,12 +885,8 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         ns->ns_resources++;
         ldlm_namespace_get_locked(ns);
 
-        if (parent == NULL) {
-                cfs_list_add(&res->lr_childof, &ns->ns_root_list);
-        } else {
-                res->lr_parent = parent;
-                cfs_list_add(&res->lr_childof, &parent->lr_children);
-        }
+        LASSERT(parent == NULL); /* legacy... */
+        cfs_list_add(&res->lr_childof, &ns->ns_root_list);
         cfs_spin_unlock(&ns->ns_hash_lock);
 
         if (ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
@@ -972,11 +967,6 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
         }
 
         if (!cfs_list_empty(&res->lr_waiting)) {
-                ldlm_resource_dump(D_ERROR, res);
-                LBUG();
-        }
-
-        if (!cfs_list_empty(&res->lr_children)) {
                 ldlm_resource_dump(D_ERROR, res);
                 LBUG();
         }
