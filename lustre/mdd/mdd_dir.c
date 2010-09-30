@@ -884,10 +884,14 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        la->la_valid = LA_CTIME;
-        rc = mdd_attr_check_set_internal(env, mdd_cobj, la, handle, 0);
-        if (rc)
-                GOTO(cleanup, rc);
+        if (ma->ma_attr.la_nlink > 0 || mdd_cobj->mod_count > 0) {
+                /* update ctime of an unlinked file only if it is still
+                 * opened or a link still exists */
+                la->la_valid = LA_CTIME;
+                rc = mdd_attr_check_set_internal(env, mdd_cobj, la, handle, 0);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 
         rc = mdd_finish_unlink(env, mdd_cobj, ma, handle);
 #ifdef HAVE_QUOTA_SUPPORT
