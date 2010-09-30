@@ -158,7 +158,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                         ldlm_error_t *err, cfs_list_t *work_list)
 {
         struct ldlm_resource *res = req->l_resource;
-        struct ldlm_namespace *ns = res->lr_namespace;
+        struct ldlm_namespace *ns = ldlm_res_to_ns(res);
         cfs_list_t *tmp;
         cfs_list_t *ownlocks = NULL;
         struct ldlm_lock *lock = NULL;
@@ -652,7 +652,7 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         LASSERT(lock);
         LASSERT(flag == LDLM_CB_CANCELING);
 
-        ns = lock->l_resource->lr_namespace;
+        ns = ldlm_lock_to_ns(lock);
 
         /* take lock off the deadlock detection waitq. */
         cfs_spin_lock(&ldlm_flock_waitq_lock);

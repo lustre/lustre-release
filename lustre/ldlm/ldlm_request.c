@@ -90,7 +90,7 @@ int ldlm_expired_completion_wait(void *data)
                         last_dump = next_dump;
                         next_dump = cfs_time_shift(300);
                         ldlm_namespace_dump(D_DLMTRACE,
-                                            lock->l_resource->lr_namespace);
+                                            ldlm_lock_to_ns(lock));
                         if (last_dump == 0)
                                 libcfs_debug_dumplog();
                 }
@@ -113,7 +113,7 @@ int ldlm_expired_completion_wait(void *data)
    from a single node. */
 int ldlm_get_enq_timeout(struct ldlm_lock *lock)
 {
-        int timeout = at_get(&lock->l_resource->lr_namespace->ns_at_estimate);
+        int timeout = at_get(ldlm_lock_to_ns_at(lock));
         if (AT_OFF)
                 return obd_timeout / 2;
         /* Since these are non-updating timeouts, we should be conservative.
@@ -143,7 +143,7 @@ static int ldlm_completion_tail(struct ldlm_lock *lock)
                            CFS_DURATION_T"s", delay);
 
                 /* Update our time estimate */
-                at_measured(&lock->l_resource->lr_namespace->ns_at_estimate,
+                at_measured(ldlm_lock_to_ns_at(lock),
                             delay);
                 result = 0;
         }
@@ -255,7 +255,7 @@ noreproc:
                 cfs_spin_unlock(&imp->imp_lock);
         }
 
-        if (ns_is_client(lock->l_resource->lr_namespace) &&
+        if (ns_is_client(ldlm_lock_to_ns(lock)) &&
             OBD_FAIL_CHECK_RESET(OBD_FAIL_LDLM_INTR_CP_AST,
                                  OBD_FAIL_LDLM_CP_BL_RACE | OBD_FAIL_ONCE)) {
                 lock->l_flags |= LDLM_FL_FAIL_LOC;
@@ -905,7 +905,7 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
         struct ldlm_resource *res;
         int rc;
         ENTRY;
-        if (ns_is_client(lock->l_resource->lr_namespace)) {
+        if (ns_is_client(ldlm_lock_to_ns(lock))) {
                 CERROR("Trying to cancel local lock\n");
                 LBUG();
         }
@@ -1028,7 +1028,7 @@ static int ldlm_cli_cancel_local(struct ldlm_lock *lock)
                 }
                 ldlm_lock_cancel(lock);
         } else {
-                if (ns_is_client(lock->l_resource->lr_namespace)) {
+                if (ns_is_client(ldlm_lock_to_ns(lock))) {
                         LDLM_ERROR(lock, "Trying to cancel local lock");
                         LBUG();
                 }
@@ -1260,7 +1260,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                                                   RCL_CLIENT, 0);
                 LASSERT(avail > 0);
 
-                ns = lock->l_resource->lr_namespace;
+                ns = ldlm_lock_to_ns(lock);
                 flags = ns_connect_lru_resize(ns) ?
                         LDLM_CANCEL_LRUR : LDLM_CANCEL_AGED;
                 count += ldlm_cancel_lru_local(ns, &cancels, 0, avail - 1,

@@ -57,7 +57,7 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
         cfs_spin_lock(&lock->l_lock);
         res = lock->l_resource;
 
-        if (ns_is_server(res->lr_namespace))
+        if (ns_is_server(ldlm_res_to_ns(res)))
                 /* on server-side resource of lock doesn't change */
                 cfs_spin_unlock(&lock->l_lock);
 
@@ -69,7 +69,7 @@ void unlock_res_and_lock(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res = lock->l_resource;
 
-        if (ns_is_server(res->lr_namespace)) {
+        if (ns_is_server(ldlm_res_to_ns(res))) {
                 /* on server-side resource of lock doesn't change */
                 unlock_res(res);
                 return;

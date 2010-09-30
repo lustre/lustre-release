@@ -1699,7 +1699,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * lock, and should not be granted if the lock will be blocked.
          */
 
-        LASSERT(ns == res->lr_namespace);
+        LASSERT(ns == ldlm_res_to_ns(res));
         lock_res(res);
         rc = policy(lock, &tmpflags, 0, &err, &rpc_list);
         check_res_locked(res);

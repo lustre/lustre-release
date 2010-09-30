@@ -340,7 +340,7 @@ repeat:
                         LDLM_LOCK_RELEASE(lock);
                         continue;
                 }
-                lock->l_resource->lr_namespace->ns_timeouts++;
+                ldlm_lock_to_ns(lock)->ns_timeouts++;
                 LDLM_ERROR(lock, "lock callback timer expired after %lds: "
                            "evicting client at %s ",
                            cfs_time_current_sec()- lock->l_last_activity,
@@ -863,7 +863,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         /* Server-side enqueue wait time estimate, used in
             __ldlm_add_waiting_lock to set future enqueue timers */
         if (total_enqueue_wait < ldlm_get_enq_timeout(lock))
-                at_measured(&lock->l_resource->lr_namespace->ns_at_estimate,
+                at_measured(ldlm_lock_to_ns_at(lock),
                             total_enqueue_wait);
         else
                 /* bz18618. Don't add lock enqueue time we spend waiting for a
@@ -873,7 +873,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 LDLM_DEBUG(lock, "lock completed after %lus; estimate was %ds. "
                        "It is likely that a previous callback timed out.",
                        total_enqueue_wait,
-                       at_get(&lock->l_resource->lr_namespace->ns_at_estimate));
+                       at_get(ldlm_lock_to_ns_at(lock)));
 
         ptlrpc_request_set_replen(req);
 

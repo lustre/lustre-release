@@ -289,10 +289,10 @@ static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
                 return 1;
 
         CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
-        if (contended_locks > res->lr_namespace->ns_contended_locks)
+        if (contended_locks > ldlm_res_to_ns(res)->ns_contended_locks)
                 res->lr_contention_time = now;
         return cfs_time_before(now, cfs_time_add(res->lr_contention_time,
-                cfs_time_seconds(res->lr_namespace->ns_contention_time)));
+                cfs_time_seconds(ldlm_res_to_ns(res)->ns_contention_time)));
 }
 
 struct ldlm_extent_compat_args {
@@ -600,7 +600,7 @@ ldlm_extent_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
             (*flags & LDLM_FL_DENY_ON_CONTENTION) &&
             req->l_req_mode != LCK_GROUP &&
             req_end - req_start <=
-            req->l_resource->lr_namespace->ns_max_nolock_size)
+            ldlm_res_to_ns(req->l_resource)->ns_max_nolock_size)
                 GOTO(destroylock, compat = -EUSERS);
 
         RETURN(compat);
@@ -711,7 +711,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
 
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
-                    !ns_is_client(res->lr_namespace))
+                    !ns_is_client(ldlm_res_to_ns(res)))
                         class_fail_export(lock->l_export);
  
                 lock_res(res);

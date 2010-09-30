@@ -88,7 +88,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         res->lr_lvb_data = lvb;
         res->lr_lvb_len = sizeof(*lvb);
 
-        obd = res->lr_namespace->ns_lvbp;
+        obd = ldlm_res_to_ns(res)->ns_lvbp;
         LASSERT(obd != NULL);
 
         CDEBUG(D_INODE, "%s: filter_lvbo_init(o_seq="LPU64", o_id="
@@ -191,7 +191,7 @@ static int filter_lvbo_update(struct ldlm_resource *res,
 
  disk_update:
         /* Update the LVB from the disk inode */
-        obd = res->lr_namespace->ns_lvbp;
+        obd = ldlm_res_to_ns(res)->ns_lvbp;
         LASSERT(obd);
 
         inode = res->lr_lvb_inode;

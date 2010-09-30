@@ -414,7 +414,7 @@ static void cleanup_resource(struct ldlm_resource *res, cfs_list_t *q,
                              int flags)
 {
         cfs_list_t *tmp;
-        int rc = 0, client = ns_is_client(res->lr_namespace);
+        int rc = 0, client = ns_is_client(ldlm_res_to_ns(res));
         int local_only = (flags & LDLM_FL_LOCAL_ONLY);
         ENTRY;
 
@@ -957,7 +957,7 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 
 void __ldlm_resource_putref_final(struct ldlm_resource *res)
 {
-        struct ldlm_namespace *ns = res->lr_namespace;
+        struct ldlm_namespace *ns = ldlm_res_to_ns(res);
 
         LASSERT_SPIN_LOCKED(&ns->ns_hash_lock);
 
@@ -995,7 +995,7 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
 
 int ldlm_resource_putref_internal(struct ldlm_resource *res, int locked)
 {
-        struct ldlm_namespace *ns = res->lr_namespace;
+        struct ldlm_namespace *ns = ldlm_res_to_ns(res);
         ENTRY;
 
         CDEBUG(D_INFO, "putref res: %p count: %d\n", res,

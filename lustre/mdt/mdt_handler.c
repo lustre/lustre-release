@@ -2138,7 +2138,7 @@ static inline int mdt_is_lock_sync(struct ldlm_lock *lock)
 int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                      void *data, int flag)
 {
-        struct obd_device *obd = lock->l_resource->lr_namespace->ns_obd;
+        struct obd_device *obd = ldlm_lock_to_ns(lock)->ns_obd;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         int rc;
         ENTRY;
