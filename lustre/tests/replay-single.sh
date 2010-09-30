@@ -21,7 +21,7 @@ require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number:  17466 18857
-ALWAYS_EXCEPT="61d   33a 33b 89    $REPLAY_SINGLE_EXCEPT"
+ALWAYS_EXCEPT="61d   33a 33b    $REPLAY_SINGLE_EXCEPT"
 
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a      44b    65 66 67 68"
@@ -2250,10 +2250,12 @@ test_88() { #bug 17485
 run_test 88 "MDS should not assign same objid to different files "
 
 test_89() {
+        cancel_lru_locks osc
         mkdir -p $DIR/$tdir
         rm -f $DIR/$tdir/$tfile
-        sleep 2
-        BLOCKS1=$(df $MOUNT | tail -n 1 | awk '{ print $3 }')
+        wait_mds_ost_sync
+        wait_destroy_complete
+        BLOCKS1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
         lfs setstripe -i 0 -c 1 $DIR/$tdir/$tfile
         dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
         sync
@@ -2263,9 +2265,9 @@ test_89() {
         umount $MOUNT
         mount_facet ost1
         zconf_mount $(hostname) $MOUNT
-	wait_mds_ost_sync
-        df $MOUNT
-        BLOCKS2=$(df $MOUNT | tail -n 1 | awk '{ print $3 }')
+        client_up || return 1
+        wait_mds_ost_sync
+        BLOCKS2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
         [ "$BLOCKS1" == "$BLOCKS2" ] || error $((BLOCKS2 - BLOCKS1)) blocks leaked
 }
 
