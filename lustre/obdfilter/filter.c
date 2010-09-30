@@ -1539,7 +1539,10 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
         struct filter_obd *filter = &obd->u.filter;
         int rc;
 
-        if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
+        /* There should be 2 references to the inode:
+         *  1) taken by filter_prepare_destroy
+         *  2) taken by filter_destroy */
+        if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 2) {
                 CERROR("destroying objid %.*s ino %lu nlink %lu count %d\n",
                        dchild->d_name.len, dchild->d_name.name, inode->i_ino,
                        (unsigned long)inode->i_nlink,
