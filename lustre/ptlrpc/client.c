@@ -1265,6 +1265,14 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         if (ptlrpc_client_recv_or_unlink(req) ||
                             ptlrpc_client_bulk_active(req))
                                 continue;
+                        /* If there is no need to resend, fail it now. */
+                        if (req->rq_no_resend) {
+                                if (req->rq_status == 0)
+                                        req->rq_status = -EIO;
+                                GOTO(interpret, req->rq_status);
+                        } else {
+                                continue;
+                        }
                 }
 
                 if (req->rq_err) {
