@@ -592,7 +592,7 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 {
         int want = WANT_PATH, idx = -1;
 
-        if (!pathname) {
+        if (!pathname || pathname[0] == '\0') {
                 want |= WANT_INDEX;
                 idx = index;
         } else

@@ -3292,8 +3292,8 @@ run_test 56h "check lfs find ! -name ============================="
 test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
-       UUID=`$LFS osts | awk '/0: / { print $2 }'`
-       OUT="`$LFIND -ost $UUID $DIR/$tdir`"
+       UUID=$(ostuuid_from_index 0 $DIR/$tdir)
+       OUT=$($LFIND -obd $UUID $DIR/$tdir)
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
 run_test 56i "check 'lfs find -ost UUID' skips directories ======="

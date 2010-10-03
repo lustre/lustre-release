@@ -162,7 +162,8 @@ command_t cmdlist[] = {
         {"join", lfs_join, 0,
          "join two lustre files into one.\n"
          "obsolete, HEAD does not support it anymore.\n"},
-        {"osts", lfs_osts, 0, "osts"},
+        {"osts", lfs_osts, 0, "list OSTs connected to client "
+         "[for specified path only]\n" "usage: osts [path]"},
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
          "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
@@ -896,20 +897,33 @@ static int lfs_getstripe(int argc, char **argv)
 
 static int lfs_osts(int argc, char **argv)
 {
-        char mntdir[PATH_MAX] = {'\0'};
+        char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         struct find_param param;
         int index = 0, rc=0;
 
-        if (argc != 1)
+        if (argc > 2)
                 return CMD_HELP;
 
-        while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
+        if (argc == 2 && !realpath(argv[1], path)) {
+                rc = -errno;
+                fprintf(stderr, "error: invalid path '%s': %s\n",
+                        argv[1], strerror(-rc));
+                return rc;
+        }
+
+        while (!llapi_search_mounts(path, index++, mntdir, NULL)) {
+                /* Check if we have a mount point */
+                if (mntdir[0] == '\0')
+                        continue;
+
                 memset(&param, 0, sizeof(param));
                 rc = llapi_ostlist(mntdir, &param);
                 if (rc) {
                         fprintf(stderr, "error: %s: failed on %s\n",
                                 argv[0], mntdir);
                 }
+                if (path[0] != '\0')
+                        break;
                 memset(mntdir, 0, PATH_MAX);
         }
 
@@ -1100,16 +1114,15 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
 
         printf("\n");
         showdf(mntdir, &sum, "filesystem summary:", ishow, cooked, NULL, 0,0);
-
+        printf("\n");
         return 0;
 }
 
 static int lfs_df(int argc, char **argv)
 {
-        char *path = NULL;
-        char *mntdir = NULL;
+        char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         int ishow = 0, cooked = 0;
-        int c, rc = 0;
+        int c, rc = 0, index = 0;
         char fsname[PATH_MAX] = "", *pool_name = NULL;
         struct option long_opts[] = {
                 {"pool", required_argument, 0, 'p'},
@@ -1132,46 +1145,25 @@ static int lfs_df(int argc, char **argv)
                         return CMD_HELP;
                 }
         }
-        if (optind < argc )
-                path = argv[optind];
-
-        if ((mntdir = malloc(PATH_MAX)) == NULL) {
-                fprintf(stderr, "error: cannot allocate %d bytes\n",
-                        PATH_MAX);
-                return -ENOMEM;
-        }
-        memset(mntdir, 0, PATH_MAX);
-
-        if (path) {
-                char rpath[PATH_MAX] = {'\0'};
-
-                if (!realpath(path, rpath)) {
-                        rc = -errno;
-                        fprintf(stderr, "error: invalid path '%s': %s\n",
-                                        path, strerror(-rc));
-                } else {
-                        rc = llapi_search_mounts(rpath, 0, mntdir, fsname);
-                        if (rc == 0 && mntdir[0] != '\0') {
-                                rc = mntdf(mntdir, fsname, pool_name,
-                                           ishow, cooked);
-                                printf("\n");
-                        }
-                }
-        } else {
-                int index = 0;
-
-                while (llapi_search_mounts(NULL, index++, mntdir, fsname)==0) {
-                        rc = mntdf(mntdir, fsname, pool_name,
-                                   ishow, cooked);
-                        if (rc)
-                                break;
-                        printf("\n");
-                        fsname[0] = '\0'; /* avoid matching in next loop */
-                        mntdir[0] = '\0'; /* avoid matching in next loop */
-                }
+        if (optind < argc && !realpath(argv[optind], path)) {
+                rc = -errno;
+                fprintf(stderr, "error: invalid path '%s': %s\n",
+                        argv[optind], strerror(-rc));
+                return rc;
         }
 
-        free(mntdir);
+        while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
+                /* Check if we have a mount point */
+                if (mntdir[0] == '\0')
+                        continue;
+
+                rc = mntdf(mntdir, fsname, pool_name, ishow, cooked);
+                if (rc || path[0] != '\0')
+                        break;
+                fsname[0] = '\0'; /* avoid matching in next loop */
+                mntdir[0] = '\0'; /* avoid matching in next loop */
+        }
+
         return rc;
 }
 
