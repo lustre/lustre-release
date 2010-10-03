@@ -1992,10 +1992,10 @@ test_80b() {
     [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 
     mkdir -p $DIR/$tdir
-    replay_barrier mds1
+    replay_barrier $SINGLEMDS
     $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
     rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
-    fail mds1
+    fail $SINGLEMDS
     stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
     return 0
 }
@@ -2009,9 +2009,9 @@ test_81a() {
     sleep 10
     $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir failed"
     $CHECKSTAT -t file $DIR/$tdir/f1002 || error "$CHECKSTAT -t file failed"
-    replay_barrier mds1
+    replay_barrier $SINGLEMDS
     rm $DIR/$tdir/f1002 || error "rm $DIR/$tdir/f1002 failed"
-    fail mds1
+    fail $SINGLEMDS
     stat $DIR/$tdir/f1002
 }
 run_test 81a "CMD: unlink cross-node file (fail mds with name)"
@@ -2033,10 +2033,10 @@ test_82b() {
     [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 
     local dir=$DIR/d82b
-    replay_barrier mds1
+    replay_barrier $SINGLEMDS
     mkdir $dir || error "mkdir $dir failed"
     log "FAILOVER mds1"
-    fail mds1
+    fail $SINGLEMDS
     stat $DIR
     $CHECKSTAT -t dir $dir || error "$CHECKSTAT -t dir $dir failed"
 }
@@ -2181,14 +2181,14 @@ test_88() { #bug 17485
     lfs setstripe $DIR/$tdir -o 0 -c 1 || error "setstripe"
 
     replay_barrier ost1
-    replay_barrier mds1
+    replay_barrier $SINGLEMDS
 
     # exhaust precreations on ost1
     local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
-    local mdtosc=$(get_mdtosc_proc_path $OST)
-    local last_id=$(do_facet mds1 lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    local next_id=$(do_facet mds1 lctl get_param -n osc.$mdtosc.prealloc_next_id)
-    echo "before test: last_id = $last_id, next_id = $next_id" 
+    local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $OST)
+    local last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
+    local next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
+    echo "before test: last_id = $last_id, next_id = $next_id"
 
     echo "Creating to objid $last_id on ost $OST..."
     createmany -o $DIR/$tdir/f-%d $next_id $((last_id - next_id + 2))
@@ -2197,27 +2197,27 @@ test_88() { #bug 17485
     last_id=$(($last_id + 1))
     createmany -o $DIR/$tdir/f-%d $last_id 8
 
-    last_id2=$(do_facet mds1 lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    next_id2=$(do_facet mds1 lctl get_param -n osc.$mdtosc.prealloc_next_id)
+    last_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
+    next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
     echo "before recovery: last_id = $last_id2, next_id = $next_id2" 
 
-    shutdown_facet mds1
+    shutdown_facet $SINGLEMDS
     shutdown_facet ost1
 
-    reboot_facet mds1
-    change_active mds1
-    wait_for mds1
-    mount_facet mds1 || error "Restart of mds failed"
+    reboot_facet $SINGLEMDS
+    change_active $SINGLEMDS
+    wait_for_facet $SINGLEMDS
+    mount_facet $SINGLEMDS || error "Restart of mds failed"
 
     reboot_facet ost1
     change_active ost1
-    wait_for ost1
+    wait_for_facet ost1
     mount_facet ost1 || error "Restart of ost1 failed"
 
     clients_up
 
-    last_id2=$(do_facet mds1 lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    next_id2=$(do_facet mds1 lctl get_param -n osc.$mdtosc.prealloc_next_id)
+    last_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
+    next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
     echo "after recovery: last_id = $last_id2, next_id = $next_id2" 
 
     # create new files, which should use new objids, and ensure the orphan 
