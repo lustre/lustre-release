@@ -631,10 +631,17 @@ static inline void cfs_mutex_down(cfs_mutex_t *mutex)
     __down(mutex);
 }
 
-#define cfs_mutex_lock(m) cfs_mutex_down(m)
-#define cfs_mutex_trylock(s) down_trylock(s)
-#define cfs_mutex_lock_nested(m) cfs_mutex_down(m)
-#define cfs_down(m)       cfs_mutex_down(m)
+static inline int cfs_mutex_down_interruptible(cfs_mutex_t *mutex)
+{
+    __down(mutex);
+    return 0;
+}
+
+#define cfs_mutex_lock(m)         cfs_mutex_down(m)
+#define cfs_mutex_trylock(s)      down_trylock(s)
+#define cfs_mutex_lock_nested(m)  cfs_mutex_down(m)
+#define cfs_down(m)               cfs_mutex_down(m)
+#define cfs_down_interruptible(m) cfs_mutex_down_interruptible(m)
 
 /*
  * mutex_up

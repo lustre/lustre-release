@@ -856,7 +856,8 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
 #endif
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                                cfs_down(&lli->lli_write_sem);
+                                if(cfs_down_interruptible(&lli->lli_write_sem))
+                                        GOTO(out, result = -ERESTARTSYS);
                                 write_sem_locked = 1;
                         }
                         break;
@@ -884,8 +885,10 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
                 result = io->ci_nob;
                 *ppos = io->u.ci_wr.wr.crw_pos;
         }
+        GOTO(out, result);
+out:
         cl_io_fini(env, io);
-        RETURN(result);
+        return result;
 }
 
 

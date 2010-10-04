@@ -217,6 +217,7 @@ typedef struct mutex cfs_mutex_t;
 #define cfs_mutex_down(x)                   down(x)
 #define cfs_up(x)                           up(x)
 #define cfs_down(x)                         down(x)
+#define cfs_down_interruptible(x)           down_interruptible(x)
 #define cfs_mutex_down_trylock(x)           down_trylock(x)
 #define cfs_mutex_lock(x)                   mutex_lock(x)
 #define cfs_mutex_unlock(x)                 mutex_unlock(x)

@@ -132,6 +132,13 @@ void __down(cfs_semaphore_t *s)
         (void)s;
 }
 
+int __down_interruptible(cfs_semaphore_t *s)
+{
+        LASSERT(s != NULL);
+        (void)s;
+        return 0;
+}
+
 void __up(cfs_semaphore_t *s)
 {
         LASSERT(s != NULL);

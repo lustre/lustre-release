@@ -282,6 +282,8 @@ void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a);
 #define cfs_up(s)                           cfs_mutex_up(s)
 #define cfs_mutex_down(s)                   __down(s)
 #define cfs_down(s)                         cfs_mutex_down(s)
+#define cfs_mutex_down_interruptible(s)     __down_interruptible(s)
+#define cfs_down_interruptible(s)           cfs_mutex_down_interruptible(s)
 
 #define cfs_init_mutex(x)                   cfs_sema_init(x, 1)
 #define cfs_init_mutex_locked(x)            cfs_sema_init(x, 0)
