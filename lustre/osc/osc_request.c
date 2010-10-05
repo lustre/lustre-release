@@ -966,6 +966,10 @@ static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
         oa->o_grant = cli->cl_avail_grant / 4;
         cli->cl_avail_grant -= oa->o_grant;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
+        if (!(oa->o_valid & OBD_MD_FLFLAGS)) {
+                oa->o_valid |= OBD_MD_FLFLAGS;
+                oa->o_flags = 0;
+        }
         oa->o_flags |= OBD_FL_SHRINK_GRANT;
         osc_update_next_shrink(cli);
 }
@@ -1016,6 +1020,10 @@ int osc_shrink_grant_to_target(struct client_obd *cli, long target)
         body->oa.o_grant = cli->cl_avail_grant - target;
         cli->cl_avail_grant = target;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
+        if (!(body->oa.o_valid & OBD_MD_FLFLAGS)) {
+                body->oa.o_valid |= OBD_MD_FLFLAGS;
+                body->oa.o_flags = 0;
+        }
         body->oa.o_flags |= OBD_FL_SHRINK_GRANT;
         osc_update_next_shrink(cli);
 

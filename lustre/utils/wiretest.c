@@ -658,6 +658,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_FL_CKSUM_CRC32 == 4096);
         CLASSERT(OBD_FL_CKSUM_ADLER == 8192);
         CLASSERT(OBD_FL_SHRINK_GRANT == 131072);
+        CLASSERT(OBD_FL_MMAP == (0x00040000));
         CLASSERT(OBD_CKSUM_CRC32 == 1);
         CLASSERT(OBD_CKSUM_ADLER == 2);
 
