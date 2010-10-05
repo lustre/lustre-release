@@ -3729,8 +3729,8 @@ do_rpc_nodes () {
     shift
 
     # Add paths to lustre tests for 32 and 64 bit systems.
-    local RPATH="$RLUSTRE/tests:/usr/lib/lustre/tests:/usr/lib64/lustre/tests:$PATH"
-    do_nodesv $list "PATH=$RPATH sh rpc.sh $@ "
+    local RPATH="PATH=$RLUSTRE/tests:/usr/lib/lustre/tests:/usr/lib64/lustre/tests:$PATH"
+    do_nodesv $list "${RPATH} NAME=${NAME} sh rpc.sh $@ "
 }
 
 wait_clients_import_state () {
