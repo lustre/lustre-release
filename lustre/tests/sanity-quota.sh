@@ -96,7 +96,7 @@ eval ONLY_99=true
 set_blk_tunesz() {
         local btune=$(($1 * BLK_SZ))
         # set btune size on all obdfilters
-        do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_btune_sz=$btune"
+        do_nodes $(comma_list $(osts_nodes)) "lctl set_param lquota.${FSNAME}-OST*.quota_btune_sz=$btune"
         # set btune size on mds
         do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_btune_sz=$btune"
 }
@@ -105,7 +105,7 @@ set_blk_tunesz() {
 set_blk_unitsz() {
         local bunit=$(($1 * BLK_SZ))
         # set bunit size on all obdfilters
-        do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_bunit_sz=$bunit"
+        do_nodes $(comma_list $(osts_nodes)) "lctl set_param lquota.${FSNAME}-OST*.quota_bunit_sz=$bunit"
         # set bunit size on mds
         do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_bunit_sz=$bunit"
 }
@@ -113,8 +113,6 @@ set_blk_unitsz() {
 # set_file_tunesz(itune_sz)
 set_file_tunesz() {
         local itune=$1
-        # set itune size on all obdfilters
-        do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_itune_sz=$itune"
         # set itune size on mds
         do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_itune_sz=$itune"
 }
@@ -122,8 +120,6 @@ set_file_tunesz() {
 # set_file_unitsz(iunit_sz)
 set_file_unitsz() {
         local iunit=$1
-        # set iunit size on all obdfilters
-        do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_iunit_sz=$iunit"
         # set iunit size on mds
         do_facet mds  "lctl set_param lquota.*${FSNAME}-MDT*.quota_iunit_sz=$iunit"
 }
