@@ -1249,6 +1249,10 @@ err_req:
         RETURN(1);
 }
 
+#ifndef noinline
+#define noinline __attribute__((noinline))
+#endif
+
 /*
  * The sole purpose of these functions is to avoid unreasonable stack frame
  * sizes such as assigned by the gcc compiler. Should NOT be inlined.
