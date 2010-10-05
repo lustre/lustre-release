@@ -263,7 +263,7 @@ EXPORT_SYMBOL(mds_lov_prepare_objids);
  * Special lsm is allocated with single stripe, caller should deallocated it
  * after use
  */
-static int mds_log_lost_precreated(struct obd_device *obd,
+static int noinline mds_log_lost_precreated(struct obd_device *obd,
                                    struct lov_stripe_md **lsmp, int *stripes,
                                    obd_id id, obd_count count, int idx)
 {
