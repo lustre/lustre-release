@@ -68,26 +68,34 @@ int lprocfs_seq_release(struct inode *inode, struct file *file)
 }
 EXPORT_SYMBOL(lprocfs_seq_release);
 
-struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
-                                    const char *name)
+static struct proc_dir_entry *__lprocfs_srch(struct proc_dir_entry *head,
+                                             const char *name)
 {
         struct proc_dir_entry *temp;
 
         if (head == NULL)
                 return NULL;
-        LPROCFS_ENTRY();
 
         temp = head->subdir;
         while (temp != NULL) {
                 if (strcmp(temp->name, name) == 0) {
-                        LPROCFS_EXIT();
                         return temp;
                 }
 
                 temp = temp->next;
         }
-        LPROCFS_EXIT();
         return NULL;
+}
+
+struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
+                                    const char *name)
+{
+        struct proc_dir_entry *temp;
+
+        LPROCFS_ENTRY();
+        temp = __lprocfs_srch(head, name);
+        LPROCFS_EXIT();
+        return temp;
 }
 
 /* lprocfs API calls */
@@ -131,9 +139,11 @@ cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
                 mode |= 0200;
         if (fops)
                 mode = 0644;
+        LPROCFS_WRITE_ENTRY();
         proc = create_proc_entry(name, mode, root);
         if (!proc) {
                 CERROR("LprocFS: No memory to create /proc entry %s", name);
+                LPROCFS_WRITE_EXIT();
                 return ERR_PTR(-ENOMEM);
         }
         proc->read_proc = read_proc;
@@ -141,6 +151,7 @@ cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
         proc->data = data;
         if (fops)
                 proc->proc_fops = fops;
+        LPROCFS_WRITE_EXIT();
         return proc;
 }
 
@@ -288,9 +299,12 @@ EXPORT_SYMBOL(lprocfs_evict_client_fops);
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
 {
+        int rc = 0;
+
         if (root == NULL || list == NULL)
                 return -EINVAL;
 
+        LPROCFS_WRITE_ENTRY();
         while (list->name != NULL) {
                 struct proc_dir_entry *cur_root, *proc;
                 char *pathcopy, *cur, *next, pathbuf[64];
@@ -303,7 +317,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                 if (strlen(list->name) > sizeof(pathbuf) - 1) {
                         OBD_ALLOC(pathcopy, pathsize);
                         if (pathcopy == NULL)
-                                return -ENOMEM;
+                                GOTO(out, rc = -ENOMEM);
                 } else {
                         pathcopy = pathbuf;
                 }
@@ -315,7 +329,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                         if (*cur =='\0') /* skip double/trailing "/" */
                                 continue;
 
-                        proc = lprocfs_srch(cur_root, cur);
+                        proc = __lprocfs_srch(cur_root, cur);
                         CDEBUG(D_OTHER, "cur_root=%s, cur=%s, next=%s, (%s)\n",
                                cur_root->name, cur, next,
                                (proc ? "exists" : "new"));
@@ -342,7 +356,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                 if (cur_root == NULL || proc == NULL) {
                         CERROR("LprocFS: No memory to create /proc entry %s",
                                list->name);
-                        return -ENOMEM;
+                        GOTO(out, rc = -ENOMEM);
                 }
 
                 if (list->fops)
@@ -354,7 +368,9 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                 proc->data = (list->data ? list->data : data);
                 list++;
         }
-        return 0;
+out:
+        LPROCFS_WRITE_EXIT();
+        return rc;
 }
 
 void lprocfs_remove(struct proc_dir_entry **rooth)
@@ -1361,11 +1377,18 @@ int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
         struct proc_dir_entry *entry;
         LASSERT(root != NULL);
 
+        LPROCFS_WRITE_ENTRY();
         entry = create_proc_entry(name, 0644, root);
+        if (entry) {
+                entry->proc_fops = &lprocfs_stats_seq_fops;
+                entry->data = stats;
+        }
+
+        LPROCFS_WRITE_EXIT();
+
         if (entry == NULL)
                 return -ENOMEM;
-        entry->proc_fops = &lprocfs_stats_seq_fops;
-        entry->data = stats;
+
         return 0;
 }
 
@@ -2067,11 +2090,16 @@ int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, mode_t mode,
         struct proc_dir_entry *entry;
         ENTRY;
 
+        LPROCFS_WRITE_ENTRY();
         entry = create_proc_entry(name, mode, parent);
+        if (entry) {
+                entry->proc_fops = seq_fops;
+                entry->data = data;
+        }
+        LPROCFS_WRITE_EXIT();
+
         if (entry == NULL)
                 RETURN(-ENOMEM);
-        entry->proc_fops = seq_fops;
-        entry->data = data;
 
         RETURN(0);
 }
