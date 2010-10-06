@@ -101,7 +101,7 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
                         lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
                                           hist[BRW_W_RPC_HIST],
-                                         atomic_read(&filter->fo_r_in_flight));
+                                         atomic_read(&filter->fo_w_in_flight));
                         lprocfs_oh_tally_log2(&exp->exp_nid_stats->
                                         nid_brw_stats->hist[BRW_W_DISK_IOSIZE],
                                               size);
