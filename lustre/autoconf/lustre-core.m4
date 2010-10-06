@@ -1987,16 +1987,18 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.31
           LC_BLK_QUEUE_LOG_BLK_SIZE
-        
+
           # 2.6.32
           LC_NEW_BACKING_DEV_INFO
-          LC_WALK_SPACE_HAS_DATA_SEM
+          if test x$enable_server = xyes ; then
+              LC_WALK_SPACE_HAS_DATA_SEM
+          fi
           LC_DQUOT_INIT
           LC_REQUEST_QUEUE_LIMITS
 
-          # 
+          #
           if test x$enable_server = xyes ; then
-          	LC_QUOTA64    # must after LC_HAVE_QUOTAIO_V1_H
+              LC_QUOTA64    # must after LC_HAVE_QUOTAIO_V1_H
           fi
 ])
 
