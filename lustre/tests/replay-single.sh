@@ -124,6 +124,15 @@ start_full_debug_logging
 run_test 0c "fld create"
 stop_full_debug_logging
 
+test_0d() {
+    replay_barrier $SINGLEMDS
+    umount $MOUNT
+    facet_failover $SINGLEMDS
+    zconf_mount `hostname` $MOUNT || error "mount fails"
+    client_up || error "post-failover df failed"
+}
+run_test 0d "expired recovery with no clients"
+
 test_1() {
     replay_barrier $SINGLEMDS
     mcreate $DIR/$tfile

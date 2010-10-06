@@ -38,6 +38,39 @@ rm -rf $DIR/[df][0-9]*
 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
+test_0a() {
+    touch $MOUNT2/$tfile-A # force sync FLD/SEQ update before barrier
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_PTLRPC_FINISH_REPLAY | OBD_FAIL_ONCE
+    touch $MOUNT2/$tfile
+    createmany -o $MOUNT1/$tfile- 50
+    $LCTL set_param fail_loc=0x80000514
+    facet_failover $SINGLEMDS
+    client_up || return 1
+    umount -f $MOUNT2
+    client_up || return 1
+    zconf_mount `hostname` $MOUNT2 || error "mount2 fais"
+    unlinkmany $MOUNT1/$tfile- 50 || return 2
+    rm $MOUNT2/$tfile || return 3
+    rm $MOUNT2/$tfile-A || return 4
+}
+run_test 0a "expired recovery with lost client"
+
+test_0b() {
+    replay_barrier $SINGLEMDS
+    touch $MOUNT2/$tfile
+    touch $MOUNT1/$tfile-2
+    umount $MOUNT2
+    facet_failover $SINGLEMDS
+    umount -f $MOUNT1
+    zconf_mount `hostname` $MOUNT1 || error "mount1 fais"
+    zconf_mount `hostname` $MOUNT2 || error "mount2 fais"
+    checkstat $MOUNT1/$tfile-2 && return 1
+    checkstat $MOUNT2/$tfile && return 2
+    return 0
+}
+run_test 0b "lost client during waiting for next transno"
+
 test_1() {
     touch $MOUNT1/a
     replay_barrier $SINGLEMDS

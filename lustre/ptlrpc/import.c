@@ -1209,6 +1209,9 @@ static int signal_completed_replay(struct obd_import *imp)
         struct ptlrpc_request *req;
         ENTRY;
 
+        if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_FINISH_REPLAY)))
+                RETURN(0);
+
         LASSERT(cfs_atomic_read(&imp->imp_replay_inflight) == 0);
         cfs_atomic_inc(&imp->imp_replay_inflight);
 
