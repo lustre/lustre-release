@@ -28,3 +28,4 @@ ext4-disable-write-bar-by-default.patch
 ext4-mballoc-skip-grps.patch
 ext4-disable-mb-cache-sles11.patch
 ext4-consolidate-in_range-definitions.patch
+ext4-bug23780-remove-i_data_sem-from-walk_space.patch
