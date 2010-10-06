@@ -161,10 +161,11 @@ int main (int argc, char *argv[]) {
                 do {
                         ret = write(fd, chunk_buf[rank] + done,
                                     CHUNK_SIZE(n) - done);
-                        if (ret < 0)
+                        if (ret < 0 && errno != EINTR)
                                 rprintf(rank, n, "write() returned %s\n",
                                         strerror(errno));
-                        done += ret;
+                        if (ret > 0)
+                                done += ret;
                 } while (done != CHUNK_SIZE(n));
 
                 MPI_Barrier(MPI_COMM_WORLD);
