@@ -555,8 +555,10 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         npages = count >> CFS_PAGE_SHIFT;
 
         OBD_ALLOC(pga, npages * sizeof(*pga));
-        if (pga == NULL)
-                return (-ENOMEM);
+        if (pga == NULL) {
+                rc = -ENOMEM;
+                goto out_set;
+        }
 
         for (i = 0, pgp = pga, off = offset;
              i < npages;
@@ -597,7 +599,6 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         if (rc)
                 CDEBUG_LIMIT(rc == -ENOSPC ? D_INODE : D_ERROR,
                              "error from obd_brw_async: rc = %d\n", rc);
-        ptlrpc_set_destroy(set);
  out:
         if (rc != 0 || rw != OBD_BRW_READ)
                 verify = 0;
@@ -616,6 +617,8 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 OBD_PAGE_FREE(pgp->pg);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
+ out_set:
+        ptlrpc_set_destroy(set);
         return (rc);
 }
 
