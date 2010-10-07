@@ -1524,6 +1524,17 @@ int lov_fini_statfs_set(struct lov_request_set *set)
         RETURN(rc);
 }
 
+int lov_fini_sync_fs_set(struct lov_request_set *set)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (set == NULL)
+                RETURN(rc);
+        lov_put_reqset(set);
+        RETURN(rc);
+}
+
 void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
                        int success)
 {
@@ -1701,5 +1712,61 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
         RETURN(rc);
 out_set:
         lov_fini_statfs_set(set);
+        RETURN(rc);
+}
+
+int cb_sync_fs_update(void *cookie, int rc)
+{
+        struct obd_info *oinfo = cookie;
+        struct lov_request *lovreq;
+        ENTRY;
+
+        lovreq = container_of(oinfo, struct lov_request, rq_oi);
+        lov_update_set(lovreq->rq_rqset, lovreq, rc);
+
+        RETURN(rc);
+}
+
+int lov_prep_sync_fs_set(struct obd_device *obd, struct obd_info *oinfo,
+                         struct lov_request_set **request)
+{
+        struct lov_request_set *set;
+        struct lov_obd *lov = &obd->u.lov;
+        int rc = 0;
+        int i;
+
+        ENTRY;
+
+        OBD_ALLOC(set, sizeof(*set));
+        if (set == NULL)
+                RETURN(ENOMEM);
+        lov_init_set(set);
+        set->set_obd = obd;
+        set->set_oi = oinfo;
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                struct lov_request *req;
+
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active ||
+                    !lov->lov_tgts[i]->ltd_exp) {
+                        CDEBUG(D_INFO, "lov idx %d inactive or disabled\n", i);
+                        continue;
+                }
+
+                OBD_ALLOC(req, sizeof(*req));
+                if (req == NULL)
+                        GOTO(out, rc = ENOMEM);
+
+                req->rq_idx = i;
+                req->rq_oi.oi_cb_up = cb_sync_fs_update;
+
+                lov_set_add_req(req, set);
+        }
+        if (!set->set_count)
+                GOTO(out, rc = -EIO);
+        *request = set;
+        RETURN(rc);
+out:
+        lov_fini_sync_fs_set(set);
         RETURN(rc);
 }

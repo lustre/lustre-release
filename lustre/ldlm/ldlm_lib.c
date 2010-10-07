@@ -282,6 +282,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
+        CFS_INIT_LIST_HEAD(&cli->cl_loi_sync_fs_list);
         client_obd_list_lock_init(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight = 0;
         cli->cl_w_in_flight = 0;

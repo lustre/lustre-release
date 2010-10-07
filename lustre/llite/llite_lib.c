@@ -2107,3 +2107,16 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         RETURN(0);
 }
+
+int ll_sync_fs(struct super_block *sb, int wait)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int rc = 0;
+        ENTRY;
+
+        rc = obd_sync_fs(class_exp2obd(sbi->ll_dt_exp), NULL, wait);
+        if (rc)
+                CERROR("sync_fs fails: rc = %d\n", rc);
+
+        RETURN(rc);
+}

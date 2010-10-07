@@ -96,7 +96,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
         cfs_list_t loi_hp_ready_item;
         cfs_list_t loi_write_item;
         cfs_list_t loi_read_item;
-
+        cfs_list_t loi_sync_fs_item;
         unsigned long loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
         struct ost_lvb loi_lvb;
@@ -123,6 +123,7 @@ static inline void loi_init(struct lov_oinfo *loi)
         CFS_INIT_LIST_HEAD(&loi->loi_hp_ready_item);
         CFS_INIT_LIST_HEAD(&loi->loi_write_item);
         CFS_INIT_LIST_HEAD(&loi->loi_read_item);
+        CFS_INIT_LIST_HEAD(&loi->loi_sync_fs_item);
 }
 
 struct lov_stripe_md {
@@ -158,6 +159,12 @@ struct lov_stripe_md {
 struct obd_info;
 
 typedef int (*obd_enqueue_update_f)(void *cookie, int rc);
+
+struct osc_sync_fs_wait {
+        struct obd_info      *sfw_oi;
+        obd_enqueue_update_f  sfw_upcall;
+        int started;
+};
 
 /* obd info for a particular level (lov, osc). */
 struct obd_info {
@@ -440,6 +447,7 @@ struct client_obd {
         cfs_list_t               cl_loi_hp_ready_list;
         cfs_list_t               cl_loi_write_list;
         cfs_list_t               cl_loi_read_list;
+        cfs_list_t               cl_loi_sync_fs_list;
         int                      cl_r_in_flight;
         int                      cl_w_in_flight;
         /* just a sum of the loi/lop pending numbers to be exported by /proc */
@@ -487,7 +495,9 @@ struct client_obd {
         struct lu_client_seq    *cl_seq;
 
         cfs_atomic_t             cl_resends; /* resend count */
+        struct osc_sync_fs_wait  cl_sf_wait;
 };
+
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
 #define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
@@ -1406,6 +1416,8 @@ struct obd_ops {
                           char *ostname);
         void (*o_getref)(struct obd_device *obd);
         void (*o_putref)(struct obd_device *obd);
+        int (*o_sync_fs)(struct obd_device *obd, struct obd_info *oinfo,
+                         int wait);
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
