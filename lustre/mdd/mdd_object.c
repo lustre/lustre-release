@@ -245,7 +245,7 @@ struct lov_mds_md *mdd_max_lmm_get(const struct lu_env *env,
         }
         if (unlikely(mti->mti_max_lmm == NULL)) {
                 OBD_ALLOC(mti->mti_max_lmm, max_lmm_size);
-                if (unlikely(mti->mti_max_lmm != NULL))
+                if (likely(mti->mti_max_lmm != NULL))
                         mti->mti_max_lmm_size = max_lmm_size;
         }
         return mti->mti_max_lmm;
