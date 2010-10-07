@@ -267,6 +267,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         client_obd_list_lock_init(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight = 0;
         cli->cl_w_in_flight = 0;
+        cli->cl_dio_r_in_flight = 0;
+        cli->cl_dio_w_in_flight = 0;
         spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);

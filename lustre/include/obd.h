@@ -509,6 +509,8 @@ struct client_obd {
         struct list_head         cl_loi_read_list;
         int                      cl_r_in_flight;
         int                      cl_w_in_flight;
+        int                      cl_dio_r_in_flight;
+        int                      cl_dio_w_in_flight;
         /* just a sum of the loi/lop pending numbers to be exported by /proc */
         int                      cl_pending_w_pages;
         int                      cl_pending_r_pages;

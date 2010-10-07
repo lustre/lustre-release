@@ -1713,6 +1713,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
         if (rc == 0) {
                 aa = ptlrpc_req_async_args(request);
+                /* Do we need to separate dio stats? */
                 if (cmd == OBD_BRW_READ) {
                         lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                         lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
@@ -1727,12 +1728,14 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 request->rq_interpret_reply = brw_interpret;
                 ptlrpc_set_add_req(set, request);
+
                 client_obd_list_lock(&cli->cl_loi_list_lock);
                 if (cmd == OBD_BRW_READ)
-                        cli->cl_r_in_flight++;
+                        cli->cl_dio_r_in_flight++;
                 else
-                        cli->cl_w_in_flight++;
+                        cli->cl_dio_w_in_flight++;
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
+
                 OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DIO_PAUSE, 3);
         } else if (cmd == OBD_BRW_WRITE) {
                 client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -2282,16 +2285,17 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
 
         cli = aa->aa_cli;
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
-         * is called so we know whether to go to sync BRWs or wait for more
-         * RPCs to complete */
-        if (lustre_msg_get_opc(request->rq_reqmsg) == OST_WRITE)
-                cli->cl_w_in_flight--;
-        else
-                cli->cl_r_in_flight--;
-
         if (!list_empty(&aa->aa_oaps)) { /* from osc_send_oap_rpc() */
                 struct osc_async_page *oap, *tmp;
+
+                /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
+                 * is called so we know whether to go to sync BRWs or wait for more
+                 * RPCs to complete */
+                if (lustre_msg_get_opc(request->rq_reqmsg) == OST_WRITE)
+                        cli->cl_w_in_flight--;
+                else
+                        cli->cl_r_in_flight--;
+
                 /* the caller may re-use the oap after the completion call so
                  * we need to clean it up a little */
                 list_for_each_entry_safe(oap, tmp, &aa->aa_oaps, oap_rpc_item) {
@@ -2307,6 +2311,11 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                 if (aa->aa_oa->o_valid & OBD_MD_FLFLAGS &&
                     aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
                         OBDO_FREE(aa->aa_oa);
+
+                if (lustre_msg_get_opc(request->rq_reqmsg) == OST_WRITE)
+                        cli->cl_dio_w_in_flight--;
+                else
+                        cli->cl_dio_r_in_flight--;
         }
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);

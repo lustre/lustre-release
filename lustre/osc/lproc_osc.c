@@ -589,15 +589,19 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+        seq_printf(seq, "snapshot_time:            %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
-        seq_printf(seq, "read RPCs in flight:  %d\n",
+        seq_printf(seq, "read RPCs in flight:      %d\n",
                    cli->cl_r_in_flight);
-        seq_printf(seq, "write RPCs in flight: %d\n",
+        seq_printf(seq, "write RPCs in flight:     %d\n",
                    cli->cl_w_in_flight);
-        seq_printf(seq, "pending write pages:  %d\n",
+        seq_printf(seq, "dio read RPCs in flight:  %d\n",
+                   cli->cl_dio_r_in_flight);
+        seq_printf(seq, "dio write RPCs in flight: %d\n",
+                   cli->cl_dio_w_in_flight);
+        seq_printf(seq, "pending write pages:      %d\n",
                    cli->cl_pending_w_pages);
-        seq_printf(seq, "pending read pages:   %d\n",
+        seq_printf(seq, "pending read pages:       %d\n",
                    cli->cl_pending_r_pages);
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
