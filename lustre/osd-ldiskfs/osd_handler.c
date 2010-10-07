@@ -1944,7 +1944,7 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
         result = __osd_object_create(info, obj, attr, hint, dof, th);
 
         /* objects under osd root shld have igif fid, so dont add fid EA */
-        if (result == 0 && fid_seq(fid) >= FID_SEQ_DISTRIBUTED_START)
+        if (result == 0 && fid_seq(fid) >= FID_SEQ_NORMAL)
                 result = osd_ea_fid_set(env, dt, fid);
 
         if (result == 0)
@@ -2918,7 +2918,7 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
         child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
 
         if (fid_is_igif((struct lu_fid *)fid) ||
-            fid_seq((struct lu_fid *)fid) >= FID_SEQ_DISTRIBUTED_START) {
+            fid_seq((struct lu_fid *)fid) >= FID_SEQ_NORMAL) {
                 ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
                 osd_get_ldiskfs_dirent_param(ldp, fid);
                 child->d_fsdata = (void*) ldp;
@@ -2972,7 +2972,7 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
 
                 if (!dir->oo_compat_dot_created)
                         return -EINVAL;
-                if (fid_seq((struct lu_fid *) dot_fid) >= FID_SEQ_DISTRIBUTED_START) {
+                if (fid_seq((struct lu_fid *)dot_fid) >= FID_SEQ_NORMAL) {
                         osd_get_ldiskfs_dirent_param(dot_ldp, dot_fid);
                         osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
                 } else {

@@ -73,7 +73,7 @@
  * FID_SEQ_START + 2 is for .lustre directory and its objects
  */
 const struct lu_seq_range LUSTRE_SEQ_SPACE_RANGE = {
-        FID_SEQ_DISTRIBUTED_START,
+        FID_SEQ_NORMAL,
         (__u64)~0ULL
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);
@@ -92,13 +92,13 @@ const struct lu_fid LUSTRE_BFL_FID = { .f_seq = 0x0000000000000003,
 EXPORT_SYMBOL(LUSTRE_BFL_FID);
 
 /** Special fid for ".lustre" directory */
-const struct lu_fid LU_DOT_LUSTRE_FID = { .f_seq = LU_DOT_LUSTRE_SEQ,
+const struct lu_fid LU_DOT_LUSTRE_FID = { .f_seq = FID_SEQ_DOT_LUSTRE,
                                           .f_oid = 0x0000000000000001,
                                           .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LU_DOT_LUSTRE_FID);
 
 /** Special fid for "fid" special object in .lustre */
-const struct lu_fid LU_OBF_FID = { .f_seq = LU_DOT_LUSTRE_SEQ,
+const struct lu_fid LU_OBF_FID = { .f_seq = FID_SEQ_DOT_LUSTRE,
                                    .f_oid = 0x0000000000000002,
                                    .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LU_OBF_FID);

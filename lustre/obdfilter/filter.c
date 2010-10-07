@@ -3807,10 +3807,15 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 } else
                         next_id = filter_last_id(filter, group) + 1;
 
-                /* Temporary solution for oid in CMD before fid-on-OST */
-                if ((fid_seq_is_mdt0(oa->o_seq) && next_id >= IDIF_MAX_OID) &&
-                    (fid_seq_is_cmd(oa->o_seq) && next_id >= OBIF_MAX_OID)) {
-                        CERROR("%s:"POSTID" hit the max IDIF_MAX_OID(1<<48)!\n",
+                /* Don't create objects beyond the valid range for this SEQ */
+                if (unlikely(fid_seq_is_mdt0(group) &&
+                            next_id >= IDIF_MAX_OID)) {
+                        CERROR("%s:"POSTID" hit the IDIF_MAX_OID (1<<48)!\n",
+                                obd->obd_name, next_id, group);
+                        GOTO(cleanup, rc = -ENOSPC);
+               } else if (unlikely(!fid_seq_is_mdt0(group) &&
+                                   next_id >= OBIF_MAX_OID)) {
+                        CERROR("%s:"POSTID" hit the OBIF_MAX_OID (1<<32)!\n",
                                 obd->obd_name, next_id, group);
                         GOTO(cleanup, rc = -ENOSPC);
                 }

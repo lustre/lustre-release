@@ -503,8 +503,8 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         fld->lsf_control_exp = NULL;
 
         /* Insert reserved sequence number of ".lustre" into fld cache. */
-        range.lsr_start = LU_DOT_LUSTRE_SEQ;
-        range.lsr_end = LU_DOT_LUSTRE_SEQ + 1;
+        range.lsr_start = FID_SEQ_DOT_LUSTRE;
+        range.lsr_end = FID_SEQ_DOT_LUSTRE + 1;
         range.lsr_mdt = 0;
         fld_cache_insert(fld->lsf_cache, &range);
 

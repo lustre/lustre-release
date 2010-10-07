@@ -389,6 +389,10 @@ static inline obd_id fid_ver_oid(const struct lu_fid *fid)
 }
 
 /**
+ * Note that reserved SEQ numbers below 12 will conflict with ldiskfs
+ * inodes in the IGIF namespace, so these reserved SEQ numbers can be
+ * used for other purposes and not risk collisions with existing inodes.
+ *
  * Different FID Format
  * http://arch.lustre.org/index.php?title=Interoperability_fids_zfs#NEW.0
  */
