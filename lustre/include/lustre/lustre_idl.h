@@ -355,7 +355,7 @@ static inline void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 /**
  * fid constants
  */
-enum {
+enum fid_oid {
         /** initial fid id value */
         LUSTRE_FID_INIT_OID  = 1UL
 };
@@ -1136,7 +1136,7 @@ extern void lustre_swab_connect(struct obd_connect_data *ocd);
  * Please update DECLARE_CKSUM_NAME/OBD_CKSUM_ALL in obd.h when adding a new
  * algorithm and also the OBD_FL_CKSUM* flags.
  */
-typedef enum {
+typedef enum cksum_type {
         OBD_CKSUM_CRC32 = 0x00000001,
         OBD_CKSUM_ADLER = 0x00000002,
 } cksum_type_t;
@@ -1146,7 +1146,7 @@ typedef enum {
  */
 
 /* opcodes */
-typedef enum {
+typedef enum ost_cmd {
         OST_REPLY      =  0,       /* reply ? */
         OST_GETATTR    =  1,
         OST_SETATTR    =  2,
@@ -1403,7 +1403,7 @@ extern void lustre_swab_ost_lvb(struct ost_lvb *);
  */
 
 /* opcodes */
-typedef enum {
+typedef enum mds_cmd {
         MDS_GETATTR      = 33,
         MDS_GETATTR_NAME = 34,
         MDS_CLOSE        = 35,
@@ -1434,7 +1434,7 @@ typedef enum {
  * Do not exceed 63
  */
 
-typedef enum {
+typedef enum mdt_reint {
         REINT_SETATTR  = 1,
         REINT_CREATE   = 2,
         REINT_LINK     = 3,
@@ -1713,7 +1713,7 @@ struct mds_remote_perm {
 };
 
 /* permissions for md_perm.mp_perm */
-enum {
+enum mp_perm {
         CFS_SETUID_PERM = 0x01,
         CFS_SETGID_PERM = 0x02,
         CFS_SETGRP_PERM = 0x04,
@@ -1845,7 +1845,7 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 /* lfs rgetfacl permission check */
 #define MAY_RGETFACL    (1 << 14)
 
-enum {
+enum op_bias {
         MDS_CHECK_SPLIT   = 1 << 0,
         MDS_CROSS_REF     = 1 << 1,
         MDS_VTX_BYPASS    = 1 << 2,
@@ -2128,7 +2128,7 @@ extern void lustre_swab_lov_desc (struct lov_desc *ld);
  *   LDLM requests:
  */
 /* opcodes -- MUST be distinct from OST/MDS opcodes */
-typedef enum {
+typedef enum ldlm_cmd {
         LDLM_ENQUEUE     = 101,
         LDLM_CONVERT     = 102,
         LDLM_CANCEL      = 103,
@@ -2148,7 +2148,7 @@ struct ldlm_res_id {
 extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 
 /* lock types */
-typedef enum {
+typedef enum ldlm_mode {
         LCK_MINMODE = 0,
         LCK_EX      = 1,
         LCK_PW      = 2,
@@ -2163,7 +2163,7 @@ typedef enum {
 
 #define LCK_MODE_NUM    8
 
-typedef enum {
+typedef enum ldlm_type {
         LDLM_PLAIN     = 10,
         LDLM_EXTENT    = 11,
         LDLM_FLOCK     = 12,
@@ -2203,7 +2203,7 @@ struct ldlm_flock {
  * this ever changes we will need to swab the union differently based
  * on the resource type. */
 
-typedef union {
+typedef union ldlm_policy_data {
         struct ldlm_extent l_extent;
         struct ldlm_flock  l_flock;
         struct ldlm_inodebits l_inodebits;
@@ -2271,7 +2271,7 @@ extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
 /*
  * Opcodes for mountconf (mgs and mgc)
  */
-typedef enum {
+typedef enum mgs_cmd {
         MGS_CONNECT = 250,
         MGS_DISCONNECT,
         MGS_EXCEPTION,         /* node died, etc. */
@@ -2335,7 +2335,7 @@ extern void lustre_swab_cfg_marker(struct cfg_marker *marker,
  * Opcodes for multiple servers.
  */
 
-typedef enum {
+typedef enum obd_cmd {
         OBD_PING = 400,
         OBD_LOG_CANCEL,
         OBD_QC_CALLBACK,
@@ -2367,7 +2367,7 @@ struct llog_catid {
 #define LLOG_OP_MAGIC 0x10600000
 #define LLOG_OP_MASK  0xfff00000
 
-typedef enum {
+typedef enum llog_op_type {
         LLOG_PAD_MAGIC     = LLOG_OP_MAGIC | 0x00000,
         OST_SZ_REC         = LLOG_OP_MAGIC | 0x00f00,
         OST_RAID1_REC      = LLOG_OP_MAGIC | 0x01000,
@@ -2731,7 +2731,7 @@ extern struct qunit_data *quota_get_qdata(void *req, int is_req, int is_exp);
 extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
                             int is_req, int is_exp);
 
-typedef enum {
+typedef enum quota_cmd {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
         QUOTA_LAST_OPC
@@ -2751,7 +2751,7 @@ typedef enum {
 
 
 /* security opcodes */
-typedef enum {
+typedef enum sec_cmd {
         SEC_CTX_INIT            = 801,
         SEC_CTX_INIT_CONT       = 802,
         SEC_CTX_FINI            = 803,
@@ -2782,7 +2782,7 @@ struct lustre_capa {
 extern void lustre_swab_lustre_capa(struct lustre_capa *c);
 
 /** lustre_capa::lc_opc */
-enum {
+enum capa {
         CAPA_OPC_BODY_WRITE   = 1<<0,  /**< write object data */
         CAPA_OPC_BODY_READ    = 1<<1,  /**< read object data */
         CAPA_OPC_INDEX_LOOKUP = 1<<2,  /**< lookup object fid */
@@ -2822,7 +2822,7 @@ static inline int capa_for_oss(struct lustre_capa *c)
 }
 
 /* lustre_capa::lc_hmac_alg */
-enum {
+enum capa_mac_alg {
         CAPA_HMAC_ALG_SHA1 = 1, /**< sha1 algorithm */
         CAPA_HMAC_ALG_MAX,
 };

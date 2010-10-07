@@ -127,6 +127,62 @@ do {                                                            \
 } while(0)
 
 static void
+check_lu_seq_range(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lu_seq_range);
+        CHECK_MEMBER(lu_seq_range, lsr_start);
+        CHECK_MEMBER(lu_seq_range, lsr_end);
+        CHECK_MEMBER(lu_seq_range, lsr_mdt);
+        CHECK_MEMBER(lu_seq_range, lsr_padding);
+}
+
+/* lustre_mdt_attrs is stored in EA; it's worth checking for changes here */
+static void
+check_lustre_mdt_attrs(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_mdt_attrs);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_compat);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_incompat);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_self_fid);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_flags);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_ioepoch);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_som_size);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_som_blocks);
+        CHECK_MEMBER(lustre_mdt_attrs, lma_som_mountid);
+}
+
+static void
+check_lu_dirent(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lu_dirent);
+        CHECK_MEMBER(lu_dirent, lde_fid);
+        CHECK_MEMBER(lu_dirent, lde_hash);
+        CHECK_MEMBER(lu_dirent, lde_reclen);
+        CHECK_MEMBER(lu_dirent, lde_namelen);
+        CHECK_MEMBER(lu_dirent, lde_attrs);
+        CHECK_MEMBER(lu_dirent, lde_name[0]);
+}
+
+static void
+check_luda_type(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(luda_type);
+        CHECK_MEMBER(luda_type, lt_type);
+}
+
+static void
+check_lu_dirpage(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lu_dirpage);
+        CHECK_MEMBER(lu_dirpage, ldp_hash_start);
+        CHECK_MEMBER(lu_dirpage, ldp_hash_end);
+        CHECK_MEMBER(lu_dirpage, ldp_flags);
+        CHECK_MEMBER(lu_dirpage, ldp_pad0);
+        CHECK_MEMBER(lu_dirpage, ldp_entries[0]);
+}
+
+static void
 check_lustre_handle(void)
 {
         BLANK_LINE();
@@ -465,6 +521,16 @@ check_ost_body(void)
 }
 
 static void
+check_ll_fiemap_info_key(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(ll_fiemap_info_key);
+        CHECK_MEMBER(ll_fiemap_info_key, name[0]);
+        CHECK_MEMBER(ll_fiemap_info_key, oa);
+        CHECK_MEMBER(ll_fiemap_info_key, fiemap);
+}
+
+
+static void
 check_ll_fid(void)
 {
         BLANK_LINE();
@@ -543,6 +609,55 @@ check_mds_body(void)
         CHECK_CDEFINE(MDS_INODELOCK_LOOKUP);
         CHECK_CDEFINE(MDS_INODELOCK_UPDATE);
         CHECK_CDEFINE(MDS_INODELOCK_OPEN);
+}
+
+static void
+check_mdt_body(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(mdt_body);
+        CHECK_MEMBER(mdt_body, fid1);
+        CHECK_MEMBER(mdt_body, fid2);
+        CHECK_MEMBER(mdt_body, handle);
+        CHECK_MEMBER(mdt_body, valid);
+        CHECK_MEMBER(mdt_body, size);
+        CHECK_MEMBER(mdt_body, mtime);
+        CHECK_MEMBER(mdt_body, atime);
+        CHECK_MEMBER(mdt_body, ctime);
+        CHECK_MEMBER(mdt_body, blocks);
+        CHECK_MEMBER(mdt_body, ioepoch);
+        CHECK_MEMBER(mdt_body, ino);
+        CHECK_MEMBER(mdt_body, fsuid);
+        CHECK_MEMBER(mdt_body, fsgid);
+        CHECK_MEMBER(mdt_body, capability);
+        CHECK_MEMBER(mdt_body, mode);
+        CHECK_MEMBER(mdt_body, uid);
+        CHECK_MEMBER(mdt_body, gid);
+        CHECK_MEMBER(mdt_body, flags);
+        CHECK_MEMBER(mdt_body, rdev);
+        CHECK_MEMBER(mdt_body, nlink);
+        CHECK_MEMBER(mdt_body, generation);
+        CHECK_MEMBER(mdt_body, suppgid);
+        CHECK_MEMBER(mdt_body, eadatasize);
+        CHECK_MEMBER(mdt_body, aclsize);
+        CHECK_MEMBER(mdt_body, max_mdsize);
+        CHECK_MEMBER(mdt_body, max_cookiesize);
+        CHECK_MEMBER(mdt_body, padding_4);
+        CHECK_MEMBER(mdt_body, padding_5);
+        CHECK_MEMBER(mdt_body, padding_6);
+        CHECK_MEMBER(mdt_body, padding_7);
+        CHECK_MEMBER(mdt_body, padding_8);
+        CHECK_MEMBER(mdt_body, padding_9);
+        CHECK_MEMBER(mdt_body, padding_10);
+}
+
+static void
+check_mdt_ioepoch(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(mdt_ioepoch);
+        CHECK_MEMBER(mdt_ioepoch, handle);
+        CHECK_MEMBER(mdt_ioepoch, ioepoch);
+        CHECK_MEMBER(mdt_ioepoch, flags);
+        CHECK_MEMBER(mdt_ioepoch, padding);
 }
 
 static void
@@ -688,7 +803,7 @@ check_mdt_rec_rename(void)
         CHECK_MEMBER(mdt_rec_rename, rn_padding_1);
         CHECK_MEMBER(mdt_rec_rename, rn_padding_2);
         CHECK_MEMBER(mdt_rec_rename, rn_padding_3);
-        CHECK_MEMBER(mdt_rec_rename, rn_padding_4); 
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_4);
         CHECK_MEMBER(mdt_rec_rename, rn_bias);
         CHECK_MEMBER(mdt_rec_rename, rn_mode);
         CHECK_MEMBER(mdt_rec_rename, rn_padding_5);
@@ -977,6 +1092,14 @@ check_llog_size_change_rec(void)
 }
 
 static void
+check_changelog_setinfo(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(changelog_setinfo);
+        CHECK_MEMBER(changelog_setinfo, cs_recno);
+        CHECK_MEMBER(changelog_setinfo, cs_id);
+}
+
+static void
 check_changelog_rec(void)
 {
         BLANK_LINE();
@@ -999,6 +1122,17 @@ check_llog_changelog_rec(void)
         CHECK_MEMBER(llog_changelog_rec, cr_hdr);
         CHECK_MEMBER(llog_changelog_rec, cr);
         CHECK_MEMBER(llog_changelog_rec, cr_tail);
+}
+
+static void
+check_llog_changelog_user_rec(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(llog_changelog_user_rec);
+        CHECK_MEMBER(llog_changelog_user_rec, cur_hdr);
+        CHECK_MEMBER(llog_changelog_user_rec, cur_id);
+        CHECK_MEMBER(llog_changelog_user_rec, cur_padding);
+        CHECK_MEMBER(llog_changelog_user_rec, cur_endrec);
+        CHECK_MEMBER(llog_changelog_user_rec, cur_tail);
 }
 
 static void
@@ -1096,6 +1230,40 @@ check_qunit_data(void)
 }
 
 static void
+check_lustre_capa(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_capa);
+        CHECK_MEMBER(lustre_capa, lc_fid);
+        CHECK_MEMBER(lustre_capa, lc_opc);
+        CHECK_MEMBER(lustre_capa, lc_uid);
+        CHECK_MEMBER(lustre_capa, lc_gid);
+        CHECK_MEMBER(lustre_capa, lc_flags);
+        CHECK_MEMBER(lustre_capa, lc_keyid);
+        CHECK_MEMBER(lustre_capa, lc_timeout);
+        CHECK_MEMBER(lustre_capa, lc_expiry);
+        CHECK_MEMBER(lustre_capa, lc_hmac[0]);
+}
+
+static void
+check_lustre_capa_key(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_capa_key);
+        CHECK_MEMBER(lustre_capa_key, lk_seq);
+        CHECK_MEMBER(lustre_capa_key, lk_keyid);
+        CHECK_MEMBER(lustre_capa_key, lk_padding);
+        CHECK_MEMBER(lustre_capa_key, lk_key[0]);
+}
+
+static void
+check_mgs_send_param(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mgs_send_param);
+        CHECK_MEMBER(mgs_send_param, mgs_param[0]);
+        CHECK_MEMBER(mgs_send_param, mgs_param[MGS_PARAM_MAXLEN - 1]);
+}
+
+static void
 check_mgs_target_info(void)
 {
         BLANK_LINE();
@@ -1165,6 +1333,125 @@ check_quota_adjust_qunit(void)
 }
 
 static void
+check_mds_remote_perm(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(mds_remote_perm);
+        CHECK_MEMBER(mds_remote_perm, rp_uid);
+        CHECK_MEMBER(mds_remote_perm, rp_gid);
+        CHECK_MEMBER(mds_remote_perm, rp_fsuid);
+        CHECK_MEMBER(mds_remote_perm, rp_fsgid);
+        CHECK_MEMBER(mds_remote_perm, rp_access_perm);
+}
+
+static void
+check_mdt_remote_perm(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(mdt_remote_perm);
+        CHECK_MEMBER(mdt_remote_perm, rp_uid);
+        CHECK_MEMBER(mdt_remote_perm, rp_gid);
+        CHECK_MEMBER(mdt_remote_perm, rp_fsuid);
+        CHECK_MEMBER(mdt_remote_perm, rp_fsgid);
+        CHECK_MEMBER(mdt_remote_perm, rp_access_perm);
+}
+
+static void
+check_mdt_rec_setxattr(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(mdt_rec_setxattr);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_opcode);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_cap);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_fsuid);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_fsuid_h);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_fsgid);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_fsgid_h);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_suppgid1);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_suppgid1_h);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_suppgid2);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_suppgid2_h);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_fid);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_1);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_2);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_3);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_valid);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_time);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_5);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_6);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_7);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_size);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_flags);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_8);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_9);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_10);
+        CHECK_MEMBER(mdt_rec_setxattr, sx_padding_11);
+}
+
+static void
+check_mdt_rec_reint(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(mdt_rec_reint);
+        CHECK_MEMBER(mdt_rec_reint, rr_opcode);
+        CHECK_MEMBER(mdt_rec_reint, rr_cap);
+        CHECK_MEMBER(mdt_rec_reint, rr_fsuid);
+        CHECK_MEMBER(mdt_rec_reint, rr_fsuid_h);
+        CHECK_MEMBER(mdt_rec_reint, rr_fsgid);
+        CHECK_MEMBER(mdt_rec_reint, rr_fsgid_h);
+        CHECK_MEMBER(mdt_rec_reint, rr_suppgid1);
+        CHECK_MEMBER(mdt_rec_reint, rr_suppgid1_h);
+        CHECK_MEMBER(mdt_rec_reint, rr_suppgid2);
+        CHECK_MEMBER(mdt_rec_reint, rr_suppgid2_h);
+        CHECK_MEMBER(mdt_rec_reint, rr_fid1);
+        CHECK_MEMBER(mdt_rec_reint, rr_fid2);
+        CHECK_MEMBER(mdt_rec_reint, rr_mtime);
+        CHECK_MEMBER(mdt_rec_reint, rr_atime);
+        CHECK_MEMBER(mdt_rec_reint, rr_ctime);
+        CHECK_MEMBER(mdt_rec_reint, rr_size);
+        CHECK_MEMBER(mdt_rec_reint, rr_blocks);
+        CHECK_MEMBER(mdt_rec_reint, rr_bias);
+        CHECK_MEMBER(mdt_rec_reint, rr_mode);
+        CHECK_MEMBER(mdt_rec_reint, rr_padding_1);
+        CHECK_MEMBER(mdt_rec_reint, rr_padding_2);
+        CHECK_MEMBER(mdt_rec_reint, rr_padding_3);
+        CHECK_MEMBER(mdt_rec_reint, rr_padding_4);
+}
+
+static void
+check_lmv_desc(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lmv_desc);
+        CHECK_MEMBER(lmv_desc, ld_tgt_count);
+        CHECK_MEMBER(lmv_desc, ld_active_tgt_count);
+        CHECK_MEMBER(lmv_desc, ld_default_stripe_count);
+        CHECK_MEMBER(lmv_desc, ld_pattern);
+        CHECK_MEMBER(lmv_desc, ld_default_hash_size);
+        CHECK_MEMBER(lmv_desc, ld_padding_1);
+        CHECK_MEMBER(lmv_desc, ld_padding_2);
+        CHECK_MEMBER(lmv_desc, ld_qos_maxage);
+        CHECK_MEMBER(lmv_desc, ld_padding_3);
+        CHECK_MEMBER(lmv_desc, ld_padding_4);
+        CHECK_MEMBER(lmv_desc, ld_uuid);
+}
+
+static void
+check_lmv_stripe_md(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(lmv_stripe_md);
+        CHECK_MEMBER(lmv_stripe_md, mea_magic);
+        CHECK_MEMBER(lmv_stripe_md, mea_count);
+        CHECK_MEMBER(lmv_stripe_md, mea_master);
+        CHECK_MEMBER(lmv_stripe_md, mea_padding);
+        CHECK_MEMBER(lmv_stripe_md, mea_pool_name[0]);
+        CHECK_MEMBER(lmv_stripe_md, mea_ids[0]);
+}
+
+static void
+check_md_fld(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(md_fld);
+        CHECK_MEMBER(md_fld, mf_seq);
+        CHECK_MEMBER(md_fld, mf_mds);
+}
+
+static void
 check_ll_user_fiemap(void)
 {
         BLANK_LINE();
@@ -1227,6 +1514,17 @@ check_link_ea_entry(void)
         CHECK_MEMBER(link_ea_entry, lee_reclen);
         CHECK_MEMBER(link_ea_entry, lee_parent_fid);
         CHECK_MEMBER(link_ea_entry, lee_name);
+}
+
+static void
+check_getinfo_fid2path(void) {
+        BLANK_LINE();
+        CHECK_STRUCT(getinfo_fid2path);
+        CHECK_MEMBER(getinfo_fid2path, gf_fid);
+        CHECK_MEMBER(getinfo_fid2path, gf_recno);
+        CHECK_MEMBER(getinfo_fid2path, gf_linkno);
+        CHECK_MEMBER(getinfo_fid2path, gf_pathlen);
+        CHECK_MEMBER(getinfo_fid2path, gf_path[0]);
 }
 
 
@@ -1429,6 +1727,11 @@ main(int argc, char **argv)
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
         CHECK_STRUCT(obd_uuid);
+        check_lu_seq_range();
+        check_lustre_mdt_attrs();
+        check_lu_dirent();
+        check_luda_type();
+        check_lu_dirpage();
         check_lustre_handle();
         check_lustre_msg_v2();
         check_ptlrpc_body();
@@ -1441,9 +1744,12 @@ main(int argc, char **argv)
         check_obd_quotactl();
         check_niobuf_remote();
         check_ost_body();
+        check_ll_fiemap_info_key();
         check_ll_fid();
         check_mds_status_req();
         check_mds_body();
+        check_mdt_body();
+        check_mdt_ioepoch();
         check_mdt_rec_setattr();
         check_mdt_rec_create();
         check_mdt_rec_link();
@@ -1472,8 +1778,10 @@ main(int argc, char **argv)
         check_llog_setattr_rec();
         check_llog_setattr64_rec();
         check_llog_size_change_rec();
+        check_changelog_setinfo();
         check_changelog_rec();
         check_llog_changelog_rec();
+        check_llog_changelog_user_rec();
         check_llog_gen();
         check_llog_gen_rec();
         check_llog_log_hdr();
@@ -1481,7 +1789,17 @@ main(int argc, char **argv)
         check_llogd_body();
         check_llogd_conn_body();
         check_qunit_data();
+        check_lustre_capa();
+        check_lustre_capa_key();
         check_quota_adjust_qunit();
+        check_mds_remote_perm();
+        check_mdt_remote_perm();
+        check_mdt_rec_setxattr();
+        check_mdt_rec_reint();
+        check_lmv_desc();
+        check_lmv_stripe_md();
+        check_md_fld();
+        check_mgs_send_param();
         check_mgs_target_info();
         check_lustre_disk_data();
         check_ll_user_fiemap();
@@ -1495,6 +1813,7 @@ main(int argc, char **argv)
         printf("#endif\n");
         check_link_ea_header();
         check_link_ea_entry();
+        check_getinfo_fid2path();
 
         printf("}\n\n");
 
