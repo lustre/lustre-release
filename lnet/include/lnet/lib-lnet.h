@@ -337,13 +337,13 @@ lnet_msg_alloc(void)
 
         LIBCFS_ALLOC(msg, sizeof(*msg));
 
-        if (msg != NULL) {
-                /* NULL pointers, clear flags etc */
-                memset (msg, 0, sizeof (*msg));
+        /* no need to zero, LIBCFS_ALLOC does for us */
+
 #ifdef CRAY_XT3
+        if (msg != NULL) {
                 msg->msg_ev.uid = LNET_UID_ANY;
-#endif
         }
+#endif
         return (msg);
 }
 
