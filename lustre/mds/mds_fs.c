@@ -977,7 +977,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         push_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "%u.%u", tmpname, current->pid);
-        dchild = lookup_one_len(fidname, mds->mds_objects_dir, strlen(fidname));
+        dchild = ll_lookup_one_len(fidname, mds->mds_objects_dir, strlen(fidname));
         if (IS_ERR(dchild)) {
                 CERROR("getting neg dentry for obj: %u\n", tmpname);
                 GOTO(out_pop, rc = PTR_ERR(dchild));
