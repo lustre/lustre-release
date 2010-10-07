@@ -1246,6 +1246,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                                         rc = -EOVERFLOW;
                                 else
                                         rc = -EFAULT;
+                                CERROR("file recreated with wrong inode number"
+				       " %lu != %lu\n", ino, inode->i_ino);
                                 GOTO(cleanup, rc);
                         }
                         /* Written as part of setattr */
