@@ -54,7 +54,9 @@
 #include <obd_support.h>
 #include <lprocfs_status.h>
 
+#ifdef CONFIG_SYSCTL
 cfs_sysctl_table_header_t *obd_table_header = NULL;
+#endif
 
 #ifndef HAVE_SYSCTL_UNNUMBERED
 
@@ -322,6 +324,7 @@ int LL_PROC_PROTO(proc_at_history)
         return ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
 }
 
+#ifdef CONFIG_SYSCTL
 static cfs_sysctl_table_t obd_table[] = {
         {
                 .ctl_name = OBD_FAIL_LOC,
@@ -483,6 +486,7 @@ static cfs_sysctl_table_t parent_table[] = {
         },
         {0}
 };
+#endif
 
 void obd_sysctl_init (void)
 {
