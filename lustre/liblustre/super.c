@@ -767,9 +767,9 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
 
         if (ia_valid & ATTR_SIZE)
                 attr->ia_valid |= ATTR_SIZE;
-        if ((ia_valid & ATTR_SIZE) ||
-            (ia_valid | ATTR_ATIME | ATTR_ATIME_SET) ||
-            (ia_valid | ATTR_MTIME | ATTR_MTIME_SET))
+        if (ia_valid & (ATTR_SIZE |
+                        ATTR_ATIME | ATTR_ATIME_SET |
+                        ATTR_MTIME | ATTR_MTIME_SET))
                 /* on truncate and utimes send attributes to osts, setting
                  * mtime/atime to past will be performed under PW 0:EOF extent
                  * lock (new_size:EOF for truncate)
