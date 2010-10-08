@@ -118,6 +118,54 @@ EOF
         SOURCE="${TOPDIR}/SRPMS/ofed${variant}-${OFED_DEVEL_VERSION}.src.rpm"
         # end of dirty hack
 
+        # dirty hack until Novell make the kernel-source location overridable
+        # when building kmps
+        # XXX - this is very racy.  let's hope we only ever have a single
+        #       instance of this running at a time
+        local tmpfile
+        if [ -f ~/.rpmmacros ]; then
+            tmpfile=$(mktemp ~/.rpmmacros.XXXXXX)
+            cp ~/.rpmmacros $tmpfile
+        fi
+        cat <<"EOF" >~/.rpmmacros
+# an overridable specification of where the linux-obj tree is located
+%{!?kobjdir: %define kobjdir /usr/src/linux-obj}
+
+# Defines %flavors_to_build and %kernel_source() as a side effect.
+%_kernel_module_package(n:v:r:s:f:Xp:) \
+%{expand:%( subpkg=%{-s*}%{!-s:/usr/lib/rpm/rpm-suse-kernel-module-subpackage} \
+        echo "%%define _suse_kernel_module_subpackage(n:v:r:f:p:) %%{expand:%%(cd %_sourcedir; cat $subpkg; echo %%%%nil)}" \
+        flavors="%{!-X:%*}%{-X:$(ls %kobjdir/%_target_cpu 2>/dev/null)}" \
+	a_flavor=($flavors)
+        flavors_to_build= \
+        if [ -s %kobjdir/%_target_cpu/${a_flavor}/include/linux/utsrelease.h ]; then
+            LINUXRELEASEHEADER=utsrelease.h
+        else
+            LINUXRELEASEHEADER=version.h
+        fi
+        kver=$(sed -ne "/^#define UTS_RELEASE/s/.*\\"\\\(.*\\\)-${a_flavor}\\"$/\\1/p" %kobjdir/%_target_cpu/${a_flavor}/include/linux/$LINUXRELEASEHEADER)
+        for flavor in $flavors; do \
+            if [ -n "%{-X}" ]; then \
+                case " %* " in \
+                (*" $flavor "*) \
+                    continue ;; \
+                esac \
+            fi \
+            krel=$(make -s -C %kobjdir/%_target_cpu/$flavor kernelrelease) \
+            [ -e %symsetsdir/symsets-$krel.tar.gz ] || continue \
+            flavors_to_build="$flavors_to_build $flavor" \
+            echo "%%_suse_kernel_module_subpackage -n %{-n*}%{!-n:%name}-kmp -v %{-v*}%{!-v:%version} -r %{-r*}%{!-r:%release} %{-p} $flavor $krel $kver" \
+        done \
+        echo "%%global flavors_to_build${flavors_to_build:-%%nil}" \
+        echo "%%global kernel_source() %kobjdir/%_target_cpu/%%%%{1}" \
+        \
+        echo "%package -n %{-n*}%{!-n:%name}-kmp-_dummy_" \
+        echo "Version: %version" \
+        echo "Summary: %summary" \
+        echo "Group: %group" \
+        echo "%description -n %{-n*}%{!-n:%name}-kmp-_dummy_" \
+        )}
+EOF
         local targets
         for arch in $BUILD_ARCHS; do
             targets="--target $(resolve_arch $arch $PATCHLESS) $targets"
@@ -128,7 +176,17 @@ EOF
                                  --define "_tmppath /var/tmp" \
                                  --define "_topdir ${TOPDIR}" \
                       ${SOURCE} 2>&1; then
+            rm ~/.rpmmacros
+            if [ -n "$tmpfile" ]; then
+                cp $tmpfile ~/.rpmmacros
+                rm $tmpfile
+            fi
             return 255
+        fi
+        rm ~/.rpmmacros
+        if [ -n "$tmpfile" ]; then
+            cp $tmpfile ~/.rpmmacros
+            rm $tmpfile
         fi
     fi # $REBUILD_OFED_DEVEL_RPM; then
 
