@@ -89,6 +89,11 @@ CONFIG=
 # build the lustre-tests rpm?
 LUSTRE_TESTS=true
 
+# these are disabled by default, enabled with command line switches or by
+# the calling environment
+BUILD_MPTLINUX=${BUILD_MPTLINUX:-false}
+BUILD_RDAC=${BUILD_RDAC:-false}
+
 DATE=$(date)
 
 USE_DATESTAMP=1
@@ -237,6 +242,13 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --xen
     Builds a Xen domX kernel.
 
+  --enable-mptlinux
+    Enables the building of MPTLINUX with the same kernel Lustre is
+    built with.
+
+  --enable-rdac
+    Enables the building of MPTLINUX with the same kernel Lustre is
+    built with.
 EOF
 
 #   list_targets
@@ -527,34 +539,6 @@ download_ofed() {
     fi
 
     local file="OFED-${OFED_VERSION}.tgz"
-    download_file "$location/$file" "$KERNELTREE" "$force"
-
-}
-
-download_rdac() {
-    local force="${1:-false}"
-
-    local location="http://downloads.lustre.org/public/RDAC/"
-
-    if [ -z "$RDAC_VERSION" -o "$RDAC_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    local file="rdac-LINUX-${RDAC_VERSION}-source.tar.gz"
-    download_file "$location/$file" "$KERNELTREE" "$force"
-
-}
-
-download_mptlinux() {
-    local force="${1:-false}"
-
-    local location="http://downloads.lustre.org/public/MPTLINUX/"
-
-    if [ -z "$MPTLINUX_VERSION" -o "$MPTLINUX_VERSION" = "inkernel" ]; then
-        return 0
-    fi
-
-    file="SUN_MPTLINUX_RHEL5_PH16-${MPTLINUX_VERSION}.tar.gz"
     download_file "$location/$file" "$KERNELTREE" "$force"
 
 }
@@ -1370,7 +1354,7 @@ build_mptlinux() {
     local linux="$1"
     local version="$2"
 
-    if [ -z "$version" -o "$version" = "inkernel" ]; then
+    if ! $BUILD_RDAC || [ -z "$version" -o "$version" = "inkernel" ]; then
         return 0
     fi
 
@@ -1439,7 +1423,7 @@ build_rdac() {
     local linux="$1"
     local version="$2"
 
-    if [ -z "$version" -o "$version" = "inkernel" ]; then
+    if ! $BUILD_MPTLINUX || [ -z "$version" -o "$version" = "inkernel" ]; then
         return 0
     fi
 
@@ -1792,7 +1776,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen,enable-mptlinux,enable-rdac -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1935,6 +1919,14 @@ while [ "$1" ]; do
             eval $2
             shift 2
             ;;
+        --enable-mptlinux)
+            BUILD_MPTLINUX=true
+            shift
+            ;;
+        --enable-rdac)
+            BUILD_RDAC=true
+            shift
+            ;;
         --)
             shift
             # there are actually some lustre configure flags that we need to
@@ -1963,16 +1955,14 @@ if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     unpack_ofed || fatal 1 "Error unpacking OFED tarball"
 fi
 
-if [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ]; then
-    download_mptlinux
+if $BUILD_MPTLINUX && [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ]; then
     unpack_mptlinux || fatal 1 "Error unpacking MPTLINUX distribution"
 fi
 
 # make sure the RPM build environment is set up
 create_rpmbuild_dirs
 
-if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
-    download_rdac
+if $BUILD_RDAC && [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
     # we don't actually need to unpack this.  just put it in the SOURCES dir
     #unpack_rdac || fatal 1 "Error unpacking RDAC tarball"
     cp "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ${TOPDIR}/SOURCES/ ||
