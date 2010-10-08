@@ -391,10 +391,10 @@ Index: linux-stage/fs/ext4/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -3003,6 +3355,8 @@ failed_mount3:
- 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
- 	percpu_counter_destroy(&sbi->s_dirs_counter);
- 	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
+@@ -2571,6 +2913,8 @@ failed_mount3:
+		else
+			kfree(sbi->s_flex_groups);
+	}
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
  failed_mount2:

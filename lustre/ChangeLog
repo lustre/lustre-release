@@ -2,7 +2,7 @@
 	* version 1.8.5
 	* Support for kernels:
 	  2.6.16.60-0.42.8 (SLES 10),
-	  2.6.32.13-0.5.1 (SLES11),
+	  2.6.32.19-0.2.1 (SLES11),
 	  2.6.18-194.8.1.el5 (RHEL 5)
 	  2.6.18-194.8.1.0.1.el5 (OEL 5)
 	* Client support for unpatched kernels:
@@ -14,7 +14,7 @@
 
 Severity   : enhancement
 Bugzilla   : 21610
-Description: Update SLES11 SP1 kernel to 2.6.32.13-0.5.1.
+Description: Update SLES11 SP1 kernel to 2.6.32.19-0.2.1.
 
 Severity   : normal
 Bugzilla   : 21174

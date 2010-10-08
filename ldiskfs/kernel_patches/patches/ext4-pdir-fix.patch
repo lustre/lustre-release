@@ -6,13 +6,13 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/ext4.h linux-2.6.27.21-0.1_2//fs/ext4/
  #include <linux/blockgroup_lock.h>
  #include <linux/percpu_counter.h>
 +#include <linux/dynlocks.h>
- 
- /*
-  * The fourth extended filesystem constants/structures
+ #ifdef __KERNEL__
+ #include <linux/compat.h>
+ #endif
 @@ -56,7 +57,9 @@ struct ext4_inode_info {
  	__u32	i_flags;
- 	ext4_fsblk_t	i_file_acl;
  	__u32	i_dtime;
+ 	ext4_fsblk_t	i_file_acl;
 -
 +	/* following fields for parallel directory operations -bzzz */
 +	struct dynlock   i_htree_lock;

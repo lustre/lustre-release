@@ -1,6 +1,6 @@
 lnxmaj="2.6.32"
-lnxmin=".13"
-lnxrel="0.5"
+lnxmin=".19"
+lnxrel="0.2"
 # use this when there is an "RPM fix" which means that the name of the
 # (source) RPM has been updated but the version of the kernel inside the
 # RPM is not also updated

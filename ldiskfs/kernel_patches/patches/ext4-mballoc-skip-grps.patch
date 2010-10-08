@@ -2,22 +2,6 @@ Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/mballoc.c
 +++ linux-stage/fs/ext4/mballoc.c
-@@ -2009,9 +2009,13 @@ repeat:
- 			if (group == EXT4_SB(sb)->s_groups_count)
- 				group = 0;
- 
--			/* quick check to skip empty groups */
-+			/* If there's no chance that this group has a better
-+			 * extent, just skip it instead of seeking to read
-+			 * block bitmap from disk. Initially ac_b_ex.fe_len = 0,
-+			 * so this always skips groups with no free space. */
-+
- 			grp = ext4_get_group_info(sb, group);
--			if (grp->bb_free == 0)
-+			if (grp->bb_free <= ac->ac_b_ex.fe_len)
- 				continue;
- 
- 			/*
 @@ -2780,7 +2784,7 @@ int ext4_mb_init(struct super_block *sb,
  
  		sbi->s_mb_small_req = 256;

@@ -330,8 +330,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
  
 	/* don't use group allocation for large files */
 	size = max(size, isize);
--	if (size >= sbi->s_mb_stream_request) {
-+	if (size >= sbi->s_mb_large_req) {
+-	if (size > sbi->s_mb_stream_request) {
++	if (size > sbi->s_mb_large_req) {
 		ac->ac_flags |= EXT4_MB_STREAM_ALLOC;
 		return;
 	}

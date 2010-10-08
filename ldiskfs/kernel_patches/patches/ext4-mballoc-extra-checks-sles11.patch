@@ -123,7 +123,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
  	ext4_lock_group(sb, group);
  	memcpy(&sg, ext4_get_group_info(sb, group), i);
  	ext4_unlock_group(sb, group);
- 	ext4_mb_release_desc(&e4b);
+	ext4_mb_unload_buddy(&e4b);
  
 -	seq_printf(seq, "#%-5u: %-5u %-5u %-5u [", group, sg.info.bb_free,
 +	seq_printf(seq, "#%-5u: %-5u %-5u %-5u %-5u [", group,

@@ -320,3 +320,14 @@ Index: linux-2.6.27.21-0.1/fs/ext4/inode.c
 +
 +#include_next <fiemap.h>
 +
+--- linux/fs/ext4/move_extent.c
++++ linux/fs/ext4/move_extent.c
+@@ -483,7 +483,7 @@
+
+	o_start = o_end = oext = orig_path[depth].p_ext;
+	oext_alen = ext4_ext_get_actual_len(oext);
+-	start_ext.ee_len = end_ext.ee_len = 0;
++	start_ext.ee_block = start_ext.ee_len = end_ext.ee_len = 0;
+
+	new_ext.ee_block = cpu_to_le32(*from);
+	ext4_ext_store_pblock(&new_ext, ext_pblock(dext));
