@@ -621,6 +621,34 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
+#
+# 2.6.32-30.el6 adds a new 'walk_stack' field in 'struct stacktrace_ops'
+#
+AC_DEFUN([LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK],
+[AC_MSG_CHECKING([if 'struct stacktrace_ops' has 'walk_stack' field])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/stacktrace.h>
+	unsigned long walkstack(struct thread_info *tinfo,
+                                           unsigned long *stack,
+                                           unsigned long bp,
+                                           const struct stacktrace_ops *ops,
+                                           void *data,
+                                           unsigned long *end,
+                                           int *graph);
+],[
+        struct stacktrace_ops ops;
+
+	ops.walk_stack = walkstack;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(STACKTRACE_OPS_HAVE_WALK_STACK, 1, ['struct stacktrace_ops' has 'walk_stack' field])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -666,6 +694,8 @@ LIBCFS_STRUCT_CRED_IN_TASK
 # 2.6.30
 LIBCFS_FUNC_UNSHARE_FS_STRUCT
 LIBCFS_SOCK_MAP_FD_2ARG
+# 2.6.32
+LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 ])
 
 #

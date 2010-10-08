@@ -249,6 +249,9 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
 	.warning_symbol = print_trace_warning_symbol,
 	.stack = print_trace_stack,
 	.address = print_trace_address,
+#ifdef STACKTRACE_OPS_HAVE_WALK_STACK
+	.walk_stack = print_context_stack,
+#endif
 };
 #endif
 
