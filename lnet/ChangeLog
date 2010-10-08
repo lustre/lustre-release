@@ -12,6 +12,11 @@
 	  mxlnd     - MX 1.2.10 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 23179
+Description: MDS node unresponsive
+Details    : improve hash distribution, doubled hash size for the lnet cookie
+	     hash.
 
 -------------------------------------------------------------------------------
 

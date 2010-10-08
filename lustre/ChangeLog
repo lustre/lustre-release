@@ -20,6 +20,84 @@ Severity   : normal
 Bugzilla   : 21174
 Description: Enabling quotas fails with non-consecutive OST numbering.
 
+Severity   : normal
+Bugzilla   : 23645
+Description: Fix kernel warning due to lookup_on_len() called without i_mutex
+	     hold.
+
+Severity   : normal
+Bugzilla   : 23596
+Description: Account direct i/o inflight rpcs separately from non-direct i/o so
+	     that direct i/o, which is limited by max_rpcs_in_flight, should not
+	     block non-direct i/o, which is not limited by max_rpcs_in_flight.
+
+Severity   : normal
+Bugzilla   : 23827
+Description: Fix per-NID reporting on outstanding writes
+
+Severity   : normal
+Bugzilla   : 23710
+Description: Reduce stack pressure by uninlining some mds and ptlrpc functions.
+
+Severity   : normal
+Bugzilla   : 22770
+Description: Remove LASSERT in lprocfs_rd_conn_uuid() since conn == NULL is a
+	     legitimate case.
+
+Severity   : normal
+Bugzilla   : 23781
+Description: fix obdo leak issue in ll_setattr_raw()
+
+Severity   : normal
+Bugzilla   : 22117
+Description: limit MMP interval
+
+Severity   : enhancement
+Bugzilla   : 20101
+Description: add several lfs ost enhancements
+
+Severity   : normal
+Bugzilla   : 22820
+Description: Too many default ACLs break directory access on new directories
+
+Severity   : normal
+Bugzilla   : 23174
+Description: Lustre inode size is not coherent across nodes.
+Details    : Update lvbo from disk when AST fails with EINVAL. Lvbo is updated
+	     on EINVAL error in ldlm_handle_ast_error(). The updates in
+	     filter_intent_policy() and ldlm_cb_interpret() have been removed as
+	     redundant.
+
+Severity   : normal
+Bugzilla   : 23503
+Description: Oops at __percpu_counter_add+0x1b
+Details    : Use bdi_init()/bdi_destroy() to proper initialize backing_dev_info
+	     structure.
+
+Severity   : normal
+Bugzilla   : 20563
+Description: add mount option to generate 32bit ino, this can be used for 32bit
+	     application compatibility.
+
+Severity   : normal
+Bugzilla   : 22935
+Description: keep reference count for "lli_sai" to prevent it to be released
+	     when "statahead_enter()"
+
+Severity   : normal
+Bugzilla   : 21174
+Description: allow quotacheck over OSTs with sparse indices
+
+Severity   : normal
+Bugzilla   : 22891
+Description: Objects not getting deleted for files which have been removed
+Details    : ll_have_md_lock() should differentiate between CR and CW OPEN
+	     locks.
+
+Severity   : normal
+Bugzilla   : 22107
+Description: pin object's inode in memory to avoid certain timeouts
+
 -------------------------------------------------------------------------------
 
 2010-07-31 Oracle, Inc.
