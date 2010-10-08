@@ -918,8 +918,11 @@ out_free:
                         lmdp = (struct lov_user_mds_data *)arg;
                         lump = &lmdp->lmd_lmm;
                 }
-                if (cfs_copy_to_user(lump, lmm, lmmsize))
-                        GOTO(out_req, rc = -EFAULT);
+                if (cfs_copy_to_user(lump, lmm, lmmsize)) {
+                        if (cfs_copy_to_user(lump, lmm, sizeof(*lump)))
+                                GOTO(out_req, rc = -EFAULT);
+                        rc = -EOVERFLOW;
+                }
         skip_lmm:
                 if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO) {
                         struct lov_user_mds_data *lmdp;
@@ -1113,7 +1116,7 @@ out_free:
                         CDEBUG(D_QUOTA, "mdc ioctl %d failed: %d\n", cmd, rc);
                         if (cfs_copy_to_user((void *)arg, check,
                                              sizeof(*check)))
-                                rc = -EFAULT;
+                                CDEBUG(D_QUOTA, "cfs_copy_to_user failed\n");
                         GOTO(out_poll, rc);
                 }
 
@@ -1123,7 +1126,7 @@ out_free:
                         CDEBUG(D_QUOTA, "osc ioctl %d failed: %d\n", cmd, rc);
                         if (cfs_copy_to_user((void *)arg, check,
                                              sizeof(*check)))
-                                rc = -EFAULT;
+                                CDEBUG(D_QUOTA, "cfs_copy_to_user failed\n");
                         GOTO(out_poll, rc);
                 }
         out_poll:

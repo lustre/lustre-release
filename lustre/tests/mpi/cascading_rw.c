@@ -68,7 +68,6 @@ char *testdir = NULL;
 void rw_file(char *name, long stride, unsigned int seed)
 {
         char filename[MAX_FILENAME_LEN];
-        char path[MAX_FILENAME_LEN]; 
         char errmsg[MAX_FILENAME_LEN+20];
         char *buf, *o_buf;
         struct lov_user_md lum = {0};
@@ -101,13 +100,6 @@ void rw_file(char *name, long stride, unsigned int seed)
 
                 if (close(fd) == -1) {
                         sprintf(errmsg, "close of file %s", filename);
-                        FAIL(errmsg);
-                }
-
-                strncpy(path, filename, MAX_FILENAME_LEN);
-                rc = llapi_file_get_stripe(path, &lum);
-                if (rc == -1) {
-                        sprintf(errmsg, "get stripe of file %s", filename);
                         FAIL(errmsg);
                 }
         }
