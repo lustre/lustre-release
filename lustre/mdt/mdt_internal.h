@@ -806,16 +806,27 @@ int mdt_cos_is_enabled(struct mdt_device *);
 int mdt_hsm_copytool_send(struct obd_export *exp);
 
 /* lprocfs stuff */
+enum {
+        LPROC_MDT_OPEN = 0,
+        LPROC_MDT_CLOSE,
+        LPROC_MDT_MKNOD,
+        LPROC_MDT_LINK,
+        LPROC_MDT_UNLINK,
+        LPROC_MDT_MKDIR,
+        LPROC_MDT_RMDIR,
+        LPROC_MDT_RENAME,
+        LPROC_MDT_GETXATTR,
+        LPROC_MDT_SETXATTR,
+        LPROC_MDT_LAST,
+};
+void mdt_counter_incr(struct obd_export *exp, int opcode);
+void mdt_stats_counter_init(struct lprocfs_stats *stats);
 void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);
 int mdt_procfs_init(struct mdt_device *mdt, const char *name);
 int mdt_procfs_fini(struct mdt_device *mdt);
 
 void mdt_time_start(const struct mdt_thread_info *info);
 void mdt_time_end(const struct mdt_thread_info *info, int idx);
-
-enum {
-        LPROC_MDT_NR
-};
 
 /* Capability */
 int mdt_ck_thread_start(struct mdt_device *mdt);

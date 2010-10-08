@@ -215,6 +215,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         EXIT;
 out:
         if (rc >= 0) {
+                mdt_counter_incr(req->rq_export, LPROC_MDT_GETXATTR);
                 repbody->eadatasize = rc;
                 rc = 0;
         }
@@ -238,7 +239,7 @@ static int mdt_rmtlsetfacl(struct mdt_thread_info *info,
         rc = lustre_ext_acl_xattr_id2server(uc, med->med_idmap, header);
         if (rc)
                 RETURN(rc);
- 
+
         rc = mo_xattr_get(info->mti_env, next, &LU_BUF_NULL, xattr_name);
         if (rc == -ENODATA)
                 rc = 0;
@@ -422,6 +423,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                 CDEBUG(D_INFO, "valid bits: "LPX64"\n", valid);
                 rc = -EINVAL;
         }
+        if (rc == 0)
+                mdt_counter_incr(req->rq_export, LPROC_MDT_SETXATTR);
+
         EXIT;
 out_unlock:
         mdt_object_unlock_put(info, obj, lh, rc);

@@ -182,43 +182,10 @@ struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_mdt_module_vars[] = {
-        { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
-        { 0 }
-};
-
-void mds_counter_incr(struct obd_export *exp, int opcode)
-{
-        if (exp->exp_obd && exp->exp_obd->obd_stats)
-                lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
-        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
-                lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
-
-}
-
-void mds_stats_counter_init(struct lprocfs_stats *stats)
-{
-        lprocfs_counter_init(stats, LPROC_MDS_OPEN, 0, "open", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_CLOSE, 0, "close", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_MKNOD, 0, "mknod", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_LINK, 0, "link", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_UNLINK, 0, "unlink", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_MKDIR, 0, "mkdir", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_RMDIR, 0, "rmdir", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_RENAME, 0, "rename", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_GETXATTR, 0, "getxattr", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDS_SETXATTR, 0, "setxattr", "reqs");
-}
-
 void lprocfs_mds_init_vars(struct lprocfs_static_vars *lvars)
 {
     lvars->module_vars = lprocfs_mds_module_vars;
     lvars->obd_vars = lprocfs_mds_obd_vars;
 }
 
-void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars)
-{
-    lvars->module_vars = lprocfs_mdt_module_vars;
-    lvars->obd_vars = lprocfs_mdt_obd_vars;
-}
 #endif

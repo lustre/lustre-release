@@ -68,6 +68,9 @@
 #include "mdt_internal.h"
 #include <lnet/lib-lnet.h>
 
+enum {
+        LPROC_MDT_NR
+};
 static const char *mdt_proc_names[LPROC_MDT_NR] = {
 };
 
@@ -108,7 +111,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
                 lprocfs_add_simple(obd->obd_proc_exports_entry,
                                    "clear", lprocfs_nid_stats_clear_read,
                                    lprocfs_nid_stats_clear_write, obd, NULL);
-        rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_NR);
+        rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_LAST);
 
         RETURN(rc);
 }
@@ -806,4 +809,27 @@ void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars)
 {
     lvars->module_vars  = lprocfs_mdt_module_vars;
     lvars->obd_vars     = lprocfs_mdt_obd_vars;
+}
+
+void mdt_counter_incr(struct obd_export *exp, int opcode)
+{
+        if (exp->exp_obd && exp->exp_obd->obd_stats)
+                lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
+                lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
+
+}
+
+void mdt_stats_counter_init(struct lprocfs_stats *stats)
+{
+        lprocfs_counter_init(stats, LPROC_MDT_OPEN, 0, "open", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_CLOSE, 0, "close", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_MKNOD, 0, "mknod", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_LINK, 0, "link", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_UNLINK, 0, "unlink", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_MKDIR, 0, "mkdir", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_RMDIR, 0, "rmdir", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_RENAME, 0, "rename", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_GETXATTR, 0, "getxattr", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_SETXATTR, 0, "setxattr", "reqs");
 }

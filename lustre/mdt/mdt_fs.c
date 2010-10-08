@@ -62,7 +62,22 @@ int mdt_export_stats_init(struct obd_device *obd,
                 RETURN(rc);
         }
         if (newnid) {
-                rc = lprocfs_nid_ldlm_stats_init(exp->exp_nid_stats);
+                struct nid_stat *tmp = exp->exp_nid_stats;
+                int num_stats;
+
+                num_stats = (sizeof(*obd->obd_type->typ_md_ops) / sizeof(void *)) +
+                            LPROC_MDT_LAST;
+                tmp->nid_stats = lprocfs_alloc_stats(num_stats,
+                                                     LPROCFS_STATS_FLAG_NOPERCPU);
+                if (tmp->nid_stats == NULL)
+                        return -ENOMEM;
+                lprocfs_init_mps_stats(LPROC_MDT_LAST, tmp->nid_stats);
+                mdt_stats_counter_init(tmp->nid_stats);
+                rc = lprocfs_register_stats(tmp->nid_proc, "stats",
+                                            tmp->nid_stats);
+                if (rc)
+                        GOTO(clean, rc);
+                rc = lprocfs_nid_ldlm_stats_init(tmp);
                 if (rc)
                         GOTO(clean, rc);
         }

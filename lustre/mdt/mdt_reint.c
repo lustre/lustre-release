@@ -605,7 +605,8 @@ out:
 static int mdt_reint_create(struct mdt_thread_info *info,
                             struct mdt_lock_handle *lhc)
 {
-        int rc;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        int                     rc;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
@@ -617,10 +618,15 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFDIR:{
                 /* Cross-ref case. */
+                /* TODO: we can add LPROC_MDT_CROSS for cross-ref stats */
                 if (info->mti_cross_ref) {
                         rc = mdt_md_mkobj(info);
-                        break;
+                } else {
+                        LASSERT(info->mti_rr.rr_namelen > 0);
+                        mdt_counter_incr(req->rq_export, LPROC_MDT_MKDIR);
+                        rc = mdt_md_create(info);
                 }
+                break;
         }
         case S_IFREG:
         case S_IFLNK:
@@ -630,6 +636,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         case S_IFSOCK:{
                 /* Special file should stay on the same node as parent. */
                 LASSERT(info->mti_rr.rr_namelen > 0);
+                mdt_counter_incr(req->rq_export, LPROC_MDT_MKNOD);
                 rc = mdt_md_create(info);
                 break;
         }
@@ -641,7 +648,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 
 /*
  * VBR: save parent version in reply and child version getting by its name.
- * Version of child is getting and checking during its lookup. If 
+ * Version of child is getting and checking during its lookup. If
  */
 static int mdt_reint_unlink(struct mdt_thread_info *info,
                             struct mdt_lock_handle *lhc)
@@ -754,6 +761,24 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (rc == 0)
                 mdt_handle_last_unlink(info, mc, ma);
 
+        switch (ma->ma_attr.la_mode & S_IFMT) {
+        case S_IFDIR:
+                mdt_counter_incr(req->rq_export, LPROC_MDT_RMDIR);
+                break;
+        case S_IFREG:
+        case S_IFLNK:
+        case S_IFCHR:
+        case S_IFBLK:
+        case S_IFIFO:
+        case S_IFSOCK:
+                mdt_counter_incr(req->rq_export, LPROC_MDT_UNLINK);
+                break;
+        default:
+                CERROR("bad file type %o unlinking\n", ma->ma_attr.la_mode);
+                LBUG();
+                GOTO(out, rc = -EINVAL);
+        }
+
         EXIT;
 
         mdt_object_unlock_put(info, mc, child_lh, rc);
@@ -860,6 +885,9 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         rc = mdo_link(info->mti_env, mdt_object_child(mp),
                       mdt_object_child(ms), lname, ma);
+
+        if (rc == 0)
+                mdt_counter_incr(req->rq_export, LPROC_MDT_LINK);
 
         EXIT;
 out_unlock_child:
@@ -1245,8 +1273,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                         lname, ma);
 
         /* handle last link of tgt object */
-        if (rc == 0 && mnew)
-                mdt_handle_last_unlink(info, mnew, ma);
+        if (rc == 0) {
+                mdt_counter_incr(req->rq_export, LPROC_MDT_RENAME);
+                if (mnew)
+                        mdt_handle_last_unlink(info, mnew, ma);
+        }
 
         EXIT;
 out_unlock_new:

@@ -76,21 +76,5 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 extern struct lvfs_callback_ops mds_lvfs_ops;
 
 /* mds/lproc_mds.c */
-enum {
-        LPROC_MDS_OPEN = 0,
-        LPROC_MDS_CLOSE,
-        LPROC_MDS_MKNOD,
-        LPROC_MDS_LINK,
-        LPROC_MDS_UNLINK,
-        LPROC_MDS_MKDIR,
-        LPROC_MDS_RMDIR,
-        LPROC_MDS_RENAME,
-        LPROC_MDS_GETXATTR,
-        LPROC_MDS_SETXATTR,
-        LPROC_MDS_LAST,
-};
-void mds_counter_incr(struct obd_export *exp, int opcode);
-void mds_stats_counter_init(struct lprocfs_stats *stats);
 void lprocfs_mds_init_vars(struct lprocfs_static_vars *lvars);
-void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);
 #endif /* _MDS_INTERNAL_H */

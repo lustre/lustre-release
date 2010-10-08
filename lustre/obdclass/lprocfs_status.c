@@ -1550,23 +1550,8 @@ do {                                                                    \
         lprocfs_counter_init(stats, coffset, 0, #op, "reqs");           \
 } while (0)
 
-int lprocfs_alloc_md_stats(struct obd_device *obd,
-                           unsigned num_private_stats)
+void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
 {
-        struct lprocfs_stats *stats;
-        unsigned int num_stats;
-        int rc, i;
-
-        LASSERT(obd->md_stats == NULL);
-        LASSERT(obd->obd_proc_entry != NULL);
-        LASSERT(obd->md_cntr_base == 0);
-
-        num_stats = 1 + MD_COUNTER_OFFSET(revalidate_lock) +
-                    num_private_stats;
-        stats = lprocfs_alloc_stats(num_stats, 0);
-        if (stats == NULL)
-                return -ENOMEM;
-
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getstatus);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, change_cbdata);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, find_cbdata);
@@ -1599,6 +1584,26 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_getattr_async);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, revalidate_lock);
+}
+
+int lprocfs_alloc_md_stats(struct obd_device *obd,
+                           unsigned num_private_stats)
+{
+        struct lprocfs_stats *stats;
+        unsigned int num_stats;
+        int rc, i;
+
+        LASSERT(obd->md_stats == NULL);
+        LASSERT(obd->obd_proc_entry != NULL);
+        LASSERT(obd->md_cntr_base == 0);
+
+        num_stats = 1 + MD_COUNTER_OFFSET(revalidate_lock) +
+                    num_private_stats;
+        stats = lprocfs_alloc_stats(num_stats, 0);
+        if (stats == NULL)
+                return -ENOMEM;
+
+        lprocfs_init_mps_stats(num_private_stats, stats);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {
@@ -2375,6 +2380,7 @@ EXPORT_SYMBOL(lprocfs_free_stats);
 EXPORT_SYMBOL(lprocfs_clear_stats);
 EXPORT_SYMBOL(lprocfs_register_stats);
 EXPORT_SYMBOL(lprocfs_init_ops_stats);
+EXPORT_SYMBOL(lprocfs_init_mps_stats);
 EXPORT_SYMBOL(lprocfs_init_ldlm_stats);
 EXPORT_SYMBOL(lprocfs_alloc_obd_stats);
 EXPORT_SYMBOL(lprocfs_alloc_md_stats);

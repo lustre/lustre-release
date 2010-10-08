@@ -131,7 +131,7 @@ EXPORT_SYMBOL(lu_time_named_init);
 int lu_time_init(struct lprocfs_stats **stats, cfs_proc_dir_entry_t *entry,
                  const char **names, int nr)
 {
-        return lu_time_named_init(stats, "stats", entry, names, nr);
+        return lu_time_named_init(stats, "lu_stats", entry, names, nr);
 }
 EXPORT_SYMBOL(lu_time_init);
 
