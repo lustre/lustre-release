@@ -3312,7 +3312,8 @@ do_rpc_nodes () {
     local list=$1
     shift
 
-    do_nodesv $list "PATH=$LUSTRE/tests/:$PATH sh rpc.sh $@ " 
+    local RPATH="PATH=$LUSTRE/tests/:$PATH"
+    do_nodesv $list "${RPATH} NAME=${NAME} sh rpc.sh $@ "
 }
 
 wait_clients_import_state () {
