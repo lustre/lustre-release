@@ -9,3 +9,4 @@ sd_iostats-2.6.27-vanilla.patch
 md-mmp-unplug-dev-sles11.patch
 quota-support-64-bit-quota-format.patch
 jbd2-jcberr-2.6-sles11.patch
+bio_add_page.patch
