@@ -340,59 +340,131 @@ test_5a() {	# was test_5
 }
 run_test 5a "force cleanup mds, then cleanup"
 
+cleanup_5b () {
+	trap 0
+	start_mgs
+}
+
 test_5b() {
+	grep " $MOUNT " /etc/mtab && \
+		error false "unexpected entry in mtab before mount" && return 10
+
+	local rc=0
 	start_ost
+	if ! combined_mgs_mds ; then
+		trap cleanup_5b EXIT ERR
+		start_mds
+		stop mgs
+	fi
+
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab before mount" && return 10
-	mount_client $MOUNT && return 1
-	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab after failed mount" && return 11
+	mount_client $MOUNT && rc=1
+	grep " $MOUNT " /etc/mtab && \
+		error "$MOUNT entry in mtab after failed mount" && rc=11
 	umount_client $MOUNT
 	# stop_mds is a no-op here, and should not fail
-	cleanup_nocli || return $?
-	return 0
+	cleanup_nocli || rc=$?
+	if ! combined_mgs_mds ; then
+		cleanup_5b
+	fi
+	return $rc
 }
-run_test 5b "mds down, cleanup after failed mount (bug 2712) (should return errs)"
+run_test 5b "Try to start a client with no MGS (should return errs)"
 
 test_5c() {
+	grep " $MOUNT " /etc/mtab && \
+		error false "unexpected entry in mtab before mount" && return 10
+
+	local rc=0
 	start_mds
 	start_ost
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
 	local oldfs="${FSNAME}"
 	FSNAME="wrong.${FSNAME}"
 	mount_client $MOUNT || :
 	FSNAME=${oldfs}
-	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab after failed mount" && return 11
+	grep " $MOUNT " /etc/mtab && \
+		error "$MOUNT entry in mtab after failed mount" && rc=11
 	umount_client $MOUNT
-	cleanup_nocli  || return $?
+	cleanup_nocli  || rc=$?
+	return $rc
 }
 run_test 5c "cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5d() {
+	grep " $MOUNT " /etc/mtab && \
+		error false "unexpected entry in mtab before mount" && return 10
+
+	local rc=0
 	start_ost
 	start_mds
 	stop_ost -f
-	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab before mount" && return 10
-	mount_client $MOUNT || return 1
-	cleanup  || return $?
-	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab after unmount" && return 11
-	return 0
+	mount_client $MOUNT || rc=1
+	cleanup  || rc=$?
+	grep " $MOUNT " /etc/mtab && \
+		error "$MOUNT entry in mtab after unmount" && rc=11
+	return $rc
 }
 run_test 5d "mount with ost down"
 
 test_5e() {
+	grep " $MOUNT " /etc/mtab && \
+		error false "unexpected entry in mtab before mount" && return 10
+
+	local rc=0
 	start_mds
 	start_ost
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "lctl set_param fail_loc=0x80000506"
-	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab before mount" && return 10
 	mount_client $MOUNT || echo "mount failed (not fatal)"
-	cleanup  || return $?
-	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab after unmount" && return 11
-	return 0
+	cleanup  || rc=$?
+	grep " $MOUNT " /etc/mtab && \
+		error "$MOUNT entry in mtab after unmount" && rc=11
+	return $rc
 }
 run_test 5e "delayed connect, don't crash (bug 10268)"
+
+test_5f() {
+	if combined_mgs_mds ; then
+		skip "combined mgs and mds"
+		return 0
+	fi
+
+	grep " $MOUNT " /etc/mtab && \
+		error false "unexpected entry in mtab before mount" && return 10
+
+	local rc=0
+	start_ost
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	mount_client $MOUNT &
+	local pid=$!
+	echo client_mount pid is $pid
+
+	sleep 5
+
+	if ! ps -f -p $pid >/dev/null; then
+		wait $pid
+		rc=$?
+		grep " $MOUNT " /etc/mtab && echo "test 5f: mtab after mount"
+		error "mount returns $rc, expected to hang"
+		rc=11
+		cleanup || rc=$?
+		return $rc
+	fi
+
+	# start mds
+	start_mds
+
+	# mount should succeed after start mds
+	wait $pid
+	rc=$?
+	[ $rc -eq 0 ] || error "mount returned $rc"
+	grep " $MOUNT " /etc/mtab && echo "test 5f: mtab after mount"
+	cleanup || return $?
+	return $rc
+}
+run_test 5f "mds down, cleanup after failed mount (bug 2712)"
 
 test_6() {
 	setup
