@@ -36,7 +36,7 @@ Bugzilla   : 23827
 Description: Fix per-NID reporting on outstanding writes
 
 Severity   : normal
-Bugzilla   : 23710
+Bugzilla   : 23701
 Description: Reduce stack pressure by uninlining some mds and ptlrpc functions.
 
 Severity   : normal

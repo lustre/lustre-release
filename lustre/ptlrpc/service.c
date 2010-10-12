@@ -1627,6 +1627,33 @@ ptlrpc_retry_rqbds(void *arg)
         return (-ETIMEDOUT);
 }
 
+static void noinline ptlrpc_wait_event(struct ptlrpc_service *svc,
+                                       struct ptlrpc_thread *thread)
+{
+        /* Don't exit while there are replies to be handled */
+        struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
+                                             ptlrpc_retry_rqbds, svc);
+
+        lc_watchdog_disable(thread->t_watchdog);
+
+        cfs_cond_resched();
+
+        l_wait_event_exclusive (svc->srv_waitq,
+                              ((thread->t_flags & SVC_STOPPING) != 0 &&
+                               svc->srv_n_difficult_replies == 0) ||
+                              (!list_empty(&svc->srv_idle_rqbds) &&
+                               svc->srv_rqbd_timeout == 0) ||
+                              !list_empty(&svc->srv_req_in_queue) ||
+                              !list_empty(&svc->srv_reply_queue) ||
+                              (ptlrpc_server_request_pending(svc, 0) &&
+                               (svc->srv_n_active_reqs <
+                                (svc->srv_threads_running - 1))) ||
+                              svc->srv_at_check,
+                              &lwi);
+
+        lc_watchdog_touch(thread->t_watchdog, GET_TIMEOUT(svc));
+}
+
 static int ptlrpc_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -1712,28 +1739,7 @@ static int ptlrpc_main(void *arg)
 
         while ((thread->t_flags & SVC_STOPPING) == 0 ||
                svc->srv_n_difficult_replies != 0) {
-                /* Don't exit while there are replies to be handled */
-                struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
-                                                     ptlrpc_retry_rqbds, svc);
-
-                lc_watchdog_disable(thread->t_watchdog);
-
-                cfs_cond_resched();
-
-                l_wait_event_exclusive (svc->srv_waitq,
-                              ((thread->t_flags & SVC_STOPPING) != 0 &&
-                               svc->srv_n_difficult_replies == 0) ||
-                              (!list_empty(&svc->srv_idle_rqbds) &&
-                               svc->srv_rqbd_timeout == 0) ||
-                              !list_empty(&svc->srv_req_in_queue) ||
-                              !list_empty(&svc->srv_reply_queue) ||
-                              (ptlrpc_server_request_pending(svc, 0) &&
-                               (svc->srv_n_active_reqs <
-                                (svc->srv_threads_running - 1))) ||
-                              svc->srv_at_check,
-                              &lwi);
-
-                lc_watchdog_touch(thread->t_watchdog, GET_TIMEOUT(svc));
+                ptlrpc_wait_event(svc, thread);
 
                 ptlrpc_check_rqbd_pool(svc);
 
