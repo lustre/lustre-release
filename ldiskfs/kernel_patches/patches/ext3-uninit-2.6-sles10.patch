@@ -213,7 +213,7 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
 +				   le16_to_cpu(gdp->bg_checksum));
 +			return 0;
 +		}
- 		block += EXT3_BLOCKS_PER_GROUP(sb);
+		first_block += EXT3_BLOCKS_PER_GROUP(sb);
  		gdp++;
  	}
 Index: linux-2.6.16.60-0.27/fs/ext3/group.h

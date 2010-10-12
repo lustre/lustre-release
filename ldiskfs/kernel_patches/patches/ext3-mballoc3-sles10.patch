@@ -17,10 +17,10 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_fs_sb.h
 ===================================================================
 --- linux-2.6.16.46-0.14.orig/include/linux/ext3_fs_sb.h
 +++ linux-2.6.16.46-0.14/include/linux/ext3_fs_sb.h
-@@ -21,8 +21,15 @@
+@@ -21,8 +21,16 @@
  #include <linux/wait.h>
  #include <linux/blockgroup_lock.h>
- #include <linux/percpu_counter.h>
+ #include <linux/percpu_counter64.h>
 +#include <linux/list.h>
  #endif
  #include <linux/rbtree.h>
@@ -30,6 +30,7 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_fs_sb.h
 +struct ext3_locality_group;
 +struct ext3_mb_history;
 +#define EXT3_BB_MAX_BLOCKS
++#define EXT3_SBI_WITH_COUNTER64        1
  
  /*
   * third extended-fs super-block data in memory
@@ -48,14 +49,23 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_fs.h
 @@ -784,8 +785,9 @@ struct dir_private_info {
  extern int ext3_bg_has_super(struct super_block *sb, int group);
  extern unsigned long ext3_bg_num_gdb(struct super_block *sb, int group);
- extern int ext3_new_block (handle_t *, struct inode *, unsigned long, int *);
-+extern int ext3_new_block_old (handle_t *, struct inode *, unsigned long, int *);
- extern void ext3_free_blocks (handle_t *, struct inode *, unsigned long,
+ extern ext3_fsblk_t ext3_new_block (handle_t *, struct inode *, ext3_fsblk_t, int *);
++extern ext3_fsblk_t ext3_new_block_old (handle_t *, struct inode *, ext3_fsblk_t, int *);
+ extern void ext3_free_blocks (handle_t *, struct inode *, ext3_fsblk_t,
 -			      unsigned long);
 +			      unsigned long, int);
  extern void ext3_free_blocks_sb (handle_t *, struct super_block *,
  				 unsigned long, unsigned long, int *);
  extern unsigned long ext3_count_free_blocks (struct super_block *);
+@@ -784,7 +785,7 @@ struct dir_private_info {
+ extern void ext3_mb_discard_inode_preallocations(struct inode *);
+ extern int __init init_ext3_mb_proc(void);
+ extern void exit_ext3_mb_proc(void);
+-extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long, unsigned long, int, int *);
++extern void ext3_mb_free_blocks(handle_t *, struct inode *, unsigned long, unsigned long, int, unsigned long *);
+ 
+  
+ /* inode.c */
 Index: linux-2.6.16.46-0.14/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.16.46-0.14.orig/fs/ext3/super.c
@@ -307,14 +317,14 @@ Index: linux-2.6.16.46-0.14/fs/ext3/balloc.c
  
 -/* Free given blocks, update quota and i_blocks field */
 -void ext3_free_blocks(handle_t *handle, struct inode *inode,
--			unsigned long block, unsigned long count)
+-			ext3_fsblk_t block, unsigned long count)
 +void ext3_free_blocks(handle_t *handle, struct inode * inode,
-+		unsigned long block, unsigned long count, int metadata)
++		ext3_fsblk_t block, unsigned long count, int metadata)
  {
 -	struct super_block * sb;
--	int dquot_freed_blocks;
+-	unsigned long dquot_freed_blocks;
 +	struct super_block *sb;
-+	int freed;
++	unsigned long freed;
 +
 +	/* this isn't the right place to decide whether block is metadata
 +	 * inode.c/extents.c knows better, but for safety ... */
@@ -343,9 +353,9 @@ Index: linux-2.6.16.46-0.14/fs/ext3/balloc.c
   * bitmap, and then for any free bit if that fails.
   * This function also updates quota and i_blocks field.
   */
--int ext3_new_block(handle_t *handle, struct inode *inode,
-+int ext3_new_block_old(handle_t *handle, struct inode *inode,
- 			unsigned long goal, int *errp)
+-ext3_fsblk_t ext3_new_block(handle_t *handle, struct inode *inode,
++ext3_fsblk_t ext3_new_block_old(handle_t *handle, struct inode *inode,
+			ext3_fsblk_t goal, int *errp)
  {
  	struct buffer_head *bitmap_bh = NULL;
 Index: linux-2.6.16.46-0.14/fs/ext3/inode.c
@@ -379,3 +389,34 @@ Index: linux-2.6.16.46-0.14/fs/ext3/inode.c
  
  			if (parent_bh) {
  				/*
+Index: linux-2.6.16.46-0.14/fs/ext3/mballoc.c
+===================================================================
+--- linux-2.6.16.46-0.14.orig/fs/ext3/mballoc.c
++++ linux-2.6.16.46-0.14/fs/ext3/mballoc.c
+@@ -569,7 +569,7 @@
+ 		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count)
+ 				- ac->ac_b_ex.fe_len);
+ 	spin_unlock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
+-	percpu_counter_mod(&sbi->s_freeblocks_counter, - ac->ac_b_ex.fe_len);
++	percpu_counter64_mod(&sbi->s_freeblocks_counter, - ac->ac_b_ex.fe_len);
+ 	ext3_unlock_group(sb, ac->ac_b_ex.fe_group);
+ 
+ 	err = ext3_journal_dirty_metadata(handle, bitmap_bh);
+@@ -769,7 +769,7 @@
+  */
+ void ext3_mb_free_blocks(handle_t *handle, struct inode *inode,
+ 			unsigned long block, unsigned long count,
+-			int metadata, int *freed)
++			int metadata, unsigned long *freed)
+ {
+ 	struct buffer_head *bitmap_bh = NULL;
+ 	struct super_block *sb = inode->i_sb;
+@@ -1569,7 +1569,7 @@
+ 	gdp->bg_free_blocks_count =
+ 		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
+ 	spin_unlock(sb_bgl_lock(sbi, block_group));
+-	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
++	percpu_counter64_mod(&sbi->s_freeblocks_counter, count);
+ 
+ 	if (metadata) {
+ 		/* blocks being freed are metadata. these blocks shouldn't

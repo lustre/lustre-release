@@ -12,7 +12,6 @@ ext3-mballoc3-core.patch
 ext3-mballoc3-sles10.patch 
 ext3-nlinks-2.6.9.patch
 ext3-remove-cond_resched-calls-2.6.12.patch
-ext3-filterdata-sles10.patch
 ext3-disable-write-bar-by-default-2.6-sles10.patch
 ext3-uninit-2.6-sles10.patch
 ext3-nanosecond-2.6-sles10.patch

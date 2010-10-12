@@ -2518,9 +2518,9 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
  
  /* inode.c */
 +extern int ext3_block_truncate_page(handle_t *, struct page *, struct address_space *, loff_t);
- int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
+ int ext3_forget(handle_t *handle, int is_metadata, struct inode *inode,
+		struct buffer_head *bh, ext3_fsblk_t blocknr);
  struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
- struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
 @@ -804,6 +810,7 @@ extern int ext3_get_inode_loc(struct ino
  extern void ext3_truncate (struct inode *);
  extern void ext3_set_inode_flags(struct inode *);

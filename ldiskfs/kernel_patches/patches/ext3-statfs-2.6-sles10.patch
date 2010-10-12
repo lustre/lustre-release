@@ -3,10 +3,10 @@ Index: linux-2.6.16.46-0.14/fs/ext3/super.c
 --- linux-2.6.16.46-0.14.orig/fs/ext3/super.c
 +++ linux-2.6.16.46-0.14/fs/ext3/super.c
 @@ -2908,18 +2908,19 @@ restore_opts:
- static int ext3_statfs (struct super_block * sb, struct kstatfs * buf)
  {
+	struct super_block *sb = dentry->d_sb;
  	struct ext3_super_block *es = EXT3_SB(sb)->s_es;
--	unsigned long overhead;
+-	ext3_fsblk_t overhead;
 -	int i;
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
  

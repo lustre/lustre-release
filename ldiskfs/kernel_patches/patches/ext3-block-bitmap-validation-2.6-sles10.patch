@@ -167,22 +167,3 @@ Index: linux-stage/fs/ext3/balloc.c
  	return bh;
  }
  /*
-Index: linux-stage/include/linux/ext3_fs.h
-===================================================================
---- linux-stage.orig/include/linux/ext3_fs.h
-+++ linux-stage/include/linux/ext3_fs.h
-@@ -872,6 +872,14 @@ struct dir_private_info {
- 	__u32		next_hash;
- };
- 
-+/* calculate the first block number of the group */
-+static inline long long
-+ext3_group_first_block_no(struct super_block *sb, unsigned long group_no)
-+{
-+	        return group_no * (long long)EXT3_BLOCKS_PER_GROUP(sb) +
-+			le32_to_cpu(EXT3_SB(sb)->s_es->s_first_data_block);
-+}
-+
- /*
-  * Special error return code only used by dx_probe() and its callers.
-  */

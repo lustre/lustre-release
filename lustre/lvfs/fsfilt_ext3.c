@@ -2059,7 +2059,11 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
         /* number of inodes that have been allocated */
         inode_inuse = sbi->s_inodes_per_group * sbi->s_groups_count -
+#ifdef EXT3_SBI_WITH_COUNTER64
+                      percpu_counter64_sum(&sbi->s_freeinodes_counter);
+#else
                       percpu_counter_sum(&sbi->s_freeinodes_counter);
+#endif
 
         /* check quota and update in hash */
         for (group = 0; group < sbi->s_groups_count && inode_inuse > 0;

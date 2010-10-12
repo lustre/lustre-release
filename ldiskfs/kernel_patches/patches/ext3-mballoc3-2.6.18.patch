@@ -580,21 +580,6 @@ Index: linux-2.6.18.8/fs/ext3/mballoc.c
  		return block;
  	}
  
-@@ -4135,11 +4135,11 @@ out:
- }
- EXPORT_SYMBOL(ext3_mb_new_blocks);
- 
--int ext3_new_block(handle_t *handle, struct inode *inode,
--		   unsigned long goal, int *errp)
-+ext3_fsblk_t ext3_new_block(handle_t *handle, struct inode *inode,
-+		   ext3_fsblk_t goal, int *errp)
- {
- 	struct ext3_allocation_request ar;
--	unsigned long ret;
-+	ext3_fsblk_t ret;
- 
- 	if (!test_opt(inode->i_sb, MBALLOC)) {
- 		ret = ext3_new_block_old(handle, inode, goal, errp);
 @@ -4254,8 +4254,8 @@ int ext3_mb_free_metadata(handle_t *hand
   * Main entry point into mballoc to free blocks
   */

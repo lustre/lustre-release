@@ -75,7 +75,7 @@ Index: linux-2.6.9-full/fs/ext3/extents.c
 +{
 +	struct buffer_head *bh = NULL;
 +	struct ext3_extent_header *eh;
-+	struct ext3_extent_idx *ix;
++	struct ext3_extent_idx *ix = NULL;
 +	struct ext3_extent *ex;
 +	unsigned long block;
 +	int depth;

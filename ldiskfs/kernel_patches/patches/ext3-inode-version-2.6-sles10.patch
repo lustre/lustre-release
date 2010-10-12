@@ -118,9 +118,9 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs_i.h
  	__u32			_rsv_start;	/* First byte reserved */
  	__u32			_rsv_end;	/* Last byte reserved or 0 */
 @@ -142,6 +144,8 @@ struct ext3_inode_info {
+	/* mballoc */
+	struct list_head i_prealloc_list;
  	spinlock_t i_prealloc_lock;
- 
- 	void *i_filterdata;
 +
 +	__u64 i_fs_version;
  };
@@ -292,7 +292,7 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.c
 +		if (ext3_xattr_check_block(bh)) {
 +			ext3_error(inode->i_sb, __FUNCTION__,
 +				"inode %lu: bad block %d", inode->i_ino,
-+				EXT3_I(inode)->i_file_acl);
++				(int)EXT3_I(inode)->i_file_acl);
 +			error = -EIO;
 +			goto cleanup;
 +		}
