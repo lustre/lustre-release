@@ -1,7 +1,7 @@
 2010-xx-xx Oracle, Inc.
 	* version 1.8.5
 	* Support for kernels:
-	  2.6.16.60-0.42.8 (SLES 10),
+	  2.6.16.60-0.69.1 (SLES 10),
 	  2.6.32.19-0.2.1 (SLES11),
 	  2.6.18-194.8.1.el5 (RHEL 5)
 	  2.6.18-194.8.1.0.1.el5 (OEL 5)
@@ -11,6 +11,10 @@
 	* Recommended e2fsprogs version: 1.41.10-sun2
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
+
+Severity   : enhancement
+Bugzilla   : 20744
+Description: Update to SLES10 SP3 kernel 2.6.16.60-0.69.1.
 
 Severity   : enhancement
 Bugzilla   : 21610
