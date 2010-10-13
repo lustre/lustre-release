@@ -1,4 +1,4 @@
-2010-xx-xx Oracle, Inc.
+2010-10-29 Oracle, Inc.
 	* version 1.8.5
 	* Support for kernels:
 	  2.6.16.60-0.69.1 (SLES 10),
@@ -15,7 +15,7 @@
 Severity   : enhancement
 Bugzilla   : 22514
 Description: Update to RHEL5.5 kernel 2.6.19-194.17.1.el5.
-             Update to OEL5.5  kernel 2.6.19-194.17.1.0.1.el5.
+	     Update to OEL5.5  kernel 2.6.19-194.17.1.0.1.el5.
 
 Severity   : enhancement
 Bugzilla   : 20744

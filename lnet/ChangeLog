@@ -1,4 +1,4 @@
-2010-xx-xx Oracle, Inc.
+2010-10-29 Oracle, Inc.
 	* version 1.8.5
 	* Support for networks:
 	  socklnd   - any kernel supported by Lustre,
