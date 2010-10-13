@@ -12,7 +12,10 @@ source ${0%/*}/lbuild-sles
 OFED_DEVEL_LOCATION="$KERNELTREE"
 
 # do we want to rebuild the OFED devel RPM or use the supplied one?
-REBUILD_OFED_DEVEL_RPM=${REBUILD_OFED_DEVEL_RPM:-true}
+if ! $PATCHLESS; then
+	REBUILD_OFED_DEVEL_RPM=${REBUILD_OFED_DEVEL_RPM:-true}
+else
+	REBUILD_OFED_DEVEL_RPM=${REBUILD_OFED_DEVEL_RPM:-false}
 
 edit_specs() {
 
