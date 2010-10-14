@@ -375,7 +375,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
         mds->mds_objects_dir = dentry;
 
-        dentry = lookup_one_len("__iopen__", current->fs->pwd,
+        dentry = ll_lookup_one_len("__iopen__", current->fs->pwd,
                                 strlen("__iopen__"));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
