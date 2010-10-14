@@ -16,6 +16,7 @@ if ! $PATCHLESS; then
 	REBUILD_OFED_DEVEL_RPM=${REBUILD_OFED_DEVEL_RPM:-true}
 else
 	REBUILD_OFED_DEVEL_RPM=${REBUILD_OFED_DEVEL_RPM:-false}
+fi
 
 edit_specs() {
 
