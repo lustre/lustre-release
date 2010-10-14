@@ -2166,6 +2166,10 @@ test_32()
         cleanup_and_setup_lustre
         LOAD_MODULES_REMOTE=$LMR_orig
 
+        client_up
+        wait_mds_ost_sync
+        quota_init
+
         for user in $SANITY_QUOTA_USERS; do
 	    check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" >/dev/null 2>/dev/null || \
 		missing_users="$missing_users $user"
