@@ -8,7 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 libcfs_is_module=yes
-ldiskfs_is_ext4=no
+ldiskfs_is_ext4=yes
 ])
 
 #
