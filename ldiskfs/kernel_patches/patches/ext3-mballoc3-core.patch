@@ -1,8 +1,8 @@
-Index: linux-2.6.22.19/include/linux/ext3_fs.h
+Index: linux-stage/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.22.19.orig/include/linux/ext3_fs.h
-+++ linux-2.6.22.19/include/linux/ext3_fs.h
-@@ -54,6 +54,31 @@
+--- linux-stage.orig/include/linux/ext3_fs.h
++++ linux-stage/include/linux/ext3_fs.h
+@@ -53,6 +53,31 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
  
@@ -34,7 +34,7 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -412,6 +437,14 @@ struct ext3_inode {
+@@ -398,6 +423,14 @@ struct ext3_inode {
  #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
  #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
  
@@ -49,7 +49,7 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -813,6 +846,20 @@ extern unsigned long ext3_count_dirs (st
+@@ -799,6 +832,20 @@ extern unsigned long ext3_count_dirs (st
  extern void ext3_check_inodes_bitmap (struct super_block *);
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
@@ -70,7 +70,7 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
  
  /* inode.c */
  int ext3_forget(handle_t *handle, int is_metadata, struct inode *inode,
-@@ -859,6 +906,10 @@ extern int ext3_group_extend(struct supe
+@@ -845,6 +892,10 @@ extern int ext3_group_extend(struct supe
  				ext3_fsblk_t n_blocks_count);
  
  /* super.c */
@@ -81,11 +81,11 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
  extern void ext3_error (struct super_block *, const char *, const char *, ...)
  	__attribute__ ((format (printf, 3, 4)));
  extern void __ext3_std_error (struct super_block *, const char *, int);
-Index: linux-2.6.22.19/include/linux/ext3_fs_sb.h
+Index: linux-stage/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.22.19.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.22.19/include/linux/ext3_fs_sb.h
-@@ -88,6 +88,68 @@ struct ext3_sb_info {
+--- linux-stage.orig/include/linux/ext3_fs_sb.h
++++ linux-stage/include/linux/ext3_fs_sb.h
+@@ -89,6 +89,68 @@ struct ext3_sb_info {
  	unsigned long s_ext_blocks;
  	unsigned long s_ext_extents;
  #endif
@@ -154,20 +154,20 @@ Index: linux-2.6.22.19/include/linux/ext3_fs_sb.h
 +				 [(group) & (EXT3_DESC_PER_BLOCK(sb) - 1)]
 +
  #endif	/* _LINUX_EXT3_FS_SB */
-Index: linux-2.6.22.19/fs/ext3/super.c
+Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- linux-2.6.22.19.orig/fs/ext3/super.c
-+++ linux-2.6.22.19/fs/ext3/super.c
+--- linux-stage.orig/fs/ext3/super.c
++++ linux-stage/fs/ext3/super.c
 @@ -392,6 +392,7 @@ static void ext3_put_super (struct super
  	struct ext3_super_block *es = sbi->s_es;
- 	int i;
+ 	int i, err;
  
 +	ext3_mb_release(sb);
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
- 	journal_destroy(sbi->s_journal);
-@@ -434,6 +435,10 @@ static void ext3_put_super (struct super
- 		invalidate_bdev(sbi->journal_bdev);
+ 	err = journal_destroy(sbi->s_journal);
+@@ -438,6 +439,10 @@ static void ext3_put_super (struct super
+ 		invalidate_bdev(sbi->journal_bdev, 0);
  		ext3_blkdev_remove(sbi);
  	}
 +	if (sbi->s_dev_proc) {
@@ -177,7 +177,7 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -459,6 +464,8 @@ static struct inode *ext3_alloc_inode(st
+@@ -463,6 +468,8 @@ static struct inode *ext3_alloc_inode(st
  	ei->vfs_inode.i_version = 1;
  
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
@@ -186,7 +186,7 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -1434,6 +1441,7 @@ static int ext3_fill_super (struct super
+@@ -1465,6 +1472,7 @@ static int ext3_fill_super (struct super
  	unsigned long journal_devnum = 0;
  	unsigned long def_mount_opts;
  	struct inode *root;
@@ -194,7 +194,7 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  	int blocksize;
  	int hblock;
  	int db_count;
-@@ -1448,6 +1456,22 @@ static int ext3_fill_super (struct super
+@@ -1480,6 +1488,22 @@ static int ext3_fill_super (struct super
  	sbi->s_mount_opt = 0;
  	sbi->s_resuid = EXT3_DEF_RESUID;
  	sbi->s_resgid = EXT3_DEF_RESGID;
@@ -217,7 +217,7 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  
  	unlock_kernel();
  
-@@ -1857,6 +1881,10 @@ failed_mount:
+@@ -1885,6 +1909,10 @@ failed_mount:
  	ext3_blkdev_remove(sbi);
  	brelse(bh);
  out_fail:
@@ -228,8 +228,8 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	lock_kernel();
-@@ -2787,9 +2815,46 @@ static struct file_system_type ext3_fs_t
- 	.fs_flags	= FS_REQUIRES_DEV,
+@@ -2850,9 +2878,46 @@ static struct file_system_type ext3_fs_t
+ 			 |FS_HAS_TRYTOFREE,
  };
  
 +#define EXT3_ROOT "ext3"
@@ -276,7 +276,7 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2811,6 +2876,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2877,6 +2942,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -284,11 +284,11 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  }
  
  int ext3_map_inode_page(struct inode *inode, struct page *page,
-Index: linux-2.6.22.19/fs/ext3/mballoc.c
+Index: linux-stage/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
-+++ linux-2.6.22.19/fs/ext3/mballoc.c
-@@ -0,0 +1,4483 @@
++++ linux-stage/fs/ext3/mballoc.c
+@@ -0,0 +1,4486 @@
 +/*
 + * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 + * Written by Alex Zhuravlev <alex.zhuravlev@sun.com>
@@ -2126,9 +2126,12 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			if (group == EXT3_SB(sb)->s_groups_count)
 +				group = 0;
 +
-+			/* quick check to skip empty groups */
++			/* If there's no chance that this group has a better
++			 * extent, just skip it instead of seeking to read
++			 * block bitmap from disk. Initially ac_b_ex.fe_len = 0,
++			 * so this always skips groups with no free space. */
 +			grp = EXT3_GROUP_INFO(ac->ac_sb, group);
-+			if (grp->bb_free == 0)
++			if (grp->bb_free <= ac->ac_b_ex.fe_len)
 +				continue;
 +
 +			if (EXT3_MB_GRP_NEED_INIT(EXT3_GROUP_INFO(sb, group))) {
@@ -2802,7 +2805,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +
 +		sbi->s_mb_small_req = 256;
 +		sbi->s_mb_large_req = 1024;
-+		sbi->s_mb_group_prealloc = 512;
++		sbi->s_mb_group_prealloc = 256;
 +	} else {
 +		sbi->s_mb_prealloc_table_size = 3;
 +		i = sbi->s_mb_prealloc_table_size * sizeof(unsigned long);
@@ -2821,7 +2824,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +
 +		sbi->s_mb_small_req = sbi->s_stripe;
 +		sbi->s_mb_large_req = sbi->s_stripe * 8;
-+		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
++		sbi->s_mb_group_prealloc = sbi->s_stripe;
 +	}
 +
 +	i = sizeof(struct ext3_locality_group) * num_possible_cpus();
