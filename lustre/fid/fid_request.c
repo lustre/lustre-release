@@ -89,17 +89,26 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 
         ptlrpc_request_set_replen(req);
 
-        if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
-                req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
-                        SEQ_CONTROLLER_PORTAL : SEQ_METADATA_PORTAL;
-                /* update mdt field of *in, it is required for fld update
-                 * on super sequence allocator node. */
-                if (opc == SEQ_ALLOC_SUPER)
-                        in->lsr_mdt = seq->lcs_space.lsr_mdt;
+       if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
+                req->rq_request_portal = SEQ_METADATA_PORTAL;
+                in->lsr_flags = LU_SEQ_RANGE_MDT;
         } else {
-                LASSERT(opc == SEQ_ALLOC_META);
+                LASSERTF(seq->lcs_type == LUSTRE_SEQ_DATA,
+                         "unknown lcs_type %u\n", seq->lcs_type);
                 req->rq_request_portal = SEQ_DATA_PORTAL;
+                in->lsr_flags = LU_SEQ_RANGE_OST;
         }
+
+        if (opc == SEQ_ALLOC_SUPER) {
+                /* Update index field of *in, it is required for
+                 * FLD update on super sequence allocator node. */
+                in->lsr_index = seq->lcs_space.lsr_index;
+                req->rq_request_portal = SEQ_CONTROLLER_PORTAL;
+        } else {
+                LASSERTF(opc == SEQ_ALLOC_META,
+                         "unknown opcode %u\n, opc", opc);
+        }
+
         ptlrpc_at_set_req_timeout(req);
 
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
@@ -275,7 +284,7 @@ void seq_client_flush(struct lu_client_seq *seq)
          * set to -1 for dgb check.
          */
 
-        seq->lcs_space.lsr_mdt = -1;
+        seq->lcs_space.lsr_index = -1;
 
         range_init(&seq->lcs_space);
         cfs_up(&seq->lcs_sem);

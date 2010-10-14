@@ -111,7 +111,8 @@ void lustre_swab_lu_seq_range(struct lu_seq_range *range)
 {
         __swab64s (&range->lsr_start);
         __swab64s (&range->lsr_end);
-        __swab32s (&range->lsr_mdt);
+        __swab32s (&range->lsr_index);
+        __swab32s (&range->lsr_flags);
 }
 EXPORT_SYMBOL(lustre_swab_lu_seq_range);
 

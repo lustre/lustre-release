@@ -171,7 +171,7 @@ restart_fixup:
 
                 /* check merge possibility with next range */
                 if (c_range->lsr_end == n_range->lsr_start) {
-                        if (c_range->lsr_mdt != n_range->lsr_mdt)
+                        if (c_range->lsr_index != n_range->lsr_index)
                                 continue;
                         n_range->lsr_start = c_range->lsr_start;
                         fld_cache_entry_delete(cache, f_curr);
@@ -181,7 +181,7 @@ restart_fixup:
                 /* check if current range overlaps with next range. */
                 if (n_range->lsr_start < c_range->lsr_end) {
 
-                        if (c_range->lsr_mdt == n_range->lsr_mdt) {
+                        if (c_range->lsr_index == n_range->lsr_index) {
                                 n_range->lsr_start = c_range->lsr_start;
                                 n_range->lsr_end = max(c_range->lsr_end,
                                                        n_range->lsr_end);
@@ -302,7 +302,7 @@ void fld_cache_punch_hole(struct fld_cache *cache,
         /* fldt */
         fldt->fce_range.lsr_start = new_end;
         fldt->fce_range.lsr_end = f_curr->fce_range.lsr_end;
-        fldt->fce_range.lsr_mdt = f_curr->fce_range.lsr_mdt;
+        fldt->fce_range.lsr_index = f_curr->fce_range.lsr_index;
 
         /* f_curr */
         f_curr->fce_range.lsr_end = new_start;
@@ -325,12 +325,12 @@ void fld_cache_overlap_handle(struct fld_cache *cache,
         const struct lu_seq_range *range = &f_new->fce_range;
         const seqno_t new_start  = range->lsr_start;
         const seqno_t new_end  = range->lsr_end;
-        const mdsno_t mdt = range->lsr_mdt;
+        const mdsno_t mdt = range->lsr_index;
 
         /* this is overlap case, these case are checking overlapping with
          * prev range only. fixup will handle overlaping with next range. */
 
-        if (f_curr->fce_range.lsr_mdt == mdt) {
+        if (f_curr->fce_range.lsr_index == mdt) {
                 f_curr->fce_range.lsr_start = min(f_curr->fce_range.lsr_start,
                                                   new_start);
 

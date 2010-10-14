@@ -94,7 +94,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                seq->lss_name, cli->lcs_name);
 
         seq->lss_cli = cli;
-        cli->lcs_space.lsr_mdt = seq->lss_site->ms_node_id;
+        cli->lcs_space.lsr_index = seq->lss_site->ms_node_id;
         EXIT;
 out_up:
         cfs_up(&seq->lss_sem);
@@ -363,7 +363,8 @@ static int seq_req_handle(struct ptlrpc_request *req,
                 /* seq client passed mdt id, we need to pass that using out
                  * range parameter */
 
-                out->lsr_mdt = tmp->lsr_mdt;
+                out->lsr_index = tmp->lsr_index;
+                out->lsr_flags = tmp->lsr_flags;
                 rc = seq_server_handle(site, env, *opc, out);
         } else
                 rc = err_serious(-EPROTO);
@@ -518,7 +519,7 @@ int seq_server_init(struct lu_server_seq *seq,
                         LUSTRE_SEQ_ZERO_RANGE:
                         LUSTRE_SEQ_SPACE_RANGE;
 
-                seq->lss_space.lsr_mdt = ms->ms_node_id;
+                seq->lss_space.lsr_index = ms->ms_node_id;
                 CDEBUG(D_INFO, "%s: No data found "
                        "on store. Initialize space\n",
                        seq->lss_name);

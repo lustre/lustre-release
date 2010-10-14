@@ -94,7 +94,7 @@ seq_proc_read_common(char *page, char **start, off_t off,
 	ENTRY;
 
         *eof = 1;
-        rc = snprintf(page, count, "["LPX64" - "LPX64"]:%x\n",
+        rc = snprintf(page, count, "["LPX64" - "LPX64"]:%x:%x\n",
                       PRANGE(range));
 	RETURN(rc);
 }

@@ -143,20 +143,18 @@ int fld_server_create(struct lu_server_fld *fld,
 
         /* STEP 1: try to merge with previous range */
         rc = fld_index_lookup(fld, env, new->lsr_start, erange);
-        if (!rc) {
-                /* in case of range overlap, mdt ID must be same for both ranges */
-                if (new->lsr_mdt != erange->lsr_mdt) {
-                        CERROR("mdt[%x] for given range is different from"
-                               "existing overlapping range mdt[%x]\n",
-                                new->lsr_mdt, erange->lsr_mdt);
-                        rc = -EIO;
-                        GOTO(out, rc);
+        if (rc == 0) {
+                /* in case of range overlap, the location must be same */
+                if (range_compare_loc(new, erange) != 0) {
+                        CERROR("the start of given range "DRANGE" conflict to"
+                               "an existing range "DRANGE"\n",
+                               PRANGE(new), PRANGE(erange));
+                        GOTO(out, rc = -EIO);
                 }
 
                 if (new->lsr_end < erange->lsr_end)
                         GOTO(out, rc);
                 do_merge = 1;
-
         } else if (rc == -ENOENT) {
                 /* check for merge case: optimizes for single mds lustre.
                  * As entry does not exist, returned entry must be left side
@@ -164,7 +162,7 @@ int fld_server_create(struct lu_server_fld *fld,
                  * So try to merge from left.
                  */
                 if (new->lsr_start == erange->lsr_end &&
-                    new->lsr_mdt == erange->lsr_mdt)
+                    range_compare_loc(new, erange) == 0)
                         do_merge = 1;
         } else {
                 /* no overlap allowed in fld, so failure in lookup is error */
@@ -172,53 +170,62 @@ int fld_server_create(struct lu_server_fld *fld,
         }
 
         if (do_merge) {
-                /* new range can be combined with existing one.
-                 * So delete existing range.
-                 */
-
+                /* new range will be merged with the existing one.
+                 * delete this range at first. */
                 rc = fld_index_delete(fld, env, erange, th);
-                if (rc == 0) {
-                        new->lsr_start = min(erange->lsr_start, new->lsr_start);
-                        new->lsr_end = max(erange->lsr_end, new->lsr_end);
-                } else
+                if (rc != 0)
                         GOTO(out, rc);
 
+                new->lsr_start = min(erange->lsr_start, new->lsr_start);
+                new->lsr_end = max(erange->lsr_end, new->lsr_end);
                 do_merge = 0;
         }
 
         /* STEP 2: try to merge with next range */
         rc = fld_index_lookup(fld, env, new->lsr_end, erange);
-        if (!rc) {
-                /* case range overlap: with right side entry. */
-                if (new->lsr_mdt == erange->lsr_mdt)
-                        do_merge = 1;
+        if (rc == 0) {
+                /* found a matched range, meaning we're either
+                 * overlapping or ajacent, must merge with it. */
+                do_merge = 1;
         } else if (rc == -ENOENT) {
                 /* this range is left of new range end point */
                 LASSERT(erange->lsr_end <= new->lsr_end);
+                /*
+                 * the found left range must be either:
+                 *  1. withing new range.
+                 *  2. left of new range (no overlapping).
+                 * because if they're partly overlapping, the STEP 1 must have
+                 * been removed this range.
+                 */
+                LASSERTF(erange->lsr_start > new->lsr_start ||
+                         erange->lsr_end < new->lsr_start ||
+                         (erange->lsr_end == new->lsr_end &&
+                          range_compare_loc(new, erange) != 0),
+                         "left "DRANGE", new "DRANGE"\n",
+                         PRANGE(erange), PRANGE(new));
 
-                if (new->lsr_end == erange->lsr_end)
+                /* if it's within the new range, merge it */
+                if (erange->lsr_start > new->lsr_start)
                         do_merge = 1;
-                if (new->lsr_start <= erange->lsr_start)
-                        do_merge = 1;
-        } else
+        } else {
                GOTO(out, rc);
+        }
 
         if (do_merge) {
-                if (new->lsr_mdt != erange->lsr_mdt) {
-                        CERROR("mdt[%x] for given range is different from"
-                               "existing overlapping range mdt[%x]\n",
-                                new->lsr_mdt, erange->lsr_mdt);
-                        rc = -EIO;
-                        GOTO(out, rc);
+                if (range_compare_loc(new, erange) != 0) {
+                        CERROR("the end of given range "DRANGE" overlaps "
+                               "with an existing range "DRANGE"\n",
+                               PRANGE(new), PRANGE(erange));
+                        GOTO(out, rc = -EIO);
                 }
-        
+
                 /* merge with next range */
                 rc = fld_index_delete(fld, env, erange, th);
-                if (rc == 0) {
-                        new->lsr_start = min(erange->lsr_start, new->lsr_start);
-                        new->lsr_end = max(erange->lsr_end, new->lsr_end);
-                } else
+                if (rc != 0)
                         GOTO(out, rc);
+
+                new->lsr_start = min(erange->lsr_start, new->lsr_start);
+                new->lsr_end = max(erange->lsr_end, new->lsr_end);
         }
 
         /* now update fld entry. */
@@ -253,17 +260,39 @@ int fld_server_lookup(struct lu_server_fld *fld,
                       const struct lu_env *env,
                       seqno_t seq, struct lu_seq_range *range)
 {
+        struct lu_seq_range *erange;
+        struct fld_thread_info *info;
         int rc;
         ENTRY;
 
-        /* Lookup it in the cache. */
-        rc = fld_cache_lookup(fld->lsf_cache, seq, range);
-        if (rc == 0)
-                RETURN(0);
+        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+        erange = &info->fti_lrange;
 
-        if (fld->lsf_obj)
-                rc = fld_index_lookup(fld, env, seq, range);
-        else {
+        /* Lookup it in the cache. */
+        rc = fld_cache_lookup(fld->lsf_cache, seq, erange);
+        if (rc == 0) {
+                if (unlikely(erange->lsr_flags != range->lsr_flags)) {
+                        CERROR("FLD cache found a range "DRANGE" doesn't "
+                               "match the requested flag %x\n",
+                               PRANGE(erange), range->lsr_flags);
+                        RETURN(-EIO);
+                }
+                *range = *erange;
+                RETURN(0);
+        }
+
+        if (fld->lsf_obj) {
+                rc = fld_index_lookup(fld, env, seq, erange);
+                if (rc == 0) {
+                        if (unlikely(erange->lsr_flags != range->lsr_flags)) {
+                                CERROR("FLD found a range "DRANGE" doesn't "
+                                       "match the requested flag %x\n",
+                                       PRANGE(erange), range->lsr_flags);
+                                RETURN(-EIO);
+                        }
+                        *range = *erange;
+                }
+        } else {
                 LASSERT(fld->lsf_control_exp);
                 /* send request to mdt0 i.e. super seq. controller.
                  * This is temporary solution, long term solution is fld
@@ -305,7 +334,7 @@ static int fld_server_handle(struct lu_server_fld *fld,
 
         CDEBUG(D_INFO, "%s: FLD req handle: error %d (opc: %d, range: "
                DRANGE"\n", fld->lsf_name, rc, opc, PRANGE(range));
-        
+
         RETURN(rc);
 
 }
@@ -415,7 +444,7 @@ int fid_is_local(const struct lu_env *env,
                 rc = fld_cache_lookup(msite->ms_client_fld->lcf_cache,
                                       fid_seq(fid), range);
                 if (rc == 0)
-                        result = (range->lsr_mdt == msite->ms_node_id);
+                        result = (range->lsr_index == msite->ms_node_id);
         }
         return result;
 }
@@ -505,7 +534,8 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         /* Insert reserved sequence number of ".lustre" into fld cache. */
         range.lsr_start = FID_SEQ_DOT_LUSTRE;
         range.lsr_end = FID_SEQ_DOT_LUSTRE + 1;
-        range.lsr_mdt = 0;
+        range.lsr_index = 0;
+        range.lsr_flags = LU_SEQ_RANGE_MDT;
         fld_cache_insert(fld->lsf_cache, &range);
 
         EXIT;

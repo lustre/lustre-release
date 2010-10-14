@@ -189,15 +189,18 @@ typedef __u32 obd_count;
 /**
  * Describes a range of sequence, lsr_start is included but lsr_end is
  * not in the range.
- * Same structure is used in fld module where lsr_mdt field holds mdt id
+ * Same structure is used in fld module where lsr_index field holds mdt id
  * of the home mdt.
  */
+
+#define LU_SEQ_RANGE_MDT        0x0
+#define LU_SEQ_RANGE_OST        0x1
 
 struct lu_seq_range {
         __u64 lsr_start;
         __u64 lsr_end;
-        __u32 lsr_mdt;
-        __u32 lsr_padding;
+        __u32 lsr_index;
+        __u32 lsr_flags;
 };
 
 /**
@@ -215,7 +218,7 @@ static inline __u64 range_space(const struct lu_seq_range *range)
 
 static inline void range_init(struct lu_seq_range *range)
 {
-        range->lsr_start = range->lsr_end = range->lsr_mdt = 0;
+        range->lsr_start = range->lsr_end = range->lsr_index = 0;
 }
 
 /**
@@ -244,12 +247,21 @@ static inline int range_is_exhausted(const struct lu_seq_range *range)
         return range_space(range) == 0;
 }
 
-#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x):%x"
+/* return 0 if two range have the same location */
+static inline int range_compare_loc(const struct lu_seq_range *r1,
+                                    const struct lu_seq_range *r2)
+{
+        return r1->lsr_index != r2->lsr_index ||
+               r1->lsr_flags != r2->lsr_flags;
+}
+
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x):%x:%x"
 
 #define PRANGE(range)      \
         (range)->lsr_start, \
         (range)->lsr_end,    \
-        (range)->lsr_mdt
+        (range)->lsr_index,  \
+        (range)->lsr_flags
 
 /** \defgroup lu_fid lu_fid
  * @{ */
