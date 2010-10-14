@@ -974,8 +974,8 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         total = (stat->os_blocks * stat->os_bsize) >> shift;
                 }
 
-                if (total > 0)
-                        ratio = (double)used / (double)total;
+                if ((used + avail) > 0)
+                        ratio = (double)used / (double)(used + avail);
 
                 if (cooked) {
                         int i;
@@ -1007,7 +1007,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         sprintf(abuf, CDF, avail);
                 }
 
-                sprintf(rbuf, RDF, (int)(ratio * 100));
+                sprintf(rbuf, RDF, (int)(ratio * 100 + 0.5));
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
                        uuid, tbuf, ubuf, abuf, rbuf, mntdir);
                 if (type)
@@ -1082,18 +1082,14 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
                         /* the llapi_obd_statfs() call may have returned with
                          * an error, but if it filled in uuid_buf we will at
                          * lease use that to print out a message for that OBD.
-                         * If we didn't even fill in uuid_buf something is
-                         * definitely incorrect and no point in continuing. */
-                        if (uuid_buf.uuid[0] != '\0') {
-                                showdf(mntdir,&stat_buf,obd_uuid2str(&uuid_buf),
-                                       ishow, cooked, tp->st_name, index, rc);
-                        } else {
-                                char tmp_uuid[12];
+                         * If we didn't get anything in the uuid_buf, then fill
+                         * it in so that we can print an error message. */
+                        if (uuid_buf.uuid[0] == '\0')
+                                sprintf(uuid_buf.uuid, "%s%04x",
+					tp->st_name, index);
+			showdf(mntdir,&stat_buf,obd_uuid2str(&uuid_buf),
+			       ishow, cooked, tp->st_name, index, rc);
 
-                                sprintf(tmp_uuid, "%s%04x", tp->st_name, index);
-                                showdf(mntdir, &stat_buf, tmp_uuid,
-                                       ishow, cooked, tp->st_name, index, rc);
-                        }
                         if (rc == 0) {
                                 if (tp->st_op == LL_STATFS_MDC) {
                                         sum.os_ffree += stat_buf.os_ffree;
