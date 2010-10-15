@@ -462,9 +462,9 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
                            struct ptlrpc_cli_ctx *newctx)
 {
         struct sptlrpc_flavor   old_flvr;
-        char                   *reqmsg;
+        char                   *reqmsg = NULL; /* to workaround old gcc */
         int                     reqmsg_size;
-        int                     rc;
+        int                     rc = 0;
 
         LASSERT(req->rq_reqmsg);
         LASSERT(req->rq_reqlen);
@@ -482,10 +482,12 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
 
         /* save request message */
         reqmsg_size = req->rq_reqlen;
-        OBD_ALLOC(reqmsg, reqmsg_size);
-        if (reqmsg == NULL)
-                return -ENOMEM;
-        memcpy(reqmsg, req->rq_reqmsg, reqmsg_size);
+        if (reqmsg_size != 0) {
+                OBD_ALLOC(reqmsg, reqmsg_size);
+                if (reqmsg == NULL)
+                        return -ENOMEM;
+                memcpy(reqmsg, req->rq_reqmsg, reqmsg_size);
+        }
 
         /* release old req/rep buf */
         req->rq_cli_ctx = oldctx;
@@ -498,18 +500,19 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
 
         /* alloc new request buffer
          * we don't need to alloc reply buffer here, leave it to the
-         * rest procedure of ptlrpc
-         */
-        rc = sptlrpc_cli_alloc_reqbuf(req, reqmsg_size);
-        if (!rc) {
-                LASSERT(req->rq_reqmsg);
-                memcpy(req->rq_reqmsg, reqmsg, reqmsg_size);
-        } else {
-                CWARN("failed to alloc reqbuf: %d\n", rc);
-                req->rq_flvr = old_flvr;
-        }
+         * rest procedure of ptlrpc */
+        if (reqmsg_size != 0) {
+                rc = sptlrpc_cli_alloc_reqbuf(req, reqmsg_size);
+                if (!rc) {
+                        LASSERT(req->rq_reqmsg);
+                        memcpy(req->rq_reqmsg, reqmsg, reqmsg_size);
+                } else {
+                        CWARN("failed to alloc reqbuf: %d\n", rc);
+                        req->rq_flvr = old_flvr;
+                }
 
-        OBD_FREE(reqmsg, reqmsg_size);
+                OBD_FREE(reqmsg, reqmsg_size);
+        }
         return rc;
 }
 
@@ -1805,12 +1808,14 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 
                 /* if it's gss, we only interested in root ctx init */
                 if (req->rq_auth_gss &&
-                    !(req->rq_ctx_init && (req->rq_auth_usr_root ||
-                                           req->rq_auth_usr_mdt))) {
+                    !(req->rq_ctx_init &&
+                      (req->rq_auth_usr_root || req->rq_auth_usr_mdt ||
+                       req->rq_auth_usr_ost))) {
                         cfs_spin_unlock(&exp->exp_lock);
-                        CDEBUG(D_SEC, "is good but not root(%d:%d:%d:%d)\n",
+                        CDEBUG(D_SEC, "is good but not root(%d:%d:%d:%d:%d)\n",
                                req->rq_auth_gss, req->rq_ctx_init,
-                               req->rq_auth_usr_root, req->rq_auth_usr_mdt);
+                               req->rq_auth_usr_root, req->rq_auth_usr_mdt,
+                               req->rq_auth_usr_ost);
                         return 0;
                 }
 
@@ -1827,7 +1832,8 @@ int sptlrpc_target_export_check(struct obd_export *exp,
                 /* most cases should return here, we only interested in
                  * gss root ctx init */
                 if (!req->rq_auth_gss || !req->rq_ctx_init ||
-                    (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt)) {
+                    (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt &&
+                     !req->rq_auth_usr_ost)) {
                         cfs_spin_unlock(&exp->exp_lock);
                         return 0;
                 }
@@ -1919,11 +1925,12 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 
         cfs_spin_unlock(&exp->exp_lock);
 
-        CWARN("exp %p(%s): req %p (%u|%u|%u|%u|%u) with "
+        CWARN("exp %p(%s): req %p (%u|%u|%u|%u|%u|%u) with "
               "unauthorized flavor %x, expect %x|%x(%+ld)|%x(%+ld)\n",
               exp, exp->exp_obd->obd_name,
               req, req->rq_auth_gss, req->rq_ctx_init, req->rq_ctx_fini,
-              req->rq_auth_usr_root, req->rq_auth_usr_mdt, req->rq_flvr.sf_rpc,
+              req->rq_auth_usr_root, req->rq_auth_usr_mdt, req->rq_auth_usr_ost,
+              req->rq_flvr.sf_rpc,
               exp->exp_flvr.sf_rpc,
               exp->exp_flvr_old[0].sf_rpc,
               exp->exp_flvr_expire[0] ?
@@ -1979,43 +1986,41 @@ EXPORT_SYMBOL(sptlrpc_target_update_exp_flavor);
 
 static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
 {
-        if (svc_rc == SECSVC_DROP)
-                return SECSVC_DROP;
+        /* peer's claim is unreliable unless gss is being used */
+        if (!req->rq_auth_gss || svc_rc == SECSVC_DROP)
+                return svc_rc;
 
         switch (req->rq_sp_from) {
         case LUSTRE_SP_CLI:
-        case LUSTRE_SP_MDT:
-        case LUSTRE_SP_OST:
-        case LUSTRE_SP_MGC:
-        case LUSTRE_SP_MGS:
-        case LUSTRE_SP_ANY:
+                if (req->rq_auth_usr_mdt || req->rq_auth_usr_ost) {
+                        DEBUG_REQ(D_ERROR, req, "faked source CLI");
+                        svc_rc = SECSVC_DROP;
+                }
                 break;
+        case LUSTRE_SP_MDT:
+                if (!req->rq_auth_usr_mdt) {
+                        DEBUG_REQ(D_ERROR, req, "faked source MDT");
+                        svc_rc = SECSVC_DROP;
+                }
+                break;
+        case LUSTRE_SP_OST:
+                if (!req->rq_auth_usr_ost) {
+                        DEBUG_REQ(D_ERROR, req, "faked source OST");
+                        svc_rc = SECSVC_DROP;
+                }
+                break;
+        case LUSTRE_SP_MGS:
+        case LUSTRE_SP_MGC:
+                if (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt &&
+                    !req->rq_auth_usr_ost) {
+                        DEBUG_REQ(D_ERROR, req, "faked source MGC/MGS");
+                        svc_rc = SECSVC_DROP;
+                }
+                break;
+        case LUSTRE_SP_ANY:
         default:
                 DEBUG_REQ(D_ERROR, req, "invalid source %u", req->rq_sp_from);
-                return SECSVC_DROP;
-        }
-
-        if (!req->rq_auth_gss)
-                return svc_rc;
-
-        if (unlikely(req->rq_sp_from == LUSTRE_SP_ANY)) {
-                CERROR("not specific part\n");
-                return SECSVC_DROP;
-        }
-
-        /* from MDT, must be authenticated as MDT */
-        if (unlikely(req->rq_sp_from == LUSTRE_SP_MDT &&
-                     !req->rq_auth_usr_mdt)) {
-                DEBUG_REQ(D_ERROR, req, "fake source MDT");
-                return SECSVC_DROP;
-        }
-
-        /* from OST, must be callback to MDT and CLI, the reverse sec
-         * was from mdt/root keytab, so it should be MDT or root FIXME */
-        if (unlikely(req->rq_sp_from == LUSTRE_SP_OST &&
-                     !req->rq_auth_usr_mdt && !req->rq_auth_usr_root)) {
-                DEBUG_REQ(D_ERROR, req, "fake source OST");
-                return SECSVC_DROP;
+                svc_rc = SECSVC_DROP;
         }
 
         return svc_rc;

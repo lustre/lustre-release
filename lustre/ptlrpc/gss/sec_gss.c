@@ -2056,10 +2056,12 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
         if (rc != SECSVC_OK)
                 RETURN(rc);
 
-        if (grctx->src_ctx->gsc_usr_mds || grctx->src_ctx->gsc_usr_root)
+        if (grctx->src_ctx->gsc_usr_mds || grctx->src_ctx->gsc_usr_oss ||
+            grctx->src_ctx->gsc_usr_root)
                 CWARN("create svc ctx %p: user from %s authenticated as %s\n",
                       grctx->src_ctx, libcfs_nid2str(req->rq_peer.nid),
-                      grctx->src_ctx->gsc_usr_mds ? "mds" : "root");
+                      grctx->src_ctx->gsc_usr_mds ? "mds" :
+                        (grctx->src_ctx->gsc_usr_oss ? "oss" : "root"));
         else
                 CWARN("create svc ctx %p: accept user %u from %s\n",
                       grctx->src_ctx, grctx->src_ctx->gsc_uid,
@@ -2419,6 +2421,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
                 req->rq_auth_gss = 1;
                 req->rq_auth_remote = grctx->src_ctx->gsc_remote;
                 req->rq_auth_usr_mdt = grctx->src_ctx->gsc_usr_mds;
+                req->rq_auth_usr_ost = grctx->src_ctx->gsc_usr_oss;
                 req->rq_auth_usr_root = grctx->src_ctx->gsc_usr_root;
                 req->rq_auth_uid = grctx->src_ctx->gsc_uid;
                 req->rq_auth_mapped_uid = grctx->src_ctx->gsc_mapped_uid;

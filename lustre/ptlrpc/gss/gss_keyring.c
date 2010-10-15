@@ -721,7 +721,23 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                 /* update reverse handle for root user */
                 sec2gsec(sec)->gs_rvs_hdl = gss_get_next_ctx_index();
 
-                co_flags = "r";
+                switch (sec->ps_part) {
+                case LUSTRE_SP_MDT:
+                        co_flags = "m";
+                        break;
+                case LUSTRE_SP_OST:
+                        co_flags = "o";
+                        break;
+                case LUSTRE_SP_MGC:
+                        co_flags = "rmo";
+                        break;
+                case LUSTRE_SP_CLI:
+                        co_flags = "r";
+                        break;
+                case LUSTRE_SP_MGS:
+                default:
+                        LBUG();
+                }
         }
 
         /* in case of setuid, key will be constructed as owner of fsuid/fsgid,

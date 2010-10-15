@@ -105,8 +105,9 @@ struct keyring_upcall_param {
         uint64_t        kup_nid;
         char            kup_tgt[64];
         char            kup_mech[16];
-        int             kup_is_root;
-        int             kup_is_mds;
+        unsigned int    kup_is_root:1,
+                        kup_is_mdt:1,
+                        kup_is_ost:1;
 };
 
 /****************************************
@@ -535,7 +536,7 @@ out_cred:
  *  [1]: mech_name      (string)
  *  [2]: uid            (uint)
  *  [3]: gid            (uint)
- *  [4]: flags          (chars) FMT: r-root; m-mds
+ *  [4]: flags          (string) FMT: r-root; m-mdt; o-ost
  *  [5]: lustre_svc     (uint)
  *  [6]: target_nid     (uint64)
  *  [7]: target_uuid    (string)
@@ -581,17 +582,19 @@ static int parse_callout_info(const char *coinfo,
         if (strchr(data[4], 'r'))
                 uparam->kup_is_root = 1;
         if (strchr(data[4], 'm'))
-                uparam->kup_is_mds = 1;
+                uparam->kup_is_mdt = 1;
+        if (strchr(data[4], 'o'))
+                uparam->kup_is_ost = 1;
         uparam->kup_svc = strtol(data[5], NULL, 0);
         uparam->kup_nid = strtoll(data[6], NULL, 0);
         strncpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
 
         logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u "
-               "is_root %d, is_mds %d, svc %d, nid 0x%Lx, tgt %s\n",
+               "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%Lx, tgt %s\n",
                uparam->kup_secid, uparam->kup_mech,
                uparam->kup_uid, uparam->kup_gid,
-               uparam->kup_is_root, uparam->kup_is_mds, uparam->kup_svc,
-               uparam->kup_nid, uparam->kup_tgt);
+               uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,
+               uparam->kup_svc, uparam->kup_nid, uparam->kup_tgt);
         return 0;
 }
 
@@ -714,8 +717,9 @@ int main(int argc, char *argv[])
         }
 
         cred->lc_uid = uparam.kup_uid;
-        cred->lc_fl_root = (uparam.kup_is_root != 0);
-        cred->lc_fl_mds = (uparam.kup_is_mds != 0);
+        cred->lc_root_flags |= uparam.kup_is_root ? LGSS_ROOT_CRED_ROOT : 0;
+        cred->lc_root_flags |= uparam.kup_is_mdt ? LGSS_ROOT_CRED_MDT : 0;
+        cred->lc_root_flags |= uparam.kup_is_ost ? LGSS_ROOT_CRED_OST : 0;
         cred->lc_tgt_nid = uparam.kup_nid;
         cred->lc_tgt_svc = uparam.kup_svc;
 
@@ -731,7 +735,7 @@ int main(int argc, char *argv[])
          * on it, and share it among all root sessions; otherswise link to
          * session keyring.
          */
-        if (cred->lc_fl_root || cred->lc_fl_mds)
+        if (cred->lc_root_flags != 0)
                 inst_keyring = 0;
         else
                 inst_keyring = KEY_SPEC_SESSION_KEYRING;

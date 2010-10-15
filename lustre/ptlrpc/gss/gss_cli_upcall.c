@@ -91,6 +91,7 @@ int ctx_init_pack_request(struct obd_import *imp,
         /* gss hdr */
         ghdr = lustre_msg_buf(msg, 0, sizeof(*ghdr));
         ghdr->gh_version = PTLRPC_GSS_VERSION;
+        ghdr->gh_sp = (__u8) imp->imp_sec->ps_part;
         ghdr->gh_flags = 0;
         ghdr->gh_proc = PTLRPC_GSS_PROC_INIT;
         ghdr->gh_seq = 0;

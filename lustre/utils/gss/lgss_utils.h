@@ -49,7 +49,7 @@
 
 #define LGSS_SVC_MGS_STR        "lustre_mgs"
 #define LGSS_SVC_MDS_STR        "lustre_mds"
-#define LGSS_SVC_OST_STR        "lustre_oss"
+#define LGSS_SVC_OSS_STR        "lustre_oss"
 #define LGSS_USR_ROOT_STR       "lustre_root"
 
 typedef enum {
@@ -160,10 +160,17 @@ struct lgss_mech_type {
         int                (*lmt_using_cred)(struct lgss_cred *cred);
 };
 
+enum {
+        LGSS_ROOT_CRED_ROOT     = 0x01,
+        LGSS_ROOT_CRED_MDT      = 0x02,
+        LGSS_ROOT_CRED_OST      = 0x04,
+
+        LGSS_ROOT_CRED_NR       = 3
+};
+
 struct lgss_cred {
         int                     lc_uid;
-        unsigned int            lc_fl_root:1,
-                                lc_fl_mds:1;
+        unsigned int            lc_root_flags;
         uint64_t                lc_tgt_nid;
         uint32_t                lc_tgt_svc;
 

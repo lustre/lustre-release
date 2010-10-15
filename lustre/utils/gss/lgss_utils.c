@@ -104,7 +104,7 @@
 const char *lgss_svc_str[LGSS_SVC_MAX] = {
         [LGSS_SVC_MGS] = LGSS_SVC_MGS_STR,
         [LGSS_SVC_MDS] = LGSS_SVC_MDS_STR,
-        [LGSS_SVC_OSS] = LGSS_SVC_OST_STR,
+        [LGSS_SVC_OSS] = LGSS_SVC_OSS_STR,
 };
 
 /****************************************

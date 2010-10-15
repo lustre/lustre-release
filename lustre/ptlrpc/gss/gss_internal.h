@@ -232,6 +232,7 @@ struct gss_svc_ctx {
         uid_t                   gsc_mapped_uid;
         unsigned int            gsc_usr_root:1,
                                 gsc_usr_mds:1,
+                                gsc_usr_oss:1,
                                 gsc_remote:1,
                                 gsc_reverse:1;
 };

@@ -575,6 +575,7 @@ struct ptlrpc_request {
                                  rq_auth_remote:1,   /* authed as remote user */
                                  rq_auth_usr_root:1, /* authed as root */
                                  rq_auth_usr_mdt:1,  /* authed as mdt */
+                                 rq_auth_usr_ost:1,  /* authed as ost */
                                  /* security tfm flags */
                                  rq_pack_udesc:1,
                                  rq_pack_bulk:1,

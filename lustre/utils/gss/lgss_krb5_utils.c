@@ -156,13 +156,15 @@ static void lgss_krb5_mutex_unlock(void)
 
 const char *krb5_cc_type_mem    = "MEMORY:";
 const char *krb5_cc_type_file   = "FILE:";
+const char *krb5_cred_root_suffix  = "lustre_root";
+const char *krb5_cred_mds_suffix   = "lustre_mds";
+const char *krb5_cred_oss_suffix   = "lustre_oss";
 
 char    *krb5_this_realm        = NULL;
 char    *krb5_keytab_file       = "/etc/krb5.keytab";
 char    *krb5_cc_type           = "FILE:";
 char    *krb5_cc_dir            = "/tmp";
 char    *krb5_cred_prefix       = "krb5cc_";
-char    *krb5_cred_root_suffix  = "lustre_root";
 
 struct lgss_krb5_cred {
         char            kc_ccname[128];
@@ -272,9 +274,12 @@ int svc_princ_verify_host(krb5_context ctx,
 static
 int lkrb5_cc_check_tgt_princ(krb5_context ctx,
                              krb5_ccache ccache,
-                             krb5_principal princ)
+                             krb5_principal princ,
+                             unsigned int flag)
 {
-        logmsg(LL_TRACE, "principal: realm %.*s, type %d, size %d, name %.*s\n",
+        const char     *princ_name;
+
+        logmsg(LL_DEBUG, "principal: realm %.*s, type %d, size %d, name %.*s\n",
                krb5_princ_realm(ctx, princ)->length,
                krb5_princ_realm(ctx, princ)->data,
                krb5_princ_type(ctx, princ),
@@ -298,66 +303,93 @@ int lkrb5_cc_check_tgt_princ(krb5_context ctx,
                 return -1;
         }
 
-        /* if it's mds service principal, or lustre_root principal
-         * with host part, verify the hostname.
-         * note we allow lustre_root without host part */
-        if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
-                             LGSS_SVC_MDS_STR) == 0) {
-                if (svc_princ_verify_host(ctx, princ, LL_WARN)) {
-                        logmsg(LL_WARN, "mds service principal doesn't belong "
-                               "to this node\n");
-                        return -1;
-                }
-        } else if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
-                                    LGSS_USR_ROOT_STR) == 0) {
-                if (krb5_princ_component(ctx, princ, 1) != NULL &&
-                    svc_princ_verify_host(ctx, princ, LL_WARN)) {
-                        logmsg(LL_WARN, "lustre_root principal doesn't belong "
-                               "to this node\n");
+        /* check principal name */
+        switch (flag) {
+        case LGSS_ROOT_CRED_ROOT:
+                princ_name = LGSS_USR_ROOT_STR;
+                break;
+        case LGSS_ROOT_CRED_MDT:
+                princ_name = LGSS_SVC_MDS_STR;
+                break;
+        case LGSS_ROOT_CRED_OST:
+                princ_name = LGSS_SVC_OSS_STR;
+                break;
+        default:
+                lassert(0);
+        }
+
+        if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ), princ_name)) {
+                logmsg(LL_WARN, "%.*s: we expect %s instead\n",
+                       krb5_princ_name(ctx, princ)->length,
+                       krb5_princ_name(ctx, princ)->data,
+                       princ_name);
+                return -1;
+        }
+
+        /*
+         * verify the hostname part of the principal, except we do allow
+         * lustre_root without binding to a host.
+         */
+        if (krb5_princ_component(ctx, princ, 1) == NULL) {
+                if (flag != LGSS_ROOT_CRED_ROOT) {
+                        logmsg(LL_WARN, "%.*s: missing hostname\n",
+                               krb5_princ_name(ctx, princ)->length,
+                               krb5_princ_name(ctx, princ)->data);
                         return -1;
                 }
         } else {
-                logmsg(LL_WARN, "unexpected krb5 cc principal name %.*s\n",
-                       krb5_princ_name(ctx, princ)->length,
-                       krb5_princ_name(ctx, princ)->data);
-                return -1;
+                if (svc_princ_verify_host(ctx, princ, LL_WARN)) {
+                        logmsg(LL_DEBUG, "%.*s: doesn't belong to this node\n",
+                               krb5_princ_name(ctx, princ)->length,
+                               krb5_princ_name(ctx, princ)->data);
+                        return -1;
+                }
         }
 
         logmsg(LL_TRACE, "principal is OK\n");
         return 0;
 }
 
-/*
- * find out whether current TGT cache is valid or not
+/**
+ * compose the TGT cc name, according to the root flags.
  */
 static
-int lkrb5_check_root_tgt_cc(krb5_context ctx,
-                            krb5_ccache ccache,
-                            char *ccname)
+void get_root_tgt_ccname(char *ccname, int size, unsigned int flag)
 {
-        struct stat             statbuf;
+        const char *suffix;
+
+        switch (flag) {
+        case LGSS_ROOT_CRED_ROOT:
+                suffix = krb5_cred_root_suffix;
+                break;
+        case LGSS_ROOT_CRED_MDT:
+                suffix = krb5_cred_mds_suffix;
+                break;
+        case LGSS_ROOT_CRED_OST:
+                suffix = krb5_cred_oss_suffix;
+                break;
+        default:
+                lassert(0);
+        }
+
+        snprintf(ccname, size, "%s%s/%s%s_%s",
+                 krb5_cc_type, krb5_cc_dir, krb5_cred_prefix,
+                 suffix, krb5_this_realm);
+}
+
+static
+int lkrb5_check_root_tgt_cc_base(krb5_context ctx,
+                                 krb5_ccache ccache,
+                                 char *ccname,
+                                 unsigned int flag)
+{
         krb5_ccache             tgt_ccache;
         krb5_creds              cred;
         krb5_principal          princ;
         krb5_cc_cursor          cursor;
         krb5_error_code         code;
-        char                   *ccfile;
         time_t                  now;
         int                     rc = -1, found = 0;
-
-        if (strncmp(ccname, krb5_cc_type, strlen(krb5_cc_type_file))) {
-                logmsg(LL_ERR, "unexpected cc type\n");
-                return -1;
-        }
-
-        ccfile = ccname + strlen(krb5_cc_type_file);
-        logmsg(LL_TRACE, "cc file name: %s\n", ccfile);
-
-        /* firstly make sure the cache file is there */
-        if (stat(ccfile, &statbuf)) {
-                logmsg(LL_DEBUG, "krb5 cc %s: %s\n", ccname, strerror(errno));
-                return -1;
-        }
 
         /* prepare parsing the cache file */
         code = krb5_cc_resolve(ctx, ccname, &tgt_ccache);
@@ -374,10 +406,8 @@ int lkrb5_check_root_tgt_cc(krb5_context ctx,
                 goto out_cc;
         }
 
-        if (lkrb5_cc_check_tgt_princ(ctx, tgt_ccache, princ)) {
-                logmsg(LL_WARN, "cc principal is not valid\n");
+        if (lkrb5_cc_check_tgt_princ(ctx, tgt_ccache, princ, flag))
                 goto out_princ;
-        }
 
         /*
          * find a valid entry
@@ -463,6 +493,47 @@ out_cc:
         krb5_cc_close(ctx, tgt_ccache);
 
         return rc;
+}
+
+/**
+ * find out whether current TGT cache is valid or not
+ */
+static
+int lkrb5_check_root_tgt_cc(krb5_context ctx,
+                            krb5_ccache ccache,
+                            unsigned int root_flags)
+{
+        struct stat             statbuf;
+        unsigned int            flag;
+        char                    ccname[1024];
+        char                   *ccfile;
+        int                     i, rc;
+
+        for (i = 0; i < LGSS_ROOT_CRED_NR; i++) {
+                flag = 1 << i;
+
+                if ((root_flags & flag) == 0)
+                        continue;
+
+                get_root_tgt_ccname(ccname, sizeof(ccname), flag);
+                logmsg(LL_DEBUG, "root krb5 TGT ccname: %s\n", ccname);
+
+                /* currently we only support type "FILE", firstly make sure
+                 * the cache file is there */
+                ccfile = ccname + strlen(krb5_cc_type);
+                if (stat(ccfile, &statbuf)) {
+                        logmsg(LL_DEBUG, "krb5 cc %s: %s\n",
+                               ccname, strerror(errno));
+                        continue;
+                }
+
+                rc = lkrb5_check_root_tgt_cc_base(ctx, ccache, ccname, flag);
+                if (rc == 0)
+                        return 0;
+        }
+
+        logmsg(LL_TRACE, "doesn't find a valid tgt cc\n");
+        return -1;
 }
 
 static
@@ -559,14 +630,15 @@ out_cred:
 static
 int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
                               krb5_ccache ccache,
-                              const char *ccname)
+                              unsigned int root_flags)
 {
         krb5_keytab             kt;
         krb5_keytab_entry       kte;
         krb5_kt_cursor          cursor;
-        krb5_principal          princ = NULL, princ2;
+        krb5_principal          princ = NULL;
         krb5_error_code         code;
-        int                     general_root = 0;
+        char                    ccname[1024];
+        unsigned int            flag = 0;
         int                     rc = -1;
 
         /* prepare parsing the keytab file */
@@ -585,6 +657,8 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
 
         /* iterate keytab to find proper a entry */
         do {
+                krb5_data      *princname;
+
                 code = krb5_kt_next_entry(ctx, kt, &kte, &cursor);
                 if (code != 0)
                         break;
@@ -601,77 +675,44 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
                 if (!princ_is_local_realm(ctx, kte.principal))
                         continue;
 
-                /* lustre_root[/host]@realm */
-                if (lgss_krb5_strcmp(krb5_princ_name(ctx, kte.principal),
-                                     LGSS_USR_ROOT_STR) == 0) {
-                        int tmp_general_root = 0;
+                princname = krb5_princ_name(ctx, kte.principal);
 
-                        if (krb5_princ_component(ctx, kte.principal,1) == NULL){
-                                if (princ != NULL) {
-                                        logmsg(LL_TRACE, "lustre_root: "
-                                               "already picked one, skip\n");
-                                        continue;
-                                }
-
-                                tmp_general_root = 1;
-                        } else {
-                                if (svc_princ_verify_host(ctx, kte.principal,
-                                                          LL_TRACE)) {
-                                        logmsg(LL_TRACE, "lustre_root: "
-                                               "doesn't belong to this node\n");
-                                        continue;
-                                }
-
-                                if (princ != NULL && !general_root) {
-                                        logmsg(LL_TRACE, "lustre_root: already "
-                                               "have a host-specific one, "
-                                               "skip\n");
-                                        continue;
-                                }
-                        }
-
-                        code = krb5_copy_principal(ctx, kte.principal, &princ2);
-                        if (code) {
-                                logmsg(LL_ERR, "copy lustre_root princ: %s\n",
-                                       krb5_err_msg(code));
-                                continue;
-                        }
-
-                        if (princ != NULL) {
-                                logmsg(LL_TRACE, "release a lustre_root one\n");
-                                krb5_free_principal(ctx, princ);
-                        }
-                        princ = princ2;
-
-                        general_root = tmp_general_root;
+                if ((root_flags & LGSS_ROOT_CRED_ROOT) != 0 &&
+                    lgss_krb5_strcmp(princname, LGSS_USR_ROOT_STR) == 0) {
+                        flag = LGSS_ROOT_CRED_ROOT;
+                } else if ((root_flags & LGSS_ROOT_CRED_MDT) != 0 &&
+                           lgss_krb5_strcmp(princname, LGSS_SVC_MDS_STR) == 0) {
+                        flag = LGSS_ROOT_CRED_MDT;
+                } else if ((root_flags & LGSS_ROOT_CRED_OST) != 0 &&
+                           lgss_krb5_strcmp(princname, LGSS_SVC_OSS_STR) == 0) {
+                        flag = LGSS_ROOT_CRED_OST;
+                } else {
+                        logmsg(LL_TRACE, "not what we want, skip\n");
                         continue;
                 }
 
-                /* lustre_mds/host@realm */
-                if (lgss_krb5_strcmp(krb5_princ_name(ctx, kte.principal),
-                                     LGSS_SVC_MDS_STR) == 0) {
+                if (krb5_princ_component(ctx, kte.principal, 1) == NULL) {
+                        if (flag != LGSS_ROOT_CRED_ROOT) {
+                                logmsg(LL_TRACE, "no hostname, skip\n");
+                                continue;
+                        }
+                } else {
                         if (svc_princ_verify_host(ctx, kte.principal,
                                                   LL_TRACE)) {
-                                logmsg(LL_TRACE, "mds service principal: "
-                                       "doesn't belong to this node\n");
+                                logmsg(LL_TRACE, "doesn't belong to this "
+                                       "node, skip\n");
                                 continue;
                         }
-
-                        /* select this one */
-                        code = krb5_copy_principal(ctx, kte.principal, &princ2);
-                        if (code) {
-                                logmsg(LL_ERR, "copy lustre_mds princ: %s\n",
-                                       krb5_err_msg(code));
-                                continue;
-                        }
-
-                        if (princ != NULL) {
-                                logmsg(LL_TRACE, "release a lustre_root one\n");
-                                krb5_free_principal(ctx, princ);
-                        }
-                        princ = princ2;
-                        break;
                 }
+
+                code = krb5_copy_principal(ctx, kte.principal, &princ);
+                if (code) {
+                        logmsg(LL_ERR, "copy princ: %s\n", krb5_err_msg(code));
+                        continue;
+                }
+
+                lassert(princ != NULL);
+                break;
         } while (1);
 
         krb5_kt_end_seq_get(ctx, kt, &cursor);
@@ -682,6 +723,7 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
         }
 
         /* obtain root TGT */
+        get_root_tgt_ccname(ccname, sizeof(ccname), flag);
         rc = lkrb5_get_root_tgt_keytab(ctx, ccache, kt, princ, ccname);
 
         krb5_free_principal(ctx, princ);
@@ -697,22 +739,14 @@ int lkrb5_prepare_root_cred(struct lgss_cred *cred)
         krb5_ccache             ccache;
         krb5_error_code         code;
         struct lgss_krb5_cred  *kcred;
-        char                    tgtcc[1024];
         int                     rc = -1;
 
         lassert(krb5_this_realm != NULL);
 
         kcred = (struct lgss_krb5_cred *) cred->lc_mech_cred;
 
-        /* compose the TGT cc name */
-        snprintf(tgtcc, sizeof(tgtcc), "%s%s/%s%s_%s",
-                 krb5_cc_type, krb5_cc_dir, krb5_cred_prefix,
-                 krb5_cred_root_suffix, krb5_this_realm);
-        logmsg(LL_DEBUG, "root krb5 TGT ccname: %s\n", tgtcc);
-
         /* compose the memory cc name, since the only user is myself,
-         * the name could be fixed
-         */
+         * the name could be fixed */
         snprintf(kcred->kc_ccname, sizeof(kcred->kc_ccname),
                  "%s/self", krb5_cc_type_mem);
         logmsg(LL_TRACE, "private cc: %s\n", kcred->kc_ccname);
@@ -737,9 +771,10 @@ int lkrb5_prepare_root_cred(struct lgss_cred *cred)
          */
         lgss_krb5_mutex_lock();
 
-        rc = lkrb5_check_root_tgt_cc(ctx, ccache, tgtcc);
+        rc = lkrb5_check_root_tgt_cc(ctx, ccache, cred->lc_root_flags);
         if (rc != 0)
-                rc = lkrb5_refresh_root_tgt_cc(ctx, ccache, tgtcc);
+                rc = lkrb5_refresh_root_tgt_cc(ctx, ccache,
+                                               cred->lc_root_flags);
 
         if (rc == 0)
                 rc = lgss_krb5_set_ccache_name(kcred->kc_ccname);
@@ -797,7 +832,7 @@ int lgss_krb5_prepare_cred(struct lgss_cred *cred)
         kcred->kc_remove = 0;
         cred->lc_mech_cred = kcred;
 
-        if (cred->lc_fl_root || cred->lc_fl_mds) {
+        if (cred->lc_root_flags != 0) {
                 if (lgss_krb5_get_local_realm())
                         return -1;
 

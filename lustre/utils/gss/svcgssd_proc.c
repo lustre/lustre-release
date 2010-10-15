@@ -62,6 +62,7 @@ struct svc_cred {
 	uint32_t cr_remote;
 	uint32_t cr_usr_root;
 	uint32_t cr_usr_mds;
+	uint32_t cr_usr_oss;
 	uid_t    cr_uid;
 	uid_t    cr_mapped_uid;
 	uid_t    cr_gid;
@@ -91,6 +92,7 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	qword_printint(f, cred->cr_remote);
 	qword_printint(f, cred->cr_usr_root);
 	qword_printint(f, cred->cr_usr_mds);
+	qword_printint(f, cred->cr_usr_oss);
 	qword_printint(f, cred->cr_mapped_uid);
 	qword_printint(f, cred->cr_uid);
 	qword_printint(f, cred->cr_gid);
@@ -308,7 +310,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	gss_OID		name_type = GSS_C_NO_OID;
 	struct passwd	*pw;
 
-	cred->cr_remote = cred->cr_usr_root = cred->cr_usr_mds = 0;
+	cred->cr_remote = 0;
+	cred->cr_usr_root = cred->cr_usr_mds = cred->cr_usr_oss = 0;
 	cred->cr_uid = cred->cr_mapped_uid = cred->cr_gid = -1;
 
 	maj_stat = gss_display_name(&min_stat, client_name, &name, &name_type);
@@ -344,9 +347,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
         if (host)
                 *host++ = '\0';
 
-	if (strcmp(sname, GSSD_SERVICE_OSS) == 0 ||
-	    strcmp(sname, GSSD_SERVICE_MGS) == 0) {
-		printerr(0, "forbid %s as user name\n", sname);
+	if (strcmp(sname, GSSD_SERVICE_MGS) == 0) {
+		printerr(0, "forbid %s as a user name\n", sname);
 		goto out_free;
 	}
 
@@ -366,61 +368,84 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 			goto out_free;
 		}
 	} else {
-		if (!strcmp(sname, GSSD_SERVICE_MDS)) {
-			printerr(0, "ERROR: "GSSD_SERVICE_MDS"@%s from %016llx "
-				 "doesn't bind with hostname\n", realm, nid);
+		if (!strcmp(sname, GSSD_SERVICE_MDS) ||
+		    !strcmp(sname, GSSD_SERVICE_OSS)) {
+			printerr(0, "ERROR: %s@%s from %016llx doesn't "
+				 "bind with hostname\n", sname, realm, nid);
 			goto out_free;
 		}
 	}
 
-	/* 2. check realm */
-	if (!mds_local_realm || strcasecmp(mds_local_realm, realm)) {
-		cred->cr_remote = 1;
+	/* 2. check realm and user */
+	switch (lustre_svc) {
+	case LUSTRE_GSS_SVC_MDS:
+		if (strcasecmp(mds_local_realm, realm)) {
+			cred->cr_remote = 1;
 
-		/* Allow mapped user from remote realm */
-		if (cred->cr_mapped_uid != -1)
-			res = 0;
-		/* Allow OSS auth using client machine credential */
-		else if (lustre_svc == LUSTRE_GSS_SVC_OSS &&
-			 !strcmp(sname, LUSTRE_ROOT_NAME))
-			res = 0;
-		/* Invalid remote user */
-		else
-			printerr(0, "ERROR: %s%s%s@%s from %016llx is remote "
-				 "but without mapping\n", sname,
-				 host ? "/" : "", host ? host : "", realm, nid);
+			/* only allow mapped user from remote realm */
+			if (cred->cr_mapped_uid == -1) {
+				printerr(0, "ERROR: %s%s%s@%s from %016llx "
+					 "is remote but without mapping\n",
+					 sname, host ? "/" : "",
+					 host ? host : "", realm, nid);
+				break;
+			}
+		} else {
+			if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
+				cred->cr_uid = 0;
+				cred->cr_usr_root = 1;
+			} else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
+				cred->cr_uid = 0;
+				cred->cr_usr_mds = 1;
+			} else if (!strcmp(sname, GSSD_SERVICE_OSS)) {
+				printerr(0, "ERROR: MDS doesn't accept "
+					 "user "GSSD_SERVICE_OSS"\n");
+				break;
+			} else {
+				pw = getpwnam(sname);
+				if (pw != NULL) {
+					cred->cr_uid = pw->pw_uid;
+					printerr(2, "%s resolve to uid %u\n",
+						 sname, cred->cr_uid);
+				} else if (cred->cr_mapped_uid != -1) {
+					printerr(2, "user %s from %016llx is "
+						 "mapped to %u\n", sname, nid,
+						 cred->cr_mapped_uid);
+				} else {
+					printerr(0, "ERROR: invalid user, "
+						 "%s/%s@%s from %016llx\n",
+						 sname, host, realm, nid);
+					break;
+				}
+			}
+		}
 
-		/* skip local user check */
-		goto out_free;
+		res = 0;
+		break;
+	case LUSTRE_GSS_SVC_MGS:
+		if (!strcmp(sname, GSSD_SERVICE_OSS)) {
+			cred->cr_uid = 0;
+			cred->cr_usr_oss = 1;
+		}
+		/* fall through */
+	case LUSTRE_GSS_SVC_OSS:
+		if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
+			cred->cr_uid = 0;
+			cred->cr_usr_root = 1;
+		} else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
+			cred->cr_uid = 0;
+			cred->cr_usr_mds = 1;
+		} else {
+			printerr(0, "ERROR: svc %d doesn't accept user %s"
+				 "from %016llx\n", lustre_svc, sname, nid);
+			break;
+		}
+		res = 0;
+		break;
+	default:
+		assert(0);
 	}
 
-	/* 3. check user */
-        if (!(pw = getpwnam(sname))) {
-                /* map lustre_root/lustre_mds to root user, which is subject
-		 * to further mapping by root-squash in kernel. */
-                if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
-                        cred->cr_uid = 0;
-                        cred->cr_usr_root = 1;
-                } else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
-                        cred->cr_uid = 0;
-                        cred->cr_usr_mds = 1;
-                } else {
-                        if (cred->cr_mapped_uid == -1) {
-                                printerr(0, "ERROR: invalid user, %s/%s@%s "
-					 "from %016llx\n", sname, host,
-					 realm, nid);
-                                goto out_free;
-                        }
-                }
-		printerr(2, "user %s from %016llx is mapped to %u\n",
-			 sname, nid, cred->cr_mapped_uid);
-        } else {
-		/* note: a mapped local user will go to here too */
-                cred->cr_uid = pw->pw_uid;
-                printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
-        }
-
-        res = 0;
 out_free:
 	if (!res)
 		printerr(1, "%s: authenticated %s%s%s@%s from %016llx\n",

@@ -671,6 +671,14 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
         }
         rsci.ctx.gsc_usr_mds = (tmp_int != 0);
 
+        /* oss user flag */
+        rv = get_int(&mesg, &tmp_int);
+        if (rv) {
+                CERROR("fail to get oss user flag\n");
+                goto out;
+        }
+        rsci.ctx.gsc_usr_oss = (tmp_int != 0);
+
         /* mapped uid */
         rv = get_int(&mesg, (int *) &rsci.ctx.gsc_mapped_uid);
         if (rv) {
@@ -821,6 +829,14 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
                 goto out;
         }
         rsci.ctx.gsc_usr_mds = (tmp_int != 0);
+
+        /* oss user flag */
+        rv = get_int(&mesg, &tmp_int);
+        if (rv) {
+                CERROR("fail to get oss user flag\n");
+                goto out;
+        }
+        rsci.ctx.gsc_usr_oss = (tmp_int != 0);
 
         /* mapped uid */
         rv = get_int(&mesg, (int *) &rsci.ctx.gsc_mapped_uid);
@@ -1069,10 +1085,12 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
         }
         rsci.h.expiry_time = (time_t) ctx_expiry;
 
-        /* FIXME */
-        rsci.ctx.gsc_usr_root = 1;
-        rsci.ctx.gsc_usr_mds= 1;
-        rsci.ctx.gsc_reverse = 1;
+        if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)
+                rsci.ctx.gsc_usr_mds = 1;
+        else if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0)
+                rsci.ctx.gsc_usr_oss = 1;
+        else
+                rsci.ctx.gsc_usr_root = 1;
 
         rscp = rsc_update(&rsci, rscp);
         if (rscp == NULL)
@@ -1124,10 +1142,12 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
         }
         rsci.h.expiry_time = (time_t) ctx_expiry;
 
-        /* FIXME */
-        rsci.ctx.gsc_usr_root = 1;
-        rsci.ctx.gsc_usr_mds= 1;
-        rsci.ctx.gsc_reverse = 1;
+        if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)
+                rsci.ctx.gsc_usr_mds = 1;
+        else if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0)
+                rsci.ctx.gsc_usr_oss = 1;
+        else
+                rsci.ctx.gsc_usr_root = 1;
 
         rscp = rsc_lookup(&rsci, 1);
         if (rscp == NULL) {
