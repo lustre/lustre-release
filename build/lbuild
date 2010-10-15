@@ -507,6 +507,10 @@ download_file() {
 download_ofed() {
     local force="${1:-false}"
 
+    if [ -z "$OFED_VERSION" -o "$OFED_VERSION" = "inkernel" ]; then
+        return 0
+    fi
+
     local location="http://www.openfabrics.org/downloads/OFED/ofed-${OFED_VERSION}/"
 
     if [[ $OFED_VERSION = daily-* ]]; then
@@ -520,10 +524,6 @@ download_ofed() {
         if [ -z "$OFED_VERSION" ]; then
             fatal 1 "Could not determine the filename of the OFED snapshot for ${daily}"
         fi
-    fi
-
-    if [ -z "$OFED_VERSION" -o "$OFED_VERSION" = "inkernel" ]; then
-        return 0
     fi
 
     local file="OFED-${OFED_VERSION}.tgz"
