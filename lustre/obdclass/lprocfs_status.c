@@ -1761,10 +1761,10 @@ int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
         struct nid_stat *stat = obj;
         int i;
         ENTRY;
-        /* object has only hash + iterate_all references.
-         * add/delete blocked by hash bucket lock */
+
         CDEBUG(D_INFO,"refcnt %d\n", cfs_atomic_read(&stat->nid_exp_ref_count));
-        if (cfs_atomic_read(&stat->nid_exp_ref_count) == 2) {
+        if (cfs_atomic_read(&stat->nid_exp_ref_count) == 1) {
+                /* object has only hash references. */
                 cfs_spin_lock(&stat->nid_obd->obd_nid_lock);
                 cfs_list_move(&stat->nid_list, data);
                 cfs_spin_unlock(&stat->nid_obd->obd_nid_lock);

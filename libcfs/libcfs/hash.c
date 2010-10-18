@@ -1546,7 +1546,9 @@ CFS_EXPORT_SYMBOL(cfs_hash_is_empty);
 __u64
 cfs_hash_size_get(cfs_hash_t *hs)
 {
-        return cfs_hash_for_each_tight(hs, NULL, NULL, 0);
+        return cfs_hash_with_counter(hs) ?
+               cfs_atomic_read(&hs->hs_count) :
+               cfs_hash_for_each_tight(hs, NULL, NULL, 0);
 }
 CFS_EXPORT_SYMBOL(cfs_hash_size_get);
 
