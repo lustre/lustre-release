@@ -148,7 +148,7 @@ debs:
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
 	fi; \
 	if [ -d .git ]; then \
-		ver=$$(git describe --match v\* --tags); \
+		ver=$$(git describe --match [0-9v]\* --tags); \
 		if [[ $$ver = *-*-* ]]; then \
 			hash=$${ver##*-}; \
 			ffw=$${ver#*-}; \
