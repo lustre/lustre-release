@@ -6102,6 +6102,7 @@ test_133b() {
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
 	touch ${testdir}/${tfile} || "touch failed"
+	cancel_lru_locks mdc
 
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
@@ -6110,7 +6111,7 @@ test_133b() {
 
 	# extra mdt stats verification.
 	stat ${testdir}/${tfile} || error "stat failed"
-	check_stats mds "getattr" 1
+	check_stats mds "getattr" 0
 	chmod 444 ${testdir}/${tfile} || error "chmod failed"
 	check_stats mds "setattr" 1
 	$LFS df || error "lfs failed"
