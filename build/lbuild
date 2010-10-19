@@ -1177,7 +1177,6 @@ reuse() {
                 find $dir -type f |
                   xargs ln -t $dest/RPMS/${dir##*/} -s
             done
-
         fi
         return 0
     else
@@ -1506,14 +1505,14 @@ EOF
         local dir
         for dir in RPMS/*; do
             pushd $dir
-                for file in *; do
-                    if [ -h $file ]; then
-                        cp $file foo
-                        mv foo $file
-                    fi
-                done
+            for file in $(ls); do
+                if [ -h $file ]; then
+                    cp $file foo
+                    mv foo $file
+                fi
             done
-        popd
+            popd
+        done
         # also, for i?86, make sure all of the RPMs are in RPMS/$TARGET_ARCH
         # as that's where LTS expects to find them
         for dir in RPMS/*; do

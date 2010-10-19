@@ -97,7 +97,7 @@ resolve_arch() {
                 ;;
         i?86)	if $canonical; then
                     arch=i386
-                elif $for_patchless; then
+                elif $(eval $for_patchless); then
                     arch=i586
                 fi
                 ;;

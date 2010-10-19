@@ -227,11 +227,11 @@ build_ofed-sles10() {
     # temporary hack until we get a base O/S intalled ofed-devel
     local arch=$TARGET_ARCH
     if [ -n "$OFED_VERSION" -a "$OFED_VERSION" = "inkernel" ]; then
-        local ofed_devel="${OFED_DEVEL_LOCATION}/ofed-devel-${OFED_DEVEL_VERSION}.$(resolve_arch $TARGET_ARCH $PATCHLESS).rpm"
+        local ofed_devel="${OFED_DEVEL_LOCATION}/ofed-devel-${OFED_DEVEL_VERSION}.$(resolve_arch $TARGET_ARCH "$PATCHLESS || ! $REBUILD_OFED_DEVEL_RPM").rpm"
         if ! rpm2cpio < $ofed_devel | cpio -id; then
             fatal 1 "could not unpack the ofed-devel rpm."
 	fi
-        echo "$(pwd)/usr/src/kernel-modules-ofed/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE"
+        echo "$(pwd)/usr/src/kernel-modules-ofed/$(resolve_arch $TARGET_ARCH "$PATCHLESS || ! $REBUILD_OFED_DEVEL_RPM")/$RPMSMPTYPE"
     fi
 
     return 0
