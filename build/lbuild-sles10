@@ -8,6 +8,12 @@ BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
 
 source ${0%/*}/lbuild-sles
 
+# the location of the ofed-devel-<version>.<arch>.rpm
+OFED_DEVEL_LOCATION="$KERNELTREE"
+
+# do we want to rebuild the OFED devel RPM or use the supplied one?
+REBUILD_OFED_DEVEL_RPM=${REBUILD_OFED_DEVEL_RPM:-false}
+
 edit_specs() {
 
     # edit the SPECs with our changes
@@ -53,17 +59,90 @@ unpack_linux_devel_rpm-sles10() {
     # get the Module.symvers out of the kenrel-flavor RPM
     local kernelrpm=${callers_rpm/-source-/-$RPMSMPTYPE-}
 
-    if ! rpm2cpio < "$kernelrpm" | cpio -id ./usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH)/$RPMSMPTYPE/Module.symvers ./boot/sym\* > /dev/null 2>&1; then
+    if ! rpm2cpio < "$kernelrpm" | cpio -id ./usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS true)/$RPMSMPTYPE/Module.symvers ./boot/sym\* > /dev/null 2>&1; then
         return 255
     fi
 
     # now just sanity check that everything needed to build properly versioned
     # modules is in place
-    if [ ! -f usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH)/$RPMSMPTYPE/Module.symvers && ! -f usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$TARGET_ARCH/$RPMSMPTYPE/Module.symvers ]; then
+    if [ ! -f usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS true)/$RPMSMPTYPE/Module.symvers ]; then
         fatal 1 "cannot build kernel modules: the Kernel's Module.symvers is missing."
     fi
     if [ ! -f boot/symsets-${lnxmaj}${lnxmin}-${lnxrel}-$RPMSMPTYPE.tar.gz ]; then
         fatal 1 "cannot build modules: the Kernel's symsets is missing."
+    fi
+
+    return 0
+
+}
+
+build_sles_ofed_rpm() {
+    local variant="${1:+-$1}"
+    local add_spec_edit="$2"
+
+    if $REBUILD_OFED_DEVEL_RPM; then
+        #
+        # rebuild the $variant rpm
+        #
+
+        local SOURCE="${KERNELTREE}/ofed${variant}-${OFED_DEVEL_VERSION}.src.rpm"
+
+        local targets
+        for arch in $BUILD_ARCHS; do
+            targets="--target $(resolve_arch $arch $PATCHLESS) $targets"
+        done
+        if ! $RPMBUILD --rebuild --nodeps $targets \
+                                 --define "symsetsdir ${TOPDIR}/reused/boot" \
+                                 --define "kobjdir ${LINUXOBJ%/*/*}" \
+                                 --define "_tmppath /var/tmp" \
+                                 --define "_topdir ${TOPDIR}" \
+                      ${SOURCE} 2>&1; then
+            return 255
+        fi
+    fi # $REBUILD_OFED_DEVEL_RPM; then
+
+}
+
+# additional edits need to the ofed spec
+edit_spec_ofed() {
+
+        ed ofed.spec <<"EOF"
+/^# we assume config.mk and the include files are same for all flavors/a
+built_flavors=(%flavors_to_build)
+.
+/^cp obj\/default\/config\.mk \$RPM_BUILD_ROOT\/%{_prefix}\/src\/kernel-modules-ofed/c
+cp obj/${built_flavors[0]}/config.mk $RPM_BUILD_ROOT/%{_prefix}/src/kernel-modules-ofed
+.
+/^for D in obj\/default\\\\include \$(sed 's@^.*-I\\\${CWD}\/@obj\/default\\\\@' obj\/default\/config.mk); do/c
+for D in obj/${built_flavors[0]}\\include $(sed "s@^.*-I\${CWD}/@obj/${built_flavors[0]}\\\@" obj/${built_flavors[0]}/config.mk); do
+.
+wq
+EOF
+
+}
+
+build_ofed-sles10() {
+    local outfd=$1
+
+    if [ -z "$outfd" ] || [ $outfd = 1 ]; then
+        fatal 1 "You must supply a file descriptor to ${FUNCNAME[0]} and it cannot be 1"
+    fi
+
+    if $REBUILD_OFED_DEVEL_RPM; then
+        build_sles_ofed_rpm cxgb3-NIC >&${outfd} || return ${PIPESTATUS[0]}
+        build_sles_ofed_rpm >&${outfd} || return ${PIPESTATUS[0]}
+        OFED_DEVEL_LOCATION="${TOPDIR}/RPMS/$(resolve_arch $TARGET_ARCH $PATCHLESS)"
+    fi # $REBUILD_OFED_DEVEL_RPM; then
+
+    # XXX I'm not convinced this belongs in here, but really, this is a
+    # temporary hack until we get a base O/S intalled ofed-devel
+    local arch=$TARGET_ARCH
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" = "inkernel" ]; then
+        local ofed_devel="${OFED_DEVEL_LOCATION}/ofed-devel-${OFED_DEVEL_VERSION}.$(resolve_arch $TARGET_ARCH $PATCHLESS).rpm"
+        if ! rpm2cpio < $ofed_devel | cpio -id; then
+            fatal 1 "could not unpack the ofed-devel rpm."
+	fi
+        echo "$(pwd)/usr/src/kernel-modules-ofed/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE"
     fi
 
     return 0

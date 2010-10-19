@@ -517,7 +517,7 @@ else
 			. $O2IBPATH/ofed_patch.mk
 		fi
 		if test -n "$BACKPORT_INCLUDES"; then
-			OFED_BACKPORT_PATH=`echo $BACKPORT_INCLUDES | sed "s#.*/src/ofa_kernel/#$O2IBPATH/#"`
+			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
 			EXTRA_LNET_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_LNET_INCLUDE"
 			AC_MSG_RESULT([yes])
 		else

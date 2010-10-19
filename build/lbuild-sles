@@ -86,11 +86,20 @@ rpm_BUILD_kernel_dirname() {
 
 resolve_arch() {
     local arch="$1"
+    # because we build an i686 kernel, we need to know if the arch we are
+    # resolving for is for the patched or patchless kernel (which is i586)
+    # we really should be building an i586 kernel to match what Novell does
+    local for_patchless=${2:-true}
+    local canonical=${3:-false}
 
     case $arch in
         ppc64)	arch=powerpc
                 ;;
-        i686)	arch=i386
+        i?86)	if $canonical; then
+                    arch=i386
+                elif $for_patchless; then
+                    arch=i586
+                fi
                 ;;
     esac
 
@@ -102,7 +111,7 @@ find_linux_devel_paths() {
     local path="$1"
 
     LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
-    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH)/$RPMSMPTYPE
+    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
     # XXX this has been commented out in th rhel5 build file for a while
     # as it says there, it's probably not needed anymore and can be deleted
     #LINUXRELEASE=$(find_linux_release "$LINUXOBJ")

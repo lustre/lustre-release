@@ -237,6 +237,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --xen
     Builds a Xen domX kernel.
 
+  --set-value
+    Set's a variable to a given value.
+
 EOF
 
 #   list_targets
@@ -1330,11 +1333,24 @@ build_ofed() {
     local linux="$1"
     local ofed_version="$2"
 
-    # before lustre, build kernel-ib
+    # if an ofed version is given, then it means use OFED proper,
+    # not any vendor specific "inkernel" version
     if [ -z "$ofed_version" -o "$ofed_version" = "inkernel" ]; then
+        # first see if there is a distro specific override for this
+        # XXX we need to better integrate an distro specific override with
+        #     the rest of this function so that all of the reuse cache
+        #     stuff is leveraged given that 80% of this function is reuse
+        if type -p build_ofed-${DISTRO}; then
+            local ofed_location
+            ofed_location=$(build_ofed-${DISTRO} ${STDOUT})
+            CONFIGURE_FLAGS="--with-o2ib=${ofed_location} ${CONFIGURE_FLAGS}"
+            return ${PIPESTATUS[0]}
+        fi
+    else
         return 0
     fi
 
+    # build kernel-ib
     if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
         local REUSE_SIGNATURE=$({ echo "$ofed_version";
                                   echo "$(find_linux_release ${linux})";
@@ -1395,7 +1411,9 @@ build_ofed() {
     ofed_version=$(echo $ofed_version |
                    sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
     local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
-    rpm2cpio -itv < $rpm | cpio -id
+    if ! rpm2cpio < $rpm | cpio -id; then
+        fatal 1 "could not unpack the kernel-ib-devel rpm."
+    fi
     CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
     popd >/dev/null
 
@@ -1474,19 +1492,35 @@ EOF
         # in RPMS/$arch to real files so that that that huge mess of
         # complication known as LTS can copy them yet somewhere else.
         # is it any wonder this whole process is so damn so?  anyone ever
-        # heard of hardlinks?  it this cool new thing that allows you save
+        # heard of hardlinks?  it's this cool new thing that allows you save
         # tons of time and space by creating... well you can go read about
         # them if you have not heard about them yet.
         # can i say how much the implemenation of all of this really impedes
         # RPM reuse?
-        pushd RPMS/$TARGET_ARCH
-            for file in *; do
-                if [ -h $file ]; then
-                    cp $file foo
-                    mv foo $file
-                fi
+        local dir
+        for dir in RPMS/*; do
+            pushd $dir
+                for file in *; do
+                    if [ -h $file ]; then
+                        cp $file foo
+                        mv foo $file
+                    fi
+                done
             done
         popd
+        # also, for i?86, make sure all of the RPMs are in RPMS/$TARGET_ARCH
+        # as that's where LTS expects to find them
+        for dir in RPMS/*; do
+            if [ $dir = RPMS/$TARGET_ARCH ]; then
+                continue
+            fi
+            pushd $dir
+            local files=$(ls)
+            if [ -n "$files" ]; then
+                cp -al $files ../$TARGET_ARCH
+            fi
+            popd
+        done
     else
         return 1
     fi
