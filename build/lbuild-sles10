@@ -87,6 +87,37 @@ build_sles_ofed_rpm() {
 
         local SOURCE="${KERNELTREE}/ofed${variant}-${OFED_DEVEL_VERSION}.src.rpm"
 
+        # dirty hack until Novell make the kernel-source location overridable
+        # - unpack the src.rpm, patch the .spec and re-pack up the src.rpm
+        mkdir -p ofed-rpm/S{PEC,OURCE,RPM}S
+        pushd ofed-rpm
+        rpm2cpio < $KERNELTREE/ofed${variant}-${OFED_DEVEL_VERSION}.src.rpm | cpio -id
+        ed ofed${variant}.spec <<"EOF"
+/^%define kver /c
+%define kver %(flavors=($(ls %kobjdir/%_target_cpu/)); if test -s %kobjdir/%_target_cpu/${flavors[0]}/include/linux/utsrelease.h ; then LINUXRELEASEHEADER=utsrelease.h; else LINUXRELEASEHEADER=version.h; fi; sed -ne "/^#define UTS_RELEASE/s/.*\\"\\\(.*\\\)-${flavors[0]}\\"$/\\1/p" %kobjdir/%_target_cpu/${flavors[0]}/include/linux/$LINUXRELEASEHEADER)
+.
+/^		--kernel-version=%kver-$flavor --kernel-sources=\/usr\/src\/linux-obj\/%_target_cpu\/\$flavor/c
+		--kernel-version=%kver-$flavor --kernel-sources=%kobjdir/%_target_cpu/$flavor
+.
+/^     make -C \/usr\/src\/linux-obj\/%_target_cpu\/\$flavor modules_install \\/c
+     make -C %kobjdir/%_target_cpu/$flavor modules_install \
+.
+wq
+EOF
+        if type -p edit_spec_ofed${variant}; then
+            edit_spec_ofed${variant}
+        fi
+
+        mv ofed${variant}.spec SPECS
+        mv * SOURCES
+        mv SOURCES/S{PEC,RPM}S .
+        rpmbuild --bs --nodeps --define "_topdir $(pwd)" SPECS/ofed${variant}.spec 2>&1 || return 255
+        popd
+        mv ofed-rpm/SRPMS/* ${TOPDIR}/SRPMS/
+        rm -rf ofed-rpm
+        SOURCE="${TOPDIR}/SRPMS/ofed${variant}-${OFED_DEVEL_VERSION}.src.rpm"
+        # end of dirty hack
+
         local targets
         for arch in $BUILD_ARCHS; do
             targets="--target $(resolve_arch $arch $PATCHLESS) $targets"
