@@ -1592,40 +1592,6 @@ static int lov_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_sync_fs(struct obd_device *obd, struct obd_info *dummy,
-                       int wait)
-{
-        struct lov_obd *lov;
-        struct obd_info oinfo = { { { 0 } } };
-        struct lov_request *req;
-        struct lov_request_set *set;
-        struct l_wait_info  lwi = { 0 };
-        cfs_list_t *pos;
-        int rc = 0;
-        ENTRY;
-
-        lov = &obd->u.lov;
-        rc  = lov_prep_sync_fs_set(obd, &oinfo, &set);
-        if (rc)
-                RETURN(rc);
-
-        cfs_list_for_each(pos, &set->set_list) {
-                struct obd_device *osc_obd;
-                req = cfs_list_entry(pos, struct lov_request, rq_link);
-
-                osc_obd = class_exp2obd(lov->lov_tgts[req->rq_idx]->ltd_exp);
-                rc = obd_sync_fs(osc_obd, &req->rq_oi, wait);
-                if (rc)
-                        break;
-        }
-        /* if wait then check if all sync_fs IO's are done */
-        if (wait)
-                l_wait_event(set->set_waitq, lov_finished_set(set), &lwi);
-
-        rc = lov_fini_sync_fs_set(set);
-        RETURN(rc);
-}
-
 static int lov_brw_check(struct lov_obd *lov, struct obd_info *lov_oinfo,
                          obd_count oa_bufs, struct brw_page *pga)
 {
@@ -2856,7 +2822,6 @@ struct obd_ops lov_obd_ops = {
         .o_pool_del            = lov_pool_del,
         .o_getref              = lov_getref,
         .o_putref              = lov_putref,
-        .o_sync_fs             = lov_sync_fs,
 };
 
 static quota_interface_t *quota_interface;

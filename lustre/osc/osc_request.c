@@ -864,19 +864,6 @@ static unsigned long rpcs_in_flight(struct client_obd *cli)
         return cli->cl_r_in_flight + cli->cl_w_in_flight;
 }
 
-int osc_wake_sync_fs(struct client_obd *cli)
-{
-        int rc = 0;
-        ENTRY;
-        if (cfs_list_empty(&cli->cl_loi_sync_fs_list) &&
-            cli->cl_sf_wait.started) {
-                cli->cl_sf_wait.sfw_upcall(cli->cl_sf_wait.sfw_oi, rc);
-                cli->cl_sf_wait.started = 0;
-                CDEBUG(D_CACHE, "sync_fs_loi list is empty\n");
-        }
-        RETURN(rc);
-}
-
 /* caller must hold loi_list_lock */
 void osc_wake_cache_waiters(struct client_obd *cli)
 {
@@ -1945,24 +1932,6 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
         osc_release_write_grant(cli, &oap->oap_brw_page, sent);
 }
 
-static int lop_makes_syncfs_rpc(struct loi_oap_pages *lop)
-{
-        struct osc_async_page *oap;
-        ENTRY;
-
-        if (cfs_list_empty(&lop->lop_urgent))
-                RETURN(0);
-
-        oap = cfs_list_entry(lop->lop_urgent.next,
-                             struct osc_async_page, oap_urgent_item);
-
-        if (oap->oap_async_flags & ASYNC_SYNCFS) {
-                CDEBUG(D_CACHE, "syncfs request forcing RPC\n");
-                RETURN(1);
-        }
-
-        RETURN(0);
-}
 
 /* This maintains the lists of pending pages to read/write for a given object
  * (lop).  This is used by osc_check_rpcs->osc_next_loi() and loi_list_maint()
@@ -2051,19 +2020,10 @@ void loi_list_maint(struct client_obd *cli, struct lov_oinfo *loi)
                 on_list(&loi->loi_ready_item, &cli->cl_loi_ready_list, 0);
                 on_list(&loi->loi_hp_ready_item, &cli->cl_loi_hp_ready_list, 1);
         } else {
-                if (lop_makes_syncfs_rpc(&loi->loi_write_lop)) {
-                        on_list(&loi->loi_sync_fs_item,
-                                &cli->cl_loi_sync_fs_list,
-                                loi->loi_write_lop.lop_num_pending);
-                } else {
-                        on_list(&loi->loi_hp_ready_item,
-                                &cli->cl_loi_hp_ready_list, 0);
-                        on_list(&loi->loi_ready_item, &cli->cl_loi_ready_list,
-                                lop_makes_rpc(cli, &loi->loi_write_lop,
-                                              OBD_BRW_WRITE)||
-                                lop_makes_rpc(cli, &loi->loi_read_lop,
-                                              OBD_BRW_READ));
-                }
+                on_list(&loi->loi_hp_ready_item, &cli->cl_loi_hp_ready_list, 0);
+                on_list(&loi->loi_ready_item, &cli->cl_loi_ready_list,
+                        lop_makes_rpc(cli, &loi->loi_write_lop, OBD_BRW_WRITE)||
+                        lop_makes_rpc(cli, &loi->loi_read_lop, OBD_BRW_READ));
         }
 
         on_list(&loi->loi_write_item, &cli->cl_loi_write_list,
@@ -2279,7 +2239,6 @@ static int brw_interpret(const struct lu_env *env,
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
         }
         osc_wake_cache_waiters(cli);
-        osc_wake_sync_fs(cli);
         osc_check_rpcs(env, cli);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
         if (!async)
@@ -2452,7 +2411,7 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
          * to be canceled, the pages covered by the lock will be sent out
          * with ASYNC_HP. We have to send out them as soon as possible. */
         cfs_list_for_each_entry_safe(oap, tmp, &lop->lop_urgent, oap_urgent_item) {
-                if (oap->oap_async_flags & ASYNC_HP)
+                if (oap->oap_async_flags & ASYNC_HP) 
                         cfs_list_move(&oap->oap_pending_item, &tmp_list);
                 else
                         cfs_list_move_tail(&oap->oap_pending_item, &tmp_list);
@@ -2612,7 +2571,7 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
         }
 
         osc_wake_cache_waiters(cli);
-        osc_wake_sync_fs(cli);
+
         loi_list_maint(cli, loi);
 
         client_obd_list_unlock(&cli->cl_loi_list_lock);
@@ -2705,9 +2664,6 @@ struct lov_oinfo *osc_next_loi(struct client_obd *cli)
         if (!cfs_list_empty(&cli->cl_loi_ready_list))
                 RETURN(cfs_list_entry(cli->cl_loi_ready_list.next,
                                       struct lov_oinfo, loi_ready_item));
-        if (!cfs_list_empty(&cli->cl_loi_sync_fs_list))
-                RETURN(cfs_list_entry(cli->cl_loi_sync_fs_list.next,
-                                      struct lov_oinfo, loi_sync_fs_item));
 
         /* then if we have cache waiters, return all objects with queued
          * writes.  This is especially important when many small files
@@ -2823,8 +2779,6 @@ void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli)
                         cfs_list_del_init(&loi->loi_write_item);
                 if (!cfs_list_empty(&loi->loi_read_item))
                         cfs_list_del_init(&loi->loi_read_item);
-                if (!cfs_list_empty(&loi->loi_sync_fs_item))
-                        cfs_list_del_init(&loi->loi_sync_fs_item);
 
                 loi_list_maint(cli, loi);
 
@@ -3089,21 +3043,6 @@ int osc_set_async_flags_base(struct client_obd *cli,
         if ((oap->oap_async_flags & async_flags) == async_flags)
                 RETURN(0);
 
-        /* XXX: This introduces a tiny insignificant race for the case if this
-         * loi already had other urgent items.
-         */
-        if (SETTING(oap->oap_async_flags, async_flags, ASYNC_SYNCFS) &&
-            cfs_list_empty(&oap->oap_rpc_item) &&
-            cfs_list_empty(&oap->oap_urgent_item)) {
-                cfs_list_add_tail(&oap->oap_urgent_item, &lop->lop_urgent);
-                flags |= ASYNC_SYNCFS;
-                cfs_spin_lock(&oap->oap_lock);
-                oap->oap_async_flags |= flags;
-                cfs_spin_unlock(&oap->oap_lock);
-                loi_list_maint(cli, loi);
-                RETURN(0);
-        }
-
         if (SETTING(oap->oap_async_flags, async_flags, ASYNC_READY))
                 flags |= ASYNC_READY;
 
@@ -3160,8 +3099,7 @@ int osc_teardown_async_page(struct obd_export *exp,
         if (!cfs_list_empty(&oap->oap_urgent_item)) {
                 cfs_list_del_init(&oap->oap_urgent_item);
                 cfs_spin_lock(&oap->oap_lock);
-                oap->oap_async_flags &= ~(ASYNC_URGENT | ASYNC_HP |
-                                          ASYNC_SYNCFS);
+                oap->oap_async_flags &= ~(ASYNC_URGENT | ASYNC_HP);
                 cfs_spin_unlock(&oap->oap_lock);
         }
         if (!cfs_list_empty(&oap->oap_pending_item)) {
@@ -4583,45 +4521,6 @@ int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
         return(rc);
 }
 
-static int osc_sync_fs(struct obd_device *obd, struct obd_info *oinfo,
-                       int wait)
-{
-        struct client_obd *cli;
-        struct lov_oinfo *loi;
-        struct lov_oinfo *tloi;
-        struct osc_async_page *oap;
-        struct osc_async_page *toap;
-        struct loi_oap_pages *lop;
-        struct lu_env *env;
-        int refcheck;
-        int rc = 0;
-        ENTRY;
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
-
-        cli = &obd->u.cli;
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_sf_wait.sfw_oi = oinfo;
-        cli->cl_sf_wait.sfw_upcall = oinfo->oi_cb_up;
-        cli->cl_sf_wait.started = 1;
-        /* creating cl_loi_sync_fs list */
-        cfs_list_for_each_entry_safe(loi, tloi, &cli->cl_loi_write_list,
-                                     loi_write_item) {
-                lop = &loi->loi_write_lop;
-                cfs_list_for_each_entry_safe(oap, toap, &lop->lop_pending,
-                                             oap_pending_item)
-                        osc_set_async_flags_base(cli, loi, oap, ASYNC_SYNCFS);
-        }
-
-        osc_check_rpcs(env, cli);
-        osc_wake_sync_fs(cli);
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
-        cl_env_put(env, &refcheck);
-        RETURN(rc);
-}
-
 static int osc_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         return osc_process_config_base(obd, buf);
@@ -4664,7 +4563,6 @@ struct obd_ops osc_obd_ops = {
         .o_llog_init            = osc_llog_init,
         .o_llog_finish          = osc_llog_finish,
         .o_process_config       = osc_process_config,
-        .o_sync_fs              = osc_sync_fs,
 };
 
 extern struct lu_kmem_descr osc_caches[];
