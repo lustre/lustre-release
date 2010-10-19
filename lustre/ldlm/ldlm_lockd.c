@@ -2487,11 +2487,11 @@ static int ldlm_setup(void)
                         GOTO(out_thread, rc);
         }
 
-        rc = ptlrpc_start_threads(NULL, ldlm_state->ldlm_cancel_service);
+        rc = ptlrpc_start_threads(ldlm_state->ldlm_cancel_service);
         if (rc)
                 GOTO(out_thread, rc);
 
-        rc = ptlrpc_start_threads(NULL, ldlm_state->ldlm_cb_service);
+        rc = ptlrpc_start_threads(ldlm_state->ldlm_cb_service);
         if (rc)
                 GOTO(out_thread, rc);
 

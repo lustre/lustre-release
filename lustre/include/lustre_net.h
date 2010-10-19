@@ -1407,8 +1407,8 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        svc_hpreq_handler_t);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
-int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc);
-int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc);
+int ptlrpc_start_threads(struct ptlrpc_service *svc);
+int ptlrpc_start_thread(struct ptlrpc_service *svc);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(char *name);
@@ -1430,7 +1430,6 @@ struct ptlrpc_svc_data {
         char *name;
         struct ptlrpc_service *svc;
         struct ptlrpc_thread *thread;
-        struct obd_device *dev;
 };
 /** @} */
 

@@ -2545,7 +2545,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 GOTO(out_lprocfs, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(obd, ost->ost_service);
+        rc = ptlrpc_start_threads(ost->ost_service);
         if (rc)
                 GOTO(out_service, rc = -EINVAL);
 
@@ -2574,7 +2574,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 GOTO(out_service, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(obd, ost->ost_create_service);
+        rc = ptlrpc_start_threads(ost->ost_create_service);
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 
@@ -2594,7 +2594,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         ost->ost_io_service->srv_init = ost_thread_init;
         ost->ost_io_service->srv_done = ost_thread_done;
         ost->ost_io_service->srv_cpu_affinity = 1;
-        rc = ptlrpc_start_threads(obd, ost->ost_io_service);
+        rc = ptlrpc_start_threads(ost->ost_io_service);
         if (rc)
                 GOTO(out_io, rc = -EINVAL);
 

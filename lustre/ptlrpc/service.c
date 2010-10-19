@@ -2046,7 +2046,6 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_service  *svc = data->svc;
         struct ptlrpc_thread   *thread = data->thread;
-        struct obd_device      *dev = data->dev;
         struct ptlrpc_reply_state *rs;
         struct ptlrpc_main_check_s st;
 #ifdef WITH_GROUP_INFO
@@ -2160,7 +2159,7 @@ static int ptlrpc_main(void *arg)
                 if (svc->srv_threads_started < svc->srv_threads_max &&
                     svc->srv_n_active_reqs >= (svc->srv_threads_started - 2))
                         /* Ignore return code - we tried... */
-                        ptlrpc_start_thread(dev, svc);
+                        ptlrpc_start_thread(svc);
 
                 /* Process all incoming reqs before handling any */
                 if (st.todo & PTLRPC_MAIN_IN_REQ) {
@@ -2405,7 +2404,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
         EXIT;
 }
 
-int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
+int ptlrpc_start_threads(struct ptlrpc_service *svc)
 {
         int i, rc = 0;
         ENTRY;
@@ -2414,7 +2413,7 @@ int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
            ptlrpc_server_handle_request */
         LASSERT(svc->srv_threads_min >= 2);
         for (i = 0; i < svc->srv_threads_min; i++) {
-                rc = ptlrpc_start_thread(dev, svc);
+                rc = ptlrpc_start_thread(svc);
                 /* We have enough threads, don't start more.  b=15759 */
                 if (rc == -EMFILE)
                         break;
@@ -2428,7 +2427,7 @@ int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
         RETURN(rc);
 }
 
-int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
+int ptlrpc_start_thread(struct ptlrpc_service *svc)
 {
         struct l_wait_info lwi = { 0 };
         struct ptlrpc_svc_data d;
@@ -2467,7 +2466,6 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         thread->t_svc = svc;
         thread->t_id = id;
         sprintf(name, "%s_%02d", svc->srv_thread_name, id);
-        d.dev = dev;
         d.svc = svc;
         d.name = name;
         d.thread = thread;

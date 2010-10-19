@@ -248,7 +248,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_llog, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(obd, mgs->mgs_service);
+        rc = ptlrpc_start_threads(mgs->mgs_service);
         if (rc)
                 GOTO(err_thread, rc);
 

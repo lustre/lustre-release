@@ -3894,7 +3894,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         if (m->mdt_regular_service == NULL)
                 RETURN(-ENOMEM);
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_regular_service);
+        rc = ptlrpc_start_threads(m->mdt_regular_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -3924,7 +3924,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_readpage_service);
+        rc = ptlrpc_start_threads(m->mdt_readpage_service);
 
         /*
          * setattr service configuration.
@@ -3952,7 +3952,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_setattr_service);
+        rc = ptlrpc_start_threads(m->mdt_setattr_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -3981,7 +3981,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_mdsc_service);
+        rc = ptlrpc_start_threads(m->mdt_mdsc_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -4010,7 +4010,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_mdss_service);
+        rc = ptlrpc_start_threads(m->mdt_mdss_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -4042,7 +4042,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_dtss_service);
+        rc = ptlrpc_start_threads(m->mdt_dtss_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -4069,7 +4069,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_fld_service);
+        rc = ptlrpc_start_threads(m->mdt_fld_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -4099,7 +4099,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_xmds_service);
+        rc = ptlrpc_start_threads(m->mdt_xmds_service);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
