@@ -648,13 +648,6 @@ struct ldlm_lock {
 
         ldlm_policy_data_t       l_policy_data;
 
-        /**
-         * Traffic index indicating how busy the resource will be, if it is
-         * high, the lock's granted region will not be so big lest it conflicts
-         * other locks, causing frequent lock cancellation and re-enqueue
-         */
-        int                   l_traffic;
-
         /*
          * Protected by lr_lock. Various counters: readers, writers, etc.
          */
