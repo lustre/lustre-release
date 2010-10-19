@@ -15,6 +15,16 @@ TBD  Oracle, Inc.
          Lustre filesystem with 4K stack may cause a stack overflow. For more
          information, please refer to bugzilla 17630.
 
+Severity   : normal
+Frequency  : only with SLES10
+Bugzilla   : 20744
+Description: Use OFED "KMP" provided by Novell
+Details    : SLES10 SP3 ships with OFED in a separate "KMP" package.
+	     Lustre is now built against this package. That means you need to
+	     install the ofed-kmp package from Novell for the patchless client.
+	     Note that the ofed-kmp that Novell ships may not exactly match the
+	     kernel version but should still be compatible.
+
 Severity   : enhancement
 Bugzilla   : 22514
 Description: Update RHEL5.5 kernel to 2.6.18-194.11.3.el5 and OEL5.5 kernel to
