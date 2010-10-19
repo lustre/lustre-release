@@ -1445,12 +1445,6 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                         LASSERT(req->rq_next_phase != req->rq_phase);
                         LASSERT(req->rq_next_phase != RQ_PHASE_UNDEFINED);
 
-                        /* Abort the bulk, if the request itself has been
-                         * aborted, for instance, on a client eviction. */
-                        if (req->rq_err && req->rq_status == -EINTR &&
-                            req->rq_bulk != NULL)
-                                ptlrpc_abort_bulk(req->rq_bulk);
-
                         /*
                          * Skip processing until reply is unlinked. We
                          * can't return to pool before that and we can't
