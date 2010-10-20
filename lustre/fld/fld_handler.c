@@ -199,7 +199,7 @@ int fld_server_create(struct lu_server_fld *fld,
                  */
                 LASSERTF(erange->lsr_start > new->lsr_start ||
                          erange->lsr_end < new->lsr_start ||
-                         (erange->lsr_end == new->lsr_end &&
+                         (erange->lsr_end == new->lsr_start &&
                           range_compare_loc(new, erange) != 0),
                          "left "DRANGE", new "DRANGE"\n",
                          PRANGE(erange), PRANGE(new));
