@@ -118,6 +118,10 @@ Severity   : normal
 Bugzilla   : 22107
 Description: pin object's inode in memory to avoid certain timeouts
 
+Severity   : normal
+Bugzilla   : 21745
+Description: fix LBUG when obdfilter-survey is interrupted.
+
 -------------------------------------------------------------------------------
 
 2010-07-31 Oracle, Inc.

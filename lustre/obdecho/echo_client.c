@@ -1411,7 +1411,8 @@ static int echo_client_cleanup(struct obd_device *obddev)
                 el = ec->ec_objects.next;
                 eco = list_entry(el, struct ec_object, eco_obj_chain);
 
-                LASSERT(eco->eco_refcount == 0);
+                if (eco->eco_refcount > 0)
+                        RETURN(-EBUSY);
                 eco->eco_refcount = 1;
                 eco->eco_deleted = 1;
                 echo_put_object(eco);
