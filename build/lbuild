@@ -1335,19 +1335,25 @@ build_ofed() {
 
     # if an ofed version is given, then it means use OFED proper,
     # not any vendor specific "inkernel" version
-    if [ -z "$ofed_version" -o "$ofed_version" = "inkernel" ]; then
-        # first see if there is a distro specific override for this
-        # XXX we need to better integrate an distro specific override with
+    if [ -z "$ofed_version" ]; then
+        return 0
+    fi
+
+    if [ "$ofed_version" = "inkernel" ]; then
+        # see if there is a distro specific override for this and use
+        # that if it exists
+        # XXX we need to better integrate a distro specific override with
         #     the rest of this function so that all of the reuse cache
         #     stuff is leveraged given that 80% of this function is reuse
         if type -p build_ofed-${DISTRO}; then
             local ofed_location
             ofed_location=$(build_ofed-${DISTRO} ${STDOUT})
+            local rc=${PIPESTATUS[0]}
             CONFIGURE_FLAGS="--with-o2ib=${ofed_location} ${CONFIGURE_FLAGS}"
-            return ${PIPESTATUS[0]}
+            return $rc
+        else
+            return 0
         fi
-    else
-        return 0
     fi
 
     # build kernel-ib
