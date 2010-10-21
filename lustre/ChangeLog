@@ -1,12 +1,12 @@
 TBD  Oracle, Inc.
        * version 2.1.0
        * Server support for kernels:
-         2.6.18-194.11.3.el5 (RHEL 5)
-         2.6.18-194.11.3.0.1.el5 (OEL 5)
+         2.6.18-194.17.1.el5 (RHEL 5)
+         2.6.18-194.17.1.0.1.el5 (OEL 5)
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-         2.6.18-194.11.3.el5 (RHEL 5),
-         2.6.18-194.11.3.0.1.el5 (OEL 5)
+         2.6.18-194.17.1.el5 (RHEL 5),
+         2.6.18-194.17.1.0.1.el5 (OEL 5)
          2.6.16.60-0.42.8 (SLES 10),
          2.6.27.19-5 (SLES11)
 	 2.6.29.4-167.fc11 (FC11)
@@ -27,8 +27,8 @@ Details    : SLES10 SP3 ships with OFED in a separate "KMP" package.
 
 Severity   : enhancement
 Bugzilla   : 22514
-Description: Update RHEL5.5 kernel to 2.6.18-194.11.3.el5 and OEL5.5 kernel to
-	     2.6.18-194.11.3.0.1.el5.
+Description: Update RHEL5.5 kernel to 2.6.18-194.17.1.el5
+             Update OEL5.5  kernel to 2.6.18-194.17.1.0.1.el5.
 
 --------------------------------------------------------------------------------
 
