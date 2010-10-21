@@ -1218,14 +1218,16 @@ int cl_inode_init(struct inode *inode, struct lustre_md *md)
 static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
 {
         struct lu_object_header *header = obj->co_lu.lo_header;
-        struct lu_site          *site;
         cfs_waitlink_t           waiter;
 
         if (unlikely(cfs_atomic_read(&header->loh_ref) != 1)) {
-                site = obj->co_lu.lo_dev->ld_site;
+                struct lu_site *site = obj->co_lu.lo_dev->ld_site;
+                struct lu_site_bkt_data *bkt;
+
+                bkt = lu_site_bkt_from_fid(site, &header->loh_fid);
 
                 cfs_waitlink_init(&waiter);
-                cfs_waitq_add(&site->ls_marche_funebre, &waiter);
+                cfs_waitq_add(&bkt->lsb_marche_funebre, &waiter);
 
                 while (1) {
                         cfs_set_current_state(CFS_TASK_UNINT);
@@ -1235,7 +1237,7 @@ static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
                 }
 
                 cfs_set_current_state(CFS_TASK_RUNNING);
-                cfs_waitq_del(&site->ls_marche_funebre, &waiter);
+                cfs_waitq_del(&bkt->lsb_marche_funebre, &waiter);
         }
 
         cl_object_put(env, obj);

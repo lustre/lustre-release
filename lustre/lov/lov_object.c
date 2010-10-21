@@ -224,6 +224,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
         struct cl_object        *sub;
         struct lov_layout_raid0 *r0;
         struct lu_site          *site;
+        struct lu_site_bkt_data *bkt;
         cfs_waitlink_t          *waiter;
 
         r0  = &lov->u.raid0;
@@ -231,6 +232,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 
         sub  = lovsub2cl(los);
         site = sub->co_lu.lo_dev->ld_site;
+        bkt  = lu_site_bkt_from_fid(site, &sub->co_lu.lo_header->loh_fid);
 
         cl_object_kill(env, sub);
         /* release a reference to the sub-object and ... */
@@ -242,7 +244,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
         if (r0->lo_sub[idx] == los) {
                 waiter = &lov_env_info(env)->lti_waiter;
                 cfs_waitlink_init(waiter);
-                cfs_waitq_add(&site->ls_marche_funebre, waiter);
+                cfs_waitq_add(&bkt->lsb_marche_funebre, waiter);
                 cfs_set_current_state(CFS_TASK_UNINT);
                 while (1) {
                         /* this wait-queue is signaled at the end of
@@ -258,7 +260,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
                                 break;
                         }
                 }
-                cfs_waitq_del(&site->ls_marche_funebre, waiter);
+                cfs_waitq_del(&bkt->lsb_marche_funebre, waiter);
         }
         LASSERT(r0->lo_sub[idx] == NULL);
 }

@@ -551,6 +551,37 @@ struct lu_object_header {
 
 struct fld;
 
+struct lu_site_bkt_data {
+       /**
+         * LRU list, updated on each access to object. Protected by
+         * bucket lock of lu_site::ls_obj_hash.
+         *
+         * "Cold" end of LRU is lu_site::ls_lru.next. Accessed object are
+         * moved to the lu_site::ls_lru.prev (this is due to the non-existence
+         * of list_for_each_entry_safe_reverse()).
+         */
+        cfs_list_t                lsb_lru;
+        /**
+         * Wait-queue signaled when an object in this site is ultimately
+         * destroyed (lu_object_free()). It is used by lu_object_find() to
+         * wait before re-trying when object in the process of destruction is
+         * found in the hash table.
+         *
+         * \see htable_lookup().
+         */
+        cfs_waitq_t               lsb_marche_funebre;
+};
+
+enum {
+        LU_SS_CREATED         = 0,
+        LU_SS_CACHE_HIT,
+        LU_SS_CACHE_MISS,
+        LU_SS_CACHE_RACE,
+        LU_SS_CACHE_DEATH_RACE,
+        LU_SS_LRU_PURGED,
+        LU_SS_LAST_STAT
+};
+
 /**
  * lu_site is a "compartment" within which objects are unique, and LRU
  * discipline is maintained.
@@ -563,106 +594,36 @@ struct fld;
  */
 struct lu_site {
         /**
-         * Site-wide lock.
-         *
-         * lock protecting:
-         *
-         *        - lu_site::ls_hash hash table (and its linkages in objects);
-         *
-         *        - lu_site::ls_lru list (and its linkages in objects);
-         *
-         *        - 0/1 transitions of object lu_object_header::loh_ref
-         *        reference count;
-         *
-         * yes, it's heavy.
+         * objects hash table
          */
-        cfs_rwlock_t              ls_guard;
+        cfs_hash_t               *ls_obj_hash;
         /**
-         * Hash-table where objects are indexed by fid.
+         * index of bucket on hash table while purging
          */
-        cfs_hlist_head_t         *ls_hash;
-        /**
-         * Bit-mask for hash-table size.
-         */
-        int                       ls_hash_mask;
-        /**
-         * Order of hash-table.
-         */
-        int                       ls_hash_bits;
-        /**
-         * Number of buckets in the hash-table.
-         */
-        int                       ls_hash_size;
-
-        /**
-         * LRU list, updated on each access to object. Protected by
-         * lu_site::ls_guard.
-         *
-         * "Cold" end of LRU is lu_site::ls_lru.next. Accessed object are
-         * moved to the lu_site::ls_lru.prev (this is due to the non-existence
-         * of list_for_each_entry_safe_reverse()).
-         */
-        cfs_list_t                ls_lru;
-        /**
-         * Total number of objects in this site. Protected by
-         * lu_site::ls_guard.
-         */
-        unsigned                  ls_total;
-        /**
-         * Total number of objects in this site with reference counter greater
-         * than 0. Protected by lu_site::ls_guard.
-         */
-        unsigned                  ls_busy;
-
+        int                       ls_purge_start;
         /**
          * Top-level device for this stack.
          */
         struct lu_device         *ls_top_dev;
-
-        /**
-         * Wait-queue signaled when an object in this site is ultimately
-         * destroyed (lu_object_free()). It is used by lu_object_find() to
-         * wait before re-trying when object in the process of destruction is
-         * found in the hash table.
-         *
-         * If having a single wait-queue turns out to be a problem, a
-         * wait-queue per hash-table bucket can be easily implemented.
-         *
-         * \see htable_lookup().
-         */
-        cfs_waitq_t               ls_marche_funebre;
-
-        /** statistical counters. Protected by nothing, races are accepted. */
-        struct {
-                __u32 s_created;
-                __u32 s_cache_hit;
-                __u32 s_cache_miss;
-                /**
-                 * Number of hash-table entry checks made.
-                 *
-                 *       ->s_cache_check / (->s_cache_miss + ->s_cache_hit)
-                 *
-                 * is an average number of hash slots inspected during single
-                 * lookup.
-                 */
-                __u32 s_cache_check;
-                /** Races with cache insertions. */
-                __u32 s_cache_race;
-                /**
-                 * Races with object destruction.
-                 *
-                 * \see lu_site::ls_marche_funebre.
-                 */
-                __u32 s_cache_death_race;
-                __u32 s_lru_purged;
-        } ls_stats;
-
         /**
          * Linkage into global list of sites.
          */
         cfs_list_t                ls_linkage;
+        /**
+         * lu_site stats
+         */
+        struct lprocfs_stats     *ls_stats;
         struct lprocfs_stats     *ls_time_stats;
 };
+
+static inline struct lu_site_bkt_data *
+lu_site_bkt_from_fid(struct lu_site *site, struct lu_fid *fid)
+{
+        cfs_hash_bd_t bd;
+
+        cfs_hash_bd_get(site->ls_obj_hash, fid, &bd);
+        return cfs_hash_bd_extra_get(site->ls_obj_hash, &bd);
+}
 
 /** \name ctors
  * Constructors/destructors.

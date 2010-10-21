@@ -282,9 +282,12 @@ int cl_sb_fini(struct super_block *sb)
 #define PGC_DEPTH_SHIFT (32)
 
 struct vvp_pgcache_id {
-        unsigned vpi_bucket;
-        unsigned vpi_depth;
-        uint32_t vpi_index;
+        unsigned                 vpi_bucket;
+        unsigned                 vpi_depth;
+        uint32_t                 vpi_index;
+
+        unsigned                 vpi_curdep;
+        struct lu_object_header *vpi_obj;
 };
 
 static void vvp_pgcache_id_unpack(loff_t pos, struct vvp_pgcache_id *id)
@@ -304,53 +307,49 @@ static loff_t vvp_pgcache_id_pack(struct vvp_pgcache_id *id)
                 ((__u64)id->vpi_bucket << PGC_OBJ_SHIFT);
 }
 
+static int vvp_pgcache_obj_get(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                               cfs_hlist_node_t *hnode, void *data)
+{
+        struct vvp_pgcache_id   *id  = data;
+        struct lu_object_header *hdr = cfs_hash_object(hs, hnode);
+
+        if (id->vpi_curdep-- > 0)
+                return 0; /* continue */
+
+        if (lu_object_is_dying(hdr))
+                return 1;
+
+        cfs_hash_get(hs, hnode);
+        id->vpi_obj = hdr;
+        return 1;
+}
+
 static struct cl_object *vvp_pgcache_obj(const struct lu_env *env,
                                          struct lu_device *dev,
                                          struct vvp_pgcache_id *id)
 {
-        cfs_hlist_head_t        *bucket;
-        struct lu_object_header *hdr;
-        struct lu_site          *site;
-        cfs_hlist_node_t        *scan;
-        struct lu_object_header *found;
-        struct cl_object        *clob;
-        unsigned                 depth;
-
         LASSERT(lu_device_is_cl(dev));
 
-        site   = dev->ld_site;
-        bucket = site->ls_hash + (id->vpi_bucket & site->ls_hash_mask);
-        depth  = id->vpi_depth & 0xf;
-        found  = NULL;
-        clob   = NULL;
+        id->vpi_depth &= 0xf;
+        id->vpi_obj    = NULL;
+        id->vpi_curdep = id->vpi_depth;
 
-        /* XXX copy of lu_object.c:htable_lookup() */
-        cfs_read_lock(&site->ls_guard);
-        cfs_hlist_for_each_entry(hdr, scan, bucket, loh_hash) {
-                if (depth-- == 0) {
-                        if (!lu_object_is_dying(hdr)) {
-                                if (cfs_atomic_add_return(1,
-                                                          &hdr->loh_ref) == 1)
-                                        ++ site->ls_busy;
-                                found = hdr;
-                        }
-                        break;
-                }
-        }
-        cfs_read_unlock(&site->ls_guard);
-
-        if (found != NULL) {
+        cfs_hash_hlist_for_each(dev->ld_site->ls_obj_hash, id->vpi_bucket,
+                                vvp_pgcache_obj_get, id);
+        if (id->vpi_obj != NULL) {
                 struct lu_object *lu_obj;
 
-                lu_obj = lu_object_locate(found, dev->ld_type);
+                lu_obj = lu_object_locate(id->vpi_obj, dev->ld_type);
                 if (lu_obj != NULL) {
                         lu_object_ref_add(lu_obj, "dump", cfs_current());
-                        clob = lu2cl(lu_obj);
-                } else
-                        lu_object_put(env, lu_object_top(found));
-        } else if (depth > 0)
+                        return lu2cl(lu_obj);
+                }
+                lu_object_put(env, lu_object_top(id->vpi_obj));
+
+        } else if (id->vpi_curdep > 0) {
                 id->vpi_depth = 0xf;
-        return clob;
+        }
+        return NULL;
 }
 
 static loff_t vvp_pgcache_find(const struct lu_env *env,
@@ -364,7 +363,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
         vvp_pgcache_id_unpack(pos, &id);
 
         while (1) {
-                if (id.vpi_bucket >= site->ls_hash_size)
+                if (id.vpi_bucket >= CFS_HASH_NHLIST(site->ls_obj_hash))
                         return ~0ULL;
                 clob = vvp_pgcache_obj(env, dev, &id);
                 if (clob != NULL) {
@@ -494,7 +493,7 @@ static void *vvp_pgcache_start(struct seq_file *f, loff_t *pos)
         env = cl_env_get(&refcheck);
         if (!IS_ERR(env)) {
                 sbi = f->private;
-                if (sbi->ll_site->ls_hash_bits > 64 - PGC_OBJ_SHIFT)
+                if (sbi->ll_site->ls_obj_hash->hs_cur_bits > 64 - PGC_OBJ_SHIFT)
                         pos = ERR_PTR(-EFBIG);
                 else {
                         *pos = vvp_pgcache_find(env, &sbi->ll_cl->cd_lu_dev,

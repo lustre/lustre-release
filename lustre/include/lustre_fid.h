@@ -341,6 +341,13 @@ static inline __u64 fid_flatten(const struct lu_fid *fid)
         RETURN(ino ? ino : fid_oid(fid));
 }
 
+static inline __u32 fid_hash(const struct lu_fid *f, int bits)
+{
+        /* all objects with same id and different versions will belong to same
+         * collisions list. */
+        return cfs_hash_long(fid_flatten(f), bits);
+}
+
 /**
  * map fid to 32 bit value for ino on 32bit systems. */
 static inline __u32 fid_flatten32(const struct lu_fid *fid)
