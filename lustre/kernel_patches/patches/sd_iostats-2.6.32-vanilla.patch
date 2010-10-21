@@ -61,14 +61,14 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
  mempool_t *sd_cdb_pool;
  
 @@ -571,6 +589,8 @@
-	if (host_dif || scsi_prot_sg_count(SCpnt))
-		sd_prot_op(SCpnt, host_dif);
- 
-+	sd_iostats_start_req(SCpnt);
-+
- 	/*
- 	 * We shouldn't disconnect in the middle of a sector, so with a dumb
- 	 * host adapter, it's safe to assume that we can at least transfer
+	 */
+	ret = BLKPREP_OK;
+  out:
++	if (ret == BLKPREP_OK) 
++		sd_iostats_start_req(SCpnt);
+	return scsi_prep_return(q, rq, ret);
+ }
+
 @@ -1091,6 +1111,7 @@
  		break;
  	}
