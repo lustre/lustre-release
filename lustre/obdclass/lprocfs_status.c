@@ -1718,13 +1718,15 @@ int lprocfs_exp_print_hash(cfs_hash_t *hs, cfs_hash_bd_t *bd,
         struct exp_uuid_cb_data *data = cb_data;
         struct obd_export       *exp = cfs_hash_object(hs, hnode);
 
-        LASSERT(hs == exp->exp_lock_hash);
-        if (!*data->len) {
-                *data->len += cfs_hash_debug_header(data->page,
-                                                    data->count);
+        if (exp->exp_lock_hash != NULL) {
+                if (!*data->len) {
+                        *data->len += cfs_hash_debug_header(data->page,
+                                                            data->count);
+                }
+                *data->len += cfs_hash_debug_str(hs, data->page + *data->len,
+                                                 data->count);
         }
-        *data->len += cfs_hash_debug_str(hs, data->page + *data->len,
-                                         data->count);
+
         return 0;
 }
 
