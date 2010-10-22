@@ -2137,11 +2137,16 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 for (i = 0; i < count; i++) {
                         int err;
+                        struct obd_device *osc_obd;
 
                         /* OST was disconnected */
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
                                 continue;
 
+                        /* ll_umount_begin() sets force flag but for lov, not
+                         * osc. Let's pass it through */
+                        osc_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
+                        osc_obd->obd_force = obddev->obd_force;
                         err = obd_iocontrol(cmd, lov->lov_tgts[i]->ltd_exp,
                                             len, karg, uarg);
                         if (err == -ENODATA && cmd == OBD_IOC_POLL_QUOTACHECK) {

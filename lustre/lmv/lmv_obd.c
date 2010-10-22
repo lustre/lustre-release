@@ -625,8 +625,11 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
         mdc_obd = class_exp2obd(tgt->ltd_exp);
 
-        if (mdc_obd)
+        if (mdc_obd) {
+                mdc_obd->obd_force = obd->obd_force;
+                mdc_obd->obd_fail = obd->obd_fail;
                 mdc_obd->obd_no_recov = obd->obd_no_recov;
+        }
 
 #ifdef __KERNEL__
         lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
@@ -829,10 +832,14 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
         default : {
                 for (i = 0; i < count; i++) {
                         int err;
+                        struct obd_device *mdc_obd;
 
                         if (lmv->tgts[i].ltd_exp == NULL)
                                 continue;
-
+                        /* ll_umount_begin() sets force flag but for lmv, not
+                         * mdc. Let's pass it through */
+                        mdc_obd = class_exp2obd(lmv->tgts[i].ltd_exp);
+                        mdc_obd->obd_force = obddev->obd_force;
                         err = obd_iocontrol(cmd, lmv->tgts[i].ltd_exp, len,
                                             karg, uarg);
                         if (err == -ENODATA && cmd == OBD_IOC_POLL_QUOTACHECK) {
