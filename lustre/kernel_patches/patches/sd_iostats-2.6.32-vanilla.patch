@@ -48,12 +48,12 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
 +
 +extern void sd_iostats_init(void);
 +extern void sd_iostats_fini(void);
-+void sd_iostats_start_req(struct scsi_cmnd *SCpnt);
++void sd_iostats_start_req(struct request *rq);
 +void sd_iostats_finish_req(struct scsi_cmnd *SCpnt);
 +#else
 +static inline void sd_iostats_init(void) {}
 +static inline void sd_iostats_fini(void) {}
-+static inline void sd_iostats_start_req(struct scsi_cmnd *SCpnt) {}
++static inline void sd_iostats_start_req(struct request *rq) {}
 +static inline void sd_iostats_finish_req(struct scsi_cmnd *SCpnt) {}
 +#endif
 +
@@ -61,14 +61,14 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
  mempool_t *sd_cdb_pool;
  
 @@ -571,6 +589,8 @@
-	if (host_dif || scsi_prot_sg_count(SCpnt))
-		sd_prot_op(SCpnt, host_dif);
- 
-+	sd_iostats_start_req(SCpnt);
-+
- 	/*
- 	 * We shouldn't disconnect in the middle of a sector, so with a dumb
- 	 * host adapter, it's safe to assume that we can at least transfer
+	 */
+	ret = BLKPREP_OK;
+  out:
++	if (rq->rq_disk && ret == BLKPREP_OK) 
++		sd_iostats_start_req(rq);
+	return scsi_prep_return(q, rq, ret);
+ }
+
 @@ -1091,6 +1111,7 @@
  		break;
  	}
@@ -408,9 +408,9 @@ Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
 +	spin_unlock_irqrestore(&stats->iostat_lock, irqflags);
 +}
 +
-+void sd_iostats_start_req(struct scsi_cmnd *SCpnt)
++void sd_iostats_start_req(struct request *rq)
 +{
-+	struct request		*rq = SCpnt->request;
++	struct scsi_cmnd        *SCpnt = rq->special;
 +	iostat_stats_t		*stats;
 +	iostat_counter_t	*counter;
 +	int			bucket;
