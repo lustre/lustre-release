@@ -2361,7 +2361,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
         struct lustre_cfg_bufs bufs;
         char *logname;
         char *tmp;
-        int rc = 0;
+        int rc = 0, rc2 = 0;
         ENTRY;
 
         /* For various parameter settings, we have to figure out which logs
@@ -2614,12 +2614,13 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
         }
 
         LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
+        rc2 = -ENOSYS;
 
 end:
         if (rc)
                 CERROR("err %d on param '%s'\n", rc, ptr);
 
-        RETURN(rc);
+        RETURN(rc ?: rc2);
 }
 
 /* Not implementing automatic failover nid addition at this time. */
