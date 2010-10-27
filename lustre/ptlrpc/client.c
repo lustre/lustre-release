@@ -2314,7 +2314,7 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
                                   "replay ("LPU64"/"LPU64")\n",
                                   lustre_msg_get_transno(req->rq_reqmsg),
                                   lustre_msg_get_transno(req->rq_repmsg));
-                        LBUG();
+                        ptlrpc_evict_imp(imp);
                 }
         }
 

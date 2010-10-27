@@ -835,6 +835,7 @@ int ptlrpc_unregister_reply(struct ptlrpc_request *req, int async);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
 void ptlrpc_cleanup_imp(struct obd_import *imp);
+void ptlrpc_evict_imp(struct obd_import *imp);
 void ptlrpc_abort_set(struct ptlrpc_request_set *set);
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void);

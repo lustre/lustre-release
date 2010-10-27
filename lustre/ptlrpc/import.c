@@ -1429,6 +1429,13 @@ void ptlrpc_import_setasync(struct obd_import *imp, int count)
         LNetSetAsync(imp->imp_connection->c_peer, count);
 }
 
+void ptlrpc_evict_imp(struct obd_import *imp)
+{
+        ENTRY;
+        IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
+        EXIT;
+}
+
 void ptlrpc_cleanup_imp(struct obd_import *imp)
 {
         ENTRY;
