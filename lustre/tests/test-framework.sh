@@ -537,6 +537,15 @@ ostdevlabel() {
 }
 
 # Facet functions
+mount_facets () {
+    local facets=${1:-$(get_facets)}
+    local facet
+
+    for facet in ${facets//,/ }; do
+        mount_facet $facet || error "Restart of $facet failed!"
+    done
+}
+
 mount_facet() {
     local facet=$1
     shift
@@ -912,6 +921,28 @@ facets_on_host () {
     done
 
     echo $(comma_list $affected)
+}
+
+facet_up () {
+    local facet=$1
+    local host=${2:-$(facet_host $facet)}
+
+    local label=$(convert_facet2label $facet)
+    do_node $host lctl dl | awk '{print $4}' | grep -q $label
+}
+
+facets_up_on_host () {
+    local host=$1
+    local facets=$(facets_on_host $host)
+    local affected_up
+
+    for facet in ${facets//,/ }; do
+        if $(facet_up $facet $host); then
+            affected_up="$affected_up $facet"
+        fi
+    done
+
+    echo $(comma_list $affected_up)
 }
 
 shutdown_facet() {
@@ -1378,6 +1409,18 @@ client_reconnect() {
     rm $MOUNT/recon
 }
 
+affected_facets () {
+    local facet=$1
+
+    local host=$(facet_active_host $facet)
+    local affected=$facet
+
+    if [ "$FAILURE_MODE" = HARD ]; then
+        affected=$(facets_up_on_host $host)
+    fi
+    echo $affected
+}
+
 facet_failover() {
     local facet=$1
     local sleep_time=$2
@@ -1385,11 +1428,7 @@ facet_failover() {
 
     echo "Failing $facet on node $host"
 
-    local affected=$facet
-
-    if [ "$FAILURE_MODE" = HARD ]; then
-        affected=$(facets_on_host $host)
-    fi
+    local affected=$(affected_facets $facet)
 
     shutdown_facet $facet
 
@@ -1408,9 +1447,7 @@ facet_failover() {
     fi
     # FIXME; has to be changed to mount all facets concurrently
     affected=$(exclude_items_from_list $affected mgs)
-    for facet in ${affected//,/ }; do
-        mount_facet $facet || error "Restart of $facet on node $host failed!"
-    done
+    mount_facets $affected
 }
 
 obd_name() {

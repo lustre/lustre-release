@@ -2210,18 +2210,23 @@ test_88() { #bug 17485
     next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
     echo "before recovery: last_id = $last_id2, next_id = $next_id2" 
 
+    # if test uses shutdown_facet && reboot_facet instead of facet_failover ()
+    # it has to take care about the affected facets, bug20407
+    local affected_mds1=$(affected_facets mds1)
+    local affected_ost1=$(affected_facets ost1)
+
     shutdown_facet $SINGLEMDS
     shutdown_facet ost1
 
     reboot_facet $SINGLEMDS
-    change_active $SINGLEMDS
-    wait_for_facet $SINGLEMDS
-    mount_facet $SINGLEMDS || error "Restart of mds failed"
+    change_active $affected_mds1
+    wait_for_facet $affected_mds1
+    mount_facets $affected_mds1 || error "Restart of mds failed"
 
     reboot_facet ost1
-    change_active ost1
-    wait_for_facet ost1
-    mount_facet ost1 || error "Restart of ost1 failed"
+    change_active $affected_ost1
+    wait_for_facet $affected_ost1
+    mount_facets $affected_ost1 || error "Restart of ost1 failed"
 
     clients_up
 
