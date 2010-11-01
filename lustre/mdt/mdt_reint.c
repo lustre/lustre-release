@@ -761,22 +761,23 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (rc == 0)
                 mdt_handle_last_unlink(info, mc, ma);
 
-        switch (ma->ma_attr.la_mode & S_IFMT) {
-        case S_IFDIR:
-                mdt_counter_incr(req->rq_export, LPROC_MDT_RMDIR);
-                break;
-        case S_IFREG:
-        case S_IFLNK:
-        case S_IFCHR:
-        case S_IFBLK:
-        case S_IFIFO:
-        case S_IFSOCK:
-                mdt_counter_incr(req->rq_export, LPROC_MDT_UNLINK);
-                break;
-        default:
-                CERROR("bad file type %o unlinking\n", ma->ma_attr.la_mode);
-                LBUG();
-                GOTO(out, rc = -EINVAL);
+        if (ma->ma_valid & MA_INODE) {
+                switch (ma->ma_attr.la_mode & S_IFMT) {
+                case S_IFDIR:
+                        mdt_counter_incr(req->rq_export, LPROC_MDT_RMDIR);
+                        break;
+                case S_IFREG:
+                case S_IFLNK:
+                case S_IFCHR:
+                case S_IFBLK:
+                case S_IFIFO:
+                case S_IFSOCK:
+                        mdt_counter_incr(req->rq_export, LPROC_MDT_UNLINK);
+                        break;
+                default:
+                        LASSERTF(0, "bad file type %o unlinking\n",
+                                 ma->ma_attr.la_mode);
+                }
         }
 
         EXIT;
