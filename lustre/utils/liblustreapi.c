@@ -2996,10 +2996,9 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 int llapi_fid2path(const char *device, const char *fidstr, char *buf,
                    int buflen, long long *recno, int *linkno)
 {
-        char path[PATH_MAX];
         struct lu_fid fid;
         struct getinfo_fid2path *gf;
-        int fd, rc;
+        int rc;
 
         while (*fidstr == '[')
                 fidstr++;
@@ -3012,26 +3011,16 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
                 return -EINVAL;
         }
 
-        /* Take path or fsname */
-        if (device[0] == '/') {
-                strcpy(path, device);
-        } else {
-                rc = get_root_path(WANT_PATH | WANT_ERROR, (char *)device,
-                                   NULL, path, -1);
-                if (rc < 0)
-                        return rc;
-        }
-        sprintf(path, "%s/%s/fid/%s", path, dot_lustre_name, fidstr);
-        fd = open(path, O_RDONLY | O_NONBLOCK);
-        if (fd < 0)
-                return -errno;
-
         gf = malloc(sizeof(*gf) + buflen);
+        if (gf == NULL)
+                return -ENOMEM;
         gf->gf_fid = fid;
         gf->gf_recno = *recno;
         gf->gf_linkno = *linkno;
         gf->gf_pathlen = buflen;
-        rc = ioctl(fd, OBD_IOC_FID2PATH, gf);
+
+        /* Take path or fsname */
+        rc = root_ioctl(device, OBD_IOC_FID2PATH, gf, NULL, 0);
         if (rc) {
                 llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
         } else {
@@ -3041,7 +3030,6 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         }
 
         free(gf);
-        close(fd);
         return rc;
 }
 

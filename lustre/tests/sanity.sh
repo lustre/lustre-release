@@ -7102,42 +7102,47 @@ check_path() {
       	err17935 "path looked up \"${path}\" instead of \"${expected}\""
  	return 2
     fi
-    echo "fid $fid resolves to path $path"
+    echo "fid $fid resolves to path $path (expected $expected)"
 }
 
 test_162() {
-    # Make changes to filesystem
-    mkdir -p $DIR/$tdir/d2
-    touch $DIR/$tdir/d2/$tfile
-    touch $DIR/$tdir/d2/x1
-    touch $DIR/$tdir/d2/x2
-    mkdir -p $DIR/$tdir/d2/a/b/c
-    mkdir -p $DIR/$tdir/d2/p/q/r
+	# Make changes to filesystem
+	mkdir -p $DIR/$tdir/d2
+	touch $DIR/$tdir/d2/$tfile
+	touch $DIR/$tdir/d2/x1
+	touch $DIR/$tdir/d2/x2
+	mkdir -p $DIR/$tdir/d2/a/b/c
+	mkdir -p $DIR/$tdir/d2/p/q/r
 	# regular file
-    FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[')
-    check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0
+	FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[]')
+	check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0
 
 	# softlink
-    ln -s $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/slink
-    FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[')
-    check_path "$tdir/d2/p/q/r/slink" $FSNAME $FID --link 0
+	ln -s $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/slink
+	FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[]')
+	check_path "$tdir/d2/p/q/r/slink" $FSNAME $FID --link 0
+
+	# softlink to wrong file
+	ln -s /this/is/garbage $DIR/$tdir/d2/p/q/r/slink.wrong
+	FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink.wrong | tr -d '[]')
+	check_path "$tdir/d2/p/q/r/slink.wrong" $FSNAME $FID --link 0
 
 	# hardlink
-    ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
-    mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
-    FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[')
-    # fid2path dir/fsname should both work
-    check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
-    check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
+	ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
+	mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
+	FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[]')
+	# fid2path dir/fsname should both work
+	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
+	check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
 
-    # hardlink count: check that there are 2 links
-    # Doesnt work with CMD yet: 17935
+	# hardlink count: check that there are 2 links
+	# Doesnt work with CMD yet: 17935
 	${LFS} fid2path $DIR $FID | wc -l | grep -q 2 || \
 		err17935 "expected 2 links"
 
 	# hardlink indexing: remove the first link
-    rm $DIR/$tdir/d2/p/q/r/hlink
-    check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 0
+	rm $DIR/$tdir/d2/p/q/r/hlink
+	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 0
 
 	return 0
 }
