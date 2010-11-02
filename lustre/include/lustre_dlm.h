@@ -662,7 +662,10 @@ struct ldlm_lock {
          * Protected by lock and resource locks.
          */
         __u8                  l_destroyed;
-
+        /**
+         * flag whether this is a server namespace lock
+         */
+        __u8                  l_ns_srv;
         /**
          * If the lock is granted, a process sleeps on this waitq to learn when
          * it's no longer in use.  If the lock is not granted, a process sleeps

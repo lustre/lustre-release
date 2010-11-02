@@ -203,6 +203,11 @@ int ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
         int rc;
 
         ENTRY;
+        if (lock->l_ns_srv) {
+                LASSERT(cfs_list_empty(&lock->l_lru));
+                RETURN(0);
+        }
+
         cfs_spin_lock(&ns->ns_unused_lock);
         rc = ldlm_lock_remove_from_lru_nolock(lock);
         cfs_spin_unlock(&ns->ns_unused_lock);
@@ -238,6 +243,12 @@ void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
         struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
         ENTRY;
+        if (lock->l_ns_srv) {
+                LASSERT(cfs_list_empty(&lock->l_lru));
+                EXIT;
+                return;
+        }
+
         cfs_spin_lock(&ns->ns_unused_lock);
         if (!cfs_list_empty(&lock->l_lru)) {
                 ldlm_lock_remove_from_lru_nolock(lock);
@@ -334,8 +345,7 @@ static void lock_handle_addref(void *lock)
 
 /*
  * usage: pass in a resource on which you have done ldlm_resource_get
- *        pass in a parent lock on which you have done a ldlm_lock_get
- *        after return, ldlm_*_put the resource and parent
+ *        new lock will take over the refcount.
  * returns: lock with refcount 2 - one for current caller and one for remote
  */
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
@@ -351,7 +361,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
                 RETURN(NULL);
 
         cfs_spin_lock_init(&lock->l_lock);
-        lock->l_resource = ldlm_resource_getref(resource);
+        lock->l_resource = resource;
         lu_ref_add(&resource->lr_reference, "lock", lock);
 
         cfs_atomic_set(&lock->l_refc, 2);
@@ -695,7 +705,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
             (lock->l_flags & LDLM_FL_CBPENDING)) {
                 /* If we received a blocked AST and this was the last reference,
                  * run the callback. */
-                if (ns_is_server(ns) && lock->l_export)
+                if (lock->l_ns_srv && lock->l_export)
                         CERROR("FL_CBPENDING set on non-local lock--just a "
                                "warning\n");
 
@@ -1176,7 +1186,6 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                 RETURN(NULL);
 
         lock = ldlm_lock_new(res);
-        ldlm_resource_putref(res);
 
         if (lock == NULL)
                 RETURN(NULL);
@@ -1184,6 +1193,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_req_mode = mode;
         lock->l_ast_data = data;
         lock->l_pid = cfs_curproc_pid();
+        lock->l_ns_srv = ns_is_server(ns);
         if (cbs) {
                 lock->l_blocking_ast = cbs->lcs_blocking;
                 lock->l_completion_ast = cbs->lcs_completion;

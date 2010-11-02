@@ -403,13 +403,15 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         if (unlikely(!lock))
                 GOTO(out_nolock, err = -ENOMEM);
 
-        ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
-        lock_res_and_lock(lock);
+
+        /* NB: we don't have any lock now (lock_res_and_lock)
+         * because it's a new lock */
+        ldlm_lock_addref_internal_nolock(lock, mode);
         lock->l_flags |= LDLM_FL_LOCAL;
         if (*flags & LDLM_FL_ATOMIC_CB)
                 lock->l_flags |= LDLM_FL_ATOMIC_CB;
-        unlock_res_and_lock(lock);
+
         if (policy != NULL)
                 lock->l_policy_data = *policy;
         if (client_cookie != NULL)
