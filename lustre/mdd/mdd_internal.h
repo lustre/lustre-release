@@ -107,7 +107,6 @@ struct mdd_txn_op_descr {
 
 struct mdd_changelog {
         cfs_spinlock_t                   mc_lock;    /* for index */
-        cfs_waitq_t                      mc_waitq;
         int                              mc_flags;
         int                              mc_mask;
         __u64                            mc_index;

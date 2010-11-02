@@ -241,7 +241,6 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 
         mdd->mdd_cl.mc_index = 0;
         cfs_spin_lock_init(&mdd->mdd_cl.mc_lock);
-        cfs_waitq_init(&mdd->mdd_cl.mc_waitq);
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
         mdd->mdd_cl.mc_flags = 0; /* off by default */
         mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
@@ -329,8 +328,6 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         /* nested journal transaction */
         rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
         llog_ctxt_put(ctxt);
-
-        cfs_waitq_signal(&mdd->mdd_cl.mc_waitq);
 
         return rc;
 }
