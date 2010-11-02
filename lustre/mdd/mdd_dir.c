@@ -82,7 +82,7 @@ static int mdd_links_add(const struct lu_env *env,
                          struct mdd_object *mdd_obj,
                          const struct lu_fid *pfid,
                          const struct lu_name *lname,
-                         struct thandle *handle);
+                         struct thandle *handle, int first);
 static int mdd_links_rename(const struct lu_env *env,
                             struct mdd_object *mdd_obj,
                             const struct lu_fid *oldpfid,
@@ -741,8 +741,10 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
         la->la_valid = LA_CTIME;
         rc = mdd_attr_check_set_internal(env, mdd_sobj, la, handle, 0);
-        if (rc == 0)
-                mdd_links_add(env, mdd_sobj, mdo2fid(mdd_tobj), lname, handle);
+        if (rc == 0) {
+                mdd_links_add(env, mdd_sobj,
+                              mdo2fid(mdd_tobj), lname, handle, 0);
+        }
 
         EXIT;
 out_unlock:
@@ -1483,7 +1485,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                         __mdd_ref_del(env, child, handle, 1);
         }
         if (rc == 0)
-                mdd_links_add(env, child, pfid, lname, handle);
+                mdd_links_add(env, child, pfid, lname, handle, 1);
 
         RETURN(rc);
 }
@@ -2167,7 +2169,7 @@ static int mdd_rename(const struct lu_env *env,
                 if (rc == -ENOENT)
                         /* Old files might not have EA entry */
                         mdd_links_add(env, mdd_sobj, mdo2fid(mdd_spobj),
-                                      lsname, handle);
+                                      lsname, handle, 0);
                 mdd_write_unlock(env, mdd_sobj);
                 /* We don't fail the transaction if the link ea can't be
                    updated -- fid2path will use alternate lookup method. */
@@ -2381,7 +2383,7 @@ static int mdd_links_add(const struct lu_env *env,
                          struct mdd_object *mdd_obj,
                          const struct lu_fid *pfid,
                          const struct lu_name *lname,
-                         struct thandle *handle)
+                         struct thandle *handle, int first)
 {
         struct lu_buf *buf;
         struct link_ea_header *leh;
@@ -2391,7 +2393,7 @@ static int mdd_links_add(const struct lu_env *env,
         if (!mdd_linkea_enable)
                 RETURN(0);
 
-        buf = mdd_links_get(env, mdd_obj);
+        buf = first ? ERR_PTR(-ENODATA) : mdd_links_get(env, mdd_obj);
         if (IS_ERR(buf)) {
                 rc = PTR_ERR(buf);
                 if (rc != -ENODATA) {
