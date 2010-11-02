@@ -1433,7 +1433,7 @@ run_test_with_stat 18a "run for fixing bug14840 ==========="
 test_18bc_sub() {
         type=$1
 
-        LIMIT=$((110 * 1024 )) # 110M
+        LIMIT=$(((100 + $OSTCOUNT * 3) * 1024))
         TESTFILE="$DIR/$tdir/$tfile"
         mkdir -p $DIR/$tdir
 
@@ -1468,8 +1468,8 @@ test_18bc_sub() {
         # check if quotaon successful
         $LFS quota -u $TSTUSR $MOUNT 2>&1 | grep -q "quotas are not enabled"
         if [ $? -eq 0 ]; then
-            error "quotaon failed!"
             rm -rf $TESTFILE
+            error "quotaon failed!"
             return
         fi
 
@@ -1490,17 +1490,18 @@ test_18bc_sub() {
         sync
         cancel_lru_locks mdc
         cancel_lru_locks osc
-
-        testfile_size=$(stat -c %s $TESTFILE)
-        [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
-	    quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
         $SHOW_QUOTA_USER
-        rm -f $TESTFILE
-        sync
 
 	resetquota -u $TSTUSR
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
+	testfile_size=$(stat -c %s $TESTFILE)
+	if [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] ; then
+	     rm -f $TESTFILE
+	     quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
+	fi
+	rm -f $TESTFILE
+
 }
 
 # test when mds does failover, the ost still could work well
