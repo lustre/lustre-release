@@ -834,7 +834,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 }
 
 int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-                        struct lu_fid *fid, __u32 *bits)
+                        struct lu_fid *fid)
 {
         /* We could just return 1 immediately, but since we should only
          * be called in revalidate_it if we already have a lock, let's
@@ -846,12 +846,8 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
         ENTRY;
 
         fid_build_reg_res_name(fid, &res_id);
-        /* Firstly consider the bits */
-        if (bits && *bits)
-                policy.l_inodebits.bits = *bits;
-        else
-                policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
-                        MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
+        policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
+                                  MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
 
         mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
@@ -859,13 +855,6 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
         if (mode) {
                 it->d.lustre.it_lock_handle = lockh.cookie;
                 it->d.lustre.it_lock_mode = mode;
-                if (bits) {
-                        struct ldlm_lock *lock = ldlm_handle2lock(&lockh);
-
-                        LASSERT(lock != NULL);
-                        *bits = lock->l_policy_data.l_inodebits.bits; 
-                        LDLM_LOCK_PUT(lock);
-                }
         }
 
         RETURN(!!mode);
@@ -921,7 +910,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                rc = mdc_revalidate_lock(exp, it, &op_data->op_fid2, NULL);
+                rc = mdc_revalidate_lock(exp, it, &op_data->op_fid2);
                 /* Only return failure if it was not GETATTR by cfid
                    (from inode_revalidate) */
                 if (rc || op_data->op_namelen != 0)

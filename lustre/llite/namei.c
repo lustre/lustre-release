@@ -258,18 +258,6 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_drop_negative_dentry(inode);
                 }
 
-                if ((bits & MDS_INODELOCK_LOOKUP) &&
-                    !cfs_list_empty(&lli->lli_sa_dentry)) {
-                        struct ll_dentry_data *lld, *next;
-
-                        cfs_spin_lock(&lli->lli_sa_lock);
-                        cfs_list_for_each_entry_safe(lld, next,
-                                                     &lli->lli_sa_dentry,
-                                                     lld_sa_alias)
-                                cfs_list_del_init(&lld->lld_sa_alias);
-                        cfs_spin_unlock(&lli->lli_sa_lock);
-                }
-
                 if (inode->i_sb->s_root &&
                     inode != inode->i_sb->s_root->d_inode &&
                     (bits & MDS_INODELOCK_LOOKUP))
@@ -438,29 +426,6 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         return de;
 }
 
-void ll_lookup_it_alias(struct dentry **de, struct inode *inode, __u32 bits)
-{
-        struct dentry *save = *de;
-        ENTRY;
-
-        ll_dops_init(*de, 1);
-        *de = ll_find_alias(inode, *de);
-        if (*de != save) {
-                struct ll_dentry_data *lld = ll_d2d(*de);
-
-                /* just make sure the ll_dentry_data is ready */
-                if (unlikely(lld == NULL))
-                        ll_dops_init(*de, 1);
-        }
-        /* we have lookup look - unhide dentry */
-        if (bits & MDS_INODELOCK_LOOKUP) {
-                lock_dentry(*de);
-                (*de)->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                unlock_dentry(*de);
-        }
-        EXIT;
-}
-
 int ll_lookup_it_finish(struct ptlrpc_request *request,
                         struct lookup_intent *it, void *data)
 {
@@ -475,6 +440,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
+                struct dentry *save = *de;
                 __u32 bits;
 
                 rc = ll_prep_inode(&inode, request, (*de)->d_sb);
@@ -486,13 +452,6 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                 md_set_lock_data(sbi->ll_md_exp,
                                  &it->d.lustre.it_lock_handle, inode, &bits);
 
-                if (icbd->bits != NULL)
-                        *icbd->bits = bits;
-                if (icbd->icbd_alias != NULL) {
-                        *icbd->icbd_alias = inode;
-                        RETURN(0);
-                }
-
                 /* We used to query real size from OSTs here, but actually
                    this is not needed. For stat() calls size would be updated
                    from subsequent do_revalidate()->ll_inode_revalidate_it() in
@@ -501,7 +460,21 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                    Everybody else who needs correct file size would call
                    cl_glimpse_size or some equivalent themselves anyway.
                    Also see bug 7198. */
-                ll_lookup_it_alias(de, inode, bits);
+                ll_dops_init(*de, 1);
+                *de = ll_find_alias(inode, *de);
+                if (*de != save) {
+                        struct ll_dentry_data *lld = ll_d2d(*de);
+
+                        /* just make sure the ll_dentry_data is ready */
+                        if (unlikely(lld == NULL))
+                                ll_dops_init(*de, 1);
+                }
+                /* we have lookup look - unhide dentry */
+                if (bits & MDS_INODELOCK_LOOKUP) {
+                        lock_dentry(*de);
+                        (*de)->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                        unlock_dentry(*de);
+                }
         } else {
                 ll_dops_init(*de, 1);
                 /* Check that parent has UPDATE lock. If there is none, we
@@ -576,8 +549,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
-        icbd.icbd_alias  = NULL;
-        icbd.bits        = NULL;
 
         if (it->it_op & IT_CREAT ||
             (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT))
@@ -686,7 +657,6 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                         if (IS_ERR(nd->intent.open.file))
                                 RETURN((struct dentry *)nd->intent.open.file);
 #endif
-
                 if (ll_d2d(dentry) && ll_d2d(dentry)->lld_it) {
                         it = ll_d2d(dentry)->lld_it;
                         ll_d2d(dentry)->lld_it = NULL;
@@ -831,9 +801,8 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, it);
-        if (IS_ERR(inode)) {
+        if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
-        }
 
         d_instantiate(dentry, inode);
         /* Negative dentry may be unhashed if parent does not have UPDATE lock,
@@ -900,8 +869,8 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
 
                 d_drop(dchild);
                 d_instantiate(dchild, inode);
-                EXIT;
         }
+        EXIT;
 err_exit:
         ptlrpc_req_finished(request);
 

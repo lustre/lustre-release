@@ -110,7 +110,6 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
         if (dchild->d_flags & DCACHE_LUSTRE_INVALID)
                 RETURN(1);
 
-
         RETURN(0);
 }
 
@@ -169,7 +168,7 @@ static int ll_ddelete(struct dentry *de)
         RETURN(0);
 }
 
-int ll_set_dd(struct dentry *de)
+static int ll_set_dd(struct dentry *de)
 {
         ENTRY;
         LASSERT(de != NULL);
@@ -183,7 +182,6 @@ int ll_set_dd(struct dentry *de)
 
                 OBD_ALLOC_PTR(lld);
                 if (likely(lld != NULL)) {
-                        CFS_INIT_LIST_HEAD(&lld->lld_sa_alias);
                         lock_dentry(de);
                         if (likely(de->d_fsdata == NULL))
                                 de->d_fsdata = lld;
@@ -196,6 +194,26 @@ int ll_set_dd(struct dentry *de)
         }
 
         RETURN(0);
+}
+
+int ll_dops_init(struct dentry *de, int block)
+{
+        struct ll_dentry_data *lld = ll_d2d(de);
+        int rc = 0;
+
+        if (lld == NULL && block != 0) {
+                rc = ll_set_dd(de);
+                if (rc)
+                        return rc;
+
+                lld = ll_d2d(de);
+        }
+
+        if (lld != NULL)
+                lld->lld_sa_generation = 0;
+
+        de->d_op = &ll_d_ops;
+        return rc;
 }
 
 void ll_intent_drop_lock(struct lookup_intent *it)
@@ -492,14 +510,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 }
         }
 
-        if (it->it_op == IT_GETATTR) {
+        if (it->it_op == IT_GETATTR)
                 first = ll_statahead_enter(parent, &de, 0);
-                if (first == 1) {
-                        ll_statahead_exit(parent, de, 1);
-                        ll_finish_md_op_data(op_data);
-                        GOTO(out, rc = 1);
-                }
-        }
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
@@ -575,14 +587,12 @@ out:
                        "inode %p refc %d\n", de->d_name.len,
                        de->d_name.name, de, de->d_parent, de->d_inode,
                        atomic_read(&de->d_count));
-                if (first != 1) {
-                        if (de->d_flags & DCACHE_LUSTRE_INVALID) {
-                                lock_dentry(de);
-                                de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                                unlock_dentry(de);
-                        }
-                        ll_lookup_finish_locks(it, de);
+                if (de->d_flags & DCACHE_LUSTRE_INVALID) {
+                        lock_dentry(de);
+                        de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                        unlock_dentry(de);
                 }
+                ll_lookup_finish_locks(it, de);
         }
         RETURN(rc);
 
@@ -763,15 +773,17 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 
         if (nd && !(nd->flags & (LOOKUP_CONTINUE|LOOKUP_PARENT))) {
                 struct lookup_intent *it;
+
                 it = ll_convert_intent(&nd->intent.open, nd->flags);
                 if (IS_ERR(it))
                         RETURN(0);
-                if (it->it_op == (IT_OPEN|IT_CREAT))
-                        if (nd->intent.open.flags & O_EXCL) {
-                                CDEBUG(D_VFSTRACE, "create O_EXCL, returning 0\n");
-                                rc = 0;
-                                goto out_it;
-                        }
+
+                if (it->it_op == (IT_OPEN|IT_CREAT) &&
+                    nd->intent.open.flags & O_EXCL) {
+                        CDEBUG(D_VFSTRACE, "create O_EXCL, returning 0\n");
+                        rc = 0;
+                        goto out_it;
+                }
 
                 rc = ll_revalidate_it(dentry, nd->flags, it);
 

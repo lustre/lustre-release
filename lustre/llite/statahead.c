@@ -55,8 +55,6 @@ struct ll_sai_entry {
         int                     se_stat;
         struct ptlrpc_request  *se_req;
         struct md_enqueue_info *se_minfo;
-        struct dentry          *se_dentry;
-        struct inode           *se_inode;
 };
 
 enum {
@@ -123,38 +121,6 @@ static inline int sa_low_hit(struct ll_statahead_info *sai)
                 (sai->sai_consecutive_miss > 8));
 }
 
-static inline int sa_skip_nolock(struct ll_statahead_info *sai)
-{
-        return (sai->sai_nolock >= 3);
-}
-
-static void ll_sai_entry_free(struct ll_sai_entry *entry)
-{
-        struct dentry *dentry = entry->se_dentry;
-        struct inode  *inode  = entry->se_inode;
-
-        if (dentry) {
-                struct ll_dentry_data *lld = ll_d2d(dentry);
-                struct ll_inode_info *lli;
-
-                entry->se_dentry = NULL;
-                LASSERT(inode != NULL);
-                lli = ll_i2info(inode);
-                if (!cfs_list_empty(&lli->lli_sa_dentry)) {
-                        cfs_spin_lock(&lli->lli_sa_lock);
-                        cfs_list_del_init(&lld->lld_sa_alias);
-                        cfs_spin_unlock(&lli->lli_sa_lock);
-                }
-                dput(dentry);
-        }
-        if (inode) {
-                entry->se_inode = NULL;
-                iput(inode);
-        }
-        LASSERT(cfs_list_empty(&entry->se_list));
-        OBD_FREE_PTR(entry);
-}
-
 /**
  * process the deleted entry's member and free the entry.
  * (1) release intent
@@ -179,8 +145,10 @@ static void ll_sai_entry_cleanup(struct ll_sai_entry *entry, int free)
                 entry->se_req = NULL;
                 ptlrpc_req_finished(req);
         }
-        if (free)
-                ll_sai_entry_free(entry);
+        if (free) {
+                LASSERT(cfs_list_empty(&entry->se_list));
+                OBD_FREE_PTR(entry);
+        }
 
         EXIT;
 }
@@ -319,7 +287,7 @@ static int ll_sai_entry_fini(struct ll_statahead_info *sai)
                 if (entry->se_index < sai->sai_index_next) {
                         cfs_list_del_init(&entry->se_list);
                         rc = entry->se_stat;
-                        ll_sai_entry_free(entry);
+                        OBD_FREE_PTR(entry);
                 }
         } else {
                 LASSERT(sa_is_stopped(sai));
@@ -390,7 +358,7 @@ ll_sai_entry_to_stated(struct ll_statahead_info *sai, struct ll_sai_entry *entry
         /* stale entry */
         if (unlikely(entry->se_index < sai->sai_index_next)) {
                 cfs_spin_unlock(&lli->lli_sa_lock);
-                ll_sai_entry_free(entry);
+                OBD_FREE_PTR(entry);
                 RETURN(0);
         }
 
@@ -456,12 +424,9 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
                  * lookup.
                  */
                 struct dentry    *save = dentry;
-                __u32 bits             = 0;
                 struct it_cb_data icbd = {
                         .icbd_parent   = minfo->mi_dir,
-                        .icbd_childp   = &dentry,
-                        .icbd_alias    = &entry->se_inode,
-                        .bits          = &bits
+                        .icbd_childp   = &dentry
                 };
 
                 LASSERT(fid_is_zero(&minfo->mi_data.op_fid2));
@@ -473,45 +438,14 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
 
                 /* Here dentry->d_inode might be NULL, because the entry may
                  * have been removed before we start doing stat ahead. */
-
-                /* BUG 15962, 21739: since statahead thread does not hold
-                 * parent's i_mutex, it can not alias the dentry to inode.
-                 * Here we just create/update inode in memory, and let the
-                 * main "ls -l" thread to alias such dentry to the inode with
-                 * parent's i_mutex held.
-                 * On the other hand, we hold ldlm ibits lock for the inode
-                 * yet, to allow other operations to cancel such lock in time,
-                 * we should drop the ldlm lock reference count, then the main
-                 * "ls -l" thread should check/get such ldlm ibits lock before
-                 * aliasing such dentry to the inode later. If we don't do such
-                 * drop here, it maybe cause deadlock with i_muext held by
-                 * others, just like bug 21739. */
                 rc = ll_lookup_it_finish(req, it, &icbd);
-                if (entry->se_inode != NULL) {
-                        struct ll_dentry_data *lld = ll_d2d(dentry);
-                        struct ll_inode_info *sei = ll_i2info(entry->se_inode);
+                if (!rc)
+                        ll_lookup_finish_locks(it, dentry);
 
-                        /* For statahead lookup case, both MDS_INODELOCK_LOOKUP
-                         * and MDS_INODELOCK_UPDATE should be granted */
-                        if (likely(bits & MDS_INODELOCK_LOOKUP &&
-                                   bits & MDS_INODELOCK_UPDATE)) {
-                                /* the first dentry ref_count will be dropped by
-                                 * ll_sai_entry_to_stated(), so hold another ref
-                                 * in advance */
-                                entry->se_dentry = dget(dentry);
-                                cfs_spin_lock(&sei->lli_sa_lock);
-                                cfs_list_add(&lld->lld_sa_alias,
-                                             &sei->lli_sa_dentry);
-                                cfs_spin_unlock(&sei->lli_sa_lock);
-                                sai->sai_nolock = 0;
-                        } else {
-                                iput(entry->se_inode);
-                                entry->se_inode = NULL;
-                                sai->sai_nolock++;
-                        }
+                if (dentry != save) {
+                        minfo->mi_dentry = dentry;
+                        dput(save);
                 }
-                LASSERT(dentry == save);
-                ll_intent_drop_lock(it);
         } else {
                 /*
                  * revalidate.
@@ -722,8 +656,7 @@ static int do_sa_revalidate(struct inode *dir, struct dentry *dentry)
         if (unlikely(dentry == dentry->d_sb->s_root))
                 RETURN(1);
 
-        rc = md_revalidate_lock(ll_i2mdexp(dir), &it, ll_inode2fid(inode),
-                                NULL);
+        rc = md_revalidate_lock(ll_i2mdexp(dir), &it, ll_inode2fid(inode));
         if (rc == 1) {
                 ll_intent_release(&it);
                 RETURN(1);
@@ -777,18 +710,9 @@ static int ll_statahead_one(struct dentry *parent, const char* entry_name,
         ll_name2qstr(&name, entry_name, entry_name_len);
         dentry = d_lookup(parent, &name);
         if (!dentry) {
-                if (unlikely(sa_skip_nolock(sai))) {
-                        CWARN("can not obtain lookup lock, skip the succeedent "
-                              "lookup cases, will cause statahead miss, and "
-                              "statahead maybe exit for that.\n");
-                        GOTO(out, rc = -EAGAIN);
-                }
-
                 dentry = d_alloc(parent, &name);
                 if (dentry) {
-                        rc = ll_dops_init(dentry, 1);
-                        if (!rc)
-                                rc = do_sa_lookup(dir, dentry);
+                        rc = do_sa_lookup(dir, dentry);
                         if (rc)
                                 dput(dentry);
                 } else {
@@ -977,9 +901,9 @@ out:
 /**
  * called in ll_file_release().
  */
-void ll_stop_statahead(struct inode *inode, void *key)
+void ll_stop_statahead(struct inode *dir, void *key)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ll_inode_info *lli = ll_i2info(dir);
 
         if (unlikely(key == NULL))
                 return;
@@ -1138,48 +1062,11 @@ out:
         return rc;
 }
 
-/*
- * tgt: the dentry to be revalidate or lookup
- * new: the dentry created by statahead
- */
-static int is_same_dentry(struct dentry *tgt, struct dentry *new, int lookup)
-{
-        if (tgt == new) {
-                LASSERT(lookup == 0);
-                return 1;
-        }
-        if (tgt->d_parent != new->d_parent)
-                return 0;
-        if (tgt->d_name.hash != new->d_name.hash)
-                return 0;
-        if (tgt->d_name.len != new->d_name.len)
-                return 0;
-        if (memcmp(tgt->d_name.name, new->d_name.name, tgt->d_name.len) != 0)
-                return 0;
-        if (tgt->d_inode == NULL && lookup)
-                return 1;
-        if (tgt->d_inode)
-                LASSERTF(tgt->d_flags & DCACHE_LUSTRE_INVALID,
-                         "[%.*s/%.*s] [%x %p "DFID"] [%x %p "DFID"]\n",
-                         tgt->d_parent->d_name.len, tgt->d_parent->d_name.name,
-                         tgt->d_name.len, tgt->d_name.name,
-                         tgt->d_flags, tgt, PFID(ll_inode2fid(tgt->d_inode)),
-                         new->d_flags, new, PFID(ll_inode2fid(new->d_inode)));
-        else
-                LASSERTF(tgt->d_flags & DCACHE_LUSTRE_INVALID,
-                         "[%.*s/%.*s] [%x %p 0] [%x %p "DFID"]\n",
-                         tgt->d_parent->d_name.len, tgt->d_parent->d_name.name,
-                         tgt->d_name.len, tgt->d_name.name,
-                         tgt->d_flags, tgt,
-                         new->d_flags, new, PFID(ll_inode2fid(new->d_inode)));
-        return 0;
-}
-
 /**
  * Start statahead thread if this is the first dir entry.
  * Otherwise if a thread is started already, wait it until it is ahead of me.
- * \retval 0       -- stat ahead thread process such dentry, miss for lookup
- * \retval 1       -- stat ahead thread process such dentry, hit for any case
+ * \retval 0       -- stat ahead thread process such dentry, for lookup, it miss
+ * \retval 1       -- stat ahead thread process such dentry, for lookup, it hit
  * \retval -EEXIST -- stat ahead thread started, and this is the first dentry
  * \retval -EBADFD -- statahead thread exit and not dentry available
  * \retval -EAGAIN -- try to stat by caller
@@ -1242,108 +1129,6 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                                           &lwi);
                         if (unlikely(rc == -EINTR))
                                 RETURN(rc);
-                }
-
-                if (ll_sai_entry_stated(sai)) {
-                        struct ll_sai_entry  *entry;
-
-                        entry = cfs_list_entry(sai->sai_entries_stated.next,
-                                               struct ll_sai_entry, se_list);
-                        /* This is for statahead lookup */
-                        if (entry->se_inode != NULL) {
-                                struct lookup_intent it = {.it_op = IT_LOOKUP};
-                                struct dentry *dchild = entry->se_dentry;
-                                struct inode *ichild = entry->se_inode;
-                                struct ll_dentry_data *lld = ll_d2d(dchild);
-                                struct ll_inode_info *sei = ll_i2info(ichild);
-                                struct dentry *save = dchild;
-                                int invalid = 0;
-                                __u32 bits = MDS_INODELOCK_LOOKUP |
-                                             MDS_INODELOCK_UPDATE;
-                                int found = 0;
-
-                                LASSERT(dchild != *dentryp);
-
-                                if (!lookup)
-                                        mutex_lock(&dir->i_mutex);
-
-                                /*
-                                 * Make sure dentry is still valid.
-                                 * For statahead lookup case, we need both
-                                 * LOOKUP lock and UPDATE lock which obtained
-                                 * by statahead thread originally.
-                                 *
-                                 * Consider following racer case:
-                                 * 1. statahead thread on client1 get lock with
-                                 *    both LOOKUK and UPDATE bits for "aaa"
-                                 * 2. rename thread on client2 cancel such lock
-                                 *    from client1, then rename "aaa" to "bbb"
-                                 * 3. ls thread on client1 obtain LOOKUP lock
-                                 *    for "bbb" again
-                                 * 4. here the dentry "aaa" created by statahead
-                                 *    thread should be invalid even related
-                                 *    LOOKUP lock valid for the same inode
-                                 */
-                                rc = md_revalidate_lock(ll_i2mdexp(dir), &it,
-                                                        ll_inode2fid(ichild),
-                                                        &bits);
-                                cfs_spin_lock(&sei->lli_sa_lock);
-                                if (!cfs_list_empty(&lld->lld_sa_alias))
-                                        cfs_list_del_init(&lld->lld_sa_alias);
-                                else
-                                        invalid = 1;
-                                cfs_spin_unlock(&sei->lli_sa_lock);
-                                if (rc != 1)
-                                        /* Someone has cancelled the original
-                                         * lock before the real "revalidate"
-                                         * using it. Drop it. */
-                                        goto out_mutex;
-
-                                if (invalid) {
-                                        /* Someone has cancelled the original
-                                         * lock, and reobtained it, the dentry
-                                         * maybe invalid anymore, Drop it. */
-                                        ll_intent_drop_lock(&it);
-                                        goto out_mutex;
-                                }
-
-                                ll_lookup_it_alias(&dchild, ichild, bits);
-                                found = is_same_dentry(*dentryp, dchild, lookup);
-                                ll_lookup_finish_locks(&it, dchild);
-                                if (dchild != save)
-                                        dput(save);
-                                ichild = NULL;
-
-out_mutex:
-                                if (!lookup)
-                                        mutex_unlock(&dir->i_mutex);
-                                /* Drop the inode reference count held by
-                                 * interpreter. */
-                                if (ichild != NULL)
-                                        iput(ichild);
-
-                                entry->se_dentry = NULL;
-                                entry->se_inode = NULL;
-                                if (found) {
-                                        if (lookup) {
-                                                LASSERT(*dentryp != dchild);
-                                                /* VFS will drop the reference
-                                                 * count for dchild and *dentryp
-                                                 * by itself. */
-                                                *dentryp = dchild;
-                                        } else {
-                                                LASSERT(*dentryp == dchild);
-                                                /* Drop the dentry reference
-                                                 * count held by statahead. */
-                                                dput(dchild);
-                                        }
-                                        RETURN(1);
-                                } else {
-                                        /* Drop the dentry reference count held
-                                         * by statahead. */
-                                        dput(dchild);
-                                }
-                        }
                 }
 
                 if (lookup) {

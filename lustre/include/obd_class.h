@@ -2165,13 +2165,13 @@ static inline int md_intent_getattr_async(struct obd_export *exp,
 
 static inline int md_revalidate_lock(struct obd_export *exp,
                                      struct lookup_intent *it,
-                                     struct lu_fid *fid, __u32 *bits)
+                                     struct lu_fid *fid)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, revalidate_lock);
         EXP_MD_COUNTER_INCREMENT(exp, revalidate_lock);
-        rc = MDP(exp->exp_obd, revalidate_lock)(exp, it, fid, bits);
+        rc = MDP(exp->exp_obd, revalidate_lock)(exp, it, fid);
         RETURN(rc);
 }
 
