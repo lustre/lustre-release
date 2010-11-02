@@ -58,6 +58,9 @@ static void mds_lov_dump_objids(const char *label, struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         unsigned int i=0, j;
 
+        if ((libcfs_debug & D_INFO) == 0)
+                return;
+
         CDEBUG(D_INFO, "dump from %s\n", label);
         if (mds->mds_lov_page_dirty == NULL) {
                 CERROR("NULL bitmap!\n");
