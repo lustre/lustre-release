@@ -516,8 +516,7 @@ srpc_finish_service (srpc_service_t *sv)
                 if (!cfs_list_empty(&sv->sv_active_rpcq)) {
                         rpc = cfs_list_entry(sv->sv_active_rpcq.next,
                                              srpc_server_rpc_t, srpc_list);
-                        CDEBUG (D_NETERROR,
-                                "Active RPC %p on shutdown: sv %s, peer %s, "
+                        CNETERR("Active RPC %p on shutdown: sv %s, peer %s, "
                                 "wi %s scheduled %d running %d, "
                                 "ev fired %d type %d status %d lnet %d\n",
                                 rpc, sv->sv_name, libcfs_id2str(rpc->srpc_peer),
@@ -762,7 +761,7 @@ srpc_server_rpc_done (srpc_server_rpc_t *rpc, int status)
 
         rpc->srpc_status = status;
 
-        CDEBUG (status == 0 ? D_NET : D_NETERROR,
+        CDEBUG_LIMIT (status == 0 ? D_NET : D_NETERROR,
                 "Server RPC %p done: service %s, peer %s, status %s:%d\n",
                 rpc, sv->sv_name, libcfs_id2str(rpc->srpc_peer),
                 swi_state2str(rpc->srpc_wi.swi_state), status);
@@ -1004,7 +1003,7 @@ srpc_client_rpc_done (srpc_client_rpc_t *rpc, int status)
 
         srpc_del_client_rpc_timer(rpc);
 
-        CDEBUG ((status == 0) ? D_NET : D_NETERROR,
+        CDEBUG_LIMIT ((status == 0) ? D_NET : D_NETERROR,
                 "Client RPC done: service %d, peer %s, status %s:%d:%d\n",
                 rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
                 swi_state2str(wi->swi_state), rpc->crpc_aborted, status);

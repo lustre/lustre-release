@@ -1030,8 +1030,8 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
             lnet_peer_alive_locked(lp) == 0) {
                 LNET_UNLOCK();
 
-                CDEBUG(D_NETERROR, "Dropping message for %s: peer not alive\n",
-                       libcfs_id2str(msg->msg_target));
+                CNETERR("Dropping message for %s: peer not alive\n",
+                        libcfs_id2str(msg->msg_target));
                 if (do_send)
                         lnet_finalize(ni, msg, -EHOSTUNREACH);
 
@@ -1864,12 +1864,11 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
                 /* fall through */
 
         case LNET_MATCHMD_DROP:
-                CDEBUG(D_NETERROR,
-                       "Dropping PUT from %s portal %d match "LPU64
-                       " offset %d length %d: %d\n",
-                       libcfs_id2str(src), index,
-                       hdr->msg.put.match_bits,
-                       hdr->msg.put.offset, rlength, rc);
+                CNETERR("Dropping PUT from %s portal %d match "LPU64
+                        " offset %d length %d: %d\n",
+                        libcfs_id2str(src), index,
+                        hdr->msg.put.match_bits,
+                        hdr->msg.put.offset, rlength, rc);
                 LNET_UNLOCK();
 
                 return ENOENT;          /* +ve: OK but no match */
@@ -1903,14 +1902,13 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
                            hdr->msg.get.match_bits, msg,
                            &mlength, &offset, &md);
         if (rc == LNET_MATCHMD_DROP) {
-                CDEBUG(D_NETERROR,
-                       "Dropping GET from %s portal %d match "LPU64
-                       " offset %d length %d\n",
-                       libcfs_id2str(src),
-                       hdr->msg.get.ptl_index,
-                       hdr->msg.get.match_bits,
-                       hdr->msg.get.src_offset,
-                       hdr->msg.get.sink_length);
+                CNETERR("Dropping GET from %s portal %d match "LPU64
+                        " offset %d length %d\n",
+                        libcfs_id2str(src),
+                        hdr->msg.get.ptl_index,
+                        hdr->msg.get.match_bits,
+                        hdr->msg.get.src_offset,
+                        hdr->msg.get.sink_length);
                 LNET_UNLOCK();
                 return ENOENT;                  /* +ve: OK but no match */
         }
@@ -1973,12 +1971,12 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.reply.dst_wmd);
         if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
-                CDEBUG(D_NETERROR, "%s: Dropping REPLY from %s for %s "
-                       "MD "LPX64"."LPX64"\n", 
-                       libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
-                       (md == NULL) ? "invalid" : "inactive",
-                       hdr->msg.reply.dst_wmd.wh_interface_cookie,
-                       hdr->msg.reply.dst_wmd.wh_object_cookie);
+                CNETERR("%s: Dropping REPLY from %s for %s "
+                        "MD "LPX64"."LPX64"\n",
+                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
+                        (md == NULL) ? "invalid" : "inactive",
+                        hdr->msg.reply.dst_wmd.wh_interface_cookie,
+                        hdr->msg.reply.dst_wmd.wh_object_cookie);
                 if (md != NULL && md->md_me != NULL)
                         CERROR("REPLY MD also attached to portal %d\n",
                                md->md_me->me_portal);
@@ -1994,9 +1992,9 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
 
         if (mlength < rlength &&
             (md->md_options & LNET_MD_TRUNCATE) == 0) {
-                CDEBUG(D_NETERROR, "%s: Dropping REPLY from %s length %d "
-                       "for MD "LPX64" would overflow (%d)\n",
-                       libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
+                CNETERR("%s: Dropping REPLY from %s length %d "
+                        "for MD "LPX64" would overflow (%d)\n",
+                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
                         rlength, hdr->msg.reply.dst_wmd.wh_object_cookie,
                         mlength);
                 LNET_UNLOCK();

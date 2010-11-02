@@ -537,7 +537,7 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 
         if (status != EP_SUCCESS) {
 
-                CDEBUG (D_NETERROR, "Tx completion to %s failed: %d\n", 
+                CNETERR("Tx completion to %s failed: %d\n",
                         libcfs_nid2str(ktx->ktx_nid), status);
 
                 status = -EHOSTDOWN;
@@ -677,7 +677,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                 return (0);
 
         default: /* fatal error */
-                CDEBUG (D_NETERROR, "Tx to %s failed: %d\n",
+                CNETERR ("Tx to %s failed: %d\n",
                         libcfs_nid2str(ktx->ktx_nid), rc);
                 kqswnal_notify_peer_down(ktx);
                 return (-EHOSTUNREACH);
@@ -1223,23 +1223,23 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 #endif
                 nob += payload_nob;
         }
-        
+
         ktx->ktx_port = (nob <= KQSW_SMALLMSG) ?
                         EP_MSG_SVC_PORTALS_SMALL : EP_MSG_SVC_PORTALS_LARGE;
 
         rc = kqswnal_launch (ktx);
 
  out:
-        CDEBUG(rc == 0 ? D_NET : D_NETERROR, "%s %d bytes to %s%s: rc %d\n",
-               routing ? (rc == 0 ? "Routed" : "Failed to route") :
-                         (rc == 0 ? "Sent" : "Failed to send"),
-               nob, libcfs_nid2str(target.nid),
-               target_is_router ? "(router)" : "", rc);
+        CDEBUG_LIMIT(rc == 0? D_NET :D_NETERROR, "%s %d bytes to %s%s: rc %d\n",
+                     routing ? (rc == 0 ? "Routed" : "Failed to route") :
+                               (rc == 0 ? "Sent" : "Failed to send"),
+                     nob, libcfs_nid2str(target.nid),
+                     target_is_router ? "(router)" : "", rc);
 
         if (rc != 0) {
                 lnet_msg_t *repmsg = (lnet_msg_t *)ktx->ktx_args[2];
                 int         state = ktx->ktx_state;
-                
+
                 kqswnal_put_idle_tx (ktx);
 
                 if (state == KTX_GETTING && repmsg != NULL) {

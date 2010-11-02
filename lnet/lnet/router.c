@@ -546,8 +546,8 @@ lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
         if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC)) {
                 lnet_swap_pinginfo(info);
         } else if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
-                CDEBUG(D_NETERROR, "%s: Unexpected magic %08x\n",
-                       libcfs_nid2str(rtr->lp_nid), info->pi_magic);
+                CNETERR("%s: Unexpected magic %08x\n",
+                        libcfs_nid2str(rtr->lp_nid), info->pi_magic);
                 return -EPROTO;
         }
 
@@ -555,8 +555,8 @@ lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
                 return -ENOENT;  /* v1 doesn't carry NI status info */
 
         if (info->pi_version != LNET_PROTO_PING_VERSION) {
-                CDEBUG(D_NETERROR, "%s: Unexpected version 0x%x\n",
-                       libcfs_nid2str(rtr->lp_nid), info->pi_version);
+                CNETERR("%s: Unexpected version 0x%x\n",
+                        libcfs_nid2str(rtr->lp_nid), info->pi_version);
                 return -EPROTO;
         }
 
@@ -565,8 +565,8 @@ lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
                 lnet_nid_t        nid = stat->ns_nid;
 
                 if (nid == LNET_NID_ANY) {
-                        CDEBUG(D_NETERROR, "%s: unexpected LNET_NID_ANY\n",
-                               libcfs_nid2str(rtr->lp_nid));
+                        CNETERR("%s: unexpected LNET_NID_ANY\n",
+                                libcfs_nid2str(rtr->lp_nid));
                         return -EPROTO;
                 }
 
@@ -582,8 +582,8 @@ lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
                 }
 
                 if (stat->ns_status != LNET_NI_STATUS_UP) {
-                        CDEBUG(D_NETERROR, "%s: Unexpected status 0x%x\n",
-                               libcfs_nid2str(rtr->lp_nid), stat->ns_status);
+                        CNETERR("%s: Unexpected status 0x%x\n",
+                                libcfs_nid2str(rtr->lp_nid), stat->ns_status);
                         return -EPROTO;
                 }
 
@@ -1500,9 +1500,9 @@ lnet_router_checker (void)
         if (last != 0 &&
             interval > MAX(live_router_check_interval,
                            dead_router_check_interval))
-                CDEBUG(D_NETERROR, "Checker(%d/%d) not called for %d seconds\n",
-                       live_router_check_interval, dead_router_check_interval,
-                       interval);
+                CNETERR("Checker(%d/%d) not called for %d seconds\n",
+                        live_router_check_interval, dead_router_check_interval,
+                        interval);
 
         LNET_LOCK();
         LASSERT (!running); /* recursion check */

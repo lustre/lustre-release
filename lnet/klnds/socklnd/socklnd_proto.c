@@ -493,10 +493,10 @@ ksocknal_send_hello_v1 (ksock_conn_t *conn, ksock_hello_msg_t *hello)
         hdr->msg.hello.type = cpu_to_le32 (hello->kshm_ctype);
         hdr->msg.hello.incarnation = cpu_to_le64 (hello->kshm_src_incarnation);
 
-        rc = libcfs_sock_write(sock, hdr, sizeof(*hdr), lnet_acceptor_timeout());
+        rc = libcfs_sock_write(sock, hdr, sizeof(*hdr),lnet_acceptor_timeout());
 
         if (rc != 0) {
-                CDEBUG (D_NETERROR, "Error %d sending HELLO hdr to %u.%u.%u.%u/%d\n",
+                CNETERR("Error %d sending HELLO hdr to %u.%u.%u.%u/%d\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
                 goto out;
         }
@@ -512,7 +512,7 @@ ksocknal_send_hello_v1 (ksock_conn_t *conn, ksock_hello_msg_t *hello)
                                hello->kshm_nips * sizeof(__u32),
                                lnet_acceptor_timeout());
         if (rc != 0) {
-                CDEBUG (D_NETERROR, "Error %d sending HELLO payload (%d)"
+                CNETERR("Error %d sending HELLO payload (%d)"
                         " to %u.%u.%u.%u/%d\n", rc, hello->kshm_nips,
                         HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
         }
@@ -545,7 +545,7 @@ ksocknal_send_hello_v2 (ksock_conn_t *conn, ksock_hello_msg_t *hello)
                                lnet_acceptor_timeout());
 
         if (rc != 0) {
-                CDEBUG (D_NETERROR, "Error %d sending HELLO hdr to %u.%u.%u.%u/%d\n",
+                CNETERR("Error %d sending HELLO hdr to %u.%u.%u.%u/%d\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
                 return rc;
         }
@@ -557,7 +557,7 @@ ksocknal_send_hello_v2 (ksock_conn_t *conn, ksock_hello_msg_t *hello)
                                hello->kshm_nips * sizeof(__u32),
                                lnet_acceptor_timeout());
         if (rc != 0) {
-                CDEBUG (D_NETERROR, "Error %d sending HELLO payload (%d)"
+                CNETERR("Error %d sending HELLO payload (%d)"
                         " to %u.%u.%u.%u/%d\n", rc, hello->kshm_nips,
                         HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
         }

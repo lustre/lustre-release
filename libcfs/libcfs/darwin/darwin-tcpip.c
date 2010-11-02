@@ -699,7 +699,7 @@ libcfs_sock_connect (cfs_socket_t **sockp, int *fatal,
         }
 
         *fatal = !(rc == -EADDRNOTAVAIL || rc == -EADDRINUSE);
-        CDEBUG(*fatal ? D_NETERROR : D_NET,
+        CDEBUG_LIMIT(*fatal ? D_NETERROR : D_NET,
                "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
                HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
 
@@ -1311,8 +1311,7 @@ libcfs_sock_connect (struct socket **sockp, int *fatal,
         if (rc != 0) {
                 CFS_NET_EX;
                 if (rc != EADDRNOTAVAIL && rc != EADDRINUSE)
-                        CDEBUG(D_NETERROR,
-                               "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
+                        CNETERR("Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
                                HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
                 goto out;
         }
@@ -1325,8 +1324,7 @@ libcfs_sock_connect (struct socket **sockp, int *fatal,
                 so->so_error = 0;
                 splx(s);
                 CFS_NET_EX;
-                CDEBUG(D_NETERROR,
-                       "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
+                CNETERR("Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
                        HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
                 goto out;
         }

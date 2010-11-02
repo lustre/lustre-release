@@ -382,9 +382,9 @@ kranal_close_conn_locked (kra_conn_t *conn, int error)
 {
         kra_peer_t        *peer = conn->rac_peer;
 
-        CDEBUG(error == 0 ? D_NET : D_NETERROR,
-               "closing conn to %s: error %d\n", 
-               libcfs_nid2str(peer->rap_nid), error);
+        CDEBUG_LIMIT(error == 0 ? D_NET : D_NETERROR,
+                     "closing conn to %s: error %d\n",
+                     libcfs_nid2str(peer->rap_nid), error);
 
         LASSERT (!cfs_in_interrupt());
         LASSERT (conn->rac_state == RANAL_CONN_ESTABLISHED);
@@ -850,8 +850,8 @@ kranal_connect (kra_peer_t *peer)
         if (cfs_list_empty(&zombies))
                 return;
 
-        CDEBUG(D_NETERROR, "Dropping packets for %s: connection failed\n",
-               libcfs_nid2str(peer->rap_nid));
+        CNETERR("Dropping packets for %s: connection failed\n",
+                libcfs_nid2str(peer->rap_nid));
 
         do {
                 tx = cfs_list_entry(zombies.next, kra_tx_t, tx_list);

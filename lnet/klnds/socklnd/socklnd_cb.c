@@ -414,13 +414,13 @@ ksocknal_txlist_done (lnet_ni_t *ni, cfs_list_t *txlist, int error)
                 tx = cfs_list_entry (txlist->next, ksock_tx_t, tx_list);
 
                 if (error && tx->tx_lnetmsg != NULL) {
-                        CDEBUG (D_NETERROR, "Deleting packet type %d len %d %s->%s\n",
+                        CNETERR("Deleting packet type %d len %d %s->%s\n",
                                 le32_to_cpu (tx->tx_lnetmsg->msg_hdr.type),
                                 le32_to_cpu (tx->tx_lnetmsg->msg_hdr.payload_length),
                                 libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.src_nid)),
                                 libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.dest_nid)));
                 } else if (error) {
-                        CDEBUG (D_NETERROR, "Deleting noop packet\n");
+                        CNETERR("Deleting noop packet\n");
                 }
 
                 cfs_list_del (&tx->tx_list);
@@ -920,7 +920,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
         cfs_write_unlock_bh (g_lock);
 
         /* NB Routes may be ignored if connections to them failed recently */
-        CDEBUG(D_NETERROR, "No usable routes to %s\n", libcfs_id2str(id));
+        CNETERR("No usable routes to %s\n", libcfs_id2str(id));
         return (-EHOSTUNREACH);
 }
 
@@ -2160,28 +2160,28 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
 
                         switch (error) {
                         case ECONNRESET:
-                                CDEBUG(D_NETERROR, "A connection with %s "
-                                       "(%u.%u.%u.%u:%d) was reset; "
-                                       "it may have rebooted.\n",
-                                       libcfs_id2str(peer->ksnp_id),
-                                       HIPQUAD(conn->ksnc_ipaddr),
-                                       conn->ksnc_port);
+                                CNETERR("A connection with %s "
+                                        "(%u.%u.%u.%u:%d) was reset; "
+                                        "it may have rebooted.\n",
+                                        libcfs_id2str(peer->ksnp_id),
+                                        HIPQUAD(conn->ksnc_ipaddr),
+                                        conn->ksnc_port);
                                 break;
                         case ETIMEDOUT:
-                                CDEBUG(D_NETERROR, "A connection with %s "
-                                       "(%u.%u.%u.%u:%d) timed out; the "
-                                       "network or node may be down.\n",
-                                       libcfs_id2str(peer->ksnp_id),
-                                       HIPQUAD(conn->ksnc_ipaddr),
-                                       conn->ksnc_port);
+                                CNETERR("A connection with %s "
+                                        "(%u.%u.%u.%u:%d) timed out; the "
+                                        "network or node may be down.\n",
+                                        libcfs_id2str(peer->ksnp_id),
+                                        HIPQUAD(conn->ksnc_ipaddr),
+                                        conn->ksnc_port);
                                 break;
                         default:
-                                CDEBUG(D_NETERROR, "An unexpected network error %d "
-                                       "occurred with %s "
-                                       "(%u.%u.%u.%u:%d\n", error,
-                                       libcfs_id2str(peer->ksnp_id),
-                                       HIPQUAD(conn->ksnc_ipaddr),
-                                       conn->ksnc_port);
+                                CNETERR("An unexpected network error %d "
+                                        "occurred with %s "
+                                        "(%u.%u.%u.%u:%d\n", error,
+                                        libcfs_id2str(peer->ksnp_id),
+                                        HIPQUAD(conn->ksnc_ipaddr),
+                                        conn->ksnc_port);
                                 break;
                         }
 
@@ -2193,14 +2193,14 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                                      conn->ksnc_rx_deadline)) {
                         /* Timed out incomplete incoming message */
                         ksocknal_conn_addref(conn);
-                        CDEBUG(D_NETERROR, "Timeout receiving from %s "
-                               "(%u.%u.%u.%u:%d), state %d wanted %d left %d\n",
-                               libcfs_id2str(peer->ksnp_id),
-                               HIPQUAD(conn->ksnc_ipaddr),
-                               conn->ksnc_port,
-                               conn->ksnc_rx_state,
-                               conn->ksnc_rx_nob_wanted,
-                               conn->ksnc_rx_nob_left);
+                        CNETERR("Timeout receiving from %s (%u.%u.%u.%u:%d), "
+                                "state %d wanted %d left %d\n",
+                                libcfs_id2str(peer->ksnp_id),
+                                HIPQUAD(conn->ksnc_ipaddr),
+                                conn->ksnc_port,
+                                conn->ksnc_rx_state,
+                                conn->ksnc_rx_nob_wanted,
+                                conn->ksnc_rx_nob_left);
                         return (conn);
                 }
 
@@ -2211,12 +2211,11 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         /* Timed out messages queued for sending or
                          * buffered in the socket's send buffer */
                         ksocknal_conn_addref(conn);
-                        CDEBUG(D_NETERROR, "Timeout sending data to %s "
-                               "(%u.%u.%u.%u:%d) the network or that "
-                               "node may be down.\n",
-                               libcfs_id2str(peer->ksnp_id),
-                               HIPQUAD(conn->ksnc_ipaddr),
-                               conn->ksnc_port);
+                        CNETERR("Timeout sending data to %s (%u.%u.%u.%u:%d) "
+                                "the network or that node may be down.\n",
+                                libcfs_id2str(peer->ksnp_id),
+                                HIPQUAD(conn->ksnc_ipaddr),
+                                conn->ksnc_port);
                         return (conn);
                 }
         }

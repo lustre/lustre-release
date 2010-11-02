@@ -75,7 +75,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 
         err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
         if (err != 0) {
-                CDEBUG(D_NETERROR, "cannot find peer %s!\n", uuid->uuid);
+                CNETERR("cannot find peer %s!\n", uuid->uuid);
                 return NULL;
         }
 

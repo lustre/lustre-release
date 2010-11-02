@@ -113,25 +113,24 @@ lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
         switch (rc) {
         /* "normal" errors */
         case -ECONNREFUSED:
-                CDEBUG(D_NETERROR, "Connection to %s at host %u.%u.%u.%u "
-                       "on port %d was refused: "
-                       "check that Lustre is running on that node.\n",
-                       libcfs_nid2str(peer_nid),
-                       HIPQUAD(peer_ip), peer_port);
+                CNETERR("Connection to %s at host %u.%u.%u.%u on port %d was "
+                        "refused: check that Lustre is running on that node.\n",
+                        libcfs_nid2str(peer_nid),
+                        HIPQUAD(peer_ip), peer_port);
                 break;
         case -EHOSTUNREACH:
         case -ENETUNREACH:
-                CDEBUG(D_NETERROR, "Connection to %s at host %u.%u.%u.%u "
-                       "was unreachable: the network or that node may "
-                       "be down, or Lustre may be misconfigured.\n",
-                       libcfs_nid2str(peer_nid), HIPQUAD(peer_ip));
+                CNETERR("Connection to %s at host %u.%u.%u.%u "
+                        "was unreachable: the network or that node may "
+                        "be down, or Lustre may be misconfigured.\n",
+                        libcfs_nid2str(peer_nid), HIPQUAD(peer_ip));
                 break;
         case -ETIMEDOUT:
-                CDEBUG(D_NETERROR, "Connection to %s at host %u.%u.%u.%u on "
-                       "port %d took too long: that node may be hung "
-                       "or experiencing high load.\n",
-                       libcfs_nid2str(peer_nid),
-                       HIPQUAD(peer_ip), peer_port);
+                CNETERR("Connection to %s at host %u.%u.%u.%u on "
+                        "port %d took too long: that node may be hung "
+                        "or experiencing high load.\n",
+                        libcfs_nid2str(peer_nid),
+                        HIPQUAD(peer_ip), peer_port);
                 break;
         case -ECONNRESET:
                 LCONSOLE_ERROR_MSG(0x11b, "Connection to %s at host %u.%u.%u.%u"

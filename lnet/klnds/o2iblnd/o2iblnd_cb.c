@@ -458,8 +458,8 @@ kiblnd_rx_complete (kib_rx_t *rx, int status, int nob)
                 goto ignore;
 
         if (status != IB_WC_SUCCESS) {
-                CDEBUG(D_NETERROR, "Rx from %s failed: %d\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid), status);
+                CNETERR("Rx from %s failed: %d\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid), status);
                 goto failed;
         }
 
@@ -958,11 +958,11 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
 
         if (failed) {
                 if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
-                        CDEBUG(D_NETERROR, "Tx -> %s cookie "LPX64
-                               " sending %d waiting %d: failed %d\n",
-                               libcfs_nid2str(conn->ibc_peer->ibp_nid),
-                               tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
-                               status);
+                        CNETERR("Tx -> %s cookie "LPX64
+                                " sending %d waiting %d: failed %d\n",
+                                libcfs_nid2str(conn->ibc_peer->ibp_nid),
+                                tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
+                                status);
 
                 kiblnd_close_conn(conn, -EIO);
         } else {
@@ -1787,7 +1787,7 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                 CDEBUG(D_NET, "closing conn to %s\n", 
                        libcfs_nid2str(peer->ibp_nid));
         } else {
-                CDEBUG(D_NETERROR, "Closing conn to %s: error %d%s%s%s%s\n",
+                CNETERR("Closing conn to %s: error %d%s%s%s%s\n",
                        libcfs_nid2str(peer->ibp_nid), error,
                        cfs_list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
                        cfs_list_empty(&conn->ibc_tx_queue_rsrvd) ? "" : "(sending_rsrvd)",
@@ -1961,7 +1961,7 @@ kiblnd_peer_connect_failed (kib_peer_t *peer, int active, int error)
         if (cfs_list_empty (&zombies))
                 return;
 
-        CDEBUG (D_NETERROR, "Deleting messages for %s: connection failed\n",
+        CNETERR("Deleting messages for %s: connection failed\n",
                 libcfs_nid2str(peer->ibp_nid));
 
         kiblnd_txlist_done(peer->ibp_ni, &zombies, -EHOSTUNREACH);
@@ -2392,13 +2392,13 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
                 break;
         }
 
-        CDEBUG(D_NETERROR, "%s: retrying (%s), %x, %x, "
-                           "queue_dep: %d, max_frag: %d, msg_size: %d\n",
-               libcfs_nid2str(peer->ibp_nid),
-               reason, IBLND_MSG_VERSION, version,
-               cp != NULL ? cp->ibcp_queue_depth : IBLND_MSG_QUEUE_SIZE(version),
-               cp != NULL ? cp->ibcp_max_frags   : IBLND_RDMA_FRAGS(version),
-               cp != NULL ? cp->ibcp_max_msg_size: IBLND_MSG_SIZE);
+        CNETERR("%s: retrying (%s), %x, %x, "
+                "queue_dep: %d, max_frag: %d, msg_size: %d\n",
+                libcfs_nid2str(peer->ibp_nid),
+                reason, IBLND_MSG_VERSION, version,
+                cp != NULL? cp->ibcp_queue_depth :IBLND_MSG_QUEUE_SIZE(version),
+                cp != NULL? cp->ibcp_max_frags   : IBLND_RDMA_FRAGS(version),
+                cp != NULL? cp->ibcp_max_msg_size: IBLND_MSG_SIZE);
 
         kiblnd_connect_peer(peer);
 }
@@ -2418,9 +2418,9 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
                 break;
 
         case IB_CM_REJ_INVALID_SERVICE_ID:
-                CDEBUG(D_NETERROR, "%s rejected: no listener at %d\n",
-                       libcfs_nid2str(peer->ibp_nid),
-                       *kiblnd_tunables.kib_service);
+                CNETERR("%s rejected: no listener at %d\n",
+                        libcfs_nid2str(peer->ibp_nid),
+                        *kiblnd_tunables.kib_service);
                 break;
 
         case IB_CM_REJ_CONSUMER_DEFINED:
@@ -2530,8 +2530,8 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
                 }
                 /* fall through */
         default:
-                CDEBUG(D_NETERROR, "%s rejected: reason %d, size %d\n",
-                       libcfs_nid2str(peer->ibp_nid), reason, priv_nob);
+                CNETERR("%s rejected: reason %d, size %d\n",
+                        libcfs_nid2str(peer->ibp_nid), reason, priv_nob);
                 break;
         }
 
@@ -2724,7 +2724,7 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 
 	case RDMA_CM_EVENT_ADDR_ERROR:
                 peer = (kib_peer_t *)cmid->context;
-                CDEBUG(D_NETERROR, "%s: ADDR ERROR %d\n",
+                CNETERR("%s: ADDR ERROR %d\n",
                        libcfs_nid2str(peer->ibp_nid), event->status);
                 kiblnd_peer_connect_failed(peer, 1, -EHOSTUNREACH);
                 kiblnd_peer_decref(peer);
@@ -2737,8 +2737,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                        libcfs_nid2str(peer->ibp_nid), event->status);
 
                 if (event->status != 0) {
-                        CDEBUG(D_NETERROR, "Can't resolve address for %s: %d\n",
-                               libcfs_nid2str(peer->ibp_nid), event->status);
+                        CNETERR("Can't resolve address for %s: %d\n",
+                                libcfs_nid2str(peer->ibp_nid), event->status);
                         rc = event->status;
                 } else {
                         rc = rdma_resolve_route(
@@ -2755,8 +2755,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
 	case RDMA_CM_EVENT_ROUTE_ERROR:
                 peer = (kib_peer_t *)cmid->context;
-                CDEBUG(D_NETERROR, "%s: ROUTE ERROR %d\n",
-                       libcfs_nid2str(peer->ibp_nid), event->status);
+                CNETERR("%s: ROUTE ERROR %d\n",
+                        libcfs_nid2str(peer->ibp_nid), event->status);
                 kiblnd_peer_connect_failed(peer, 1, -EHOSTUNREACH);
                 kiblnd_peer_decref(peer);
                 return -EHOSTUNREACH;           /* rc != 0 destroys cmid */
@@ -2769,7 +2769,7 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 if (event->status == 0)
                         return kiblnd_active_connect(cmid);
 
-                CDEBUG(D_NETERROR, "Can't resolve route for %s: %d\n",
+                CNETERR("Can't resolve route for %s: %d\n",
                        libcfs_nid2str(peer->ibp_nid), event->status);
                 kiblnd_peer_connect_failed(peer, 1, event->status);
                 kiblnd_peer_decref(peer);
@@ -2779,7 +2779,7 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 conn = (kib_conn_t *)cmid->context;
                 LASSERT(conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT ||
                         conn->ibc_state == IBLND_CONN_PASSIVE_WAIT);
-                CDEBUG(D_NETERROR, "%s: UNREACHABLE %d\n",
+                CNETERR("%s: UNREACHABLE %d\n",
                        libcfs_nid2str(conn->ibc_peer->ibp_nid), event->status);
                 kiblnd_connreq_done(conn, -ENETDOWN);
                 kiblnd_conn_decref(conn);
@@ -2789,8 +2789,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 conn = (kib_conn_t *)cmid->context;
                 LASSERT(conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT ||
                         conn->ibc_state == IBLND_CONN_PASSIVE_WAIT);
-                CDEBUG(D_NETERROR, "%s: CONNECT ERROR %d\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid), event->status);
+                CNETERR("%s: CONNECT ERROR %d\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid), event->status);
                 kiblnd_connreq_done(conn, -ENOTCONN);
                 kiblnd_conn_decref(conn);
                 return 0;
@@ -3129,8 +3129,8 @@ kiblnd_complete (struct ib_wc *wc)
                  * failing RDMA because 'tx' might be back on the idle list or
                  * even reused already if we didn't manage to post all our work
                  * items */
-                CDEBUG(D_NETERROR, "RDMA (tx: %p) failed: %d\n",
-                       kiblnd_wreqid2ptr(wc->wr_id), wc->status);
+                CNETERR("RDMA (tx: %p) failed: %d\n",
+                        kiblnd_wreqid2ptr(wc->wr_id), wc->status);
                 return;
 
         case IBLND_WID_TX:

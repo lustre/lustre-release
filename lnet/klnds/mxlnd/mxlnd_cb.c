@@ -186,16 +186,16 @@ mxlnd_get_idle_rx(kmx_conn_t *conn)
 
 #if MXLND_DEBUG
         if (rx->mxc_get != rx->mxc_put) {
-                CDEBUG(D_NETERROR, "*** RX get (%llu) != put (%llu) ***\n", rx->mxc_get, rx->mxc_put);
-                CDEBUG(D_NETERROR, "*** incarnation= %lld ***\n", rx->mxc_incarnation);
-                CDEBUG(D_NETERROR, "*** deadline= %ld ***\n", rx->mxc_deadline);
-                CDEBUG(D_NETERROR, "*** state= %s ***\n", mxlnd_ctxstate_to_str(rx->mxc_state));
-                CDEBUG(D_NETERROR, "*** listed?= %d ***\n", !cfs_list_empty(&rx->mxc_list));
-                CDEBUG(D_NETERROR, "*** nid= 0x%llx ***\n", rx->mxc_nid);
-                CDEBUG(D_NETERROR, "*** peer= 0x%p ***\n", rx->mxc_peer);
-                CDEBUG(D_NETERROR, "*** msg_type= %s ***\n", mxlnd_msgtype_to_str(rx->mxc_msg_type));
-                CDEBUG(D_NETERROR, "*** cookie= 0x%llx ***\n", rx->mxc_cookie);
-                CDEBUG(D_NETERROR, "*** nob= %d ***\n", rx->mxc_nob);
+                CNETERR("*** RX get (%llu) != put (%llu) ***\n", rx->mxc_get, rx->mxc_put);
+                CNETERR("*** incarnation= %lld ***\n", rx->mxc_incarnation);
+                CNETERR("*** deadline= %ld ***\n", rx->mxc_deadline);
+                CNETERR("*** state= %s ***\n", mxlnd_ctxstate_to_str(rx->mxc_state));
+                CNETERR("*** listed?= %d ***\n", !cfs_list_empty(&rx->mxc_list));
+                CNETERR("*** nid= 0x%llx ***\n", rx->mxc_nid);
+                CNETERR("*** peer= 0x%p ***\n", rx->mxc_peer);
+                CNETERR("*** msg_type= %s ***\n", mxlnd_msgtype_to_str(rx->mxc_msg_type));
+                CNETERR("*** cookie= 0x%llx ***\n", rx->mxc_cookie);
+                CNETERR("*** nob= %d ***\n", rx->mxc_nob);
         }
 #endif
         LASSERT (rx->mxc_get == rx->mxc_put);
@@ -237,7 +237,7 @@ mxlnd_get_idle_tx(void)
         cfs_spin_lock(&kmxlnd_data.kmx_tx_idle_lock);
 
         if (cfs_list_empty (&kmxlnd_data.kmx_tx_idle)) {
-                CDEBUG(D_NETERROR, "%d txs in use\n", kmxlnd_data.kmx_tx_used);
+                CNETERR("%d txs in use\n", kmxlnd_data.kmx_tx_used);
                 cfs_spin_unlock(&kmxlnd_data.kmx_tx_idle_lock);
                 return NULL;
         }
@@ -431,7 +431,7 @@ mxlnd_conn_cancel_pending_rxs(kmx_conn_t *conn)
                                                   &ctx->mxc_mxreq,
                                                   &result);
                                 if (mxret != MX_SUCCESS) {
-                                        CDEBUG(D_NETERROR, "mx_cancel() returned %s (%d)\n", mx_strerror(mxret), mxret);
+                                        CNETERR("mx_cancel() returned %s (%d)\n", mx_strerror(mxret), mxret);
                                 }
                                 if (result == 1) {
                                         ctx->mxc_errno = -ECONNABORTED;
@@ -588,7 +588,7 @@ mxlnd_conn_alloc_locked(kmx_conn_t **connp, kmx_peer_t *peer)
 
         MXLND_ALLOC(conn, sizeof (*conn));
         if (conn == NULL) {
-                CDEBUG(D_NETERROR, "Cannot allocate conn\n");
+                CNETERR("Cannot allocate conn\n");
                 return -ENOMEM;
         }
         CDEBUG(D_NET, "allocated conn 0x%p for peer 0x%p\n", conn, peer);
@@ -738,8 +738,8 @@ mxlnd_deq_pending_ctx(kmx_ctx_t *ctx)
                 ctx->mxc_state == MXLND_CTX_COMPLETED);
         if (ctx->mxc_state != MXLND_CTX_PENDING &&
             ctx->mxc_state != MXLND_CTX_COMPLETED) {
-                CDEBUG(D_NETERROR, "deq ctx->mxc_state = %s\n",
-                       mxlnd_ctxstate_to_str(ctx->mxc_state));
+                CNETERR("deq ctx->mxc_state = %s\n",
+                        mxlnd_ctxstate_to_str(ctx->mxc_state));
         }
         ctx->mxc_state = MXLND_CTX_COMPLETED;
         if (!cfs_list_empty(&ctx->mxc_list)) {
@@ -880,7 +880,7 @@ mxlnd_peer_alloc(kmx_peer_t **peerp, lnet_nid_t nid, u32 board, u32 ep_id, u64 n
 
         MXLND_ALLOC(peer, sizeof (*peer));
         if (peer == NULL) {
-                CDEBUG(D_NETERROR, "Cannot allocate peer for NID 0x%llx\n",
+                CNETERR("Cannot allocate peer for NID 0x%llx\n",
                        nid);
                 return -ENOMEM;
         }
@@ -974,7 +974,7 @@ mxlnd_find_peer_by_nid(lnet_nid_t nid, int create)
                                 if (ret != 0) {
                                         /* we tried, return the peer only.
                                          * the caller needs to see if the conn exists */
-                                        CDEBUG(D_NETERROR, "%s: %s could not alloc conn\n",
+                                        CNETERR("%s: %s could not alloc conn\n",
                                         __func__, libcfs_nid2str(peer->mxp_nid));
                                 } else {
                                         /* drop extra conn ref */
@@ -1124,7 +1124,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
 
         /* 6 bytes are enough to have received magic + version */
         if (nob < 6) {
-                CDEBUG(D_NETERROR, "not enough bytes for magic + hdr: %d\n", nob);
+                CNETERR("not enough bytes for magic + hdr: %d\n", nob);
                 return -EPROTO;
         }
 
@@ -1133,24 +1133,24 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
         } else if (msg->mxm_magic == __swab32(MXLND_MSG_MAGIC)) {
                 flip = 1;
         } else {
-                CDEBUG(D_NETERROR, "Bad magic: %08x\n", msg->mxm_magic);
+                CNETERR("Bad magic: %08x\n", msg->mxm_magic);
                 return -EPROTO;
         }
 
         if (msg->mxm_version !=
             (flip ? __swab16(MXLND_MSG_VERSION) : MXLND_MSG_VERSION)) {
-                CDEBUG(D_NETERROR, "Bad version: %d\n", msg->mxm_version);
+                CNETERR("Bad version: %d\n", msg->mxm_version);
                 return -EPROTO;
         }
 
         if (nob < hdr_size) {
-                CDEBUG(D_NETERROR, "not enough for a header: %d\n", nob);
+                CNETERR("not enough for a header: %d\n", nob);
                 return -EPROTO;
         }
 
         msg_nob = flip ? __swab32(msg->mxm_nob) : msg->mxm_nob;
         if (msg_nob > nob) {
-                CDEBUG(D_NETERROR, "Short message: got %d, wanted %d\n", nob, msg_nob);
+                CNETERR("Short message: got %d, wanted %d\n", nob, msg_nob);
                 return -EPROTO;
         }
 
@@ -1159,7 +1159,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
         msg_cksum = flip ? __swab32(msg->mxm_cksum) : msg->mxm_cksum;
         msg->mxm_cksum = 0;
         if (msg_cksum != 0 && msg_cksum != mxlnd_cksum(msg, msg_nob)) {
-                CDEBUG(D_NETERROR, "Bad checksum\n");
+                CNETERR("Bad checksum\n");
                 return -EPROTO;
         }
         msg->mxm_cksum = msg_cksum;
@@ -1177,13 +1177,13 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
         }
 
         if (msg->mxm_srcnid == LNET_NID_ANY) {
-                CDEBUG(D_NETERROR, "Bad src nid: %s\n", libcfs_nid2str(msg->mxm_srcnid));
+                CNETERR("Bad src nid: %s\n", libcfs_nid2str(msg->mxm_srcnid));
                 return -EPROTO;
         }
 
         switch (msg->mxm_type) {
         default:
-                CDEBUG(D_NETERROR, "Unknown message type %x\n", msg->mxm_type);
+                CNETERR("Unknown message type %x\n", msg->mxm_type);
                 return -EPROTO;
 
         case MXLND_MSG_NOOP:
@@ -1191,7 +1191,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
 
         case MXLND_MSG_EAGER:
                 if (msg_nob < offsetof(kmx_msg_t, mxm_u.eager.mxem_payload[0])) {
-                        CDEBUG(D_NETERROR, "Short EAGER: %d(%d)\n", msg_nob,
+                        CNETERR("Short EAGER: %d(%d)\n", msg_nob,
                                (int)offsetof(kmx_msg_t, mxm_u.eager.mxem_payload[0]));
                         return -EPROTO;
                 }
@@ -1199,7 +1199,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
 
         case MXLND_MSG_PUT_REQ:
                 if (msg_nob < hdr_size + sizeof(msg->mxm_u.put_req)) {
-                        CDEBUG(D_NETERROR, "Short PUT_REQ: %d(%d)\n", msg_nob,
+                        CNETERR("Short PUT_REQ: %d(%d)\n", msg_nob,
                                (int)(hdr_size + sizeof(msg->mxm_u.put_req)));
                         return -EPROTO;
                 }
@@ -1209,7 +1209,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
 
         case MXLND_MSG_PUT_ACK:
                 if (msg_nob < hdr_size + sizeof(msg->mxm_u.put_ack)) {
-                        CDEBUG(D_NETERROR, "Short PUT_ACK: %d(%d)\n", msg_nob,
+                        CNETERR("Short PUT_ACK: %d(%d)\n", msg_nob,
                                (int)(hdr_size + sizeof(msg->mxm_u.put_ack)));
                         return -EPROTO;
                 }
@@ -1221,7 +1221,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
 
         case MXLND_MSG_GET_REQ:
                 if (msg_nob < hdr_size + sizeof(msg->mxm_u.get_req)) {
-                        CDEBUG(D_NETERROR, "Short GET_REQ: %d(%d)\n", msg_nob,
+                        CNETERR("Short GET_REQ: %d(%d)\n", msg_nob,
                                (int)(hdr_size + sizeof(msg->mxm_u.get_req)));
                         return -EPROTO;
                 }
@@ -1233,7 +1233,7 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
         case MXLND_MSG_CONN_REQ:
         case MXLND_MSG_CONN_ACK:
                 if (msg_nob < hdr_size + sizeof(msg->mxm_u.conn_req)) {
-                        CDEBUG(D_NETERROR, "Short connreq/ack: %d(%d)\n", msg_nob,
+                        CNETERR("Short connreq/ack: %d(%d)\n", msg_nob,
                                (int)(hdr_size + sizeof(msg->mxm_u.conn_req)));
                         return -EPROTO;
                 }
@@ -1282,8 +1282,8 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, kmx_ctx_t *rx, u8 msg_type, u64 cookie, u32 l
                           cookie, mask, (void *) rx, &rx->mxc_mxreq);
         if (mxret != MX_SUCCESS) {
                 mxlnd_deq_pending_ctx(rx);
-                CDEBUG(D_NETERROR, "mx_kirecv() failed with %s (%d)\n",
-                                   mx_strerror(mxret), (int) mxret);
+                CNETERR("mx_kirecv() failed with %s (%d)\n",
+                        mx_strerror(mxret), (int) mxret);
                 return -1;
         }
         return 0;
@@ -1328,7 +1328,7 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
 
         /* TODO this will change to the net struct */
         if (context != NULL) {
-                CDEBUG(D_NETERROR, "non-NULL context\n");
+                CNETERR("non-NULL context\n");
         }
 
 #if MXLND_DEBUG
@@ -1362,8 +1362,8 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
 
                 if (conn) mxlnd_conn_decref(conn); /* drop ref taken above */
                 if (unlikely(length != expected || !data_if_available)) {
-                        CDEBUG(D_NETERROR, "received invalid CONN_REQ from %llx "
-                               "length=%d (expected %d)\n", nic_id, length, expected);
+                        CNETERR("received invalid CONN_REQ from %llx "
+                                "length=%d (expected %d)\n", nic_id, length, expected);
                         mxlnd_send_message(source, MXLND_MSG_CONN_ACK, EPROTO, 0);
                         return MX_RECV_FINISHED;
                 }
@@ -1371,8 +1371,8 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
                 ret = mxlnd_connparams_alloc(&cp, context, source, match_value, length,
                                          conn, peer, data_if_available);
                 if (unlikely(ret != 0)) {
-                        CDEBUG(D_NETERROR, "unable to alloc CONN_REQ from %llx:%d\n",
-                                        nic_id, ep_id);
+                        CNETERR("unable to alloc CONN_REQ from %llx:%d\n",
+                                nic_id, ep_id);
                         mxlnd_send_message(source, MXLND_MSG_CONN_ACK, ENOMEM, 0);
                         return MX_RECV_FINISHED;
                 }
@@ -1389,12 +1389,11 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
 
                 LASSERT(conn);
                 if (unlikely(error != 0)) {
-                        CDEBUG(D_NETERROR, "received CONN_ACK from %s "
-                               "with error -%d\n",
+                        CNETERR("received CONN_ACK from %s with error -%d\n",
                                libcfs_nid2str(peer->mxp_nid), (int) error);
                         mxlnd_conn_disconnect(conn, 1, 0);
                 } else if (unlikely(length != expected || !data_if_available)) {
-                        CDEBUG(D_NETERROR, "received %s CONN_ACK from %s "
+                        CNETERR("received %s CONN_ACK from %s "
                                "length=%d (expected %d)\n",
                                data_if_available ? "short" : "missing",
                                libcfs_nid2str(peer->mxp_nid), length, expected);
@@ -1404,7 +1403,7 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
                         ret = mxlnd_connparams_alloc(&cp, context, source, match_value, length,
                                          conn, peer, data_if_available);
                         if (unlikely(ret != 0)) {
-                                CDEBUG(D_NETERROR, "unable to alloc kmx_connparams_t"
+                                CNETERR("unable to alloc kmx_connparams_t"
                                                " from %llx:%d\n", nic_id, ep_id);
                                 mxlnd_conn_disconnect(conn, 1, 1);
                         } else {
@@ -1429,9 +1428,9 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
                 if (length <= MXLND_MSG_SIZE) {
                         ret = mxlnd_recv_msg(NULL, rx, msg_type, match_value, length);
                 } else {
-                        CDEBUG(D_NETERROR, "unexpected large receive with "
-                                           "match_value=0x%llx length=%d\n",
-                                           match_value, length);
+                        CNETERR("unexpected large receive with "
+                                "match_value=0x%llx length=%d\n",
+                                match_value, length);
                         ret = mxlnd_recv_msg(NULL, rx, msg_type, match_value, 0);
                 }
 
@@ -1441,7 +1440,7 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
                         rx->mxc_peer = peer;
                         rx->mxc_nid = peer->mxp_nid;
                 } else {
-                        CDEBUG(D_NETERROR, "could not post receive\n");
+                        CNETERR("could not post receive\n");
                         mxlnd_put_idle_rx(rx);
                 }
         }
@@ -1453,12 +1452,12 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
         if (rx == NULL || ret != 0) {
                 mxlnd_conn_decref(conn); /* drop ref taken above */
                 if (rx == NULL) {
-                        CDEBUG(D_NETERROR, "no idle rxs available - dropping rx"
-                               " 0x%llx from %s\n", match_value,
-                               libcfs_nid2str(peer->mxp_nid));
+                        CNETERR("no idle rxs available - dropping rx"
+                                " 0x%llx from %s\n", match_value,
+                                libcfs_nid2str(peer->mxp_nid));
                 } else {
                         /* ret != 0 */
-                        CDEBUG(D_NETERROR, "disconnected peer - dropping rx\n");
+                        CNETERR("disconnected peer - dropping rx\n");
                 }
                 seg.segment_ptr = 0ULL;
                 seg.segment_length = 0;
@@ -1652,7 +1651,7 @@ mxlnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 break;
         }
         default:
-                CDEBUG(D_NETERROR, "unknown ctl(%d)\n", cmd);
+                CNETERR("unknown ctl(%d)\n", cmd);
                 break;
         }
 
@@ -1809,7 +1808,7 @@ mxlnd_setup_iov(kmx_ctx_t *ctx, u32 niov, struct iovec *iov, u32 offset, u32 nob
 
         MXLND_ALLOC(seg, nseg * sizeof(*seg));
         if (seg == NULL) {
-                CDEBUG(D_NETERROR, "MXLND_ALLOC() failed\n");
+                CNETERR("MXLND_ALLOC() failed\n");
                 return -1;
         }
         memset(seg, 0, nseg * sizeof(*seg));
@@ -1878,7 +1877,7 @@ mxlnd_setup_kiov(kmx_ctx_t *ctx, u32 niov, lnet_kiov_t *kiov, u32 offset, u32 no
 
         MXLND_ALLOC(seg, nseg * sizeof(*seg));
         if (seg == NULL) {
-                CDEBUG(D_NETERROR, "MXLND_ALLOC() failed\n");
+                CNETERR("MXLND_ALLOC() failed\n");
                 return -1;
         }
         memset(seg, 0, niov * sizeof(*seg));
@@ -1952,7 +1951,7 @@ mxlnd_send_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, kmx_peer_t *peer, u8 msg_type
 
         tx = mxlnd_get_idle_tx();
         if (tx == NULL) {
-                CDEBUG(D_NETERROR, "Can't allocate %s tx for %s\n",
+                CNETERR("Can't allocate %s tx for %s\n",
                         msg_type == MXLND_MSG_PUT_DATA ? "PUT_DATA" : "GET_DATA",
                         libcfs_nid2str(target.nid));
                 goto failed_0;
@@ -1970,8 +1969,8 @@ mxlnd_send_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, kmx_peer_t *peer, u8 msg_type
         /* This setups up the mx_ksegment_t to send the DATA payload  */
         if (nob == 0) {
                 /* do not setup the segments */
-                CDEBUG(D_NETERROR, "nob = 0; why didn't we use an EAGER reply "
-                                   "to %s?\n", libcfs_nid2str(target.nid));
+                CNETERR("nob = 0; why didn't we use an EAGER reply "
+                        "to %s?\n", libcfs_nid2str(target.nid));
                 ret = 0;
         } else if (kiov == NULL) {
                 ret = mxlnd_setup_iov(tx, niov, iov, offset, nob);
@@ -1979,8 +1978,8 @@ mxlnd_send_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, kmx_peer_t *peer, u8 msg_type
                 ret = mxlnd_setup_kiov(tx, niov, kiov, offset, nob);
         }
         if (ret != 0) {
-                CDEBUG(D_NETERROR, "Can't setup send DATA for %s\n",
-                                   libcfs_nid2str(target.nid));
+                CNETERR("Can't setup send DATA for %s\n",
+                        libcfs_nid2str(target.nid));
                 tx->mxc_errno = -EIO;
                 goto failed_1;
         }
@@ -1993,7 +1992,7 @@ failed_1:
         return;
 
 failed_0:
-        CDEBUG(D_NETERROR, "no tx avail\n");
+        CNETERR("no tx avail\n");
         lnet_finalize(ni, lntmsg, -EIO);
         return;
 }
@@ -2056,13 +2055,13 @@ mxlnd_recv_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, kmx_ctx_t *rx, u8 msg_type, u
         if (msg_type == MXLND_MSG_GET_DATA) {
                 rx->mxc_lntmsg[1] = lnet_create_reply_msg(kmxlnd_data.kmx_ni, lntmsg);
                 if (rx->mxc_lntmsg[1] == NULL) {
-                        CDEBUG(D_NETERROR, "Can't create reply for GET -> %s\n",
-                                           libcfs_nid2str(target.nid));
+                        CNETERR("Can't create reply for GET -> %s\n",
+                                libcfs_nid2str(target.nid));
                         ret = -1;
                 }
         }
         if (ret != 0) {
-                CDEBUG(D_NETERROR, "Can't setup %s rx for %s\n",
+                CNETERR("Can't setup %s rx for %s\n",
                        msg_type == MXLND_MSG_PUT_DATA ? "PUT_DATA" : "GET_DATA",
                        libcfs_nid2str(target.nid));
                 return -1;
@@ -2081,8 +2080,8 @@ mxlnd_recv_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, kmx_ctx_t *rx, u8 msg_type, u
                 if (rx->mxc_conn != NULL) {
                         mxlnd_deq_pending_ctx(rx);
                 }
-                CDEBUG(D_NETERROR, "mx_kirecv() failed with %d for %s\n",
-                                   (int) mxret, libcfs_nid2str(target.nid));
+                CNETERR("mx_kirecv() failed with %d for %s\n",
+                        (int) mxret, libcfs_nid2str(target.nid));
                 return -1;
         }
 
@@ -2185,9 +2184,9 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 tx = mxlnd_get_idle_tx();
                 if (unlikely(tx == NULL)) {
-                        CDEBUG(D_NETERROR, "Can't allocate %s tx for %s\n",
-                               type == LNET_MSG_PUT ? "PUT" : "REPLY",
-                               libcfs_nid2str(nid));
+                        CNETERR("Can't allocate %s tx for %s\n",
+                                type == LNET_MSG_PUT ? "PUT" : "REPLY",
+                                libcfs_nid2str(nid));
                         if (conn) mxlnd_conn_decref(conn);
                         return -ENOMEM;
                 }
@@ -2207,8 +2206,8 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 rx = mxlnd_get_idle_rx(conn);
                 if (unlikely(rx == NULL)) {
-                        CDEBUG(D_NETERROR, "Can't allocate rx for PUT_ACK for %s\n",
-                                           libcfs_nid2str(nid));
+                        CNETERR("Can't allocate rx for PUT_ACK for %s\n",
+                                libcfs_nid2str(nid));
                         mxlnd_put_idle_tx(tx);
                         if (conn) mxlnd_conn_decref(conn); /* for the ref taken above */
                         return -ENOMEM;
@@ -2224,7 +2223,7 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 length = offsetof(kmx_msg_t, mxm_u) + sizeof(kmx_putack_msg_t);
                 ret = mxlnd_recv_msg(lntmsg, rx, MXLND_MSG_PUT_ACK, rx->mxc_match, length);
                 if (unlikely(ret != 0)) {
-                        CDEBUG(D_NETERROR, "recv_msg() failed for PUT_ACK for %s\n",
+                        CNETERR("recv_msg() failed for PUT_ACK for %s\n",
                                            libcfs_nid2str(nid));
                         rx->mxc_lntmsg[0] = NULL;
                         mxlnd_put_idle_rx(rx);
@@ -2250,15 +2249,15 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  * then post GET_REQ tx */
                 tx = mxlnd_get_idle_tx();
                 if (unlikely(tx == NULL)) {
-                        CDEBUG(D_NETERROR, "Can't allocate GET tx for %s\n",
-                                           libcfs_nid2str(nid));
+                        CNETERR("Can't allocate GET tx for %s\n",
+                                libcfs_nid2str(nid));
                         mxlnd_conn_decref(conn); /* for the ref taken above */
                         return -ENOMEM;
                 }
                 rx_data = mxlnd_get_idle_rx(conn);
                 if (unlikely(rx_data == NULL)) {
-                        CDEBUG(D_NETERROR, "Can't allocate DATA rx for %s\n",
-                                           libcfs_nid2str(nid));
+                        CNETERR("Can't allocate DATA rx for %s\n",
+                                libcfs_nid2str(nid));
                         mxlnd_put_idle_tx(tx);
                         mxlnd_conn_decref(conn); /* for the ref taken above */
                         return -ENOMEM;
@@ -2271,8 +2270,8 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 ret = mxlnd_recv_data(ni, lntmsg, rx_data, MXLND_MSG_GET_DATA, tx->mxc_cookie);
                 if (unlikely(ret != 0)) {
-                        CDEBUG(D_NETERROR, "Can't setup GET sink for %s\n",
-                                           libcfs_nid2str(nid));
+                        CNETERR("Can't setup GET sink for %s\n",
+                                libcfs_nid2str(nid));
                         mxlnd_put_idle_rx(rx_data);
                         mxlnd_put_idle_tx(tx);
                         mxlnd_conn_decref(conn); /* for the rx_data... */
@@ -2305,8 +2304,8 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         tx = mxlnd_get_idle_tx();
         if (unlikely(tx == NULL)) {
-                CDEBUG(D_NETERROR, "Can't send %s to %s: tx descs exhausted\n",
-                                   mxlnd_lnetmsg_to_str(type), libcfs_nid2str(nid));
+                CNETERR("Can't send %s to %s: tx descs exhausted\n",
+                        mxlnd_lnetmsg_to_str(type), libcfs_nid2str(nid));
                 mxlnd_conn_decref(conn); /* drop ref taken above */
                 return -ENOMEM;
         }
@@ -2382,8 +2381,8 @@ mxlnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 nob = offsetof(kmx_msg_t, mxm_u.eager.mxem_payload[rlen]);
                 len = rx->mxc_status.xfer_length;
                 if (unlikely(nob > len)) {
-                        CDEBUG(D_NETERROR, "Eager message from %s too big: %d(%d)\n",
-                                           libcfs_nid2str(nid), nob, len);
+                        CNETERR("Eager message from %s too big: %d(%d)\n",
+                                libcfs_nid2str(nid), nob, len);
                         ret = -EPROTO;
                         break;
                 }
@@ -2410,7 +2409,7 @@ mxlnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 
                 tx = mxlnd_get_idle_tx();
                 if (unlikely(tx == NULL)) {
-                        CDEBUG(D_NETERROR, "Can't allocate tx for %s\n", libcfs_nid2str(nid));
+                        CNETERR("Can't allocate tx for %s\n", libcfs_nid2str(nid));
                         /* Not replying will break the connection */
                         ret = -ENOMEM;
                         break;
@@ -2447,8 +2446,8 @@ mxlnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 
                 if (unlikely(ret != 0)) {
                         /* Notify peer that it's over */
-                        CDEBUG(D_NETERROR, "Can't setup PUT_DATA rx for %s: %d\n",
-                                           libcfs_nid2str(nid), ret);
+                        CNETERR("Can't setup PUT_DATA rx for %s: %d\n",
+                                libcfs_nid2str(nid), ret);
                         mxlnd_ctx_init(tx);
                         tx->mxc_state = MXLND_CTX_PREP;
                         tx->mxc_peer = peer;
@@ -2480,8 +2479,8 @@ mxlnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                          * Send the error in bits 52-59 and the cookie in bits 0-51 */
                         tx = mxlnd_get_idle_tx();
                         if (unlikely(tx == NULL)) {
-                                CDEBUG(D_NETERROR, "Can't get tx for GET NAK for %s\n",
-                                                   libcfs_nid2str(nid));
+                                CNETERR("Can't get tx for GET NAK for %s\n",
+                                        libcfs_nid2str(nid));
                                 /* we can't get a tx, notify the peer that the GET failed */
                                 mxlnd_send_message(conn->mxk_epa, MXLND_MSG_GET_DATA,
                                                    ENODATA, cookie);
@@ -2712,7 +2711,7 @@ mxlnd_iconnect(kmx_peer_t *peer, u8 msg_type)
                 cfs_spin_lock(&conn->mxk_lock);
                 mxlnd_set_conn_status(conn, MXLND_CONN_FAIL);
                 cfs_spin_unlock(&conn->mxk_lock);
-                CDEBUG(D_NETERROR, "mx_iconnect() failed with %s (%d) to %s\n",
+                CNETERR("mx_iconnect() failed with %s (%d) to %s\n",
                        mx_strerror(mxret), mxret, libcfs_nid2str(peer->mxp_nid));
                 mxlnd_conn_decref(conn);
         }
@@ -2761,7 +2760,7 @@ mxlnd_check_sends(kmx_peer_t *peer)
 
         if (conn == NULL) {
                 /* we do not have any conns */
-                CDEBUG(D_NETERROR, "peer %s has no conn\n", libcfs_nid2str(peer->mxp_nid));
+                CNETERR("peer %s has no conn\n", libcfs_nid2str(peer->mxp_nid));
                 return -1;
         }
 
@@ -2995,8 +2994,8 @@ mxlnd_check_sends(kmx_peer_t *peer)
                         if (likely(mxret == MX_SUCCESS)) {
                                 ret = 0;
                         } else {
-                                CDEBUG(D_NETERROR, "mx_kisend() failed with %s (%d) "
-                                       "sending to %s\n", mx_strerror(mxret), (int) mxret,
+                                CNETERR("mx_kisend() failed with %s (%d) "
+                                        "sending to %s\n", mx_strerror(mxret), (int) mxret,
                                        libcfs_nid2str(peer->mxp_nid));
                                 /* NOTE mx_kisend() only fails if there are not enough
                                 * resources. Do not change the connection status. */
@@ -3114,8 +3113,7 @@ mxlnd_handle_tx_completion(kmx_ctx_t *tx)
                 }
         case MXLND_MSG_CONN_REQ:
                 if (failed) {
-                        CDEBUG(D_NETERROR, "%s failed with %s (%d) (errno = %d)"
-                               " to %s\n",
+                        CNETERR("%s failed with %s (%d) (errno = %d) to %s\n",
                                type == MXLND_MSG_CONN_REQ ? "CONN_REQ" : "CONN_ACK",
                                mx_strstatus(code), code, tx->mxc_errno,
                                libcfs_nid2str(tx->mxc_nid));
@@ -3131,7 +3129,7 @@ mxlnd_handle_tx_completion(kmx_ctx_t *tx)
                 break;
 
         default:
-                CDEBUG(D_NETERROR, "Unknown msg type of %d\n", type);
+                CNETERR("Unknown msg type of %d\n", type);
                 LBUG();
         }
 
@@ -3212,10 +3210,10 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
 
         if (rx->mxc_status.code != MX_STATUS_SUCCESS &&
             rx->mxc_status.code != MX_STATUS_TRUNCATED) {
-                CDEBUG(D_NETERROR, "rx from %s failed with %s (%d)\n",
-                                   libcfs_nid2str(rx->mxc_nid),
-                                   mx_strstatus(rx->mxc_status.code),
-                                   rx->mxc_status.code);
+                CNETERR("rx from %s failed with %s (%d)\n",
+                        libcfs_nid2str(rx->mxc_nid),
+                        mx_strstatus(rx->mxc_status.code),
+                        rx->mxc_status.code);
                 credit = 0;
                 goto cleanup;
         }
@@ -3230,8 +3228,8 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
                         goto cleanup;
                 } else {
                         /* we had a rx complete with 0 bytes (no hdr, nothing) */
-                        CDEBUG(D_NETERROR, "rx from %s returned with 0 bytes\n",
-                                           libcfs_nid2str(rx->mxc_nid));
+                        CNETERR("rx from %s returned with 0 bytes\n",
+                                libcfs_nid2str(rx->mxc_nid));
                         goto cleanup;
                 }
         }
@@ -3250,8 +3248,8 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
 
         ret = mxlnd_unpack_msg(msg, nob);
         if (ret != 0) {
-                CDEBUG(D_NETERROR, "Error %d unpacking rx from %s\n",
-                                   ret, libcfs_nid2str(rx->mxc_nid));
+                CNETERR("Error %d unpacking rx from %s\n",
+                        ret, libcfs_nid2str(rx->mxc_nid));
                 goto cleanup;
         }
         rx->mxc_nob = nob;
@@ -3259,7 +3257,7 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
 
         if (rx->mxc_nid != msg->mxm_srcnid ||
             kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
-                CDEBUG(D_NETERROR, "rx with mismatched NID (type %s) (my nid is "
+                CNETERR("rx with mismatched NID (type %s) (my nid is "
                        "0x%llx and rx msg dst is 0x%llx)\n",
                        mxlnd_msgtype_to_str(type), kmxlnd_data.kmx_ni->ni_nid,
                        msg->mxm_dstnid);
@@ -3268,7 +3266,7 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
 
         if ((conn != NULL && msg->mxm_srcstamp != conn->mxk_incarnation) ||
             msg->mxm_dststamp != kmxlnd_data.kmx_incarnation) {
-                CDEBUG(D_NETERROR, "Stale rx from %s with type %s "
+                CNETERR("Stale rx from %s with type %s "
                        "(mxm_srcstamp (%lld) != mxk_incarnation (%lld) "
                        "|| mxm_dststamp (%lld) != kmx_incarnation (%lld))\n",
                        libcfs_nid2str(rx->mxc_nid), mxlnd_msgtype_to_str(type),
@@ -3287,8 +3285,8 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
                 if (msg->mxm_srcstamp == conn->mxk_incarnation) {
                         if ((conn->mxk_credits + msg->mxm_credits) >
                              *kmxlnd_tunables.kmx_peercredits) {
-                                CDEBUG(D_NETERROR, "mxk_credits %d  mxm_credits %d\n",
-                                       conn->mxk_credits, msg->mxm_credits);
+                                CNETERR("mxk_credits %d  mxm_credits %d\n",
+                                        conn->mxk_credits, msg->mxm_credits);
                         }
                         conn->mxk_credits += msg->mxm_credits;
                         LASSERT(conn->mxk_credits >= 0);
@@ -3317,8 +3315,8 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
         case MXLND_MSG_PUT_ACK: {
                 u64  cookie = (u64) msg->mxm_u.put_ack.mxpam_dst_cookie;
                 if (cookie > MXLND_MAX_COOKIE) {
-                        CDEBUG(D_NETERROR, "NAK for msg_type %d from %s\n", rx->mxc_msg_type,
-                                           libcfs_nid2str(rx->mxc_nid));
+                        CNETERR("NAK for msg_type %d from %s\n", rx->mxc_msg_type,
+                                libcfs_nid2str(rx->mxc_nid));
                         result = -((u32) MXLND_ERROR_VAL(cookie));
                         lntmsg[0] = rx->mxc_lntmsg[0];
                 } else {
@@ -3336,8 +3334,8 @@ mxlnd_handle_rx_completion(kmx_ctx_t *rx)
                 break;
 
         default:
-                CDEBUG(D_NETERROR, "Bad MXLND message type %x from %s\n", msg->mxm_type,
-                                libcfs_nid2str(rx->mxc_nid));
+                CNETERR("Bad MXLND message type %x from %s\n", msg->mxm_type,
+                        libcfs_nid2str(rx->mxc_nid));
                 ret = -EPROTO;
                 break;
         }
@@ -3406,8 +3404,8 @@ mxlnd_handle_connect_msg(kmx_peer_t *peer, u8 msg_type, mx_status_t status)
         if (status.code != MX_STATUS_SUCCESS) {
                 int send_bye    = (msg_type == MXLND_MSG_ICON_REQ ? 0 : 1);
 
-                CDEBUG(D_NETERROR, "mx_iconnect() failed for %s with %s (%d) "
-                       "to %s mxp_nid = 0x%llx mxp_nic_id = 0x%0llx mxp_ep_id = %d\n",
+                CNETERR("mx_iconnect() failed for %s with %s (%d) "
+                        "to %s mxp_nid = 0x%llx mxp_nic_id = 0x%0llx mxp_ep_id = %d\n",
                         mxlnd_msgtype_to_str(msg_type),
                         mx_strstatus(status.code), status.code,
                         libcfs_nid2str(peer->mxp_nid),
@@ -3420,7 +3418,7 @@ mxlnd_handle_connect_msg(kmx_peer_t *peer, u8 msg_type, mx_status_t status)
 
                 if (cfs_time_after(jiffies, peer->mxp_reconnect_time +
                                    MXLND_CONNECT_TIMEOUT)) {
-                        CDEBUG(D_NETERROR, "timeout, calling conn_disconnect()\n");
+                        CNETERR("timeout, calling conn_disconnect()\n");
                         mxlnd_conn_disconnect(conn, 0, send_bye);
                 }
 
@@ -3448,7 +3446,7 @@ mxlnd_handle_connect_msg(kmx_peer_t *peer, u8 msg_type, mx_status_t status)
         /* we are still using the conn ref from iconnect() - do not take another */
         tx = mxlnd_get_idle_tx();
         if (tx == NULL) {
-                CDEBUG(D_NETERROR, "Can't obtain %s tx for %s\n",
+                CNETERR("Can't obtain %s tx for %s\n",
                        mxlnd_msgtype_to_str(type),
                        libcfs_nid2str(peer->mxp_nid));
                 cfs_spin_lock(&conn->mxk_lock);
@@ -3535,10 +3533,10 @@ mxlnd_request_waitd(void *arg)
                        (u64) status.match_info, status.msg_length);
 
                 if (status.code != MX_STATUS_SUCCESS) {
-                        CDEBUG(D_NETERROR, "wait_any() failed with %s (%d) with "
-                               "match_info 0x%llx and length %d\n",
-                               mx_strstatus(status.code), status.code,
-                               (u64) status.match_info, status.msg_length);
+                        CNETERR("wait_any() failed with %s (%d) with "
+                                "match_info 0x%llx and length %d\n",
+                                mx_strstatus(status.code), status.code,
+                                (u64) status.match_info, status.msg_length);
                 }
 
                 msg_type = MXLND_MSG_TYPE(status.match_info);
@@ -3575,7 +3573,7 @@ mxlnd_request_waitd(void *arg)
                                 mxlnd_handle_rx_completion(ctx);
                                 break;
                         default:
-                                CDEBUG(D_NETERROR, "Unknown ctx type %d\n", req_type);
+                                CNETERR("Unknown ctx type %d\n", req_type);
                                 LBUG();
                                 break;
                         }
@@ -3680,22 +3678,22 @@ mxlnd_passive_connect(kmx_connparams_t *cp)
         ret = mxlnd_unpack_msg(msg, cp->mxr_nob);
         if (ret != 0) {
                 if (peer) {
-                        CDEBUG(D_NETERROR, "Error %d unpacking CONN_REQ from %s\n",
+                        CNETERR("Error %d unpacking CONN_REQ from %s\n",
                                ret, libcfs_nid2str(peer->mxp_nid));
                 } else {
-                        CDEBUG(D_NETERROR, "Error %d unpacking CONN_REQ from "
+                        CNETERR("Error %d unpacking CONN_REQ from "
                                "unknown host with nic_id 0x%llx\n", ret, nic_id);
                 }
                 goto cleanup;
         }
         if (kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
-                CDEBUG(D_NETERROR, "Can't accept %s: bad dst nid %s\n",
+                CNETERR("Can't accept %s: bad dst nid %s\n",
                                 libcfs_nid2str(msg->mxm_srcnid),
                                 libcfs_nid2str(msg->mxm_dstnid));
                 goto cleanup;
         }
         if (msg->mxm_u.conn_req.mxcrm_queue_depth != *kmxlnd_tunables.kmx_peercredits) {
-                CDEBUG(D_NETERROR, "Can't accept %s: incompatible queue depth "
+                CNETERR("Can't accept %s: incompatible queue depth "
                             "%d (%d wanted)\n",
                                 libcfs_nid2str(msg->mxm_srcnid),
                                 msg->mxm_u.conn_req.mxcrm_queue_depth,
@@ -3703,7 +3701,7 @@ mxlnd_passive_connect(kmx_connparams_t *cp)
                 incompatible = 1;
         }
         if (msg->mxm_u.conn_req.mxcrm_eager_size != MXLND_MSG_SIZE) {
-                CDEBUG(D_NETERROR, "Can't accept %s: incompatible EAGER size "
+                CNETERR("Can't accept %s: incompatible EAGER size "
                             "%d (%d wanted)\n",
                                 libcfs_nid2str(msg->mxm_srcnid),
                                 msg->mxm_u.conn_req.mxcrm_eager_size,
@@ -3750,7 +3748,7 @@ mxlnd_passive_connect(kmx_connparams_t *cp)
                         mxlnd_peer_decref(peer); /* drop ref taken above */
                         cfs_write_unlock(g_lock);
                         if (ret != 0) {
-                                CDEBUG(D_NETERROR, "Cannot allocate mxp_conn\n");
+                                CNETERR("Cannot allocate mxp_conn\n");
                                 goto cleanup;
                         }
                 }
@@ -3769,7 +3767,7 @@ mxlnd_passive_connect(kmx_connparams_t *cp)
                         * conn_decref() which will eventually free it. */
                         ret = mxlnd_conn_alloc(&conn, peer);
                         if (ret != 0) {
-                                CDEBUG(D_NETERROR, "Cannot allocate peer->mxp_conn\n");
+                                CNETERR("Cannot allocate peer->mxp_conn\n");
                                 goto cleanup;
                         }
                         /* conn_alloc() adds one ref for the peer and one
@@ -3817,10 +3815,10 @@ mxlnd_check_conn_ack(kmx_connparams_t *cp)
         ret = mxlnd_unpack_msg(msg, cp->mxr_nob);
         if (ret != 0) {
                 if (peer) {
-                        CDEBUG(D_NETERROR, "Error %d unpacking CONN_ACK from %s\n",
+                        CNETERR("Error %d unpacking CONN_ACK from %s\n",
                                ret, libcfs_nid2str(peer->mxp_nid));
                 } else {
-                        CDEBUG(D_NETERROR, "Error %d unpacking CONN_ACK from "
+                        CNETERR("Error %d unpacking CONN_ACK from "
                                "unknown host with nic_id 0x%llx\n", ret, nic_id);
                 }
                 ret = -1;
@@ -3828,14 +3826,14 @@ mxlnd_check_conn_ack(kmx_connparams_t *cp)
                 goto failed;
         }
         if (kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
-                CDEBUG(D_NETERROR, "Can't accept CONN_ACK from %s: "
+                CNETERR("Can't accept CONN_ACK from %s: "
                        "bad dst nid %s\n", libcfs_nid2str(msg->mxm_srcnid),
                         libcfs_nid2str(msg->mxm_dstnid));
                 ret = -1;
                 goto failed;
         }
         if (msg->mxm_u.conn_req.mxcrm_queue_depth != *kmxlnd_tunables.kmx_peercredits) {
-                CDEBUG(D_NETERROR, "Can't accept CONN_ACK from %s: "
+                CNETERR("Can't accept CONN_ACK from %s: "
                        "incompatible queue depth %d (%d wanted)\n",
                         libcfs_nid2str(msg->mxm_srcnid),
                         msg->mxm_u.conn_req.mxcrm_queue_depth,
@@ -3845,8 +3843,8 @@ mxlnd_check_conn_ack(kmx_connparams_t *cp)
                 goto failed;
         }
         if (msg->mxm_u.conn_req.mxcrm_eager_size != MXLND_MSG_SIZE) {
-                CDEBUG(D_NETERROR, "Can't accept CONN_ACK from %s: "
-                       "incompatible EAGER size %d (%d wanted)\n",
+                CNETERR("Can't accept CONN_ACK from %s: "
+                        "incompatible EAGER size %d (%d wanted)\n",
                         libcfs_nid2str(msg->mxm_srcnid),
                         msg->mxm_u.conn_req.mxcrm_eager_size,
                         (int) MXLND_MSG_SIZE);
@@ -3988,7 +3986,7 @@ mxlnd_connd(void *arg)
                 cfs_spin_lock(g_conn_lock);
                 if (cfs_list_empty(conn_reqs)) {
                         if (ret == 0)
-                                CDEBUG(D_NETERROR, "connd woke up but did not "
+                                CNETERR("connd woke up but did not "
                                        "find a kmx_connparams_t or zombie conn\n");
                         cfs_spin_unlock(g_conn_lock);
                         continue;
