@@ -2,6 +2,7 @@
 
 AC_INIT([Lustre ldiskfs], 3.3.0, [https://bugzilla.lustre.org/])
 AC_CONFIG_SRCDIR([lustre-ldiskfs.spec.in])
+ldiskfs_is_ext4=yes
 
 # Don't look for install-sh, etc. in ..
 AC_CONFIG_AUX_DIR([.])
@@ -13,9 +14,22 @@ AM_INIT_AUTOMAKE
 AC_PROG_CC
 
 LB_CANONICAL_SYSTEM
+
+LB_DOWNSTREAM_RELEASE
+
+LB_BUILDID
+
 LB_INCLUDE_RULES
 LB_PROG_CC
 
+AC_ARG_ENABLE([dist],
+	AC_HELP_STRING([--enable-dist],
+			[only configure enough for make dist]),
+	[enable_dist='yes'],[enable_dist='no'])
+AC_MSG_RESULT([$enable_dist])
+if test x$enable_dist != xno; then
+	enable_modules='no'
+fi
 
 #
 # LC_TARGET_SUPPORTED
@@ -98,6 +112,8 @@ AC_SUBST(BACKFSU) # We need a Upper string
 
 AM_CONDITIONAL(USE_EXT4, test x$enable_ext4 = xyes)
 
+if test x$enable_dist != xyes; then
+	# don't need to do this if only configuring for make dist
 AC_MSG_CHECKING([which ldiskfs series to use])
 case $LINUXRELEASE in
 2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
@@ -123,6 +139,7 @@ case $LINUXRELEASE in
 *) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix ldiskfs/configure.ac])
 esac
 AC_MSG_RESULT([$LDISKFS_SERIES])
+fi
 AC_SUBST(LDISKFS_SERIES)
 
 AC_SUBST(ac_configure_args)

@@ -42,9 +42,12 @@ checkstack-clean:
 
 module-dist-hook:
 	if [ -d CVS -o -d .git ]; then \
-	    perl lustre/scripts/tree_status.pl > $(distdir)/tree_status; \
-	elif [ -f tree_status ]; then \
-	    cp tree_status $(distdir)/tree_status; \
+	    perl lustre/scripts/make_META.pl > $(distdir)/META; \
+	    cp $(distdir)/META $(distdir)/ldiskfs/META; \
+	elif [ -f META ]; then \
+	    cp META $(distdir)/META; \
+	    cp $(distdir)/META $(distdir)/ldiskfs/META; \
 	else \
-	    echo -e "I have no idea how to create a tree_status file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+	    echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+	    exit 1; \
 	fi

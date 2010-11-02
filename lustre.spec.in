@@ -1,7 +1,21 @@
 # lustre.spec
 %{!?version: %define version @VERSION@}
-%{!?kversion: %define kversion @LINUXRELEASE@}
-%{!?release: %define release @RELEASE@}
+%{!?kdir: %define kdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else echo "/lib/modules/$(uname -r)/build"; fi)}
+
+%{!?kobjdir: %define kobjdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux-obj=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else echo "%kdir"; fi)}
+
+# as an alternative to this implementation we could simply "make -C $kdir kernelversion"
+%{!?kversion: %define kversion %(if test -s %kobjdir/include/linux/utsrelease.h ; then LINUXRELEASEHEADER=utsrelease.h; else LINUXRELEASEHEADER=version.h; fi; sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %kobjdir/include/linux/$LINUXRELEASEHEADER)}
+
+%{!?downstream_release: %define downstream_release "@DOWNSTREAM_RELEASE@"}
+
+%define buildid %(if [ -n "@BUILDID@" ]; then echo "_@BUILDID@"; fi)
+
+%{!?myrelease: %define myrelease %(if [ -n "%downstream_release" ]; then echo -n "%{downstream_release}_"; fi; echo %kversion | tr '-' '_')}
+
+# always append the buildid, even when the caller defines %release
+%define fullrelease %{myrelease}%{buildid}
+
 %{!?lustre_name: %define lustre_name lustre}
 %{!?build_lustre_tests: %define build_lustre_tests 1}
 
@@ -38,7 +52,7 @@
 Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}
-Release: %{release}
+Release: %{fullrelease}
 License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
@@ -143,13 +157,29 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 # override %optflags so that the vendor's overzealous flags don't create
 # build failures
 %define optflags -g -O2 -Werror
-CONFIGURE_ARGS=""
+CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
 %if %{build_lustre_tests}
 CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests --enable-liblustre-tests"
 %else
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests --disable-liblustre-tests"
 %endif
-%configure %{?configure_args:%configure_args} $CONFIGURE_ARGS
+
+# if %%kdir was given, make sure it's not in the configure arguments
+if [ -n "%kdir" ]; then
+	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux=[^ ][^ ]* \?//')
+fi
+# ditto for %%kobjdir
+if [ -n "%kobjdir" ]; then
+	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux-obj=[^ ][^ ]* \?//')
+fi
+
+# we need to eval "configure" because $CONFIGURE_ARGS could have a quoted
+# string in it which we don't want word splitted by the shell
+%define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#')
+
+%eval_configure \
+	%{?kdir: --with-linux=%kdir} %{?kobjdir: --with-linux-obj=%kobjdir} \
+	$CONFIGURE_ARGS
 make -j $RPM_BUILD_NCPUS -s
 
 %install
@@ -232,6 +262,7 @@ fi
 %endif
 
 pushd $RPM_BUILD_ROOT >/dev/null
+> $RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
 find lib/modules/%{kversion}/updates -type f | awk "!/(ZZZZZZZZZZ$modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
 popd >/dev/null
 

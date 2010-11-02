@@ -10,4 +10,14 @@ include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += kernel_patches
 
+# this only needs to be done if disting stand-alone (i.e. not as a
+# subdir of lustre
 module-dist-hook:
+	if ! grep "AC_INIT(\[Lustre\], \[LUSTRE_VERSION\], \[https:\/\/bugzilla\.lustre\.org\/], \[lustre\])" ../configure.ac; then \
+	    if [ -f META ]; then \
+		cp META $(distdir)/META; \
+	    else \
+		echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+		exit 1; \
+	    fi; \
+	fi
