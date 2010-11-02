@@ -185,7 +185,8 @@ mmp_init() {
 # which did not use failover.
 mmp_fini() {
 
-    if [ -z "$mdsfailover_HOST" ]; then
+    local var=${MMP_MDS}failover_HOST
+    if [ -z "${!var}" ]; then
         log "Failover is not used on MDS, disabling MMP manually..."
         disable_mmp $MMP_MDS $MMP_MDSDEV || \
             error "failed to disable MMP on $MMP_MDSDEV on $MMP_MDS"
@@ -193,7 +194,8 @@ mmp_fini() {
             error "MMP was not disabled on $MMP_MDSDEV on $MMP_MDS"
     fi
 
-    if [ -z "$ostfailover_HOST" ]; then
+    var=${MMP_OSS}failover_HOST
+    if [ -z "${!var}" ]; then
         log "Failover is not used on OSS, disabling MMP manually..."
         disable_mmp $MMP_OSS $MMP_OSTDEV || \
             error "failed to disable MMP on $MMP_OSTDEV on $MMP_OSS"
