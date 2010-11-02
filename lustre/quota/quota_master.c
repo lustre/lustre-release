@@ -215,7 +215,7 @@ static struct lustre_dquot *lustre_dqget(struct obd_device *obd,
                 if (rc) {
                         CERROR("can't read dquot from admin quotafile! "
                                "(rc:%d)\n", rc);
-                        lustre_dqput(dquot);
+                        free_dquot(dquot);
                         RETURN(ERR_PTR(rc));
                 } else {
                         cfs_write_lock(&dquot_hash_lock);
@@ -370,6 +370,10 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OBD_DQACQ))
+                RETURN(-EIO);
+
+        if (!ll_sb_has_quota_active(qctxt->lqc_sb,
+                                    QDATA_IS_GRP(qdata) ? GRPQUOTA : USRQUOTA))
                 RETURN(-EIO);
 
         lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
