@@ -213,23 +213,32 @@ static inline void
 osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save)
 {
         struct md_ucred    *uc = md_ucred(env);
+        struct cred        *tc;
 
         LASSERT(uc != NULL);
 
-        save->oc_uid = current->fsuid;
-        save->oc_gid = current->fsgid;
-        save->oc_cap = current->cap_effective;
-        current->fsuid         = uc->mu_fsuid;
-        current->fsgid         = uc->mu_fsgid;
-        current->cap_effective = uc->mu_cap;
+        save->oc_uid = current_fsuid();
+        save->oc_gid = current_fsgid();
+        save->oc_cap = current_cap();
+        if ((tc = prepare_creds())) {
+                tc->fsuid         = uc->mu_fsuid;
+                tc->fsgid         = uc->mu_fsgid;
+                tc->cap_effective = uc->mu_cap;
+                commit_creds(tc);
+        }
 }
 
 static inline void
 osd_pop_ctxt(struct osd_ctxt *save)
 {
-        current->fsuid         = save->oc_uid;
-        current->fsgid         = save->oc_gid;
-        current->cap_effective = save->oc_cap;
+        struct cred *tc;
+
+        if ((tc = prepare_creds())) {
+                tc->fsuid         = save->oc_uid;
+                tc->fsgid         = save->oc_gid;
+                tc->cap_effective = save->oc_cap;
+                commit_creds(tc);
+        }
 }
 #endif
 

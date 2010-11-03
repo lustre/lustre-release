@@ -89,7 +89,7 @@ int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                 GOTO(out_pop, rc = PTR_ERR(mnt));
         }
 
-        file = dentry_open(dentry, mnt, O_RDONLY);
+        file = ll_dentry_open(dentry, mnt, O_RDONLY, current_cred());
         if (IS_ERR(file))
                 /* dentry_open_it() drops the dentry, mnt refs */
                 GOTO(out_pop, rc = PTR_ERR(file));

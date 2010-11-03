@@ -797,5 +797,13 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define blk_queue_logical_block_size(q, sz) blk_queue_hardsect_size(q, sz)
 #endif
 
+#ifdef HAVE_DQUOT_INIT
+# define ll_vfs_dq_init DQUOT_INIT
+# define ll_vfs_dq_drop DQUOT_DROP
+#else
+# define ll_vfs_dq_init vfs_dq_init
+# define ll_vfs_dq_drop vfs_dq_drop
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

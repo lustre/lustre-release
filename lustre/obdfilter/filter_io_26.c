@@ -675,7 +675,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        DQUOT_INIT(inode);
+        ll_vfs_dq_init(inode);
         fsfilt_check_slow(obd, now, "quota init");
 
         LOCK_INODE_MUTEX(inode);

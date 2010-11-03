@@ -1667,13 +1667,19 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.27 sles11 move the quotaio_v1.h to fs
+#
+# 2.6.27 sles11 move the quotaio_v1{2}.h from include/linux to fs
+# 2.6.32 move the quotaio_v1{2}.h from fs to fs/quota
 AC_DEFUN([LC_HAVE_QUOTAIO_V1_H],
 [LB_CHECK_FILE([$LINUX/include/linux/quotaio_v1.h],[
         AC_DEFINE(HAVE_QUOTAIO_V1_H, 1,
                 [kernel has include/linux/quotaio_v1.h])
+],[LB_CHECK_FILE([$LINUX/fs/quota/quotaio_v1.h],[
+               AC_DEFINE(HAVE_FS_QUOTA_QUOTAIO_V1_H, 1,
+                [kernel has fs/quota/quotaio_v1.h])
 ],[
         AC_MSG_RESULT([no])
+])
 ])
 ])
 
@@ -1860,6 +1866,39 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.32 without DQUOT_INIT defined.
+AC_DEFUN([LC_DQUOT_INIT],
+[AC_MSG_CHECKING([if DQUOT_INIT is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quotaops.h>
+],[
+        DQUOT_INIT(NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_DQUOT_INIT, 1,
+                  [DQUOT_INIT is defined])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# 2.6.32 add a limits member in struct request_queue.
+AC_DEFUN([LC_REQUEST_QUEUE_LIMITS],
+[AC_MSG_CHECKING([if request_queue has a limits field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkdev.h>
+],[
+        struct request_queue rq;
+        rq.limits.io_min = 0;
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_REQUEST_QUEUE_LIMITS, 1,
+                  [request_queue has a limits field])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1913,7 +1952,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_FUNC_RCU
          LC_PERCPU_COUNTER
          LC_TASK_CLENV_STORE
-         LC_QUOTA64
          LC_4ARGS_VFS_SYMLINK
 
          # does the kernel have VFS intent patches?
@@ -2013,6 +2051,17 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.31
          LC_BLK_QUEUE_LOG_BLK_SIZE
+
+         # 2.6.32
+         LC_DQUOT_INIT
+         LC_REQUEST_QUEUE_LIMITS
+
+         #
+         if test x$enable_server = xyes ; then
+                if test x$enable_quota_module = xyes ; then
+                        LC_QUOTA64    # must after LC_HAVE_QUOTAIO_V1_H
+                fi
+         fi
 ])
 
 #
@@ -2319,26 +2368,25 @@ LB_LINUX_TRY_COMPILE([
 # LC_QUOTA64
 # linux kernel have 64-bit limits support
 #
-AC_DEFUN([LC_QUOTA64],
-[if test x$enable_quota_module = xyes -a x$enable_server = xyes ; then
+AC_DEFUN([LC_QUOTA64],[
         AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-I$LINUX/fs"
         LB_LINUX_TRY_COMPILE([
                 #include <linux/kernel.h>
                 #include <linux/fs.h>
-                #include <linux/quotaio_v2.h>
+                #ifdef HAVE_QUOTAIO_V1_H
+                # include <linux/quotaio_v2.h>
                 int versions[] = V2_INITQVERSIONS_R1;
                 struct v2_disk_dqblk_r1 dqblk_r1;
-        ],[],[
-                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
-                AC_MSG_RESULT([yes])
-        ],[
-        tmp_flags="$EXTRA_KCFLAGS"
-        EXTRA_KCFLAGS="-I$LINUX/fs"
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/kernel.h>
-                #include <linux/fs.h>
-                #include <quotaio_v2.h>
+                #else
+                # ifdef HAVE_FS_QUOTA_QUOTAIO_V1_H
+                #  include <quota/quotaio_v2.h>
+                # else
+                #  include <quotaio_v2.h>
+                # endif
                 struct v2r1_disk_dqblk dqblk_r1;
+                #endif
         ],[],[
                 AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
                 AC_MSG_RESULT([yes])
@@ -2348,9 +2396,7 @@ AC_DEFUN([LC_QUOTA64],
                 ],[])
                 AC_MSG_RESULT([no])
         ])
-        EXTRA_KCFLAGS=$tmp_flags
-        ])
-fi
+EXTRA_KCFLAGS=$tmp_flags
 ])
 
 # LC_SECURITY_PLUG  # for SLES10 SP2

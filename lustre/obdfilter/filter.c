@@ -1561,7 +1561,7 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
                 GOTO(out, rc = -EPERM);
 
         /* check_sticky() */
-        if ((dentry->d_inode->i_uid != current->fsuid &&
+        if ((dentry->d_inode->i_uid != cfs_curproc_fsuid() &&
              !cfs_capable(CFS_CAP_FOWNER)) || IS_APPEND(dentry->d_inode) ||
             IS_IMMUTABLE(dentry->d_inode))
                 GOTO(out, rc = -EPERM);
@@ -1569,7 +1569,7 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
         /* NOTE: This might need to go outside i_mutex, though it isn't clear if
          *       that was done because of journal_start (which is already done
          *       here) or some other ordering issue. */
-        DQUOT_INIT(dir);
+        ll_vfs_dq_init(dir);
 
         rc = ll_security_inode_unlink(dir, dentry, mnt);
         if (rc)
@@ -3187,7 +3187,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
                 unsigned long now = jiffies;
-                DQUOT_INIT(inode);
+                ll_vfs_dq_init(inode);
                 /* Filter truncates and writes are serialized by
                  * i_alloc_sem, see the comment in
                  * filter_preprw_write.*/
@@ -4073,7 +4073,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 if (fcc != NULL)
                         *fcc = oa->o_lcookie;
         }
-        DQUOT_INIT(dchild->d_inode);
+        ll_vfs_dq_init(dchild->d_inode);
 
         /* we're gonna truncate it first in order to avoid possible deadlock:
          *      P1                      P2

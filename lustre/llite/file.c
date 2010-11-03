@@ -2428,7 +2428,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
                 return -EROFS;
         if ((mask & MAY_WRITE) && IS_IMMUTABLE(inode))
                 return -EACCES;
-        if (current->fsuid == inode->i_uid) {
+        if (cfs_curproc_fsuid() == inode->i_uid) {
                 mode >>= 6;
         } else if (1) {
                 if (((mode >> 3) & mask & S_IRWXO) != mask)
