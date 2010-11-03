@@ -1266,8 +1266,8 @@ cfs_hash_find_or_add(cfs_hash_t *hs, void *key,
 int
 cfs_hash_add_unique(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 {
-        RETURN(cfs_hash_find_or_add(hs, key, hnode, 1) != hnode ?
-               -EALREADY : 0);
+        return cfs_hash_find_or_add(hs, key, hnode, 1) != hnode ?
+               -EALREADY : 0;
 }
 CFS_EXPORT_SYMBOL(cfs_hash_add_unique);
 
@@ -1697,7 +1697,6 @@ cfs_hash_hlist_for_each(cfs_hash_t *hs, unsigned hindex,
         cfs_hlist_head_t   *hhead;
         cfs_hlist_node_t   *hnode;
         cfs_hash_bd_t       bd;
-        ENTRY;
 
         cfs_hash_for_each_enter(hs);
         cfs_hash_lock(hs, 0);
@@ -1717,7 +1716,6 @@ cfs_hash_hlist_for_each(cfs_hash_t *hs, unsigned hindex,
  out:
         cfs_hash_unlock(hs, 0);
         cfs_hash_for_each_exit(hs);
-        EXIT;
 }
 
 CFS_EXPORT_SYMBOL(cfs_hash_hlist_for_each);
@@ -1735,7 +1733,6 @@ cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
         cfs_hlist_node_t   *hnode;
         cfs_hash_bd_t       bds[2];
         unsigned            i;
-        ENTRY;
 
         cfs_hash_lock(hs, 0);
 
@@ -1756,8 +1753,6 @@ cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
 
         cfs_hash_dual_bd_unlock(hs, bds, 0);
         cfs_hash_unlock(hs, 0);
-
-        EXIT;
 }
 CFS_EXPORT_SYMBOL(cfs_hash_for_each_key);
 
@@ -1814,7 +1809,6 @@ int
 cfs_hash_rehash(cfs_hash_t *hs, int do_rehash)
 {
         int     rc;
-        ENTRY;
 
         LASSERT(cfs_hash_with_rehash(hs) && !cfs_hash_with_no_lock(hs));
 
@@ -1884,7 +1878,6 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
         int                 count = 0;
         int                 rc = 0;
         int                 i;
-        ENTRY;
 
         LASSERT (hs != NULL && cfs_hash_with_rehash(hs));
 
@@ -1970,7 +1963,7 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
         if (rc != 0)
                 CDEBUG(D_INFO, "early quit of of rehashing: %d\n", rc);
         /* cfs_workitem require us to always return 0 */
-        RETURN(0);
+        return 0;
 }
 
 /**
