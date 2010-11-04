@@ -1899,6 +1899,33 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.32 has new BDI interface.
+AC_DEFUN([LC_NEW_BACKING_DEV_INFO],
+[AC_MSG_CHECKING([if backing_dev_info has a wb_cnt field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/backing-dev.h>
+],[
+        struct backing_dev_info bdi;
+        bdi.wb_cnt = 0;
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_NEW_BACKING_DEV_INFO, 1,
+                  [backing_dev_info has a wb_cnt field])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# 2.6.24 has bdi_init()/bdi_destroy() functions.
+AC_DEFUN([LC_EXPORT_BDI_INIT],
+[LB_CHECK_SYMBOL_EXPORT([bdi_init],
+[mm/backing-dev.c],[
+        AC_DEFINE(HAVE_BDI_INIT, 1,
+                [bdi_init/bdi_destroy functions are present])
+],[
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -2011,6 +2038,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_STRUCT_HASH_DESC
          LC_STRUCT_BLKCIPHER_DESC
          LC_FS_RENAME_DOES_D_MOVE
+
          # 2.6.23
          LC_UNREGISTER_BLKDEV_RETURN_INT
          LC_KERNEL_SPLICE_READ
@@ -2024,6 +2052,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BIO_ENDIO_2ARG
          LC_FH_TO_DENTRY
          LC_PROCFS_DELETED
+         LC_EXPORT_BDI_INIT
 
          #2.6.25
          LC_MAPPING_CAP_WRITEBACK_DIRTY
@@ -2055,6 +2084,7 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.32
          LC_DQUOT_INIT
          LC_REQUEST_QUEUE_LIMITS
+         LC_NEW_BACKING_DEV_INFO
 
          #
          if test x$enable_server = xyes ; then

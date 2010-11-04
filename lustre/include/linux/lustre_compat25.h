@@ -805,5 +805,19 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 # define ll_vfs_dq_drop vfs_dq_drop
 #endif
 
+#ifdef HAVE_BDI_INIT
+#define ll_bdi_init(bdi)    bdi_init(bdi)
+#define ll_bdi_destroy(bdi) bdi_destroy(bdi)
+#else
+#define ll_bdi_init(bdi)    0
+#define ll_bdi_destroy(bdi) do { } while(0)
+#endif
+
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+#define ll_bdi_wb_cnt(bdi) ((bdi).wb_cnt)
+#else
+#define ll_bdi_wb_cnt(bdi) 1
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
