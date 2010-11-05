@@ -3276,7 +3276,10 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         * we have two left for the last_rcvd and VBR inode version updates. */
         err = fsfilt_extend(exp->exp_obd, inode, 2, handle);
 
-        rc = filter_finish_transno(exp, inode, oti, rc, sync);
+        /* Update inode version only if data has changed => size has changed */
+        rc = filter_finish_transno(exp, ia_valid & ATTR_SIZE ? inode : NULL,
+                                   oti, rc, sync);
+
         if (sync) {
                 filter_cancel_cookies_cb(exp->exp_obd, 0, fcc, rc);
                 fcc = NULL;
