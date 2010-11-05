@@ -278,6 +278,12 @@ struct md_object_operations {
                                 dt_obj_version_t);
         int (*moo_path)(const struct lu_env *env, struct md_object *obj,
                         char *path, int pathlen, __u64 *recno, int *linkno);
+        int (*moo_file_lock)(const struct lu_env *env, struct md_object *obj,
+                             struct lov_mds_md *lmm, struct ldlm_extent *extent,
+                             struct lustre_handle *lockh);
+        int (*moo_file_unlock)(const struct lu_env *env, struct md_object *obj,
+                               struct lov_mds_md *lmm,
+                               struct lustre_handle *lockh);
 };
 
 /**
@@ -755,6 +761,23 @@ static inline void mo_version_set(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_version_set);
         return m->mo_ops->moo_version_set(env, m, ver);
+}
+
+static inline int mo_file_lock(const struct lu_env *env, struct md_object *m,
+                               struct lov_mds_md *lmm,
+                               struct ldlm_extent *extent,
+                               struct lustre_handle *lockh)
+{
+        LASSERT(m->mo_ops->moo_file_lock);
+        return m->mo_ops->moo_file_lock(env, m, lmm, extent, lockh);
+}
+
+static inline int mo_file_unlock(const struct lu_env *env, struct md_object *m,
+                                 struct lov_mds_md *lmm,
+                                 struct lustre_handle *lockh)
+{
+        LASSERT(m->mo_ops->moo_file_unlock);
+        return m->mo_ops->moo_file_unlock(env, m, lmm, lockh);
 }
 
 static inline int mdo_lookup(const struct lu_env *env,

@@ -1104,12 +1104,26 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
         cfs_spin_unlock(&hdr->coh_lock_guard);
 
         if (conflict) {
-                CDEBUG(D_DLMTRACE, "lock %p is confliced with %p, will wait\n",
-                       lock, conflict);
-                lu_ref_add(&conflict->cll_reference, "cancel-wait", lock);
-                LASSERT(lock->cll_conflict == NULL);
-                lock->cll_conflict = conflict;
-                rc = CLO_WAIT;
+                if (lock->cll_descr.cld_mode == CLM_GROUP) {
+                        /* we want a group lock but a previous lock request
+                         * conflicts, we do not wait but return 0 so the
+                         * request is send to the server
+                         */
+                        CDEBUG(D_DLMTRACE, "group lock %p is conflicted "
+                                           "with %p, no wait, send to server\n",
+                               lock, conflict);
+                        cl_lock_put(env, conflict);
+                        rc = 0;
+                } else {
+                        CDEBUG(D_DLMTRACE, "lock %p is conflicted with %p, "
+                                           "will wait\n",
+                               lock, conflict);
+                        LASSERT(lock->cll_conflict == NULL);
+                        lu_ref_add(&conflict->cll_reference, "cancel-wait",
+                                   lock);
+                        lock->cll_conflict = conflict;
+                        rc = CLO_WAIT;
+                }
         }
         RETURN(rc);
 }

@@ -2435,4 +2435,6 @@ const struct md_object_operations mdd_obj_ops = {
         .moo_version_get   = mdd_version_get,
         .moo_version_set   = mdd_version_set,
         .moo_path          = mdd_path,
+        .moo_file_lock     = mdd_file_lock,
+        .moo_file_unlock   = mdd_file_unlock,
 };

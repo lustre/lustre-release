@@ -575,6 +575,18 @@ static int dot_lustre_mdd_path(const struct lu_env *env, struct md_object *obj,
         return -ENOSYS;
 }
 
+static int dot_file_lock(const struct lu_env *env, struct md_object *obj,
+                         struct lov_mds_md *lmm, struct ldlm_extent *extent,
+                         struct lustre_handle *lockh)
+{
+        return -ENOSYS;
+}
+
+static int dot_file_unlock(const struct lu_env *env, struct md_object *obj,
+                           struct lov_mds_md *lmm, struct lustre_handle *lockh)
+{
+        return -ENOSYS;
+}
 
 static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_permission    = dot_lustre_mdd_permission,
@@ -596,6 +608,8 @@ static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_version_get   = dot_lustre_mdd_version_get,
         .moo_version_set   = dot_lustre_mdd_version_set,
         .moo_path          = dot_lustre_mdd_path,
+        .moo_file_lock     = dot_file_lock,
+        .moo_file_unlock   = dot_file_unlock,
 };
 
 
