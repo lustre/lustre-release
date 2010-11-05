@@ -89,6 +89,7 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 }
 
 #if !(CFS_O_CREAT == O_CREAT && CFS_O_EXCL == O_EXCL &&	\
+     CFS_O_NOACCESS == O_NOACCESS &&\
      CFS_O_TRUNC == O_TRUNC && CFS_O_APPEND == O_APPEND &&\
      CFS_O_NONBLOCK == O_NONBLOCK && CFS_O_NDELAY == O_NDELAY &&\
      CFS_O_SYNC == O_SYNC && CFS_O_ASYNC == FASYNC &&\
@@ -97,9 +98,9 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 
 int cfs_oflags2univ(int flags)
 {
-	int f; 
-	
-	f = flags & O_ACCMODE;
+	int f;
+
+	f = flags & O_NOACCESS;
 	f |= (flags & O_CREAT) ? CFS_O_CREAT: 0;
 	f |= (flags & O_EXCL) ? CFS_O_EXCL: 0;
 	f |= (flags & O_NOCTTY) ? CFS_O_NOCTTY: 0;

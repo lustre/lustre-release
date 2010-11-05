@@ -150,7 +150,7 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->cr_time     = op_data->op_mod_time;
         rec->cr_suppgid1 = op_data->op_suppgids[0];
         rec->cr_suppgid2 = op_data->op_suppgids[1];
-        rec->cr_flags    = op_data->op_flags & MF_SOM_LOCAL_FLAGS;
+        set_mrc_cr_flags(rec, op_data->op_flags & MF_SOM_LOCAL_FLAGS);
         rec->cr_bias     = op_data->op_bias;
 
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
@@ -164,9 +164,9 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         }
 }
 
-static __u32 mds_pack_open_flags(__u32 flags, __u32 mode)
+static __u64 mds_pack_open_flags(__u32 flags, __u32 mode)
 {
-        __u32 cr_flags = (flags & (FMODE_READ | FMODE_WRITE |
+        __u64 cr_flags = (flags & (FMODE_READ | FMODE_WRITE |
                                    MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS | 
                                    MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK));
         if (flags & O_CREAT)
@@ -188,6 +188,9 @@ static __u32 mds_pack_open_flags(__u32 flags, __u32 mode)
         if (flags & O_LOV_DELAY_CREATE)
                 cr_flags |= MDS_OPEN_DELAY_CREATE;
 
+        if ((flags & O_NOACCESS) || (flags & O_NONBLOCK))
+                cr_flags |= MDS_OPEN_NORESTORE;
+
         return cr_flags;
 }
 
@@ -198,6 +201,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 {
         struct mdt_rec_create *rec;
         char *tmp;
+        __u64 cr_flags;
 
         CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_create));
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -212,7 +216,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                 rec->cr_fid2 = op_data->op_fid2;
         }
         rec->cr_mode     = mode;
-        rec->cr_flags    = mds_pack_open_flags(flags, mode);
+        cr_flags = mds_pack_open_flags(flags, mode);
         rec->cr_rdev     = rdev;
         rec->cr_time     = op_data->op_mod_time;
         rec->cr_suppgid1 = op_data->op_suppgids[0];
@@ -229,7 +233,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         }
 
         if (lmm) {
-                rec->cr_flags |= MDS_OPEN_HAS_EA;
+                cr_flags |= MDS_OPEN_HAS_EA;
 #ifndef __KERNEL__
                 /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
                 rec->cr_fid2 = op_data->op_fid2;
@@ -237,6 +241,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                 tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
                 memcpy (tmp, lmm, lmmlen);
         }
+        set_mrc_cr_flags(rec, cr_flags);
 }
 
 static inline __u64 attr_pack(unsigned int ia_valid) {

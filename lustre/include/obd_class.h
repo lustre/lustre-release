@@ -103,6 +103,12 @@ void obd_zombie_impexp_stop(void);
 void obd_zombie_impexp_cull(void);
 void obd_zombie_barrier(void);
 void obd_exports_barrier(struct obd_device *obd);
+int kuc_len(int payload_len);
+struct kuc_hdr * kuc_ptr(void *p);
+int kuc_ispayload(void *p);
+void *kuc_alloc(int payload_len, int transport, int type);
+void kuc_free(void *p, int payload_len);
+
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,

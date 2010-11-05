@@ -601,8 +601,8 @@ check_mdt_rec_create(void)
         CHECK_MEMBER(mdt_rec_create, cr_padding_1);
         CHECK_MEMBER(mdt_rec_create, cr_mode);
         CHECK_MEMBER(mdt_rec_create, cr_bias);
-        CHECK_MEMBER(mdt_rec_create, cr_flags);
-        CHECK_MEMBER(mdt_rec_create, cr_padding_2);
+        CHECK_MEMBER(mdt_rec_create, cr_flags_l);
+        CHECK_MEMBER(mdt_rec_create, cr_flags_h);
         CHECK_MEMBER(mdt_rec_create, cr_padding_3);
         CHECK_MEMBER(mdt_rec_create, cr_padding_4);
 }
@@ -1229,6 +1229,37 @@ check_link_ea_entry(void)
         CHECK_MEMBER(link_ea_entry, lee_name);
 }
 
+static void
+check_hsm_user_item(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(hsm_user_item);
+        CHECK_MEMBER(hsm_user_item, hui_fid);
+        CHECK_MEMBER(hsm_user_item, hui_extent);
+}
+
+static void
+check_hsm_user_request(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(hsm_user_request);
+        CHECK_MEMBER(hsm_user_request, hur_action);
+        CHECK_MEMBER(hsm_user_request, hur_archive_num);
+        CHECK_MEMBER(hsm_user_request, hur_itemcount);
+        CHECK_MEMBER(hsm_user_request, hur_data_len);
+}
+
+static void
+check_hsm_user_state(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(hsm_user_state);
+        CHECK_MEMBER(hsm_user_state, hus_states);
+        CHECK_MEMBER(hsm_user_state, hus_archive_num);
+        CHECK_MEMBER(hsm_user_state, hus_in_progress_state);
+        CHECK_MEMBER(hsm_user_state, hus_in_progress_action);
+        CHECK_MEMBER(hsm_user_state, hus_in_progress_location);
+}
 
 static void
 system_string (char *cmdline, char *str, int len)
@@ -1495,6 +1526,9 @@ main(int argc, char **argv)
         printf("#endif\n");
         check_link_ea_header();
         check_link_ea_entry();
+        check_hsm_user_item();
+        check_hsm_user_request();
+        check_hsm_user_state();
 
         printf("}\n\n");
 

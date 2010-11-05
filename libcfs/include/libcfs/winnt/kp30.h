@@ -150,6 +150,7 @@ typedef struct {
 #define LPU64 "%I64u"
 #define LPD64 "%I64d"
 #define LPX64 "%#I64x"
+#define LPO64 "%#I64o"
 
 /*
  * long_ptr_t & ulong_ptr_t, same to "long" for linux

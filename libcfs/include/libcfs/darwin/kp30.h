@@ -116,6 +116,7 @@ typedef struct {
 
 #define IOCTL_LIBCFS_TYPE struct libcfs_ioctl_data
 
+#define LPO64 "%#llo"
 #define LPU64 "%llu"
 #define LPD64 "%lld"
 #define LPX64 "%#llx"

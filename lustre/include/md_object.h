@@ -149,9 +149,8 @@ typedef enum {
 
 struct md_hsm {
         __u32  mh_flags;
+        __u32  mh_archive_number;
 };
-#define ma_hsm_flags ma_hsm.mh_flags
-#define HSM_FLAGS_MASK 0
 
 #define IOEPOCH_INVAL 0
 
@@ -199,7 +198,7 @@ struct md_op_spec {
         int no_create;
 
         /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
-        __u32      sp_cr_flags;
+        __u64      sp_cr_flags;
 
         /** Should mdd do lookup sanity check or not. */
         int        sp_cr_lookup;
@@ -246,7 +245,9 @@ struct md_object_operations {
 
         int (*moo_readlink)(const struct lu_env *env, struct md_object *obj,
                             struct lu_buf *buf);
-
+        int (*moo_changelog)(const struct lu_env *env,
+                             enum changelog_rec_type type, int flags,
+                             struct md_object *obj);
         /** part of cross-ref operation */
         int (*moo_object_create)(const struct lu_env *env,
                                  struct md_object *obj,
@@ -617,6 +618,14 @@ static inline int mo_readlink(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_readlink);
         return m->mo_ops->moo_readlink(env, m, buf);
+}
+
+static inline int mo_changelog(const struct lu_env *env,
+                               enum changelog_rec_type type,
+                               int flags, struct md_object *m)
+{
+        LASSERT(m->mo_ops->moo_changelog);
+        return m->mo_ops->moo_changelog(env, type, flags, m);
 }
 
 static inline int mo_attr_set(const struct lu_env *env,

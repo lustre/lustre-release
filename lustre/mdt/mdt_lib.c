@@ -903,7 +903,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID |
                          LA_CTIME | LA_MTIME | LA_ATIME;
         memset(&sp->u, 0, sizeof(sp->u));
-        sp->sp_cr_flags = rec->cr_flags;
+        sp->sp_cr_flags = get_mrc_cr_flags(rec);
         sp->sp_ck_split = !!(rec->cr_bias & MDS_CHECK_SPLIT);
         info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
 
@@ -914,7 +914,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
         if (!info->mti_cross_ref) {
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-                rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
+                rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME,
+                                                      RCL_CLIENT) - 1;
                 LASSERT(rr->rr_name && rr->rr_namelen > 0);
         } else {
                 rr->rr_name = NULL;
@@ -1172,7 +1173,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
                          LA_CTIME | LA_MTIME | LA_ATIME;
         memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
-        info->mti_spec.sp_cr_flags = rec->cr_flags;
+        info->mti_spec.sp_cr_flags = get_mrc_cr_flags(rec);
         /* Do not trigger ASSERTION if client miss to set such flags. */
         if (unlikely(info->mti_spec.sp_cr_flags == 0))
                 RETURN(-EPROTO);

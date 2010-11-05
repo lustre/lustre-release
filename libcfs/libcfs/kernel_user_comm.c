@@ -40,7 +40,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define D_KUC 0
+#define D_KUC D_OTHER
 
 #include <libcfs/libcfs.h>
 
@@ -105,7 +105,7 @@ int libcfs_ukuc_msg_get(lustre_kernelcomm *link, char *buf, int maxsize,
                 }
                 kuch = (struct kuc_hdr *)buf;
 
-                CDEBUG(D_KUC, " Received message mg=%x t=%d m=%d l=%d\n",
+                CDEBUG(D_KUC, "Received message mg=%x t=%d m=%d l=%d\n",
                        kuch->kuc_magic, kuch->kuc_transport, kuch->kuc_msgtype,
                        kuch->kuc_msglen);
 
@@ -190,6 +190,7 @@ struct kkuc_reg {
         cfs_list_t  kr_chain;
         int         kr_uid;
         cfs_file_t *kr_fp;
+        __u32       kr_data;
 };
 static cfs_list_t kkuc_groups[KUC_GRP_MAX+1] = {};
 /* Protect message sending against remove and adds */
@@ -200,7 +201,7 @@ static CFS_DECLARE_RWSEM(kg_sem);
  * @param uid identidier for this receiver
  * @param group group number
  */
-int libcfs_kkuc_group_add(cfs_file_t *filp, int uid, int group)
+int libcfs_kkuc_group_add(cfs_file_t *filp, int uid, int group, __u32 data)
 {
         struct kkuc_reg *reg;
 
@@ -220,6 +221,7 @@ int libcfs_kkuc_group_add(cfs_file_t *filp, int uid, int group)
 
         reg->kr_fp = filp;
         reg->kr_uid = uid;
+        reg->kr_data = data;
 
         cfs_down_write(&kg_sem);
         if (kkuc_groups[group].next == NULL)
@@ -258,7 +260,8 @@ int libcfs_kkuc_group_rem(int uid, int group)
                         cfs_list_del(&reg->kr_chain);
                         CDEBUG(D_KUC, "Removed uid=%d fp=%p from group %d\n",
                                reg->kr_uid, reg->kr_fp, group);
-                        cfs_put_file(reg->kr_fp);
+                        if (reg->kr_fp != NULL)
+                                cfs_put_file(reg->kr_fp);
                         cfs_free(reg);
                 }
         }
@@ -276,13 +279,53 @@ int libcfs_kkuc_group_put(int group, void *payload)
 
         cfs_down_read(&kg_sem);
         cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
+                if (reg->kr_fp != NULL) {
                 rc = libcfs_kkuc_msg_put(reg->kr_fp, payload);
+                        if (rc == -EPIPE) {
+                                cfs_put_file(reg->kr_fp);
+                                reg->kr_fp = NULL;
+                        }
+                }
         }
         cfs_up_read(&kg_sem);
 
         RETURN(rc);
 }
 CFS_EXPORT_SYMBOL(libcfs_kkuc_group_put);
+
+/**
+ * Calls a callback function for each link of the given kuc group.
+ * @param group the group to call the function on.
+ * @param cb_func the function to be called.
+ * @param cb_arg iextra argument to be passed to the callback function.
+ */
+int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
+                              void *cb_arg)
+{
+        struct kkuc_reg *reg;
+        int rc = 0;
+        ENTRY;
+
+        if (group > KUC_GRP_MAX) {
+                CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
+                RETURN(-EINVAL);
+        }
+
+        /* no link for this group */
+        if (kkuc_groups[group].next == NULL)
+                RETURN(0);
+
+        cfs_down_read(&kg_sem);
+        cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
+                if (reg->kr_fp != NULL) {
+                        rc = cb_func(reg->kr_data, cb_arg);
+                }
+        }
+        cfs_up_read(&kg_sem);
+
+        RETURN(rc);
+}
+CFS_EXPORT_SYMBOL(libcfs_kkuc_group_foreach);
 
 #endif /* LUSTRE_UTILS */
 

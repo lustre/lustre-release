@@ -714,9 +714,9 @@ static int __mdd_lma_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         /* Swab and copy LMA */
         if (ma->ma_need & MA_HSM) {
                 if (lma->lma_compat & LMAC_HSM)
-                        ma->ma_hsm_flags = lma->lma_flags & HSM_FLAGS_MASK;
+                        ma->ma_hsm.mh_flags = lma->lma_flags & HSM_FLAGS_MASK;
                 else
-                        ma->ma_hsm_flags = 0;
+                        ma->ma_hsm.mh_flags = 0;
                 ma->ma_valid |= MA_HSM;
         }
 
@@ -733,8 +733,7 @@ static int __mdd_lma_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         RETURN(0);
 }
 
-static int mdd_attr_get_internal(const struct lu_env *env,
-                                 struct mdd_object *mdd_obj,
+int mdd_attr_get_internal(const struct lu_env *env, struct mdd_object *mdd_obj,
                                  struct md_attr *ma)
 {
         int rc = 0;
@@ -762,8 +761,8 @@ static int mdd_attr_get_internal(const struct lu_env *env,
                         rc = mdd_def_acl_get(env, mdd_obj, ma);
         }
 #endif
-        CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
-               rc, ma->ma_valid);
+        CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64" ma_lmm=%p\n",
+               rc, ma->ma_valid, ma->ma_lmm);
         RETURN(rc);
 }
 
@@ -1281,6 +1280,28 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
         return 0;
 }
 
+int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
+                  int flags, struct md_object *obj)
+{
+        struct thandle *handle;
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
+        int rc;
+        ENTRY;
+
+        handle = mdd_trans_start(env, mdd);
+
+        if (IS_ERR(handle))
+                return(PTR_ERR(handle));
+
+        rc = mdd_changelog_data_store(env, mdd, type, flags, mdd_obj,
+                                      handle);
+
+        mdd_trans_stop(env, mdd, rc, handle);
+
+        RETURN(rc);
+}
+
 /**
  * Should be called with write lock held.
  *
@@ -1311,7 +1332,7 @@ static int __mdd_lma_set(const struct lu_env *env, struct mdd_object *mdd_obj,
 
         /* Copy HSM data */
         if (ma->ma_valid & MA_HSM) {
-                lma->lma_flags  |= ma->ma_hsm_flags & HSM_FLAGS_MASK;
+                lma->lma_flags  |= ma->ma_hsm.mh_flags & HSM_FLAGS_MASK;
                 lma->lma_compat |= LMAC_HSM;
         }
 
@@ -2408,6 +2429,7 @@ const struct md_object_operations mdd_obj_ops = {
         .moo_close         = mdd_close,
         .moo_readpage      = mdd_readpage,
         .moo_readlink      = mdd_readlink,
+        .moo_changelog     = mdd_changelog,
         .moo_capa_get      = mdd_capa_get,
         .moo_object_sync   = mdd_object_sync,
         .moo_version_get   = mdd_version_get,

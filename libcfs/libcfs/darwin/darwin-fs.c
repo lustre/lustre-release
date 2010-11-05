@@ -448,7 +448,7 @@ int cfs_oflags2univ(int flags)
 {
         int f;
 
-        f = flags & O_ACCMODE;
+        f = flags & O_NOACCESS;
         f |= (flags & O_CREAT) ? CFS_O_CREAT: 0;
         f |= (flags & O_TRUNC) ? CFS_O_TRUNC: 0;
         f |= (flags & O_EXCL) ? CFS_O_EXCL: 0;

@@ -1710,3 +1710,70 @@ void obd_zombie_impexp_stop(void)
 #endif
 }
 
+/***** Kernel-userspace comm helpers *******/
+
+/* Get length of entire message, including header */
+int kuc_len(int payload_len)
+{
+        return sizeof(struct kuc_hdr) + payload_len;
+}
+EXPORT_SYMBOL(kuc_len);
+
+/* Get a pointer to kuc header, given a ptr to the payload
+ * @param p Pointer to payload area
+ * @returns Pointer to kuc header
+ */
+struct kuc_hdr * kuc_ptr(void *p)
+{
+        struct kuc_hdr *lh = ((struct kuc_hdr *)p) - 1;
+        LASSERT(lh->kuc_magic == KUC_MAGIC);
+        return lh;
+}
+EXPORT_SYMBOL(kuc_ptr);
+
+/* Test if payload is part of kuc message
+ * @param p Pointer to payload area
+ * @returns boolean
+ */
+int kuc_ispayload(void *p)
+{
+        struct kuc_hdr *kh = ((struct kuc_hdr *)p) - 1;
+
+        if (kh->kuc_magic == KUC_MAGIC)
+                return 1;
+        else
+                return 0;
+}
+EXPORT_SYMBOL(kuc_ispayload);
+
+/* Alloc space for a message, and fill in header
+ * @return Pointer to payload area
+ */
+void *kuc_alloc(int payload_len, int transport, int type)
+{
+        struct kuc_hdr *lh;
+        int len = kuc_len(payload_len);
+
+        OBD_ALLOC(lh, len);
+        if (lh == NULL)
+                return ERR_PTR(-ENOMEM);
+
+        lh->kuc_magic = KUC_MAGIC;
+        lh->kuc_transport = transport;
+        lh->kuc_msgtype = type;
+        lh->kuc_msglen = len;
+
+        return (void *)(lh + 1);
+}
+EXPORT_SYMBOL(kuc_alloc);
+
+/* Takes pointer to payload area */
+inline void kuc_free(void *p, int payload_len)
+{
+        struct kuc_hdr *lh = kuc_ptr(p);
+        OBD_FREE(lh, kuc_len(payload_len));
+}
+EXPORT_SYMBOL(kuc_free);
+
+
+

@@ -1417,7 +1417,8 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, rc = 0);
         }
         case LL_IOC_GET_CONNECT_FLAGS: {
-                if (cfs_copy_to_user(uarg, &exp->exp_connect_flags, sizeof(__u64)))
+                if (cfs_copy_to_user(uarg, &exp->exp_connect_flags,
+                                     sizeof(__u64)))
                         GOTO(out, rc = -EFAULT);
                 else
                         GOTO(out, rc = 0);
@@ -1487,8 +1488,8 @@ static void lustre_swab_hai(struct hsm_action_item *h)
         __swab32s(&h->hai_action);
         lustre_swab_lu_fid(&h->hai_fid);
         __swab64s(&h->hai_cookie);
-        __swab64s(&h->hai_extent_start);
-        __swab64s(&h->hai_extent_end);
+        __swab64s(&h->hai_extent.offset);
+        __swab64s(&h->hai_extent.length);
         __swab64s(&h->hai_gid);
 }
 
@@ -1532,7 +1533,8 @@ static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                 rc = libcfs_kkuc_group_rem(lk->lk_uid,lk->lk_group);
         else {
                 cfs_file_t *fp = cfs_get_fd(lk->lk_wfd);
-                rc = libcfs_kkuc_group_add(fp, lk->lk_uid,lk->lk_group);
+                rc = libcfs_kkuc_group_add(fp, lk->lk_uid,lk->lk_group,
+                                           lk->lk_data);
                 if (rc && fp)
                         cfs_put_file(fp);
         }

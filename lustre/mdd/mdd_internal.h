@@ -251,6 +251,8 @@ int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
                     struct md_attr *ma);
 int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                   struct md_attr *ma);
+int mdd_attr_get_internal(const struct lu_env *env, struct mdd_object *mdd_obj,
+                          struct md_attr *ma);
 int mdd_attr_get_internal_locked(const struct lu_env *env,
                                  struct mdd_object *mdd_obj,
                                  struct md_attr *ma);
@@ -380,7 +382,8 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
 int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm);
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                  const struct lu_rdpg *rdpg);
-
+int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
+                  int flags, struct md_object *obj);
 /* mdd_quota.c*/
 #ifdef HAVE_QUOTA_SUPPORT
 int mdd_quota_notify(const struct lu_env *env, struct md_device *m);

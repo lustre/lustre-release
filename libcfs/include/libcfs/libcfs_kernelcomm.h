@@ -77,6 +77,9 @@ enum kuc_generic_message_type {
         KUC_MSG_SHUTDOWN = 1,
 };
 
+/* prototype for callback function on kuc groups */
+typedef int (*libcfs_kkuc_cb_t)(__u32 data, void *cb_arg);
+
 /* KUC Broadcast Groups. This determines which userspace process hears which
  * messages.  Mutliple transports may be used within a group, or multiple
  * groups may use the same transport.  Broadcast
@@ -89,8 +92,11 @@ enum kuc_generic_message_type {
 /* Kernel methods */
 extern int libcfs_kkuc_msg_put(cfs_file_t *fp, void *payload);
 extern int libcfs_kkuc_group_put(int group, void *payload);
-extern int libcfs_kkuc_group_add(cfs_file_t *fp, int uid, int group);
+extern int libcfs_kkuc_group_add(cfs_file_t *fp, int uid, int group,
+                                 __u32 data);
 extern int libcfs_kkuc_group_rem(int uid, int group);
+extern int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
+                                     void *cb_arg);
 
 #define LK_FLG_STOP 0x01
 

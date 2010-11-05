@@ -619,6 +619,7 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
 static int mdd_changelog_ns_store(const struct lu_env  *env,
                                   struct mdd_device    *mdd,
                                   enum changelog_rec_type type,
+                                  int flags,
                                   struct mdd_object    *target,
                                   struct mdd_object    *parent,
                                   const struct lu_fid  *tf,
@@ -650,7 +651,7 @@ static int mdd_changelog_ns_store(const struct lu_env  *env,
                 RETURN(-ENOMEM);
         rec = (struct llog_changelog_rec *)buf->lb_buf;
 
-        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
         rec->cr.cr_type = (__u32)type;
         tfid = tf ? tf : mdo2fid(target);
         rec->cr.cr_tfid = *tfid;
@@ -752,7 +753,7 @@ out_unlock:
         mdd_pdo_write_unlock(env, mdd_tobj, dlh);
 out_trans:
         if (rc == 0)
-                rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, mdd_sobj,
+                rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
                                             mdd_tobj, NULL, lname, handle);
         mdd_trans_stop(env, mdd, rc, handle);
 out_pending:
@@ -780,7 +781,9 @@ int mdd_finish_unlink(const struct lu_env *env,
 
         LASSERT(mdd_write_locked(env, obj) != 0);
 
-        rc = mdd_iattr_get(env, obj, ma);
+        /* read HSM flags, needed to set changelogs flags */
+        ma->ma_need = MA_HSM | MA_INODE;
+        rc = mdd_attr_get_internal(env, obj, ma);
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
                 obj->mod_flags |= DEAD_OBJ;
                 /* add new orphan and the object
@@ -923,11 +926,18 @@ cleanup:
         mdd_write_unlock(env, mdd_cobj);
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
-        if (rc == 0)
+        if (rc == 0) {
+                int cl_flags;
+
+                cl_flags = (ma->ma_attr.la_nlink == 0) ? CLF_UNLINK_LAST : 0;
+                if ((ma->ma_valid & MA_HSM) &&
+                    (ma->ma_hsm.mh_flags & HS_EXISTS))
+                        cl_flags |= CLF_UNLINK_HSM_EXISTS;
+
                 rc = mdd_changelog_ns_store(env, mdd,
-                                            is_dir ? CL_RMDIR : CL_UNLINK,
-                                            mdd_cobj, mdd_pobj, NULL, lname,
-                                            handle);
+                         is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
+                         mdd_cobj, mdd_pobj, NULL, lname, handle);
+        }
 
         mdd_trans_stop(env, mdd, rc, handle);
 #ifdef HAVE_QUOTA_SUPPORT
@@ -1301,7 +1311,7 @@ out_trans:
         if (rc == 0)
                 /* Bare EXT record with no RENAME in front of it signifies
                    a partial slave op */
-                rc = mdd_changelog_ns_store(env, mdd, CL_EXT, mdd_tobj,
+                rc = mdd_changelog_ns_store(env, mdd, CL_EXT, 0, mdd_tobj,
                                             mdd_tpobj, NULL, lname, handle);
 
         mdd_trans_stop(env, mdd, rc, handle);
@@ -1852,10 +1862,10 @@ out_trans:
                             S_ISDIR(attr->la_mode) ? CL_MKDIR :
                             S_ISREG(attr->la_mode) ? CL_CREATE :
                             S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
-                            son, mdd_pobj, NULL, lname, handle);
+                            0, son, mdd_pobj, NULL, lname, handle);
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
-        /* finis lov_create stuff, free all temporary data */
+        /* finish lov_create stuff, free all temporary data */
         mdd_lov_create_finish(env, mdd, lmm, lmm_size, spec);
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
@@ -2226,10 +2236,10 @@ cleanup:
                 mdd_pdo_write_unlock(env, mdd_spobj, sdlh);
 cleanup_unlocked:
         if (rc == 0)
-                rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, mdd_tobj,
+                rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, 0, mdd_tobj,
                                             mdd_spobj, lf, lsname, handle);
         if (rc == 0)
-                rc = mdd_changelog_ns_store(env, mdd, CL_EXT, mdd_tobj,
+                rc = mdd_changelog_ns_store(env, mdd, CL_EXT, 0, mdd_tobj,
                                             mdd_tpobj, lf, ltname, handle);
 
         mdd_trans_stop(env, mdd, rc, handle);
@@ -2536,5 +2546,5 @@ const struct md_dir_operations mdd_dir_ops = {
         .mdo_name_insert   = mdd_name_insert,
         .mdo_name_remove   = mdd_name_remove,
         .mdo_rename_tgt    = mdd_rename_tgt,
-        .mdo_create_data   = mdd_create_data
+        .mdo_create_data   = mdd_create_data,
 };

@@ -119,18 +119,21 @@ typedef struct {
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPX64i "%Lx"
+# define LPO64 "%#Lo"
 # define LPF64 "L"
 #elif (BITS_PER_LONG == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPX64i "%Lx"
+# define LPO64 "%#Lo"
 # define LPF64 "L"
 #elif (BITS_PER_LONG == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
-# define LPX64 "%#lx"
 # define LPX64i "%lx"
+# define LPX64 "%#lx"
+# define LPO64 "%#lo"
 # define LPF64 "l"
 #endif
 

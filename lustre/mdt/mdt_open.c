@@ -586,7 +586,7 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, int mode)
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
-                        struct mdt_object *o, int flags, int created)
+                        struct mdt_object *o, __u64 flags, int created)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
@@ -677,8 +677,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                         old_mfd = mdt_handle2mfd(info, info->mti_rr.rr_handle);
                         if (old_mfd) {
                                 CDEBUG(D_HA, "del orph mfd %p fid=("DFID") "
-                                       "cookie=" LPX64"\n",
-                                       mfd, 
+                                       "cookie=" LPX64"\n", mfd,
                                        PFID(mdt_object_fid(mfd->mfd_object)),
                                        info->mti_rr.rr_handle->cookie);
                                 cfs_spin_lock(&med->med_open_lock);
@@ -716,7 +715,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 
 static int mdt_finish_open(struct mdt_thread_info *info,
                            struct mdt_object *p, struct mdt_object *o,
-                           int flags, int created, struct ldlm_reply *rep)
+                           __u64 flags, int created, struct ldlm_reply *rep)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct obd_export       *exp = req->rq_export;
@@ -1152,7 +1151,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         struct mdt_body         *repbody;
         struct lu_fid           *child_fid = &info->mti_tmp_fid1;
         struct md_attr          *ma = &info->mti_attr;
-        __u32                    create_flags = info->mti_spec.sp_cr_flags;
+        __u64                    create_flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct lu_name          *lname;
         int                      result, rc;
@@ -1189,7 +1188,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 GOTO(out, result = err_serious(-EINVAL));
 
         CDEBUG(D_INODE, "I am going to open "DFID"/(%s->"DFID") "
-               "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
+               "cr_flag="LPO64" mode=0%06o msg_flag=0x%x\n",
                PFID(rr->rr_fid1), rr->rr_name,
                PFID(rr->rr_fid2), create_flags,
                ma->ma_attr.la_mode, msg_flags);
@@ -1210,7 +1209,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                  * via a regular replay.
                  */
                 if (!(create_flags & MDS_OPEN_CREAT)) {
-                        DEBUG_REQ(D_ERROR, req,"OPEN & CREAT not in open replay.");
+                        DEBUG_REQ(D_ERROR, req,
+                                  "OPEN & CREAT not in open replay.");
                         GOTO(out, result = -EFAULT);
                 }
                 CDEBUG(D_INFO, "Open replay did find object, continue as "

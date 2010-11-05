@@ -1097,7 +1097,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_LOV_V3 | OBD_CONNECT_SOM | \
-                                OBD_CONNECT_FULL20)
+                                OBD_CONNECT_FULL20 | OBD_CONNECT_LAYOUTLOCK)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -1839,6 +1839,9 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
+#define MDS_OPEN_NORESTORE  0100000000000ULL /* Do not restore file at open */
+#define MDS_OPEN_NEWSTRIPE  0200000000000ULL /* New stripe needed (restripe or
+                                              * hsm restore) */
 
 /* permission for create non-directory file */
 #define MAY_CREATE      (1 << 7)
@@ -1888,11 +1891,25 @@ struct mdt_rec_create {
         __u64           cr_padding_1;   /* rr_blocks */
         __u32           cr_mode;
         __u32           cr_bias;
-        __u32           cr_flags;       /* for use with open */
-        __u32           cr_padding_2;   /* rr_padding_2 */
+        /* use of helpers set/get_mrc_cr_flags() is needed to access
+         * 64 bits cr_flags [cr_flags_l, cr_flags_h], this is done to
+         * extend cr_flags size without breaking 1.8 compat */
+        __u32           cr_flags_l;     /* for use with open, low  32 bits  */
+        __u32           cr_flags_h;     /* for use with open, high 32 bits */
         __u32           cr_padding_3;   /* rr_padding_3 */
         __u32           cr_padding_4;   /* rr_padding_4 */
 };
+
+static inline void set_mrc_cr_flags(struct mdt_rec_create *mrc, __u64 flags)
+{
+        mrc->cr_flags_l = (__u32)(flags & 0xFFFFFFFFUll);
+        mrc->cr_flags_h = (__u32)(flags >> 32);
+}
+
+static inline __u64 get_mrc_cr_flags(struct mdt_rec_create *mrc)
+{
+        return ((__u64)(mrc->cr_flags_l) | ((__u64)mrc->cr_flags_h << 32));
+}
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_link {

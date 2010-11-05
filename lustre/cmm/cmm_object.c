@@ -284,6 +284,15 @@ static int cml_readlink(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+static int cml_changelog(const struct lu_env *env, enum changelog_rec_type type,
+                         int flags, struct md_object *mo)
+{
+        int rc;
+        ENTRY;
+        rc = mo_changelog(env, type, flags, md_object_next(mo));
+        RETURN(rc);
+}
+
 static int cml_xattr_list(const struct lu_env *env, struct md_object *mo,
                           struct lu_buf *buf)
 {
@@ -410,6 +419,7 @@ static const struct md_object_operations cml_mo_ops = {
         .moo_close         = cml_close,
         .moo_readpage      = cml_readpage,
         .moo_readlink      = cml_readlink,
+        .moo_changelog     = cml_changelog,
         .moo_capa_get      = cml_capa_get,
         .moo_object_sync   = cml_object_sync,
         .moo_version_get   = cml_version_get,
@@ -866,7 +876,7 @@ static const struct md_dir_operations cml_dir_ops = {
         .mdo_name_insert = cml_name_insert,
         .mdo_rename      = cml_rename,
         .mdo_rename_tgt  = cml_rename_tgt,
-        .mdo_create_data = cml_create_data
+        .mdo_create_data = cml_create_data,
 };
 /** @} */
 /** @} */
@@ -1024,6 +1034,12 @@ static int cmr_readlink(const struct lu_env *env, struct md_object *mo,
         return -EFAULT;
 }
 
+static int cmr_changelog(const struct lu_env *env, enum changelog_rec_type type,
+                         int flags, struct md_object *mo)
+{
+        return -EFAULT;
+}
+
 static int cmr_xattr_list(const struct lu_env *env, struct md_object *mo,
                           struct lu_buf *buf)
 {
@@ -1128,6 +1144,7 @@ static const struct md_object_operations cmr_mo_ops = {
         .moo_close         = cmr_close,
         .moo_readpage      = cmr_readpage,
         .moo_readlink      = cmr_readlink,
+        .moo_changelog     = cmr_changelog,
         .moo_capa_get      = cmr_capa_get,
         .moo_object_sync   = cmr_object_sync,
         .moo_version_get   = cmr_version_get,

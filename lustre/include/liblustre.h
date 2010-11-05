@@ -208,19 +208,7 @@ struct iattr {
 
 #define ll_iattr iattr
 
-#define IT_OPEN     0x0001
-#define IT_CREAT    0x0002
-#define IT_READDIR  0x0004
-#define IT_GETATTR  0x0008
-#define IT_LOOKUP   0x0010
-#define IT_UNLINK   0x0020
-#define IT_GETXATTR 0x0040
-#define IT_EXEC     0x0080
-#define IT_PIN      0x0100
-
-#define IT_FL_LOCKED   0x0001
-#define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
-
+/* defined in kernel header include/linux/namei.h */
 #define INTENT_MAGIC 0x19620323
 
 struct lustre_intent_data {

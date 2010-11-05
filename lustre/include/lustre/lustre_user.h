@@ -322,7 +322,8 @@ typedef struct lu_fid lustre_fid;
 
 /* printf display format
    e.g. printf("file FID is "DFID"\n", PFID(fid)); */
-#define DFID "["LPX64":0x%x:0x%x]"
+#define DFID_NOBRACE LPX64":0x%x:0x%x"
+#define DFID "["DFID_NOBRACE"]"
 #define PFID(fid)     \
         (fid)->f_seq, \
         (fid)->f_oid, \
@@ -498,6 +499,83 @@ static inline const char *changelog_type2str(int type) {
 #define CLF_VERSION  0x1000
 #define CLF_FLAGMASK 0x0FFF
 /* Anything under the flagmask may be per-type (if desired) */
+/* Flags for unlink */
+#define CLF_UNLINK_LAST       0x0001 /* Unlink of last hardlink */
+#define CLF_UNLINK_HSM_EXISTS 0x0002 /* File has something in HSM */
+                                     /* HSM cleaning needed */
+/* Flags for HSM */
+/* 12b used (from high weight to low weight):
+ * 2b for flags
+ * 3b for event
+ * 7b for error code
+ */
+#define CLF_HSM_ERR_L        0 /* HSM return code, 7 bits */
+#define CLF_HSM_ERR_H        6
+#define CLF_HSM_EVENT_L      7 /* HSM event, 3 bits, see enum hsm_event */
+#define CLF_HSM_EVENT_H      9
+#define CLF_HSM_FLAG_L      10 /* HSM flags, 2 bits, 1 used, 1 spare */
+#define CLF_HSM_FLAG_H      11
+#define CLF_HSM_SPARE_L     12 /* 4 spare bits */
+#define CLF_HSM_SPARE_H     15
+#define CLF_HSM_LAST        15
+
+#define CLF_GET_BITS(_b, _h, _l) \
+ _b &= (0xFFFF << (CLF_HSM_LAST - _h)); \
+ _b = _b >> (_l + CLF_HSM_LAST - _h)
+
+#define CLF_HSM_SUCCESS      0x00
+#define CLF_HSM_MAXERROR     0x7E
+#define CLF_HSM_ERROVERFLOW  0x7F
+
+#define CLF_HSM_DIRTY        1 /* file is dirty after HSM request end */
+
+/* 3 bits field => 8 values allowed */
+enum hsm_event {
+        HE_ARCHIVE      = 0,
+        HE_RESTORE      = 1,
+        HE_CANCEL       = 2,
+        HE_RELEASE      = 3,
+        HE_REMOVE       = 4,
+        HE_STATE        = 5,
+        HE_SPARE1       = 6,
+        HE_SPARE2       = 7,
+};
+
+static inline enum hsm_event hsm_get_cl_event(__u16 flags)
+{
+        enum hsm_event he;
+
+        CLF_GET_BITS(flags, CLF_HSM_EVENT_H, CLF_HSM_EVENT_L);
+        he = flags;
+        return he;
+}
+
+static inline void hsm_set_cl_event(int *flags, enum hsm_event he)
+{
+        *flags |= (he << CLF_HSM_EVENT_L);
+}
+
+static inline __u16 hsm_get_cl_flags(int flags)
+{
+        CLF_GET_BITS(flags, CLF_HSM_FLAG_H, CLF_HSM_FLAG_L);
+        return flags;
+}
+
+static inline void hsm_set_cl_flags(int *flags, int bits)
+{
+        *flags |= (bits << CLF_HSM_FLAG_L);
+}
+
+static inline int hsm_get_cl_error(int flags)
+{
+        CLF_GET_BITS(flags, CLF_HSM_ERR_H, CLF_HSM_ERR_L);
+        return flags;
+}
+
+static inline void hsm_set_cl_error(int *flags, int error)
+{
+        *flags |= (error << CLF_HSM_ERR_L);
+}
 
 #define CR_MAXSIZE (PATH_MAX + sizeof(struct changelog_rec))
 struct changelog_rec {
@@ -538,42 +616,203 @@ enum changelog_message_type {
 
 /********* HSM **********/
 
+/** HSM per-file state
+ * See HSM_FLAGS below.
+ */
+enum hsm_states {
+        HS_EXISTS    = 0x00000001,
+        HS_DIRTY     = 0x00000002,
+        HS_RELEASED  = 0x00000004,
+        HS_ARCHIVED  = 0x00000008,
+        HS_NORELEASE = 0x00000010,
+        HS_NOARCHIVE = 0x00000020,
+        HS_LOST      = 0x00000040,
+};
 
-#define HSM_FLAGS_MASK  0
+/* HSM user-setable flags. */
+#define HSM_USER_MASK   (HS_NORELEASE | HS_NOARCHIVE | HS_DIRTY)
 
+/* Other HSM flags. */
+#define HSM_STATUS_MASK (HS_EXISTS | HS_LOST | HS_RELEASED | HS_ARCHIVED)
 
+/*
+ * All HSM-related possible flags that could be applied to a file.
+ * This should be kept in sync with hsm_states.
+ */
+#define HSM_FLAGS_MASK  (HSM_USER_MASK | HSM_STATUS_MASK)
+
+/**
+ * HSM request progress state
+ */
+enum hsm_progress_states {
+        HPS_WAITING     = 1,
+        HPS_RUNNING     = 2,
+        HPS_DONE        = 3,
+};
+#define HPS_NONE        0
+
+static inline char *hsm_progress_state2name(enum hsm_progress_states s)
+{
+        switch  (s) {
+        case HPS_WAITING: return "waiting";
+        case HPS_RUNNING: return "running";
+        case HPS_DONE:    return "done";
+        default:          return "unknown";
+        }
+}
+
+struct hsm_extent {
+        __u64 offset;
+        __u64 length;
+} __attribute__((packed));
+
+/**
+ * Current HSM states of a Lustre file.
+ *
+ * This structure purpose is to be sent to user-space mainly. It describes the
+ * current HSM flags and in-progress action.
+ */
+struct hsm_user_state {
+        /** Current HSM states, from enum hsm_states. */
+        __u32              hus_states;
+        __u32              hus_archive_num;
+        /**  The current undergoing action, if there is one */
+        __u32              hus_in_progress_state;
+        __u32              hus_in_progress_action;
+        struct hsm_extent  hus_in_progress_location;
+        char               hus_extended_info[];
+};
+
+struct hsm_state_set_ioc {
+        struct lu_fid  hssi_fid;
+        __u64          hssi_setmask;
+        __u64          hssi_clearmask;
+};
+
+/***** HSM user requests ******/
+/* User-generated (lfs/ioctl) request types */
+enum hsm_user_action {
+        HUA_NONE    =  1, /* no action (noop) */
+        HUA_ARCHIVE = 10, /* copy to hsm */
+        HUA_RESTORE = 11, /* prestage */
+        HUA_RELEASE = 12, /* drop ost objects */
+        HUA_REMOVE  = 13, /* remove from archive */
+        HUA_CANCEL  = 14  /* cancel a request */
+};
+
+static inline char *hsm_user_action2name(enum hsm_user_action  a)
+{
+        switch  (a) {
+        case HUA_NONE:    return "NOOP";
+        case HUA_ARCHIVE: return "ARCHIVE";
+        case HUA_RESTORE: return "RESTORE";
+        case HUA_RELEASE: return "RELEASE";
+        case HUA_REMOVE:  return "REMOVE";
+        case HUA_CANCEL:  return "CANCEL";
+        default:          return "UNKNOWN";
+        }
+}
+
+struct hsm_user_item {
+       lustre_fid        hui_fid;
+       struct hsm_extent hui_extent;
+} __attribute__((packed));
+
+struct hsm_user_request {
+        __u32 hur_action;    /* enum hsm_user_action */
+        __u32 hur_archive_num; /* archive number, used only with HUA_ARCHIVE */
+        __u32 hur_itemcount;
+        __u32 hur_data_len;
+        struct hsm_user_item hur_user_item[0];
+        /* extra data blob at end of struct (after all
+         * hur_user_items), only use helpers to access it
+         */
+} __attribute__((packed));
+
+/** Return pointer to data field in a hsm user request */
+static inline void *hur_data(struct hsm_user_request *hur)
+{
+        return &(hur->hur_user_item[hur->hur_itemcount]);
+}
+
+/** Compute the current length of the provided hsm_user_request. */
+static inline int hur_len(struct hsm_user_request *hur)
+{
+        int data_offset;
+
+        data_offset = hur_data(hur) - (void *)hur;
+        return (data_offset + hur->hur_data_len);
+}
+
+/****** HSM RPCs to copytool *****/
+/* Message types the copytool may receive */
 enum hsm_message_type {
         HMT_ACTION_LIST = 100, /* message is a hsm_action_list */
 };
 
-/* User-generated (ioctl) request types */
-enum hsm_request {
-        HSMR_ARCHIVE = 10, /* copy to hsm */
-        HSMR_RESTORE = 11, /* prestage */
-        HSMR_RELEASE = 12, /* drop ost objects */
-        HSMR_REMOVE  = 13, /* remove from archive */
-        HSMR_CANCEL  = 14
-};
-
-/* Copytool commands */
-enum hsm_action {
+/* Actions the copytool may be instructed to take for a given action_item */
+enum hsm_copytool_action {
+        HSMA_NONE    = 10, /* no action */
         HSMA_ARCHIVE = 20, /* arbitrary offset */
         HSMA_RESTORE = 21,
         HSMA_REMOVE  = 22,
         HSMA_CANCEL  = 23
 };
 
+static inline char *hsm_copytool_action2name(enum hsm_copytool_action  a)
+{
+        switch  (a) {
+        case HSMA_NONE:    return "NOOP";
+        case HSMA_ARCHIVE: return "ARCHIVE";
+        case HSMA_RESTORE: return "RESTORE";
+        case HSMA_REMOVE:  return "REMOVE";
+        case HSMA_CANCEL:  return "CANCEL";
+        default:           return "UNKNOWN";
+        }
+}
+
 /* Copytool item action description */
 struct hsm_action_item {
         __u32      hai_len;     /* valid size of this struct */
-        __u32      hai_action;  /* enum actually, but use known size */
+        __u32      hai_action;  /* hsm_copytool_action, but use known size */
         lustre_fid hai_fid;     /* Lustre FID to operated on */
+        struct hsm_extent hai_extent;  /* byte range to operate on */
         __u64      hai_cookie;  /* action cookie from coordinator */
-        __u64      hai_extent_start;  /* byte range to operate on */
-        __u64      hai_extent_end;
         __u64      hai_gid;     /* grouplock id */
         char       hai_data[0]; /* variable length */
 } __attribute__((packed));
+
+/*
+ * helper function which print in hexa the first bytes of
+ * hai opaque field
+ * \param hai [IN] record to print
+ * \param buffer [OUT] output buffer
+ * \param len [IN] max buffer len
+ * \retval buffer
+ */
+static inline char *hai_dump_data_field(struct hsm_action_item *hai,
+                                        char *buffer, int len)
+{
+        int i, sz, data_len;
+        char *ptr;
+
+        LASSERT(len > 0);
+
+        ptr = buffer;
+        sz = len;
+        data_len = hai->hai_len - sizeof(*hai);
+        for (i = 0 ; (i < data_len) && (sz > 0) ; i++)
+        {
+                int cnt;
+
+                cnt = snprintf(ptr, sz, "%.2X",
+                               (unsigned char)hai->hai_data[i]);
+                ptr += cnt;
+                sz -= cnt;
+        }
+        *ptr = '\0';
+        return buffer;
+}
 
 /* Copytool action list */
 #define HAL_VERSION 1
@@ -581,6 +820,7 @@ struct hsm_action_item {
 struct hsm_action_list {
         __u32 hal_version;
         __u32 hal_count;       /* number of hai's to follow */
+        __u64 hal_compound_id; /* returned by coordinator */
         __u32 hal_archive_num; /* which archive backend */
         __u32 padding1;
         char  hal_fsname[0];   /* null-terminated */
@@ -601,6 +841,34 @@ static __inline__ struct hsm_action_item * hai_next(struct hsm_action_item *hai)
         return (struct hsm_action_item *)((char *)hai +
                                           cfs_size_round(hai->hai_len));
 }
+
+/* Return size of an hsm_action_list */
+static __inline__ int hal_size(struct hsm_action_list *hal)
+{
+        int i, sz;
+        struct hsm_action_item *hai;
+
+        LASSERT(hal->hal_version == HAL_VERSION);
+        sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname));
+        hai = hai_zero(hal);
+        for (i = 0 ; i < hal->hal_count ; i++) {
+                sz += cfs_size_round(hai->hai_len);
+                hai = hai_next(hai);
+        }
+        return(sz);
+}
+
+/* Copytool progress reporting */
+#define HP_FLAG_COMPLETED 0x01
+#define HP_FLAG_RETRY     0x02
+
+struct hsm_progress {
+        lustre_fid        hp_fid;
+        __u64             hp_cookie;
+        struct hsm_extent hp_extent;
+        __u16             hp_flags;
+        __u16             hp_errval; /* positive val */
+} __attribute__((packed));
 
 /** @} lustreuser */
 
