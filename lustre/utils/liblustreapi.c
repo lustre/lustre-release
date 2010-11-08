@@ -1434,8 +1434,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
         }
 
         if ((verbose & VERBOSE_POOL) && (pool_name != NULL)) {
-                llapi_printf(LLAPI_MSG_NORMAL, "pool: %s", pool_name);
-                is_dir = 1;
+                if (verbose & ~VERBOSE_POOL)
+                        llapi_printf(LLAPI_MSG_NORMAL, "%spool:           ",
+                                     prefix);
+                llapi_printf(LLAPI_MSG_NORMAL, "%s%c", pool_name, nl);
         }
 
         if (is_dir && (verbose != VERBOSE_OBJID))

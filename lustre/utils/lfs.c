@@ -860,7 +860,10 @@ static int lfs_getstripe(int argc, char **argv)
                         }
                         break;
                 case 'p':
-                        param.verbose |= VERBOSE_POOL;
+                        if (!(param.verbose & VERBOSE_DETAIL)) {
+                                param.verbose |= VERBOSE_POOL;
+                                param.maxdepth = 0;
+                        }
                         break;
                 case 'M':
                         param.get_mdt_index = 1;

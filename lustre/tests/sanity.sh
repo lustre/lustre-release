@@ -7399,8 +7399,8 @@ run_test 200c "Set pool on a directory ================================="
 
 test_200d() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	res=$($GETSTRIPE --pool $POOL_DIR | awk '/^pool:/ {print $2}')
-	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is $res, not $POOL"
+	res=$($GETSTRIPE --pool $POOL_DIR)
+	[ $res = $POOL ] || error "Pool on $POOL_DIR is $res, not $POOL"
 }
 run_test 200d "Check pool on a directory ==============================="
 
