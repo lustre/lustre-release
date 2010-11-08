@@ -26,7 +26,6 @@ SETSTRIPE=${SETSTRIPE:-lstripe}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
-TRUNCATE=${TRUNCATE:-truncate}
 export TMP=${TMP:-/tmp}
 MOUNT_2=${MOUNT_2:-"yes"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
@@ -148,7 +147,7 @@ run_test 4 "fstat validation on multiple mount points =========="
 
 test_5() {
 	mcreate $DIR1/f5
-	truncate $DIR2/f5 100
+	$TRUNCATE $DIR2/f5 100
 	$CHECKSTAT -t file -s 100 $DIR1/f5 || error
 	rm $DIR1/f5
 }
@@ -208,13 +207,13 @@ test_10b() {
 	yes "R" | head -c 4000 >$TMP/f10b-seed
 	dd if=$TMP/f10b-seed of=$DIR1/f10b bs=3k count=1 || error "dd $DIR1"
 
-	truncate $DIR1/f10b 4096 || error "truncate 4096"
+	$TRUNCATE $DIR1/f10b 4096 || error "truncate 4096"
 
 	dd if=$DIR2/f10b of=$TMP/f10b-lustre bs=4k count=1 || error "dd $DIR2"
 
 	# create a test file locally to compare
 	dd if=$TMP/f10b-seed of=$TMP/f10b bs=3k count=1 || error "dd random"
-	truncate $TMP/f10b 4096 || error "truncate 4096"
+	$TRUNCATE $TMP/f10b 4096 || error "truncate 4096"
 	cmp $TMP/f10b $TMP/f10b-lustre || error "file miscompare"
 	rm $TMP/f10b $TMP/f10b-lustre $TMP/f10b-seed
 }
@@ -284,7 +283,7 @@ test_14b() { # bug 3192, 7040
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
         MULTIOP_PID=$!
-        truncate $DIR2/d14/multiop 0 && kill -9 $MULTIOP_PID && \
+        $TRUNCATE $DIR2/d14/multiop 0 && kill -9 $MULTIOP_PID && \
 		error "expected truncate error, got success"
         kill -USR1 $MULTIOP_PID || return 2
         wait $MULTIOP_PID || return 3

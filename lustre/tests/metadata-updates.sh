@@ -86,7 +86,7 @@ do_truncate () {
 
      do_nodes $NODES_TO_USE "set $TRACE;
 TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-truncate \\\$TESTFILE 0" || return ${PIPESTATUS[0]} 
+$TRUNCATE \\\$TESTFILE 0" || return ${PIPESTATUS[0]} 
 
     FILE_SIZE=0
     return 0

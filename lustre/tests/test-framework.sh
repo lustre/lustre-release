@@ -146,6 +146,9 @@ init_test_env() {
     export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
     [ ! -f "$LST" ] && export LST=$(which lst)
     export SGPDDSURVEY=${SGPDDSURVEY:-$(which sgpdd-survey)}
+    # Ubuntu, at least, has a truncate command in /usr/bin
+    # so fully path our truncate command.
+    export TRUNCATE=${TRUNCATE:-$LUSTRE/tests/truncate}
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mpi/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     if ! echo $PATH | grep -q $LUSTRE/tests/racer; then

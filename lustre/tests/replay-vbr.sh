@@ -454,7 +454,7 @@ test_4j() { # former test_0q
 
     do_node $CLIENT1 mcreate $file
     pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 truncate $file 1
+    do_node $CLIENT1 $TRUNCATE $file 1
     post=$(get_version $CLIENT1 $file)
     if (($pre != $post)); then
         error "version changed unexpectedly: pre $pre, post $post"
@@ -478,7 +478,7 @@ test_4k() { # former test_0r
 
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
-    do_node $CLIENT1 truncate $file 1
+    do_node $CLIENT1 $TRUNCATE $file 1
     sleep 1
     mtime_pre=$(do_node $CLIENT1 stat --format=%Y $file)
     do_node $CLIENT1 touch $file
@@ -1010,7 +1010,7 @@ test_10b() { # former test_2b
     do_node $CLIENT2 chmod 666 $DIR1/$tfile-b           # R
     do_node $CLIENT2 chgrp $RUNAS_GID $DIR2/$tfile-a    # U
     do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-a      # J
-    do_node $CLIENT2 truncate $DIR2/$tfile-b 1          # U
+    do_node $CLIENT2 $TRUNCATE $DIR2/$tfile-b 1          # U
     do_node $CLIENT2 chgrp $RUNAS_GID $DIR1/$tfile-b    # R
     do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-b      # R
     zconf_umount $CLIENT2 $MOUNT2

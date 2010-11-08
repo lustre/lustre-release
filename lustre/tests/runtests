@@ -54,7 +54,7 @@ if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
 	rm $HOSTS || error "can't remove $HOSTS" 9
 	cp /etc/hosts $HOSTS.2 || error "can't cp /etc/hosts to $HOSTS.2" 7
 	log "truncating $HOSTS.2 to $TRUNCSIZE bytes"
-	truncate $HOSTS.2 $TRUNCSIZE
+	$TRUNCATE $HOSTS.2 $TRUNCSIZE
 fi
 
 DST=$MOUNT/runtest.$$
