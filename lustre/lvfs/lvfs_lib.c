@@ -172,7 +172,8 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
         smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
 
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
+                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         percpu_cntr->lc_count++;
 
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
@@ -187,8 +188,9 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                 if (amount > percpu_cntr->lc_max)
                         percpu_cntr->lc_max = amount;
         }
-        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
-        lprocfs_stats_unlock(stats);
+        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
+                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID);
 }
 EXPORT_SYMBOL(lprocfs_counter_add);
 
@@ -206,7 +208,8 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
         smp_id = lprocfs_stats_lock(stats, LPROCFS_GET_SMP_ID);
 
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
+                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
                 /*
                  * currently lprocfs_count_add() can only be called in thread
@@ -221,8 +224,9 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
                 else
                         percpu_cntr->lc_sum -= amount;
         }
-        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
-        lprocfs_stats_unlock(stats);
+        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
+                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+        lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID);
 }
 EXPORT_SYMBOL(lprocfs_counter_sub);
 #endif  /* LPROCFS */

@@ -701,10 +701,7 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 
         cnt->lc_min = LC_MIN_INIT;
 
-        if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
-                num_cpu = 1;
-        else
-                num_cpu = cfs_num_possible_cpus();
+        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
 
         for (i = 0; i < num_cpu; i++) {
                 percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[idx];
@@ -731,6 +728,7 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
         }
 
         cnt->lc_units = stats->ls_percpu[0]->lp_cntr[idx].lc_units;
+        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
 }
 
 /**
@@ -1258,7 +1256,7 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
                 }
         }
 
-        lprocfs_stats_unlock(stats);
+        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
 }
 
 static ssize_t lprocfs_stats_seq_write(struct file *file, const char *buf,
@@ -1414,7 +1412,7 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
                 c->lc_units = units;
         }
 
-        lprocfs_stats_unlock(stats);
+        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
 }
 EXPORT_SYMBOL(lprocfs_counter_init);
 
