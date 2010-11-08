@@ -73,7 +73,7 @@ obdflter_survey_run () {
 	rm -f ${TMP}/obdfilter_survey*
 
 	local targets=$(obdflter_survey_targets $case)
-	local cmd="NETTYPE=$NETTYPE thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" sh $OBDSURVEY"
+	local cmd="NETTYPE=$NETTYPE thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" $OBDSURVEY"
 	echo + $cmd
 	eval $cmd
 
