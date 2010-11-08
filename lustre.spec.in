@@ -1,8 +1,9 @@
 # lustre.spec
 %{!?version: %define version @VERSION@}
-%{!?kdir: %define kdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else echo "/lib/modules/$(uname -r)/build"; fi)}
+%{!?kver: %define kver ""}
+%{!?kdir: %define kdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else if [ -n "%kver" ]; then kversion="%kver"; else kversion="$(uname -r)"; fi; echo "/lib/modules/$kversion/source"; fi)}
 
-%{!?kobjdir: %define kobjdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux-obj=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else echo "%kdir"; fi)}
+%{!?kobjdir: %define kobjdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux-obj=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else if [ -n "%kver" ]; then kversion="%kver"; else kversion="$(uname -r)"; fi; if [ "%kdir" = "/lib/modules/$kversion/source" ]; then echo "/lib/modules/$kversion/build"; else echo "%kdir"; fi; fi)}
 
 # as an alternative to this implementation we could simply "make -C $kdir kernelversion"
 %{!?kversion: %define kversion %(if test -s %kobjdir/include/linux/utsrelease.h ; then LINUXRELEASEHEADER=utsrelease.h; else LINUXRELEASEHEADER=version.h; fi; sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %kobjdir/include/linux/$LINUXRELEASEHEADER)}
@@ -40,8 +41,6 @@
 #%%global _use_internal_dependency_generator 0
 
 %define is_client %(bash -c "if [[ %{lustre_name} = *-client ]]; then echo -n '1'; else echo -n '0'; fi")
-# for those uses that don't want the -smp/-bigsmp on the end of %kversion
-%define krequires %(bash -c "echo %{kversion} | sed -e 's/.x86_64$//' -e 's/.i586$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
 
 %define sles10 %(bash -c "if [ "%sles_version" = "10" ]; then echo -n '1'; else echo -n '0'; fi")
 
