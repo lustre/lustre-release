@@ -798,7 +798,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         cfs_sema_init(&lli->lli_size_sem, 1);
         cfs_sema_init(&lli->lli_write_sem, 1);
-        cfs_sema_init(&lli->lli_trunc_sem, 1);
+        cfs_init_rwsem(&lli->lli_trunc_sem);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         cfs_spin_lock_init(&lli->lli_lock);
@@ -1270,7 +1270,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         UNLOCK_INODE_MUTEX(inode);
         if (ia_valid & ATTR_SIZE)
                 UP_WRITE_I_ALLOC_SEM(inode);
-        cfs_down(&lli->lli_trunc_sem);
+        cfs_down_write(&lli->lli_trunc_sem);
         LOCK_INODE_MUTEX(inode);
         if (ia_valid & ATTR_SIZE)
                 DOWN_WRITE_I_ALLOC_SEM(inode);
@@ -1311,7 +1311,7 @@ out:
                         rc1 = ll_setattr_done_writing(inode, op_data, mod);
                 ll_finish_md_op_data(op_data);
         }
-        cfs_up(&lli->lli_trunc_sem);
+        cfs_up_write(&lli->lli_trunc_sem);
         return rc ? rc : rc1;
 }
 

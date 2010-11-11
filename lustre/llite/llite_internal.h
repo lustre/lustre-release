@@ -121,7 +121,7 @@ struct ll_inode_info {
         cfs_semaphore_t         lli_size_sem;           /* protect open and change size */
         void                   *lli_size_sem_owner;
         cfs_semaphore_t         lli_write_sem;
-        cfs_semaphore_t         lli_trunc_sem;
+        cfs_rw_semaphore_t      lli_trunc_sem;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
         __u64                   lli_ioepoch;
