@@ -6168,50 +6168,48 @@ test_128() { # bug 15212
 run_test 128 "interactive lfs for 2 consecutive find's"
 
 set_dir_limits () {
-        local mntdev
-        local node
+	local mntdev
+	local canondev
+	local node
 
 	local LDPROC=/proc/fs/ldiskfs
 
-        for node in $(mdts_nodes); do
-                devs=$(do_node $node "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
-	        for dev in $devs; do
-		        mntdev=$(do_node $node "lctl get_param -n osd*.$dev.mntdev")
-		        do_node $node "test -e $LDPROC/\\\$(basename $mntdev)/max_dir_size" || LDPROC=/sys/fs/ldiskfs
-		        do_node $node "echo $1 >$LDPROC/\\\$(basename $mntdev)/max_dir_size"
-		done
+	for facet in $(get_facets MDS); do
+		canondev=$(ldiskfs_canon *.$(convert_facet2label $facet).mntdev $facet)
+		do_facet $facet "test -e $LDPROC/$canondev/max_dir_size" || LDPROC=/sys/fs/ldiskfs
+		do_facet $facet "echo $1 >$LDPROC/$canondev/max_dir_size"
 	done
 }
 test_129() {
-        [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
-        remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-        EFBIG=27
-        MAX=16384
+	EFBIG=27
+	MAX=16384
 
-        set_dir_limits $MAX
+	set_dir_limits $MAX
 
-        mkdir -p $DIR/$tdir
+	mkdir -p $DIR/$tdir
 
-        I=0
-        J=0
-        while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
-                multiop $DIR/$tdir/$J Oc
-                rc=$?
-                if [ $rc -eq $EFBIG ]; then
-                        set_dir_limits 0
-                        echo "return code $rc received as expected"
-                        return 0
-                elif [ $rc -ne 0 ]; then
-                        set_dir_limits 0
-                        error_exit "return code $rc received instead of expected $EFBIG"
-                fi
-                J=$((J+1))
-                I=$(stat -c%s "$DIR/$tdir")
-        done
+	I=0
+	J=0
+	while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
+		multiop $DIR/$tdir/$J Oc
+		rc=$?
+		if [ $rc -eq $EFBIG ]; then
+			set_dir_limits 0
+			echo "return code $rc received as expected"
+			return 0
+		elif [ $rc -ne 0 ]; then
+			set_dir_limits 0
+			error_exit "return code $rc received instead of expected $EFBIG"
+		fi
+		J=$((J+1))
+		I=$(stat -c%s "$DIR/$tdir")
+	done
 
-        error "exceeded dir size limit $MAX x $MDSCOUNT $((MAX * MDSCOUNT)) : $I bytes"
-        do_facet $SINGLEMDS "echo 0 >$LDPROC"
+	set_dir_limits 0
+	error "exceeded dir size limit $MAX x $MDSCOUNT $((MAX * MDSCOUNT)) : $I bytes"
 }
 run_test 129 "test directory size limit ========================"
 
