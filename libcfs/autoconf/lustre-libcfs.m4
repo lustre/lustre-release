@@ -110,30 +110,9 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ])
 ])
 
-# check userland & kernel __u64 type
-AC_DEFUN([LIBCFS_U64_LONG_LONG],
-[AC_MSG_CHECKING([u64 is long long type])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
-AC_COMPILE_IFELSE([
-	#include <stdio.h>
-	#include <linux/types.h>
-	#include <linux/stddef.h>
-	int main(void) {
-		unsigned long long *data1;
-		__u64 *data2 = NULL;
-
-		data1 = data2;
-		return 0;
-	}
-],[
-	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_USER__U64_LONG_LONG, 1,
-                  [__u64 is long long type])
-],[
-	AC_MSG_RESULT([no])
-])
-CFLAGS="$tmp_flags"
+# check kernel __u64 type
+AC_DEFUN([LIBCFS_U64_LONG_LONG_LINUX],
+[
 AC_MSG_CHECKING([kernel __u64 is long long type])
 tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Werror"
@@ -660,7 +639,7 @@ LIBCFS_TYPE_GFP_T
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
 LIBCFS_FUNC_SHOW_TASK
-LIBCFS_U64_LONG_LONG
+LIBCFS_U64_LONG_LONG_LINUX
 LIBCFS_TASK_RCU
 # 2.6.18
 LIBCFS_TASKLIST_LOCK
@@ -780,6 +759,30 @@ AC_CHECK_TYPE([__s64],
 	[AC_DEFINE(HAVE___S64, 1, [__s64 is defined])],
 	[],
 	[#include <asm/types.h>])
+
+# check userland __u64 type
+AC_MSG_CHECKING([userspace __u64 is long long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <stdio.h>
+	#include <linux/types.h>
+	#include <linux/stddef.h>
+	int main(void) {
+		unsigned long long *data1;
+		__u64 *data2 = NULL;
+
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_USER__U64_LONG_LONG, 1,
+                  [__u64 is long long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
 
 # --------  Check for required packages  --------------
 
