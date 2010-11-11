@@ -228,7 +228,7 @@ static inline int ldlm_pool_t2gsp(unsigned int t)
  *
  * \pre ->pl_lock is locked.
  */
-static inline void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
+static void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
 {
         int granted, grant_step, limit;
 
@@ -248,7 +248,7 @@ static inline void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
  *
  * \pre ->pl_lock is locked.
  */
-static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
+static void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
 {
         int granted;
         int grant_plan;
@@ -293,7 +293,7 @@ static inline void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
  *
  * \pre ->pl_lock is locked.
  */
-static inline void ldlm_pool_recalc_stats(struct ldlm_pool *pl)
+static void ldlm_pool_recalc_stats(struct ldlm_pool *pl)
 {
         int grant_plan = pl->pl_grant_plan;
         __u64 slv = pl->pl_server_lock_volume;
@@ -438,7 +438,6 @@ static int ldlm_srv_pool_shrink(struct ldlm_pool *pl,
 static int ldlm_srv_pool_setup(struct ldlm_pool *pl, int limit)
 {
         struct obd_device *obd;
-        ENTRY;
 
         obd = ldlm_pl2ns(pl)->ns_obd;
         LASSERT(obd != NULL && obd != LP_POISON);
@@ -448,7 +447,7 @@ static int ldlm_srv_pool_setup(struct ldlm_pool *pl, int limit)
         cfs_write_unlock(&obd->obd_pool_lock);
 
         ldlm_pool_set_limit(pl, limit);
-        RETURN(0);
+        return 0;
 }
 
 /**
@@ -638,10 +637,9 @@ EXPORT_SYMBOL(ldlm_pool_shrink);
  */
 int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
 {
-        ENTRY;
         if (pl->pl_ops->po_setup != NULL)
-                RETURN(pl->pl_ops->po_setup(pl, limit));
-        RETURN(0);
+                return(pl->pl_ops->po_setup(pl, limit));
+        return 0;
 }
 EXPORT_SYMBOL(ldlm_pool_setup);
 
@@ -912,9 +910,7 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
          */
         if (lock->l_resource->lr_type == LDLM_FLOCK)
                 return;
-        ENTRY;
 
-        LDLM_DEBUG(lock, "add lock to pool");
         cfs_atomic_inc(&pl->pl_granted);
         cfs_atomic_inc(&pl->pl_grant_rate);
         cfs_atomic_inc(&pl->pl_grant_speed);
@@ -928,7 +924,6 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
          */
         if (ns_is_server(ldlm_pl2ns(pl)))
                 ldlm_pool_recalc(pl);
-        EXIT;
 }
 EXPORT_SYMBOL(ldlm_pool_add);
 
@@ -942,9 +937,7 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
          */
         if (lock->l_resource->lr_type == LDLM_FLOCK)
                 return;
-        ENTRY;
 
-        LDLM_DEBUG(lock, "del lock from pool");
         LASSERT(cfs_atomic_read(&pl->pl_granted) > 0);
         cfs_atomic_dec(&pl->pl_granted);
         cfs_atomic_inc(&pl->pl_cancel_rate);
@@ -954,7 +947,6 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
 
         if (ns_is_server(ldlm_pl2ns(pl)))
                 ldlm_pool_recalc(pl);
-        EXIT;
 }
 EXPORT_SYMBOL(ldlm_pool_del);
 
