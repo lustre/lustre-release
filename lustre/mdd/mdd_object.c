@@ -2063,7 +2063,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
-        struct thandle    *handle;
+        struct thandle    *handle = NULL;
         int rc;
         int reset = 1;
 
@@ -2075,14 +2075,26 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 #endif
         ENTRY;
 
-        rc = mdd_log_txn_param_build(env, obj, ma, MDD_TXN_UNLINK_OP);
-        if (rc)
-                RETURN(rc);
-        handle = mdd_trans_start(env, mdo2mdd(obj));
-        if (IS_ERR(handle))
-                RETURN(PTR_ERR(handle));
+        /* check without any lock */
+        if (mdd_obj->mod_count == 1 &&
+            (mdd_obj->mod_flags & (ORPHAN_OBJ | DEAD_OBJ)) != 0) {
+ again:
+                rc = mdd_log_txn_param_build(env, obj, ma, MDD_TXN_UNLINK_OP);
+                if (rc)
+                        RETURN(rc);
+                handle = mdd_trans_start(env, mdo2mdd(obj));
+                if (IS_ERR(handle))
+                        RETURN(PTR_ERR(handle));
+        }
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+        if (handle == NULL &&
+            mdd_obj->mod_count == 1 &&
+            (mdd_obj->mod_flags & ORPHAN_OBJ) != 0) {
+                mdd_write_unlock(env, mdd_obj);
+                goto again;
+        }
+
         /* release open count */
         mdd_obj->mod_count --;
 
@@ -2137,7 +2149,8 @@ out:
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
         mdd_write_unlock(env, mdd_obj);
-        mdd_trans_stop(env, mdo2mdd(obj), rc, handle);
+        if (handle != NULL)
+                mdd_trans_stop(env, mdo2mdd(obj), rc, handle);
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc)
                 /* Trigger dqrel on the owner of child. If failed,
