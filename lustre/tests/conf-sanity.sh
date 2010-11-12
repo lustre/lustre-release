@@ -1572,28 +1572,32 @@ test_36() { # 12743
 run_test 36 "df report consistency on OSTs with different block size"
 
 test_37() {
-	client_only && skip "client only testing" && return 0
-	LOCAL_MDSDEV="$TMP/mdt.img"
-	SYM_MDSDEV="$TMP/sym_mdt.img"
+	local mntpt=$(facet_mntpt $SINGLEMDS)
+	local mdsdev=$(mdsdevname ${SINGLEMDS//mds/})
+	local mdsdev_sym="$TMP/sym_mdt.img"
 
-	echo "MDS :     $LOCAL_MDSDEV"
-	echo "SYMLINK : $SYM_MDSDEV"
-	rm -f $LOCAL_MDSDEV
+	echo "MDS :     $mdsdev"
+	echo "SYMLINK : $mdsdev_sym"
+	do_facet $SINGLEMDS rm -f $mdsdev_sym
 
-	touch $LOCAL_MDSDEV
-	mkfs.lustre --reformat --fsname=lustre --mdt --mgs --device-size=9000 $LOCAL_MDSDEV ||
-		error "mkfs.lustre $LOCAL_MDSDEV failed"
-	ln -s $LOCAL_MDSDEV $SYM_MDSDEV
+	do_facet $SINGLEMDS ln -s $mdsdev $mdsdev_sym
 
-	echo "mount symlink device - $SYM_MDSDEV"
+	echo "mount symlink device - $mdsdev_sym"
 
-	mount_op=`mount -v -t lustre -o loop $SYM_MDSDEV ${MOUNT%/*}/mds 2>&1 | grep "unable to set tunable"`
-	umount -d ${MOUNT%/*}/mds
-	rm -f $LOCAL_MDSDEV $SYM_MDSDEV
+	local rc=0
+	mount_op=$(do_facet $SINGLEMDS mount -v -t lustre $MDS_MOUNT_OPTS  $mdsdev_sym $mntpt 2>&1 )
+	rc=${PIPESTATUS[0]}
 
-	if [ -n "$mount_op" ]; then
-		error "**** FAIL: set tunables failed for symlink device"
+	echo mount_op=$mount_op
+
+	do_facet $SINGLEMDS "umount -d $mntpt && rm -f $mdsdev_sym"
+
+	if $(echo $mount_op | grep -q "unable to set tunable"); then
+		error "set tunables failed for symlink device"
 	fi
+
+	[ $rc -eq 0 ] || error "mount symlink $mdsdev_sym failed! rc=$rc"
+
 	return 0
 }
 run_test 37 "verify set tunables works for symlink device"
