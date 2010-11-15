@@ -143,10 +143,10 @@ my $pristine = is_pristine();
 my $buildid = get_buildid();
 
 if ($progname eq "version_tag.pl") {
-    die("you have to configure with a linux kernel source/headers tree (i.e. using\n--with-linux=) before you can run this script\n")
-        if ($am_linuxdir eq "");
+    my $kernver = "";
+    $kernver = get_kernver($am_linuxdir, $am_linuxobjdir)
+        if ($am_linuxdir ne "");
 
-    my $kernver = get_kernver($am_linuxdir, $am_linuxobjdir);
     my $linuxdir =~ s/\//\./g;
     generate_ver($tag, $local_version, $buildid, $linuxdir, $pristine, $kernver,
                  $ENV{LUSTRE_VERS});
