@@ -1575,10 +1575,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                  * is more out-of-date than the specified limit.  If we are
                  * already going to write out the atime then do it anyway. */
                 if ((request_body->valid & OBD_MD_FLATIME) &&
-                    ((LTIME_S(iattr.ia_atime) >
-                      LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
-                     (iattr.ia_valid != 0 &&
-                      LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))) {
+                    ((request_body->atime > LTIME_S(inode->i_atime) +
+                      mds->mds_atime_diff) )) {
                         LTIME_S(iattr.ia_atime) = request_body->atime;
                         iattr.ia_valid |= ATTR_ATIME;
                 }
