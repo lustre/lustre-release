@@ -12,6 +12,10 @@
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : normal
+Bugzilla   : 23766
+Description: atime is not properly updated on an MDS
+
 Severity   : enhancement
 Bugzilla   : 22514
 Description: Update to RHEL5.5 kernel 2.6.19-194.17.1.el5.
