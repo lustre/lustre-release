@@ -47,7 +47,7 @@
 #include <libcfs/libcfs.h>
 
 /* non-0 = don't match */
-static int libcfs_strncasecmp(const char *s1, const char *s2, size_t n)
+static int cfs_strncasecmp(const char *s1, const char *s2, size_t n)
 {
         if (s1 == NULL || s2 == NULL)
                 return 1;
@@ -66,8 +66,8 @@ static int libcfs_strncasecmp(const char *s1, const char *s2, size_t n)
 }
 
 /* Convert a text string to a bitmask */
-int libcfs_str2mask(const char *str, const char *(*bit2str)(int bit),
-                    int *oldmask, int minmask, int allmask)
+int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
+                 int *oldmask, int minmask, int allmask)
 {
         char op = 0;
         int newmask = minmask, i, len, found = 0;
@@ -101,7 +101,7 @@ int libcfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                 /* match token */
                 found = 0;
                 for (i = 0; i < 32; i++) {
-                        if (libcfs_strncasecmp(str, bit2str(i), len) == 0) {
+                        if (cfs_strncasecmp(str, bit2str(i), len) == 0) {
                                 if (op == '-')
                                         newmask &= ~(1 << i);
                                 else
@@ -110,7 +110,7 @@ int libcfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                                 break;
                         }
                 }
-                if (!found && (libcfs_strncasecmp(str, "ALL", len) == 0)) {
+                if (!found && (cfs_strncasecmp(str, "ALL", len) == 0)) {
                         if (op == '-')
                                 newmask = minmask;
                         else
@@ -128,9 +128,10 @@ int libcfs_str2mask(const char *str, const char *(*bit2str)(int bit),
         *oldmask = newmask;
         return 0;
 }
+EXPORT_SYMBOL(cfs_str2mask);
 
 /* Duplicate a string in a platform-independent way */
-char *libcfs_strdup(const char *str, u_int32_t flags)
+char *cfs_strdup(const char *str, u_int32_t flags)
 {
         size_t lenz; /* length of str + zero byte */
         char *dup_str;
@@ -145,6 +146,34 @@ char *libcfs_strdup(const char *str, u_int32_t flags)
 
         return dup_str;
 }
+EXPORT_SYMBOL(cfs_strdup);
 
-EXPORT_SYMBOL(libcfs_str2mask);
-EXPORT_SYMBOL(libcfs_strdup);
+/**
+ * cfs_{v}snprintf() return the actual size that is printed rather than
+ * the size that would be printed in standard functions.
+ */
+/* safe vsnprintf */
+int cfs_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
+{
+        int i;
+
+        LASSERT(size > 0);
+        i = vsnprintf(buf, size, fmt, args);
+
+        return  (i >= size ? size - 1 : i);
+}
+EXPORT_SYMBOL(cfs_vsnprintf);
+
+/* safe snprintf */
+int cfs_snprintf(char *buf, size_t size, const char *fmt, ...)
+{
+        va_list args;
+        int i;
+
+        va_start(args, fmt);
+        i = cfs_vsnprintf(buf, size, fmt, args);
+        va_end(args);
+
+        return  i;
+}
+EXPORT_SYMBOL(cfs_snprintf);

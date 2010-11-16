@@ -322,8 +322,8 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
                 return 0;
         }
 
-        return libcfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK,
-                               0xffffffff);
+        return cfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK,
+                            0xffffffff);
 }
 
 /**

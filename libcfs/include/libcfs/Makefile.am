@@ -10,4 +10,5 @@ EXTRA_DIST := curproc.h libcfs_private.h libcfs.h list.h lltrace.h \
 		libcfs_prim.h libcfs_time.h libcfs_hash.h \
 		libcfs_debug.h libcfsutil.h libcfs_ioctl.h \
 		libcfs_pack.h libcfs_unpack.h libcfs_string.h \
-		libcfs_kernelcomm.h libcfs_workitem.h
+		libcfs_kernelcomm.h libcfs_workitem.h \
+		params_tree.h

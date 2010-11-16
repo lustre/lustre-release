@@ -45,11 +45,17 @@
 
 /* libcfs_string.c */
 /* Convert a text string to a bitmask */
-int libcfs_str2mask(const char *str, const char *(*bit2str)(int bit),
-                    int *oldmask, int minmask, int allmask);
+int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
+                 int *oldmask, int minmask, int allmask);
 
 /* Allocate space for and copy an existing string.
  * Must free with cfs_free().
  */
-char *libcfs_strdup(const char *str, u_int32_t flags);
+char *cfs_strdup(const char *str, u_int32_t flags);
+
+/* safe vsnprintf */
+int cfs_vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
+
+/* safe snprintf */
+int cfs_snprintf(char *buf, size_t size, const char *fmt, ...);
 #endif

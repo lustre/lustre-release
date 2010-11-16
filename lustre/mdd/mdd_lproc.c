@@ -188,8 +188,8 @@ static int lprocfs_wr_changelog_mask(struct file *file, const char *buffer,
                 GOTO(out, rc = -EFAULT);
         kernbuf[count] = 0;
 
-        rc = libcfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
-                             CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
+        rc = cfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
+                          CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
         if (rc == 0)
                 rc = count;
 out:
