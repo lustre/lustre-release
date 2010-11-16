@@ -330,10 +330,6 @@ struct ldlm_pool {
          */
         cfs_atomic_t           pl_cancel_rate;
         /**
-         * Grant speed (GR-CR) per T.
-         */
-        cfs_atomic_t           pl_grant_speed;
-        /**
          * Server lock volume. Protected by pl_lock.
          */
         __u64                  pl_server_lock_volume;

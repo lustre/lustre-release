@@ -344,30 +344,35 @@ static int ldlm_srv_pool_recalc(struct ldlm_pool *pl)
         time_t recalc_interval_sec;
         ENTRY;
 
+        recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
+        if (recalc_interval_sec < pl->pl_recalc_period)
+                RETURN(0);
+
         cfs_spin_lock(&pl->pl_lock);
         recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
-        if (recalc_interval_sec >= pl->pl_recalc_period) {
-                /*
-                 * Recalc SLV after last period. This should be done
-                 * _before_ recalculating new grant plan.
-                 */
-                ldlm_pool_recalc_slv(pl);
-
-                /*
-                 * Make sure that pool informed obd of last SLV changes.
-                 */
-                ldlm_srv_pool_push_slv(pl);
-
-                /*
-                 * Update grant_plan for new period.
-                 */
-                ldlm_pool_recalc_grant_plan(pl);
-
-                pl->pl_recalc_time = cfs_time_current_sec();
-                lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT,
-                                    recalc_interval_sec);
+        if (recalc_interval_sec < pl->pl_recalc_period) {
+                cfs_spin_unlock(&pl->pl_lock);
+                RETURN(0);
         }
+        /*
+         * Recalc SLV after last period. This should be done
+         * _before_ recalculating new grant plan.
+         */
+        ldlm_pool_recalc_slv(pl);
 
+        /*
+         * Make sure that pool informed obd of last SLV changes.
+         */
+        ldlm_srv_pool_push_slv(pl);
+
+        /*
+         * Update grant_plan for new period.
+         */
+        ldlm_pool_recalc_grant_plan(pl);
+
+        pl->pl_recalc_time = cfs_time_current_sec();
+        lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT,
+                            recalc_interval_sec);
         cfs_spin_unlock(&pl->pl_lock);
         RETURN(0);
 }
@@ -477,6 +482,10 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
         time_t recalc_interval_sec;
         ENTRY;
 
+        recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
+        if (recalc_interval_sec < pl->pl_recalc_period)
+                RETURN(0);
+
         cfs_spin_lock(&pl->pl_lock);
         /*
          * Check if we need to recalc lists now.
@@ -575,6 +584,10 @@ int ldlm_pool_recalc(struct ldlm_pool *pl)
         time_t recalc_interval_sec;
         int count;
 
+        recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
+        if (recalc_interval_sec <= 0)
+                goto recalc;
+
         cfs_spin_lock(&pl->pl_lock);
         recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
         if (recalc_interval_sec > 0) {
@@ -588,10 +601,10 @@ int ldlm_pool_recalc(struct ldlm_pool *pl)
                  */
                 cfs_atomic_set(&pl->pl_grant_rate, 0);
                 cfs_atomic_set(&pl->pl_cancel_rate, 0);
-                cfs_atomic_set(&pl->pl_grant_speed, 0);
         }
         cfs_spin_unlock(&pl->pl_lock);
 
+ recalc:
         if (pl->pl_ops->po_recalc != NULL) {
                 count = pl->pl_ops->po_recalc(pl);
                 lprocfs_counter_add(pl->pl_stats, LDLM_POOL_RECALC_STAT,
@@ -660,9 +673,9 @@ static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
         grant_plan = pl->pl_grant_plan;
         granted = cfs_atomic_read(&pl->pl_granted);
         grant_rate = cfs_atomic_read(&pl->pl_grant_rate);
-        lvf = cfs_atomic_read(&pl->pl_lock_volume_factor);
-        grant_speed = cfs_atomic_read(&pl->pl_grant_speed);
         cancel_rate = cfs_atomic_read(&pl->pl_cancel_rate);
+        grant_speed = grant_rate - cancel_rate;
+        lvf = cfs_atomic_read(&pl->pl_lock_volume_factor);
         grant_step = ldlm_pool_t2gsp(pl->pl_recalc_period);
         cfs_spin_unlock(&pl->pl_lock);
 
@@ -689,6 +702,20 @@ static int lprocfs_rd_pool_state(char *page, char **start, off_t off,
         nr += snprintf(page + nr, count - nr, "  L:   %d\n",
                        limit);
         return nr;
+}
+
+static int lprocfs_rd_grant_speed(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct ldlm_pool *pl = data;
+        int               grant_speed;
+
+        cfs_spin_lock(&pl->pl_lock);
+        /* serialize with ldlm_pool_recalc */
+        grant_speed = cfs_atomic_read(&pl->pl_grant_rate) -
+                      cfs_atomic_read(&pl->pl_cancel_rate);
+        cfs_spin_unlock(&pl->pl_lock);
+        return lprocfs_rd_uint(page, start, off, count, eof, &grant_speed);
 }
 
 LDLM_POOL_PROC_READER(grant_plan, int);
@@ -743,8 +770,8 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         snprintf(var_name, MAX_STRING_SIZE, "grant_speed");
-        pool_vars[0].data = &pl->pl_grant_speed;
-        pool_vars[0].read_fptr = lprocfs_rd_atomic;
+        pool_vars[0].data = pl;
+        pool_vars[0].read_fptr = lprocfs_rd_grant_speed;
         lprocfs_add_vars(pl->pl_proc_dir, pool_vars, 0);
 
         snprintf(var_name, MAX_STRING_SIZE, "cancel_rate");
@@ -854,7 +881,6 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
 
         cfs_atomic_set(&pl->pl_grant_rate, 0);
         cfs_atomic_set(&pl->pl_cancel_rate, 0);
-        cfs_atomic_set(&pl->pl_grant_speed, 0);
         pl->pl_grant_plan = LDLM_POOL_GP(LDLM_POOL_HOST_L);
 
         snprintf(pl->pl_name, sizeof(pl->pl_name), "ldlm-pool-%s-%d",
@@ -913,8 +939,6 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
 
         cfs_atomic_inc(&pl->pl_granted);
         cfs_atomic_inc(&pl->pl_grant_rate);
-        cfs_atomic_inc(&pl->pl_grant_speed);
-
         lprocfs_counter_incr(pl->pl_stats, LDLM_POOL_GRANT_STAT);
         /*
          * Do not do pool recalc for client side as all locks which
@@ -941,7 +965,6 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
         LASSERT(cfs_atomic_read(&pl->pl_granted) > 0);
         cfs_atomic_dec(&pl->pl_granted);
         cfs_atomic_inc(&pl->pl_cancel_rate);
-        cfs_atomic_dec(&pl->pl_grant_speed);
 
         lprocfs_counter_incr(pl->pl_stats, LDLM_POOL_CANCEL_STAT);
 
