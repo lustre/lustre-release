@@ -62,11 +62,9 @@ static __u64 handle_base;
 static cfs_spinlock_t handle_base_lock;
 
 static struct handle_bucket {
-        cfs_spinlock_t lock;
-        cfs_list_t head;
+        cfs_spinlock_t  lock;
+        cfs_list_t      head;
 } *handle_hash;
-
-static cfs_atomic_t handle_count = CFS_ATOMIC_INIT(0);
 
 #ifdef __arch_um__
 /* For unknown reason, UML uses kmalloc rather than vmalloc to allocate
@@ -75,7 +73,7 @@ static cfs_atomic_t handle_count = CFS_ATOMIC_INIT(0);
  */
 #define HANDLE_HASH_SIZE 4096
 #else
-#define HANDLE_HASH_SIZE (1 << 14)
+#define HANDLE_HASH_SIZE (1 << 16)
 #endif /* ifdef __arch_um__ */
 
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
@@ -111,7 +109,6 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
         }
         cfs_spin_unlock(&handle_base_lock);
  
-        cfs_atomic_inc(&handle_count);
         h->h_addref = cb;
         cfs_spin_lock_init(&h->h_lock);
 
@@ -155,8 +152,6 @@ void class_handle_unhash(struct portals_handle *h)
         cfs_spin_lock(&bucket->lock);
         class_handle_unhash_nolock(h);
         cfs_spin_unlock(&bucket->lock);
-
-        cfs_atomic_dec(&handle_count);
 }
 
 void class_handle_hash_back(struct portals_handle *h)
@@ -166,7 +161,6 @@ void class_handle_hash_back(struct portals_handle *h)
 
         bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
 
-        cfs_atomic_inc(&handle_count);
         cfs_spin_lock(&bucket->lock);
         list_add_rcu(&h->h_link, &bucket->head);
         h->h_in = 1;
@@ -248,11 +242,12 @@ int class_handle_init(void)
         return 0;
 }
 
-static void cleanup_all_handles(void)
+static int cleanup_all_handles(void)
 {
+        int rc;
         int i;
 
-        for (i = 0; i < HANDLE_HASH_SIZE; i++) {
+        for (rc = i = 0; i < HANDLE_HASH_SIZE; i++) {
                 struct portals_handle *h;
 
                 cfs_spin_lock(&handle_hash[i].lock);
@@ -261,9 +256,12 @@ static void cleanup_all_handles(void)
                                h->h_cookie, h, h->h_addref);
 
                         class_handle_unhash_nolock(h);
+                        rc++;
                 }
                 cfs_spin_unlock(&handle_hash[i].lock);
         }
+
+        return rc;
 }
 
 void class_handle_cleanup(void)
@@ -271,15 +269,11 @@ void class_handle_cleanup(void)
         int count;
         LASSERT(handle_hash != NULL);
 
-        count = cfs_atomic_read(&handle_count);
-        if (count != 0) {
-                CERROR("handle_count at cleanup: %d\n", count);
-                cleanup_all_handles();
-        }
+        count = cleanup_all_handles();
 
         OBD_VFREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         handle_hash = NULL;
 
-        if (cfs_atomic_read(&handle_count))
-                CERROR("leaked %d handles\n", cfs_atomic_read(&handle_count));
+        if (count != 0)
+                CERROR("handle_count at cleanup: %d\n", count);
 }
