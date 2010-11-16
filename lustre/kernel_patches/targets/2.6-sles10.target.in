@@ -1,6 +1,6 @@
 lnxmaj="2.6.16"
 lnxmin=".60"
-lnxrel="0.42.8"
+lnxrel="0.69.1"
 # use this when there is an "RPM fix" which means that the name of the
 # (source) RPM has been updated but the version of the kernel inside the
 # RPM is not also updated
@@ -16,7 +16,7 @@ VERSION=$lnxmaj
 EXTRA_VERSION="${lnxmin#.}-${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@
 
-OFED_VERSION=1.5.1
+OFED_VERSION=inkernel
 # if using "inkernel" on sles10, we need to know which version of ofed-devel
 # to use
 OFED_DEVEL_VERSION="1.4.2-0.8.4.1682.0.PTF.578796"

@@ -7,7 +7,7 @@ TBD  Oracle, Inc.
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
          2.6.18-194.17.1.el5 (RHEL 5),
          2.6.18-194.17.1.0.1.el5 (OEL 5)
-         2.6.16.60-0.42.8 (SLES 10),
+         2.6.16.60-0.69.1 (SLES 10),
          2.6.27.19-5 (SLES11)
 	 2.6.29.4-167.fc11 (FC11)
        * Recommended e2fsprogs version: 1.41.10-sun2
