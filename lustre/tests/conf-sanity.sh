@@ -39,6 +39,11 @@ MDSSIZE=200000
 OSTSIZE=200000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+if ! combined_mgs_mds; then
+    # bug number for skipped test:    23954
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
+fi
+
 # STORED_MDSSIZE is used in test_18
 if [ -n "$MDSSIZE" ]; then
     STORED_MDSSIZE=$MDSSIZE
