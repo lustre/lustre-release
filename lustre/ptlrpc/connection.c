@@ -198,30 +198,26 @@ conn_object(cfs_hlist_node_t *hnode)
         return cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 }
 
-static void *
-conn_get(cfs_hlist_node_t *hnode)
+static void
+conn_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 
         conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
         cfs_atomic_inc(&conn->c_refcount);
-
-        return conn;
 }
 
-static void *
-conn_put_locked(cfs_hlist_node_t *hnode)
+static void
+conn_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 
         conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
         cfs_atomic_dec(&conn->c_refcount);
-
-        return conn;
 }
 
 static void
-conn_exit(cfs_hlist_node_t *hnode)
+conn_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
 

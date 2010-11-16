@@ -1572,7 +1572,6 @@ cfs_hash_for_each_relax(cfs_hash_t *hs, cfs_hash_for_each_cb_t func, void *data)
 {
         cfs_hlist_node_t *hnode;
         cfs_hlist_node_t *tmp;
-        void             *obj;
         cfs_hash_bd_t     bd;
         __u32             version;
         int               count = 0;
@@ -1596,13 +1595,13 @@ cfs_hash_for_each_relax(cfs_hash_t *hs, cfs_hash_for_each_cb_t func, void *data)
                 cfs_hash_bd_for_each_hlist(hs, &bd, hhead) {
                         for (hnode = hhead->first; hnode != NULL;) {
                                 cfs_hash_bucket_validate(hs, &bd, hnode);
-                                obj = cfs_hash_get(hs, hnode);
+                                cfs_hash_get(hs, hnode);
                                 cfs_hash_bd_unlock(hs, &bd, 0);
                                 cfs_hash_unlock(hs, 0);
 
                                 rc = func(hs, &bd, hnode, data);
                                 if (stop_on_change)
-                                        (void)cfs_hash_put(hs, hnode);
+                                        cfs_hash_put(hs, hnode);
                                 cfs_cond_resched();
                                 count++;
 
@@ -1703,8 +1702,7 @@ cfs_hash_hlist_for_each(cfs_hash_t *hs, unsigned hindex,
         if (hindex >= CFS_HASH_NHLIST(hs))
                 goto out;
 
-        bd.bd_bucket = hs->hs_buckets[hindex >> hs->hs_bkt_bits];
-        bd.bd_offset = hindex & (CFS_HASH_BKT_NHLIST(hs) - 1);
+        cfs_hash_bd_index_set(hs, hindex, &bd);
 
         cfs_hash_bd_lock(hs, &bd, 0);
         hhead = cfs_hash_bd_hhead(hs, &bd);

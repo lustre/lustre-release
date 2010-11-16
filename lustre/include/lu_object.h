@@ -552,7 +552,11 @@ struct lu_object_header {
 struct fld;
 
 struct lu_site_bkt_data {
-       /**
+        /**
+         * number of busy object on this bucket
+         */
+        long                      lsb_busy;
+        /**
          * LRU list, updated on each access to object. Protected by
          * bucket lock of lu_site::ls_obj_hash.
          *

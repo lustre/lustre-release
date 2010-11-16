@@ -127,22 +127,21 @@ static void *pool_hashobject(cfs_hlist_node_t *hnode)
         return cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
 }
 
-static void *pool_hashrefcount_get(cfs_hlist_node_t *hnode)
+static void pool_hashrefcount_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct pool_desc *pool;
 
         pool = cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
         lov_pool_getref(pool);
-        return (pool);
 }
 
-static void *pool_hashrefcount_put_locked(cfs_hlist_node_t *hnode)
+static void pool_hashrefcount_put_locked(cfs_hash_t *hs,
+                                         cfs_hlist_node_t *hnode)
 {
         struct pool_desc *pool;
 
         pool = cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
         lov_pool_putref_locked(pool);
-        return (pool);
 }
 
 cfs_hash_ops_t pool_hash_operations = {

@@ -1623,36 +1623,29 @@ lqs_object(cfs_hlist_node_t *hnode)
         return cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 }
 
-static void *
-lqs_get(cfs_hlist_node_t *hnode)
+static void
+lqs_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-        ENTRY;
 
         __lqs_getref(q);
-
-        RETURN(q);
-}
-
-static void *
-lqs_put_locked(cfs_hlist_node_t *hnode)
-{
-        struct lustre_qunit_size *q =
-                cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-        ENTRY;
-
-        __lqs_putref(q);
-
-        RETURN(q);
 }
 
 static void
-lqs_exit(cfs_hlist_node_t *hnode)
+lqs_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-        ENTRY;
+
+        __lqs_putref(q);
+}
+
+static void
+lqs_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+{
+        struct lustre_qunit_size *q =
+                cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
         /*
          * Nothing should be left. User of lqs put it and
@@ -1663,7 +1656,6 @@ lqs_exit(cfs_hlist_node_t *hnode)
                  "Busy lqs %p with %d refs\n", q,
                  cfs_atomic_read(&q->lqs_refcount));
         OBD_FREE_PTR(q);
-        EXIT;
 }
 
 static cfs_hash_ops_t lqs_hash_ops = {

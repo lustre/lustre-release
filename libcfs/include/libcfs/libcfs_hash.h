@@ -361,13 +361,13 @@ typedef struct cfs_hash_ops {
         /** return object address of @hnode, i.e: container_of(...hnode) */
         void *   (*hs_object)(cfs_hlist_node_t *hnode);
         /** get refcount of item, always called with holding bucket-lock */
-        void *   (*hs_get)(cfs_hlist_node_t *hnode);
+        void     (*hs_get)(cfs_hash_t *hs, cfs_hlist_node_t *hnode);
         /** release refcount of item */
-        void *   (*hs_put)(cfs_hlist_node_t *hnode);
+        void     (*hs_put)(cfs_hash_t *hs, cfs_hlist_node_t *hnode);
         /** release refcount of item, always called with holding bucket-lock */
-        void *   (*hs_put_locked)(cfs_hlist_node_t *hnode);
+        void     (*hs_put_locked)(cfs_hash_t *hs, cfs_hlist_node_t *hnode);
         /** it's called before removing of @hnode */
-        void     (*hs_exit)(cfs_hlist_node_t *hnode);
+        void     (*hs_exit)(cfs_hash_t *hs, cfs_hlist_node_t *hnode);
 } cfs_hash_ops_t;
 
 /** total number of buckets in @hs */
@@ -540,33 +540,33 @@ cfs_hash_object(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         return CFS_HOP(hs, object)(hnode);
 }
 
-static inline void *
+static inline void
 cfs_hash_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        return CFS_HOP(hs, get)(hnode);
+        return CFS_HOP(hs, get)(hs, hnode);
 }
 
-static inline void *
+static inline void
 cfs_hash_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LASSERT(CFS_HOP(hs, put_locked) != NULL);
 
-        return CFS_HOP(hs, put_locked)(hnode);
+        return CFS_HOP(hs, put_locked)(hs, hnode);
 }
 
-static inline void *
+static inline void
 cfs_hash_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LASSERT(CFS_HOP(hs, put) != NULL);
 
-        return CFS_HOP(hs, put)(hnode);
+        return CFS_HOP(hs, put)(hs, hnode);
 }
 
 static inline void
 cfs_hash_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         if (CFS_HOP(hs, exit))
-                CFS_HOP(hs, exit)(hnode);
+                CFS_HOP(hs, exit)(hs, hnode);
 }
 
 static inline void cfs_hash_lock(cfs_hash_t *hs, int excl)
@@ -577,6 +577,13 @@ static inline void cfs_hash_lock(cfs_hash_t *hs, int excl)
 static inline void cfs_hash_unlock(cfs_hash_t *hs, int excl)
 {
         hs->hs_lops->hs_unlock(&hs->hs_lock, excl);
+}
+
+static inline int cfs_hash_dec_and_lock(cfs_hash_t *hs,
+                                        cfs_atomic_t *condition)
+{
+        LASSERT(cfs_hash_with_no_bktlock(hs));
+        return cfs_atomic_dec_and_lock(condition, &hs->hs_lock.spin);
 }
 
 static inline void cfs_hash_bd_lock(cfs_hash_t *hs,
@@ -602,6 +609,18 @@ static inline void cfs_hash_bd_get_and_lock(cfs_hash_t *hs, void *key,
 {
         cfs_hash_bd_get(hs, key, bd);
         cfs_hash_bd_lock(hs, bd, excl);
+}
+
+static inline unsigned cfs_hash_bd_index_get(cfs_hash_t *hs, cfs_hash_bd_t *bd)
+{
+        return bd->bd_offset | (bd->bd_bucket->hsb_index << hs->hs_bkt_bits);
+}
+
+static inline void cfs_hash_bd_index_set(cfs_hash_t *hs,
+                                         unsigned index, cfs_hash_bd_t *bd)
+{
+        bd->bd_bucket = hs->hs_buckets[index >> hs->hs_bkt_bits];
+        bd->bd_offset = index & (CFS_HASH_BKT_NHLIST(hs) - 1U);
 }
 
 static inline void *

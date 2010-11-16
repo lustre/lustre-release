@@ -637,13 +637,19 @@ static int cl_env_hops_keycmp(void *key, cfs_hlist_node_t *hn)
         return (key == cle->ce_owner);
 }
 
+static void cl_env_hops_noop(cfs_hash_t *hs, cfs_hlist_node_t *hn)
+{
+        struct cl_env *cle = cfs_hlist_entry(hn, struct cl_env, ce_node);
+        LASSERT(cle->ce_magic == &cl_env_init0);
+}
+
 static cfs_hash_ops_t cl_env_hops = {
         .hs_hash        = cl_env_hops_hash,
         .hs_key         = cl_env_hops_obj,
         .hs_keycmp      = cl_env_hops_keycmp,
         .hs_object      = cl_env_hops_obj,
-        .hs_get         = cl_env_hops_obj,
-        .hs_put_locked  = cl_env_hops_obj,
+        .hs_get         = cl_env_hops_noop,
+        .hs_put_locked  = cl_env_hops_noop,
 };
 
 static inline struct cl_env *cl_env_fetch(void)

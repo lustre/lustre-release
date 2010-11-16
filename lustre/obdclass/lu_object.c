@@ -73,6 +73,7 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o);
  */
 void lu_object_put(const struct lu_env *env, struct lu_object *o)
 {
+        struct lu_site_bkt_data *bkt;
         struct lu_object_header *top;
         struct lu_site          *site;
         struct lu_object        *orig;
@@ -83,20 +84,22 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
         orig = o;
 
         cfs_hash_bd_get(site->ls_obj_hash, &top->loh_fid, &bd);
+        bkt = cfs_hash_bd_extra_get(site->ls_obj_hash, &bd);
+
         if (!cfs_hash_bd_dec_and_lock(site->ls_obj_hash, &bd, &top->loh_ref)) {
                 if (lu_object_is_dying(top)) {
-                        struct lu_site_bkt_data *bkt;
 
                         /*
                          * somebody may be waiting for this, currently only
                          * used for cl_object, see cl_object_put_last().
                          */
-                        bkt = cfs_hash_bd_extra_get(site->ls_obj_hash, &bd);
                         cfs_waitq_broadcast(&bkt->lsb_marche_funebre);
                 }
                 return;
         }
 
+        LASSERT(bkt->lsb_busy > 0);
+        bkt->lsb_busy--;
         /*
          * When last reference is released, iterate over object
          * layers, and notify them that object is no longer busy.
@@ -498,6 +501,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
                 return NULL;
 
         *version = ver;
+        bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, bd);
         /* cfs_hash_bd_lookup_intent is a somehow "internal" function
          * of cfs_hash, but we don't want refcount on object right now */
         hnode = cfs_hash_bd_lookup_locked(s->ls_obj_hash, bd, (void *)f);
@@ -520,7 +524,6 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         cfs_atomic_dec(&h->loh_ref);
 
         cfs_waitlink_init(waiter);
-        bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, bd);
         cfs_waitq_add(&bkt->lsb_marche_funebre, waiter);
         cfs_set_current_state(CFS_TASK_UNINT);
         lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
@@ -599,6 +602,7 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
                 bkt = cfs_hash_bd_extra_get(hs, &bd);
                 cfs_hash_bd_add_locked(hs, &bd, &o->lo_header->loh_hash);
                 cfs_list_add_tail(&o->lo_header->loh_lru, &bkt->lsb_lru);
+                bkt->lsb_busy++;
                 cfs_hash_bd_unlock(hs, &bd, 1);
                 return o;
         }
@@ -816,19 +820,24 @@ static int lu_obj_hop_keycmp(void *key, cfs_hlist_node_t *hnode)
         return lu_fid_eq(&h->loh_fid, (struct lu_fid *)key);
 }
 
-static void *lu_obj_hop_get(cfs_hlist_node_t *hnode)
+static void lu_obj_hop_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct lu_object_header *h;
 
         h = cfs_hlist_entry(hnode, struct lu_object_header, loh_hash);
-        cfs_atomic_inc(&h->loh_ref);
-        return h;
+        if (cfs_atomic_add_return(1, &h->loh_ref) == 1) {
+                struct lu_site_bkt_data *bkt;
+                cfs_hash_bd_t            bd;
+
+                cfs_hash_bd_get(hs, &h->loh_fid, &bd);
+                bkt = cfs_hash_bd_extra_get(hs, &bd);
+                bkt->lsb_busy++;
+        }
 }
 
-static void *lu_obj_hop_put_locked(cfs_hlist_node_t *hnode)
+static void lu_obj_hop_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         LBUG(); /* we should never called it */
-        return NULL;
 }
 
 cfs_hash_ops_t lu_site_hash_ops = {
@@ -843,8 +852,14 @@ cfs_hash_ops_t lu_site_hash_ops = {
 /**
  * Initialize site \a s, with \a d as the top level device.
  */
-#define LU_SITE_BITS_MIN    10
+#define LU_SITE_BITS_MIN    12
 #define LU_SITE_BITS_MAX    23
+/**
+ * total 128 buckets, we don't want too many buckets because:
+ * - consume too much memory
+ * - avoid unbalanced LRU list
+ */
+#define LU_SITE_BKT_BITS    7
 
 int lu_site_init(struct lu_site *s, struct lu_device *top)
 {
@@ -858,8 +873,8 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
         bits = lu_htable_order();
         for (bits = min(max(LU_SITE_BITS_MIN, bits), LU_SITE_BITS_MAX);
              bits >= LU_SITE_BITS_MIN; bits--) {
-                s->ls_obj_hash = cfs_hash_create("lu_site", bits,
-                                                 bits, bits - LU_SITE_BITS_MIN,
+                s->ls_obj_hash = cfs_hash_create("lu_site", bits, bits,
+                                                 bits - LU_SITE_BKT_BITS,
                                                  sizeof(*bkt), 0, 0,
                                                  &lu_site_hash_ops,
                                                  CFS_HASH_SPIN_BKTLOCK |
@@ -1575,39 +1590,45 @@ EXPORT_SYMBOL(lu_env_refill);
 
 static struct cfs_shrinker *lu_site_shrinker = NULL;
 
-struct lu_site_stats_result {
+typedef struct lu_site_stats{
         unsigned        lss_populated;
         unsigned        lss_max_search;
         unsigned        lss_total;
         unsigned        lss_busy;
-        cfs_hash_bd_t   lss_bd;
-};
+} lu_site_stats_t;
 
-static int lu_site_stats_get(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                             cfs_hlist_node_t *hnode, void *data)
+static void lu_site_stats_get(cfs_hash_t *hs,
+                              lu_site_stats_t *stats, int populated)
 {
-        struct lu_site_stats_result    *sa = data;
-        struct lu_object_header        *h;
+        cfs_hash_bd_t bd;
+        int           i;
 
-        sa->lss_total++;
-        h = cfs_hlist_entry(hnode, struct lu_object_header, loh_hash);
-        if (cfs_atomic_read(&h->loh_ref) > 0)
-                sa->lss_busy++;
+        cfs_hash_for_each_bucket(hs, &bd, i) {
+                struct lu_site_bkt_data *bkt = cfs_hash_bd_extra_get(hs, &bd);
+                cfs_hlist_head_t        *hhead;
 
-        if (sa->lss_bd.bd_bucket == NULL ||
-            cfs_hash_bd_compare(&sa->lss_bd, bd) != 0) {
-                if (sa->lss_max_search < cfs_hash_bd_depmax_get(bd))
-                        sa->lss_max_search = cfs_hash_bd_depmax_get(bd);
-                sa->lss_populated++;
-                sa->lss_bd = *bd;
+                cfs_hash_bd_lock(hs, &bd, 1);
+                stats->lss_busy  += bkt->lsb_busy;
+                stats->lss_total += cfs_hash_bd_count_get(&bd);
+                stats->lss_max_search = max((int)stats->lss_max_search,
+                                            cfs_hash_bd_depmax_get(&bd));
+                if (!populated) {
+                        cfs_hash_bd_unlock(hs, &bd, 1);
+                        continue;
+                }
+
+                cfs_hash_bd_for_each_hlist(hs, &bd, hhead) {
+                        if (!cfs_hlist_empty(hhead))
+                                stats->lss_populated++;
+                }
+                cfs_hash_bd_unlock(hs, &bd, 1);
         }
-        return 0;
 }
 
 #ifdef __KERNEL__
 static int lu_cache_shrink(int nr, unsigned int gfp_mask)
 {
-        struct lu_site_stats_result stats;
+        lu_site_stats_t stats;
         struct lu_site *s;
         struct lu_site *tmp;
         int cached = 0;
@@ -1632,7 +1653,7 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
                 }
 
                 memset(&stats, 0, sizeof(stats));
-                cfs_hash_for_each(s->ls_obj_hash, lu_site_stats_get, &stats);
+                lu_site_stats_get(s->ls_obj_hash, &stats, 0);
                 cached += stats.lss_total - stats.lss_busy;
                 if (nr && remain <= 0)
                         break;
@@ -1821,10 +1842,10 @@ static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)
  */
 int lu_site_stats_print(const struct lu_site *s, char *page, int count)
 {
-        struct lu_site_stats_result stats;
+        lu_site_stats_t stats;
 
         memset(&stats, 0, sizeof(stats));
-        cfs_hash_for_each(s->ls_obj_hash, lu_site_stats_get, &stats);
+        lu_site_stats_get(s->ls_obj_hash, &stats, 1);
 
         return snprintf(page, count, "%d/%d %d/%d %d %d %d %d %d %d %d\n",
                         stats.lss_busy,

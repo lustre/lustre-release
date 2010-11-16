@@ -2306,10 +2306,9 @@ static void *
 ldlm_export_lock_key(cfs_hlist_node_t *hnode)
 {
         struct ldlm_lock *lock;
-        ENTRY;
 
         lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
-        RETURN(&lock->l_remote_handle);
+        return &lock->l_remote_handle;
 }
 
 static void
@@ -2324,8 +2323,7 @@ ldlm_export_lock_keycpy(cfs_hlist_node_t *hnode, void *key)
 static int
 ldlm_export_lock_keycmp(void *key, cfs_hlist_node_t *hnode)
 {
-        ENTRY;
-        RETURN(lustre_handle_equal(ldlm_export_lock_key(hnode), key));
+        return lustre_handle_equal(ldlm_export_lock_key(hnode), key);
 }
 
 static void *
@@ -2334,28 +2332,22 @@ ldlm_export_lock_object(cfs_hlist_node_t *hnode)
         return cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
 }
 
-static void *
-ldlm_export_lock_get(cfs_hlist_node_t *hnode)
+static void
+ldlm_export_lock_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct ldlm_lock *lock;
-        ENTRY;
 
         lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
         LDLM_LOCK_GET(lock);
-
-        RETURN(lock);
 }
 
-static void *
-ldlm_export_lock_put(cfs_hlist_node_t *hnode)
+static void
+ldlm_export_lock_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
         struct ldlm_lock *lock;
-        ENTRY;
 
         lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
         LDLM_LOCK_RELEASE(lock);
-
-        RETURN(lock);
 }
 
 static cfs_hash_ops_t ldlm_export_lock_ops = {
