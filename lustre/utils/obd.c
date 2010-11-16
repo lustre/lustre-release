@@ -3107,12 +3107,12 @@ void  llapi_ping_target(char *obd_type, char *obd_name,
         if (rc)
                 rc = errno;
         if (rc == ENOTCONN || rc == ESHUTDOWN) {
-                printf("%s inactive.\n", obd_name);
+                printf("%s: INACTIVE\n", obd_name);
         } else if (rc) {
-                fprintf(stderr, "error: check '%s' %s\n",
+                printf("%s: check error: %s\n",
                         obd_name, strerror(errno));
         } else {
-                printf("%s active.\n", obd_name);
+                printf("%s: active\n", obd_name);
         }
 }
 
