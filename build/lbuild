@@ -44,9 +44,10 @@ DOWNLOAD=true
 TAG=
 CANONICAL_TARGET=
 TARGET=
-TARGET_ARCH=$(uname -m)
-TARGET_ARCHS=
-TARGET_ARCHS_ALL=$TARGET_ARCH
+TARGET_ARCH="$(uname -m)"
+# change default behavior to only build for the current arch
+TARGET_ARCHS="$TARGET_ARCH"
+TARGET_ARCHS_ALL="$TARGET_ARCH"
 [ "$TARGET_ARCH" = "i686" ] && TARGET_ARCHS_ALL="i686 i586 i386"
 CONFIGURE_FLAGS=
 EXTERNAL_PATCHES=
@@ -296,6 +297,8 @@ check_options() {
             usage 1 "A branch/tag name must be specified with --tag when not building from a tarball."
     fi
 
+    [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
+
     if [ -z "$LINUX" ]; then
         [ "$KERNELDIR" -o "$KERNELTREE" ] || \
             usage 1 "A kernel directory must be specified with --kerneldir or --kerneltree."
@@ -308,7 +311,7 @@ check_options() {
                 usage 1 "When building a snapshot, a tag name must be used."
         fi
 
-        [ "$TARGET" ] || usage 1 "A target must be specified with --target."
+        [ "$TARGET" ] || TARGET=$(autodetect_target "$DISTRO")
 #       TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
 #       [ -r "$TARGET_FILE" ] || \
 #               usage 1 "Target '$TARGET' was not found."
@@ -391,8 +394,23 @@ check_options() {
         fi
     fi
 
-    [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
+    return 0
 
+}
+
+# autodetect target
+autodetect_target() {
+    local distro="$1"
+
+    local target=""
+    case ${distro} in
+          oel5) target="2.6-oel5";;
+         rhel5) target="2.6-rhel5";;
+        sles10) target="2.6-sles10";;
+            *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
+    esac
+
+    echo ${target}
     return 0
 
 }
@@ -403,17 +421,41 @@ autodetect_distro() {
     local name
     local version
 
-    if [ -f /etc/SuSE-release ]; then
-        name=sles
-        version=$(grep ^VERSION /etc/SuSE-release)
-        version=${version#*= }
-    elif [ -f /etc/redhat-release ]; then
-        name=$(head -1 /etc/redhat-release)
-        version=$(echo "$distroname" |
-                  sed -e 's/^[^0-9.]*//g' | sed -e 's/[ \.].*//')
-    fi
-    if [ -z "$name" -o -z "$version" ]; then
-        fatal 1 "I don't know how to determine distro type/version.\nEither update autodetect_distro() or use the --distro argument"
+    if which lsb_release >/dev/null 2>&1; then
+        name="$(lsb_release -s -i)"
+        version="$(lsb_release -s -r)"
+        case "$name" in
+            "EnterpriseEnterpriseServer" | "ScientificSL")
+                name="oel"
+                version="${version%%.*}"
+                ;;
+            "RedHatEnterpriseServer")
+                name="rhel"
+                version="${version%%.*}"
+                ;;
+            "SUSE LINUX")
+                name="sles"
+                ;;
+            *)
+                fatal 1 "I don't know what distro name $name and version $version is.\nEither update autodetect_distro() or use the --distro argument."
+                ;;
+        esac
+    else
+        echo "You really ought to install lsb_release for accurate distro identification"
+        # try some heuristics
+        if [ -f /etc/SuSE-release ]; then
+            name=sles
+            version=$(grep ^VERSION /etc/SuSE-release)
+            version=${version#*= }
+        elif [ -f /etc/redhat-release ]; then
+            #name=$(head -1 /etc/redhat-release)
+            name=rhel
+            version=$(echo "$distroname" |
+                      sed -e 's/^[^0-9.]*//g' | sed -e 's/[ \.].*//')
+        fi
+        if [ -z "$name" -o -z "$version" ]; then
+            fatal 1 "I don't know how to determine distro type/version.\nEither update autodetect_distro() or use the --distro argument."
+        fi
     fi
 
     echo ${name}${version}
