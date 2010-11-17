@@ -42,6 +42,23 @@ fi
 ])
 
 #
+# LN_FUNC_DEV_GET_BY_NAME_2ARG
+#
+AC_DEFUN([LN_FUNC_DEV_GET_BY_NAME_2ARG],
+[AC_MSG_CHECKING([if dev_get_by_name has two args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/netdevice.h>
+],[
+        dev_get_by_name(NULL, NULL);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_DEV_GET_BY_NAME_2ARG, 1, [dev_get_by_name has 2 args])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LN_CONFIG_AFFINITY
 #
 # check if cpu affinity is available/wanted
@@ -539,6 +556,7 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LN_PROG_LINUX],
 [
+LN_FUNC_DEV_GET_BY_NAME_2ARG
 LN_CONFIG_AFFINITY
 LN_CONFIG_BACKOFF
 LN_CONFIG_QUADRICS

@@ -98,6 +98,7 @@ typedef int gfp_t;
 
 typedef struct
 {
+        int              *kib_dev_failover;     /* HCA failover */
         unsigned int     *kib_service;          /* IB service number */
         int              *kib_min_reconnect_interval; /* first failed connection retry... */
         int              *kib_max_reconnect_interval; /* ...exponentially increasing to this */
@@ -184,30 +185,44 @@ kiblnd_concurrent_sends_v1(void)
 #define IBLND_SEND_WRS(v)          ((IBLND_RDMA_FRAGS(v) + 1) * IBLND_CONCURRENT_SENDS(v))
 #define IBLND_CQ_ENTRIES(v)         (IBLND_RECV_WRS(v) + IBLND_SEND_WRS(v))
 
+struct kib_hca_dev;
+
 typedef struct
 {
         cfs_list_t           ibd_list;          /* chain on kib_devs */
+        cfs_list_t           ibd_fail_list;     /* chain on kib_failed_devs */
         __u32                ibd_ifip;          /* IPoIB interface IP */
         char                 ibd_ifname[32];    /* IPoIB interface name */
         int                  ibd_nnets;         /* # nets extant */
 
-        struct rdma_cm_id   *ibd_cmid;          /* IB listener (bound to 1 device) */
-        struct ib_pd        *ibd_pd;            /* PD for the device */
-        int                  ibd_page_shift;    /* page shift of current HCA */
-        int                  ibd_page_size;     /* page size of current HCA */
-        __u64                ibd_page_mask;     /* page mask of current HCA */
-        int                  ibd_mr_shift;      /* bits shift of max MR size */
-        __u64                ibd_mr_size;       /* size of MR */
-
-        int                  ibd_nmrs;          /* # of global MRs */
-        struct ib_mr       **ibd_mrs;           /* MR for non RDMA I/O */
+        cfs_time_t           ibd_next_failover;
+        int                  ibd_failed_failover; /* # failover failures */
+        unsigned int         ibd_failover;      /* failover in progress */
+        unsigned int         ibd_can_failover;  /* IPoIB interface is a bonding master */
+        cfs_list_t           ibd_nets;
+        struct kib_hca_dev  *ibd_hdev;
 } kib_dev_t;
+
+typedef struct kib_hca_dev
+{
+        struct rdma_cm_id   *ibh_cmid;          /* listener cmid */
+        struct ib_device    *ibh_ibdev;         /* IB device */
+        int                  ibh_page_shift;    /* page shift of current HCA */
+        int                  ibh_page_size;     /* page size of current HCA */
+        __u64                ibh_page_mask;     /* page mask of current HCA */
+        int                  ibh_mr_shift;      /* bits shift of max MR size */
+        __u64                ibh_mr_size;       /* size of MR */
+        int                  ibh_nmrs;          /* # of global MRs */
+        struct ib_mr       **ibh_mrs;           /* global MR */
+        struct ib_pd        *ibh_pd;            /* PD */
+        kib_dev_t           *ibh_dev;           /* owner */
+        cfs_atomic_t         ibh_ref;           /* refcount */
+} kib_hca_dev_t;
 
 #define IBLND_POOL_DEADLINE     300             /* # of seconds to keep pool alive */
 
 typedef struct
 {
-        struct ib_device       *ibp_device;             /* device for mapping */
         int                     ibp_npages;             /* # pages */
         struct page            *ibp_pages[0];           /* page array */
 } kib_pages_t;
@@ -243,6 +258,7 @@ typedef struct kib_poolset
         struct kib_net         *ps_net;                 /* network it belongs to */
         char                    ps_name[IBLND_POOL_NAME_LEN]; /* pool set name */
         cfs_list_t              ps_pool_list;           /* list of pools */
+        cfs_list_t              ps_failed_pool_list;    /* failed pool list */
         cfs_time_t              ps_next_retry;          /* time stamp for retry if failed to allocate */
         int                     ps_increasing;          /* is allocating new pool */
         int                     ps_pool_size;           /* new pool size */
@@ -260,6 +276,7 @@ typedef struct kib_pool
         kib_poolset_t          *po_owner;               /* pool_set of this pool */
         cfs_time_t              po_deadline;            /* deadline of this pool */
         int                     po_allocated;           /* # of elements in use */
+        int                     po_failed;              /* pool is created on failed HCA */
         int                     po_size;                /* # of pre-allocated elements */
 } kib_pool_t;
 
@@ -270,6 +287,7 @@ typedef struct {
 
 typedef struct {
         kib_pool_t              tpo_pool;               /* pool */
+        struct kib_hca_dev     *tpo_hdev;               /* device for this pool */
         struct kib_tx          *tpo_tx_descs;           /* all the tx descriptors */
         kib_pages_t            *tpo_tx_pages;           /* premapped tx msg pages */
 } kib_tx_pool_t;
@@ -279,6 +297,7 @@ typedef struct {
 } kib_pmr_poolset_t;
 
 typedef struct kib_pmr_pool {
+        struct kib_hca_dev     *ppo_hdev;               /* device for this pool */
         kib_pool_t              ppo_pool;               /* pool */
 } kib_pmr_pool_t;
 
@@ -287,6 +306,7 @@ typedef struct
         cfs_spinlock_t          fps_lock;               /* serialize */
         struct kib_net         *fps_net;                /* IB network */
         cfs_list_t              fps_pool_list;          /* FMR pool list */
+        cfs_list_t              fps_failed_pool_list;   /* FMR pool list */
         __u64                   fps_version;            /* validity stamp */
         int                     fps_increasing;         /* is allocating new pool */
         cfs_time_t              fps_next_retry;         /* time stamp for retry if failed to allocate */
@@ -295,9 +315,11 @@ typedef struct
 typedef struct
 {
         cfs_list_t              fpo_list;               /* chain on pool list */
+        struct kib_hca_dev     *fpo_hdev;               /* device for this pool */
         kib_fmr_poolset_t      *fpo_owner;              /* owner of this pool */
         struct ib_fmr_pool     *fpo_fmr_pool;           /* IB FMR pool */
         cfs_time_t              fpo_deadline;           /* deadline of this pool */
+        int                     fpo_failed;             /* fmr pool is failed */
         int                     fpo_map_count;          /* # of mapped FMR */
 } kib_fmr_pool_t;
 
@@ -308,6 +330,7 @@ typedef struct {
 
 typedef struct kib_net
 {
+        cfs_list_t           ibn_list;          /* chain on kib_dev_t::ibd_nets */
         __u64                ibn_incarnation;   /* my epoch */
         int                  ibn_init;          /* initialisation state */
         int                  ibn_shutdown;      /* shutting down? */
@@ -329,6 +352,7 @@ typedef struct
         int               kib_init;        /* initialisation state */
         int               kib_shutdown;    /* shut down? */
         cfs_list_t        kib_devs;        /* IB devices extant */
+        cfs_list_t           kib_failed_devs;   /* list head of failed devices */
         cfs_atomic_t      kib_nthreads;    /* # live threads */
         cfs_rwlock_t      kib_global_lock; /* stabilize net/dev/peer/conn ops */
 
@@ -344,6 +368,7 @@ typedef struct
         cfs_waitq_t       kib_sched_waitq; /* schedulers sleep here */
         cfs_list_t        kib_sched_conns; /* conns to check for rx completions */
         cfs_spinlock_t    kib_sched_lock;  /* serialise */
+        cfs_waitq_t          kib_failover_waitq; /* schedulers sleep here */
 
         struct ib_qp_attr kib_error_qpa;   /* QP->ERROR */
 } kib_data_t;
@@ -529,6 +554,7 @@ typedef struct kib_connvars
 typedef struct kib_conn
 {
         struct kib_peer     *ibc_peer;          /* owning peer */
+        kib_hca_dev_t      *ibc_hdev;           /* HCA bound on */
         cfs_list_t           ibc_list;          /* stash on peer's conn list */
         cfs_list_t           ibc_sched_list;    /* schedule for attention */
         __u16                ibc_version;       /* version of connection */
@@ -584,6 +610,38 @@ typedef struct kib_peer
 } kib_peer_t;
 
 extern kib_data_t      kiblnd_data;
+
+extern void kiblnd_hdev_destroy(kib_hca_dev_t *hdev);
+
+static inline void
+kiblnd_hdev_addref_locked(kib_hca_dev_t *hdev)
+{
+        LASSERT (cfs_atomic_read(&hdev->ibh_ref) > 0);
+        cfs_atomic_inc(&hdev->ibh_ref);
+}
+
+static inline void
+kiblnd_hdev_decref(kib_hca_dev_t *hdev)
+{
+        LASSERT (cfs_atomic_read(&hdev->ibh_ref) > 0);
+        if (cfs_atomic_dec_and_test(&hdev->ibh_ref))
+                kiblnd_hdev_destroy(hdev);
+}
+
+static inline int
+kiblnd_dev_can_failover(kib_dev_t *dev)
+{
+        if (!cfs_list_empty(&dev->ibd_fail_list)) /* already scheduled */
+                return 0;
+
+        if (*kiblnd_tunables.kib_dev_failover == 0) /* disabled */
+                return 0;
+
+        if (*kiblnd_tunables.kib_dev_failover > 1) /* force failover */
+                return 1;
+
+        return dev->ibd_can_failover;
+}
 
 #define kiblnd_conn_addref(conn)                                \
 do {                                                            \
@@ -922,9 +980,9 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 
 #endif
 
-struct ib_mr *kiblnd_find_rd_dma_mr(kib_net_t *net,
+struct ib_mr *kiblnd_find_rd_dma_mr(kib_hca_dev_t *hdev,
                                     kib_rdma_desc_t *rd);
-struct ib_mr *kiblnd_find_dma_mr(kib_net_t *net,
+struct ib_mr *kiblnd_find_dma_mr(kib_hca_dev_t *hdev,
                                  __u64 addr, __u64 size);
 void kiblnd_map_rx_descs(kib_conn_t *conn);
 void kiblnd_unmap_rx_descs(kib_conn_t *conn);
@@ -938,8 +996,8 @@ int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages,
                          int npages, __u64 iov, kib_fmr_t *fmr);
 void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
-int  kiblnd_pmr_pool_map(kib_pmr_poolset_t *pps, kib_rdma_desc_t *rd,
-                         __u64 *iova, kib_phys_mr_t **pp_pmr);
+int  kiblnd_pmr_pool_map(kib_pmr_poolset_t *pps, kib_hca_dev_t *hdev,
+                         kib_rdma_desc_t *rd, __u64 *iova, kib_phys_mr_t **pp_pmr);
 void kiblnd_pmr_pool_unmap(kib_phys_mr_t *pmr);
 
 int  kiblnd_startup (lnet_ni_t *ni);
@@ -953,6 +1011,7 @@ void kiblnd_tunables_fini(void);
 int  kiblnd_connd (void *arg);
 int  kiblnd_scheduler(void *arg);
 int  kiblnd_thread_start (int (*fn)(void *arg), void *arg);
+int  kiblnd_failover_thread (void *arg);
 
 int  kiblnd_alloc_pages (kib_pages_t **pp, int npages);
 void kiblnd_free_pages (kib_pages_t *p);
@@ -961,6 +1020,7 @@ int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
                         struct rdma_cm_event *event);
 int  kiblnd_translate_mtu(int value);
 
+int  kiblnd_dev_failover(kib_dev_t *dev);
 int  kiblnd_create_peer (lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid);
 void kiblnd_destroy_peer (kib_peer_t *peer);
 void kiblnd_destroy_dev (kib_dev_t *dev);
