@@ -100,7 +100,8 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/autoconf/lustre-build-linux.m4				\
 	build/autoconf/lustre-build-darwin.m4				\
 	build/autoconf/lustre-build.m4 build/rdac_spec                  \
-	build/mptlinux.spec.patch build/patches
+	build/mptlinux.spec.patch build/patches                         \
+	build/funcs.sh build/find_linux_rpms
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | sed -re 's/--(en|dis)able-tests//'); \
