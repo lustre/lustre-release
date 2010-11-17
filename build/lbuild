@@ -1103,45 +1103,60 @@ EOF
 }
 
 store_for_reuse() {
-        local articles="$1"
-        local module="$2"
-        local location="$3"
-        local signature="$4"
-        local use_links="$5"
+    local articles="$1"
+    local module="$2"
+    local location="$3"
+    local signature="$4"
+    local use_links="$5"
 
-        local linkflag=""
-        if $use_links; then
-            linkflag="l"
+    local linkflag=""
+    if $use_links; then
+        linkflag="l"
+    fi
+
+    local default_iface=$(/sbin/ip route get 192.1.1.1 | sed -ne 's/.* dev \(.*\)  * src .*/\1/p')
+    if [ -z "$default_iface" ]; then
+        fatal 1 "Failed to determine the default route interface"
+    fi
+    local unique_id=$(/sbin/ip addr show dev $default_iface | sed -ne '/ inet /s/ *inet \(.*\)\/.*/\1/p' | head -1)
+    if [ -z "$unique_id" ]; then
+        fatal 1 "Failed to determine a unique id from interface $default_interface"
+    fi
+
+    local finallocation="$location"/"$signature"/"$module"
+    location="$location"/"$signature-${unique_id}"/"$module"
+    mkdir -p "$location"
+    # the cleanup script removes any directory that doesn't have a
+    # .lastused, so let's try to prevent that as soon as we can
+    # this solution still slightly racy with the cleanup script
+    # but the race is a lot tighter now
+    touch -t 197001010000 "$location/.lastused"
+    ## use eval/echo here to make sure shell expansions are performed
+    #if ! cp -a${linkflag} $(eval echo $articles) "$location"; then
+    local article
+    for article in $(eval echo $articles); do
+        if ! cp -a${linkflag} "$article" "$location"; then
+            error "Failed to copy \"$article\" to \"$location\" in store_for_reuse()"
+            # rename the cache location so that it's not cached
+            # product, but is around for analysis
+            mv "$location"{,-bad-$(date +%s)} ||
+                error "failed to clean up a failed cache attempt" \
+                      "in \"$location\" -- manual cleanup will be" \
+                      "necessary"
+            return 1
         fi
+    done
 
-        location="$location"/"$signature"/"$module"
-        mkdir -p "$location"
-        # the cleanup script removes any directory that doesn't have a
-        # .lastused, so let's try to prevent that as soon as we can
-        # this solution still slightly racy with the cleanup script
-        # but the race is a lot tighter now
-        touch -t 197001010000 "$location/.lastused"
-        ## use eval/echo here to make sure shell expansions are performed
-        #if ! cp -a${linkflag} $(eval echo $articles) "$location"; then
-        local article
-        for article in $(eval echo $articles); do
-            if ! cp -a${linkflag} "$article" "$location"; then
-                error "Failed to copy \"$article\" to \"$location\" in store_for_reuse()"
-                # rename the cache location so that it's not cached
-                # product, but is around for analysis
-                mv "$location"{,-bad-$(date +%s)} ||
-                    error "failed to clean up a failed cache attempt" \
-                          "in \"$location\" -- manual cleanup will be" \
-                          "necessary"
-                return 1
-            fi
-        done
+    # flag the cache as complete (i.e. in case lbuild was previously
+    # interrupted while caching)
+    touch "$location/.lastused"
 
-        # flag the cache as complete (i.e. in case lbuild was previously
-        # interrupted while caching)
-        touch "$location/.lastused"
-
-        return 0
+    # put the temporary location into the final location
+    # (last one wins)
+    mkdir -p "${finallocation%/*}"
+    mv "$location" "$finallocation"
+    rmdir "${location%/*}"
+    return 0
 
 }
 
