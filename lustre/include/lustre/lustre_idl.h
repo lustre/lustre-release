@@ -140,13 +140,6 @@
 
 /* Portal 63 is reserved for the Cray Inc DVS - nic@cray.com, roe@cray.com, n8851@cray.com */
 
-#define SVC_KILLED               1
-#define SVC_EVENT                2
-#define SVC_SIGNAL               4
-#define SVC_RUNNING              8
-#define SVC_STOPPING            16
-#define SVC_STOPPED             32
-
 /* packet types */
 #define PTL_RPC_MSG_REQUEST 4711
 #define PTL_RPC_MSG_ERR     4712

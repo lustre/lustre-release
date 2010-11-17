@@ -463,7 +463,6 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
                 CERROR("not replying on NULL connection\n"); /* bug 9635 */
                 return -ENOTCONN;
         }
-        cfs_atomic_inc (&svc->srv_outstanding_replies);
         ptlrpc_rs_addref(rs);                   /* +1 ref for the network */
 
         rc = sptlrpc_svc_wrap_reply(req);
@@ -478,10 +477,8 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
                            &rs->rs_cb_id, conn, svc->srv_rep_portal,
                            req->rq_xid, req->rq_reply_off);
 out:
-        if (unlikely(rc != 0)) {
-                cfs_atomic_dec (&svc->srv_outstanding_replies);
+        if (unlikely(rc != 0))
                 ptlrpc_req_drop_rs(req);
-        }
         ptlrpc_connection_put(conn);
         return rc;
 }

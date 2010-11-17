@@ -568,12 +568,12 @@ int server_disconnect_export(struct obd_export *exp)
                                        struct ptlrpc_reply_state, rs_exp_list);
                 struct ptlrpc_service *svc = rs->rs_service;
 
-                cfs_spin_lock(&svc->srv_lock);
+                cfs_spin_lock(&svc->srv_rs_lock);
                 cfs_list_del_init(&rs->rs_exp_list);
                 cfs_spin_lock(&rs->rs_lock);
                 ptlrpc_schedule_difficult_reply(rs);
                 cfs_spin_unlock(&rs->rs_lock);
-                cfs_spin_unlock(&svc->srv_lock);
+                cfs_spin_unlock(&svc->srv_rs_lock);
         }
         cfs_spin_unlock(&exp->exp_lock);
 
@@ -2184,7 +2184,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         netrc = target_send_reply_msg (req, rc, fail_id);
 
-        cfs_spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_rs_lock);
 
         cfs_atomic_inc(&svc->srv_n_difficult_replies);
 
@@ -2196,7 +2196,6 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                  * reply_out_callback leaves alone) */
                 rs->rs_on_net = 0;
                 ptlrpc_rs_addref(rs);
-                cfs_atomic_inc (&svc->srv_outstanding_replies);
         }
 
         cfs_spin_lock(&rs->rs_lock);
@@ -2211,7 +2210,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
         cfs_spin_unlock(&rs->rs_lock);
-        cfs_spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_rs_lock);
         EXIT;
 }
 

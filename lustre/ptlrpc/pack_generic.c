@@ -270,12 +270,12 @@ struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc)
 {
         struct ptlrpc_reply_state *rs = NULL;
 
-        cfs_spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_rs_lock);
         /* See if we have anything in a pool, and wait if nothing */
         while (cfs_list_empty(&svc->srv_free_rs_list)) {
                 struct l_wait_info lwi;
                 int rc;
-                cfs_spin_unlock(&svc->srv_lock);
+                cfs_spin_unlock(&svc->srv_rs_lock);
                 /* If we cannot get anything for some long time, we better
                    bail out instead of waiting infinitely */
                 lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
@@ -284,13 +284,13 @@ struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc)
                                   &lwi);
                 if (rc)
                         goto out;
-                cfs_spin_lock(&svc->srv_lock);
+                cfs_spin_lock(&svc->srv_rs_lock);
         }
 
         rs = cfs_list_entry(svc->srv_free_rs_list.next,
                             struct ptlrpc_reply_state, rs_list);
         cfs_list_del(&rs->rs_list);
-        cfs_spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_rs_lock);
         LASSERT(rs);
         memset(rs, 0, svc->srv_max_reply_size);
         rs->rs_service = svc;
@@ -305,9 +305,9 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 
         LASSERT(svc);
 
-        cfs_spin_lock(&svc->srv_lock);
+        cfs_spin_lock(&svc->srv_rs_lock);
         cfs_list_add(&rs->rs_list, &svc->srv_free_rs_list);
-        cfs_spin_unlock(&svc->srv_lock);
+        cfs_spin_unlock(&svc->srv_rs_lock);
         cfs_waitq_signal(&svc->srv_free_rs_waitq);
 }
 

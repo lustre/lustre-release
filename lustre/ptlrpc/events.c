@@ -339,7 +339,6 @@ void reply_out_callback(lnet_event_t *ev)
                  * net's ref on 'rs' */
                 LASSERT (ev->unlinked);
                 ptlrpc_rs_decref(rs);
-                cfs_atomic_dec (&svc->srv_outstanding_replies);
                 EXIT;
                 return;
         }
@@ -349,14 +348,14 @@ void reply_out_callback(lnet_event_t *ev)
         if (ev->unlinked) {
                 /* Last network callback. The net's ref on 'rs' stays put
                  * until ptlrpc_handle_rs() is done with it */
-                cfs_spin_lock(&svc->srv_lock);
+                cfs_spin_lock(&svc->srv_rs_lock);
                 cfs_spin_lock(&rs->rs_lock);
                 rs->rs_on_net = 0;
                 if (!rs->rs_no_ack ||
                     rs->rs_transno <= rs->rs_export->exp_obd->obd_last_committed)
                         ptlrpc_schedule_difficult_reply (rs);
                 cfs_spin_unlock(&rs->rs_lock);
-                cfs_spin_unlock(&svc->srv_lock);
+                cfs_spin_unlock(&svc->srv_rs_lock);
         }
 
         EXIT;

@@ -333,7 +333,7 @@ ptlrpc_lprocfs_rd_threads_started(char *page, char **start, off_t off,
 {
         struct ptlrpc_service *svc = data;
 
-        return snprintf(page, count, "%d\n", svc->srv_threads_started);
+        return snprintf(page, count, "%d\n", svc->srv_threads_running);
 }
 
 static int
@@ -470,7 +470,7 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
         return srhi;
 }
 
-/* common ost/mdt srv_request_history_print_fn */
+/* common ost/mdt srv_req_printfn */
 void target_print_req(void *seq_file, struct ptlrpc_request *req)
 {
         /* Called holding srv_lock with irqs disabled.
@@ -527,10 +527,10 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                            req->rq_arrival_time.tv_sec,
                            req->rq_sent - req->rq_arrival_time.tv_sec,
                            req->rq_sent - req->rq_deadline);
-                if (svc->srv_request_history_print_fn == NULL)
+                if (svc->srv_req_printfn == NULL)
                         seq_printf(s, "\n");
                 else
-                        svc->srv_request_history_print_fn(s, srhi->srhi_req);
+                        svc->srv_req_printfn(s, srhi->srhi_req);
         }
 
         cfs_spin_unlock(&svc->srv_lock);
