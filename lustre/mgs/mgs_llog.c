@@ -1073,6 +1073,12 @@ struct temp_comp
 
 static int mgs_write_log_mdc_to_mdt(struct obd_device *, struct fs_db *,
                                     struct mgs_target_info *, char *);
+static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
+                                    struct mgs_target_info *mti,
+                                    char *logname, char *suffix, char *lovname,
+                                    enum lustre_sec_part sec_part, int flags);
+static void name_create_mdt_and_lov(char **logname, char **lovname,
+                                    struct fs_db *fsdb, int i);
 
 static int mgs_steal_llog_handler(struct llog_handle *llh,
                                   struct llog_rec_hdr *rec,
@@ -1192,6 +1198,21 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
 
                 mgs_write_log_mdc_to_mdt(obd, fsdb, tmti, mti->mti_svname);
                 memset(tmti, 0, sizeof(*tmti));
+                RETURN(rc);
+        }
+
+        if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD) {
+                char mdt_index[9];
+                char *logname, *lovname;
+
+                name_create_mdt_and_lov(&logname, &lovname, fsdb, mti->mti_stripe_index);
+                sprintf(mdt_index, "-MDT%04x", mti->mti_stripe_index);
+
+                mgs_write_log_osc_to_lov(obd, fsdb, tmti, logname,
+                                         mdt_index, lovname,
+                                         LUSTRE_SP_MDT, 0);
+                name_destroy(&logname);
+                name_destroy(&lovname);
                 RETURN(rc);
         }
         RETURN(rc);
@@ -1437,7 +1458,7 @@ static int mgs_write_log_mdc_to_mdt(struct obd_device *obd, struct fs_db *fsdb,
         int i, rc;
 
         ENTRY;
-        if (mgs_log_is_empty(obd, mti->mti_svname)) {
+        if (mgs_log_is_empty(obd, logname)) {
                 CERROR("log is empty! Logical error\n");
                 RETURN (-EINVAL);
         }
@@ -1686,9 +1707,8 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                mti->mti_svname, logname);
 
         if (mgs_log_is_empty(obd, logname)) {
-                /* The first item in the log must be the lov, so we have
-                   somewhere to add our osc. */
-                rc = mgs_write_log_lov(obd, fsdb, mti, logname, lovname);
+                CERROR("log is empty! Logical error\n");
+                RETURN (-EINVAL);
         }
 
         name_create(&nodeuuid, libcfs_nid2str(mti->mti_nids[0]), "");
@@ -1818,6 +1838,13 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
 
         /* Append ost info to the client log */
         name_create(&logname, mti->mti_fsname, "-client");
+        if (mgs_log_is_empty(obd, logname)) {
+                /* Start client log */
+                rc = mgs_write_log_lov(obd, fsdb, mti, logname,
+                                       fsdb->fsdb_clilov);
+                rc = mgs_write_log_lmv(obd, fsdb, mti, logname,
+                                       fsdb->fsdb_clilmv);
+        }
         mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, "",
                                  fsdb->fsdb_clilov, LUSTRE_SP_CLI, 0);
         name_destroy(&logname);

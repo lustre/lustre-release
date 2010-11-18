@@ -130,6 +130,12 @@ stop_mds() {
 	stop $SINGLEMDS -f  || return 97
 }
 
+stop_mgs() {
+       echo "stop mgs service on `facet_active_host mgs`"
+       # These tests all use non-failover stop
+       stop mgs -f  || return 97
+}
+
 start_ost() {
 	echo "start ost1 service on `facet_active_host ost1`"
 	start ost1 `ostdevname 1` $OST_MOUNT_OPTS $@ || return 95
@@ -699,6 +705,27 @@ test_21c() {
 	writeconf
 }
 run_test 21c "start mds between two osts, stop mds last"
+
+test_21d() {
+        if combined_mgs_mds ; then
+                skip "need separate mgs device" && return 0
+        fi
+        stopall
+
+        reformat
+
+        start_mgs
+        start_ost
+        start_ost2
+        start_mds
+        wait_osc_import_state mds ost2 FULL
+
+        stop_ost
+        stop_ost2
+        stop_mds
+        stop_mgs
+}
+run_test 21d "start mgs then ost and then mds"
 
 test_22() {
 	start_mds
@@ -1682,7 +1709,9 @@ test_40() { # bug 15759
 }
 run_test 40 "race during service thread startup"
 
-test_41() { #bug 14134
+test_41a() { #bug 14134
+        echo $MDS_MOUNT_OPTS | grep "loop" && skip " loop devices does not work with nosvc option" && return
+
         local rc
         local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
 
@@ -1703,8 +1732,33 @@ test_41() { #bug 14134
         unload_modules_conf || return 204
         return $rc
 }
-run_test 41 "mount mds with --nosvc and --nomgs"
+run_test 41a "mount mds with --nosvc and --nomgs"
 
+test_41b() {
+        echo $MDS_MOUNT_OPTS | grep "loop" && skip " loop devices does not work with nosvc option" && return
+
+        stopall
+        reformat
+        local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
+
+        start $SINGLEMDS $MDSDEV $MDS_MOUNT_OPTS -o nosvc -n
+        start_ost
+        start $SINGLEMDS $MDSDEV $MDS_MOUNT_OPTS -o nomgs,force
+        mkdir -p $MOUNT
+        mount_client $MOUNT || return 1
+        sleep 5
+
+        echo "blah blah" > $MOUNT/$tfile
+        cat $MOUNT/$tfile || return 200
+
+        umount_client $MOUNT
+        stop_ost || return 201
+        stop_mds -f || return 202
+        stop_mds -f || return 203
+
+}
+
+run_test 41b "mount mds with --nosvc and --nomgs on first mount"
 test_42() { #bug 14693
         setup
         check_mount || return 2
