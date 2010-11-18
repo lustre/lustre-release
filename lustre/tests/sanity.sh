@@ -6820,7 +6820,7 @@ test_203() {
         cancel_lru_locks osc
         cancel_lru_locks mdc
         time2=`stat -c "%X" $DIR/$tfile`
-        loh "new atime is $time2"
+        log "new atime is $time2"
         [ "$time2" -ge "$time1" ] || error "atime was not updated"
 }
 run_test 203 " atime should be updated on the MDS when closing file ===="
