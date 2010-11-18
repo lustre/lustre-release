@@ -6804,6 +6804,28 @@ test_202() {
 }
 run_test 202 "O_APPEND+O_DIRECT multistripe write ========================"
 
+test_203() {
+        local ATIME=`do_facet mds lctl get_param -n mds.*.atime_diff`
+        echo "atime should be updated on the MDS when closing file" > $DIR/$tfile
+        sync
+        # reads should update atime on the client and close should update it on the MDS
+        multiop_bg_pause $DIR/$tfile o_r20c || return 1
+        MULTIPID=$!
+        sleep $((ATIME+1))
+        time1=`date +%s`
+        log "now is $time1"
+        kill -USR1 $MULTIPID || return 2
+        echo "starting reads"
+        wait
+        cancel_lru_locks osc
+        cancel_lru_locks mdc
+        time2=`stat -c "%X" $DIR/$tfile`
+        loh "new atime is $time2"
+        [ "$time2" -ge "$time1" ] || error "atime was not updated"
+}
+run_test 203 " atime should be updated on the MDS when closing file ===="
+
+
 #
 # tests that do cleanup/setup should be run at the end
 #
