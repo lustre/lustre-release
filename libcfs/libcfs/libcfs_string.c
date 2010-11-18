@@ -69,6 +69,7 @@ static int cfs_strncasecmp(const char *s1, const char *s2, size_t n)
 int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                  int *oldmask, int minmask, int allmask)
 {
+        const char *debugstr;
         char op = 0;
         int newmask = minmask, i, len, found = 0;
         ENTRY;
@@ -101,7 +102,10 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                 /* match token */
                 found = 0;
                 for (i = 0; i < 32; i++) {
-                        if (cfs_strncasecmp(str, bit2str(i), len) == 0) {
+                        debugstr = bit2str(i);
+                        if (debugstr != NULL &&
+                            strlen(debugstr) == len &&
+                            cfs_strncasecmp(str, debugstr, len) == 0) {
                                 if (op == '-')
                                         newmask &= ~(1 << i);
                                 else
@@ -110,7 +114,8 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                                 break;
                         }
                 }
-                if (!found && (cfs_strncasecmp(str, "ALL", len) == 0)) {
+                if (!found && len == 3 &&
+                    (cfs_strncasecmp(str, "ALL", len) == 0)) {
                         if (op == '-')
                                 newmask = minmask;
                         else
