@@ -25,7 +25,7 @@ Group: Development/Kernel
 Source: lustre-ldiskfs-%{version}.tar.gz
 URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: %{_tmppath}/lustre-ldiskfs-%{version}-root
-Requires: modutils >= 2.4.10
+Requires: modutils >= 2.4.10, ldiskfsprogs >= 1.41.12.2.ora1
 
 %description
 Provides the ldiskfs backend file system kernel module, used by
