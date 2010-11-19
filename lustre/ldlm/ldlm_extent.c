@@ -760,7 +760,7 @@ out:
 
 /* When a lock is cancelled by a client, the KMS may undergo change if this
  * is the "highest lock".  This function returns the new KMS value.
- * Caller must hold ns_lock already.
+ * Caller must hold lr_lock already.
  *
  * NB: A lock on [x,y] protects a KMS of up to y + 1 bytes! */
 __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)

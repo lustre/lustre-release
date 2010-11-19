@@ -373,7 +373,7 @@ reprocess:
                  * it must see the original lock data in the reply. */
 
                 /* XXX - if ldlm_lock_new() can sleep we should
-                 * release the ns_lock, allocate the new lock,
+                 * release the lr_lock, allocate the new lock,
                  * and restart processing this lock. */
                 if (!new2) {
                         unlock_res_and_lock(req);

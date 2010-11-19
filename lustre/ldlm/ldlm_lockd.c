@@ -2681,7 +2681,6 @@ EXPORT_SYMBOL(ldlm_cli_cancel_req);
 EXPORT_SYMBOL(ldlm_replay_locks);
 EXPORT_SYMBOL(ldlm_resource_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach);
-EXPORT_SYMBOL(ldlm_namespace_foreach_res);
 EXPORT_SYMBOL(ldlm_resource_iterate);
 EXPORT_SYMBOL(ldlm_cancel_resource_local);
 EXPORT_SYMBOL(ldlm_cli_cancel_list_local);

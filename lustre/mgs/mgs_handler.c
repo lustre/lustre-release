@@ -197,8 +197,10 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         /* namespace for mgs llog */
-        obd->obd_namespace = ldlm_namespace_new(obd ,"MGS", LDLM_NAMESPACE_SERVER,
-                                                LDLM_NAMESPACE_MODEST);
+        obd->obd_namespace = ldlm_namespace_new(obd ,"MGS",
+                                                LDLM_NAMESPACE_SERVER,
+                                                LDLM_NAMESPACE_MODEST,
+                                                LDLM_NS_TYPE_MGT);
         if (obd->obd_namespace == NULL)
                 GOTO(err_ops, rc = -ENOMEM);
 

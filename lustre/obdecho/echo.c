@@ -560,7 +560,8 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
                                                 LDLM_NAMESPACE_SERVER,
-                                                LDLM_NAMESPACE_MODEST);
+                                                LDLM_NAMESPACE_MODEST,
+                                                LDLM_NS_TYPE_OST);
         if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);

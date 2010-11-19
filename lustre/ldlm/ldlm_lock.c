@@ -159,7 +159,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LASSERT(cfs_list_empty(&lock->l_res_link));
                 LASSERT(cfs_list_empty(&lock->l_pending_chain));
 
-                cfs_atomic_dec(&ldlm_res_to_ns(res)->ns_locks);
+                lprocfs_counter_decr(ldlm_res_to_ns(res)->ns_stats,
+                                     LDLM_NSS_LOCKS);
                 lu_ref_del(&res->lr_reference, "lock", lock);
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
@@ -208,9 +209,9 @@ int ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
                 RETURN(0);
         }
 
-        cfs_spin_lock(&ns->ns_unused_lock);
+        cfs_spin_lock(&ns->ns_lock);
         rc = ldlm_lock_remove_from_lru_nolock(lock);
-        cfs_spin_unlock(&ns->ns_unused_lock);
+        cfs_spin_unlock(&ns->ns_lock);
         EXIT;
         return rc;
 }
@@ -232,9 +233,9 @@ void ldlm_lock_add_to_lru(struct ldlm_lock *lock)
         struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
         ENTRY;
-        cfs_spin_lock(&ns->ns_unused_lock);
+        cfs_spin_lock(&ns->ns_lock);
         ldlm_lock_add_to_lru_nolock(lock);
-        cfs_spin_unlock(&ns->ns_unused_lock);
+        cfs_spin_unlock(&ns->ns_lock);
         EXIT;
 }
 
@@ -249,12 +250,12 @@ void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
                 return;
         }
 
-        cfs_spin_lock(&ns->ns_unused_lock);
+        cfs_spin_lock(&ns->ns_lock);
         if (!cfs_list_empty(&lock->l_lru)) {
                 ldlm_lock_remove_from_lru_nolock(lock);
                 ldlm_lock_add_to_lru_nolock(lock);
         }
-        cfs_spin_unlock(&ns->ns_unused_lock);
+        cfs_spin_unlock(&ns->ns_lock);
         EXIT;
 }
 
@@ -377,7 +378,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_sl_policy);
         CFS_INIT_HLIST_NODE(&lock->l_exp_hash);
 
-        cfs_atomic_inc(&ldlm_res_to_ns(resource)->ns_locks);
+        lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
+                             LDLM_NSS_LOCKS);
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
         class_handle_hash(&lock->l_handle, lock_handle_addref);
 
@@ -421,9 +423,10 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         unlock_res_and_lock(lock);
 
         newres = ldlm_resource_get(ns, NULL, new_resid, type, 1);
-        lu_ref_add(&newres->lr_reference, "lock", lock);
         if (newres == NULL)
                 RETURN(-ENOMEM);
+
+        lu_ref_add(&newres->lr_reference, "lock", lock);
         /*
          * To flip the lock from the old to the new resource, lock, oldres and
          * newres have to be locked. Resource spin-locks are nested within
@@ -1540,40 +1543,25 @@ static int reprocess_one_queue(struct ldlm_resource *res, void *closure)
         return LDLM_ITER_CONTINUE;
 }
 
+static int ldlm_reprocess_res(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+                              cfs_hlist_node_t *hnode, void *arg)
+{
+        struct ldlm_resource *res = cfs_hash_object(hs, hnode);
+        int    rc;
+
+        rc = reprocess_one_queue(res, arg);
+
+        return rc == LDLM_ITER_STOP;
+}
+
 void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 {
-        cfs_list_t *tmp;
-        int i, rc;
-
-        if (ns == NULL)
-                return;
-
         ENTRY;
-        cfs_spin_lock(&ns->ns_hash_lock);
-        for (i = 0; i < RES_HASH_SIZE; i++) {
-                tmp = ns->ns_hash[i].next;
-                while (tmp != &(ns->ns_hash[i])) {
-                        struct ldlm_resource *res =
-                                cfs_list_entry(tmp, struct ldlm_resource,
-                                               lr_hash);
 
-                        ldlm_resource_getref(res);
-                        cfs_spin_unlock(&ns->ns_hash_lock);
-                        LDLM_RESOURCE_ADDREF(res);
-
-                        rc = reprocess_one_queue(res, NULL);
-
-                        LDLM_RESOURCE_DELREF(res);
-                        cfs_spin_lock(&ns->ns_hash_lock);
-                        tmp = tmp->next;
-                        ldlm_resource_putref_locked(res);
-
-                        if (rc == LDLM_ITER_STOP)
-                                GOTO(out, rc);
-                }
+        if (ns != NULL) {
+                cfs_hash_for_each_nolock(ns->ns_rs_hash,
+                                         ldlm_reprocess_res, NULL);
         }
- out:
-        cfs_spin_unlock(&ns->ns_hash_lock);
         EXIT;
 }
 
@@ -1722,7 +1710,6 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
  */
 void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode)
 {
-        struct ldlm_namespace *ns;
         ENTRY;
 
         LASSERT(lock->l_granted_mode & (LCK_PW | LCK_EX));
@@ -1734,8 +1721,7 @@ void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode)
          * Remove the lock from pool as it will be added again in
          * ldlm_grant_lock() called below.
          */
-        ns = ldlm_lock_to_ns(lock);
-        ldlm_pool_del(&ns->ns_pool, lock);
+        ldlm_pool_del(&ldlm_lock_to_ns(lock)->ns_pool, lock);
 
         lock->l_req_mode = new_mode;
         ldlm_grant_lock(lock, NULL);
@@ -1818,7 +1804,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
 
                         ldlm_grant_lock(lock, &rpc_list);
                         granted = 1;
-                        /* FIXME: completion handling not with ns_lock held ! */
+                        /* FIXME: completion handling not with lr_lock held ! */
                         if (lock->l_completion_ast)
                                 lock->l_completion_ast(lock, 0, NULL);
                 }

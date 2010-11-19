@@ -546,9 +546,9 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
          */
         ldlm_cli_pool_pop_slv(pl);
 
-        cfs_spin_lock(&ns->ns_unused_lock);
+        cfs_spin_lock(&ns->ns_lock);
         unused = ns->ns_nr_unused;
-        cfs_spin_unlock(&ns->ns_unused_lock);
+        cfs_spin_unlock(&ns->ns_lock);
         
         if (nr) {
                 canceled = ldlm_cancel_lru(ns, nr, LDLM_SYNC, 
@@ -735,10 +735,11 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         if (!var_name)
                 RETURN(-ENOMEM);
 
-        parent_ns_proc = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
+        parent_ns_proc = lprocfs_srch(ldlm_ns_proc_dir,
+                                      ldlm_ns_name(ns));
         if (parent_ns_proc == NULL) {
                 CERROR("%s: proc entry is not initialized\n",
-                       ns->ns_name);
+                       ldlm_ns_name(ns));
                 GOTO(out_free_name, rc = -EINVAL);
         }
         pl->pl_proc_dir = lprocfs_register("pool", parent_ns_proc,
@@ -884,7 +885,7 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
         pl->pl_grant_plan = LDLM_POOL_GP(LDLM_POOL_HOST_L);
 
         snprintf(pl->pl_name, sizeof(pl->pl_name), "ldlm-pool-%s-%d",
-                 ns->ns_name, idx);
+                 ldlm_ns_name(ns), idx);
 
         if (client == LDLM_NAMESPACE_SERVER) {
                 pl->pl_ops = &ldlm_srv_pool_ops;
@@ -1105,7 +1106,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 ldlm_namespace_move_locked(ns, client);
                 cfs_mutex_up(ldlm_namespace_lock(client));
                 total += ldlm_pool_shrink(&ns->ns_pool, 0, gfp_mask);
-                ldlm_namespace_put(ns, 1);
+                ldlm_namespace_put(ns);
         }
 
         if (nr == 0 || total == 0) {
@@ -1144,7 +1145,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 cancel = 1 + nr_locks * nr / total;
                 ldlm_pool_shrink(&ns->ns_pool, cancel, gfp_mask);
                 cached += ldlm_pool_granted(&ns->ns_pool);
-                ldlm_namespace_put(ns, 1);
+                ldlm_namespace_put(ns);
         }
         cl_env_reexit(cookie);
         return cached;
@@ -1258,18 +1259,18 @@ void ldlm_pools_recalc(ldlm_side_t client)
                 }
                 ns = ldlm_namespace_first_locked(client);
 
-                cfs_spin_lock(&ns->ns_hash_lock);
+                cfs_spin_lock(&ns->ns_lock);
                 /*
                  * skip ns which is being freed, and we don't want to increase
                  * its refcount again, not even temporarily. bz21519.
                  */
-                if (ns->ns_refcount == 0) {
+                if (cfs_atomic_read(&ns->ns_bref) == 0) {
                         skip = 1;
                 } else {
                         skip = 0;
-                        ldlm_namespace_get_locked(ns);
+                        ldlm_namespace_get(ns);
                 }
-                cfs_spin_unlock(&ns->ns_hash_lock);
+                cfs_spin_unlock(&ns->ns_lock);
 
                 ldlm_namespace_move_locked(ns, client);
                 cfs_mutex_up(ldlm_namespace_lock(client));
@@ -1279,7 +1280,7 @@ void ldlm_pools_recalc(ldlm_side_t client)
                  */
                 if (!skip) {
                         ldlm_pool_recalc(&ns->ns_pool);
-                        ldlm_namespace_put(ns, 1);
+                        ldlm_namespace_put(ns);
                 }
         }
 }

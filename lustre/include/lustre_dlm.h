@@ -261,7 +261,7 @@ static inline int lockmode_compat(ldlm_mode_t exist_mode, ldlm_mode_t new_mode)
  *     led_lock
  *
  * lr_lock
- *     ns_unused_lock
+ *     ns_lock
  *
  * lr_lvb_sem
  *     lr_lock
@@ -391,16 +391,61 @@ typedef enum {
 #define NS_DEFAULT_CONTENTION_SECONDS 2
 #define NS_DEFAULT_CONTENDED_LOCKS 32
 
+struct ldlm_ns_bucket {
+        /** refer back */
+        struct ldlm_namespace      *nsb_namespace;
+        /** estimated lock callback time */
+        struct adaptive_timeout     nsb_at_estimate;
+};
+
+enum {
+        /** ldlm namespace lock stats */
+        LDLM_NSS_LOCKS          = 0,
+        LDLM_NSS_LAST
+};
+
+typedef enum {
+        /** invalide type */
+        LDLM_NS_TYPE_UNKNOWN    = 0,
+        /** mdc namespace */
+        LDLM_NS_TYPE_MDC,
+        /** mds namespace */
+        LDLM_NS_TYPE_MDT,
+        /** osc namespace */
+        LDLM_NS_TYPE_OSC,
+        /** ost namespace */
+        LDLM_NS_TYPE_OST,
+        /** mgc namespace */
+        LDLM_NS_TYPE_MGC,
+        /** mgs namespace */
+        LDLM_NS_TYPE_MGT,
+} ldlm_ns_type_t;
+
 struct ldlm_namespace {
         /**
-         * Namespace name. Used for logging, etc.
+         * Backward link to obd, required for ldlm pool to store new SLV.
          */
-        char                  *ns_name;
+        struct obd_device     *ns_obd;
 
         /**
          * Is this a client-side lock tree?
          */
         ldlm_side_t            ns_client;
+
+        /**
+         * resource hash
+         */
+        cfs_hash_t            *ns_rs_hash;
+
+        /**
+         * serialize
+         */
+        cfs_spinlock_t         ns_lock;
+
+        /**
+         * big refcount (by bucket)
+         */
+        cfs_atomic_t           ns_bref;
 
         /**
          * Namespce connect flags supported by server (may be changed via proc,
@@ -414,22 +459,6 @@ struct ldlm_namespace {
         __u64                  ns_orig_connect_flags;
 
         /**
-         * Hash table for namespace.
-         */
-        cfs_list_t            *ns_hash;
-        cfs_spinlock_t         ns_hash_lock;
-
-         /**
-          * Count of resources in the hash.
-          */
-        __u32                  ns_refcount;
-
-         /**
-          * All root resources in namespace.
-          */
-        cfs_list_t             ns_root_list;
-
-        /**
          * Position in global namespace list.
          */
         cfs_list_t             ns_list_chain;
@@ -439,7 +468,6 @@ struct ldlm_namespace {
          */
         cfs_list_t             ns_unused_list;
         int                    ns_nr_unused;
-        cfs_spinlock_t         ns_unused_lock;
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
@@ -454,8 +482,6 @@ struct ldlm_namespace {
          */
         cfs_time_t             ns_next_dump;
 
-        cfs_atomic_t           ns_locks;
-        __u64                  ns_resources;
         ldlm_res_policy        ns_policy;
         struct ldlm_valblock_ops *ns_lvbo;
         void                  *ns_lvbp;
@@ -479,16 +505,12 @@ struct ldlm_namespace {
          * Limit size of nolock requests, in bytes.
          */
         unsigned               ns_max_nolock_size;
-
-        /**
-         * Backward link to obd, required for ldlm pool to store new SLV.
-         */
-        struct obd_device     *ns_obd;
-
-        struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
-
         /* callback to cancel locks before replaying it during recovery */
         ldlm_cancel_for_recovery ns_cancel_for_recovery;
+        /**
+         * ldlm lock stats
+         */
+        struct lprocfs_stats  *ns_stats;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -523,16 +545,6 @@ static inline void ns_register_cancel(struct ldlm_namespace *ns,
         LASSERT(ns != NULL);
         ns->ns_cancel_for_recovery = arg;
 }
-
-/*
- *
- * Resource hash table
- *
- */
-
-#define RES_HASH_BITS 12
-#define RES_HASH_SIZE (1UL << RES_HASH_BITS)
-#define RES_HASH_MASK (RES_HASH_SIZE - 1)
 
 struct ldlm_lock;
 
@@ -748,12 +760,10 @@ struct ldlm_lock {
 };
 
 struct ldlm_resource {
-        struct ldlm_namespace *lr_namespace;
+        struct ldlm_ns_bucket *lr_ns_bucket;
 
         /* protected by ns_hash_lock */
-        cfs_list_t             lr_hash;
-        cfs_list_t             lr_childof;  /* part of ns_root_list if root res,
-                                             * part of lr_children if child */
+        cfs_hlist_node_t       lr_hash;
         cfs_spinlock_t         lr_lock;
 
         /* protected by lr_lock */
@@ -782,10 +792,16 @@ struct ldlm_resource {
         struct inode          *lr_lvb_inode;
 };
 
+static inline char *
+ldlm_ns_name(struct ldlm_namespace *ns)
+{
+        return ns->ns_rs_hash->hs_name;
+}
+
 static inline struct ldlm_namespace *
 ldlm_res_to_ns(struct ldlm_resource *res)
 {
-        return res->lr_namespace;
+        return res->lr_ns_bucket->nsb_namespace;
 }
 
 static inline struct ldlm_namespace *
@@ -797,13 +813,13 @@ ldlm_lock_to_ns(struct ldlm_lock *lock)
 static inline char *
 ldlm_lock_to_ns_name(struct ldlm_lock *lock)
 {
-        return ldlm_lock_to_ns(lock)->ns_name;
+        return ldlm_ns_name(ldlm_lock_to_ns(lock));
 }
 
 static inline struct adaptive_timeout *
 ldlm_lock_to_ns_at(struct ldlm_lock *lock)
 {
-        return &ldlm_lock_to_ns(lock)->ns_at_estimate;
+        return &lock->l_resource->lr_ns_bucket->nsb_at_estimate;
 }
 
 struct ldlm_ast_work {
@@ -894,10 +910,8 @@ typedef int (*ldlm_res_iterator_t)(struct ldlm_resource *, void *);
 
 int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
                           void *closure);
-int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
-                           void *closure);
-int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
-                               ldlm_res_iterator_t iter, void *closure);
+void ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
+                            void *closure);
 
 int ldlm_replay_locks(struct obd_import *imp);
 int ldlm_resource_iterate(struct ldlm_namespace *, const struct ldlm_res_id *,
@@ -1043,7 +1057,8 @@ void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
 /* resource.c */
 struct ldlm_namespace *
 ldlm_namespace_new(struct obd_device *obd, char *name,
-                   ldlm_side_t client, ldlm_appetite_t apt);
+                   ldlm_side_t client, ldlm_appetite_t apt,
+                   ldlm_ns_type_t ns_type);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 void ldlm_namespace_free(struct ldlm_namespace *ns,
                          struct obd_import *imp, int force);
@@ -1051,10 +1066,8 @@ void ldlm_namespace_register(struct ldlm_namespace *ns, ldlm_side_t client);
 void ldlm_namespace_unregister(struct ldlm_namespace *ns, ldlm_side_t client);
 void ldlm_namespace_move_locked(struct ldlm_namespace *ns, ldlm_side_t client);
 struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client);
-void ldlm_namespace_get_locked(struct ldlm_namespace *ns);
-void ldlm_namespace_put_locked(struct ldlm_namespace *ns, int wakeup);
 void ldlm_namespace_get(struct ldlm_namespace *ns);
-void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup);
+void ldlm_namespace_put(struct ldlm_namespace *ns);
 int ldlm_proc_setup(void);
 #ifdef LPROCFS
 void ldlm_proc_cleanup(void);

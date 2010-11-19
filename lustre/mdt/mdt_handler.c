@@ -4610,7 +4610,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                  LUSTRE_MDT_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(obd, info->mti_u.ns_name,
                                               LDLM_NAMESPACE_SERVER,
-                                              LDLM_NAMESPACE_GREEDY);
+                                              LDLM_NAMESPACE_GREEDY,
+                                              LDLM_NS_TYPE_MDT);
         if (m->mdt_namespace == NULL)
                 GOTO(err_fini_seq, rc = -ENOMEM);
 
