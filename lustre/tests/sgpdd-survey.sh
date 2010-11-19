@@ -24,8 +24,6 @@ fi
 # Skip these tests
 ALWAYS_EXCEPT="$SGPDD_SURVEY_EXCEPT"
 
-SGPDDSURVEY=${SGPDDSURVEY:-$(which sgpdd-survey)}
-
 build_test_filter
 
 init_facets_vars
@@ -64,12 +62,18 @@ run_sgpdd_facets () {
 test_1 () {
     local mdss=$(get_facets MDS)
 
+    check_progs_installed $(facets_hosts $mdss) $SGPDDSURVEY sg_map || \
+        { skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found" && return 0; }
+
     run_sgpdd_facets $mdss
 }
 run_test 1 "sgpdd-survey, mds, scsidevs"
 
 test_2 () {
     local osts=$(get_facets OST)
+
+    check_progs_installed $(facets_hosts $osts) $SGPDDSURVEY sg_map || \
+        { skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found" && return 0; }
 
     run_sgpdd_facets $osts
 }
