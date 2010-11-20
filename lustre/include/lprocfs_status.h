@@ -711,11 +711,11 @@ static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
 static inline void lprocfs_counter_incr(struct lprocfs_stats *stats,
                                         int index)
 { return; }
-static inline void lprocfs_counter_decr(struct lprocfs_stats *stats,
-                                        int index)
-{ return; }
 static inline void lprocfs_counter_sub(struct lprocfs_stats *stats,
                                        int index, long amount)
+{ return; }
+static inline void lprocfs_counter_decr(struct lprocfs_stats *stats,
+                                        int index)
 { return; }
 static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
                                         int index, unsigned conf,
@@ -726,9 +726,10 @@ static inline __u64 lc_read_helper(struct lprocfs_counter *lc,
                                    enum lprocfs_fields_flags field)
 { return 0; }
 
+/* NB: we return !NULL to satisfy error checker */
 static inline struct lprocfs_stats *
 lprocfs_alloc_stats(unsigned int num, enum lprocfs_stats_flags flags)
-{ return NULL; }
+{ return (struct lprocfs_stats *)1; }
 static inline void lprocfs_clear_stats(struct lprocfs_stats *stats)
 { return; }
 static inline void lprocfs_free_stats(struct lprocfs_stats **stats)
