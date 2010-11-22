@@ -925,7 +925,7 @@ lnet_shutdown_lndnis (void)
                 cfs_list_del (&ni->ni_list);
 
                 the_lnet.ln_nzombie_nis++;
-                lnet_ni_decref_locked(ni); /* drop apini's ref */
+                lnet_ni_decref_locked(ni); /* drop ln_nis' ref */
         }
 
         /* Drop the cached eqwait NI. */
@@ -952,7 +952,7 @@ lnet_shutdown_lndnis (void)
         lnet_clear_peer_table();
 
         LNET_LOCK();
-        /* Now wait for the NI's I just nuked to show up on apini_zombie_nis
+        /* Now wait for the NI's I just nuked to show up on ln_zombie_nis
          * and shut them down in guaranteed thread context */
         i = 2;
         while (the_lnet.ln_nzombie_nis != 0) {

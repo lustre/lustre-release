@@ -7616,12 +7616,12 @@ test_215() { # for bugs 18102, 21079, 21517
 	remove_lnet_proc_files "routers"
 
 	# /proc/sys/lnet/peers should look like this:
-	# nid refs state max rtr min tx min queue
+	# nid refs state last max rtr min tx min queue
 	# where nid is a string like 192.168.1.1@tcp2, refs > 0,
-	# state is up/down/NA, max >= 0. rtr, min, tx, min are 
+	# state is up/down/NA, max >= 0. last, rtr, min, tx, min are
 	# numeric (0 or >0 or <0), queue >= 0.
-	L1="^nid +refs +state +max +rtr +min +tx +min +queue$"
-	BR="^$NID +$P +(up|down|NA) +$N +$I +$I +$I +$I +$N$"
+	L1="^nid +refs +state +last +max +rtr +min +tx +min +queue$"
+	BR="^$NID +$P +(up|down|NA) +$I +$N +$I +$I +$I +$I +$N$"
 	create_lnet_proc_files "peers"
 	check_lnet_proc_entry "peers.out" "/proc/sys/lnet/peers" "$BR" "$L1"
 	check_lnet_proc_entry "peers.sys" "lnet.peers" "$BR" "$L1"

@@ -27,7 +27,8 @@
 
 #if defined(__KERNEL__) && defined(LNET_ROUTER)
 
-/* this is really lnet_proc.c */
+/* This is really lnet_proc.c. You might need to update sanity test 215
+ * if any file format is changed. */
 
 static cfs_sysctl_table_header_t *lnet_table_header = NULL;
 
@@ -407,8 +408,8 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
         if (*ppos == 0) {
                 s += snprintf(s, tmpstr + tmpsiz - s,
-                              "%-24s %4s %5s %5s %5s %5s %5s %5s %s\n",
-                              "nid", "refs", "state", "max",
+                              "%-24s %4s %5s %5s %5s %5s %5s %5s %5s %s\n",
+                              "nid", "refs", "state", "last", "max",
                               "rtr", "min", "tx", "min", "queue");
                 LASSERT (tmpstr + tmpsiz - s > 0);
 
@@ -441,7 +442,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
                                 if (skip == 0) {
                                         peer = lp;
 
-                                        /* minor optimiztion: start from idx+1
+                                        /* minor optimization: start from idx+1
                                          * on next iteration if we've just
                                          * drained lp_hashlist */
                                         if (lp->lp_hashlist.next ==
@@ -470,6 +471,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
                 if (peer != NULL) {
                         lnet_nid_t nid       = peer->lp_nid;
                         int        nrefs     = peer->lp_refcount;
+                        int        lastalive = -1;
                         char      *aliveness = "NA";
                         int        maxcr     = peer->lp_ni->ni_peertxcredits;
                         int        txcr      = peer->lp_txcredits;
@@ -482,10 +484,25 @@ int LL_PROC_PROTO(proc_lnet_peers)
                             lnet_peer_aliveness_enabled(peer))
                                 aliveness = peer->lp_alive ? "up" : "down";
 
+                        if (lnet_peer_aliveness_enabled(peer)) {
+                                cfs_time_t     now = cfs_time_current();
+                                cfs_duration_t delta;
+
+                                delta = cfs_time_sub(now, peer->lp_last_alive);
+                                lastalive = cfs_duration_sec(delta);
+
+                                /* No need to mess up peers contents with
+                                 * arbitrarily long integers - it suffices to
+                                 * know that lastalive is more than 10000s old
+                                 */
+                                if (lastalive >= 10000)
+                                        lastalive = 9999;
+                        }
+
                         s += snprintf(s, tmpstr + tmpsiz - s,
-                                      "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n",
+                                      "%-24s %4d %5s %5d %5d %5d %5d %5d %5d %d\n",
                                       libcfs_nid2str(nid), nrefs, aliveness,
-                                      maxcr, rtrcr, minrtrcr, txcr,
+                                      lastalive, maxcr, rtrcr, minrtrcr, txcr,
                                       mintxcr, txqnob);
                         LASSERT (tmpstr + tmpsiz - s > 0);
                 }

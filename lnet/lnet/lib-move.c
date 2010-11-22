@@ -1028,6 +1028,8 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
         /* NB 'lp' is always the next hop */
         if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
             lnet_peer_alive_locked(lp) == 0) {
+                the_lnet.ln_counters.drop_count++;
+                the_lnet.ln_counters.drop_length += msg->msg_len;
                 LNET_UNLOCK();
 
                 CNETERR("Dropping message for %s: peer not alive\n",
