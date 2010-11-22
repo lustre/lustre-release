@@ -2462,8 +2462,10 @@ int ptlrpc_start_threads(struct ptlrpc_service *svc)
         for (i = 0; i < svc->srv_threads_min; i++) {
                 rc = ptlrpc_start_thread(svc);
                 /* We have enough threads, don't start more.  b=15759 */
-                if (rc == -EMFILE)
+                if (rc == -EMFILE) {
+                        rc = 0;
                         break;
+                }
                 if (rc) {
                         CERROR("cannot start %s thread #%d: rc %d\n",
                                svc->srv_thread_name, i, rc);
