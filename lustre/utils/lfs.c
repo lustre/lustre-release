@@ -292,18 +292,12 @@ static int lfs_setstripe(int argc, char **argv)
         st_offset = -1;
         st_count = 0;
 
-#if LUSTRE_VERSION < OBD_OCD_VERSION(2,1,0,0)
+#if LUSTRE_VERSION < OBD_OCD_VERSION(2,4,50,0)
         if (argc == 5 && argv[1][0] != '-' &&
             isnumber(argv[2]) && isnumber(argv[3]) && isnumber(argv[4])) {
-                fprintf(stderr, "warning: deprecated usage of setstripe "
+                fprintf(stderr, "error: obsolete usage of setstripe "
                         "positional parameters.  Use -c, -i, -s instead.\n");
-                /* for compatibility with the existing positional parameter
-                 * usage */
-                fname = argv[1];
-                stripe_size_arg = argv[2];
-                stripe_off_arg = argv[3];
-                stripe_count_arg = argv[4];
-                optind = 4;
+                return CMD_HELP;
         } else
 #else
 #warning "remove obsolete positional parameter code"
