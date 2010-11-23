@@ -77,9 +77,7 @@ static struct lu_kmem_descr cl_lock_caches[] = {
 static int cl_lock_invariant_trusted(const struct lu_env *env,
                                      const struct cl_lock *lock)
 {
-        return
-                cl_is_lock(lock) &&
-                ergo(lock->cll_state == CLS_FREEING, lock->cll_holds == 0) &&
+        return  ergo(lock->cll_state == CLS_FREEING, lock->cll_holds == 0) &&
                 cfs_atomic_read(&lock->cll_ref) >= lock->cll_holds &&
                 lock->cll_holds >= lock->cll_users &&
                 lock->cll_holds >= 0 &&
@@ -261,7 +259,6 @@ static void cl_lock_free(const struct lu_env *env, struct cl_lock *lock)
 {
         struct cl_object *obj = lock->cll_descr.cld_obj;
 
-        LASSERT(cl_is_lock(lock));
         LINVRNT(!cl_lock_is_mutexed(lock));
 
         ENTRY;
@@ -352,7 +349,6 @@ void cl_lock_get_trust(struct cl_lock *lock)
 {
         struct cl_site *site = cl_object_site(lock->cll_descr.cld_obj);
 
-        LASSERT(cl_is_lock(lock));
         CDEBUG(D_TRACE, "acquiring trusted reference: %d %p %lu\n",
                cfs_atomic_read(&lock->cll_ref), lock, RETIP);
         if (cfs_atomic_inc_return(&lock->cll_ref) == 1)
@@ -513,7 +509,6 @@ static struct cl_lock *cl_lock_lookup(const struct lu_env *env,
         cfs_list_for_each_entry(lock, &head->coh_locks, cll_linkage) {
                 int matched;
 
-                LASSERT(cl_is_lock(lock));
                 matched = cl_lock_ext_match(&lock->cll_descr, need) &&
                           lock->cll_state < CLS_FREEING &&
                           lock->cll_error == 0 &&
@@ -2068,20 +2063,6 @@ void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int cancel)
         EXIT;
 }
 EXPORT_SYMBOL(cl_locks_prune);
-
-/**
- * Returns true if \a addr is an address of an allocated cl_lock. Used in
- * assertions. This check is optimistically imprecise, i.e., it occasionally
- * returns true for the incorrect addresses, but if it returns false, then the
- * address is guaranteed to be incorrect. (Should be named cl_lockp().)
- *
- * \see cl_is_page()
- */
-int cl_is_lock(const void *addr)
-{
-        return cfs_mem_is_in_cache(addr, cl_lock_kmem);
-}
-EXPORT_SYMBOL(cl_is_lock);
 
 static struct cl_lock *cl_lock_hold_mutex(const struct lu_env *env,
                                           const struct cl_io *io,

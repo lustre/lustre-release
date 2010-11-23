@@ -99,7 +99,6 @@ static struct lu_kmem_descr cl_page_caches[] = {
  */
 static struct cl_page *cl_page_top_trusted(struct cl_page *page)
 {
-        LASSERT(cl_is_page(page));
         while (page->cp_parent != NULL)
                 page = page->cp_parent;
         return page;
@@ -118,7 +117,6 @@ static struct cl_page *cl_page_top_trusted(struct cl_page *page)
  */
 static void cl_page_get_trust(struct cl_page *page)
 {
-        LASSERT(cl_is_page(page));
         /*
          * Checkless version for trusted users.
          */
@@ -171,7 +169,6 @@ struct cl_page *cl_page_lookup(struct cl_object_header *hdr, pgoff_t index)
 
         page = radix_tree_lookup(&hdr->coh_tree, index);
         if (page != NULL) {
-                LASSERT(cl_is_page(page));
                 cl_page_get_trust(page);
         }
         return page;
@@ -221,7 +218,6 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                 idx = pvec[nr - 1]->cp_index + 1;
                 for (i = 0, j = 0; i < nr; ++i) {
                         page = pvec[i];
-                        PASSERT(env, page, cl_is_page(page));
                         pvec[i] = NULL;
                         if (page->cp_index > end)
                                 break;
@@ -288,7 +284,6 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
         struct cl_object *obj  = page->cp_obj;
         struct cl_site   *site = cl_object_site(obj);
 
-        PASSERT(env, page, cl_is_page(page));
         PASSERT(env, page, cfs_list_empty(&page->cp_batch));
         PASSERT(env, page, page->cp_owner == NULL);
         PASSERT(env, page, page->cp_req == NULL);
@@ -535,7 +530,6 @@ static inline int cl_page_invariant(const struct cl_page *pg)
         struct cl_page          *child;
         struct cl_io            *owner;
 
-        LASSERT(cl_is_page(pg));
         /*
          * Page invariant is protected by a VM lock.
          */
@@ -764,7 +758,7 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
                 }
         }
         cfs_spin_unlock(&hdr->coh_page_guard);
-        LASSERT(ergo(page, cl_is_page(page) && page->cp_type == CPT_CACHEABLE));
+        LASSERT(ergo(page, page->cp_type == CPT_CACHEABLE));
         RETURN(page);
 }
 EXPORT_SYMBOL(cl_vmpage_page);
@@ -779,20 +773,6 @@ struct cl_page *cl_page_top(struct cl_page *page)
         return cl_page_top_trusted(page);
 }
 EXPORT_SYMBOL(cl_page_top);
-
-/**
- * Returns true if \a addr is an address of an allocated cl_page. Used in
- * assertions. This check is optimistically imprecise, i.e., it occasionally
- * returns true for the incorrect addresses, but if it returns false, then the
- * address is guaranteed to be incorrect. (Should be named cl_pagep().)
- *
- * \see cl_is_lock()
- */
-int cl_is_page(const void *addr)
-{
-        return cfs_mem_is_in_cache(addr, cl_page_kmem);
-}
-EXPORT_SYMBOL(cl_is_page);
 
 const struct cl_page_slice *cl_page_at(const struct cl_page *page,
                                        const struct lu_device_type *dtype)

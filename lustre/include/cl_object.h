@@ -2684,7 +2684,6 @@ cfs_page_t     *cl_page_vmpage      (const struct lu_env *env,
                                      struct cl_page *page);
 struct cl_page *cl_vmpage_page      (cfs_page_t *vmpage, struct cl_object *obj);
 struct cl_page *cl_page_top         (struct cl_page *page);
-int             cl_is_page          (const void *addr);
 
 const struct cl_page_slice *cl_page_at(const struct cl_page *page,
                                        const struct lu_device_type *dtype);
@@ -2883,7 +2882,6 @@ void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock);
 void cl_lock_delete(const struct lu_env *env, struct cl_lock *lock);
 void cl_lock_error (const struct lu_env *env, struct cl_lock *lock, int error);
 void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int wait);
-int  cl_is_lock    (const void *addr);
 
 unsigned long cl_lock_weigh(const struct lu_env *env, struct cl_lock *lock);
 
