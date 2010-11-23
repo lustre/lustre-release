@@ -1148,11 +1148,6 @@ static int osc_lock_enqueue(const struct lu_env *env,
 {
         struct osc_lock          *ols     = cl2osc_lock(slice);
         struct cl_lock           *lock    = ols->ols_cl.cls_lock;
-        struct osc_object        *obj     = cl2osc(slice->cls_obj);
-        struct osc_thread_info   *info    = osc_env_info(env);
-        struct ldlm_res_id       *resname = &info->oti_resname;
-        ldlm_policy_data_t       *policy  = &info->oti_policy;
-        struct ldlm_enqueue_info *einfo   = &ols->ols_einfo;
         int result;
         ENTRY;
 
@@ -1160,18 +1155,22 @@ static int osc_lock_enqueue(const struct lu_env *env,
         LASSERT(lock->cll_state == CLS_QUEUING);
         LASSERT(ols->ols_state == OLS_NEW);
 
-        osc_lock_build_res(env, obj, resname);
-        osc_lock_build_policy(env, lock, policy);
         ols->ols_flags = osc_enq2ldlm_flags(enqflags);
         if (ols->ols_flags & LDLM_FL_HAS_INTENT)
                 ols->ols_glimpse = 1;
-        if (!(enqflags & CEF_MUST))
+        if (!osc_lock_is_lockless(ols) && !(enqflags & CEF_MUST))
                 /* try to convert this lock to a lockless lock */
                 osc_lock_to_lockless(env, ols, (enqflags & CEF_NEVER));
 
         result = osc_lock_enqueue_wait(env, ols);
         if (result == 0) {
                 if (!osc_lock_is_lockless(ols)) {
+                        struct osc_object        *obj = cl2osc(slice->cls_obj);
+                        struct osc_thread_info   *info = osc_env_info(env);
+                        struct ldlm_res_id       *resname = &info->oti_resname;
+                        ldlm_policy_data_t       *policy = &info->oti_policy;
+                        struct ldlm_enqueue_info *einfo = &ols->ols_einfo;
+
                         if (ols->ols_locklessable)
                                 ols->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
@@ -1185,6 +1184,8 @@ static int osc_lock_enqueue(const struct lu_env *env,
                          * ldlm_lock_match(LDLM_FL_LVB_READY) waits for
                          * LDLM_CP_CALLBACK.
                          */
+                        osc_lock_build_res(env, obj, resname);
+                        osc_lock_build_policy(env, lock, policy);
                         result = osc_enqueue_base(osc_export(obj), resname,
                                           &ols->ols_flags, policy,
                                           &ols->ols_lvb,
@@ -1515,14 +1516,6 @@ static const struct cl_lock_operations osc_lock_ops = {
         .clo_fits_into = osc_lock_fits_into,
 };
 
-static int osc_lock_lockless_enqueue(const struct lu_env *env,
-                                     const struct cl_lock_slice *slice,
-                                     struct cl_io *unused, __u32 enqflags)
-{
-        LBUG();
-        return 0;
-}
-
 static int osc_lock_lockless_unuse(const struct lu_env *env,
                                    const struct cl_lock_slice *slice)
 {
@@ -1598,7 +1591,7 @@ static int osc_lock_lockless_fits_into(const struct lu_env *env,
 
 static const struct cl_lock_operations osc_lock_lockless_ops = {
         .clo_fini      = osc_lock_fini,
-        .clo_enqueue   = osc_lock_lockless_enqueue,
+        .clo_enqueue   = osc_lock_enqueue,
         .clo_wait      = osc_lock_lockless_wait,
         .clo_unuse     = osc_lock_lockless_unuse,
         .clo_state     = osc_lock_lockless_state,
