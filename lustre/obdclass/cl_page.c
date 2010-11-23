@@ -306,7 +306,10 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
                 slice->cpl_ops->cpo_fini(env, slice);
         }
         cfs_atomic_dec(&site->cs_pages.cs_total);
+
+#ifdef LUSTRE_PAGESTATE_TRACKING
         cfs_atomic_dec(&site->cs_pages_state[page->cp_state]);
+#endif
         lu_object_ref_del_at(&obj->co_lu, page->cp_obj_ref, "cl_page", page);
         cl_object_put(env, obj);
         lu_ref_fini(&page->cp_reference);
@@ -370,7 +373,10 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
                 if (err == NULL) {
                         cfs_atomic_inc(&site->cs_pages.cs_busy);
                         cfs_atomic_inc(&site->cs_pages.cs_total);
+
+#ifdef LUSTRE_PAGESTATE_TRACKING
                         cfs_atomic_inc(&site->cs_pages_state[CPS_CACHED]);
+#endif
                         cfs_atomic_inc(&site->cs_pages.cs_created);
                         result = 0;
                 }
@@ -563,7 +569,9 @@ static void cl_page_state_set0(const struct lu_env *env,
                                struct cl_page *page, enum cl_page_state state)
 {
         enum cl_page_state old;
+#ifdef LUSTRE_PAGESTATE_TRACKING
         struct cl_site *site = cl_object_site(page->cp_obj);
+#endif
 
         /*
          * Matrix of allowed state transitions [old][new], for sanity
@@ -616,8 +624,10 @@ static void cl_page_state_set0(const struct lu_env *env,
                 PASSERT(env, page,
                         equi(state == CPS_OWNED, page->cp_owner != NULL));
 
+#ifdef LUSTRE_PAGESTATE_TRACKING
                 cfs_atomic_dec(&site->cs_pages_state[page->cp_state]);
                 cfs_atomic_inc(&site->cs_pages_state[state]);
+#endif
                 cl_page_state_set_trust(page, state);
         }
         EXIT;

@@ -2591,6 +2591,17 @@ if test x$enable_lu_ref = xyes ; then
         AC_DEFINE([USE_LU_REF], 1, [enable lu_ref reference tracking code])
 fi
 
+AC_ARG_ENABLE([pgstate-track],
+              AC_HELP_STRING([--enable-pgstate-track],
+                             [enable page state tracking]),
+              [enable_pgstat_track='yes'],[])
+AC_MSG_CHECKING([whether to enable page state tracking])
+AC_MSG_RESULT([$enable_pgstat_track])
+if test x$enable_pgstat_track = xyes ; then
+        AC_DEFINE([LUSTRE_PAGESTATE_TRACKING], 1,
+                  [enable page state tracking code])
+fi
+
          #2.6.29
          LC_WRITE_BEGIN_END
          LC_D_OBTAIN_ALIAS
