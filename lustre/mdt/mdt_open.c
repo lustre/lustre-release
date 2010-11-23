@@ -1471,6 +1471,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         if ((mode & MDS_FMODE_EXEC || mode & FMODE_READ || mode & FMODE_WRITE)
             && (ma->ma_valid & MA_INODE) && (ma->ma_attr.la_valid & LA_ATIME)) {
                 /* Set the atime only. */
+                ma->ma_valid = MA_INODE;
                 ma->ma_attr.la_valid = LA_ATIME;
                 rc = mo_attr_set(info->mti_env, next, ma);
         }
