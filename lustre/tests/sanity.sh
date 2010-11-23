@@ -4029,7 +4029,20 @@ num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
 }
 
+get_inode_slab_tunables() {
+	awk '/lustre_inode_cache/ {print $9," ",$10," ",$11; exit}' /proc/slabinfo
+}
+
+set_inode_slab_tunables() {
+	echo "lustre_inode_cache $1" > /proc/slabinfo
+}
+
 test_76() { # Now for bug 20433, added originally in bug 1443
+	local SLAB_SETTINGS=`get_inode_slab_tunables`
+	local CPUS=`getconf _NPROCESSORS_ONLN`
+	# we cannot set limit below 1 which means 1 inode in each
+	# per-cpu cache is still allowed
+	set_inode_slab_tunables "1 1 0"
 	cancel_lru_locks osc
 	BEFORE_INODES=`num_inodes`
 	echo "before inodes: $BEFORE_INODES"
@@ -4043,7 +4056,7 @@ test_76() { # Now for bug 20433, added originally in bug 1443
 	AFTER_INODES=`num_inodes`
 	echo "after inodes: $AFTER_INODES"
 	local wait=0
-	while [ $AFTER_INODES -gt $BEFORE_INODES ]; do
+	while [ $((AFTER_INODES-1*CPUS)) -gt $BEFORE_INODES ]; do
 		sleep 2
 		AFTER_INODES=`num_inodes`
 		wait=$((wait+2))
@@ -4052,6 +4065,7 @@ test_76() { # Now for bug 20433, added originally in bug 1443
 			error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
 		fi
 	done
+	set_inode_slab_tunables "$SLAB_SETTINGS"
 }
 run_test 76 "confirm clients recycle inodes properly ===="
 
