@@ -438,7 +438,17 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #endif
 
 #ifndef HAVE_D_OBTAIN_ALIAS
-#define d_obtain_alias(inode) d_alloc_anon(inode)
+/* The old d_alloc_anon() didn't free the inode reference on error
+ * like d_obtain_alias().  Hide that difference/inconvenience here. */
+static inline struct dentry *d_obtain_alias(struct inode *inode)
+{
+	struct dentry *anon = d_alloc_anon(inode);
+
+	if (anon == NULL)
+		iput(inode);
+
+	return anon;
+}
 #endif
 
 /* add a lustre compatible layer for crypto API */
