@@ -80,7 +80,7 @@ struct inode;
 #define OSD_COUNTERS (0)
 
 /** Enable thandle usage statistics */
-#define OSD_THANDLE_STATS (1)
+#define OSD_THANDLE_STATS (0)
 
 #ifdef HAVE_QUOTA_SUPPORT
 struct osd_ctxt {
