@@ -176,7 +176,7 @@ done
 if test "$DEFAULT_LINUX" = "/lib/modules/$(uname -r)/source"; then
 	PATHS="/lib/modules/$(uname -r)/build"
 fi
-PATHS+="$DEFAULT_LINUX"
+PATHS+=" $DEFAULT_LINUX"
 for DEFAULT_LINUX_OBJ in $PATHS; do
 	if readlink -q -e $DEFAULT_LINUX_OBJ; then
 		break
