@@ -95,7 +95,7 @@ print '==================================================='
 print '%s: starting nn-check' % sys.argv[1]
 print '==================================================='
 
-index = re.compile(r'^\+\+\+ [b/]*([^ \t]*)')
+index = re.compile(r'^\+\+\+ b/(.*)')
 plus = re.compile(r'^\+')
 for line in f:
 	# Check for the "diff --cc " delimiter in order to grab the file name.
