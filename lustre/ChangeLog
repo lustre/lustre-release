@@ -13,6 +13,10 @@ xxxx-xx-xx Oracle, Inc.
 	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : normal
+Bugzilla   : 23820
+Description: Handle unsent requests with rq_net_err in ptlrpc_check_set()
+
+Severity   : normal
 Bugzilla   : 21760
 Description: apps stuck in ptlrpc_check_set() during direct I/O
 Details    : start async bulk unregistering at the same time at reply unlink
