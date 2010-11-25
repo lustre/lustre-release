@@ -1426,8 +1426,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 
                 /* This moves to "unregistering" phase we need to wait for
                  * reply unlink. */
-                if (!unregistered && !ptlrpc_unregister_reply(req, 1))
+                if (!unregistered && !ptlrpc_unregister_reply(req, 1)) {
+                        /** start async bulk unlink too */
+                        ptlrpc_unregister_bulk(req, 1);
                         continue;
+                }
 
                 if (!ptlrpc_unregister_bulk(req, 1))
                         continue;

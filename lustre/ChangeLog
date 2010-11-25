@@ -12,6 +12,11 @@ xxxx-xx-xx Oracle, Inc.
 	* The async journal commit feature (bug 19128) and the cancel
 	  lock before replay feature (bug 16774) are disabled by default.
 
+Severity   : normal
+Bugzilla   : 21760
+Description: apps stuck in ptlrpc_check_set() during direct I/O
+Details    : start async bulk unregistering at the same time at reply unlink
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
