@@ -1168,6 +1168,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         list_del_init (&req->rq_list);
         /* Consider this still a "queued" request as far as stats are
            concerned */
+        ptlrpc_request_addref(req);
         spin_unlock(&svc->srv_lock);
 
         /* Clear request swab mask; this is a new request */
@@ -1237,9 +1238,13 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         if (rc)
                 GOTO(err_req, rc);
         cfs_waitq_signal(&svc->srv_waitq);
+        /** drop request refcount */
+        ptlrpc_server_drop_request(req);
         RETURN(1);
 
 err_req:
+        /** drop request refcount */
+        ptlrpc_server_drop_request(req);
         spin_lock(&svc->srv_lock);
         svc->srv_n_queued_reqs--;
         svc->srv_n_active_reqs++;

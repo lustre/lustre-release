@@ -13,6 +13,12 @@ xxxx-xx-xx Oracle, Inc.
 	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : normal
+Bugzilla   : 21804
+Description: release request ref through ptlrpc_server_drop_request()
+Details    : make sure the request is protected by rq_refcount while
+             being processed in ptlrpc_server_handle_req_in().
+
+Severity   : normal
 Bugzilla   : 23820
 Description: Handle unsent requests with rq_net_err in ptlrpc_check_set()
 
