@@ -1302,12 +1302,11 @@ static int check_lqs(struct lustre_quota_ctxt *qctxt)
         RETURN(rc);
 }
 
-
-int hash_put_lqs(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+int qctxt_del_lqs(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                  cfs_hlist_node_t *hnode, void *data)
-
 {
-        lqs_putref((struct lustre_qunit_size *)cfs_hash_object(hs, hnode));
+        /* remove from hash and -1 refcount */
+        cfs_hash_bd_del_locked(hs, bd, hnode);
         return 0;
 }
 
@@ -1356,7 +1355,9 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                                                    cfs_time_seconds(1));
         }
 
-        cfs_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
+        /* release refcount on lustre_qunit_size holding by lqs_hash */
+        cfs_hash_for_each_safe(qctxt->lqc_lqs_hash, qctxt_del_lqs, NULL);
+
         l_wait_event(qctxt->lqc_lqs_waitq, check_lqs(qctxt), &lwi);
         cfs_down_write(&obt->obt_rwsem);
         cfs_hash_putref(qctxt->lqc_lqs_hash);
@@ -1629,7 +1630,7 @@ lqs_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
-        __lqs_getref(q);
+        lqs_getref(q);
 }
 
 static void
@@ -1638,24 +1639,13 @@ lqs_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
-        __lqs_putref(q);
+        lqs_putref(q);
 }
 
 static void
 lqs_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        struct lustre_qunit_size *q =
-                cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-
-        /*
-         * Nothing should be left. User of lqs put it and
-         * lqs also was deleted from table by this time
-         * so we should have 0 refs.
-         */
-        LASSERTF(cfs_atomic_read(&q->lqs_refcount) == 0,
-                 "Busy lqs %p with %d refs\n", q,
-                 cfs_atomic_read(&q->lqs_refcount));
-        OBD_FREE_PTR(q);
+        CERROR("It should not have any item left to be handled by this!");
 }
 
 static cfs_hash_ops_t lqs_hash_ops = {

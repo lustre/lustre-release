@@ -90,20 +90,45 @@ void quota_compute_lqs(struct qunit_data *qdata, struct lustre_qunit_size *lqs,
 
 }
 
-static struct lustre_qunit_size *
-quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
+struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
+                                           struct lustre_quota_ctxt *qctxt,
+                                           int create)
 {
-        struct lustre_qunit_size *lqs = NULL;
+        struct lustre_qunit_size *lqs;
+        struct lustre_qunit_size *lqs2;
         cfs_hash_t *hs = NULL;
         int rc = 0;
 
+        cfs_spin_lock(&qctxt->lqc_lock);
+        if (qctxt->lqc_valid) {
+                LASSERT(qctxt->lqc_lqs_hash != NULL);
+                hs = cfs_hash_getref(qctxt->lqc_lqs_hash);
+        }
+        cfs_spin_unlock(&qctxt->lqc_lock);
+
+        if (hs == NULL) {
+                rc = -EBUSY;
+                goto out;
+        }
+
+        /* cfs_hash_lookup will +1 refcount for caller */
+        lqs = cfs_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
+        if (lqs != NULL) /* found */
+                goto out_put;
+
+        if (!create)
+                goto out_put;
+
         OBD_ALLOC_PTR(lqs);
-        if (!lqs)
-                GOTO(out, rc = -ENOMEM);
+        if (!lqs) {
+                rc = -ENOMEM;
+                goto out_put;
+        }
 
         lqs->lqs_key = lqs_key;
 
         cfs_spin_lock_init(&lqs->lqs_lock);
+
         lqs->lqs_bwrite_pending = 0;
         lqs->lqs_iwrite_pending = 0;
         lqs->lqs_ino_rec = 0;
@@ -114,77 +139,38 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
         lqs->lqs_iunit_sz = qctxt->lqc_iunit_sz;
         lqs->lqs_btune_sz = qctxt->lqc_btune_sz;
         lqs->lqs_itune_sz = qctxt->lqc_itune_sz;
-        lqs->lqs_ctxt = qctxt;
         if (qctxt->lqc_handler) {
                 lqs->lqs_last_bshrink  = 0;
                 lqs->lqs_last_ishrink  = 0;
         }
-        lqs_initref(lqs);
 
-        cfs_spin_lock(&qctxt->lqc_lock);
-        if (qctxt->lqc_valid)
-                hs = cfs_hash_getref(qctxt->lqc_lqs_hash);
-        cfs_spin_unlock(&qctxt->lqc_lock);
+        lqs->lqs_ctxt = qctxt; /* must be called before lqs_initref */
+        cfs_atomic_set(&lqs->lqs_refcount, 1); /* 1 for caller */
+        cfs_atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
 
-        if (hs) {
-                lqs_getref(lqs);
-                rc = cfs_hash_add_unique(qctxt->lqc_lqs_hash,
-                                         &lqs->lqs_key, &lqs->lqs_hash);
-                if (rc)
-                        lqs_putref(lqs);
-                cfs_hash_putref(hs);
-        } else {
-                rc = -EBUSY;
-        }
+        /* lqc_lqs_hash will take +1 refcount on lqs on adding */
+        lqs2 = cfs_hash_findadd_unique(qctxt->lqc_lqs_hash,
+                                       &lqs->lqs_key, &lqs->lqs_hash);
+        if (lqs2 == lqs) /* added to hash */
+                goto out_put;
 
+        create = 0;
+        lqs_putref(lqs);
+        lqs = lqs2;
+
+ out_put:
+        cfs_hash_putref(hs);
  out:
-        if (rc && lqs)
-                OBD_FREE_PTR(lqs);
-
-        if (rc)
-                return ERR_PTR(rc);
-        else
-                return lqs;
-}
-
-struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
-                                           struct lustre_quota_ctxt *qctxt,
-                                           int create)
-{
-        struct lustre_qunit_size *lqs;
-        int rc = 0;
-
- search_lqs:
-        lqs = cfs_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
-        if (IS_ERR(lqs))
-                GOTO(out, rc = PTR_ERR(lqs));
-
-        if (create && lqs == NULL) {
-                /* if quota_create_lqs is successful, it will get a
-                 * ref to the lqs. The ref will be released when
-                 * qctxt_cleanup() or quota is nullified */
-                lqs = quota_create_lqs(lqs_key, qctxt);
-                if (IS_ERR(lqs))
-                        rc = PTR_ERR(lqs);
-                if (rc == -EALREADY)
-                        GOTO(search_lqs, rc = 0);
-                /* get a reference for the caller when creating lqs
-                 * successfully */
-                if (rc == 0)
-                        lqs_getref(lqs);
-        }
-
-        if (lqs && rc == 0)
-                LQS_DEBUG(lqs, "%s\n",
-                          (create == 1 ? "create lqs" : "search lqs"));
-
- out:
-        if (rc == 0) {
-                return lqs;
-        } else {
+        if (rc != 0) { /* error */
                 CERROR("get lqs error(rc: %d)\n", rc);
                 return ERR_PTR(rc);
         }
+
+        if (lqs != NULL) {
+                LQS_DEBUG(lqs, "%s\n",
+                          (create == 1 ? "create lqs" : "search lqs"));
+        }
+        return lqs;
 }
 
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
