@@ -94,7 +94,7 @@ dist-hook:
 	  module-dist-hook
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
-	build/Makefile build/autoMakefile.am.toplevel build/lbuild	\
+	build/Makefile build/autoMakefile.am.toplevel build/lbuild*	\
 	build/linux-merge-config.awk build/linux-merge-modules.awk	\
 	build/linux-rhconfig.h build/lmake build/Rules.in		\
 	build/lustre-kernel-2.4.spec.in build/suse-functions.sh		\
@@ -107,6 +107,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/autoconf/lustre-build-darwin.m4				\
 	build/autoconf/lustre-build.m4 build/rdac_spec                  \
 	build/mptlinux.spec.patch build/patches
+	build/exit_traps.sh
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | sed -re 's/--(en|dis)able-tests//'); \
