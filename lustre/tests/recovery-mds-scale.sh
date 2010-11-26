@@ -275,7 +275,7 @@ Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), bug
 
     log "$SERVERFACET has failed over ${!var} times, and counting..."
 
-    if [ $((ELAPSED + sleep)) -gt $DURATION ]; then
+    if [ $((ELAPSED + sleep)) -ge $DURATION ]; then
          break
     fi
 
