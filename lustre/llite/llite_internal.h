@@ -311,6 +311,7 @@ enum stats_track_type {
 #define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 0 /* see bug 23175 */
 /* default value for ll_direct_io_default */
 #define SBI_DEFAULT_DIRECT_IO_DEFAULT 0
+#define SBI_DEFAULT_LOCKLESS_DIRECT_IO 1
 
 /* percpu data structure for lustre lru page list */
 struct ll_pglist_data {
@@ -370,6 +371,7 @@ struct ll_sb_info {
 
         unsigned                  ll_contention_time; /* seconds */
         unsigned                  ll_lockless_truncate_enable; /* true/false */
+        unsigned                  ll_lockless_direct_io; /* true/false */
         unsigned                  ll_direct_io_default; /* true/false */
 
         struct ll_ra_info         ll_ra_info;

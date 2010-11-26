@@ -176,6 +176,7 @@ static struct ll_sb_info *ll_init_sbi(void)
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
         sbi->ll_contention_time = SBI_DEFAULT_CONTENTION_SECONDS;
         sbi->ll_lockless_truncate_enable = SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE;
+        sbi->ll_lockless_direct_io = SBI_DEFAULT_LOCKLESS_DIRECT_IO;
         sbi->ll_direct_io_default = SBI_DEFAULT_DIRECT_IO_DEFAULT;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);

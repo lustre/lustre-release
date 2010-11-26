@@ -1143,9 +1143,16 @@ static int ll_is_file_contended(struct file *file)
         if (fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK))
                 RETURN(0);
 
-        /* server-side locking for dio unless LL_FILE_LOCKED_DIRECTIO */
+        /* The semantics here is a bit complicated due to compatibility.
+         * The user may be aware of per-file LL_FILE_LOCKED_DIRECTIO,
+         * but not of per-client lockless_direct_io, so the file bit takes
+         * precedence if it is set. If the file bit is not set, we use
+         * lockless I/O unless per-client lockless_direct_io is set to zero.
+         */
+        CLASSERT(SBI_DEFAULT_LOCKLESS_DIRECT_IO == 1);
         if ((file->f_flags & O_DIRECT) &&
-            !(fd && (fd->fd_flags & LL_FILE_LOCKED_DIRECTIO)))
+            !(fd && (fd->fd_flags & LL_FILE_LOCKED_DIRECTIO)) &&
+            sbi->ll_lockless_direct_io)
                 RETURN(1);
 
         /* server-side locking for cached I/O with LL_FILE_LOCKLESS_IO */
