@@ -348,7 +348,8 @@ load_modules_local() {
     load_module mgc/mgc
     if ! client_only; then
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
-        grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
+        grep -q -w jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
+        grep -q -w jbd2 /proc/kallsyms || { modprobe jbd2 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module mgs/mgs
         load_module mds/mds
