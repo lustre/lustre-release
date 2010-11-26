@@ -148,10 +148,15 @@ check_file_in_osts() {
         return 0
 }
 
+file_pool() {
+    $GETSTRIPE -v $1 | grep "^lmm_pool:" | tr -d "[:blank:]" | cut -f 2 -d ':'
+}
+
 check_file_not_in_pool() {
     local file=$1
     local pool=$2
-    local res=$($GETSTRIPE -v $file | grep "^pool:" | tr -d "[:blank:]" | cut -f 2 -d ':')
+    local res=$(file_pool $file)
+
     if [[ "$res" == "$pool" ]]; then
         error "File $file is in pool: $res"
         return 1
@@ -1291,8 +1296,7 @@ test_24() {
           if [ "$pool" != "" ]; then
               check_file_in_pool $file $pool
           fi
-          pool1=$($GETSTRIPE -v $file | grep "^pool:" |\
-              tr -d '[:blank:]' | cut -f 2 -d ':')
+          pool1=$(file_pool $file)
           count1=$($GETSTRIPE -v $file | grep "^lmm_stripe_count:" |\
               tr -d '[:blank:]' | cut -f 2 -d ':')
           size1=$($GETSTRIPE -v $file | grep "^lmm_stripe_size:" |\
