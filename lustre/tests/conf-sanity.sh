@@ -40,6 +40,11 @@ MDSSIZE=40000
 OSTSIZE=40000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+if ! combined_mgs_mds; then
+    # bug number for skipped test:    23954
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
+fi
+
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
