@@ -1562,6 +1562,8 @@ test_18bc_sub() {
         DDPID=$!
         do_facet mds "$LCTL conf_param ${FSNAME}-MDT*.$(get_md_name).quota_type=ug"
 
+        replay_barrier mds
+
         log "failing mds for $((2 * timeout)) seconds"
         fail mds $((2 * timeout))
 
