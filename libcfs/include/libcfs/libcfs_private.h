@@ -288,6 +288,98 @@ int libcfs_debug_cleanup(void);
 /* !__KERNEL__ */
 #endif
 
+#define LASSERT_ATOMIC_ENABLED          (1)
+
+#if LASSERT_ATOMIC_ENABLED
+
+/** assert value of @a is equal to @v */
+#define LASSERT_ATOMIC_EQ(a, v)                                 \
+do {                                                            \
+        LASSERTF(cfs_atomic_read(a) == v,                       \
+                 "value: %d\n", cfs_atomic_read((a)));          \
+} while (0)
+
+/** assert value of @a is unequal to @v */
+#define LASSERT_ATOMIC_NE(a, v)                                 \
+do {                                                            \
+        LASSERTF(cfs_atomic_read(a) != v,                       \
+                 "value: %d\n", cfs_atomic_read((a)));          \
+} while (0)
+
+/** assert value of @a is little than @v */
+#define LASSERT_ATOMIC_LT(a, v)                                 \
+do {                                                            \
+        LASSERTF(cfs_atomic_read(a) < v,                        \
+                 "value: %d\n", cfs_atomic_read((a)));          \
+} while (0)
+
+/** assert value of @a is little/equal to @v */
+#define LASSERT_ATOMIC_LE(a, v)                                 \
+do {                                                            \
+        LASSERTF(cfs_atomic_read(a) <= v,                       \
+                 "value: %d\n", cfs_atomic_read((a)));          \
+} while (0)
+
+/** assert value of @a is great than @v */
+#define LASSERT_ATOMIC_GT(a, v)                                 \
+do {                                                            \
+        LASSERTF(cfs_atomic_read(a) > v,                        \
+                 "value: %d\n", cfs_atomic_read((a)));          \
+} while (0)
+
+/** assert value of @a is great/equal to @v */
+#define LASSERT_ATOMIC_GE(a, v)                                 \
+do {                                                            \
+        LASSERTF(cfs_atomic_read(a) >= v,                       \
+                 "value: %d\n", cfs_atomic_read((a)));          \
+} while (0)
+
+/** assert value of @a is great than @v1 and little than @v2 */
+#define LASSERT_ATOMIC_GT_LT(a, v1, v2)                         \
+do {                                                            \
+        int __v = cfs_atomic_read(a);                           \
+        LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);     \
+} while (0)
+
+/** assert value of @a is great than @v1 and little/equal to @v2 */
+#define LASSERT_ATOMIC_GT_LE(a, v1, v2)                         \
+do {                                                            \
+        int __v = cfs_atomic_read(a);                           \
+        LASSERTF(__v > v1 && __v <= v2, "value: %d\n", __v);    \
+} while (0)
+
+/** assert value of @a is great/equal to @v1 and little than @v2 */
+#define LASSERT_ATOMIC_GE_LT(a, v1, v2)                         \
+do {                                                            \
+        int __v = cfs_atomic_read(a);                           \
+        LASSERTF(__v >= v1 && __v < v2, "value: %d\n", __v);    \
+} while (0)
+
+/** assert value of @a is great/equal to @v1 and little/equal to @v2 */
+#define LASSERT_ATOMIC_GE_LE(a, v1, v2)                         \
+do {                                                            \
+        int __v = cfs_atomic_read(a);                           \
+        LASSERTF(__v >= v1 && __v <= v2, "value: %d\n", __v);   \
+} while (0)
+
+#else /* !LASSERT_ATOMIC_ENABLED */
+
+#define LASSERT_ATOMIC_EQ(a, v)                 do {} while (0)
+#define LASSERT_ATOMIC_NE(a, v)                 do {} while (0)
+#define LASSERT_ATOMIC_LT(a, v)                 do {} while (0)
+#define LASSERT_ATOMIC_LE(a, v)                 do {} while (0)
+#define LASSERT_ATOMIC_GT(a, v)                 do {} while (0)
+#define LASSERT_ATOMIC_GE(a, v)                 do {} while (0)
+#define LASSERT_ATOMIC_GT_LT(a, v1, v2)         do {} while (0)
+#define LASSERT_ATOMIC_GT_LE(a, v1, v2)         do {} while (0)
+#define LASSERT_ATOMIC_GE_LT(a, v1, v2)         do {} while (0)
+#define LASSERT_ATOMIC_GE_LE(a, v1, v2)         do {} while (0)
+
+#endif /* LASSERT_ATOMIC_ENABLED */
+
+#define LASSERT_ATOMIC_ZERO(a)                  LASSERT_ATOMIC_EQ(a, 0)
+#define LASSERT_ATOMIC_POS(a)                   LASSERT_ATOMIC_GT(a, 0)
+
 #define CFS_ALLOC_PTR(ptr)      LIBCFS_ALLOC(ptr, sizeof (*(ptr)));
 #define CFS_FREE_PTR(ptr)       LIBCFS_FREE(ptr, sizeof (*(ptr)));
 

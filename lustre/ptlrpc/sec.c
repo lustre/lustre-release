@@ -287,7 +287,6 @@ struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
 
 struct ptlrpc_cli_ctx *sptlrpc_cli_ctx_get(struct ptlrpc_cli_ctx *ctx)
 {
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
         cfs_atomic_inc(&ctx->cc_refcount);
         return ctx;
 }
@@ -298,7 +297,7 @@ void sptlrpc_cli_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync)
         struct ptlrpc_sec *sec = ctx->cc_sec;
 
         LASSERT(sec);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount));
+        LASSERT_ATOMIC_POS(&ctx->cc_refcount);
 
         if (!cfs_atomic_dec_and_test(&ctx->cc_refcount))
                 return;
@@ -1230,8 +1229,8 @@ static void sec_cop_destroy_sec(struct ptlrpc_sec *sec)
 {
         struct ptlrpc_sec_policy *policy = sec->ps_policy;
 
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) == 0);
-        LASSERT(cfs_atomic_read(&sec->ps_nctx) == 0);
+        LASSERT_ATOMIC_ZERO(&sec->ps_refcount);
+        LASSERT_ATOMIC_ZERO(&sec->ps_nctx);
         LASSERT(policy->sp_cops->destroy_sec);
 
         CDEBUG(D_SEC, "%s@%p: being destroied\n", sec->ps_policy->sp_name, sec);
@@ -1248,7 +1247,7 @@ EXPORT_SYMBOL(sptlrpc_sec_destroy);
 
 static void sptlrpc_sec_kill(struct ptlrpc_sec *sec)
 {
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
+        LASSERT_ATOMIC_POS(&sec->ps_refcount);
 
         if (sec->ps_policy->sp_cops->kill_sec) {
                 sec->ps_policy->sp_cops->kill_sec(sec);
@@ -1259,10 +1258,8 @@ static void sptlrpc_sec_kill(struct ptlrpc_sec *sec)
 
 struct ptlrpc_sec *sptlrpc_sec_get(struct ptlrpc_sec *sec)
 {
-        if (sec) {
-                LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
+        if (sec)
                 cfs_atomic_inc(&sec->ps_refcount);
-        }
 
         return sec;
 }
@@ -1271,11 +1268,9 @@ EXPORT_SYMBOL(sptlrpc_sec_get);
 void sptlrpc_sec_put(struct ptlrpc_sec *sec)
 {
         if (sec) {
-                LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
+                LASSERT_ATOMIC_POS(&sec->ps_refcount);
 
                 if (cfs_atomic_dec_and_test(&sec->ps_refcount)) {
-                        LASSERT(cfs_atomic_read(&sec->ps_nctx) == 0);
-
                         sptlrpc_gc_del_sec(sec);
                         sec_cop_destroy_sec(sec);
                 }
@@ -1354,7 +1349,7 @@ static void sptlrpc_import_sec_install(struct obd_import *imp,
 {
         struct ptlrpc_sec *old_sec;
 
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
+        LASSERT_ATOMIC_POS(&sec->ps_refcount);
 
         cfs_spin_lock(&imp->imp_lock);
         old_sec = imp->imp_sec;
@@ -1553,10 +1548,10 @@ int sptlrpc_cli_alloc_reqbuf(struct ptlrpc_request *req, int msgsize)
         int rc;
 
         LASSERT(ctx);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount));
         LASSERT(ctx->cc_sec);
         LASSERT(ctx->cc_sec->ps_policy);
         LASSERT(req->rq_reqmsg == NULL);
+        LASSERT_ATOMIC_POS(&ctx->cc_refcount);
 
         policy = ctx->cc_sec->ps_policy;
         rc = policy->sp_cops->alloc_reqbuf(ctx->cc_sec, req, msgsize);
@@ -1582,9 +1577,9 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req)
         struct ptlrpc_sec_policy *policy;
 
         LASSERT(ctx);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount));
         LASSERT(ctx->cc_sec);
         LASSERT(ctx->cc_sec->ps_policy);
+        LASSERT_ATOMIC_POS(&ctx->cc_refcount);
 
         if (req->rq_reqbuf == NULL && req->rq_clrbuf == NULL)
                 return;
@@ -1680,7 +1675,6 @@ int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize)
         ENTRY;
 
         LASSERT(ctx);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount));
         LASSERT(ctx->cc_sec);
         LASSERT(ctx->cc_sec->ps_policy);
 
@@ -1702,9 +1696,9 @@ void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(ctx);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount));
         LASSERT(ctx->cc_sec);
         LASSERT(ctx->cc_sec->ps_policy);
+        LASSERT_ATOMIC_POS(&ctx->cc_refcount);
 
         if (req->rq_repbuf == NULL)
                 return;
@@ -2182,11 +2176,8 @@ void sptlrpc_svc_ctx_addref(struct ptlrpc_request *req)
 {
         struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
 
-        if (ctx == NULL)
-                return;
-
-        LASSERT(cfs_atomic_read(&ctx->sc_refcount) > 0);
-        cfs_atomic_inc(&ctx->sc_refcount);
+        if (ctx != NULL)
+                cfs_atomic_inc(&ctx->sc_refcount);
 }
 
 void sptlrpc_svc_ctx_decref(struct ptlrpc_request *req)
@@ -2196,7 +2187,7 @@ void sptlrpc_svc_ctx_decref(struct ptlrpc_request *req)
         if (ctx == NULL)
                 return;
 
-        LASSERT(cfs_atomic_read(&ctx->sc_refcount) > 0);
+        LASSERT_ATOMIC_POS(&ctx->sc_refcount);
         if (cfs_atomic_dec_and_test(&ctx->sc_refcount)) {
                 if (ctx->sc_policy->sp_sops->free_ctx)
                         ctx->sc_policy->sp_sops->free_ctx(ctx);
@@ -2211,7 +2202,7 @@ void sptlrpc_svc_ctx_invalidate(struct ptlrpc_request *req)
         if (ctx == NULL)
                 return;
 
-        LASSERT(cfs_atomic_read(&ctx->sc_refcount) > 0);
+        LASSERT_ATOMIC_POS(&ctx->sc_refcount);
         if (ctx->sc_policy->sp_sops->invalidate_ctx)
                 ctx->sc_policy->sp_sops->invalidate_ctx(ctx);
 }

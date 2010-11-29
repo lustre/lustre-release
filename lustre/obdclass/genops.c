@@ -712,7 +712,7 @@ static void class_export_destroy(struct obd_export *exp)
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
-        LASSERT (cfs_atomic_read(&exp->exp_refcount) == 0);
+        LASSERT_ATOMIC_ZERO(&exp->exp_refcount);
 
         CDEBUG(D_IOCTL, "destroying export %p/%s for %s\n", exp,
                exp->exp_client_uuid.uuid, obd->obd_name);
@@ -751,10 +751,9 @@ EXPORT_SYMBOL(class_export_get);
 void class_export_put(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
+        LASSERT_ATOMIC_GT_LT(&exp->exp_refcount, 0, 0x5a5a5a);
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
                cfs_atomic_read(&exp->exp_refcount) - 1);
-        LASSERT(cfs_atomic_read(&exp->exp_refcount) > 0);
-        LASSERT(cfs_atomic_read(&exp->exp_refcount) < 0x5a5a5a);
 
         if (cfs_atomic_dec_and_test(&exp->exp_refcount)) {
                 LASSERT(!cfs_list_empty(&exp->exp_obd_chain));
@@ -888,7 +887,7 @@ void class_import_destroy(struct obd_import *imp)
         CDEBUG(D_IOCTL, "destroying import %p for %s\n", imp,
                 imp->imp_obd->obd_name);
 
-        LASSERT(cfs_atomic_read(&imp->imp_refcount) == 0);
+        LASSERT_ATOMIC_ZERO(&imp->imp_refcount);
 
         ptlrpc_put_connection_superhack(imp->imp_connection);
 
@@ -915,8 +914,6 @@ static void import_handle_addref(void *import)
 
 struct obd_import *class_import_get(struct obd_import *import)
 {
-        LASSERT(cfs_atomic_read(&import->imp_refcount) >= 0);
-        LASSERT(cfs_atomic_read(&import->imp_refcount) < 0x5a5a5a);
         cfs_atomic_inc(&import->imp_refcount);
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
                cfs_atomic_read(&import->imp_refcount),
@@ -929,9 +926,8 @@ void class_import_put(struct obd_import *imp)
 {
         ENTRY;
 
-        LASSERT(cfs_atomic_read(&imp->imp_refcount) > 0);
-        LASSERT(cfs_atomic_read(&imp->imp_refcount) < 0x5a5a5a);
         LASSERT(cfs_list_empty(&imp->imp_zombie_chain));
+        LASSERT_ATOMIC_GE_LT(&imp->imp_refcount, 0, 0x5a5a5a);
 
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", imp,
                cfs_atomic_read(&imp->imp_refcount) - 1,

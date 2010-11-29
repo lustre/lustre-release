@@ -1104,10 +1104,10 @@ void target_destroy_export(struct obd_export *exp)
         if (exp->exp_imp_reverse != NULL)
                 client_destroy_import(exp->exp_imp_reverse);
 
-        LASSERT(cfs_atomic_read(&exp->exp_locks_count) == 0);
-        LASSERT(cfs_atomic_read(&exp->exp_rpc_count) == 0);
-        LASSERT(cfs_atomic_read(&exp->exp_cb_count) == 0);
-        LASSERT(cfs_atomic_read(&exp->exp_replay_count) == 0);
+        LASSERT_ATOMIC_ZERO(&exp->exp_locks_count);
+        LASSERT_ATOMIC_ZERO(&exp->exp_rpc_count);
+        LASSERT_ATOMIC_ZERO(&exp->exp_cb_count);
+        LASSERT_ATOMIC_ZERO(&exp->exp_replay_count);
 }
 
 /*
@@ -1118,8 +1118,8 @@ static void target_request_copy_get(struct ptlrpc_request *req)
         class_export_rpc_get(req->rq_export);
         LASSERT(cfs_list_empty(&req->rq_list));
         CFS_INIT_LIST_HEAD(&req->rq_replay_list);
+
         /* increase refcount to keep request in queue */
-        LASSERT(cfs_atomic_read(&req->rq_refcount));
         cfs_atomic_inc(&req->rq_refcount);
         /** let export know it has replays to be handled */
         cfs_atomic_inc(&req->rq_export->exp_replay_count);
@@ -1132,7 +1132,8 @@ static void target_request_copy_get(struct ptlrpc_request *req)
 static void target_request_copy_put(struct ptlrpc_request *req)
 {
         LASSERT(cfs_list_empty(&req->rq_replay_list));
-        LASSERT(cfs_atomic_read(&req->rq_export->exp_replay_count) > 0);
+        LASSERT_ATOMIC_POS(&req->rq_export->exp_replay_count);
+
         cfs_atomic_dec(&req->rq_export->exp_replay_count);
         class_export_rpc_put(req->rq_export);
         /* ptlrpc_server_drop_request() assumes the request is active */
@@ -1924,7 +1925,8 @@ static int target_process_req_flags(struct obd_device *obd,
                 if (exp->exp_req_replay_needed) {
                         exp->exp_req_replay_needed = 0;
                         cfs_spin_unlock(&exp->exp_lock);
-                        LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
+
+                        LASSERT_ATOMIC_POS(&obd->obd_req_replay_clients);
                         cfs_atomic_dec(&obd->obd_req_replay_clients);
                 } else {
                         cfs_spin_unlock(&exp->exp_lock);
@@ -1937,7 +1939,8 @@ static int target_process_req_flags(struct obd_device *obd,
                 if (exp->exp_lock_replay_needed) {
                         exp->exp_lock_replay_needed = 0;
                         cfs_spin_unlock(&exp->exp_lock);
-                        LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
+
+                        LASSERT_ATOMIC_POS(&obd->obd_lock_replay_clients);
                         cfs_atomic_dec(&obd->obd_lock_replay_clients);
                 } else {
                         cfs_spin_unlock(&exp->exp_lock);

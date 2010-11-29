@@ -203,7 +203,7 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #define class_export_rpc_put(exp)                                       \
 ({                                                                      \
-        LASSERT(cfs_atomic_read(&exp->exp_rpc_count) > 0);              \
+        LASSERT_ATOMIC_POS(&exp->exp_rpc_count);                        \
         cfs_atomic_dec(&(exp)->exp_rpc_count);                          \
         CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
                (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
@@ -221,7 +221,7 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #define class_export_lock_put(exp, lock)                                \
 ({                                                                      \
-        LASSERT(cfs_atomic_read(&exp->exp_locks_count) > 0);            \
+        LASSERT_ATOMIC_POS(&exp->exp_locks_count);                      \
         cfs_atomic_dec(&(exp)->exp_locks_count);                        \
         __class_export_del_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
@@ -239,7 +239,7 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #define class_export_cb_put(exp)                                        \
 ({                                                                      \
-        LASSERT(cfs_atomic_read(&exp->exp_cb_count) > 0);               \
+        LASSERT_ATOMIC_POS(&exp->exp_cb_count);                         \
         cfs_atomic_dec(&(exp)->exp_cb_count);                           \
         CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
                (exp), cfs_atomic_read(&(exp)->exp_cb_count));           \

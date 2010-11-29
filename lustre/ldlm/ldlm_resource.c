@@ -1128,11 +1128,12 @@ static void __ldlm_resource_putref_final(cfs_hash_bd_t *bd,
 int ldlm_resource_putref(struct ldlm_resource *res)
 {
         struct ldlm_namespace *ns = ldlm_res_to_ns(res);
-        int ref = cfs_atomic_read(&res->lr_refcount);
         cfs_hash_bd_t   bd;
 
-        CDEBUG(D_INFO, "putref res: %p count: %d\n", res, ref - 1);
-        LASSERTF(ref > 0 && ref < LI_POISON, "%d", ref);
+        LASSERT_ATOMIC_GT_LT(&res->lr_refcount, 0, LI_POISON);
+        CDEBUG(D_INFO, "putref res: %p count: %d\n",
+               res, cfs_atomic_read(&res->lr_refcount) - 1);
+
         cfs_hash_bd_get(ns->ns_rs_hash, &res->lr_name, &bd);
         if (cfs_hash_bd_dec_and_lock(ns->ns_rs_hash, &bd, &res->lr_refcount)) {
                 __ldlm_resource_putref_final(&bd, res);
@@ -1149,10 +1150,11 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 int ldlm_resource_putref_locked(struct ldlm_resource *res)
 {
         struct ldlm_namespace *ns = ldlm_res_to_ns(res);
-        int ref = cfs_atomic_read(&res->lr_refcount);
 
-        CDEBUG(D_INFO, "putref res: %p count: %d\n", res, ref - 1);
-        LASSERTF(ref > 0 && ref < LI_POISON, "%d", ref);
+        LASSERT_ATOMIC_GT_LT(&res->lr_refcount, 0, LI_POISON);
+        CDEBUG(D_INFO, "putref res: %p count: %d\n",
+               res, cfs_atomic_read(&res->lr_refcount) - 1);
+
         if (cfs_atomic_dec_and_test(&res->lr_refcount)) {
                 cfs_hash_bd_t bd;
 

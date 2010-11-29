@@ -329,7 +329,6 @@ struct llog_commit_master {
 static inline struct llog_commit_master
 *lcm_get(struct llog_commit_master *lcm)
 {
-        LASSERT(cfs_atomic_read(&lcm->lcm_refcount) > 0);
         cfs_atomic_inc(&lcm->lcm_refcount);
         return lcm;
 }
@@ -337,10 +336,9 @@ static inline struct llog_commit_master
 static inline void
 lcm_put(struct llog_commit_master *lcm)
 {
-        if (!cfs_atomic_dec_and_test(&lcm->lcm_refcount)) {
-                return ;
-        }
-        OBD_FREE_PTR(lcm);
+        LASSERT_ATOMIC_POS(&lcm->lcm_refcount);
+        if (cfs_atomic_dec_and_test(&lcm->lcm_refcount))
+                OBD_FREE_PTR(lcm);
 }
 
 struct llog_canceld_ctxt {
@@ -437,7 +435,6 @@ static inline int llog_data_len(int len)
 
 static inline struct llog_ctxt *llog_ctxt_get(struct llog_ctxt *ctxt)
 {
-        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) > 0);
         cfs_atomic_inc(&ctxt->loc_refcount);
         CDEBUG(D_INFO, "GETting ctxt %p : new refcount %d\n", ctxt,
                cfs_atomic_read(&ctxt->loc_refcount));
@@ -448,8 +445,7 @@ static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
 {
         if (ctxt == NULL)
                 return;
-        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) > 0);
-        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
+        LASSERT_ATOMIC_GT_LT(&ctxt->loc_refcount, 0, 0x5a5a5a);
         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
                cfs_atomic_read(&ctxt->loc_refcount) - 1);
         __llog_ctxt_put(ctxt);
