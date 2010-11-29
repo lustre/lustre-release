@@ -621,6 +621,10 @@ kiblnd_debug_conn (kib_conn_t *conn)
         list_for_each(tmp, &conn->ibc_early_rxs)
                 kiblnd_debug_rx(list_entry(tmp, kib_rx_t, rx_list));
 
+        CDEBUG(D_CONSOLE, "   tx_noops:\n");
+        list_for_each(tmp, &conn->ibc_tx_noops)
+                kiblnd_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
+
         CDEBUG(D_CONSOLE, "   tx_queue_nocred:\n");
         list_for_each(tmp, &conn->ibc_tx_queue_nocred)
                 kiblnd_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
@@ -730,6 +734,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
         conn->ibc_cmid = cmid;
 
         INIT_LIST_HEAD(&conn->ibc_early_rxs);
+        INIT_LIST_HEAD(&conn->ibc_tx_noops);
         INIT_LIST_HEAD(&conn->ibc_tx_queue);
         INIT_LIST_HEAD(&conn->ibc_tx_queue_rsrvd);
         INIT_LIST_HEAD(&conn->ibc_tx_queue_nocred);
@@ -866,6 +871,7 @@ kiblnd_destroy_conn (kib_conn_t *conn)
         LASSERT (!in_interrupt());
         LASSERT (atomic_read(&conn->ibc_refcount) == 0);
         LASSERT (list_empty(&conn->ibc_early_rxs));
+        LASSERT (list_empty(&conn->ibc_tx_noops));
         LASSERT (list_empty(&conn->ibc_tx_queue));
         LASSERT (list_empty(&conn->ibc_tx_queue_rsrvd));
         LASSERT (list_empty(&conn->ibc_tx_queue_nocred));
