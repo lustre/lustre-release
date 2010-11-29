@@ -572,6 +572,7 @@ typedef struct kib_conn
         int                  ibc_ready:1;       /* CQ callback fired */
         unsigned long        ibc_last_send;     /* time of last send */
         cfs_list_t           ibc_early_rxs;     /* rxs completed before ESTABLISHED */
+        cfs_list_t          ibc_tx_noops;       /* IBLND_MSG_NOOPs for IBLND_MSG_VERSION_1 */
         cfs_list_t           ibc_tx_queue;       /* sends that need a credit */
         cfs_list_t           ibc_tx_queue_nocred;/* sends that don't need a credit */
         cfs_list_t           ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
@@ -727,15 +728,25 @@ kiblnd_send_noop(kib_conn_t *conn)
             !kiblnd_send_keepalive(conn))
                 return 0; /* No need to send NOOP */
 
-        if (!cfs_list_empty(&conn->ibc_tx_queue_nocred))
-                return 0; /* NOOP can be piggybacked */
+        if (IBLND_OOB_CAPABLE(conn->ibc_version)) {
+                if (!cfs_list_empty(&conn->ibc_tx_queue_nocred))
+                        return 0; /* NOOP can be piggybacked */
 
-        if (!IBLND_OOB_CAPABLE(conn->ibc_version))
-                /* can't piggyback? */
-                return cfs_list_empty(&conn->ibc_tx_queue);
+                /* No tx to piggyback NOOP onto or no credit to send a tx */
+                return (cfs_list_empty(&conn->ibc_tx_queue) || conn->ibc_credits == 0);
+        }
+
+        if (!cfs_list_empty(&conn->ibc_tx_noops) ||       /* NOOP already queued */
+            !cfs_list_empty(&conn->ibc_tx_queue_nocred) || /* can be piggybacked */
+            conn->ibc_credits == 0)                    /* no credit */
+                return 0;
+
+        if (conn->ibc_credits == 1 &&      /* last credit reserved for */
+            conn->ibc_outstanding_credits == 0) /* giving back credits */
+                return 0;
 
         /* No tx to piggyback NOOP onto or no credit to send a tx */
-        return (cfs_list_empty(&conn->ibc_tx_queue) || conn->ibc_credits == 0);
+        return (cfs_list_empty(&conn->ibc_tx_queue) || conn->ibc_credits == 1);
 }
 
 static inline void

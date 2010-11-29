@@ -328,6 +328,11 @@ kiblnd_handle_rx (kib_rx_t *rx)
 
                 conn->ibc_credits += credits;
 
+                /* This ensures the credit taken by NOOP can be returned */
+                if (msg->ibm_type == IBLND_MSG_NOOP &&
+                    !IBLND_OOB_CAPABLE(conn->ibc_version)) /* v1 only */
+                        conn->ibc_outstanding_credits++;
+
                 cfs_spin_unlock(&conn->ibc_lock);
                 kiblnd_check_sends(conn);
         }
@@ -341,9 +346,14 @@ kiblnd_handle_rx (kib_rx_t *rx)
                 break;
 
         case IBLND_MSG_NOOP:
-                if (IBLND_OOB_CAPABLE(conn->ibc_version))
+                if (IBLND_OOB_CAPABLE(conn->ibc_version)) {
                         post_credit = IBLND_POSTRX_NO_CREDIT;
-                else
+                        break;
+                }
+
+                if (credits != 0) /* credit already posted */
+                        post_credit = IBLND_POSTRX_NO_CREDIT;
+                else              /* a keepalive NOOP */
                         post_credit = IBLND_POSTRX_PEER_CREDIT;
                 break;
 
@@ -791,8 +801,8 @@ kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
         }
 
         if (credit != 0 && !IBLND_OOB_CAPABLE(ver) &&
-            conn->ibc_credits == 1 &&   /* last credit reserved for */
-            conn->ibc_outstanding_credits == 0) { /* giving back credits */
+            conn->ibc_credits == 1 &&   /* last credit reserved */
+            msg->ibm_type != IBLND_MSG_NOOP) {      /* for NOOP */
                 CDEBUG(D_NET, "%s: not using last credit\n",
                        libcfs_nid2str(peer->ibp_nid));
                 return -EAGAIN;
@@ -939,6 +949,11 @@ kiblnd_check_sends (kib_conn_t *conn)
                         credit = 0;
                         tx = cfs_list_entry(conn->ibc_tx_queue_nocred.next,
                                             kib_tx_t, tx_list);
+                } else if (!cfs_list_empty(&conn->ibc_tx_noops)) {
+                        LASSERT (!IBLND_OOB_CAPABLE(ver));
+                        credit = 1;
+                        tx = cfs_list_entry(conn->ibc_tx_noops.next,
+                                        kib_tx_t, tx_list);
                 } else if (!cfs_list_empty(&conn->ibc_tx_queue)) {
                         credit = 1;
                         tx = cfs_list_entry(conn->ibc_tx_queue.next,
@@ -1171,7 +1186,7 @@ kiblnd_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
                 if (IBLND_OOB_CAPABLE(conn->ibc_version))
                         q = &conn->ibc_tx_queue_nocred;
                 else
-                        q = &conn->ibc_tx_queue;
+                        q = &conn->ibc_tx_noops;
                 break;
 
         case IBLND_MSG_IMMEDIATE:
@@ -1788,6 +1803,7 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                 return; /* already being handled  */
 
         if (error == 0 &&
+            cfs_list_empty(&conn->ibc_tx_noops) &&
             cfs_list_empty(&conn->ibc_tx_queue) &&
             cfs_list_empty(&conn->ibc_tx_queue_rsrvd) &&
             cfs_list_empty(&conn->ibc_tx_queue_nocred) &&
@@ -1795,9 +1811,10 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                 CDEBUG(D_NET, "closing conn to %s\n", 
                        libcfs_nid2str(peer->ibp_nid));
         } else {
-                CNETERR("Closing conn to %s: error %d%s%s%s%s\n",
+                CNETERR("Closing conn to %s: error %d%s%s%s%s%s\n",
                        libcfs_nid2str(peer->ibp_nid), error,
                        cfs_list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
+                       cfs_list_empty(&conn->ibc_tx_noops) ? "" : "(sending_noops)",
                        cfs_list_empty(&conn->ibc_tx_queue_rsrvd) ? "" : "(sending_rsrvd)",
                        cfs_list_empty(&conn->ibc_tx_queue_nocred) ? "" : "(sending_nocred)",
                        cfs_list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
@@ -1921,6 +1938,7 @@ kiblnd_finalise_conn (kib_conn_t *conn)
         /* Complete all tx descs not waiting for sends to complete.
          * NB we should be safe from RDMA now that the QP has changed state */
 
+        kiblnd_abort_txs(conn, &conn->ibc_tx_noops);
         kiblnd_abort_txs(conn, &conn->ibc_tx_queue);
         kiblnd_abort_txs(conn, &conn->ibc_tx_queue_rsrvd);
         kiblnd_abort_txs(conn, &conn->ibc_tx_queue_nocred);
@@ -2926,6 +2944,7 @@ int
 kiblnd_conn_timed_out (kib_conn_t *conn)
 {
         return  kiblnd_check_txs(conn, &conn->ibc_tx_queue) ||
+                kiblnd_check_txs(conn, &conn->ibc_tx_noops) ||
                 kiblnd_check_txs(conn, &conn->ibc_tx_queue_rsrvd) ||
                 kiblnd_check_txs(conn, &conn->ibc_tx_queue_nocred) ||
                 kiblnd_check_txs(conn, &conn->ibc_active_txs);
