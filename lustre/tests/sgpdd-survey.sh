@@ -19,8 +19,6 @@ size=${size:-1024}
 # Skip these tests
 ALWAYS_EXCEPT="$SGPDD_SURVEY_EXCEPT"
 
-SGPDDSURVEY=${SGPDDSURVEY:-$(which sgpdd-survey)}
-
 build_test_filter
 
 init_facets_vars
@@ -35,36 +33,42 @@ run_sgpdd_host () {
     do_rpc_nodes $host run_sgpdd $devs "$params"
 }
 
-test_1 () {
-    local facet=mds
-
-    local host=$(facet_host $facet)
-    local dev=${facet}_dev
-    echo "=== $facet === $host === ${!dev} ==="
-    run_sgpdd_host $host ${!dev}
-}
-run_test 1 "sgpdd-survey, mds, scsidevs"
-
-test_2 () {
+run_sgpdd_facets () {
+    local facets=$1
     local facet
 
-    local osts=$(get_facets OST)
-    
-    local ostshosts
-    for facet in ${osts//,/ }; do
+    local facetshosts
+    for facet in ${facets//,/ }; do
         local host=$(facet_host $facet)
         local dev=${facet}_dev
         local var=${host}_devs
         eval ${var}=$(expand_list ${!var} ${!dev})
-	ostshosts=$(expand_list $ostshosts $host)
+        facetshosts=$(expand_list $facetshosts $host)
     done
 
-    for host in ${ostshosts//,/ }; do
-	var=${host}_devs
-        echo "=== osts === $host === ${!var} ==="
+    for host in ${facetshosts//,/ }; do
+        var=${host}_devs
+        echo "=== $facets === $host === ${!var} ==="
         local scsidevs=${!var}
         run_sgpdd_host $host ${scsidevs}
     done
+}
+
+test_1 () {
+    check_progs_installed $(facets_hosts mds) $SGPDDSURVEY sg_map || \
+        { skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found" && return 0; }
+
+    run_sgpdd_facets mds
+}
+run_test 1 "sgpdd-survey, mds, scsidevs"
+
+test_2 () {
+    local osts=$(get_facets OST)
+
+    check_progs_installed $(facets_hosts $osts) $SGPDDSURVEY sg_map || \
+        { skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found" && return 0; }
+
+    run_sgpdd_facets $osts
 }
 run_test 2 "sgpdd-survey, osts, scsidevs"
 
