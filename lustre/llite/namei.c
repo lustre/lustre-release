@@ -62,15 +62,15 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 }
 
 /**
- * Flatten 128-bit FID values into a 64-bit value for
- * use as an inode number.  For non-IGIF FIDs this
- * starts just over 2^32, and continues without conflict
- * until 2^64, at which point we wrap the high 32 bits
- * of the SEQ into the range where there may not be many
- * OID values in use, to minimize the risk of conflict.
+ * Flatten 128-bit FID values into a 64-bit value for use as an inode number.
+ * For non-IGIF FIDs this starts just over 2^32, and continues without
+ * conflict until 2^64, at which point we wrap the high 32 bits of the SEQ
+ * into the range where there may not be many OID values in use, to minimize
+ * the risk of conflict.
  *
- * The time between re-used inode numbers is very long -
- * 2^32 SEQ numbers, or about 2^32 client mounts. */
+ * Suppose LUSTRE_SEQ_MAX_WIDTH is less than (2^24), which is currently true,
+ * the time between re-used inode numbers is very long - 2^40 SEQ numbers,
+ * or about 2^40 client mounts, if clients create less than 2^24 files/mount. */
 static inline __u64 fid_flatten(const struct lu_fid *fid)
 {
         __u64 ino;
@@ -83,7 +83,7 @@ static inline __u64 fid_flatten(const struct lu_fid *fid)
 
         seq = fid_seq(fid);
 
-        ino = (seq << 24) + ((seq >> (64-8)) & 0xffffff0000ULL) + fid_oid(fid);
+        ino = (seq << 24) + ((seq >> 24) & 0xffffff0000ULL) + fid_oid(fid);
 
         RETURN(ino ? ino : fid_oid(fid));
 }
