@@ -204,10 +204,16 @@ setup_noconfig() {
 	mount_client $MOUNT
 }
 
+unload_modules_conf () {
+        if combined_mgs_mds || ! local_mode; then
+                unload_modules || return 1
+        fi
+}
+
 cleanup_nocli() {
 	stop_mds || return 201
 	stop_ost || return 202
-	unload_modules || return 203
+	unload_modules_conf || return 203
 }
 
 cleanup() {
@@ -750,12 +756,11 @@ test_21d() {
 	start_ost
 	start_ost2
 	start_mds
-	wait_osc_import_state mds ost2 FULL
 
 	stop_ost
 	stop_ost2
 	stop_mds
-	stop_mgs
+	writeconf
 }
 run_test 21d "start mgs then ost and then mds"
 
@@ -943,9 +948,9 @@ test_26() {
     do_facet mds "lctl set_param fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
     lctl get_param -n devices
-    DEVS=$(lctl get_param -n devices | wc -l)
+    DEVS=$(lctl get_param -n devices | egrep -v MG | wc -l)
     [ $DEVS -gt 0 ] && return 2
-    unload_modules || return 203
+    unload_modules_conf || return $?
 }
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
@@ -1189,7 +1194,8 @@ cleanup_32() {
 	umount -f $MOUNT || true
 	echo "Cleanup local mds ost1 ..."
 	cleanup_nocli32
-	unload_modules
+	combined_mgs_mds || start_mgs
+	unload_modules_conf
 }
 
 test_32a() {
@@ -1210,6 +1216,8 @@ test_32a() {
 	lctl set_param debug=$PTLDEBUG
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
+
+	combined_mgs_mds || stop mgs
 
 	# nids are wrong, so client wont work, but server should start
 	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
@@ -1241,6 +1249,9 @@ test_32a() {
 	# mount a second time to make sure we didnt leave upgrade flag on
 	load_modules
 	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
+
+	combined_mgs_mds || stop mgs
+
 	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
 		trap cleanup_32 EXIT INT || return 12
 
@@ -1273,6 +1284,8 @@ test_32b() {
 	$TUNEFS --mdt --writeconf --erase-param \
 		--param="mdt.group_upcall=/usr/sbin/l_getgroups" $tmpdir/mds || \
 		error "tunefs mds failed"
+
+	combined_mgs_mds || stop mgs
 
 	start32 mds $tmpdir/mds "-o loop,abort_recov" && \
 		trap cleanup_32 EXIT INT || return 3
@@ -1342,6 +1355,8 @@ test_33a() { # bug 12333, was test_33
         else
                 mkfs_opts="--mkfsoptions='-J size=8'" # bug 17931
         fi
+
+        combined_mgs_mds || mkfs_opts="$mkfs_opts --nomgs"
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
         local fs2ostdev=${fs2ost_DEV:-$(ostdevname 1)_2}
@@ -1621,7 +1636,7 @@ test_36() { # 12743
         stop fs2ost -f || return 201
         stop fs2mds -f || return 202
         rm -rf $MOUNT2 $fs2mdsdev $fs2ostdev $fs3ostdev
-        unload_modules || return 203
+        unload_modules_conf || return 203
         return $rc
 }
 run_test 36 "df report consistency on OSTs with different block size"
@@ -1747,7 +1762,7 @@ test_41() { #bug 14134
         stop ost1 -f || return 201
         stop mds -f || return 202
         stop mds -f || return 203
-        unload_modules || return 204
+        unload_modules_conf || return 204
         return $rc
 }
 run_test 41 "mount mds with --nosvc and --nomgs"
