@@ -191,7 +191,9 @@ mmp_fini() {
             error "MMP was not disabled on $MMP_MDSDEV on $MMP_MDS"
     fi
 
-    if [ -z "$ostfailover_HOST" ]; then
+    local var=${MMP_OSS}failover_HOST
+
+    if [ -z "${!var}" ]; then
         log "Failover is not used on OSS, disabling MMP manually..."
         disable_mmp $MMP_OSS $MMP_OSTDEV || \
             error "failed to disable MMP on $MMP_OSTDEV on $MMP_OSS"
