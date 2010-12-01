@@ -2177,7 +2177,7 @@ static int ptlrpc_main(void *arg)
 
                 cfs_cond_resched();
 
-                l_wait_event_exclusive(svc->srv_waitq,
+                l_wait_event_exclusive_head(svc->srv_waitq,
                                        ptlrpc_thread_stopping(thread) ||
                                        ptlrpc_server_request_waiting(svc) ||
                                        ptlrpc_server_request_pending(svc, 0) ||
@@ -2305,7 +2305,7 @@ static int ptlrpc_hr_main(void *arg)
 
         while (!cfs_test_bit(HRT_STOPPING, &t->hrt_flags)) {
 
-                l_cfs_wait_event(t->hrt_wait, hrt_dont_sleep(t, &replies));
+                l_wait_condition(t->hrt_wait, hrt_dont_sleep(t, &replies));
                 while (!cfs_list_empty(&replies)) {
                         struct ptlrpc_reply_state *rs;
 
@@ -2340,7 +2340,7 @@ static int ptlrpc_start_hr_thread(struct ptlrpc_hr_service *hr, int n, int cpu)
                 cfs_complete(&t->hrt_completion);
                 GOTO(out, rc);
         }
-        l_cfs_wait_event(t->hrt_wait, cfs_test_bit(HRT_RUNNING, &t->hrt_flags));
+        l_wait_condition(t->hrt_wait, cfs_test_bit(HRT_RUNNING, &t->hrt_flags));
         RETURN(0);
  out:
         return rc;

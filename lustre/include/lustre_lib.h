@@ -667,7 +667,7 @@ struct l_wait_info {
  * wait for @condition to become true, but no longer than timeout, specified
  * by @info.
  */
-#define __l_wait_event(wq, condition, info, ret, excl)                         \
+#define __l_wait_event(wq, condition, info, ret, l_add_wait)                   \
 do {                                                                           \
         cfs_waitlink_t __wait;                                                 \
         cfs_duration_t __timeout = info->lwi_timeout;                          \
@@ -679,10 +679,7 @@ do {                                                                           \
                 break;                                                         \
                                                                                \
         cfs_waitlink_init(&__wait);                                            \
-        if (excl)                                                              \
-                cfs_waitq_add_exclusive(&wq, &__wait);                         \
-        else                                                                   \
-                cfs_waitq_add(&wq, &__wait);                                   \
+        l_add_wait(&wq, &__wait);                                              \
                                                                                \
         /* Block all signals (just the non-fatal ones if no timeout). */       \
         if (info->lwi_on_signal != NULL && (__timeout == 0 || __allow_intr))   \
@@ -754,7 +751,7 @@ do {                                                                           \
 } while (0)
 
 #else /* !__KERNEL__ */
-#define __l_wait_event(wq, condition, info, ret, excl)                  \
+#define __l_wait_event(wq, condition, info, ret, l_add_wait)            \
 do {                                                                    \
         long __timeout = info->lwi_timeout;                             \
         long __now;                                                     \
@@ -806,7 +803,8 @@ do {                                                                    \
         int                 __ret;                              \
         struct l_wait_info *__info = (info);                    \
                                                                 \
-        __l_wait_event(wq, condition, __info, __ret, 0);        \
+        __l_wait_event(wq, condition, __info,                   \
+                       __ret, cfs_waitq_add);                   \
         __ret;                                                  \
 })
 
@@ -815,14 +813,37 @@ do {                                                                    \
         int                 __ret;                              \
         struct l_wait_info *__info = (info);                    \
                                                                 \
-        __l_wait_event(wq, condition, __info, __ret, 1);        \
+        __l_wait_event(wq, condition, __info,                   \
+                       __ret, cfs_waitq_add_exclusive);         \
         __ret;                                                  \
 })
 
-#define l_cfs_wait_event(wq, condition)                         \
+#define l_wait_event_exclusive_head(wq, condition, info)        \
+({                                                              \
+        int                 __ret;                              \
+        struct l_wait_info *__info = (info);                    \
+                                                                \
+        __l_wait_event(wq, condition, __info,                   \
+                       __ret, cfs_waitq_add_exclusive_head);    \
+        __ret;                                                  \
+})
+
+#define l_wait_condition(wq, condition)                         \
 ({                                                              \
         struct l_wait_info lwi = { 0 };                         \
         l_wait_event(wq, condition, &lwi);                      \
+})
+
+#define l_wait_condition_exclusive(wq, condition)               \
+({                                                              \
+        struct l_wait_info lwi = { 0 };                         \
+        l_wait_event_exclusive(wq, condition, &lwi);            \
+})
+
+#define l_wait_condition_exclusive_head(wq, condition)          \
+({                                                              \
+        struct l_wait_info lwi = { 0 };                         \
+        l_wait_event_exclusive_head(wq, condition, &lwi);       \
 })
 
 #ifdef __KERNEL__

@@ -80,6 +80,11 @@ void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, struct cfs_waitlink *link)
         (void)link;
 }
 
+void cfs_waitq_add_exclusive_head(struct cfs_waitq *waitq, struct cfs_waitlink *link)
+{
+        cfs_waitq_add_exclusive(waitq, link);
+}
+
 void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 {
         LASSERT(waitq != NULL);

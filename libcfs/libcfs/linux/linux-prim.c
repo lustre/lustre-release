@@ -73,6 +73,17 @@ cfs_waitq_add(cfs_waitq_t *waitq, cfs_waitlink_t *link)
 }
 EXPORT_SYMBOL(cfs_waitq_add);
 
+#ifndef HAVE___ADD_WAIT_QUEUE_EXCLUSIVE
+
+static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
+                                              wait_queue_t *wait)
+{
+        wait->flags |= WQ_FLAG_EXCLUSIVE;
+        __add_wait_queue(q, wait);
+}
+
+#endif /* HAVE___ADD_WAIT_QUEUE_EXCLUSIVE */
+
 void
 cfs_waitq_add_exclusive(cfs_waitq_t *waitq,
                         cfs_waitlink_t *link)
@@ -80,6 +91,30 @@ cfs_waitq_add_exclusive(cfs_waitq_t *waitq,
         add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
 }
 EXPORT_SYMBOL(cfs_waitq_add_exclusive);
+
+/**
+ * wait_queue_t of Linux (version < 2.6.34) is a FIFO list for exclusively
+ * waiting threads, which is not always desirable because all threads will
+ * be waken up again and again, even user only needs a few of them to be
+ * active most time. This is not good for performance because cache can
+ * be polluted by different threads.
+ *
+ * LIFO list can resolve this problem because we always wakeup the most
+ * recent active thread by default.
+ *
+ * NB: please don't call non-exclusive & exclusive wait on the same
+ * waitq if cfs_waitq_add_exclusive_head is used.
+ */
+void
+cfs_waitq_add_exclusive_head(cfs_waitq_t *waitq, cfs_waitlink_t *link)
+{
+        unsigned long flags;
+
+        spin_lock_irqsave(&LINUX_WAITQ_HEAD(waitq)->lock, flags);
+        __add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
+        spin_unlock_irqrestore(&LINUX_WAITQ_HEAD(waitq)->lock, flags);
+}
+EXPORT_SYMBOL(cfs_waitq_add_exclusive_head);
 
 void
 cfs_waitq_del(cfs_waitq_t *waitq, cfs_waitlink_t *link)

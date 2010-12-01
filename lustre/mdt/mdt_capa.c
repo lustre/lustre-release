@@ -294,7 +294,7 @@ int mdt_ck_thread_start(struct mdt_device *mdt)
                 return rc;
         }
 
-        l_cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
+        l_wait_condition(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
         return 0;
 }
 
@@ -307,5 +307,5 @@ void mdt_ck_thread_stop(struct mdt_device *mdt)
 
         thread->t_flags = SVC_STOPPING;
         cfs_waitq_signal(&thread->t_ctl_waitq);
-        l_cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+        l_wait_condition(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 }
