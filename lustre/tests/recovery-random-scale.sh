@@ -306,7 +306,7 @@ Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), bug
     log " Number of failovers:
 $(numfailovers)                and counting..."
 
-    if [ $((ELAPSED + sleep)) -gt $DURATION ]; then
+    if [ $((ELAPSED + sleep)) -ge $DURATION ]; then
          break
     fi
 
