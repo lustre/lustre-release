@@ -219,8 +219,8 @@ extern int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
 extern int llapi_is_lustre_mnttype(const char *type);
 extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
 extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
-extern int parse_size(char *optarg, unsigned long long *size,
-                      unsigned long long *size_units, int bytes_spec);
+extern int llapi_parse_size(const char *optarg, unsigned long long *size,
+			    unsigned long long *size_units, int bytes_spec);
 extern int llapi_search_mounts(const char *pathname, int index,
                                char *mntdir, char *fsname);
 extern int llapi_search_fsname(const char *pathname, char *fsname);
@@ -298,18 +298,27 @@ extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
  * priv is private state, managed internally by these functions
  */
 struct hsm_copytool_private;
-extern int llapi_hsm_copytool_start(struct hsm_copytool_private **priv,
-				    char *fsname, int flags,
-				    int archive_count, int *archives);
-extern int llapi_hsm_copytool_fini(struct hsm_copytool_private **priv);
+struct hsm_copyaction_private;
+
+extern int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
+				       const char *mnt, int flags,
+				       int archive_count, int *archives);
+extern int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv);
 extern int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
 				   struct hsm_action_list **hal, int *msgsize);
-extern int llapi_hsm_copytool_free(struct hsm_action_list **hal);
-extern int llapi_hsm_copy_start(char *mnt, struct hsm_copy *copy,
-				const struct hsm_action_item *hai);
-extern int llapi_hsm_copy_end(char *mnt, struct hsm_copy *copy,
-			      const struct hsm_progress *hp);
-extern int llapi_hsm_progress(char *mnt, struct hsm_progress *hp);
+extern void llapi_hsm_action_list_free(struct hsm_action_list **hal);
+extern int llapi_hsm_action_begin(struct hsm_copyaction_private **hcp,
+				  const struct hsm_copytool_private *ct_priv,
+				  const struct hsm_action_item *hai,
+				  bool is_error);
+extern int llapi_hsm_action_end(struct hsm_copyaction_private **hcp,
+				const struct hsm_extent *he, int flags,
+				int errval);
+extern int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
+				     const struct hsm_extent *he, int hp_flags);
+extern int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
+				     lustre_fid *fid);
+extern int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp);
 extern int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 			    unsigned long long stripe_size, int stripe_offset,
 			    int stripe_count, int stripe_pattern,
@@ -318,7 +327,8 @@ extern int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 /* HSM user interface */
 extern struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
 							     int data_len);
-extern int llapi_hsm_request(char *mnt, struct hsm_user_request *request);
+extern int llapi_hsm_request(const char *path,
+			     const struct hsm_user_request *request);
 extern int llapi_hsm_current_action(const char *path,
 				    struct hsm_current_action *hca);
 /** @} llapi */

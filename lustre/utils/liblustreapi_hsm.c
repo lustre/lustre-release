@@ -26,7 +26,8 @@
  *
  * Author: Aurelien Degremont <aurelien.degremont@cea.fr>
  * Author: JC Lafoucriere <jacques-charles.lafoucriere@cea.fr>
- * Author: Thomas leibovici <thomas.leibovici@cea.fr>
+ * Author: Thomas Leibovici <thomas.leibovici@cea.fr>
+ * Author: Henri Doreau <henri.doreau@cea.fr>
  */
 
 #include <stdlib.h>
@@ -62,22 +63,32 @@
 #define CT_PRIV_MAGIC 0xC0BE2001
 struct hsm_copytool_private {
 	int			 magic;
-	char			*fsname;
+	char			*mnt;
+	int			 mnt_fd;
 	lustre_kernelcomm	 kuc;
 	__u32			 archives;
+};
+
+#define CP_PRIV_MAGIC 0x19880429
+struct hsm_copyaction_private {
+	__u32					 magic;
+	__s32					 data_fd;
+	const struct hsm_copytool_private	*ct_priv;
+	struct hsm_copy				 copy;
 };
 
 #include <libcfs/libcfs.h>
 
 /** Register a copytool
  * \param[out] priv Opaque private control structure
- * \param fsname Lustre filesystem
+ * \param mnt Lustre filesystem mount point
  * \param flags Open flags, currently unused (e.g. O_NONBLOCK)
  * \param archive_count
  * \param archives Which archive numbers this copytool is responsible for
  */
-int llapi_hsm_copytool_start(struct hsm_copytool_private **priv, char *fsname,
-			     int flags, int archive_count, int *archives)
+int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
+				const char *mnt, int flags, int archive_count,
+				int *archives)
 {
 	struct hsm_copytool_private	*ct;
 	int				 rc;
@@ -92,12 +103,18 @@ int llapi_hsm_copytool_start(struct hsm_copytool_private **priv, char *fsname,
 	if (ct == NULL)
 		return -ENOMEM;
 
-	ct->fsname = malloc(strlen(fsname) + 1);
-	if (ct->fsname == NULL) {
+	ct->mnt_fd = open(mnt, O_DIRECTORY | O_RDONLY | O_NONBLOCK);
+	if (ct->mnt_fd < 0) {
+		rc = -errno;
+		goto out_err;
+	}
+
+	ct->mnt = strdup(mnt);
+	if (ct->mnt == NULL) {
 		rc = -ENOMEM;
 		goto out_err;
 	}
-	strcpy(ct->fsname, fsname);
+
 	ct->magic = CT_PRIV_MAGIC;
 
 	/* no archives specified means "match all". */
@@ -126,8 +143,16 @@ int llapi_hsm_copytool_start(struct hsm_copytool_private **priv, char *fsname,
 
 	/* Storing archive(s) in lk_data; see mdc_ioc_hsm_ct_start */
 	ct->kuc.lk_data = ct->archives;
-	rc = root_ioctl(ct->fsname, LL_IOC_HSM_CT_START, &(ct->kuc), NULL,
-			WANT_ERROR);
+	rc = ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, &ct->kuc);
+	if (rc < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot start copytool on '%s'", mnt);
+		goto out_err;
+	} else {
+		rc = 0;
+	}
+
 	/* Only the kernel reference keeps the write side open */
 	close(ct->kuc.lk_wfd);
 	ct->kuc.lk_wfd = 0;
@@ -140,36 +165,44 @@ int llapi_hsm_copytool_start(struct hsm_copytool_private **priv, char *fsname,
 out_kuc:
 	/* cleanup the kuc channel */
 	libcfs_ukuc_stop(&ct->kuc);
+
 out_err:
-	if (ct->fsname)
-		free(ct->fsname);
+	if (!(ct->mnt_fd < 0))
+		close(ct->mnt_fd);
+	if (ct->mnt != NULL)
+		free(ct->mnt);
 	free(ct);
 	return rc;
 }
 
 /** Deregister a copytool
- * Note: under Linux, until llapi_hsm_copytool_fini is called (or the program is
- * killed), the libcfs module will be referenced and unremovable,
- * even after Lustre services stop.
+ * Note: under Linux, until llapi_hsm_copytool_unregister is called
+ * (or the program is killed), the libcfs module will be referenced
+ * and unremovable, even after Lustre services stop.
  */
-int llapi_hsm_copytool_fini(struct hsm_copytool_private **priv)
+int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 {
 	struct hsm_copytool_private *ct;
 
+	if (priv == NULL || *priv == NULL)
+		return -EINVAL;
+
 	ct = *priv;
-	if (!ct || (ct->magic != CT_PRIV_MAGIC))
+	if (ct->magic != CT_PRIV_MAGIC)
 		return -EINVAL;
 
 	/* Tell the kernel to stop sending us messages */
 	ct->kuc.lk_flags = LK_FLG_STOP;
-	root_ioctl(ct->fsname, LL_IOC_HSM_CT_START, &(ct->kuc), NULL, 0);
+	ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, &ct->kuc);
 
 	/* Shut down the kernelcomms */
 	libcfs_ukuc_stop(&ct->kuc);
 
-	free(ct->fsname);
+	close(ct->mnt_fd);
+	free(ct->mnt);
 	free(ct);
 	*priv = NULL;
+
 	return 0;
 }
 
@@ -183,12 +216,13 @@ int llapi_hsm_copytool_fini(struct hsm_copytool_private **priv)
 int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 			    struct hsm_action_list **halh, int *msgsize)
 {
-	struct kuc_hdr			*kuch;
-	struct hsm_action_list		*hal;
-	int				 rc = 0;
+	struct kuc_hdr		*kuch;
+	struct hsm_action_list	*hal;
+	int			 rc = 0;
 
-	if (!ct || (ct->magic != CT_PRIV_MAGIC))
+	if (ct == NULL || ct->magic != CT_PRIV_MAGIC)
 		return -EINVAL;
+
 	if (halh == NULL || msgsize == NULL)
 		return -EINVAL;
 
@@ -256,132 +290,282 @@ out_free:
 }
 
 /** Release the action list when done with it. */
-int llapi_hsm_copytool_free(struct hsm_action_list **hal)
+void llapi_hsm_action_list_free(struct hsm_action_list **hal)
 {
 	/* Reuse the llapi_changelog_free function */
-	return llapi_changelog_free((struct changelog_ext_rec **)hal);
+	llapi_changelog_free((struct changelog_ext_rec **)hal);
 }
 
-
-/**
- * Should be called by copytools just before starting handling a request.
- * It could be skipped if copytool only want to directly report an error,
- * \see llapi_hsm_copy_end().
+/** Get parent path from mount point and fid.
  *
- * \param mnt   Mount point of the corresponding Lustre filesystem.
- * \param hai   The hsm_action_item describing the request they will handle.
- * \param copy  Updated by this call. Caller will passed it to
- *		llapi_hsm_copy_end()
- *
+ * \param mnt        Filesystem root path.
+ * \param fid        Object FID.
+ * \param parent     Destination buffer.
+ * \param parent_len Destination buffer size.
  * \return 0 on success.
  */
-int llapi_hsm_copy_start(char *mnt, struct hsm_copy *copy,
-			 const struct hsm_action_item *hai)
+static int fid_parent(const char *mnt, const lustre_fid *fid, char *parent,
+		      size_t parent_len)
 {
-	int	fd;
-	int	rc;
+	int		 rc;
+	int		 linkno = 0;
+	long long	 recno = -1;
+	char		 file[PATH_MAX];
+	char		 strfid[FID_NOBRACE_LEN + 1];
+	char		*ptr;
 
-	if (memcpy(&copy->hc_hai, hai, sizeof(*hai)) == NULL)
-		RETURN(-EFAULT);
+	snprintf(strfid, sizeof(strfid), DFID_NOBRACE, PFID(fid));
 
-	rc = get_root_path(WANT_FD, NULL, &fd, mnt, -1);
-	if (rc)
+	rc = llapi_fid2path(mnt, strfid, file, sizeof(file),
+			    &recno, &linkno);
+	if (rc < 0)
 		return rc;
 
-	rc = ioctl(fd, LL_IOC_HSM_COPY_START, copy);
-	/* If error, return errno value */
-	rc = rc ? -errno : 0;
-	close(fd);
+	/* fid2path returns a relative path */
+	rc = snprintf(parent, parent_len, "%s/%s", mnt, file);
+	if (rc >= parent_len)
+		return -ENAMETOOLONG;
 
-	return rc;
-}
-
-/**
- * Should be called by copytools just having finished handling the request.
- *
- * \param mnt   Mount point of the corresponding Lustre filesystem.
- * \param copy  The element used when calling llapi_hsm_copy_start()
- * \param hp    A hsm_progress structure describing the final state of the
- *		request.
- *
- * There is a special case which can be used only when the copytool cannot
- * start the copy at all and want to directly return an error. In this case,
- * simply fill \a hp structure and set \a copy to NULL. It is useless to call
- * llapi_hsm_copy_start() in this case.
- *
- * \return 0 on success.
- */
-int llapi_hsm_copy_end(char *mnt, struct hsm_copy *copy,
-		       const struct hsm_progress *hp)
-{
-	int	end_only = 0;
-	int	fd;
-	int	rc;
-
-	/* llapi_hsm_copy_start() was skipped, so alloc copy. It will
-	 * only be used to give the needed progress information. */
-	if (copy == NULL) {
-		/* This is only ok if there is an error. */
-		if (hp->hp_errval == 0)
-			return -EINVAL;
-
-		copy = (struct hsm_copy *)malloc(sizeof(*copy));
-		if (copy == NULL)
-			return -ENOMEM;
-		end_only = 1;
-		copy->hc_hai.hai_cookie = hp->hp_cookie;
-		copy->hc_hai.hai_fid = hp->hp_fid;
-		copy->hc_hai.hai_action = HSMA_NONE;
+	/* remove file name */
+	ptr = strrchr(parent, '/');
+	if (ptr == NULL || ptr == parent) {
+		rc = -EINVAL;
+	} else {
+		*ptr = '\0';
+		rc = 0;
 	}
 
-	/* Fill the last missing data that will be needed by kernel
-	 * to send a hsm_progress. */
-	copy->hc_flags = hp->hp_flags;
-	copy->hc_errval = hp->hp_errval;
-	/* Update hai if it has changed since start */
-	copy->hc_hai.hai_extent = hp->hp_extent;
-	/* In some cases, like restore, 2 FIDs are used. hp knows the right FID
-	 * to use here. */
-	copy->hc_hai.hai_fid = hp->hp_fid;
+	return rc;
+}
 
-	rc = get_root_path(WANT_FD, NULL, &fd, mnt, -1);
-	if (rc)
-		goto out_free;
+/** Create the destination volatile file for a restore operation.
+ *
+ * \param hcp  Private copyaction handle.
+ * \return 0 on success.
+ */
+static int create_restore_volatile(struct hsm_copyaction_private *hcp)
+{
+	int			 rc;
+	int			 fd;
+	char			 parent[PATH_MAX + 1];
+	const char		*mnt = hcp->ct_priv->mnt;
+	struct hsm_action_item	*hai = &hcp->copy.hc_hai;
 
-	rc = ioctl(fd, LL_IOC_HSM_COPY_END, copy);
-	/* If error, return errno value */
-	rc = rc ? -errno : 0;
+	rc = fid_parent(mnt, &hai->hai_fid, parent, sizeof(parent));
+	if (rc < 0) {
+		/* fid_parent() failed, try to keep on going */
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot get parent path to restore "DFID
+			    "using '%s'", PFID(&hai->hai_fid), mnt);
+		snprintf(parent, sizeof(parent), "%s", mnt);
+	}
+
+	fd = llapi_create_volatile_idx(parent, 0, O_LOV_DELAY_CREATE);
+	if (fd < 0)
+		return fd;
+
+	rc = llapi_fd2fid(fd, &hai->hai_dfid);
+	if (rc < 0)
+		goto err_cleanup;
+
+	hcp->data_fd = fd;
+
+	return 0;
+
+err_cleanup:
+	hcp->data_fd = -1;
 	close(fd);
-
-out_free:
-	if (end_only)
-		free(copy);
 
 	return rc;
 }
 
-/**
- * Copytool progress reporting.
+/** Start processing an HSM action.
+ * Should be called by copytools just before starting handling a request.
+ * It could be skipped if copytool only want to directly report an error,
+ * \see llapi_hsm_action_end().
  *
- * \a hp->hp_errval should be EAGAIN until action is completely finished.
+ * \param hcp      Opaque action handle to be passed to
+ *                 llapi_hsm_action_progress and llapi_hsm_action_end.
+ * \param ct       Copytool handle acquired at registration.
+ * \param hai      The hsm_action_item describing the request.
+ * \param is_error Whether this call is just to report an error.
  *
- * \return 0 on success, an error code otherwise.
+ * \return 0 on success.
  */
-int llapi_hsm_progress(char *mnt, struct hsm_progress *hp)
+int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
+			   const struct hsm_copytool_private *ct,
+			   const struct hsm_action_item *hai, bool is_error)
 {
-	int	fd;
-	int	rc;
+	struct hsm_copyaction_private	*hcp;
+	int				 rc;
 
-	rc = get_root_path(WANT_FD, NULL, &fd, mnt, -1);
-	if (rc)
-		return rc;
+	hcp = calloc(1, sizeof(*hcp));
+	if (hcp == NULL)
+		return -ENOMEM;
 
-	rc = ioctl(fd, LL_IOC_HSM_PROGRESS, hp);
-	/* If error, save errno value */
-	rc = rc ? -errno : 0;
+	hcp->data_fd = -1;
+	hcp->ct_priv = ct;
+	hcp->copy.hc_hai = *hai;
+	hcp->copy.hc_hai.hai_len = sizeof(*hai);
 
-	close(fd);
+	if (is_error)
+		goto ok_out;
+
+	if (hai->hai_action == HSMA_RESTORE) {
+		rc = create_restore_volatile(hcp);
+		if (rc < 0)
+			goto err_out;
+	}
+
+	rc = ioctl(ct->mnt_fd, LL_IOC_HSM_COPY_START, &hcp->copy);
+	if (rc < 0) {
+		rc = -errno;
+		goto err_out;
+	}
+
+ok_out:
+	hcp->magic = CP_PRIV_MAGIC;
+	*phcp = hcp;
+	return 0;
+
+err_out:
+	if (!(hcp->data_fd < 0))
+		close(hcp->data_fd);
+
+	free(hcp);
+
 	return rc;
+}
+
+/** Terminate an HSM action processing.
+ * Should be called by copytools just having finished handling the request.
+ * \param hdl[in,out]  Handle returned by llapi_hsm_action_start.
+ * \param he[in]       The final range of copied data (for copy actions).
+ * \param errval[in]   The status code of the operation.
+ * \param flags[in]    The flags about the termination status (HP_FLAG_RETRY if
+ *                     the error is retryable).
+ *
+ * \return 0 on success.
+ */
+int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
+			 const struct hsm_extent *he, int flags, int errval)
+{
+	struct hsm_copyaction_private	*hcp;
+	struct hsm_action_item		*hai;
+	int				 rc;
+
+	if (phcp == NULL || *phcp == NULL || he == NULL)
+		return -EINVAL;
+
+	hcp = *phcp;
+
+	if (hcp->magic != CP_PRIV_MAGIC)
+		return -EINVAL;
+
+	hai = &hcp->copy.hc_hai;
+
+	/* In some cases, like restore, 2 FIDs are used.
+	 * Set the right FID to use here. */
+	if (hai->hai_action == HSMA_ARCHIVE || hai->hai_action == HSMA_RESTORE)
+		hai->hai_fid = hai->hai_dfid;
+
+	/* Fill the last missing data that will be needed by
+	 * kernel to send a hsm_progress. */
+	hcp->copy.hc_flags  = flags;
+	hcp->copy.hc_errval = abs(errval);
+
+	hcp->copy.hc_hai.hai_extent = *he;
+
+	rc = ioctl(hcp->ct_priv->mnt_fd, LL_IOC_HSM_COPY_END, &hcp->copy);
+	if (rc) {
+		rc = -errno;
+		goto err_cleanup;
+	}
+
+err_cleanup:
+	if (!(hcp->data_fd < 0))
+		close(hcp->data_fd);
+
+	free(hcp);
+	*phcp = NULL;
+
+	return rc;
+}
+
+/** Notify a progress in processing an HSM action.
+ * \param hdl[in,out]   handle returned by llapi_hsm_action_start.
+ * \param he[in]        the range of copied data (for copy actions).
+ * \param hp_flags[in]  HSM progress flags.
+ * \return 0 on success.
+ */
+int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
+			      const struct hsm_extent *he, int hp_flags)
+{
+	int			 rc;
+	struct hsm_progress	 hp;
+	struct hsm_action_item	*hai;
+
+	if (hcp == NULL || he == NULL)
+		return -EINVAL;
+
+	if (hcp->magic != CP_PRIV_MAGIC)
+		return -EINVAL;
+
+	hai = &hcp->copy.hc_hai;
+
+	memset(&hp, 0, sizeof(hp));
+
+	hp.hp_cookie = hai->hai_cookie;
+	hp.hp_flags  = hp_flags;
+
+	/* Progress is made on the data fid */
+	hp.hp_fid = hai->hai_dfid;
+	hp.hp_extent = *he;
+
+	rc = ioctl(hcp->ct_priv->mnt_fd, LL_IOC_HSM_PROGRESS, &hp);
+	if (rc < 0)
+		rc = -errno;
+
+	return rc;
+}
+
+/** Get the fid of object to be used for copying data.
+ * @return error code if the action is not a copy operation.
+ */
+int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
+			      lustre_fid *fid)
+{
+	const struct hsm_action_item	*hai = &hcp->copy.hc_hai;
+
+	if (hcp->magic != CP_PRIV_MAGIC)
+		return -EINVAL;
+
+	if (hai->hai_action != HSMA_RESTORE && hai->hai_action != HSMA_ARCHIVE)
+		return -EINVAL;
+
+	*fid = hai->hai_dfid;
+
+	return 0;
+}
+
+/**
+ * Get a file descriptor to be used for copying data. It's up to the
+ * caller to close the FDs obtained from this function.
+ *
+ * @retval a file descriptor on success.
+ * @retval a negative error code on failure.
+ */
+int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
+{
+	const struct hsm_action_item	*hai = &hcp->copy.hc_hai;
+
+	if (hcp->magic != CP_PRIV_MAGIC)
+		return -EINVAL;
+
+	if (hai->hai_action != HSMA_RESTORE)
+		return -EINVAL;
+
+	return dup(hcp->data_fd);
 }
 
 /**
@@ -599,17 +783,17 @@ struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
 /**
  * Send a HSM request to Lustre, described in \param request.
  *
- * This request should be allocated with llapi_hsm_user_request_alloc().
+ * \param path	  Fullpath to the file to operate on.
+ * \param request The request, allocated with llapi_hsm_user_request_alloc().
  *
- * \param mnt Should be the Lustre moint point.
  * \return 0 on success, an error code otherwise.
  */
-int llapi_hsm_request(char *mnt, struct hsm_user_request *request)
+int llapi_hsm_request(const char *path, const struct hsm_user_request *request)
 {
 	int rc;
 	int fd;
 
-	rc = get_root_path(WANT_FD, NULL, &fd, mnt, -1);
+	rc = get_root_path(WANT_FD, NULL, &fd, (char *)path, -1);
 	if (rc)
 		return rc;
 

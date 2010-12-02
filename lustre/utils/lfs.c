@@ -723,15 +723,16 @@ static int lfs_setstripe(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* get the stripe size */
-        if (stripe_size_arg != NULL) {
-                result = parse_size(stripe_size_arg, &st_size, &size_units, 0);
-                if (result) {
-                        fprintf(stderr, "error: %s: bad stripe size '%s'\n",
-                                argv[0], stripe_size_arg);
-                        return result;
-                }
-        }
+	/* get the stripe size */
+	if (stripe_size_arg != NULL) {
+		result = llapi_parse_size(stripe_size_arg, &st_size,
+					  &size_units, 0);
+		if (result) {
+			fprintf(stderr, "error: %s: bad stripe size '%s'\n",
+				argv[0], stripe_size_arg);
+			return result;
+		}
+	}
         /* get the stripe offset */
         if (stripe_off_arg != NULL) {
                 st_offset = strtol(stripe_off_arg, &end, 0);
@@ -1139,44 +1140,44 @@ err_free:
                         break;
                 case 'P':
                         break;
-                case 's':
-                        if (optarg[0] == '+') {
-                                param.size_sign = -1;
-                                optarg++;
-                        } else if (optarg[0] == '-') {
-                                param.size_sign =  1;
-                                optarg++;
-                        }
+		case 's':
+			if (optarg[0] == '+') {
+				param.size_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.size_sign =  1;
+				optarg++;
+			}
 
-                        ret = parse_size(optarg, &param.size,
-                                         &param.size_units, 0);
-                        if (ret) {
-                                fprintf(stderr, "error: bad file size '%s'\n",
-                                        optarg);
-                                goto err;
-                        }
-                        param.check_size = 1;
-                        param.exclude_size = !!neg_opt;
-                        break;
-                case 'S':
-                        if (optarg[0] == '+') {
-                                param.stripesize_sign = -1;
-                                optarg++;
-                        } else if (optarg[0] == '-') {
-                                param.stripesize_sign =  1;
-                                optarg++;
-                        }
+			ret = llapi_parse_size(optarg, &param.size,
+					       &param.size_units, 0);
+			if (ret) {
+				fprintf(stderr, "error: bad file size '%s'\n",
+					optarg);
+				goto err;
+			}
+			param.check_size = 1;
+			param.exclude_size = !!neg_opt;
+			break;
+		case 'S':
+			if (optarg[0] == '+') {
+				param.stripesize_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.stripesize_sign =  1;
+				optarg++;
+			}
 
-                        ret = parse_size(optarg, &param.stripesize,
-                                         &param.stripesize_units, 0);
-                        if (ret) {
-                                fprintf(stderr, "error: bad stripe_size '%s'\n",
-                                        optarg);
-                                goto err;
-                        }
-                        param.check_stripesize = 1;
-                        param.exclude_stripesize = !!neg_opt;
-                        break;
+			ret = llapi_parse_size(optarg, &param.stripesize,
+					       &param.stripesize_units, 0);
+			if (ret) {
+				fprintf(stderr, "error: bad stripe_size '%s'\n",
+					optarg);
+				goto err;
+			}
+			param.check_stripesize = 1;
+			param.exclude_stripesize = !!neg_opt;
+			break;
                 case 't':
                         param.exclude_type = !!neg_opt;
                         switch(optarg[0]) {
@@ -2179,17 +2180,17 @@ error:
         return ULONG_MAX;
 }
 
-#define ARG2ULL(nr, str, def_units)                                     \
-do {                                                                    \
-        unsigned long long limit, units = def_units;                    \
-        int rc;                                                         \
-                                                                        \
-        rc = parse_size(str, &limit, &units, 1);                        \
-        if (rc < 0) {                                                   \
-                fprintf(stderr, "error: bad limit value %s\n", str);    \
-                return CMD_HELP;                                        \
-        }                                                               \
-        nr = limit;                                                     \
+#define ARG2ULL(nr, str, def_units)					\
+do {									\
+	unsigned long long limit, units = def_units;			\
+	int rc;								\
+									\
+	rc = llapi_parse_size(str, &limit, &units, 1);			\
+	if (rc < 0) {							\
+		fprintf(stderr, "error: bad limit value %s\n", str);	\
+		return CMD_HELP;					\
+	}								\
+	nr = limit;							\
 } while (0)
 
 static inline int has_times_option(int argc, char **argv)

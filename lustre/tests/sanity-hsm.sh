@@ -10,7 +10,7 @@ set -e
 set +o monitor
 
 SRCDIR=`dirname $0`
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/utils:$PATH:/sbin
+export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/utils:$PATH:/sbin:/usr/sbin/
 
 ONLY=${ONLY:-"$*"}
 SANITY_HSM_EXCEPT=${SANITY_HSM_EXCEPT:-""}
@@ -27,6 +27,7 @@ ORIG_PWD=${PWD}
 MCREATE=${MCREATE:-mcreate}
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
@@ -63,14 +64,19 @@ copytool_cleanup() {
 }
 
 copytool_setup() {
-	# TODO: add copytool setup code here!
-	return
+	rm -rf $HSM_ARCHIVE
+	mkdir -p $HSM_ARCHIVE
 }
 
 fail() {
 	copytool_cleanup
 	error $*
 }
+
+export HSMTOOL=${HSMTOOL:-"lhsmtool_posix"}
+export HSMTOOL_VERBOSE=${HSMTOOL_VERBOSE:-""}
+HSM_ARCHIVE=${HSM_ARCHIVE:-$TMP/arc}
+HSM_ARCHIVE_NUMBER=2
 
 path2fid() {
 	$LFS path2fid $1 | tr -d '[]'
@@ -239,6 +245,32 @@ test_3() {
 		error "wrong hsm state $state, should be 0x00000003"
 }
 run_test 3 "Check file dirtyness when opening for write"
+
+test_11() {
+	mkdir -p $DIR/$tdir $HSM_ARCHIVE/$tdir
+	cp /etc/hosts $HSM_ARCHIVE/$tdir/$tfile
+	local f=$DIR/$tdir/$tfile
+	$HSMTOOL $HSMTOOL_VERBOSE --archive $HSM_ARCHIVE_NUMBER \
+		--hsm_root $HSM_ARCHIVE --import $tdir/$tfile $f $MOUNT ||
+		error "import failed"
+	echo -n "Verifying released state: "
+	$LFS hsm_state $f
+	$LFS hsm_state $f | grep -q "released exists archived" ||
+		error "flags not set"
+	local LSZ=$(stat -c "%s" $f)
+	local ASZ=$(stat -c "%s" $HSM_ARCHIVE/$tdir/$tfile)
+	echo "Verifying imported size $LSZ=$ASZ"
+	[[ $LSZ -eq $ASZ ]] || error "Incorrect size $LSZ != $ASZ"
+	echo -n "Verifying released pattern: "
+	local PTRN=$($GETSTRIPE -L $f)
+	echo $PTRN
+	[[ $PTRN == 80000001 ]] || error "Is not released"
+	local fid=$(path2fid $f)
+	echo "Verifying new fid $fid in archive"
+	local AFILE=$(ls $HSM_ARCHIVE/*/*/*/*/*/*/$fid) || \
+		error "fid $fid not in archive $HSM_ARCHIVE"
+}
+run_test 11 "Import a file"
 
 test_20() {
 	mkdir -p $DIR/$tdir

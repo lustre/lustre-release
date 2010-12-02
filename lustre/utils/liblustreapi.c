@@ -170,8 +170,8 @@ void llapi_printf(int level, char *fmt, ...)
 /**
  * size_units is to be initialized (or zeroed) by caller.
  */
-int parse_size(char *optarg, unsigned long long *size,
-               unsigned long long *size_units, int bytes_spec)
+int llapi_parse_size(const char *optarg, unsigned long long *size,
+		     unsigned long long *size_units, int bytes_spec)
 {
         char *end;
 
