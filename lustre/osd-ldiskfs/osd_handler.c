@@ -1459,6 +1459,8 @@ static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
                            struct lu_attr *attr, struct thandle *th)
 {
         osd_object_init0(obj);
+        if (obj->oo_inode && (obj->oo_inode->i_state & I_NEW))
+                unlock_new_inode(obj->oo_inode);
         return 0;
 }
 
@@ -2917,7 +2919,7 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
         child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
 
         if (fid_is_igif((struct lu_fid *)fid) ||
-            fid_seq((struct lu_fid *)fid) >= FID_SEQ_NORMAL) {
+            fid_is_norm((struct lu_fid *)fid)) {
                 ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
                 osd_get_ldiskfs_dirent_param(ldp, fid);
                 child->d_fsdata = (void*) ldp;
