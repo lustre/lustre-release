@@ -52,6 +52,7 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <linux/mount.h>
+#include <linux/backing-dev.h>
 
 typedef struct file cfs_file_t;
 typedef struct dentry cfs_dentry_t;
