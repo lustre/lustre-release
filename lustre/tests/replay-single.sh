@@ -1842,7 +1842,7 @@ test_70a () {
 		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
 
 	echo "mount clients $CLIENTS ..."
-	zconf_mount_clients $CLIENTS $DIR
+	zconf_mount_clients $CLIENTS $MOUNT
 
 	local clients=${CLIENTS//,/ }
 	echo "Write/read files on $DIR ; clients $CLIENTS ... "
@@ -1863,59 +1863,61 @@ test_70a () {
 }
 run_test 70a "check multi client t-f"
 
-check_dbench_load () {
-	local clients=${1//,/ }
-	local client=
+check_for_process () {
+	local clients=$1
+	shift
+	local prog=$@
 
-	for client in $clients; do
-		if ! do_node $client "ps ax | grep -v grep | awk '{ print $6 }' | grep -q rundbench"; then
-			error_noexit "rundbench load on $client failed!"
-			return 1
-		fi
-	done
-	return 0
+	killall_process $clients "$prog" -0
 }
 
-kill_dbench_load () {
+killall_process () {
 	local clients=${1:-$(hostname)}
-	do_nodes $clients "killall dbench"
+	local name=$2
+	local signal=$3
+	local rc=0
+
+	do_nodes $clients "killall $signal $name"
 }
 
 test_70b () {
 	local clients=${CLIENTS:-$HOSTNAME}
 
-	zconf_mount_clients $clients $DIR
+	zconf_mount_clients $clients $MOUNT
 	
 	local duration=300
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
-	local PID=""
+	local pid=""
 	do_nodesv $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
 		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
 		LCTL=$LCTL $cmd" &
-	PID=$!
-	log "Started rundbench load PID=$PID ..."
-	ELAPSED=0
-	NUM_FAILOVERS=0
-	START_TS=$(date +%s)
-	CURRENT_TS=$START_TS
-	while [ $ELAPSED -lt $duration ]; do
-		if ! check_dbench_load $clients; then
-			kill_dbench_load $clients
+	pid=$!
+	log "Started rundbench load pid=$pid ..."
+
+	# give rundbench a chance to start, bug 24118
+	sleep 2
+	local elapsed=0
+	local num_failovers=0
+	local start_ts=$(date +%s)
+	while [ $elapsed -lt $duration ]; do
+		if ! check_for_process $clients rundbench; then
+			error_noexit "rundbench not found on some of $clients!"
+			killall_process $clients dbench
 			break
 		fi
 		sleep 1
 		replay_barrier $SINGLEMDS
 		sleep 1 # give clients a time to do operations
 		# Increment the number of failovers
-		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
-		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
+		num_failovers=$((num_failovers+1))
+		log "$TESTNAME fail $SINGLEMDS $num_failovers times"
 		fail $SINGLEMDS
-		CURRENT_TS=$(date +%s)
-		ELAPSED=$((CURRENT_TS - START_TS))
+		elapsed=$(($(date +%s) - start_ts))
 	done
-	wait $PID || error "rundbench load on $CLIENTS failed!"
+
+	wait $pid || error "rundbench load on $clients failed!"
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
