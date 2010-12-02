@@ -6805,6 +6805,12 @@ test_202() {
 run_test 202 "O_APPEND+O_DIRECT multistripe write ========================"
 
 test_203() {
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]]; then
+               skip bug23766 mds running $lustre_version
+               return
+        fi
+
         local ATIME=`do_facet mds lctl get_param -n mds.*.atime_diff`
         echo "atime should be updated on the MDS when closing file" > $DIR/$tfile
         sync
