@@ -30,3 +30,4 @@ ext4_data_in_dirent.patch
 ext4-disable-mb-cache-rhel5.patch
 ext4-disable-delalloc-rhel5.patch
 ext4-back-dquot-to-rhel54.patch
+ext4-nocmtime-2.6-rhel5.patch

@@ -227,7 +227,6 @@ struct osd_thread_info {
          */
         struct txn_param       oti_txn;
         struct timespec        oti_time;
-        struct timespec        oti_time2;
         /*
          * XXX temporary: fake struct file for osd_object_sync
          */
