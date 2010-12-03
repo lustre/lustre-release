@@ -33,43 +33,20 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lustre/lvfs/upcall_cache.c
+ * libcfs/libcfs/upcall_cache.c
  *
  * Supplementary groups cache.
  */
-
 #define DEBUG_SUBSYSTEM S_SEC
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/kmod.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/version.h>
-#include <linux/unistd.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <linux/slab.h>
-
-#include <obd_support.h>
-#include <lustre_lib.h>
+#include <libcfs/lucache.h>
 
 static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
                                               __u64 key, void *args)
 {
         struct upcall_cache_entry *entry;
 
-        OBD_ALLOC_PTR(entry);
+        LIBCFS_ALLOC(entry, sizeof(*entry));
         if (!entry)
                 return NULL;
 
@@ -93,7 +70,7 @@ static void free_entry(struct upcall_cache *cache,
         cfs_list_del(&entry->ue_hash);
         CDEBUG(D_OTHER, "destroy cache entry %p for key "LPU64"\n",
                entry, entry->ue_key);
-        OBD_FREE_PTR(entry);
+        LIBCFS_FREE(entry, sizeof(*entry));
 }
 
 static inline int upcall_compare(struct upcall_cache *cache,
@@ -140,12 +117,13 @@ static int check_unlink_entry(struct upcall_cache *cache,
                               struct upcall_cache_entry *entry)
 {
         if (UC_CACHE_IS_VALID(entry) &&
-            cfs_time_before(jiffies, entry->ue_expire))
+            cfs_time_before(cfs_time_current(), entry->ue_expire))
                 return 0;
 
         if (UC_CACHE_IS_ACQUIRING(entry)) {
                 if (entry->ue_acquire_expire == 0 ||
-                    cfs_time_before(jiffies, entry->ue_acquire_expire))
+                    cfs_time_before(cfs_time_current(),
+                                    entry->ue_acquire_expire))
                         return 0;
 
                 UC_CACHE_SET_EXPIRED(entry);
@@ -221,7 +199,8 @@ find_again:
                 cfs_spin_unlock(&cache->uc_lock);
                 rc = refresh_entry(cache, entry);
                 cfs_spin_lock(&cache->uc_lock);
-                entry->ue_acquire_expire = jiffies + cache->uc_acquire_expire;
+                entry->ue_acquire_expire =
+                        cfs_time_shift(cache->uc_acquire_expire);
                 if (rc < 0) {
                         UC_CACHE_CLEAR_ACQUIRING(entry);
                         UC_CACHE_SET_INVALID(entry);
@@ -232,12 +211,12 @@ find_again:
                         }
                 }
         }
-
         /* someone (and only one) is doing upcall upon this item,
          * wait it to complete */
         if (UC_CACHE_IS_ACQUIRING(entry)) {
-                long expiry = (entry == new) ? cache->uc_acquire_expire :
-                                               CFS_MAX_SCHEDULE_TIMEOUT;
+                long expiry = (entry == new) ?
+                              cfs_time_seconds(cache->uc_acquire_expire) :
+                              CFS_MAX_SCHEDULE_TIMEOUT;
                 long left;
 
                 cfs_waitlink_init(&wait);
@@ -363,7 +342,7 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
         if (rc)
                 GOTO(out, rc);
 
-        entry->ue_expire = jiffies + cache->uc_entry_expire;
+        entry->ue_expire = cfs_time_shift(cache->uc_entry_expire);
         UC_CACHE_SET_VALID(entry);
         CDEBUG(D_OTHER, "%s: created upcall cache entry %p for key "LPU64"\n",
                cache->uc_name, entry, entry->ue_key);
@@ -437,7 +416,7 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
                       "cur %lu, ex %ld/%ld\n",
                       cache->uc_name, entry, entry->ue_key,
                       cfs_atomic_read(&entry->ue_refcount), entry->ue_flags,
-                      get_seconds(), entry->ue_acquire_expire,
+                      cfs_time_current_sec(), entry->ue_acquire_expire,
                       entry->ue_expire);
                 UC_CACHE_SET_EXPIRED(entry);
                 if (!cfs_atomic_read(&entry->ue_refcount))
@@ -454,7 +433,7 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
         int i;
         ENTRY;
 
-        OBD_ALLOC(cache, sizeof(*cache));
+        LIBCFS_ALLOC(cache, sizeof(*cache));
         if (!cache)
                 RETURN(ERR_PTR(-ENOMEM));
 
@@ -465,8 +444,8 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
         strncpy(cache->uc_name, name, sizeof(cache->uc_name) - 1);
         /* upcall pathname proc tunable */
         strncpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall) - 1);
-        cache->uc_entry_expire = 20 * 60 * CFS_HZ;
-        cache->uc_acquire_expire = 30 * CFS_HZ;
+        cache->uc_entry_expire = 20 * 60;
+        cache->uc_acquire_expire = 30;
         cache->uc_ops = ops;
 
         RETURN(cache);
@@ -478,6 +457,6 @@ void upcall_cache_cleanup(struct upcall_cache *cache)
         if (!cache)
                 return;
         upcall_cache_flush_all(cache);
-        OBD_FREE(cache, sizeof(*cache));
+        LIBCFS_FREE(cache, sizeof(*cache));
 }
 EXPORT_SYMBOL(upcall_cache_cleanup);

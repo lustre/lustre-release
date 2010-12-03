@@ -34,8 +34,14 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#ifndef _UPCALL_CACHE_H
-#define _UPCALL_CACHE_H
+#ifndef _LUCACHE_H
+#define _LUCACHE_H
+
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+
+#include <libcfs/libcfs.h>
 
 /** \defgroup ucache ucache
  *
@@ -122,8 +128,8 @@ struct upcall_cache {
 
         char                    uc_name[40];            /* for upcall */
         char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];
-        cfs_time_t              uc_acquire_expire;      /* jiffies */
-        cfs_time_t              uc_entry_expire;        /* jiffies */
+        int                     uc_acquire_expire;      /* seconds */
+        int                     uc_entry_expire;        /* seconds */
         struct upcall_cache_ops *uc_ops;
 };
 
@@ -157,4 +163,4 @@ void upcall_cache_cleanup(struct upcall_cache *hash);
 
 /** @} ucache */
 
-#endif /* _UPCALL_CACHE_H */
+#endif /* _LUCACHE_H */

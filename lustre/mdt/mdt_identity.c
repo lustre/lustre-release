@@ -64,6 +64,7 @@
 #include <linux/slab.h>
 
 #include <libcfs/libcfs.h>
+#include <libcfs/lucache.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -71,7 +72,6 @@
 #include <lustre_import.h>
 #include <lustre_dlm.h>
 #include <lustre_lib.h>
-#include <lustre_ucache.h>
 
 #include "mdt_internal.h"
 

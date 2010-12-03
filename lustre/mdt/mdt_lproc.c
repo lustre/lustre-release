@@ -156,8 +156,8 @@ static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
         *eof = 1;
-        return snprintf(page, count, "%lu\n",
-                        mdt->mdt_identity_cache->uc_entry_expire / CFS_HZ);
+        return snprintf(page, count, "%u\n",
+                        mdt->mdt_identity_cache->uc_entry_expire);
 }
 
 static int lprocfs_wr_identity_expire(struct file *file, const char *buffer,
@@ -171,7 +171,7 @@ static int lprocfs_wr_identity_expire(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        mdt->mdt_identity_cache->uc_entry_expire = val * CFS_HZ;
+        mdt->mdt_identity_cache->uc_entry_expire = val;
         return count;
 }
 
@@ -183,8 +183,8 @@ static int lprocfs_rd_identity_acquire_expire(char *page, char **start,
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
         *eof = 1;
-        return snprintf(page, count, "%lu\n",
-                        mdt->mdt_identity_cache->uc_acquire_expire / CFS_HZ);
+        return snprintf(page, count, "%u\n",
+                        mdt->mdt_identity_cache->uc_acquire_expire);
 }
 
 static int lprocfs_wr_identity_acquire_expire(struct file *file,
@@ -200,7 +200,7 @@ static int lprocfs_wr_identity_acquire_expire(struct file *file,
         if (rc)
                 return rc;
 
-        mdt->mdt_identity_cache->uc_acquire_expire = val * CFS_HZ;
+        mdt->mdt_identity_cache->uc_acquire_expire = val;
         return count;
 }
 

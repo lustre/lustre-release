@@ -54,7 +54,7 @@
 #error Unsupported operating system.
 #endif
 
-#include <lustre_ucache.h>
+#include <libcfs/lucache.h>
 
 
 #ifdef LIBLUSTRE
