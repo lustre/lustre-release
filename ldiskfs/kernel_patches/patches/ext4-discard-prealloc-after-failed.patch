@@ -1,0 +1,76 @@
+
+[PATCH] discard an inode's preallocated blocks after failed allocation
+Date:	Tue, 30 Nov 2010 15:22:38 -0800 (PST)
+From:	jiayingz@google.com (Jiaying Zhang)
+
+We have seen kernel crashes caused by the BUG_ON in
+ext4_mb_return_to_preallocation() that checks whether the inode's
+i_prealloc_list is empty. As I understand, the assumption is that
+when ext4_mb_return_to_preallocation() is called from ext4_free_blocks(),
+the inode's preallocation list should have been already discarded.
+However, although we call ext4_discard_preallocations() during ext4
+truncate, we don't always call that function in various failure
+cases before calling ext4_free_blocks(). So it is likely to hit this
+BUG_ON with disk errors or corrupted fs etc.
+
+To fix the problem, the following patch adds ext4_discard_preallocation()
+before ext4_free_blocks() in failed allocation cases. This will discard
+any preallocated block extent attached to the inode, but I think it is
+probably what we should be doing with failed allocation.
+
+I am also curious whether we can drop the ext4_mb_return_to_preallocation()
+call from ext4_free_blocks(). From the comments above that function, it
+seems to intent to discard the specified blocks only but all it is currently
+doing is the BUG_ON check on whether the inode's preallocation list is empty.
+Is there any plan to extend this function later?
+
+
+ext4: discard an inode's preallocated blocks after failed allocation so that
+we won't hit on the BUG_ON check in ext4_mb_return_to_preallocation() later.
+
+Signed-off-by: Jiaying Zhang <jiayingz@google.com>
+
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index 29a4adf..2164df6 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -1056,6 +1056,7 @@ cleanup:
+       }
+
+       if (err) {
++		ext4_discard_preallocations(inode);
+               /* free all allocated blocks in error case */
+               for (i = 0; i < depth; i++) {
+                       if (!ablocks[i])
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 4f4362c..456cb4a 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -690,6 +690,7 @@ allocated:
+       *err = 0;
+       return ret;
+ failed_out:
++	ext4_discard_preallocations(inode);
+       for (i = 0; i < index; i++)
+               ext4_free_blocks(handle, inode, 0, new_blocks[i], 1, 0);
+       return ret;
+@@ -787,6 +788,7 @@ static int ext4_alloc_branch(handle_t *handle, struct inode *inode,
+       return err;
+ failed:
+       /* Allocation failed, free what we already allocated */
++	ext4_discard_preallocations(inode);
+       for (i = 1; i <= n ; i++) {
+		BUFFER_TRACE(branch[i].bh, "call jbd2_journal_forget");
+		ext4_journal_forget(handle, branch[i].bh);
+@@ -878,6 +880,7 @@ static int ext4_splice_branch(handle_t *handle, struct inode *inode,
+       return err;
+
+ err_out:
++	ext4_discard_preallocations(inode);
+       for (i = 1; i <= num; i++) {
+               /*
+                * branch[i].bh is newly allocated, so there is no
+--
+To unsubscribe from this list: send the line "unsubscribe linux-ext4" in
+the body of a message to majordomo@vger.kernel.org
+More majordomo info at  http://vger.kernel.org/majordomo-info.html
