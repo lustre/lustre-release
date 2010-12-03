@@ -182,9 +182,6 @@ static const struct cl_device_operations osc_cl_ops = {
 static int osc_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
-        struct osc_device *od = lu2osc_dev(d);
-
-        od->od_lockless_truncate = 1;
         RETURN(0);
 }
 
