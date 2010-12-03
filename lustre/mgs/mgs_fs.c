@@ -209,7 +209,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         /* Setup the configs dir */
-        dentry = simple_mkdir(current->fs->pwd, mnt, MOUNT_CONFIGS_DIR, 0777, 1);
+        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, MOUNT_CONFIGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
@@ -220,7 +220,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* Need the iopen dir for fid2dentry, required by
            LLOG_ORIGIN_HANDLE_READ_HEADER */
-        dentry = ll_lookup_one_len("__iopen__", current->fs->pwd,
+        dentry = ll_lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
                                 strlen("__iopen__"));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);

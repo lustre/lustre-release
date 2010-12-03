@@ -544,10 +544,9 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         CLASSERT(CFS_PAGE_SIZE < (1 << (sizeof(unsigned short) * 8)));
         blk_queue_logical_block_size(lo->lo_queue,
                                      (unsigned short)CFS_PAGE_SIZE);
-        blk_queue_max_sectors(lo->lo_queue,
-                              LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
-        blk_queue_max_phys_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
-        blk_queue_max_hw_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
+        blk_queue_max_hw_sectors(lo->lo_queue,
+                                 LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
+        blk_queue_max_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
 
         set_capacity(disks[lo->lo_number], size);
         bd_set_size(bdev, size << 9);

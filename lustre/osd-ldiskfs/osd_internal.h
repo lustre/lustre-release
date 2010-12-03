@@ -86,7 +86,7 @@ struct inode;
 struct osd_ctxt {
         __u32 oc_uid;
         __u32 oc_gid;
-        __u32 oc_cap;
+        cfs_kernel_cap_t oc_cap;
 };
 #endif
 

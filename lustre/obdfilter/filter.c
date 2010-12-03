@@ -1195,7 +1195,7 @@ static int filter_prep_groups(struct obd_device *obd)
         loff_t off = 0;
         ENTRY;
 
-        O_dentry = simple_mkdir(current->fs->pwd, obd->u.obt.obt_vfsmnt,
+        O_dentry = simple_mkdir(cfs_fs_pwd(current->fs), obd->u.obt.obt_vfsmnt,
                                 "O", 0700, 1);
         CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
         if (IS_ERR(O_dentry)) {
@@ -1948,7 +1948,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         __u8 *uuid_ptr;
         char *str, *label;
         char ns_name[48];
-        request_queue_t *q;
+        struct request_queue *q;
         int rc, i;
         ENTRY;
 
@@ -2088,13 +2088,13 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                 GOTO(err_post, rc);
 
         q = bdev_get_queue(mnt->mnt_sb->s_bdev);
-        if (q->max_sectors < q->max_hw_sectors &&
-            q->max_sectors < PTLRPC_MAX_BRW_SIZE >> 9)
+        if (queue_max_sectors(q) < queue_max_hw_sectors(q) &&
+            queue_max_sectors(q) < PTLRPC_MAX_BRW_SIZE >> 9)
                 LCONSOLE_INFO("%s: underlying device %s should be tuned "
                               "for larger I/O requests: max_sectors = %u "
                               "could be up to max_hw_sectors=%u\n",
                               obd->obd_name, mnt->mnt_sb->s_id,
-                              q->max_sectors, q->max_hw_sectors);
+                              queue_max_sectors(q), queue_max_hw_sectors(q));
 
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {
@@ -2602,7 +2602,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         filter_post(obd);
 
-        LL_DQUOT_OFF(obd->u.obt.obt_sb);
+        ll_vfs_dq_off(obd->u.obt.obt_sb, 0);
         shrink_dcache_sb(obd->u.obt.obt_sb);
 
         server_put_mount(obd->obd_name, obd->u.obt.obt_vfsmnt);

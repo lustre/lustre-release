@@ -41,8 +41,6 @@
 #ifndef _MDD_INTERNAL_H
 #define _MDD_INTERNAL_H
 
-#include <asm/semaphore.h>
-
 #include <lustre_acl.h>
 #include <lustre_eacl.h>
 #include <obd.h>

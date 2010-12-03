@@ -107,6 +107,10 @@ AC_DEFUN([LIBCFS_FUNC_SHOW_TASK],
 [kernel/ksyms.c kernel/sched.c],[
 AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ],[
+        LB_CHECK_SYMBOL_EXPORT([sched_show_task],
+        [kernel/ksyms.c kernel/sched.c],[
+        AC_DEFINE(HAVE_SCHED_SHOW_TASK, 1, [sched_show_task is exported])
+        ],[])
 ])
 ])
 
@@ -442,7 +446,7 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LIBCFS_FUNC_DUMP_TRACE],
 [LB_CHECK_SYMBOL_EXPORT([dump_trace],
-[kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
+[kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c arch/x86/kernel/dumpstack_32.c arch/x86/kernel/dumpstack_64.c],[
 	tmp_flags="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="-Werror"
 	AC_MSG_CHECKING([whether we can really use dump_trace])

@@ -1849,7 +1849,7 @@ static int v3_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
 static int v3_write_dqheader(struct file *f, int type)
 {
         static const __u32 quota_magics[] = V2_INITQMAGICS;
-        static const __u32 quota_versions[] = V2_INITQVERSIONS_R1;
+        static const __u32 quota_versions[] = LUSTRE_INITQVERSIONS_V2;
         struct v2_disk_dqheader dqhead;
         loff_t offset = 0;
 
@@ -2034,14 +2034,27 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         /* we don't really need to take the group lock here,
                          * but it may be useful if one day we support online
                          * quotacheck */
+#ifdef HAVE_EXT4_LDISKFS
+                        ext4_lock_group(sb, group);
+#else
                         spin_lock(sb_bgl_lock(sbi, group));
+#endif
                         if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
                                 /* no inode in use in this group, just skip it */
+#ifdef HAVE_EXT4_LDISKFS
+                                ext3_unlock_group(sb, group);
+#else
                                 spin_unlock(sb_bgl_lock(sbi, group));
+#endif
                                 continue;
                         }
+
                         used_count -= ext3_itable_unused_count(sb, desc);
+#ifdef HAVE_EXT4_LDISKFS
+                        ext3_unlock_group(sb, group);
+#else
                         spin_unlock(sb_bgl_lock(sbi, group));
+#endif
                 }
 
                 ino = group * sbi->s_inodes_per_group + 1;

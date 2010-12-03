@@ -127,7 +127,13 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
                 cfs_waitq_signal(&iobuf->dr_wait);
 }
 
+#ifdef HAVE_BIO_ENDIO_2ARG
+#define DIO_RETURN(a)
+static void dio_complete_routine(struct bio *bio, int error)
+#else
+#define DIO_RETURN(a)   return(a)
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
+#endif
 {
         struct filter_iobuf *iobuf = bio->bi_private;
         struct bio_vec *bvl;
@@ -162,7 +168,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
                        bio->bi_end_io, cfs_atomic_read(&bio->bi_cnt),
                        bio->bi_private);
-                return 0;
+                DIO_RETURN(0);
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
@@ -193,7 +199,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
          * deadlocking the OST.  The bios are now released as soon as complete
          * so the pool cannot be exhausted while IOs are competing. bug 10076 */
         bio_put(bio);
-        return 0;
+        DIO_RETURN(0);
 }
 
 static int can_be_merged(struct bio *bio, sector_t sector)
@@ -364,7 +370,7 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                 continue;       /* added this frag OK */
 
                         if (bio != NULL) {
-                                request_queue_t *q =
+                                struct request_queue *q =
                                         bdev_get_queue(bio->bi_bdev);
 
                                 /* Dang! I have to fragment this I/O */
@@ -373,11 +379,11 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                        "sector %llu next %llu\n",
                                        bio->bi_size,
                                        bio->bi_vcnt, bio->bi_max_vecs,
-                                       bio->bi_size >> 9, q->max_sectors,
+                                       bio->bi_size >> 9, queue_max_sectors(q),
                                        bio_phys_segments(q, bio),
-                                       q->max_phys_segments,
+                                       queue_max_phys_segments(q),
                                        bio_hw_segments(q, bio),
-                                       q->max_hw_segments,
+                                       queue_max_hw_segments(q),
                                        (unsigned long long)bio->bi_sector,
                                        (unsigned long long)sector);
 

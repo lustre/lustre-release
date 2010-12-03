@@ -223,9 +223,10 @@ osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save)
         if ((tc = prepare_creds())) {
                 tc->fsuid         = uc->mu_fsuid;
                 tc->fsgid         = uc->mu_fsgid;
-                tc->cap_effective = uc->mu_cap;
                 commit_creds(tc);
         }
+        /* XXX not suboptimal */
+        cfs_curproc_cap_unpack(uc->mu_cap);
 }
 
 static inline void
@@ -1366,7 +1367,7 @@ static int osd_inode_setattr(const struct lu_env *env,
                 iattr.ia_uid = attr->la_uid;
                 iattr.ia_gid = attr->la_gid;
                 osd_push_ctxt(env, save);
-                rc = DQUOT_TRANSFER(inode, &iattr) ? -EDQUOT : 0;
+                rc = ll_vfs_dq_transfer(inode, &iattr) ? -EDQUOT : 0;
                 osd_pop_ctxt(save);
                 if (rc != 0)
                         return rc;
@@ -2613,7 +2614,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
         struct osd_thandle *oh;
         ssize_t            result = 0;
 #ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t           save = current->cap_effective;
+        cfs_cap_t           save = cfs_curproc_cap_pack();
 #endif
 
         LASSERT(handle != NULL);
@@ -2625,9 +2626,9 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_handle->h_transaction != NULL);
 #ifdef HAVE_QUOTA_SUPPORT
         if (ignore_quota)
-                current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         else
-                current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 #endif
         /* Write small symlink to inode body as we need to maintain correct
          * on-disk symlinks for ldiskfs.
@@ -2640,7 +2641,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                                                   buf->lb_len, pos,
                                                   oh->ot_handle);
 #ifdef HAVE_QUOTA_SUPPORT
-        current->cap_effective = save;
+        cfs_curproc_cap_unpack(save);
 #endif
         if (result == 0)
                 result = buf->lb_len;
@@ -2857,7 +2858,7 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         struct osd_thandle    *oh;
         struct iam_container  *bag = &obj->oo_dir->od_container;
 #ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t              save = current->cap_effective;
+        cfs_cap_t              save = cfs_curproc_cap_pack();
 #endif
         struct osd_thread_info *oti = osd_oti_get(env);
         struct iam_rec *iam_rec = (struct iam_rec *)oti->oti_ldp;
@@ -2882,9 +2883,9 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_handle->h_transaction != NULL);
 #ifdef HAVE_QUOTA_SUPPORT
         if (ignore_quota)
-                current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         else
-                current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 #endif
         if (S_ISDIR(obj->oo_inode->i_mode))
                 osd_fid_pack((struct osd_fid_pack *)iam_rec, rec, &oti->oti_fid);
@@ -2893,7 +2894,7 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
                         iam_rec, ipd);
 #ifdef HAVE_QUOTA_SUPPORT
-        current->cap_effective = save;
+        cfs_curproc_cap_unpack(save);
 #endif
         osd_ipd_put(env, bag, ipd);
         LINVRNT(osd_invariant(obj));
@@ -3147,7 +3148,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         const char               *name  = (const char *)key;
         struct osd_object        *child;
 #ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t                 save  = current->cap_effective;
+        cfs_cap_t                 save  = cfs_curproc_cap_pack();
 #endif
         int rc;
 
@@ -3171,15 +3172,15 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                 *mtime = inode->i_mtime;
 #ifdef HAVE_QUOTA_SUPPORT
                 if (ignore_quota)
-                        current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
+                        cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
                 else
-                        current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
+                        cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 #endif
                 cfs_down_write(&obj->oo_ext_idx_sem);
                 rc = osd_ea_add_rec(env, obj, child->oo_inode, name, rec, th);
                 cfs_up_write(&obj->oo_ext_idx_sem);
 #ifdef HAVE_QUOTA_SUPPORT
-                current->cap_effective = save;
+                cfs_curproc_cap_unpack(save);
 #endif
                 osd_object_put(env, child);
                 /* xtime should not be updated with server-side time. */

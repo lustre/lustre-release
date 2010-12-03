@@ -179,7 +179,12 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
+
+#ifdef HAVE_EXPORT_INODE_PERMISSION
+#define ll_permission(inode,mask,nd)    inode_permission(inode,mask)
+#else
 #define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
+#endif
 
 #define ll_pgcache_lock(mapping)          cfs_spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        cfs_spin_unlock(&mapping->page_lock)
@@ -807,12 +812,16 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define blk_queue_logical_block_size(q, sz) blk_queue_hardsect_size(q, sz)
 #endif
 
-#ifdef HAVE_DQUOT_INIT
-# define ll_vfs_dq_init DQUOT_INIT
-# define ll_vfs_dq_drop DQUOT_DROP
+#ifndef HAVE_VFS_DQ_OFF
+# define ll_vfs_dq_init             DQUOT_INIT
+# define ll_vfs_dq_drop             DQUOT_DROP
+# define ll_vfs_dq_transfer         DQUOT_TRANSFER
+# define ll_vfs_dq_off(sb, remount) DQUOT_OFF(sb)
 #else
-# define ll_vfs_dq_init vfs_dq_init
-# define ll_vfs_dq_drop vfs_dq_drop
+# define ll_vfs_dq_init             vfs_dq_init
+# define ll_vfs_dq_drop             vfs_dq_drop
+# define ll_vfs_dq_transfer         vfs_dq_transfer
+# define ll_vfs_dq_off(sb, remount) vfs_dq_off(sb, remount)
 #endif
 
 #ifdef HAVE_BDI_INIT
@@ -824,9 +833,34 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #endif
 
 #ifdef HAVE_NEW_BACKING_DEV_INFO
-#define ll_bdi_wb_cnt(bdi) ((bdi).wb_cnt)
+# define ll_bdi_wb_cnt(bdi) ((bdi).wb_cnt)
 #else
-#define ll_bdi_wb_cnt(bdi) 1
+# define ll_bdi_wb_cnt(bdi) 1
+#endif
+
+#ifdef HAVE_BLK_QUEUE_MAX_SECTORS /* removed in rhel6 */
+#define blk_queue_max_hw_sectors(q, sect) blk_queue_max_sectors(q, sect)
+#endif
+
+#ifndef HAVE_REQUEST_QUEUE_LIMITS
+#define queue_max_sectors(rq)             ((rq)->max_sectors)
+#define queue_max_hw_sectors(rq)          ((rq)->max_hw_sectors)
+#define queue_max_phys_segments(rq)       ((rq)->max_phys_segments)
+#define queue_max_hw_segments(rq)         ((rq)->max_hw_segments)
+#endif
+
+#ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS
+#define blk_queue_max_segments(rq, seg)                      \
+        do { blk_queue_max_phys_segments(rq, seg);           \
+             blk_queue_max_hw_segments(rq, seg); } while (0)
+#else
+#define queue_max_phys_segments(rq)       queue_max_segments(rq)
+#define queue_max_hw_segments(rq)         queue_max_segments(rq)
+#endif
+
+
+#ifndef HAVE_BI_HW_SEGMENTS
+#define bio_hw_segments(q, bio) 0
 #endif
 
 #endif /* __KERNEL__ */

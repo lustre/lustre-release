@@ -1884,22 +1884,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.32 without DQUOT_INIT defined.
-AC_DEFUN([LC_DQUOT_INIT],
-[AC_MSG_CHECKING([if DQUOT_INIT is defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/quotaops.h>
-],[
-        DQUOT_INIT(NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_DQUOT_INIT, 1,
-                  [DQUOT_INIT is defined])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
 # 2.6.32 add a limits member in struct request_queue.
 AC_DEFUN([LC_REQUEST_QUEUE_LIMITS],
 [AC_MSG_CHECKING([if request_queue has a limits field])
@@ -1912,6 +1896,40 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_REQUEST_QUEUE_LIMITS, 1,
                   [request_queue has a limits field])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# RHEL6(backport from 2.6.34) removes 2 functions blk_queue_max_phys_segments and
+# blk_queue_max_hw_segments add blk_queue_max_segments
+AC_DEFUN([LC_BLK_QUEUE_MAX_SEGMENTS],
+[AC_MSG_CHECKING([if blk_queue_max_segments is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkdev.h>
+],[
+        blk_queue_max_segments(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_BLK_QUEUE_MAX_SEGMENTS, 1,
+                  [blk_queue_max_segments is defined])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# RHEL6(backport from 2.6.34) removes blk_queue_max_sectors and add blk_queue_max_hw_sectors
+# check blk_queue_max_sectors and use it until disappear.
+AC_DEFUN([LC_BLK_QUEUE_MAX_SECTORS],
+[AC_MSG_CHECKING([if blk_queue_max_sectors is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkdev.h>
+],[
+        blk_queue_max_sectors(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_BLK_QUEUE_MAX_SECTORS, 1,
+                  [blk_queue_max_sectors is defined])
 ],[
         AC_MSG_RESULT(no)
 ])
@@ -2101,9 +2119,10 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BLK_QUEUE_LOG_BLK_SIZE
 
          # 2.6.32
-         LC_DQUOT_INIT
          LC_REQUEST_QUEUE_LIMITS
          LC_NEW_BACKING_DEV_INFO
+         LC_BLK_QUEUE_MAX_SECTORS
+         LC_BLK_QUEUE_MAX_SEGMENTS
 
          #
          if test x$enable_server = xyes ; then
