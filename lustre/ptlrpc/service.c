@@ -1477,6 +1477,11 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         svc->srv_n_queued_reqs--;
         /* Consider this still a "queued" request as far as stats are
            concerned */
+        /* ptlrpc_hpreq_init() inserts it to the export list and by the time
+         * of ptlrpc_server_request_add() it could be already handled and
+         * released. To not lose request in between, take an extra reference
+         * on the request. */
+        ptlrpc_request_addref(req);
         cfs_spin_unlock(&svc->srv_lock);
 
         /* go through security check/transform */
@@ -1586,9 +1591,11 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         if (rc)
                 GOTO(err_req, rc);
         cfs_waitq_signal(&svc->srv_waitq);
+        ptlrpc_server_drop_request(req);
         RETURN(1);
 
 err_req:
+        ptlrpc_server_drop_request(req);
         cfs_spin_lock(&svc->srv_rq_lock);
         svc->srv_n_active_reqs++;
         cfs_spin_unlock(&svc->srv_rq_lock);
