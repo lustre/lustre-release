@@ -2209,7 +2209,8 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                         RETURN(-ESTALE);
                 } else {
                         /* Non-dir object shouldn't have PDO lock */
-                        LASSERT(S_ISDIR(lu_object_attr(&o->mot_obj.mo_lu)));
+                        if (!S_ISDIR(lu_object_attr(&o->mot_obj.mo_lu)))
+                                RETURN(-ENOTDIR);
                 }
         }
 
