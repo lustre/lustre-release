@@ -20,6 +20,11 @@ NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
 
 [ -z $CLIENTS ] && NODES_TO_USE=$(hostname)
 
+# hostname could differ from a network interface
+# configured for NODES_TO_USE, bug 23961
+# the test dir on each host is created based on `hostname` of this host
+HOSTS=$(comma_list $(do_nodes $NODES_TO_USE "echo \\\$(hostname)"))
+
 FILE=testfile
 FILE_SIZE=1024
 CURRENT_MODE=0644
@@ -99,7 +104,7 @@ get_stat () {
     echo "Checking file(s) attributes ... "
 
     do_nodesv $NODES_TO_USE "set $TRACE;
-for HOST in ${NODES_TO_USE//,/ } ; do 
+for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%u %g %s 0%a\\\" \\\$TESTFILE);
     echo \\\"\\\$TESTFILE [ uid gid size mode ] expected : $attr ;  got : \\\$tmp \\\";
@@ -142,7 +147,7 @@ do_check_timestamps () {
     echo "Checking atime, mtime ... "
 
     do_nodesv $NODES_TO_USE "set $TRACE;
-for HOST in ${NODES_TO_USE//,/ } ; do 
+for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%X %Y\\\" \\\$TESTFILE);
     if [ x\\\"\\\$tmp\\\" != x\\\"$times\\\" ] ; then
@@ -172,7 +177,7 @@ check_dir_contents () {
 
     echo "Checking dir contents ... (should exist files : f$num_files ... f$NUM_FILES) ... "
     do_nodes $NODES_TO_USE "set $TRACE;
-for HOST in ${NODES_TO_USE//,/ } ; do 
+for HOST in ${HOSTS//,/ } ; do
     DIR=$TESTDIR/\\\$HOST;
     for i in \\\$(seq $NUM_FILES -1 $num_files) ; do
         if ! [ -f \\\$DIR/f\\\$i ] ; then
