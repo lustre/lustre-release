@@ -1962,6 +1962,16 @@ AC_DEFUN([LC_EXPORT_BDI_INIT],
 ])
 ])
 
+# 2.6.23 exports exportfs_decode_fh
+AC_DEFUN([LC_EXPORTFS_DECODE_FH],
+[LB_CHECK_SYMBOL_EXPORT([exportfs_decode_fh],
+[fs/exportfs/expfs.c],[
+        AC_DEFINE(HAVE_EXPORTFS_DECODE_FH, 1,
+                [exportfs_decode_fh has been export])
+],[
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -2083,6 +2093,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_VM_OP_FAULT
          LC_REGISTER_SHRINKER
          LC_PROCFS_USERS
+         LC_EXPORTFS_DECODE_FH
   
   	 # 2.6.24
   	 LC_HAVE_MMTYPES_H

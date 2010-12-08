@@ -117,65 +117,27 @@ int mgs_client_free(struct obd_export *exp)
         return 0;
 }
 
-/* Same as mds_fid2dentry */
+/* Same as mds_lvfs_fid2dentry */
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode
    or errors */
-static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs,
-                                     __u64 ino, __u32 gen)
-{
-        char fid_name[32];
-        struct inode *inode;
-        struct dentry *result;
-        ENTRY;
-
-        CDEBUG(D_DENTRY, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
-               (unsigned long)ino, gen, mgs->mgs_sb);
-
-        if (ino == 0)
-                RETURN(ERR_PTR(-ESTALE));
-
-        snprintf(fid_name, sizeof(fid_name), "0x%lx", (unsigned long)ino);
-
-        /* under ext3 this is neither supposed to return bad inodes nor NULL
-           inodes. */
-        result = ll_lookup_one_len(fid_name, mgs->mgs_fid_de, strlen(fid_name));
-        if (IS_ERR(result))
-                RETURN(result);
-
-        inode = result->d_inode;
-        if (!inode)
-                RETURN(ERR_PTR(-ENOENT));
-
-        if (inode->i_generation == 0 || inode->i_nlink == 0) {
-                LCONSOLE_WARN("Found inode with zero generation or link -- this"
-                              " may indicate disk corruption (inode: %lu, link:"
-                              " %lu, count: %d)\n", inode->i_ino,
-                              (unsigned long)inode->i_nlink,
-                              atomic_read(&inode->i_count));
-                l_dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        if (gen && inode->i_generation != gen) {
-                /* we didn't find the right inode.. */
-                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
-                       "count: %d, generation %u/%u\n", inode->i_ino,
-                       (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count),
-                       inode->i_generation, gen);
-                l_dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        RETURN(result);
-}
-
 static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen,
                                           __u64 gr, void *data)
 {
-        struct obd_device *obd = data;
-        return mgs_fid2dentry(&obd->u.mgs, id, gen);
+        struct fsfilt_fid  fid;
+        struct obd_device *obd = (struct obd_device *)data;
+        ENTRY;
+
+        CDEBUG(D_DENTRY, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
+               (unsigned long)id, gen, obd->u.mgs.mgs_sb);
+
+        if (id == 0)
+                RETURN(ERR_PTR(-ESTALE));
+
+        fid.ino = id;
+        fid.gen = gen;
+
+        RETURN(fsfilt_fid2dentry(obd, obd->u.mgs.mgs_vfsmnt, &fid, 0));
 }
 
 struct lvfs_callback_ops mgs_lvfs_ops = {
@@ -218,30 +180,9 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mgs->mgs_configs_dir = dentry;
 
-        /* Need the iopen dir for fid2dentry, required by
-           LLOG_ORIGIN_HANDLE_READ_HEADER */
-        dentry = ll_lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
-                                strlen("__iopen__"));
-        if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
-                CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
-                GOTO(err_configs, rc);
-        }
-        mgs->mgs_fid_de = dentry;
-        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
-                rc = -ENOENT;
-                CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
-                GOTO(err_fid, rc);
-        }
-
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return rc;
-err_fid:
-        dput(mgs->mgs_fid_de);
-err_configs:
-        dput(mgs->mgs_configs_dir);
-        goto err_pop;
 }
 
 int mgs_fs_cleanup(struct obd_device *obd)
@@ -259,7 +200,6 @@ int mgs_fs_cleanup(struct obd_device *obd)
                 mgs->mgs_configs_dir = NULL;
         }
 
-        dput(mgs->mgs_fid_de);
         shrink_dcache_sb(mgs->mgs_sb);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

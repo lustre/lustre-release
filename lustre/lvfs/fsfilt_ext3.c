@@ -46,6 +46,9 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
+#ifdef HAVE_LINUX_EXPORTFS_H
+#include <linux/exportfs.h>
+#endif
 #ifdef HAVE_EXT4_LDISKFS
 #include <ext4/ext4.h>
 #include <ext4/ext4_jbd2.h>
@@ -2322,6 +2325,69 @@ void lustre_quota_journal_stop(void *handle)
         ext3_journal_stop((handle_t *)handle);
 }
 
+static int ll_decode_fh_accept(void *context, struct dentry *de)
+{
+        return 1;
+}
+
+#ifdef HAVE_EXPORTFS_DECODE_FH
+# define ll_exportfs_decode_fh(mnt, fid, len, type, acceptable, context) \
+         exportfs_decode_fh(mnt, (struct fid*)(fid), len, type,          \
+                            acceptable, context)
+#else
+# define ll_exportfs_decode_fh(mnt, fid, len, type, acceptable, context) \
+         export_op_default.decode_fh((mnt)->mnt_sb, &(fid)->ino, len,    \
+                                     type, acceptable, context)
+# define FILEID_INO32_GEN 1
+extern struct export_operations export_op_default;
+#endif
+
+struct dentry *fsfilt_ext3_fid2dentry(struct vfsmount *mnt,
+                                      struct fsfilt_fid *fid, int ignore_gen)
+{
+        struct inode  *inode;
+        struct dentry *result;
+        
+        result = ll_exportfs_decode_fh(mnt, fid, 2, FILEID_INO32_GEN,
+                                       ll_decode_fh_accept, NULL);
+        if (IS_ERR(result)) {
+                CDEBUG(D_DENTRY, "%s of %u/%u failed %ld\n", __func__,
+                       fid->ino, fid->gen, PTR_ERR(result));
+                return result;
+        }
+
+        CDEBUG(D_DENTRY, "%s of %u/%u succeeded\n", __func__,
+               fid->ino, fid->gen);
+        inode = result->d_inode;
+        if (inode == NULL)
+                goto err_out;
+
+        if (inode->i_nlink == 0 &&
+            inode->i_mode == 0 && LTIME_S(inode->i_ctime) == 0) {
+                LCONSOLE_WARN("Found inode with zero nlink, mode and"
+                              " ctime -- this may indicate disk "
+                              "corruption (inode: %lu, link: %lu, "
+                              "count: %d)\n", inode->i_ino,
+                              (unsigned long)inode->i_nlink,
+                              atomic_read(&inode->i_count));
+                goto err_out;
+        }
+        if (fid->gen && inode->i_generation != fid->gen) {
+                /* we didn't find the right inode.. */
+                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
+                       "count: %d, generation %u/%u\n",
+                       inode->i_ino, (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       fid->gen);
+                goto err_out;
+        }
+
+        return result;
+err_out:
+        l_dput(result);
+        return ERR_PTR(-ENOENT);
+}
+
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                = "ext3",
         .fs_owner               = THIS_MODULE,
@@ -2361,6 +2427,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_get_mblk            = fsfilt_ext3_get_mblk,
 #endif
         .fs_journal_sbdev       = fsfilt_ext3_journal_sbdev,
+        .fs_fid2dentry          = fsfilt_ext3_fid2dentry,
 };
 
 static int __init fsfilt_ext3_init(void)

@@ -1614,7 +1614,7 @@ int main(int argc, char *const argv[])
                 strscat(default_mountopts, ",errors=remount-ro",
                         sizeof(default_mountopts));
                 if (IS_MDT(ldd) || IS_MGS(ldd))
-                        strscat(always_mountopts, ",iopen_nopriv,user_xattr",
+                        strscat(always_mountopts, ",user_xattr",
                                 sizeof(always_mountopts));
                 if ((get_os_version() == 24) && IS_OST(ldd))
                         strscat(always_mountopts, ",asyncdel",

@@ -58,6 +58,11 @@ struct fsfilt_objinfo {
         int fso_bufcnt;
 };
 
+struct fsfilt_fid {
+        __u32 ino;
+        __u32 gen;
+};
+
 struct lustre_dquot;
 struct fsfilt_operations {
         cfs_list_t fs_list;
@@ -125,6 +130,9 @@ struct fsfilt_operations {
                                 struct inode *inode, int frags);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
         lvfs_sbdev_type (* fs_journal_sbdev)(struct super_block *sb);
+        struct dentry  *(* fs_fid2dentry)(struct vfsmount *mnt,
+                                          struct fsfilt_fid *fid,
+                                          int ignore_gen);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -504,6 +512,16 @@ static inline __u64 fsfilt_get_version(struct obd_device *obd,
         if (obd->obd_fsops->fs_get_version)
                 return obd->obd_fsops->fs_get_version(inode);
         return -EOPNOTSUPP;
+}
+
+static inline struct dentry *fsfilt_fid2dentry(struct obd_device *obd,
+                                               struct vfsmount *mnt,
+                                               struct fsfilt_fid *fid,
+                                               int ignore_gen)
+{
+        if (obd->obd_fsops->fs_fid2dentry)
+                return obd->obd_fsops->fs_fid2dentry(mnt, fid, ignore_gen);
+        return ERR_PTR(-EOPNOTSUPP);
 }
 
 #endif /* __KERNEL__ */

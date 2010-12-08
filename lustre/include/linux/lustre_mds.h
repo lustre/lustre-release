@@ -73,8 +73,6 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
                                      __u64 lockpart);
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
-                              struct vfsmount **mnt);
 int mds_update_server_data(struct obd_device *, int force_sync);
 
 /* mds/mds_fs.c */

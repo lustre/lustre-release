@@ -3150,19 +3150,8 @@ test_54e() {
 }
 run_test 54e "console/tty device works in lustre ======================"
 
-test_55() {
-        rm -rf $DIR/d55
-        mkdir $DIR/d55
-        client_only && skip "Not a server" && return
-        mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
-        touch $DIR/d55/foo
-        $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
-        $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
-        echo "check for $EXT2_DEV. Please wait..."
-        rm -rf $DIR/d55/*
-        $UMOUNT $DIR/d55 || error "unmounting"
-}
-run_test 55 "check iopen_connect_dentry() ======================"
+#The test_55 used to be iopen test and it was removed by bz#24037. 
+#run_test 55 "check iopen_connect_dentry() ======================"
 
 test_56a() {	# was test_56
         rm -rf $DIR/d56

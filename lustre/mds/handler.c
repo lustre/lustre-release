@@ -68,62 +68,6 @@ __u32 mds_max_ost_index=0xFFFF;
 CFS_MODULE_PARM(mds_max_ost_index, "i", int, 0444,
                 "maximal OST index");
 
-/* Look up an entry by inode number. */
-/* this function ONLY returns valid dget'd dentries with an initialized inode
-   or errors */
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
-                              struct vfsmount **mnt)
-{
-        char fid_name[32];
-        unsigned long ino = fid->id;
-        __u32 generation = fid->generation;
-        struct inode *inode;
-        struct dentry *result;
-
-        if (ino == 0)
-                RETURN(ERR_PTR(-ESTALE));
-
-        snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
-
-        /* under ext3 this is neither supposed to return bad inodes
-           nor NULL inodes. */
-        result = ll_lookup_one_len(fid_name, mds->mds_fid_de, strlen(fid_name));
-        if (IS_ERR(result))
-                RETURN(result);
-
-        inode = result->d_inode;
-        if (!inode)
-                RETURN(ERR_PTR(-ENOENT));
-
-        if (inode->i_generation == 0 || inode->i_nlink == 0) {
-                LCONSOLE_WARN("Found inode with zero generation or link -- this"
-                              " may indicate disk corruption (inode: %lu/%u, "
-                              "link %lu, count %d)\n", inode->i_ino,
-                              inode->i_generation,(unsigned long)inode->i_nlink,
-                              atomic_read(&inode->i_count));
-                dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        if (generation && inode->i_generation != generation) {
-                /* we didn't find the right inode.. */
-                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
-                       "count: %d, generation %u/%u\n", inode->i_ino,
-                       (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
-                dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        if (mnt) {
-                *mnt = mds->mds_obt.obt_vfsmnt;
-                mntget(*mnt);
-        }
-
-        RETURN(result);
-}
-
 static int mds_lov_presetup (struct mds_obd *mds, struct lustre_cfg *lcfg)
 {
         int rc = 0;
@@ -295,14 +239,22 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         RETURN(rc);
 }
 
+/* Look up an entry by inode number. */
+/* this function ONLY returns valid dget'd dentries with an initialized inode
+   or errors */
 static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                           void *data)
 {
-        struct obd_device *obd = data;
-        struct ll_fid fid;
-        fid.id = id;
-        fid.generation = gen;
-        return mds_fid2dentry(&obd->u.mds, &fid, NULL);
+        struct fsfilt_fid  fid;
+        struct obd_device *obd = (struct obd_device *)data;
+
+        if (id == 0)
+                RETURN(ERR_PTR(-ESTALE));
+
+        fid.ino = id;
+        fid.gen = gen;
+
+        RETURN(fsfilt_fid2dentry(obd, obd->u.mds.mds_obt.obt_vfsmnt, &fid, 0));
 }
 
 
@@ -375,24 +327,10 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
         mds->mds_objects_dir = dentry;
 
-        dentry = ll_lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
-                                strlen("__iopen__"));
-        if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
-                CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
-                GOTO(err_objects, rc);
-        }
-
-        mds->mds_fid_de = dentry;
-        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
-                rc = -ENOENT;
-                CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
-                GOTO(err_fid, rc);
-        }
         rc = mds_lov_init_objids(obd);
         if (rc != 0) {
                CERROR("cannot init lov objid rc = %d\n", rc);
-               GOTO(err_fid, rc );
+               GOTO(err_objects, rc );
         }
 
         rc = mds_lov_presetup(mds, lcfg);
@@ -413,8 +351,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
-err_fid:
-        dput(mds->mds_fid_de);
 err_objects:
         dput(mds->mds_objects_dir);
 err_putfs:
@@ -447,7 +383,6 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                 mds->mds_objects_dir = NULL;
         }
 
-        dput(mds->mds_fid_de);
         ll_vfs_dq_off(obd->u.obt.obt_sb, 0);
         shrink_dcache_sb(mds->mds_obt.obt_sb);
         fsfilt_put_ops(obd->obd_fsops);

@@ -498,7 +498,6 @@ struct mgs_obd {
         struct vfsmount                 *mgs_vfsmnt;
         struct super_block              *mgs_sb;
         struct dentry                   *mgs_configs_dir;
-        struct dentry                   *mgs_fid_de;
         cfs_list_t                       mgs_fs_db_list;
         cfs_semaphore_t                  mgs_sem;
         cfs_proc_dir_entry_t            *mgs_proc_live;
@@ -510,7 +509,6 @@ struct mds_obd {
         struct ptlrpc_service           *mds_service;
         struct ptlrpc_service           *mds_setattr_service;
         struct ptlrpc_service           *mds_readpage_service;
-        cfs_dentry_t                    *mds_fid_de;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
         __u64                            mds_io_epoch;
