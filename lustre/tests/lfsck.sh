@@ -27,6 +27,9 @@ check_and_setup_lustre
 
 assert_DIR
 
+SAMPLE_FILE=$TMP/$(basename $0 .sh).junk
+dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=1
+
 # Create some dirs and files on the filesystem.
 create_files_sub() {
     local test_dir=$1
@@ -62,7 +65,7 @@ create_files() {
     # create files to be modified
     for f in $(seq -f $test_dir/testfile.%g $((num_files * 3))); do
         echo "creating $f"
-        cp /etc/termcap $f || error "cp /etc/termcap $f failed"
+        cp $SAMPLE_FILE $f || error "cp $SAMPLE_FILE $f failed"
     done
 
     # create some more files

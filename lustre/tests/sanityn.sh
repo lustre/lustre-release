@@ -61,6 +61,9 @@ OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 assert_DIR
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
+SAMPLE_FILE=$TMP/$(basename $0 .sh).junk
+dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=1
+
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
@@ -338,7 +341,7 @@ test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	lfs setstripe $DIR1/$tfile -i 0 -c 1
-	cp /etc/termcap $DIR1/$tfile
+	cp $SAMPLE_FILE $DIR1/$tfile
 	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
 	do_facet ost1 lctl set_param fail_loc=0x8000030a

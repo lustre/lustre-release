@@ -221,7 +221,7 @@ test_17() {
     # OST bulk will time out here, client retries
     do_facet ost1 lctl set_param fail_loc=0x80000503
     # need to ensure we send an RPC
-    do_facet client cp /etc/termcap $DIR/$tfile
+    do_facet client cp $SAMPLE_FILE $DIR/$tfile
     sync
 
     # with AT, client will wait adaptive_max*factor+net_latency before
@@ -231,7 +231,7 @@ test_17() {
     do_facet ost1 lctl set_param fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
-    do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
+    do_facet client "cmp $SAMPLE_FILE $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
     [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved ost1
     return 0
