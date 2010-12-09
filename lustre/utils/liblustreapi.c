@@ -2834,6 +2834,10 @@ static int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
                 *mdtidxp = index;
 
         rc = ioctl(fd, opc, data);
+        if (rc == -1)
+                rc = -errno;
+        else
+                rc = 0;
         if (rc && want_error)
                 llapi_err(LLAPI_MSG_ERROR, "ioctl %d err %d", opc, rc);
 
@@ -3053,7 +3057,8 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         /* Take path or fsname */
         rc = root_ioctl(device, OBD_IOC_FID2PATH, gf, NULL, 0);
         if (rc) {
-                llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
+                if (rc != -ENOENT)
+                        llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
         } else {
                 memcpy(buf, gf->gf_path, gf->gf_pathlen);
                 *recno = gf->gf_recno;
