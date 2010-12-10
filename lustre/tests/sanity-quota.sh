@@ -295,12 +295,13 @@ quota_show_check() {
 
 # set quota
 quota_init() {
+	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
+
+	log "do the quotacheck ..."
 	$LFS quotacheck -ug $DIR
 
  	resetquota -u $TSTUSR
  	resetquota -g $TSTUSR
-
-        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
 quota_init
 

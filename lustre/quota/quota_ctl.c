@@ -183,6 +183,9 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                                                 ~UGQUOTA2LQC(oqctl->qc_type);
                                 else if (quota_is_off(qctxt, oqctl))
                                                 rc = -EALREADY;
+                                CDEBUG(D_QUOTA, "%s: quotaoff type:flags:rc "
+                                       "%u:%lu:%d\n", obd->obd_name,
+                                       oqctl->qc_type, qctxt->lqc_flags, rc);
                         }
                         cfs_up(&obt->obt_quotachecking);
                 }

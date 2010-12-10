@@ -259,6 +259,11 @@ int generic_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl, int glo
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cfs_up(&obt->obt_quotachecking);
 
+        CDEBUG(D_QUOTA, "%s: quotaon type:master:global:local:flags:rc "
+               "%u:%d:%d:%d:%lu:%d\n",
+               obd->obd_name, oqctl->qc_type, is_master, global, local,
+               obt->obt_qctxt.lqc_flags, rc);
+
         return rc;
 }
 

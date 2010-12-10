@@ -938,6 +938,8 @@ int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         EXIT;
 
 out:
+        CDEBUG(D_QUOTA, "%s: quotaoff type:flags:rc %u:%lu:%d\n",
+               obd->obd_name, oqctl->qc_type, qctxt->lqc_flags, rc);
         cfs_up_write(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return rc ? : (rc1 ? : rc2);
