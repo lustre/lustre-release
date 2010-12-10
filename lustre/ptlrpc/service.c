@@ -2070,6 +2070,33 @@ ptlrpc_server_request_waiting(struct ptlrpc_service *svc)
         return !cfs_list_empty(&svc->srv_req_in_queue);
 }
 
+static __attribute__((__noinline__)) int
+ptlrpc_wait_event(struct ptlrpc_service *svc,
+                  struct ptlrpc_thread *thread)
+{
+        /* Don't exit while there are replies to be handled */
+        struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
+                                             ptlrpc_retry_rqbds, svc);
+
+        lc_watchdog_disable(thread->t_watchdog);
+
+        cfs_cond_resched();
+
+        l_wait_event_exclusive_head(svc->srv_waitq,
+                               ptlrpc_thread_stopping(thread) ||
+                               ptlrpc_server_request_waiting(svc) ||
+                               ptlrpc_server_request_pending(svc, 0) ||
+                               ptlrpc_rqbd_pending(svc) ||
+                               ptlrpc_at_check(svc), &lwi);
+
+        if (ptlrpc_thread_stopping(thread))
+                return -EINTR;
+
+        lc_watchdog_touch(thread->t_watchdog, CFS_GET_TIMEOUT(svc));
+
+        return 0;
+}
+
 /**
  * Main thread body for service threads.
  * Waits in a loop waiting for new requests to process to appear.
@@ -2176,25 +2203,8 @@ static int ptlrpc_main(void *arg)
 
         /* XXX maintain a list of all managed devices: insert here */
         while (!ptlrpc_thread_stopping(thread)) {
-                /* Don't exit while there are replies to be handled */
-                struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
-                                                     ptlrpc_retry_rqbds, svc);
-
-                lc_watchdog_disable(thread->t_watchdog);
-
-                cfs_cond_resched();
-
-                l_wait_event_exclusive_head(svc->srv_waitq,
-                                       ptlrpc_thread_stopping(thread) ||
-                                       ptlrpc_server_request_waiting(svc) ||
-                                       ptlrpc_server_request_pending(svc, 0) ||
-                                       ptlrpc_rqbd_pending(svc) ||
-                                       ptlrpc_at_check(svc), &lwi);
-
-                if (ptlrpc_thread_stopping(thread))
+                if (ptlrpc_wait_event(svc, thread))
                         break;
-
-                lc_watchdog_touch(thread->t_watchdog, CFS_GET_TIMEOUT(svc));
 
                 ptlrpc_check_rqbd_pool(svc);
 
