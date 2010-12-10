@@ -409,7 +409,8 @@ struct obd_connect_data {
         __u64 ocd_transno;       /* Used in lustre 1.8 */
         __u32 ocd_group;         /* Used in lustre 1.8 */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
-        __u64 padding1;          /* also fix lustre_swab_connect */
+        __u32 ocd_max_easize;    /* How big LOV EA size can be on MDS */
+        __u32 padding1;          /* also fix lustre_swab_connect */
         __u64 padding2;          /* also fix lustre_swab_connect */
 };
 

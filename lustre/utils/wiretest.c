@@ -514,9 +514,13 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_connect_data, ocd_cksum_types));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_cksum_types) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_cksum_types));
-        LASSERTF((int)offsetof(struct obd_connect_data, padding1) == 56, " found %lld\n",
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_max_easize) == 56, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_max_easize));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_max_easize) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_max_easize));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding1) == 60, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, padding1));
-        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding1) == 8, " found %lld\n",
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding1) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->padding1));
         LASSERTF((int)offsetof(struct obd_connect_data, padding2) == 64, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, padding2));
@@ -552,6 +556,12 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_FID == 0x40000000ULL);
         CLASSERT(OBD_CONNECT_CKSUM == 0x20000000ULL);
         CLASSERT(OBD_CONNECT_VBR == 0x80000000ULL);
+        CLASSERT(OBD_CONNECT_LOV_V3 == 0x100000000ULL);
+        CLASSERT(OBD_CONNECT_GRANT_SHRINK == 0x200000000ULL);
+        CLASSERT(OBD_CONNECT_SKIP_ORPHAN == 0x400000000ULL);
+        CLASSERT(OBD_CONNECT_MAX_EASIZE == 0x800000000ULL);
+        CLASSERT(OBD_CONNECT_FULL20 == 0x1000000000ULL);
+        CLASSERT(OBD_CONNECT_LAYOUTLOCK == 0x2000000000ULL);
 
         /* Checks for struct obdo */
         LASSERTF((int)sizeof(struct obdo) == 208, " found %lld\n",

@@ -210,6 +210,7 @@ static void check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_transno);
         CHECK_MEMBER(obd_connect_data, ocd_group);
         CHECK_MEMBER(obd_connect_data, ocd_cksum_types);
+        CHECK_MEMBER(obd_connect_data, ocd_max_easize);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
 
@@ -243,6 +244,11 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_FID);
         CHECK_CDEFINE(OBD_CONNECT_CKSUM);
         CHECK_CDEFINE(OBD_CONNECT_VBR);
+        CHECK_CDEFINE(OBD_CONNECT_LOV_V3);
+        CHECK_CDEFINE(OBD_CONNECT_GRANT_SHRINK);
+        CHECK_CDEFINE(OBD_CONNECT_MAX_EASIZE);
+        CHECK_CDEFINE(OBD_CONNECT_FULL20);
+        CHECK_CDEFINE(OBD_CONNECT_LAYOUTLOCK);
 }
 
 static void
