@@ -767,7 +767,14 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
         struct md_open_data *mod = och->och_mod;
         ENTRY;
 
-        LASSERT(mod != LP_POISON && mod != NULL);
+        /**
+         * It is possible to not have \var mod in a case of eviction between
+         * lookup and ll_file_open().
+         **/
+        if (mod == NULL)
+                RETURN(0);
+
+        LASSERT(mod != LP_POISON);
 
         mod->mod_och = NULL;
         och->och_mod = NULL;
