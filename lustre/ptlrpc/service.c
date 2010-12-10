@@ -1390,6 +1390,10 @@ static int ptlrpc_server_high_pending(struct ptlrpc_service *svc, int force)
  */
 static int ptlrpc_server_allow_normal(struct ptlrpc_service *svc, int force)
 {
+#ifndef __KERNEL__
+        if (1) /* always allow to handle normal request for liblustre */
+                return 1;
+#endif
         if (force ||
             svc->srv_n_active_reqs < svc->srv_threads_running - 2)
                 return 1;
