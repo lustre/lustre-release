@@ -2661,13 +2661,19 @@ static inline void lustre_set_wire_obdo(struct obdo *wobdo, struct obdo *lobdo)
 
 static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
 {
-        obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
+        obd_flag local_flags = 0;
+
+        if (lobdo->o_valid & OBD_MD_FLFLAGS)
+                 local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
 
         LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
 
         memcpy(lobdo, wobdo, sizeof(*lobdo));
-        lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
-        lobdo->o_flags |= local_flags;
+        if (local_flags != 0) {
+                 lobdo->o_valid |= OBD_MD_FLFLAGS;
+                 lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
+                 lobdo->o_flags |= local_flags;
+        }
 }
 
 extern void lustre_swab_obdo (struct obdo *o);
