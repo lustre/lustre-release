@@ -514,7 +514,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 first = ll_statahead_enter(parent, &de, 0);
 
 do_lock:
-        it->it_create_mode &= ~current->fs->umask;
+        it->it_create_mode &= ~cfs_curproc_umask();
         it->it_create_mode |= M_CHECK_STALE;
         rc = md_intent_lock(exp, op_data, NULL, 0, it,
                             lookup_flags,

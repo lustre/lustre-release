@@ -129,7 +129,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(cfs_atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(cfs_fs_pwd(current->fs));
         save->pwdmnt = mntget(cfs_fs_mnt(current->fs));
-        save->luc.luc_umask = current->fs->umask;
+        save->luc.luc_umask = cfs_curproc_umask();
         save->ngroups = current_cred()->group_info->ngroups;
 
         LASSERT(save->pwd);
