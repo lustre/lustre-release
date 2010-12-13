@@ -49,6 +49,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <linux/fs.h>
 #include <mntent.h>
 #include <getopt.h>
 #include "obdctl.h"
@@ -233,6 +234,9 @@ static const struct opt_map opt_map[] = {
   { "relatime", 0, MS_RELATIME },  /* set file access time on read */
   { "norelatime",1,MS_RELATIME },  /* do not set file access time on read */
 #endif
+#ifdef MS_STRICTATIME
+  { "strictatime",0,MS_STRICTATIME },  /* update access time strictly */
+#endif
   { "auto",     0, 0         },      /* Can be mounted using -a */
   { "noauto",   0, 0         },      /* Can only be mounted explicitly */
   { "nousers",  1, 0         },      /* Forbid ordinary user to mount */
@@ -313,6 +317,12 @@ int parse_options(char *orig_options, int *flagp)
                         append_option(options, opt);
                 }
         }
+#ifdef MS_STRICTATIME
+                /* set strictatime to default if NOATIME or RELATIME
+                   not given explicit */
+        if (!(*flagp & (MS_NOATIME | MS_RELATIME)))
+                *flagp |= MS_STRICTATIME;
+#endif
         strcpy(orig_options, options);
         free(options);
         return 0;
