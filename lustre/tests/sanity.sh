@@ -2409,6 +2409,28 @@ test_39l() {
 }
 run_test 39l "directory atime update ==========================="
 
+test_39m() {
+	touch $DIR1/$tfile
+	sleep 2
+	local far_past_mtime=$(date -d "May 29 1953" +%s)
+	local far_past_atime=$(date -d "Dec 17 1903" +%s)
+
+	touch -m -d @$far_past_mtime $DIR1/$tfile
+	touch -a -d @$far_past_atime $DIR1/$tfile
+
+	for (( i=0; i < 2; i++ )) ; do
+		local timestamps=$(stat -c "%X %Y" $DIR1/$tfile)
+		[ "$timestamps" = "$far_past_atime $far_past_mtime" ] || \
+			error "atime or mtime set incorrectly"
+
+		cancel_lru_locks osc
+		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+	done
+
+	
+}
+run_test 39m "test atime and mtime before 1970"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error
