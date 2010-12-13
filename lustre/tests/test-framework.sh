@@ -175,6 +175,8 @@ init_test_env() {
         export CLIENTMODSONLY=yes
     fi
 
+    export SHUTDOWN_ATTEMPTS=${SHUTDOWN_ATTEMPTS:-3}
+
     # command line
 
     while getopts "rvwf:" opt $*; do
@@ -733,12 +735,12 @@ shutdown_node () {
 
 shutdown_node_hard () {
     local host=$1
-    local attempts=3
+    local attempts=$SHUTDOWN_ATTEMPTS
 
     for i in $(seq $attempts) ; do
         shutdown_node $host
         sleep 1
-        ping -w 3 -c 1 $host > /dev/null 2>&1 || return 0
+        wait_for_function --quiet "! ping -w 3 -c 1 $host" 5 1 && return 0
         echo "waiting for $host to fail attempts=$attempts"
         [ $i -lt $attempts ] || \
             { echo "$host still pingable after power down! attempts=$attempts" && return 1; }
@@ -2244,28 +2246,45 @@ check_and_cleanup_lustre() {
 #######
 # General functions
 
-check_network() {
-    local NETWORK=0
-    local WAIT=0
-    local MAX=$2
-    while [ $NETWORK -eq 0 ]; do
-        if ping -c 1 -w 3 $1 > /dev/null; then
-            NETWORK=1
-        else
-            WAIT=$((WAIT + 5))
-            echo "waiting for $1, $((MAX - WAIT)) secs left"
-            sleep 5
-        fi
-        if [ $WAIT -gt $MAX ]; then
-            echo "Network not available"
-            exit 1
-        fi
+wait_for_function () {
+    local quiet=""
+
+    # suppress fn both stderr and stdout
+    if [ "$1" = "--quiet" ]; then
+        shift
+        quiet=" > /dev/null 2>&1"
+        
+    fi
+
+    local fn=$1
+    local max=${2:-900}
+    local sleep=${3:-5}
+
+    local wait=0
+
+    while true; do
+
+        eval $fn $quiet && return 0
+
+        wait=$((wait + sleep))
+        [ $wait -lt $max ] || return 1
+        echo waiting $fn, $((max - wait)) secs left ...
+        sleep $sleep
     done
 }
-check_port() {
-    while( !($DSH2 $1 "netstat -tna | grep -q $2") ) ; do
-        sleep 9
-    done
+
+check_network() {
+    local host=$1
+    local max=$2
+    local sleep=${3:-5}
+
+    echo `date +"%H:%M:%S (%s)"` waiting for $host network $max secs ...
+    if ! wait_for_function --quiet "ping -c 1 -w 3 $host" $max $sleep ; then
+        echo "Network not available!"
+        exit 1
+    fi
+
+    echo `date +"%H:%M:%S (%s)"` network interface is UP
 }
 
 no_dsh() {
