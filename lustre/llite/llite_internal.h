@@ -53,7 +53,7 @@
 #endif
 
 #ifndef DCACHE_LUSTRE_INVALID
-#define DCACHE_LUSTRE_INVALID 0x100
+#define DCACHE_LUSTRE_INVALID 0x4000
 #endif
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
