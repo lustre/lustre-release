@@ -910,24 +910,18 @@ int jt_obd_abort_recovery(int argc, char **argv)
 int jt_get_version(int argc, char **argv)
 {
         int rc;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
+        char rawbuf[MAX_IOC_BUFLEN];
+        char *version;
 
         if (argc != 1)
                 return CMD_HELP;
 
-        memset(buf, 0, sizeof(rawbuf));
-        data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_inllen1 = sizeof(rawbuf) - size_round(sizeof(*data));
-        data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
-        data->ioc_len = obd_ioctl_packlen(data);
-
-        rc = l2_ioctl(OBD_DEV_ID, OBD_GET_VERSION, buf);
-        if (rc < 0)
+        rc = llapi_get_version(rawbuf, MAX_IOC_BUFLEN, &version);
+        if (rc)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
+                        strerror(-rc));
         else {
-                printf("Lustre version: %s\n", data->ioc_bulk);
+                printf("Lustre version: %s\n", version);
         }
 
         printf("lctl   version: %s\n", BUILD_VERSION);
