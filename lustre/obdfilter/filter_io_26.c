@@ -398,7 +398,7 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                         }
 
                         /* allocate new bio, limited by max BIO size, b=9945 */
-                        bio = bio_alloc(GFP_NOIO, max(BIO_MAX_PAGES,
+                        bio = bio_alloc(GFP_NOIO, min(BIO_MAX_PAGES,
                                                       (npages - page_idx) *
                                                       blocks_per_page));
                         if (bio == NULL) {
