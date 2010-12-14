@@ -5776,8 +5776,6 @@ static int __init mdt_mod_init(void)
         } else {
                 mdt_max_threads = MDT_MAX_THREADS;
                 mdt_min_threads = MDT_MIN_THREADS;
-                if (mdt_min_threads < MDT_NUM_THREADS)
-                        mdt_min_threads = MDT_NUM_THREADS;
         }
 
         lprocfs_mdt_init_vars(&lvars);
