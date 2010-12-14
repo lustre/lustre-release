@@ -469,10 +469,13 @@ static inline int cfs_size_round4 (int val)
         return (val + 3) & (~0x3);
 }
 
+#ifndef HAVE_CFS_SIZE_ROUND
 static inline int cfs_size_round (int val)
 {
         return (val + 7) & (~0x7);
 }
+#define HAVE_CFS_SIZE_ROUND
+#endif
 
 static inline int cfs_size_round16(int val)
 {

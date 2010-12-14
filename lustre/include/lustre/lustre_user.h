@@ -828,22 +828,30 @@ struct hsm_action_list {
            boundaries. See hai_zero */
 } __attribute__((packed));
 
+#ifndef HAVE_CFS_SIZE_ROUND
+static inline int cfs_size_round (int val)
+{
+        return (val + 7) & (~0x7);
+}
+#define HAVE_CFS_SIZE_ROUND
+#endif
+
 /* Return pointer to first hai in action list */
-static __inline__ struct hsm_action_item * hai_zero(struct hsm_action_list *hal)
+static inline struct hsm_action_item * hai_zero(struct hsm_action_list *hal)
 {
         return (struct hsm_action_item *)(hal->hal_fsname +
                                           cfs_size_round(strlen(hal-> \
                                                                 hal_fsname)));
 }
 /* Return pointer to next hai */
-static __inline__ struct hsm_action_item * hai_next(struct hsm_action_item *hai)
+static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai)
 {
         return (struct hsm_action_item *)((char *)hai +
                                           cfs_size_round(hai->hai_len));
 }
 
 /* Return size of an hsm_action_list */
-static __inline__ int hal_size(struct hsm_action_list *hal)
+static inline int hal_size(struct hsm_action_list *hal)
 {
         int i, sz;
         struct hsm_action_item *hai;
