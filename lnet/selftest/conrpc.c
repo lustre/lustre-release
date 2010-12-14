@@ -295,8 +295,12 @@ lstcon_rpc_trans_abort(lstcon_rpc_trans_t *trans, int error)
 
                 cfs_spin_lock(&rpc->crpc_lock);
 
-                if (!crpc->crp_posted || crpc->crp_stamp != 0) {
-                        /* rpc done or aborted already */
+                if (!crpc->crp_posted || /* not posted */
+                    crpc->crp_stamp != 0) { /* rpc done or aborted already */
+                        if (crpc->crp_stamp == 0) {
+                                crpc->crp_stamp = cfs_time_current();
+                                crpc->crp_status = -EINTR;
+                        }
                         cfs_spin_unlock(&rpc->crpc_lock);
                         continue;
                 }
@@ -366,7 +370,7 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
         if (console_session.ses_shutdown)
                 rc = -ESHUTDOWN;
 
-        if (rc != 0) {
+        if (rc != 0 || atomic_read(&trans->tas_remaining) != 0) {
                 /* treat short timeout as canceled */
                 if (rc == -ETIMEDOUT && timeout < LST_TRANS_MIN_TIMEOUT * 2)
                         rc = -EINTR;
