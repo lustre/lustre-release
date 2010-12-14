@@ -49,6 +49,7 @@ enum async_flags {
                                      to give the caller a chance to update
                                      or cancel the size of the io */
         ASYNC_HP = 0x10,
+        ASYNC_SYNCFS = 0x20,
 };
 
 struct obd_async_page_ops {

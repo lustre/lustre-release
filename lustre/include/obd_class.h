@@ -1266,6 +1266,20 @@ static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
+static inline int obd_sync_fs(struct obd_export *exp, struct obd_info *oinfo,
+                              int wait)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, sync_fs, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, sync);
+
+        rc = OBP(exp->exp_obd, sync_fs)(exp, oinfo, wait);
+
+        RETURN(rc);
+}
+
 static inline int obd_punch_rqset(struct obd_export *exp,
                                   struct obd_info *oinfo,
                                   struct obd_trans_info *oti)
