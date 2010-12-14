@@ -256,6 +256,19 @@ static int osc_wr_cur_grant_bytes(struct file *file, const char *buffer,
         return count;
 }
 
+static int osc_rd_cur_lost_grant_bytes(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct obd_device *dev = data;
+        struct client_obd *cli = &dev->u.cli;
+        int rc;
+
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        rc = snprintf(page, count, "%lu\n", cli->cl_lost_grant);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
+        return rc;
+}
+
 static int osc_rd_grant_shrink_interval(char *page, char **start, off_t off,
                                         int count, int *eof, void *data)
 {
@@ -614,6 +627,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes,
                              osc_wr_cur_grant_bytes, 0 },
+        { "cur_lost_grant_bytes", osc_rd_cur_lost_grant_bytes, 0, 0},
         { "grant_shrink_interval", osc_rd_grant_shrink_interval,
                                    osc_wr_grant_shrink_interval, 0 },
         { "create_count",    osc_rd_create_count, osc_wr_create_count, 0 },

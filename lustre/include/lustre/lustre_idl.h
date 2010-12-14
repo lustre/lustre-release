@@ -1194,6 +1194,7 @@ enum obdo_flags {
         OBD_FL_CKSUM_RSVD3  = 0x00010000, /* for future cksum types */
         OBD_FL_SHRINK_GRANT = 0x00020000, /* object shrink the grant */
         OBD_FL_MMAP         = 0x00040000, /* object is mmapped on the client */
+        OBD_FL_RECOV_RESEND = 0x00080000, /* recoverable resent */
 
         OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER,
 

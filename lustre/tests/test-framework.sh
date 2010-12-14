@@ -3135,11 +3135,6 @@ canonical_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
-sync_clients() {
-    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync
-    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync
-        cd $SAVE_PWD
-}
 
 check_grant() {
     export base=`basetest $1`
@@ -3149,39 +3144,34 @@ check_grant() {
         [ ${!testname}x == x ] && return 0
 
     echo -n "checking grant......"
-        cd $SAVE_PWD
-        # write some data to sync client lost_grant
-        rm -f $DIR1/${tfile}_check_grant_* 2>&1
-        for i in `seq $OSTCOUNT`; do
-                $LFS setstripe $DIR1/${tfile}_check_grant_$i -i $(($i -1)) -c 1
-                dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
-                                              count=1 > /dev/null 2>&1
-        done
-        # sync all the data and make sure no pending data on server
-        sync_clients
-        
-        #get client grant and server grant
-        client_grant=0
-    for d in `lctl get_param -n osc.*.cur_grant_bytes`; do
-                client_grant=$((client_grant + $d))
-        done
-        server_grant=0
-        for d in `lctl get_param -n obdfilter.*.tot_granted`; do
-                server_grant=$((server_grant + $d))
-        done
 
-        # cleanup the check_grant file
-        for i in `seq $OSTCOUNT`; do
-                rm $DIR1/${tfile}_check_grant_$i
-        done
+        local clients=$CLIENTS
+        [ -z $clients ] && clients=$(hostname)
 
-        #check whether client grant == server grant
-        if [ $client_grant != $server_grant ]; then
-                echo "failed: client:${client_grant} server: ${server_grant}"
-                return 1
-        else
-                echo "pass"
-        fi
+    # sync all the data and make sure no pending data on server
+    do_nodes $clients sync
+
+    # get client grant
+    client_grant=`do_nodes $clients \
+                    "$LCTL get_param -n osc.${FSNAME}-*.cur_*grant_bytes" | \
+                    awk '{total += $1} END{print total}'`
+
+    # get server grant
+    server_grant=`do_nodes $(comma_list $(osts_nodes)) \
+                    "$LCTL get_param -n obdfilter.${FSNAME}-OST*.tot_granted" | \
+                    awk '{total += $1} END{print total}'`
+
+    # check whether client grant == server grant
+    if [ $client_grant -ne $server_grant ]; then
+        echo "failed: client:${client_grant} server: ${server_grant}."
+        do_nodes $(comma_list $(osts_nodes)) \
+                   "$LCTL get_param obdfilter.${FSNAME}-OST*.tot*"
+        do_nodes $clients "$LCTL get_param osc.${FSNAME}-*.cur_*_bytes"
+        return 1
+    else
+        echo "pass: client:${client_grant} server: ${server_grant}"
+    fi
+
 }
 
 ########################

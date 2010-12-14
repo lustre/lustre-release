@@ -1259,7 +1259,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
                                 struct brw_page **pga,
                                 struct ptlrpc_request **reqp,
-                                struct obd_capa *ocapa, int reserve)
+                                struct obd_capa *ocapa, int reserve,
+                                int resend)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1375,6 +1376,14 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 &RMF_NIOBUF_REMOTE), (void *)(niobuf - niocount));
 
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
+        if (resend) {
+                if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0) {
+                        body->oa.o_valid |= OBD_MD_FLFLAGS;
+                        body->oa.o_flags = 0;
+                }
+                body->oa.o_flags |= OBD_FL_RECOV_RESEND;
+        }
+
         if (osc_should_shrink_grant(cli))
                 osc_shrink_grant_local(cli, &body->oa);
 
@@ -1677,7 +1686,7 @@ static int osc_brw_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
 restart_bulk:
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
-                                  page_count, pga, &req, ocapa, 0);
+                                  page_count, pga, &req, ocapa, 0, resends);
         if (rc != 0)
                 return (rc);
 
@@ -1730,7 +1739,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                                   aa->aa_cli, aa->aa_oa,
                                   NULL /* lsm unused by osc currently */,
                                   aa->aa_page_count, aa->aa_ppga,
-                                  &new_req, aa->aa_ocapa, 0);
+                                  &new_req, aa->aa_ocapa, 0, 1);
         if (rc)
                 RETURN(rc);
 
@@ -2387,7 +2396,7 @@ static struct ptlrpc_request *osc_build_req(const struct lu_env *env,
 
         sort_brw_pages(pga, page_count);
         rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count,
-                                  pga, &req, crattr.cra_capa, 1);
+                                  pga, &req, crattr.cra_capa, 1, 0);
         if (rc != 0) {
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
