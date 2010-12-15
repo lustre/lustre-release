@@ -1124,10 +1124,6 @@ static void target_request_copy_get(struct ptlrpc_request *req)
         cfs_atomic_inc(&req->rq_refcount);
         /** let export know it has replays to be handled */
         cfs_atomic_inc(&req->rq_export->exp_replay_count);
-        /* release service thread while request is queued 
-         * we are moving the request from active processing
-         * to waiting on the replay queue */
-        ptlrpc_server_active_request_dec(req);
 }
 
 static void target_request_copy_put(struct ptlrpc_request *req)
@@ -1137,8 +1133,6 @@ static void target_request_copy_put(struct ptlrpc_request *req)
 
         cfs_atomic_dec(&req->rq_export->exp_replay_count);
         class_export_rpc_put(req->rq_export);
-        /* ptlrpc_server_drop_request() assumes the request is active */
-        ptlrpc_server_active_request_inc(req);
         ptlrpc_server_drop_request(req);
 }
 
