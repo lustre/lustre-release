@@ -448,21 +448,19 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 }
 
 void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
-                      struct md_op_data *op_data)
+                      struct md_op_data *op_data, int ea_size)
 {
         struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
                                                     &RMF_MDT_BODY);
 
-        b->fsuid = cfs_curproc_fsuid();
-        b->fsgid = cfs_curproc_fsgid();
-        b->capability = cfs_curproc_cap_pack();
         b->valid = valid;
         if (op_data->op_bias & MDS_CHECK_SPLIT)
                 b->valid |= OBD_MD_FLCKSPLIT;
         if (op_data->op_bias & MDS_CROSS_REF)
                 b->valid |= OBD_MD_FLCROSSREF;
+        b->eadatasize = ea_size;
         b->flags = flags;
-        b->suppgid = op_data->op_suppgids[0];
+        __mdc_pack_body(b, op_data->op_suppgids[0]);
 
         b->fid1 = op_data->op_fid1;
         b->fid2 = op_data->op_fid2;
@@ -528,7 +526,6 @@ void mdc_exit_request(struct client_obd *cli)
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight--;
         cfs_list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
-                
                 if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
                         /* No free request slots anymore */
                         break;
@@ -540,6 +537,6 @@ void mdc_exit_request(struct client_obd *cli)
                 cfs_waitq_signal(&mcw->mcw_waitq);
         }
         /* Empty waiting list? Decrease reqs in-flight number */
-        
+
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 }

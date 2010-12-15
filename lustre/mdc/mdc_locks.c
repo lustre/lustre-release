@@ -424,7 +424,8 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
         lit->opc = (__u64)it->it_op;
 
         /* pack the intended request */
-        mdc_getattr_pack(req, valid, it->it_flags, op_data);
+        mdc_getattr_pack(req, valid, it->it_flags, op_data,
+                         obddev->u.cli.cl_max_mds_easize);
 
         req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
                              obddev->u.cli.cl_max_mds_easize);

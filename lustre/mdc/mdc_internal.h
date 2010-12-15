@@ -60,7 +60,7 @@ void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, __u32 size,
                       const struct lu_fid *fid, struct obd_capa *oc);
 void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
-                      struct md_op_data *data);
+                      struct md_op_data *data, int ea_size);
 void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      void *ea, int ealen, void *ea2, int ea2len);
 void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
