@@ -1406,7 +1406,9 @@ struct dentry *filter_parent(struct obd_device *obd, obd_seq group, obd_id objid
 {
         struct filter_obd *filter = &obd->u.filter;
         struct filter_subdirs *subdirs;
-        LASSERT(group < filter->fo_group_count); /* FIXME: object groups */
+
+        if (group >= filter->fo_group_count) /* FIXME: object groups */
+		return ERR_PTR(-EBADF);
 
         if (!fid_seq_is_mdt(group) || filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
