@@ -391,7 +391,7 @@ static int orph_index_iterate(const struct lu_env *env,
 
         iops = &dor->do_index_ops->dio_it;
         it = iops->init(env, dor, BYPASS_CAPA);
-        if (it != NULL) {
+        if (!IS_ERR(it)) {
                 result = iops->load(env, it, 0);
                 if (result > 0) {
                         /* main cycle */
@@ -443,8 +443,8 @@ next:
                 iops->put(env, it);
                 iops->fini(env, it);
         } else {
-                CERROR("not enough memory for clean pending.\n");
-                result = -ENOMEM;
+                result = PTR_ERR(it);
+                CERROR("Cannot clean pending (%d).\n", result);
         }
 
         RETURN(result);

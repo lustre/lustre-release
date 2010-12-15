@@ -251,7 +251,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
 
         iops = &obj->do_index_ops->dio_it;
         it = iops->init(env, obj, BYPASS_CAPA);
-        if (it != NULL) {
+        if (!IS_ERR(it)) {
                 result = iops->get(env, it, (const void *)"");
                 if (result > 0) {
                         int i;
@@ -270,7 +270,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
                 iops->put(env, it);
                 iops->fini(env, it);
         } else
-                result = -ENOMEM;
+                result = PTR_ERR(it);
         RETURN(result);
 }
 
