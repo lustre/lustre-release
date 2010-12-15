@@ -1484,6 +1484,11 @@ replay_barrier() {
     local facet=$1
     do_facet $facet sync
     df $MOUNT
+
+    # make sure there will be no seq change
+    local clients=${CLIENTS:-$HOSTNAME}
+    do_nodes $clients "f=${MOUNT}/fsa-\\\$(hostname); mcreate \\\$f; rm \\\$f"
+
     local svc=${facet}_svc
     do_facet $facet $LCTL --device %${!svc} notransno
     do_facet $facet $LCTL --device %${!svc} readonly
