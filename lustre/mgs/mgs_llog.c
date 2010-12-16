@@ -2402,6 +2402,10 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
         if (class_match_param(ptr, PARAM_MGSNODE, NULL) == 0)
                 GOTO(end, rc);
 
+	/* Processed in ost/mdt */
+	if (class_match_param(ptr, PARAM_NETWORK, NULL) == 0)
+		GOTO(end, rc);
+
         /* Processed in mgs_write_log_ost */
         if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
                 if (mti->mti_flags & LDD_F_PARAM) {
