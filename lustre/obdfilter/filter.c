@@ -1349,7 +1349,9 @@ static int filter_lock_dentry(struct obd_device *obd, struct dentry *dparent)
 struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
 {
         struct filter_obd *filter = &obd->u.filter;
-        LASSERT(group < FILTER_GROUPS); /* FIXME: object groups */
+
+        if (group >= FILTER_GROUPS) /* FIXME: object groups */
+		return ERR_PTR(-EBADF);
 
         if (group > 0 || filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
