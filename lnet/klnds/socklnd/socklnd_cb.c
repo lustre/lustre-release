@@ -54,6 +54,7 @@ ksocknal_alloc_tx(int type, int size)
                 return NULL;
 
         cfs_atomic_set(&tx->tx_refcount, 1);
+        tx->tx_zc_aborted = 0;
         tx->tx_zc_capable = 0;
         tx->tx_zc_checked = 0;
         tx->tx_desc_size  = size;
@@ -387,7 +388,7 @@ void
 ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx)
 {
         lnet_msg_t  *lnetmsg = tx->tx_lnetmsg;
-        int          rc = (tx->tx_resid == 0) ? 0 : -EIO;
+        int          rc = (tx->tx_resid == 0 && !tx->tx_zc_aborted) ? 0 : -EIO;
         ENTRY;
 
         LASSERT(ni != NULL || tx->tx_conn != NULL);

@@ -218,9 +218,10 @@ typedef struct                                  /* transmit packet */
         int            tx_niov;        /* # packet iovec frags */
         struct iovec  *tx_iov;         /* packet iovec frags */
         int            tx_nkiov;       /* # packet page frags */
-        unsigned int   tx_zc_capable:1; /* payload is large enough for ZC */
-        unsigned int   tx_zc_checked:1; /* Have I checked if I should ZC? */
-        unsigned int   tx_nonblk:1;    /* it's a non-blocking ACK */
+        unsigned short tx_zc_aborted;  /* aborted ZC request */
+        unsigned short tx_zc_capable:1; /* payload is large enough for ZC */
+        unsigned short tx_zc_checked:1; /* Have I checked if I should ZC? */
+        unsigned short tx_nonblk:1;    /* it's a non-blocking ACK */
         lnet_kiov_t   *tx_kiov;        /* packet page frags */
         struct ksock_conn  *tx_conn;        /* owning conn */
         lnet_msg_t    *tx_lnetmsg;     /* lnet message for lnet_finalize() */

@@ -1551,8 +1551,7 @@ ksocknal_finalize_zcreq(ksock_conn_t *conn)
                 LASSERT (tx->tx_msg.ksm_zc_cookies[0] != 0);
 
                 tx->tx_msg.ksm_zc_cookies[0] = 0;
-                if (tx->tx_resid == 0)
-                        tx->tx_resid = -1; /* mark it as not-acked */
+                tx->tx_zc_aborted = 1; /* mark it as not-acked */
                 cfs_list_del(&tx->tx_zc_list);
                 cfs_list_add(&tx->tx_zc_list, &zlist);
         }
