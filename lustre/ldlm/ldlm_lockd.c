@@ -1115,10 +1115,12 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
-        /* Don't enqueue a lock onto the export if it has already
-         * been evicted.  Cancel it now instead. (bug 3822) */
-        if (req->rq_export->exp_failed) {
-                LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
+        /* Don't enqueue a lock onto the export if it is been disonnected
+         * due to eviction (bug 3822) or server umount (bug 24324).
+         * Cancel it now instead. */
+        if (req->rq_export->exp_disconnected) {
+                LDLM_ERROR(lock, "lock on disconnected export %p",
+                           req->rq_export);
                 GOTO(out, rc = -ENOTCONN);
         }
 
@@ -1175,9 +1177,10 @@ existing_lock:
         dlm_rep->lock_flags |= dlm_req->lock_flags & LDLM_INHERIT_FLAGS;
         lock->l_flags |= dlm_req->lock_flags & LDLM_INHERIT_FLAGS;
 
-        /* Don't move a pending lock onto the export if it has already
-         * been evicted.  Cancel it now instead. (bug 5683) */
-        if (unlikely(req->rq_export->exp_failed ||
+        /* Don't move a pending lock onto the export if it has already been
+         * disconnected due to eviction (bug 5683) or server umount (bug 24324).
+         * Cancel it now instead. */
+        if (unlikely(req->rq_export->exp_disconnected ||
                      OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT))) {
                 LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 rc = -ENOTCONN;
