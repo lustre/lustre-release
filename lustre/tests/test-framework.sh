@@ -390,7 +390,7 @@ mount_facet() {
     local mntpt=$(facet_mntpt $facet)
 
     echo "Starting ${facet}: ${!opt} $@ ${!dev} $mntpt"
-    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} $mntpt
+    do_facet ${facet} "mkdir -p $mntpt; mount -t lustre ${!opt} $@ ${!dev} $mntpt"
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} $mntpt"
