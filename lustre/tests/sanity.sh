@@ -1444,12 +1444,30 @@ test_29() {
 }
 run_test 29 "IT_GETATTR regression  ============================"
 
-test_30() {
+test_30a() { # was test_30
 	cp `which ls` $DIR || cp /bin/ls $DIR
-	$DIR/ls /
+	$DIR/ls / || error
 	rm $DIR/ls
 }
-run_test 30 "run binary from Lustre (execve) ==================="
+run_test 30a "execute binary from Lustre (execve) =============="
+
+test_30b() {
+	cp `which ls` $DIR || cp /bin/ls $DIR
+	chmod go+rx $DIR/ls
+	$RUNAS $DIR/ls / || error
+	rm $DIR/ls
+}
+run_test 30b "execute binary from Lustre as non-root ==========="
+
+test_30c() { # b=22376
+	cp `which ls` $DIR || cp /bin/ls $DIR
+	chmod a-rw $DIR/ls
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	$RUNAS $DIR/ls / || error
+	rm -f $DIR/ls
+}
+run_test 30c "execute binary from Lustre without read perms ===="
 
 test_31a() {
 	$OPENUNLINK $DIR/f31 $DIR/f31 || error

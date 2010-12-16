@@ -1961,7 +1961,7 @@ int accmode(const struct lu_env *env, struct lu_attr *la, int flags)
         if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
                 res |= MAY_WRITE;
         if (flags & MDS_FMODE_EXEC)
-                res |= MAY_EXEC;
+                res = MAY_EXEC;
         return res;
 }
 
