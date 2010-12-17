@@ -1,0 +1,59 @@
+.TH ll_decode_filter_fid 1 "Dec 15, 2010" Lustre "utilities"
+.SH NAME
+ll_decode_filter_fid \- display Lustre Object ID and MDT parent FID
+.SH SYNOPSIS
+.B ll_decode_filter_fid
+.I object_file
+.RI [ "object_file ..." ]
+.br
+.SH DESCRIPTION
+.B ll_decode_filter_fid
+decodes and prints the Lustre OST object ID and MDT FID and stripe index
+for the specified OST object(s), which is stored in the "trusted.fid"
+attribute on each OST object.  This is accessible to
+.B ll_decode_filter_fid
+when the OST filesystem is mounted locally as type ldiskfs for maintenance.
+.PP
+The "trusted.fid" extended attribute is stored on each OST object when it
+is first modified (data written or attributes set) and is not accessed or
+modified by Lustre after that time.
+.PP
+The OST object ID (objid) is useful in case of OST directory corruption,
+though normally the
+.BR ll_recover_lost_found_objs (8)
+utility is able to reconstruct the entire OST object directory hierarchy.
+The MDS FID can be useful to determine which MDS inode an OST object
+is (or was) used by.  The stripe index can be used in conjunction with
+other OST objects to reconstruct the layout of a file even if the MDT
+inode was lost.
+.SH EXAMPLE
+.fi
+root@oss1# cd /mnt/ost/lost+found
+.fi
+root@oss1# ll_decode_filter_fid #12345[4,5,8]
+.fi
+#123454: objid=690670 seq=0 parent=[0x751c5:0xfce6e605:0x0]
+.fi
+#123455: objid=614725 seq=0 parent=[0x18d11:0xebba84eb:0x1]
+.fi
+#123458: objid=533088 seq=0 parent=[0x21417:0x19734d61:0x0]
+.PP
+This shows that the 3 files in lost+found have decimal object IDs 690670,
+614725, and 533088, respectively.  The object sequence number (formerly
+object group) is 0 for all current OST objects.
+.PP
+The MDT parent inode FIDs are hexdecimal numbers of the form
+sequence:oid:idx.  Since the sequence number is below 0x100000000 in
+all these cases, the FIDs are in the IGIF (legacy Inode and Generation
+In FID) namespace and are mapped directly to the MDT inode = seq and
+generation = oid values, so the MDT inodes are
+0x751c5, 0x18d11, and 0x21417 respectively.  For objects with MDT parent
+sequence numbers above 0x200000000, this indicates that the FID needs
+to be mapped via the MDT Object Index (OI) file on the MDT to determine
+the internal inode number.
+.PP
+The idx field shows the stripe number of this OST object in the Lustre
+RAID-0 striped file.
+.SH SEE ALSO
+.BR lustre (7),
+.BR ll_recover_lost_found_objs (8)
