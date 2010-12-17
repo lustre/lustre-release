@@ -133,10 +133,8 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
         }
 
         result = d_obtain_alias(inode);
-        if (!result) {
-                iput(inode);
+        if (!result)
                 RETURN(ERR_PTR(-ENOMEM));
-        }
         ll_dops_init(result, 1);
 
         RETURN(result);

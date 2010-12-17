@@ -411,7 +411,17 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #endif
 
 #ifndef HAVE_D_OBTAIN_ALIAS
-#define d_obtain_alias(inode) d_alloc_anon(inode)
+/* The old d_alloc_anon() didn't free the inode reference on error
+ * like d_obtain_alias().  Hide that difference/inconvenience here. */
+static inline struct dentry *d_obtain_alias(struct inode *inode)
+{
+	struct dentry *anon = d_alloc_anon(inode);
+
+	if (anon == NULL)
+		iput(inode);
+
+	return anon;
+}
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT

@@ -620,26 +620,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-#
-# LC_D_OBTAIN_ALIAS
-# starting from 2.6.18 kernel don't export do_kern_mount
-# and want to use vfs_kern_mount instead.
-#
-AC_DEFUN([LC_D_OBTAIN_ALIAS],
-[AC_MSG_CHECKING([d_obtain_alias exist in kernel])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/dcache.h>
-],[
-        d_obtain_alias(NULL);
-],[
-        AC_DEFINE(HAVE_D_OBTAIN_ALIAS, 1,
-                [d_obtain_alias exist in kernel])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 
 # LC_INVALIDATEPAGE_RETURN_INT
 # 2.6.17 changes return type for invalidatepage to 'void' from 'int'
@@ -1656,6 +1636,26 @@ AC_DEFUN([LC_EXPORT_BDI_INIT],
         AC_DEFINE(HAVE_BDI_INIT, 1,
                 [bdi_init/bdi_destroy functions are present])
 ],[
+])
+])
+
+#
+# LC_D_OBTAIN_ALIAS
+# starting from 2.6.28 kernel replaces d_alloc_anon() with
+# d_obtain_alias() for getting anonymous dentries
+#
+AC_DEFUN([LC_D_OBTAIN_ALIAS],
+[AC_MSG_CHECKING([d_obtain_alias exist in kernel])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/dcache.h>
+],[
+        d_obtain_alias(NULL);
+],[
+        AC_DEFINE(HAVE_D_OBTAIN_ALIAS, 1,
+                [d_obtain_alias exist in kernel])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
 ])
 ])
 
