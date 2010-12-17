@@ -371,7 +371,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
         time_t now = CURRENT_SECONDS;
         struct iattr *attr = &rec->ur_iattr;
         unsigned int ia_valid = attr->ia_valid;
-        int error;
+        int error, mode;
         ENTRY;
 
         if (ia_valid & ATTR_RAW)
@@ -402,6 +402,17 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
               ia_valid & MDS_OPEN_OWNEROVERRIDE)) {
                 if ((error = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                         RETURN(error);
+        }
+
+        /* Some older clients are broken so we do the client's magic
+         * here just in case */
+        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
+            (ATTR_SIZE|ATTR_MODE)) {
+                mode = inode->i_mode;
+                if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
+                    ((mode & S_ISGID) && (mode & S_IXGRP) &&
+                    (!(attr->ia_mode & S_ISGID))))
+                        attr->ia_valid |= ATTR_FORCE;
         }
 
         if (ia_valid & (ATTR_UID | ATTR_GID)) {
@@ -447,15 +458,8 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         attr->ia_valid |= ATTR_MODE;
                 }
         } else if (ia_valid & ATTR_MODE) {
-                int mode;
-                if (!(attr->ia_valid & ATTR_FORCE)) {
-                        mode = inode->i_mode;
-                        if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
-                            ((mode & S_ISGID) && (mode & S_IXGRP) &&
-                            (!(attr->ia_mode & S_ISGID))))
-                                attr->ia_valid |= ATTR_FORCE;
-                }
                 mode = attr->ia_mode;
+
                 /* chmod */
                 if (attr->ia_mode == (umode_t)-1)
                         mode = inode->i_mode;
