@@ -5358,6 +5358,13 @@ test_122() { #bug 11544
 run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
 test_123a() { # was test 123, statahead(bug 11401)
+        # interop 18 <-> 2x
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]]; then
+                skip mds running $lustre_version, statahead is disabled
+                return 0
+        fi
+
         SLOWOK=0
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
                 log "testing on UP system. Performance may be not as good as expected."
@@ -5456,8 +5463,15 @@ test_123a() { # was test 123, statahead(bug 11401)
 run_test 123a "verify statahead work"
 
 test_123b () { # statahead(bug 15027)
-	mkdir -p $DIR/$tdir
-	createmany -o $DIR/$tdir/$tfile-%d 1000
+        # interop 18 <-> 2x
+        local lustre_version=$(get_lustre_version mds)
+        if [[ $lustre_version != 1.8* ]]; then
+                skip mds running $lustre_version, statahead is disabled
+                return 0
+        fi
+
+        mkdir -p $DIR/$tdir
+        createmany -o $DIR/$tdir/$tfile-%d 1000
 
         cancel_lru_locks mdc
         cancel_lru_locks osc
