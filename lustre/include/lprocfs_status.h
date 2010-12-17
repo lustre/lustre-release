@@ -159,8 +159,12 @@ struct lprocfs_counter {
 };
 
 struct lprocfs_percpu {
+#if __STDC_VERSION__ >= 199901L
+        __s64                  pad;
+#endif
         struct lprocfs_counter lp_cntr[0];
 };
+
 
 #define LPROCFS_GET_NUM_CPU 0x0001
 #define LPROCFS_GET_SMP_ID  0x0002
