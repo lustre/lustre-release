@@ -228,8 +228,12 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 
                 if (oqctl->qc_cmd == Q_QUOTAOFF ||
                     oqctl->qc_cmd == Q_FINVALIDATE) {
-                        if (!rc && oqctl->qc_cmd == Q_QUOTAOFF)
+                        if (!rc && oqctl->qc_cmd == Q_QUOTAOFF) {
                                 obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
+                                CDEBUG(D_QUOTA, "%s: quotaoff type:flags:rc "
+                                       "%u:%lu:%d\n", obd->obd_name,
+                                       oqctl->qc_type, qctxt->lqc_flags, rc);
+                        }
                         atomic_inc(&obt->obt_quotachecking);
                 }
                 break;

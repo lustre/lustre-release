@@ -292,17 +292,17 @@ quota_show_check() {
 
 # set quota
 test_0() {
-        $LFS quotaoff -ug $DIR
-        $LFS quotacheck -ug $DIR
-
-         resetquota -u $TSTUSR
-         resetquota -g $TSTUSR
-
         lctl set_param debug="+quota"
         do_facet mds "lctl set_param debug=+quota"
         for num in `seq $OSTCOUNT`; do
-            do_facet ost$num "lctl set_param debug=+quota"
+	    do_facet ost$num "lctl set_param debug=+quota"
         done
+
+        log "do the quotacheck ..."
+        $LFS quotacheck -ug $DIR
+
+        resetquota -u $TSTUSR
+        resetquota -g $TSTUSR
 }
 run_test_with_stat 0 "Set quota ============================="
 
