@@ -157,7 +157,7 @@ lh_exit(lustre_hash_t *lh, struct hlist_node *hnode)
         LASSERT(LHO(lh));
 
         if (LHP(lh, exit))
-                return LHP(lh, exit)(hnode);
+                LHP(lh, exit)(hnode);
 }
 
 /* Validate hnode references the correct key */
