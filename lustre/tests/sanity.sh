@@ -6798,6 +6798,19 @@ test_200g() {
 }
 run_test 200g "lfs df a pool ============================================"
 
+test_200h() { # b=24039
+	test_pools || return 0
+	mkdir -p $POOL_DIR || error "unable to create $POOL_DIR"
+
+	local file="/..$POOL_DIR/$tfile-1"
+	$SETSTRIPE -p $POOL $file || error "unable to create $file"
+
+	cd $POOL_DIR
+	$SETSTRIPE -p $POOL $tfile-2 || \
+		error "unable to create $tfile-2 in $POOL_DIR"
+}
+run_test 200h "Create files in a pool with relative pathname ============"
+
 test_201a() {
 	test_pools || return 0
 

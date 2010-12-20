@@ -607,19 +607,42 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 
 int llapi_search_fsname(const char *pathname, char *fsname)
 {
-        char *path = (char*)pathname, buf[PATH_MAX + 1];
+        char *path;
+        int rc;
 
-        if (pathname[0] != '/') { /* Need a absolute path */
-                memset(buf, '\0', sizeof(buf));
-                if (realpath(pathname, buf) == NULL) {
-                        llapi_err(LLAPI_MSG_ERROR, "pathname '%s' cannot expand",
-                                  pathname);
-                        return -EINVAL;
+        path = realpath(pathname, NULL);
+        if (path == NULL) {
+                char buf[PATH_MAX + 1], *ptr;
+
+                buf[0] = 0;
+                if (pathname[0] != '/') {
+                        /* Need an absolute path, but realpath() only works for
+                         * pathnames that actually exist.  We go through the
+                         * extra hurdle of dirname(getcwd() + pathname) in
+                         * case the relative pathname contains ".." in it. */
+                        if (getcwd(buf, sizeof(buf) - 1) == NULL)
+                                return -errno;
+                        strcat(buf, "/");
                 }
-                path = buf;
+                strncat(buf, pathname, sizeof(buf) - strlen(buf));
+                path = realpath(buf, NULL);
+                if (path == NULL) {
+                        ptr = strrchr(buf, '/');
+                        if (ptr == NULL)
+                                return -ENOENT;
+                        *ptr = '\0';
+                        path = realpath(buf, NULL);
+                        if (path == NULL) {
+                                llapi_err(LLAPI_MSG_ERROR,
+                                          "pathname '%s' cannot expand",
+                                          pathname);
+                                return -errno;
+                        }
+                }
         }
-        return get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL,
-                             path, -1);
+        rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, path, -1);
+        free(path);
+        return rc;
 }
 
 /* return the first file matching this pattern */
