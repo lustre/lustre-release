@@ -69,12 +69,15 @@ Turn on quotas for a Lustre filesystem.
 is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quotas).
 The quota files must exist; they are normally created with the
 .BR llapi_quotacheck (3)
-call.  This call is restricted to the super-user.
+call.
+
+This call is restricted to the super-user.
 .TP
 .SB LUSTRE_Q_QUOTAOFF
 Turn off quotas for a Lustre filesystem.
 .I qc_type
 is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quotas).
+
 This call is restricted to the super-user.
 .TP
 .SB LUSTRE_Q_GETQUOTA
@@ -92,6 +95,11 @@ is an empty string and
 is zero then clusterwide limits and usage are returned. On return
 .I obd_dqblk
 contains the requested information (block limits unit is kilobyte).
+.I dqb_btime
+and
+.I dqb_itime
+are block and inode softlimit grace period expiration timestamps for the requested user or group.
+
 Quotas must be turned on before using this command.
 .TP
 .SB LUSTRE_Q_SETQUOTA
@@ -105,6 +113,7 @@ must be set to QIF_ILIMITS, QIF_BLIMITS or QIF_LIMITS (both inode limits and blo
 must be filled with limits values (as set in
 .I dqb_valid 
 , block limits unit is kilobyte).
+
 Quotas must be turned on before using this command.
 .TP
 .SB LUSTRE_Q_GETINFO
@@ -112,9 +121,9 @@ Get information about quotas.
 .I qc_type
 is either USRQUOTA or GRPQUOTA. On return
 .I dqi_igrace
-is inode grace time (in seconds),
+is the default inode grace period duration for all users or all groups (in seconds),
 .I dqi_bgrace
-is block grace time (in seconds),
+is the default block grace period duration for all users or all groups (in seconds),
 .I dqi_flags
 is not used by the current Lustre version.
 .TP
