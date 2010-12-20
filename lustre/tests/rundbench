@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
