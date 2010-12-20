@@ -175,7 +175,6 @@ static int open_file(const char *file, int flag)
 	if (fd < 0) {
 		fprintf(stderr, "\n%s: Open '%s' failed:%s\n",
 			progname, file, strerror(errno));
-		exit(3);
 	}
 	return (fd);
 }
@@ -484,15 +483,20 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 			}
 			dir_num++;
 		}
+
 		fd = open_file(new_file(tempfile, tempdir, file_num),
 			       O_WRONLY | O_CREAT | O_TRUNC | O_LARGEFILE);
-
-		if (fd >= 0 && fstat64(fd, &file) == 0) {
-			inode_st = file.st_ino;
+		if (fd >= 0) {
+			if (fstat64(fd, &file) == 0) {
+				inode_st = file.st_ino;
+			} else {
+				fprintf(stderr, "\n%s: write stat '%s': %s",
+					progname, tempfile, strerror(errno));
+				close(fd);
+				break;
+			}
 		} else {
-			fprintf(stderr, "\n%s: write stat64 to file %s: %s",
-				progname, tempfile, strerror(errno));
-			exit(1);
+			break;
 		}
 
 		if (verbose > 1)
@@ -553,12 +557,17 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 
 		fd = open_file(new_file(tempfile, tempdir, file_num),
 			       O_RDONLY | O_LARGEFILE);
-		if (fd >= 0 && fstat64(fd, &file) == 0) {
-			inode_st = file.st_ino;
+		if (fd >= 0) {
+			if (fstat64(fd, &file) == 0) {
+				inode_st = file.st_ino;
+			} else {
+				fprintf(stderr, "\n%s: read stat '%s': %s\n",
+					progname, tempfile, strerror(errno));
+				close(fd);
+				return 1;
+			}
 		} else {
-			fprintf(stderr, "\n%s: read stat64 file '%s': %s\n",
-				progname, tempfile, strerror(errno));
-			return 1;
+			break;
 		}
 
 		if (verbose > 1)
@@ -599,10 +608,10 @@ int main(int argc, char **argv)
 				      longopts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
-                       chunksize = strtoul(optarg, NULL, 0) * ONE_MB;
-                       if (chunksize == 0) {
-                               fprintf(stderr, "%s: bad chunk size '%s'\n",
-                                       optarg, progname);
+			chunksize = strtoul(optarg, NULL, 0) * ONE_MB;
+			if (chunksize == 0) {
+				fprintf(stderr, "%s: bad chunk size '%s'\n",
+					optarg, progname);
 				return -1;
 			}
 			break;
