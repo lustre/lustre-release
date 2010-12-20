@@ -42,7 +42,6 @@ MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 READS=${READS:-"reads"}
-TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
@@ -2152,7 +2151,7 @@ test_43b() {
 	cp -p `which multiop` $DIR/d43/multiop
         MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
         MULTIOP_PID=$!
-        truncate $DIR/d43/multiop 0 && error "expected error, got success"
+        $TRUNCATE $DIR/d43/multiop 0 && error "expected error, got success"
         kill -USR1 $MULTIOP_PID || return 2
         wait $MULTIOP_PID || return 3
         rm $TMP/test43.junk
@@ -3368,7 +3367,7 @@ test_69() {
 
 	#define OBD_FAIL_OST_ENOENT 0x217
 	do_facet ost1 lctl set_param fail_loc=0x217
-	truncate $f 1 # vmtruncate() will ignore truncate() error.
+	$TRUNCATE $f 1 # vmtruncate() will ignore truncate() error.
 	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
 
 	do_facet ost1 lctl set_param fail_loc=0
