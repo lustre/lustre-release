@@ -1818,6 +1818,9 @@ test_70b () {
 	
 	local duration=300
 	[ "$SLOW" = "no" ] && duration=60
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=900
+
 	local cmd="rundbench 1 -t $duration"
 	local pid=""
 	do_nodesv $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
