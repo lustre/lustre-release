@@ -5741,7 +5741,7 @@ test_129() {
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         local MNTDEV=$(get_mds_mntdev_proc_path)
-        DEV=$(basename $(do_facet mds lctl get_param -n $MNTDEV))
+        DEV=$(ldiskfs_canon "$MNTDEV" mds)
         [ -z "$DEV" ] && error "can't access mds mntdev"
         EFBIG=27
         LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size

@@ -3625,3 +3625,16 @@ run_sgpdd () {
     cat ${rslt}.detail
 }
 
+# returns the canonical name for an ldiskfs device
+ldiskfs_canon() {
+        local dev="$1"
+        local facet="$2"
+
+        do_facet $facet "dv=\\\$(lctl get_param -n $dev);
+if foo=\\\$(lvdisplay -c \\\$dv 2>/dev/null); then
+    echo dm-\\\${foo##*:};
+else
+    echo \\\$(basename \\\$dv);
+fi;"
+}
+
