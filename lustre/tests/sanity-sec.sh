@@ -30,7 +30,6 @@ WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
 
 CONFDIR=/etc/lustre
 PERM_CONF=$CONFDIR/perm.conf
-SANITYSECLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
 require_dsh_mds || exit 0
@@ -573,7 +572,5 @@ sec_unsetup
 
 sec_cleanup
 
-echo '=========================== finished ==============================='
-[ -f "$SANITYSECLOG" ] && \
-	cat $SANITYSECLOG && grep -q FAIL $SANITYSECLOG && exit 1 || true
-echo "$0 completed"
+complete $(basename $0) $SECONDS
+exit_status

@@ -58,44 +58,50 @@ usage() {
 print_summary () {
     trap 0
     [ "$TESTSUITE" == "lfsck" ] && return 0
-    [ -n "$ONLY" ] && echo "WARNING: ONLY is set to ${ONLY}."
-    local form="%-13s %-17s %s\n"
-    printf "$form" "status" "script" "skipped tests E(xcluded) S(low)"
+    [ -n "$ONLY" ] && echo "WARNING: ONLY is set to $(echo $ONLY)"
+    local details
+    local form="%-13s %-17s %-9s %s %s\n"
+    printf "$form" "status" "script" "Total(sec)" "E(xcluded) S(low)"
     echo "------------------------------------------------------------------------------------"
     for O in $DEFAULT_SUITES; do
-        local skipped=""
-        local slow=""
         O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
-        local o=$(echo $O  | tr "[:upper:]" "[:lower:]")
-        o=${o//_/-}
+        [ "${!O}" = "no" ] && continue || true
+        local o=$(echo $O  | tr "[:upper:]_" "[:lower:]-")
         local log=${TMP}/${o}.log
-        [ -f $log ] && skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
-        [ -f $log ] && slow=$(grep SLOW $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
-        [ "${!O}" = "done" ] && \
-            printf "$form" "Done" "$O" "E=$skipped" && \
-            [ -n "$slow" ] && printf "$form" "-" "-" "S=$slow"
-
+        if is_sanity_benchmark $o; then
+            log=${TMP}/sanity-benchmark.log
+        fi
+        local slow=
+        local skipped=
+        local total=
+        local status=Unfinished
+        if [ -f $log ]; then
+            skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
+            slow=$(egrep "^PASS|^FAIL" $log | tr -d "("| sed s/s\)$//g | sort -nr -k 3  | head -5 |  awk '{ print $2":"$3"s" }')
+            total=$(grep duration $log | awk '{ print $2}')
+            if [ "${!O}" = "done" ]; then
+                status=Done
+            fi
+            if $DDETAILS; then
+                local durations=$(egrep "^PASS|^FAIL" $log |  tr -d "("| sed s/s\)$//g | awk '{ print $2":"$3"|" }')
+                details=$(printf "%s\n%s %s %s\n" "$details" "DDETAILS" "$O" "$(echo $durations)")
+            fi
+        fi
+        printf "$form" $status "$O" "${total}" "E=$skipped"
+        printf "$form" "-" "-" "-" "S=$(echo $slow)"
     done
 
     for O in $DEFAULT_SUITES; do
         O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
         if [ "${!O}" = "no" ]; then
-            # FIXME.
-            # only for those tests suits which are run directly from acc-sm script:
-            # bonnie, iozone, etc.
-            if [ -f "$TESTSUITELOG" ] && grep FAIL $TESTSUITELOG | grep -q ' '$O  ; then
-               printf "$form" "UNFINISHED" "$O" ""  
-            else
-               printf "$form" "Skipped" "$O" ""
-            fi
+            printf "$form" "Skipped" "$O" ""
         fi
     done
 
-    for O in $DEFAULT_SUITES; do
-        O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
-        [ "${!O}" = "done" -o "${!O}" = "no" ] || \
-            printf "$form" "UNFINISHED" "$O" ""
-    done
+    # print the detailed tests durations if DDETAILS=true
+    if $DDETAILS; then
+        echo "$details"
+    fi
 }
 
 init_test_env() {
@@ -246,6 +252,8 @@ init_test_env() {
     shift $((OPTIND - 1))
     ONLY=${ONLY:-$*}
 
+    # print the durations of each test if "true"
+    DDETAILS=${DDETAILS:-false}
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
     rm -f $TMP/*active
 }
@@ -2887,6 +2895,14 @@ error_noexit() {
     echo "$@" > $LOGDIR/err
 }
 
+exit_status () {
+    local status=0
+    local log=$TESTSUITELOG
+
+    [ -f "$log" ] && grep -q FAIL $log && status=1
+    exit $status
+}
+
 error() {
     error_noexit "$@"
     exit 1
@@ -3037,6 +3053,12 @@ trace() {
         return 1
 }
 
+complete () {
+    equals_msg $1 test complete, duration $2 sec
+    [ -f "$TESTSUITELOG" ] && egrep .FAIL $TESTSUITELOG || true
+    echo duration $2 >>$TESTSUITELOG
+}
+
 pass() {
     # Set TEST_STATUS here; will be used for logging the result
     if [ -f $LOGDIR/err ]; then
@@ -3044,7 +3066,7 @@ pass() {
     else
         TEST_STATUS="PASS"
     fi
-    echo $TEST_STATUS " " $@
+    echo "$TEST_STATUS $@" 2>&1 | tee -a $TESTSUITELOG
 }
 
 check_mds() {
@@ -3125,7 +3147,7 @@ run_one_logged() {
         echo "test_$1 returned $RC" | tee $LOGDIR/err
 
     duration=$((`date +%s` - $BEFORE))
-    pass "(${duration}s)"
+    pass "$1" "(${duration}s)"
     [ -f $LOGDIR/err ] && TEST_ERROR=$(cat $LOGDIR/err)
     log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
 
@@ -4475,3 +4497,15 @@ else
     echo \\\$(basename \\\$dv);
 fi;"
 }
+
+is_sanity_benchmark() {
+    local benchmarks="dbench bonnie iozone fsx"
+    local suite=$1
+    for b in $benchmarks; do
+        if [ "$b" == "$suite" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+

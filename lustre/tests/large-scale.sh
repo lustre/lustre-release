@@ -117,6 +117,6 @@ test_3a() {
 
 run_test 3a "recovery time, $CLIENTCOUNT clients"
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+exit_status

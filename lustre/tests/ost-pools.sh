@@ -32,8 +32,6 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
-POOLSLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
-[ "$POOLSLOG" ] && rm -f $POOLSLOG || true
 build_test_filter
 
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
@@ -1395,10 +1393,9 @@ test_26() {
 }
 run_test 26 "Choose other OSTs in the pool first in the creation remedy"
 
-log "cleanup: ======================================================"
 cd $ORIG_PWD
+
+complete $(basename $0) $SECONDS
 cleanup_pools $FSNAME
 check_and_cleanup_lustre
-echo '=========================== finished ==============================='
-[ -f "$POOLSLOG" ] && cat $POOLSLOG && grep -q FAIL $POOLSLOG && exit 1 || true
-echo "$0: completed"
+exit_status

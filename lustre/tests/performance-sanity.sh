@@ -81,7 +81,7 @@ test_8() {
 }
 run_test 8 "getattr large files ======"
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 [ -f "$LOG" ] && cat $LOG || true
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

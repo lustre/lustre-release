@@ -1097,6 +1097,6 @@ test_61()
 }
 run_test 61 "Verify to not reuse orphan objects - bug 17025"
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

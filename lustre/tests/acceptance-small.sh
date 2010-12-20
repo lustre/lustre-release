@@ -10,11 +10,11 @@ export OSKIPPED=0
 # This is the default set of tests to run.
 DEFAULT_SUITES="runtests sanity sanity-benchmark sanityn lfsck liblustre
                 runracer replay-single conf-sanity recovery-small
-                replay-ost-single replay-dual insanity sanity-quota sanity-sec
-                sanity-gss performance-sanity large-scale recovery-mds-scale 
-                recovery-double-scale recovery-random-scale parallel-scale 
-                lustre_rsync-test metadata-updates ost-pools lnet-selftest
-                mmp obdfilter-survey sgpdd-survey"
+                replay-ost-single replay-dual replay-vbr insanity sanity-quota
+                sanity-sec sanity-gss performance-sanity large-scale
+                recovery-mds-scale recovery-double-scale recovery-random-scale
+                parallel-scale lustre_rsync-test metadata-updates ost-pools
+                lnet-selftest mmp obdfilter-survey sgpdd-survey"
 
 if [[ -n $@ ]]; then
     ACC_SM_ONLY="${ACC_SM_ONLY} $@"
@@ -107,17 +107,6 @@ title() {
         fi
     fi 
     log "-----============= acceptance-small: "$*" ============----- $(date)"
-}
-
-is_sanity_benchmark() {
-    local benchmarks="dbench bonnie iozone fsx"
-    local suite=$1
-    for b in $benchmarks; do
-        if [ "$b" == "$suite" ]; then
-            return 0
-        fi
-    done
-    return 1
 }
 
 run_suite() {

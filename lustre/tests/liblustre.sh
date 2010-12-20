@@ -40,6 +40,6 @@ test_1() {
 }
 run_test 1 "liblustre sanity"
 
-banner "test complete, cleaning up"
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

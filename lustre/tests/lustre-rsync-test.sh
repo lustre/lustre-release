@@ -30,10 +30,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-REPLLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
-
-[ "$REPLLOG" ] && rm -f $REPLLOG || true
-
 check_and_setup_lustre
 
 DIR=${DIR:-$MOUNT}
@@ -585,9 +581,7 @@ test_9() {
 }
 run_test 9 "Replicate recursive directory removal"
 
-log "cleanup: ======================================================"
 cd $ORIG_PWD
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-echo '=========================== finished ==============================='
-[ -f "$REPLLOG" ] && cat $REPLLOG && grep -q FAIL $REPLLOG && exit 1 || true
-echo "$0: completed"
+exit_status

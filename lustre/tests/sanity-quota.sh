@@ -2204,10 +2204,8 @@ quota_fini()
 }
 quota_fini
 
-log "cleanup: ======================================================"
 cd $ORIG_PWD
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-echo '=========================== finished ==============================='
 export QUOTA_AUTO=$QUOTA_AUTO_OLD
-[ -f "$QUOTALOG" ] && cat $QUOTALOG && grep -q FAIL $QUOTALOG && exit 1 || true
-echo "$0: completed"
+exit_status

@@ -1132,6 +1132,6 @@ rm -f $cos_param_file
 
 [ "$CLIENTS" ] && zconf_mount_clients $CLIENTS $DIR
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

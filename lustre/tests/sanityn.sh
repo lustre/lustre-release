@@ -45,13 +45,10 @@ init_logging
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 23 33a"
 
-SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
-
-[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 check_and_setup_lustre
 
@@ -1876,8 +1873,7 @@ run_test 50 "osc lvb attrs: enqueue vs. CP AST =============="
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
-check_and_cleanup_lustre
 
-echo '=========================== finished ==============================='
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 || true
-echo "$0: completed"
+complete $(basename $0) $SECONDS
+check_and_cleanup_lustre
+exit_status

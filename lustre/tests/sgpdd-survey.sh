@@ -79,5 +79,5 @@ test_2 () {
 }
 run_test 2 "sgpdd-survey, osts, scsidevs"
 
-equals_msg `basename $0`: test complete, cleaning up
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+complete $(basename $0) $SECONDS
+exit_status

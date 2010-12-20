@@ -2703,6 +2703,8 @@ run_test 58 "missing llog files must not prevent MDT from mounting"
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
+
 cleanup_gss
-equals_msg `basename $0`: test complete
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+
+complete $(basename $0) $SECONDS
+exit_status

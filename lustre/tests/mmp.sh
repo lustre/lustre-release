@@ -626,8 +626,6 @@ run_test 10 "e2fsck with mounted filesystem"
 mmp_fini
 FAIL_ON_ERROR=$SAVED_FAIL_ON_ERROR
 
-equals_msg $(basename $0): test complete
+complete $(basename $0) $SECONDS
 $MMP_RESTORE_MOUNT && setupall
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && \
-    grep -q FAIL $TESTSUITELOG && exit 1 || true
-echo "$0: completed"
+exit_status

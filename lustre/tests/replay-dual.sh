@@ -549,9 +549,9 @@ run_test 21b "commit on sharing, two clients"
 
 # end commit on sharing tests 
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 [ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status
