@@ -471,8 +471,7 @@ void ldlm_lock2handle(const struct ldlm_lock *lock, struct lustre_handle *lockh)
 struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
                                      int flags)
 {
-        struct ldlm_namespace *ns;
-        struct ldlm_lock *lock, *retval = NULL;
+        struct ldlm_lock *lock;
         ENTRY;
 
         LASSERT(handle);
@@ -481,36 +480,36 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
         if (lock == NULL)
                 RETURN(NULL);
 
-        LASSERT(lock->l_resource != NULL);
-        ns = ldlm_lock_to_ns(lock);
-        LASSERT(ns != NULL);
-
-        lu_ref_add_atomic(&lock->l_reference, "handle", cfs_current());
-        lock_res_and_lock(lock);
-
         /* It's unlikely but possible that someone marked the lock as
          * destroyed after we did handle2object on it */
-        if (lock->l_destroyed) {
+        if (flags == 0 && !lock->l_destroyed) {
+                lu_ref_add(&lock->l_reference, "handle", cfs_current());
+                RETURN(lock);
+        }
+
+        lock_res_and_lock(lock);
+
+        LASSERT(lock->l_resource != NULL);
+
+        lu_ref_add_atomic(&lock->l_reference, "handle", cfs_current());
+        if (unlikely(lock->l_destroyed)) {
                 unlock_res_and_lock(lock);
                 CDEBUG(D_INFO, "lock already destroyed: lock %p\n", lock);
                 LDLM_LOCK_PUT(lock);
-                GOTO(out, retval);
+                RETURN(NULL);
         }
 
         if (flags && (lock->l_flags & flags)) {
                 unlock_res_and_lock(lock);
                 LDLM_LOCK_PUT(lock);
-                GOTO(out, retval);
+                RETURN(NULL);
         }
 
         if (flags)
                 lock->l_flags |= flags;
 
         unlock_res_and_lock(lock);
-        retval = lock;
-        EXIT;
- out:
-        return retval;
+        RETURN(lock);
 }
 
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)

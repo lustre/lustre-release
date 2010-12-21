@@ -851,10 +851,10 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (lock->l_resource->lr_lvb_len) {
                 void *lvb = req_capsule_client_get(&req->rq_pill, &RMF_DLM_LVB);
 
-                lock_res_and_lock(lock);
+                cfs_down(&lock->l_resource->lr_lvb_sem);
                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                        lock->l_resource->lr_lvb_len);
-                unlock_res_and_lock(lock);
+                cfs_up(&lock->l_resource->lr_lvb_sem);
         }
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %lds wait)",
@@ -1137,13 +1137,11 @@ existing_lock:
                  * local_lock_enqueue by the policy function. */
                 cookie = req;
         } else {
-                lock_res_and_lock(lock);
                 if (lock->l_resource->lr_lvb_len) {
                         req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
                                              RCL_SERVER,
                                              lock->l_resource->lr_lvb_len);
                 }
-                unlock_res_and_lock(lock);
 
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
                         GOTO(out, rc = -ENOMEM);
@@ -1244,7 +1242,6 @@ existing_lock:
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
 
-                lock_res_and_lock(lock);
                 if (rc == 0) {
                         if (lock->l_resource->lr_lvb_len > 0) {
                                 void *lvb;
@@ -1254,14 +1251,17 @@ existing_lock:
                                 LASSERTF(lvb != NULL, "req %p, lock %p\n",
                                          req, lock);
 
+                                cfs_down(&lock->l_resource->lr_lvb_sem);
                                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                                        lock->l_resource->lr_lvb_len);
+                                cfs_up(&lock->l_resource->lr_lvb_sem);
                         }
                 } else {
+                        lock_res_and_lock(lock);
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy_nolock(lock);
+                        unlock_res_and_lock(lock);
                 }
-                unlock_res_and_lock(lock);
 
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
                         ldlm_reprocess_all(lock->l_resource);
