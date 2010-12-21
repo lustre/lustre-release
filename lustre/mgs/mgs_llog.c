@@ -1846,7 +1846,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                                        fsdb->fsdb_clilmv);
         }
         mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, "",
-                                 fsdb->fsdb_clilov, LUSTRE_SP_CLI, 0);
+                                 fsdb->fsdb_clilov, LUSTRE_SP_CLI, flags);
         name_destroy(&logname);
         RETURN(rc);
 }
