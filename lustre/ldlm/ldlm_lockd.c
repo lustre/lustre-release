@@ -2218,7 +2218,8 @@ static int ldlm_bl_thread_main(void *arg)
 
                         /* Not fatal if racy and have a few too many threads */
                         if (unlikely(busy < blp->blp_max_threads &&
-                            busy >= cfs_atomic_read(&blp->blp_num_threads)))
+                            busy >= cfs_atomic_read(&blp->blp_num_threads) &&
+                            !blwi->blwi_mem_pressure))
                                 /* discard the return value, we tried */
                                 ldlm_bl_thread_start(blp);
                 } else {
