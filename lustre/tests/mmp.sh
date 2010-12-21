@@ -22,9 +22,10 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_mds || exit 0
+require_dsh_ost || exit 0
 
 # unmount and cleanup the Lustre filesystem
 MMP_RESTORE_MOUNT=false
@@ -164,7 +165,7 @@ mmp_init() {
     fi
 
     local var=${MMP_OSS}failover_HOST
- 
+
     if [ -z "${!var}" ]; then
         log "Failover is not used on OSS, enabling MMP manually..."
         enable_mmp $MMP_OSS $MMP_OSTDEV || \
@@ -204,7 +205,7 @@ mmp_fini() {
     return 0
 }
 
-# Mount the shared target on the failover server after some interval it's 
+# Mount the shared target on the failover server after some interval it's
 # mounted on the primary server.
 mount_after_interval_sub() {
     local interval=$1
@@ -269,7 +270,7 @@ mount_after_interval() {
     return 0
 }
 
-# Mount the shared target on the failover server 
+# Mount the shared target on the failover server
 # during unmounting it on the primary server.
 mount_during_unmount() {
     local device=$1
@@ -309,7 +310,7 @@ mount_during_unmount() {
     return 0
 }
 
-# Mount the shared target on the failover server 
+# Mount the shared target on the failover server
 # after clean unmounting it on the primary server.
 mount_after_unmount() {
     local device=$1
@@ -323,7 +324,7 @@ mount_after_unmount() {
     start $facet $device $mnt_opts || return ${PIPESTATUS[0]}
 
     log "Unmounting $device on $facet..."
-    stop $facet || return ${PIPESTATUS[0]} 
+    stop $facet || return ${PIPESTATUS[0]}
 
     log "Mounting $device on $failover_facet..."
     start $failover_facet $device $mnt_opts || return ${PIPESTATUS[0]}

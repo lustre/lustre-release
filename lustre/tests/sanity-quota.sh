@@ -53,12 +53,13 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
 unset ENABLE_QUOTA
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_mds || exit 0
+require_dsh_ost || exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21"
 
@@ -1089,7 +1090,7 @@ test_11() {
            echo ""
            PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
            LAST_USED=0
-           while [ $PROCS -gt 0 ]; do 
+           while [ $PROCS -gt 0 ]; do
              sleep 20
              SECS=$((SECS + sleep))
              PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
@@ -1867,7 +1868,6 @@ test_24() {
 
         set_blk_unitsz $((128 * 1024))
         set_blk_tunesz $((128 * 1024 / 2))
-        
 }
 run_test_with_stat 24 "test if lfs draws an asterix when limit is reached (16646) ==========="
 

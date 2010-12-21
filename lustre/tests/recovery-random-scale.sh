@@ -18,6 +18,7 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug
@@ -123,7 +124,7 @@ summary_and_cleanup () {
     # the one we are really interested in.
         if [ -n "$END_RUN_NODE" ]; then
             var=$(node_var_name $END_RUN_NODE)_load
-            echo "Client load failed on node $END_RUN_NODE" 
+            echo "Client load failed on node $END_RUN_NODE"
             echo
             echo "client $END_RUN_NODE load stdout and debug files :
               ${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}
@@ -179,7 +180,7 @@ Status: $result: rc=$rc"
 }
 
 #
-# MAIN 
+# MAIN
 #
 log "-----============= $0 starting =============-----"
 
@@ -213,13 +214,13 @@ sleep=0
 ERRORS_OK="yes"
 while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
 
-    # In order to perform the 
+    # In order to perform the
     # expected number of failovers, we need to account the following :
     # 1) the time that has elapsed during the client load checking
     # 2) time takes for failover
 
     it_time_start=$(date +%s)
-    
+
     FAIL_CLIENT=$(get_random_entry $NODES_TO_USE)
     client_var=$(node_var_name $FAIL_CLIENT)_nums
 
@@ -230,11 +231,11 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     SERVERFACET=$(get_random_entry $MDTS)
     var=${SERVERFACET}_nums
 
-    # Check that our client loads are still running. If any have died, 
-    # that means they have died outside of recovery, which is unacceptable.    
+    # Check that our client loads are still running. If any have died,
+    # that means they have died outside of recovery, which is unacceptable.
 
     log "==== Checking the clients loads BEFORE failover -- failure NOT OK \
-    ELAPSED=$ELAPSED DURATION=$DURATION PERIOD=$SERVER_FAILOVER_PERIOD" 
+    ELAPSED=$ELAPSED DURATION=$DURATION PERIOD=$SERVER_FAILOVER_PERIOD"
 
     if ! check_client_loads $NODES_TO_USE; then
         exit 4
@@ -246,11 +247,11 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     log "Starting failover on $SERVERFACET"
 
     facet_failover "$SERVERFACET" || exit 1
-    if ! wait_recovery_complete $SERVERFACET ; then 
+    if ! wait_recovery_complete $SERVERFACET ; then
         echo "$SERVERFACET recovery is not completed!"
         exit 7
     fi
- 
+
     boot_node $FAIL_CLIENT
     echo "Reintegrating $FAIL_CLIENT"
     zconf_mount $FAIL_CLIENT $MOUNT || exit $?
@@ -269,10 +270,10 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     # not for all clients.
     if [ -e $END_RUN_FILE ]; then
         read END_RUN_NODE < $END_RUN_FILE
-        [[ $END_RUN_NODE = $FAIL_CLIENT ]] && 
+        [[ $END_RUN_NODE = $FAIL_CLIENT ]] &&
             rm -f $END_RUN_FILE || exit 13
     fi
-   
+
     restart_client_loads $FAIL_CLIENT $ERRORS_OK || exit $?
 
     # Check that not failed clients loads are still running.
@@ -286,11 +287,11 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
 
     CURRENT_TS=$(date +%s)
     ELAPSED=$((CURRENT_TS - START_TS))
- 
+
     sleep=$((SERVER_FAILOVER_PERIOD-(CURRENT_TS - it_time_start)))
 
     # keep count the number of itterations when
-    # time spend to failover and two client loads check exceeded 
+    # time spend to failover and two client loads check exceeded
     # the value ( SERVER_FAILOVER_PERIOD - MINSLEEP )
     if [ $sleep -lt $MINSLEEP ]; then
         reqfail=$((reqfail +1))
@@ -300,8 +301,8 @@ This iteration, the load was only applied for sleep=$sleep seconds.
 Estimated max recovery time : $max_recov_time
 Probably the hardware is taking excessively long to boot.
 Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), bug 20918"
-        [ $reqfail -gt $REQFAIL ] && exit 6 
-    fi  
+        [ $reqfail -gt $REQFAIL ] && exit 6
+    fi
 
     log " Number of failovers:
 $(numfailovers)                and counting..."
@@ -310,7 +311,7 @@ $(numfailovers)                and counting..."
          break
     fi
 
-    if [ $sleep -gt 0 ]; then 
+    if [ $sleep -gt 0 ]; then
         echo "sleeping $sleep seconds ... "
         sleep $sleep
     fi

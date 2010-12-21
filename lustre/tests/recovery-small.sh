@@ -10,8 +10,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+require_dsh_mds || exit 0
 
 # also long tests: 19, 21a, 21e, 21f, 23, 27
 #                                   1  2.5  2.5    4    4          (min)"
@@ -136,7 +137,7 @@ run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 
 #b=2494
 test_12(){
-    $LCTL mark multiop $DIR/$tfile OS_c 
+    $LCTL mark multiop $DIR/$tfile OS_c
     do_facet mds "lctl set_param fail_loc=0x115"
     clear_failloc mds $((TIMEOUT * 2)) &
     multiop_bg_pause $DIR/$tfile OS_c || return 1
@@ -262,7 +263,7 @@ test_18a() {
     local osc2dev=`lctl get_param -n devices | grep ${ost2_svc}-osc- | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
     # my understanding is that there should be nothing in the page
-    # cache after the client reconnects?     
+    # cache after the client reconnects?
     rc=0
     pgcache_empty || rc=2
     $LCTL --device $osc2dev activate
@@ -383,7 +384,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	rc=$?
 	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
 }
-run_test 20a "ldlm_handle_enqueue error (should return error)" 
+run_test 20a "ldlm_handle_enqueue error (should return error)"
 
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
@@ -693,7 +694,7 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	echo starting with $OST_NEXP OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
 	do_facet client lctl set_param fail_loc=0x505
-	# evictor takes up to 2.25x to evict.  But if there's a 
+	# evictor takes up to 2.25x to evict.  But if there's a
 	# race to start the evictor from various obds, the loser
 	# might have to wait for the next ping.
 
@@ -732,8 +733,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# PING_INTERVAL max(obd_timeout / 4, 1U)
 	# PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
 
-	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
-	# But if there's a race to start the evictor from various obds, 
+	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
+	# But if there's a race to start the evictor from various obds,
 	# the loser might have to wait for the next ping.
 	# = 9 * PING_INTERVAL + PING_INTERVAL
 	# = 10 PING_INTERVAL = 10 obd_timeout / 4 = 2.5 obd_timeout
@@ -762,7 +763,7 @@ test_27() {
 	facet_failover mds
 	#no crashes allowed!
         kill -USR1 $CLIENT_PID
-	wait $CLIENT_PID 
+	wait $CLIENT_PID
 	true
 	FAILURE_MODE=$save_FAILURE_MODE
 }
@@ -802,7 +803,7 @@ test_50() {
 	# client process should see no problems even though MDS went down
 	sleep $TIMEOUT
         kill -USR1 $CLIENT_PID
-	wait $CLIENT_PID 
+	wait $CLIENT_PID
 	rc=$?
 	echo writemany returned $rc
 	#these may fail because of eviction due to slow AST response.
@@ -833,7 +834,7 @@ test_51() {
 	# and recovery was interrupted
 	sleep $TIMEOUT
         kill -USR1 $CLIENT_PID
-	wait $CLIENT_PID 
+	wait $CLIENT_PID
 	rc=$?
 	echo writemany returned $rc
 	[ $rc -eq 0 ] || error_ignore 13652 "writemany returned rc $rc" || true
@@ -931,8 +932,8 @@ test_55() {
 	count=0
 	echo  "step2: testing ......"
 	while [ $count -le 64 ]; do
-	    dd_name="`ps x | awk '$1 == '$DDPID' { print $5 }'`"	    
-	    if [ -z  $dd_name ]; then 
+	    dd_name="`ps x | awk '$1 == '$DDPID' { print $5 }'`"
+	    if [ -z  $dd_name ]; then
                 ls -l $DIR/$tdir
 		echo  "debug: (dd_name=$dd_name, dd_pid=$DDPID, time=$count)"
 		error "dd shouldn't be finished!"
@@ -971,7 +972,7 @@ test_56() { # b=11277
 run_test 56 "do not allow reconnect to busy exports"
 
 test_57_helper() {
-        # no oscs means no client or mdt 
+        # no oscs means no client or mdt
         while lctl get_param osc.*.* > /dev/null 2>&1; do
                 : # loop until proc file is removed
         done
@@ -1038,7 +1039,7 @@ test_61()
 	$LFS setstripe -c 1 --index 0 $DIR/d61
 
 	replay_barrier mds
-	createmany -o $DIR/d61/$tfile-%d 10 
+	createmany -o $DIR/d61/$tfile-%d 10
 	local oid=`do_facet ost1 "lctl get_param -n obdfilter.${ost1_svc}.last_id"`
 
 	fail_abort mds

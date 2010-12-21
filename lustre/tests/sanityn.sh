@@ -38,6 +38,7 @@ CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
 
@@ -63,6 +64,9 @@ dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=1
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 build_test_filter
+
+mkdir -p $MOUNT2
+mount_client $MOUNT2
 
 test_1a() {
 	touch $DIR1/f1

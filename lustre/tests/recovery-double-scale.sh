@@ -17,6 +17,7 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug
 
@@ -84,7 +85,7 @@ reboot_recover_node () {
                       shutdown_client $c
                       boot_node $c
                       echo "Reintegrating $c"
-                      # one client fails; need dk logs from this client only 
+                      # one client fails; need dk logs from this client only
                       zconf_mount $c $MOUNT || NODES="$c $(facet_host mds) $(osts_nodes)" error_exit "zconf_mount failed"
                  done
                  start_client_loads $item
@@ -166,7 +167,7 @@ failover_pair() {
 
     reboot_recover_node $item1 $type1
 
-    # Hendrix test17 description: 
+    # Hendrix test17 description:
     # Introduce a failure, wait at
     # least 5 minutes (for recovery),
     # introduce a 2nd
@@ -178,13 +179,13 @@ failover_pair() {
     # We have a "double failures" if SERIAL is not set,
     # do not need a sleep between failures for "double failures"
 
-    log "                            Failing type2=$type2 item2=$item2 ... "    
+    log "                            Failing type2=$type2 item2=$item2 ... "
     reboot_recover_node $item2 $type2
 
     # Client loads are allowed to die while in recovery, so we just
     # restart them.
     log "==== Checking the clients loads AFTER  failovers -- ERRORS_OK=$ERRORS_OK"
-    restart_client_loads $NODES_TO_USE $ERRORS_OK || return $? 
+    restart_client_loads $NODES_TO_USE $ERRORS_OK || return $?
     log "Done checking / re-Starting client loads. PASS"
     return 0
 }
@@ -209,7 +210,7 @@ summary_and_cleanup () {
             echo "Client load failed on node $END_RUN_NODE"
             echo
             echo "client $END_RUN_NODE load debug output :"
-            local logfile=${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}.debug 
+            local logfile=${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}.debug
             do_node ${END_RUN_NODE} "set -x; [ -e $logfile ] && cat $logfile " || true
         fi
         rc=1
@@ -260,11 +261,11 @@ START_TS=$(date +%s)
 CURRENT_TS=$START_TS
 ELAPSED=0
 
-# Set SERIAL to serialize the failure through a recovery of the first failure. 
+# Set SERIAL to serialize the failure through a recovery of the first failure.
 SERIAL=${SERIAL:-""}
 ERRORS_OK="yes"
 
-[ "$SERIAL" ] && ERRORS_OK="" 
+[ "$SERIAL" ] && ERRORS_OK=""
 
 FAILOVER_PERIOD=${FAILOVER_PERIOD:-$((60*5))} # 5 minutes
 
@@ -275,7 +276,7 @@ if ! do_nodesv $NODES_TO_USE "cat $TMP/client-load.pid"; then
         exit 3
 fi
 
-# FIXME: Do we want to have an initial sleep period where the clients 
+# FIXME: Do we want to have an initial sleep period where the clients
 # just run before introducing a failure?
 sleep $FAILOVER_PERIOD
 
@@ -296,7 +297,7 @@ if [ $OSTCOUNT -gt 1 ]; then
     sleep $FAILOVER_PERIOD
 else
     skip "$0 : $OSTCOUNT < 2 OSTs, test 4 skipped"
-fi 
+fi
 
 #CMD_TEST_NUM=17.5
 failover_pair OST clients "test 5: failover OST, then 2 clients ===="

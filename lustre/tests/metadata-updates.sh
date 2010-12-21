@@ -10,6 +10,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 TRACE=${TRACE:-"+x"}
 
@@ -71,7 +72,7 @@ do_write () {
     do_nodes $NODES_TO_USE "set $TRACE;
 TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
 dd if=/dev/zero of=\\\$TESTFILE bs=$FILE_SIZE count=1 2>/dev/null || exit 54;
-echo \\\$(hostname) | dd of=\\\$TESTFILE conv=notrunc 2>/dev/null || exit 55; 
+echo \\\$(hostname) | dd of=\\\$TESTFILE conv=notrunc 2>/dev/null || exit 55;
 md5sum \\\$TESTFILE >> $SUMFILE; " || return ${PIPESTATUS[0]}
     return 0
 }
@@ -90,7 +91,7 @@ do_truncate () {
 
      do_nodes $NODES_TO_USE "set $TRACE;
 TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-$TRUNCATE \\\$TESTFILE 0" || return ${PIPESTATUS[0]} 
+$TRUNCATE \\\$TESTFILE 0" || return ${PIPESTATUS[0]}
 
     FILE_SIZE=0
     return 0
@@ -103,7 +104,7 @@ get_stat () {
     echo "Checking file(s) attributes ... "
 
     do_nodesv $NODES_TO_USE "set $TRACE;
-for HOST in ${HOSTS//,/ } ; do 
+for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%u %g %s 0%a\\\" \\\$TESTFILE);
     echo \\\"\\\$TESTFILE [ uid gid size mode ] expected : $attr ;  got : \\\$tmp \\\";
@@ -112,7 +113,7 @@ for HOST in ${HOSTS//,/ } ; do
         exit 56;
     fi;
 done " || return ${PIPESTATUS[0]}
-    return 0 
+    return 0
 }
 
 do_chmod () {
@@ -121,7 +122,7 @@ do_chmod () {
     do_nodes $NODES_TO_USE "set $TRACE;
 TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
 chmod $NEW_MODE \\\$TESTFILE" || return ${PIPESTATUS[0]}
- 
+
     CURRENT_MODE=$NEW_MODE
     return 0
 }
@@ -146,7 +147,7 @@ do_check_timestamps () {
     echo "Checking atime, mtime ... "
 
     do_nodesv $NODES_TO_USE "set $TRACE;
-for HOST in ${HOSTS//,/ } ; do 
+for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%X %Y\\\" \\\$TESTFILE);
     if [ x\\\"\\\$tmp\\\" != x\\\"$times\\\" ] ; then
@@ -155,7 +156,7 @@ for HOST in ${HOSTS//,/ } ; do
     fi;
 done;
 exit \\\$RC" || return ${PIPESTATUS[0]}
-    return 0 
+    return 0
 }
 
 do_fill_dir () {
@@ -176,7 +177,7 @@ check_dir_contents () {
 
     echo "Checking dir contents ... (should exist files : f$num_files ... f$NUM_FILES) ... "
     do_nodes $NODES_TO_USE "set $TRACE;
-for HOST in ${HOSTS//,/ } ; do 
+for HOST in ${HOSTS//,/ } ; do
     DIR=$TESTDIR/\\\$HOST;
     for i in \\\$(seq $NUM_FILES -1 $num_files) ; do
         if ! [ -f \\\$DIR/f\\\$i ] ; then

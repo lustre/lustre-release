@@ -4,26 +4,37 @@
 #set -vx
 set -e
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE METADATA_UPDATES OST_POOLS SANITY_BENCHMARK LNET_SELFTEST MMP OBDFILTER_SURVEY SGPDD_SURVEY"
+export MSKIPPED=0
+export OSKIPPED=0
+
+# This is the default set of tests to run.
+DEFAULT_SUITES="runtests sanity sanity-benchmark sanityn lfsck liblustre
+                racer replay-single conf-sanity recovery-small
+                replay-ost-single replay-dual replay-vbr insanity sanity-quota
+                performance-sanity large-scale recovery-mds-scale
+                recovery-double-scale recovery-random-scale parallel-scale
+                lustre_rsync-test metadata-updates ost-pools lnet-selftest
+                mmp obdfilter-survey sgpdd-survey"
+
+if [[ -n $@ ]]; then
+    ACC_SM_ONLY="${ACC_SM_ONLY} $@"
+fi
 
 if [ "$ACC_SM_ONLY" ]; then
-    for O in $TESTSUITE_LIST; do
-	export ${O}="no"
+    for O in $DEFAULT_SUITES; do
+        O=$(echo $O | tr "-" "_" | tr "[:lower:]" "[:upper:]")
+        export ${O}="no"
     done
     for O in $ACC_SM_ONLY; do
-	O=`echo ${O%.sh} | tr "-" "_"`
-	O=`echo $O | tr "[:lower:]" "[:upper:]"`
-	export ${O}="yes"
+        O=`echo ${O%.sh} | tr "-" "_"`
+        O=`echo $O | tr "[:lower:]" "[:upper:]"`
+        export ${O}="yes"
     done
 fi
 
-LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
-
-RANTEST=""
-
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env
 
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
@@ -65,57 +76,21 @@ find_in_path() {
 title() {
     # update titlebar if stdin is attached to an xterm
     if ${UPDATE_TITLEBAR:-false}; then
-	if tty -s; then
-	    case $TERM in 
-		xterm*)
-		    echo -ne "\033]2; acceptance-small: $* \007" >&0
-		    ;;
-	    esac
-	fi
-    fi 
+        if tty -s; then
+            case $TERM in
+            xterm*)
+                echo -ne "\033]2; acceptance-small: $* \007" >&0
+                ;;
+            esac
+        fi
+    fi
     log "-----============= acceptance-small: "$*" ============----- `date`"
-    RANTEST=${RANTEST}$*", "
 }
 
-skip_remost() {
-	remote_ost_nodsh && log "SKIP: $1: remote OST with nodsh" && return 0
-	return 1
-}
-
-skip_remmds() {
-	remote_mds_nodsh && log "SKIP: $1: remote MDS with nodsh" && return 0
-	return 1
-}
-
-# cleanup the logs of all suites
-cleanup_log () {
-    local suite
-    local o=$(echo $O | tr "[:upper:]" "[:lower:]")
-    o=${o//_/-}
-    
-    rm -f ${TMP}/${o}.log
-}
-
-cleanup_logs () {
-    local suite
-    for suite in ${ACC_SM_ONLY:-$TESTSUITE_LIST}; do
-        cleanup_log $suite
-    done
-}
-
-export NAME MOUNT START CLEAN
-. $LUSTRE/tests/cfg/$NAME.sh
-
-assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
-assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
-assert_env FSNAME MOUNT MOUNT2
-
-setup_if_needed
-
-for s in ${ACC_SM_ONLY:-$TESTSUITE_LIST}; do
-    suite_name=$(echo ${s%.sh} | tr "[:upper:]_" "[:lower:]-" )
-    suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
-    suite_only=ONLY # Change to ${suite}_ONLY after fixing YALA
+run_suite() {
+    local suite_name=$(echo ${1%.sh} | tr "[:upper:]_" "[:lower:]-" )
+    local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
+    local suite_only=ONLY # Change to ${suite}_ONLY after fixing YALA
 
     if is_sanity_benchmark ${suite_name}; then
         suite_only=suite_name
@@ -130,34 +105,55 @@ for s in ${ACC_SM_ONLY:-$TESTSUITE_LIST}; do
         suite_script=${suite_name}.sh
     else
         echo "Can't find test script for $suite_name"
-        exit 1
+        return 1
     fi
 
     echo "$suite_script located."
+    if [[ ${!suite} != no ]]; then
+        local rc
+        local status
+        local duration
+        local start_ts=$(date +%s)
+        rm -rf $TF_FAIL
+        title $suite_name
+        log_test $suite_name
+        bash $suite_script ${!suite_only}
+        rc=$?
+        duration=$(($(date +%s) - $start_ts))
+        if [ -f $TF_FAIL -o $rc -ne 0 ]; then
+            status="FAIL"
+        else
+            status="PASS"
+        fi
+        echo "Script: $status"
+        log_test_status $duration $status
 
-    if [[ ${!suite} = no ]]; then
-        echo "Skipping $suite_name"
-        continue
-    fi
+        $CLEANUP
+        [ x$suite = xSGPDD_SURVEY ] || $SETUP
 
-    start_ts=$(date +%s)
-    title $suite_name
-    bash $suite_script ${!suite_only}
-    rc=$?
-    duration=$(($(date +%s) - $start_ts))
-    if [ $rc -ne 0 ]; then
-        RC=$rc
-        status="FAIL"
+        eval ${suite}="done"
     else
-        status="PASS"
+        echo "Skipping $suite_name"
     fi
-    echo "Script: $status"
+}
 
+run_suites() {
+    for suite in $*; do
+        run_suite $suite
+    done
+}
 
-    $CLEANUP
-    [ x$suite = xSGPDD_SURVEY ] || $SETUP
-    eval ${suite}="done"
-done
+export NAME MOUNT START CLEAN
+. $LUSTRE/tests/cfg/$NAME.sh
+
+assert_env mds_HOST MDS_MKFS_OPTS
+assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
+assert_env FSNAME MOUNT MOUNT2
+
+setup_if_needed
+init_logging
+
+run_suites ${ACC_SM_ONLY:-$DEFAULT_SUITES}
 
 RC=$?
 title FINISHED

@@ -6,6 +6,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 # bug number:
 ALWAYS_EXCEPT="$PARALLEL_SCALE_EXCEPT"
@@ -139,7 +140,7 @@ test_compilebench() {
     mkdir -p $testdir
 
     local savePWD=$PWD
-    cd $cbench_DIR 
+    cd $cbench_DIR
     local cmd="./compilebench -D $testdir -i $cbench_IDIRS -r $cbench_RUNS --makej"
 
     log "$cmd"
@@ -147,7 +148,7 @@ test_compilebench() {
     local rc=0
     eval $cmd
     rc=$?
-        
+
     cd $savePWD
     [ $rc = 0 ] || error "compilebench failed: $rc"
     rm -rf $testdir
@@ -260,9 +261,9 @@ test_connectathon() {
     #    -s  special
     #    -l  lock
     #    -a  all of the above
-    #   
+    #
     # -f      a quick functionality test
-    # 
+    #
 
     tests="-b -g -s"
     # Include lock tests unless we're running on nfsv4
@@ -306,7 +307,7 @@ test_ior() {
 
         echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
     fi
- 
+
     generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
@@ -316,13 +317,13 @@ test_ior() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
     if [ "$NFSCLIENT" ]; then
-        setstripe_nfsserver $testdir -c -1 || 
-            { error "setstripe on nfsserver failed" && return 1; } 
+        setstripe_nfsserver $testdir -c -1 ||
+            { error "setstripe on nfsserver failed" && return 1; }
     else
         $LFS setstripe $testdir -c -1 ||
             { error "setstripe failed" && return 2; }
     fi
-    # 
+    #
     # -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
     # -o S  testFileName
     # -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)"
@@ -342,7 +343,7 @@ test_ior() {
     rm -rf $testdir
 }
 run_test ior "ior"
- 
+
 test_cascading_rw() {
     if [ "$NFSCLIENT" ]; then
         skip "skipped for NFSCLIENT mode"
@@ -369,7 +370,7 @@ test_cascading_rw() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-    # -g: debug mode 
+    # -g: debug mode
     # -n: repeat test # times
 
     local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
@@ -391,7 +392,7 @@ test_write_append_truncate() {
         return
     fi
 
-    # location is lustre/tests dir 
+    # location is lustre/tests dir
     if ! which write_append_truncate > /dev/null 2>&1 ; then
         skip_env "write_append_truncate not found"
         return
@@ -578,9 +579,9 @@ test_statahead () {
 
     cancel_lru_locks mdc
 
-    local cmd="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir --nfiles $num_files --filefmt 'f%%d'"    
+    local cmd="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir --nfiles $num_files --filefmt 'f%%d'"
     echo "+ $cmd"
-    
+
     mpi_run -np $((num_clients * 32)) -machinefile ${MACHINEFILE} $cmd
 
     local rc=$?

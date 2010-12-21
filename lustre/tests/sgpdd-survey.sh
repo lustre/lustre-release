@@ -5,11 +5,12 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+init_logging
 
 # QE uses the following parameters:
 # size=128 crghi=16 thrhi=32
 crghi=${crghi:-2}
-thrhi=${thrhi:-16} 
+thrhi=${thrhi:-16}
 size=${size:-1024}
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}

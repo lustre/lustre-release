@@ -25,6 +25,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 check_and_setup_lustre
 
@@ -142,7 +143,7 @@ check_file_in_osts() {
         local ost_count=$($GETSTRIPE $file | grep 0x | wc -l)
         [[ -n "$count" ]] && [[ $ost_count -ne $count ]] && \
             { error "Stripe count $count expected; got $ost_count" && return 1; }
-                
+
         return 0
 }
 
@@ -681,10 +682,10 @@ test_12() {
     add_pool $POOL2 $FSNAME-OST[$TGT_FIRST] "$FIRST_UUID "
     do_facet $SINGLEMDS lctl pool_list $FSNAME.$POOL2
 
-    echo Checking the files again    
+    echo Checking the files again
     check_dir_in_pool $POOL_ROOT/dir1 $POOL
     check_dir_in_pool $POOL_ROOT/dir2 $POOL2
-    check_file_in_osts $POOL_ROOT/file1 "$TGT_LIST2"    
+    check_file_in_osts $POOL_ROOT/file1 "$TGT_LIST2"
     check_file_in_osts $POOL_ROOT/file2 "$(seq $start 2 $TGT_MAX)"
 
     echo Creating some more files
@@ -693,14 +694,14 @@ test_12() {
     create_file $POOL_ROOT/file3 $POOL
     create_file $POOL_ROOT/file4 $POOL2
 
-    echo Checking the new files 
+    echo Checking the new files
     check_file_in_pool $POOL_ROOT/file3 $POOL
     check_file_in_pool $POOL_ROOT/file4 $POOL2
 
     destroy_pool $POOL
     destroy_pool $POOL2
 
-    return 0    
+    return 0
 }
 run_test 12 "OST Pool Membership"
 
@@ -786,7 +787,7 @@ test_14() {
 
     create_dir $POOL_ROOT/dir1 $POOL 1
     create_file $POOL_ROOT/dir1/file $POOL 1
-    local OST=$($GETSTRIPE $POOL_ROOT/dir1/file | grep 0x | cut -f2)    
+    local OST=$($GETSTRIPE $POOL_ROOT/dir1/file | grep 0x | cut -f2)
     i=0
     while [[ $i -lt $numfiles ]];
     do
@@ -1297,7 +1298,7 @@ test_24() {
               error "Stripe count ($count) not inherited in $file ($count1)"
           [[ "$size" != "$size1" ]] && [[ "$size" != "0" ]] && \
               error "Stripe size ($size) not inherited in $file ($size1)"
-      done 
+      done
     done
 
     rm -rf $POOL_ROOT

@@ -9,6 +9,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 NUMFILES=${NUMFILES:-10}
 NUMDIRS=${NUMDIRS:-4}
@@ -156,7 +157,7 @@ get_files() {
     esac
 
     local files=""
-    local f 
+    local f
     for f in $(seq -f testfile.%g $first $last); do
         test_file=$test_dir/$f
         files="$files $test_file"

@@ -12,6 +12,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 # bug number:
 ALWAYS_EXCEPT="$SANITY_BENCHMARK_EXCEPT"
@@ -58,7 +59,7 @@ test_dbench() {
     local SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
     DB_THREADS=$((SPACE / 50000))
     [ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
-    
+
     $DEBUG_OFF
     myUID=$RUNAS_ID
     myGID=$RUNAS_GID
@@ -113,7 +114,7 @@ test_iozone() {
     fi
 
     export O_DIRECT
-    
+
     local IOZDIR=$DIR/d0.iozone
     mkdir -p $IOZDIR
     $LFS setstripe -c -1 $IOZDIR
@@ -138,7 +139,7 @@ test_iozone() {
 	{ error "iozone (1) failed" && return 1; }
     rm -f $IOZLOG
     $DEBUG_ON
-    
+
     # check if O_DIRECT support is implemented in kernel
     if [ -z "$O_DIRECT" ]; then
 	touch $DIR/f.iozone
@@ -245,7 +246,7 @@ space_check () {
     local num_runs=$(echo ${pios_THREADCOUNT//,/ } | wc -w)
     size=$(( size * $num_runs))
     space=$((space * 1024))
-    echo size=$size space=$space 
+    echo size=$size space=$space
     if [ $space -le $size ]; then
         local ratio=$(( size / space + 1 ))
         echo "Need free space atleast $size, available $space, ratio=$ratio"
@@ -260,7 +261,7 @@ space_check () {
     fi
 }
 
-pios_setup() { 
+pios_setup() {
     local testdir=$DIR/$tdir
     mkdir -p $testdir
 
@@ -285,8 +286,8 @@ run_pios () {
     local cmd="$PIOSBIN  -t $pios_THREADCOUNT -n $pios_REGIONCOUNT \
                          -c $pios_CHUNKSIZE -s $pios_REGIONSIZE    \
                          -o $pios_OFFSET $@ -p $testdir"
-    
-    if [ ! -d $testdir ]; then  
+
+    if [ ! -d $testdir ]; then
         error "No test directory created, setup_pios must have failed"
         return 20
     fi
@@ -314,7 +315,7 @@ test_pios_ssf() {
         return 0
     fi
     run_pios || return
-    run_pios  --verify || rc=$? 
+    run_pios  --verify || rc=$?
     pios_cleanup $rc
     return $rc
 }

@@ -4,6 +4,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 #
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT $LNET_SELFTEST_EXCEPT"
@@ -104,7 +105,6 @@ test_smoke_sub () {
     echo 'trap "cleanup $pid" INT TERM'
     echo sleep $smoke_DURATION
     echo 'cleanup $pid'
-    
 }
 
 run_lst () {
@@ -137,24 +137,23 @@ test_smoke () {
     local log=$TMP/$tfile.log
     local rc=0
 
-    test_smoke_sub $servers $clients 2>&1 > $runlst 
+    test_smoke_sub $servers $clients 2>&1 > $runlst
 
     cat $runlst
 
     run_lst $runlst | tee $log
     rc=${PIPESTATUS[0]}
     [ $rc = 0 ] || error "$runlst failed: $rc"
-    
+
     lst_end_session --verbose | tee -a $log
 
     # error counters in "lst show_error" should be checked
     check_lst_err $log
-    
 }
 run_test smoke "lst regression test"
 
 complete $(basename $0) $SECONDS
 if [ "$RESTORE_MOUNT" = yes ]; then
     setupall
-fi 
+fi
 exit_status

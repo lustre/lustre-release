@@ -13,13 +13,14 @@ CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 [ -n "$CLIENTS" ] || { skip_env "Need two or more clients" && exit 0; }
 [ $CLIENTCOUNT -ge 2 ] || \
     { skip_env "Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+
+require_dsh_mds || exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 

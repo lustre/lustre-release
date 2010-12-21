@@ -13,10 +13,11 @@ CLEANUP=${CLEANUP:-}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number:
@@ -906,7 +907,7 @@ test_45() {
     [ "$mdcdev" ] || return 2
     [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
 
-    $LCTL --device $mdcdev recover || return 6 
+    $LCTL --device $mdcdev recover || return 6
 
     multiop_bg_pause $DIR/$tfile O_c || return 1
     pid=$!
@@ -2041,7 +2042,7 @@ test_80b() {
         { skip "sync journal is not implemeted" && return; }
 
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
-    
+
     replay_barrier ost1
     lfs setstripe -i 0 -c 1 $DIR/$tfile
     dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
@@ -2131,14 +2132,14 @@ test_85a() { #bug 16774
     createmany -o $DIR/$tfile- 100
     ls -l $DIR/ > /dev/null
 
-    lov_id=`lctl dl | grep "clilov"` 
+    lov_id=`lctl dl | grep "clilov"`
     addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
     count=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
     echo "before recovery: unused locks count = $count"
     [ $count -ne 0 ] || error "unused locks should not be zero before recovery"
 
     fail mds
-    
+
     count2=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
     echo "after recovery: unused locks count = $count2"
 
@@ -2161,13 +2162,13 @@ test_85b() { #bug 16774
         dd if=$DIR/$tfile-$i of=/dev/null bs=4096 count=32 >/dev/null 2>&1
     done
 
-    lov_id=`lctl dl | grep "clilov"` 
+    lov_id=`lctl dl | grep "clilov"`
     addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
     count=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
     echo "before recovery: unused locks count = $count"
 
     fail ost1
-    
+
     count2=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
     echo "after recovery: unused locks count = $count2"
 
@@ -2202,7 +2203,7 @@ test_87() { #bug 17485
     local mdtosc=$(get_mdtosc_proc_path $OST)
     local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
     local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
-    echo "before test: last_id = $last_id, next_id = $next_id" 
+    echo "before test: last_id = $last_id, next_id = $next_id"
 
     echo "Creating to objid $last_id on ost $OST..."
     createmany -o $DIR/$tdir/f-%d $next_id $((last_id - next_id + 2))
@@ -2213,7 +2214,7 @@ test_87() { #bug 17485
 
     last_id2=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
     next_id2=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
-    echo "before recovery: last_id = $last_id2, next_id = $next_id2" 
+    echo "before recovery: last_id = $last_id2, next_id = $next_id2"
 
     # if test uses shutdown_facet && reboot_facet instead of facet_failover ()
     # it has to take care about the affected facets, bug20407
@@ -2237,9 +2238,9 @@ test_87() { #bug 17485
 
     last_id2=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
     next_id2=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
-    echo "after recovery: last_id = $last_id2, next_id = $next_id2" 
+    echo "after recovery: last_id = $last_id2, next_id = $next_id2"
 
-    # create new files, which should use new objids, and ensure the orphan 
+    # create new files, which should use new objids, and ensure the orphan
     # cleanup phase for ost1 is completed at the same time
     for i in `seq 8`; do
         file_id=$(($last_id + 10 + $i))

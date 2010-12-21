@@ -8,20 +8,21 @@ CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 # While we do not use OSTCOUNT=1 setup anymore,
 # ost1failover_HOST is used
 #ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 #failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
 
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_ost || exit 0
 
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 6"
 
 # Skip these tests
-# BUG NUMBER: 
+# BUG NUMBER:
 ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 
 #					
@@ -34,7 +35,7 @@ assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 TDIR=$DIR/d0.${TESTSUITE}
-mkdir -p $TDIR 
+mkdir -p $TDIR
 $LFS setstripe $TDIR -i 0 -c 1
 $LFS getstripe $TDIR
 
@@ -67,11 +68,11 @@ run_test 1 "touch"
 test_2() {
     for i in `seq 10`; do
         echo "tag-$i" > $TDIR/$tfile-$i
-    done 
+    done
     fail ost1
     for i in `seq 10`; do
       grep -q "tag-$i" $TDIR/$tfile-$i || error "f2-$i"
-    done 
+    done
     rm -f $TDIR/$tfile-*
 }
 run_test 2 "|x| 10 open(O_CREAT)s"

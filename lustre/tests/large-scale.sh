@@ -15,8 +15,9 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
-remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+require_dsh_mds || exit 0
 
 [ -n "$CLIENTS" ] || { skip_env "$0: Need two or more clients" && exit 0; }
 [ $CLIENTCOUNT -ge 2 ] || \
@@ -35,7 +36,7 @@ rm -rf $DIR/[df][0-9]*
 
 # VBR scale tests
 check_vbr () {
-    do_nodes $CLIENTS "$LCTL get_param mdc.*.connect_flags | grep version_recovery" 
+    do_nodes $CLIENTS "$LCTL get_param mdc.*.connect_flags | grep version_recovery"
 }
 
 check_vbr || \
@@ -119,7 +120,7 @@ test_1c() {
         replay_barrier mds
         do_nodes $CLIENTS "createmany -o $DIR/$tfile-\\\$(hostname)" 25
         # XXX For FAILURE_MODE=HARD it is better to exclude
-        # shutdown_facet and reboot_facet time 
+        # shutdown_facet and reboot_facet time
         fail_mds
 
         local current_ts=`date +%s`
@@ -178,7 +179,7 @@ test_3a() {
 
     local -a nodes=(${CLIENTS//,/ })
 
-    # INCREMENT is a number of clients 
+    # INCREMENT is a number of clients
     # a half of clients by default
     increment=${INCREMENT:-$(( CLIENTCOUNT / 2 ))}
 
@@ -205,7 +206,7 @@ test_3a() {
     local num=$increment
 
     while [ $num -le $CLIENTCOUNT ]; do
-        list=$(comma_list ${nodes[@]:0:$num}) 
+        list=$(comma_list ${nodes[@]:0:$num})
 
         generate_machine_file $list $machinefile ||
             { error "can not generate machinefile"; exit 1; }
@@ -231,7 +232,7 @@ test_3a() {
             fi
 
             duration=$(do_facet mds lctl get_param -n $procfile | grep recovery_duration)
-            
+
             res=( "${res[@]}" "$num" )
             res=( "${res[@]}" "$duration" )
             echo "RECOVERY TIME: NFILES=$nfiles number of clients: $num  $duration"

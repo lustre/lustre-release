@@ -65,7 +65,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-
+init_logging
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
@@ -6856,7 +6856,7 @@ test_201c() {
 
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
 	
-	sleep 2                        
+	sleep 2
     # striping on an empty/nonexistant pool should fall back to "pool of everything"
 	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
 	# setstripe on an empty pool should fail
@@ -6940,4 +6940,4 @@ check_and_cleanup_lustre
 if [ "$I_MOUNTED" != "yes" ]; then
 	lctl set_param debug="$OLDDEBUG" 2> /dev/null || true
 fi
-exit_status 
+exit_status

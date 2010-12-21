@@ -5,12 +5,13 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+init_logging
 
 nobjhi=${nobjhi:-1}
-thrhi=${thrhi:-16} 
+thrhi=${thrhi:-16}
 size=${size:-1024}
 
-# the summary file a bit smaller than OSTSIZE  
+# the summary file a bit smaller than OSTSIZE
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 [ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
@@ -85,7 +86,7 @@ print_jbd () {
 	local varsvc=${facet}_svc
 	local dev=$(ldiskfs_canon "*.${!varsvc}.mntdev" $facet)
 
-	# ext4: /proc/fs/jbd2/sda1:8/history 
+	# ext4: /proc/fs/jbd2/sda1:8/history
 	# ext3: /proc/fs/jbd/sdb1/history
 
 	do_facet $facet cat /proc/fs/jbd*/${dev}*/$file

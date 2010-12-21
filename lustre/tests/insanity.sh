@@ -9,7 +9,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-
+init_logging
 ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
@@ -33,8 +33,8 @@ assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+require_dsh_mds || exit 0
+require_dsh_ost || exit 0
 
 # FAIL_CLIENTS list should not contain the LIVE_CLIENT
 FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
@@ -64,9 +64,9 @@ fail_clients() {
 
     log "Request clients to fail: ${num}. Num of clients to fail: ${FAIL_NUM}, already failed: $DOWN_NUM"
     if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
-	num=$((FAIL_NUM - DOWN_NUM)) 
+	num=$((FAIL_NUM - DOWN_NUM))
     fi
-    
+
     if [ -z "$num" ] || [ "$num" -le 0 ]; then
         log "No clients failed!"
         return
@@ -505,7 +505,7 @@ run_test 8 "Eighth Failure Mode: CLIENT/OST `date`"
 
 ############### Ninth Failure Mode ###############
 test_9() {
-    echo 
+    echo
 
     #Create files
     echo "Verify Lustre filesystem is up and running"

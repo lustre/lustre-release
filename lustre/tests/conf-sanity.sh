@@ -31,6 +31,7 @@ HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+init_logging
 # STORED_MDSSIZE is used in test_18
 if [ -n "$MDSSIZE" ]; then
     STORED_MDSSIZE=$MDSSIZE
@@ -40,15 +41,14 @@ MDSSIZE=40000
 OSTSIZE=40000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+require_dsh_mds || exit 0
+require_dsh_ost || exit 0
+
 if ! combined_mgs_mds; then
     # bug number for skipped test:    23954
     ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
 fi
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
-
-#
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="30 31 45"
 
 assert_DIR
@@ -456,7 +456,7 @@ test_5f() {
 
 	sleep 5
 
-	if ! ps -f -p $pid >/dev/null; then 
+	if ! ps -f -p $pid >/dev/null; then
 		wait $pid
 		rc=$?
 		grep " $MOUNT " /etc/mtab && echo "test 5f: mtab after mount"
@@ -469,7 +469,7 @@ test_5f() {
 	# start mds
 	start_mds
 
-	# mount should succeed after start mds 
+	# mount should succeed after start mds
 	wait $pid
 	rc=$?
 	[ $rc -eq 0 ] || error "mount returned $rc"
@@ -649,7 +649,7 @@ test_18() {
         echo "mount mds with large journal..."
         local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 
-        local opts="--mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT" 
+        local opts="--mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
 
         if combined_mgs_mds ; then
             MDS_MKFS_OPTS="--mgs $opts"
@@ -983,7 +983,7 @@ test_27b() {
         setup
 
 	# interop 1.8 <-> 2.0:
-	# 1.8: group_acquire_expire, 2.0: identity_acquire_expire 
+	# 1.8: group_acquire_expire, 2.0: identity_acquire_expire
 	local acquire_expire=$(do_facet mds lctl get_param md*.$FSNAME-MDT0000.*acquire_expire | \
 		cut -d= -f1 | cut -d. -f3)
 	facet_failover mds
@@ -1511,7 +1511,7 @@ test_35b() { # bug 18674
 		return 1
 
 	local at_max_saved=0
-	# adaptive timeouts may prevent seeing the issue 
+	# adaptive timeouts may prevent seeing the issue
 	if at_is_enabled; then
 		at_max_saved=$(at_max_get mds)
 		at_max_set 0 mds client
@@ -1869,7 +1869,7 @@ cleanup_46a() {
 		stop ost${count} -f || rc=$?
 		let count=count-1
 	done	
-	stop_mds || rc=$? 
+	stop_mds || rc=$?
 	cleanup_nocli || rc=$?
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
@@ -1887,7 +1887,7 @@ test_46a() {
 	mount_client $MOUNT || return 3
 	trap "cleanup_46a $OSTCOUNT" EXIT ERR
 
-	local i 
+	local i
 	for (( i=2; i<=$OSTCOUNT; i++ )); do
 	    start ost$i `ostdevname $i` $OST_MOUNT_OPTS || return $((i+2))
 	done
