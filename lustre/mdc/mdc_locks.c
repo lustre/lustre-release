@@ -434,7 +434,7 @@ static struct ptlrpc_request *mdc_intent_lookup_pack(struct obd_export *exp,
 
                 /* pack the intended request */
                 mdc_getattr_pack(req, DLM_INTENT_REC_OFF, valid, it->it_flags,
-                                 data);
+                                 data, obddev->u.cli.cl_max_mds_easize);
                 ptlrpc_req_set_repsize(req, bufcount, repsize);
         }
         RETURN(req);

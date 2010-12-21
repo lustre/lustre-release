@@ -760,7 +760,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
 }
 
 static void mdc_getattr_pack_18(struct ptlrpc_request *req, int offset,
-                                __u64 valid, int flags, struct mdc_op_data *data)
+                                __u64 valid, int flags,
+                                struct mdc_op_data *data)
 {
         struct mds_body *b;
         ENTRY;
@@ -792,7 +793,8 @@ static void mdc_getattr_pack_18(struct ptlrpc_request *req, int offset,
 }
 
 static void mdc_getattr_pack_20(struct ptlrpc_request *req, int offset,
-                                __u64 valid, int flags, struct mdc_op_data *data)
+                                __u64 valid, int flags,
+                                struct mdc_op_data *data, int ea_size)
 {
         struct mdt_body *b;
         ENTRY;
@@ -803,6 +805,7 @@ static void mdc_getattr_pack_20(struct ptlrpc_request *req, int offset,
         b->fsgid = cfs_curproc_fsgid();
         b->capability = cfs_curproc_cap_pack();
         b->valid = valid;
+        b->eadatasize = ea_size;
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
         b->suppgid = data->suppgids[0];
 
@@ -820,10 +823,11 @@ static void mdc_getattr_pack_20(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_getattr_pack(struct ptlrpc_request *req, int offset,
-                      __u64 valid, int flags, struct mdc_op_data *data)
+                      __u64 valid, int flags,
+                      struct mdc_op_data *data, int ea_size)
 {
         if (mdc_req_is_2_0_server(req))
-                mdc_getattr_pack_20(req, offset, valid, flags, data);
+                mdc_getattr_pack_20(req, offset, valid, flags, data, ea_size);
         else
                 mdc_getattr_pack_18(req, offset, valid, flags, data);
 }
