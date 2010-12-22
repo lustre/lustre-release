@@ -99,7 +99,6 @@ struct super_operations lustre_super_operations =
         .umount_begin  = ll_umount_begin,
         .remount_fs    = ll_remount_fs,
         .show_options  = ll_show_options,
-        .sync_fs       = ll_sync_fs,
 };
 
 

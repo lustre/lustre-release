@@ -1508,7 +1508,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getref);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, putref);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync_fs);
 }
 
 int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
