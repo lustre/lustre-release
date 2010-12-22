@@ -3412,7 +3412,7 @@ test_72a() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
 	true
 }
-run_test 72 "Test that remove suid works properly (bug5695) ===="
+run_test 72a "Test that remove suid works properly (bug5695) ===="
 
 test_72b() { # bug 24226 -- keep mode setting when size is not changing
 	local perm
