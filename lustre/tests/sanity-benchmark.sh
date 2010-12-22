@@ -6,6 +6,8 @@
 
 set -e
 
+ONLY=${ONLY:-"$*"}
+
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@

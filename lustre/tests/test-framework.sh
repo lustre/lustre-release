@@ -58,10 +58,11 @@ print_summary () {
         [ "${!O}" = "no" ] && continue || true
         local o=$(echo $O | tr "[:upper:]" "[:lower:]")
         o=${o//_/-}
-        o=${o//tyn/tyN}
         local log=${TMP}/${o}.log
-        [ "$o" = lfsck ] && log=${TMP}/lfscktest.log
         [ "$o" = racer ] && log=${TMP}/runracer.log
+        if is_sanity_benchmark $o; then
+            log=${TMP}/sanity-benchmark.log
+        fi
         local slow=
         local skipped=
         local total=
@@ -3669,3 +3670,13 @@ else
 fi;"
 }
 
+is_sanity_benchmark() {
+    local benchmarks="dbench bonnie iozone fsx"
+    local suite=$1
+    for b in $benchmarks; do
+        if [ "$b" == "$suite" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
