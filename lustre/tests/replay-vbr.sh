@@ -1288,8 +1288,6 @@ run_test 10 "mds version recovery; $CLIENTCOUNT clients"
 
 [ "$CLIENTS" ] && zconf_mount_clients $CLIENTS $DIR
 
-equals_msg `basename $0`: test complete, cleaning up
-#SLEEP=$((`date +%s` - $NOW))
-#[ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

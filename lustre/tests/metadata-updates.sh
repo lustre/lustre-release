@@ -259,8 +259,8 @@ else
     skip_env "$0 : write_disjoint not found "
 fi
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 rm -rf $TESTDIR
 rm -f $MACHINEFILE
 check_and_cleanup_lustre
-exit $STATUS
+exit_status

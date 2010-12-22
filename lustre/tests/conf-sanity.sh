@@ -2361,7 +2361,5 @@ if ! combined_mgs_mds ; then
 	stop mgs
 fi
 
-equals_msg `basename $0`: test complete
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
-
-
+complete $(basename $0) $SECONDS
+exit_status

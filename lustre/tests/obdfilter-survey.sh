@@ -194,7 +194,7 @@ test_3a () {
 }
 run_test 3a "Network survey"
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 cleanup_echo_devs
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

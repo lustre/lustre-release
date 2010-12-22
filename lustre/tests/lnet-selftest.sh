@@ -153,9 +153,8 @@ test_smoke () {
 }
 run_test smoke "lst regression test"
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 if [ "$RESTORE_MOUNT" = yes ]; then
     setupall
 fi 
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
-
+exit_status

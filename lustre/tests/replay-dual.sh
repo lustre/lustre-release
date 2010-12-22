@@ -452,9 +452,9 @@ test_22() { #bug 18927
 }
 run_test 22 "double open|creat in replay with open orphan from two mntp"
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 [ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

@@ -2268,6 +2268,6 @@ test_87() { #bug 17485
 }
 run_test 87 "MDS should not assign same objid to different files "
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

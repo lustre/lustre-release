@@ -277,11 +277,8 @@ else
     fi
 fi
 
-equals_msg $(basename $0): test complete, cleaning up
-
 LFSCK_ALWAYS=no
-check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && \
-    grep -q FAIL $TESTSUITELOG && exit 1 || true
 
-echo "$0: completed"
+complete $(basename $0) $SECONDS
+check_and_cleanup_lustre
+exit_status

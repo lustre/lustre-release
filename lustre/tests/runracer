@@ -145,5 +145,5 @@ for rpid in $RACERPID; do
 done
 
 racer_cleanup
-echo "$0: completed $RC"
+complete $(basename $0) $SECONDS
 exit $RC

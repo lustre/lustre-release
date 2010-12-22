@@ -68,7 +68,6 @@ init_test_env $@
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
-SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 
 cleanup() {
@@ -100,8 +99,6 @@ if [ "$ONLY" == "cleanup" ]; then
  	sh llmountcleanup.sh
  	exit 0
 fi
-
-[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 check_and_setup_lustre
 
@@ -6922,12 +6919,9 @@ test_900() {
 }
 run_test 900 "umount should not race with any mgc requeue thread"
 
-log "cleanup: ======================================================"
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 if [ "$I_MOUNTED" != "yes" ]; then
 	lctl set_param debug="$OLDDEBUG" 2> /dev/null || true
 fi
-
-echo '=========================== finished ==============================='
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 || true
-echo "$0: completed"
+exit_status 

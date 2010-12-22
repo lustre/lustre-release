@@ -2373,10 +2373,7 @@ test_99()
 }
 run_test_with_stat 99 "Quota off ==============================="
 
-
-log "cleanup: ======================================================"
 cd $ORIG_PWD
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-echo '=========================== finished ==============================='
-[ -f "$QUOTALOG" ] && cat $QUOTALOG && grep -q FAIL $QUOTALOG && exit 1 || true
-echo "$0: completed"
+exit_status

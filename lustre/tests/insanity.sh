@@ -564,6 +564,6 @@ test_10() {
 }
 run_test 10 "Running Availability for 6 hours..."
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
+exit_status

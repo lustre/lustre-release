@@ -41,13 +41,10 @@ init_test_env $@
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
 
-SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
-
-[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 check_and_setup_lustre
 
@@ -917,11 +914,6 @@ test_39() {
 }
 run_test 39 "direct I/O writes should update mtime ========="
 
-log "cleanup: ======================================================"
-
+complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-
-echo '=========================== finished ==============================='
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 || true
-echo "$0: completed"
-
+exit_status
