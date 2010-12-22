@@ -830,8 +830,8 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                                 pd=ll_pglist_double_lock(sbi, old_cpu, &old_pd);
                         }
 
-                        list_move(&llap->llap_pglist_item,
-                                  &pd->llpd_list);
+                        list_move_tail(&llap->llap_pglist_item,
+                                       &pd->llpd_list);
                         old_pd->llpd_gen++;
                         if (pd->llpd_cpu != old_cpu) {
                                 pd->llpd_count++;
