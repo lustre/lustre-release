@@ -412,7 +412,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         hdr = cl_object_header(o);
         cfs_atomic_inc(&site->cs_pages.cs_lookup);
 
-        CDEBUG(D_PAGE, "%lu@"DFID" %p %lu %d\n",
+        CDEBUG(D_PAGE, "%lu@"DFID" %p %lx %d\n",
                idx, PFID(&hdr->coh_lu.loh_fid), vmpage, vmpage->private, type);
         /* fast path. */
         if (type == CPT_CACHEABLE) {
