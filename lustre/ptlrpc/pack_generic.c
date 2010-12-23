@@ -2254,7 +2254,8 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                            "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,
                            req->rq_reqmsg ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
-                           req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
+                           req->rq_reqmsg && req_ptlrpc_body_swabbed(req) ?
+                           lustre_msg_get_opc(req->rq_reqmsg) : -1,
                            req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
                            req->rq_export ?
                            (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
