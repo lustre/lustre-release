@@ -720,13 +720,10 @@ setup_quota(){
 }
 
 zconf_mount() {
-    local OPTIONS
     local client=$1
     local mnt=$2
-    # Only supply -o to mount if we have options
-    if [ -n "$MOUNTOPT" ]; then
-        OPTIONS="-o $MOUNTOPT"
-    fi
+    local OPTIONS=${3:-$MOUNTOPT}
+
     local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
         echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
@@ -835,10 +832,6 @@ zconf_mount_clients() {
     local mnt=$2
     local OPTIONS=${3:-$MOUNTOPT}
 
-    # Only supply -o to mount if we have options
-    if [ "$OPTIONS" ]; then
-        OPTIONS="-o $OPTIONS"
-    fi
     local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
         echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
