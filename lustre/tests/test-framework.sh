@@ -4502,3 +4502,7 @@ is_sanity_benchmark() {
     return 1
 }
 
+min_ost_size () {
+    $LCTL get_param -n osc.*.kbytesavail | sort -n | head -n1
+}
+

@@ -231,7 +231,13 @@ pios_file_size () {
 }
 
 space_check () {
-    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+    local testdir=$DIR/$tdir
+    local stripe=$($LFS getstripe -c $testdir)
+
+    # if stripe_count = 1 the size should be less than min ost size, bug 24294
+    local space=$($LFS df $testdir | grep "filesystem summary:"  | awk '{print $3}')
+    [ $stripe -eq 1 ] && space=$(min_ost_size)
+
     local size=$(pios_file_size)
     size=$(( size + size / 10 ))
     # we can not use pios --cleanup|-x because we need the files exist for pios --verify,
@@ -265,7 +271,7 @@ pios_setup() {
 }
 
 pios_cleanup() {
-    local rc=$1
+    local rc=${1:-0}
     local testdir=$DIR/$tdir
     if [ $rc -eq 0 ]; then
         echo cleanup: testdir=$testdir rc=$rc
@@ -301,8 +307,12 @@ test_pios_ssf() {
     fi
 
     local rc=0
-    space_check || { skip_env "not enough space" && return 0; }
     pios_setup --stripe || return
+    if ! space_check; then
+        skip_env "not enough space"
+        pios_cleanup
+        return 0
+    fi
     run_pios || return
     run_pios  --verify || rc=$? 
     pios_cleanup $rc
@@ -317,8 +327,12 @@ test_pios_fpp() {
     fi
 
     local rc=0
-    space_check || { skip_env "not enough space" && return 0; }
     pios_setup || return
+    if ! space_check; then
+        skip_env "not enough space"
+        pios_cleanup
+        return 0
+    fi
     run_pios -L fpp || return
     run_pios -L fpp --verify || rc=$?
     pios_cleanup $rc
