@@ -553,43 +553,41 @@ typedef struct kib_connvars
 
 typedef struct kib_conn
 {
-        struct kib_peer   *ibc_peer;          /* owning peer */
-        kib_hca_dev_t     *ibc_hdev;           /* HCA bound on */
-        cfs_list_t         ibc_list;          /* stash on peer's conn list */
-        cfs_list_t         ibc_sched_list;    /* schedule for attention */
-        cfs_list_t         ibc_connd_list;    /* kiblnd_check_conns only */
-        __u16              ibc_version;       /* version of connection */
-        __u64              ibc_incarnation;   /* which instance of the peer */
-        cfs_atomic_t       ibc_refcount;      /* # users */
-        int                ibc_state;         /* what's happening */
-        int                ibc_nsends_posted; /* # uncompleted sends */
-        int                ibc_noops_posted;  /* # uncompleted NOOPs */
-        int                ibc_credits;       /* # credits I have */
-        int                ibc_outstanding_credits; /* # credits to return */
-        int                ibc_reserved_credits;/* # ACK/DONE msg credits */
-        int                ibc_retry_noop;    /* need to retry returning credits */
-        int                ibc_comms_error;   /* set on comms error */
-        int                ibc_nrx:16;        /* receive buffers owned */
-        int                ibc_scheduled:1;   /* scheduled for attention */
-        int                ibc_ready:1;       /* CQ callback fired */
-        unsigned long      ibc_last_send;     /* time of last send */
-        cfs_list_t         ibc_early_rxs;     /* rxs completed before ESTABLISHED */
-        cfs_list_t         ibc_tx_noops;       /* IBLND_MSG_NOOPs for IBLND_MSG_VERSION_1 */
-        cfs_list_t         ibc_tx_queue;       /* sends that need a credit */
-        cfs_list_t         ibc_tx_queue_nocred;/* sends that don't need a credit */
-        cfs_list_t         ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
-        cfs_list_t         ibc_active_txs;     /* active tx awaiting completion */
-        cfs_spinlock_t     ibc_lock;           /* serialise */
-        kib_rx_t          *ibc_rxs;            /* the rx descs */
-        kib_pages_t       *ibc_rx_pages;       /* premapped rx msg pages */
+        struct kib_peer     *ibc_peer;          /* owning peer */
+        kib_hca_dev_t      *ibc_hdev;           /* HCA bound on */
+        cfs_list_t           ibc_list;          /* stash on peer's conn list */
+        cfs_list_t           ibc_sched_list;    /* schedule for attention */
+        __u16                ibc_version;       /* version of connection */
+        __u64                ibc_incarnation;   /* which instance of the peer */
+        cfs_atomic_t         ibc_refcount;      /* # users */
+        int                  ibc_state;         /* what's happening */
+        int                  ibc_nsends_posted; /* # uncompleted sends */
+        int                  ibc_noops_posted;  /* # uncompleted NOOPs */
+        int                  ibc_credits;       /* # credits I have */
+        int                  ibc_outstanding_credits; /* # credits to return */
+        int                  ibc_reserved_credits;/* # ACK/DONE msg credits */
+        int                  ibc_comms_error;   /* set on comms error */
+        int                  ibc_nrx:16;        /* receive buffers owned */
+        int                  ibc_scheduled:1;   /* scheduled for attention */
+        int                  ibc_ready:1;       /* CQ callback fired */
+        unsigned long        ibc_last_send;     /* time of last send */
+        cfs_list_t           ibc_early_rxs;     /* rxs completed before ESTABLISHED */
+        cfs_list_t          ibc_tx_noops;       /* IBLND_MSG_NOOPs for IBLND_MSG_VERSION_1 */
+        cfs_list_t           ibc_tx_queue;       /* sends that need a credit */
+        cfs_list_t           ibc_tx_queue_nocred;/* sends that don't need a credit */
+        cfs_list_t           ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
+        cfs_list_t           ibc_active_txs;     /* active tx awaiting completion */
+        cfs_spinlock_t       ibc_lock;           /* serialise */
+        kib_rx_t            *ibc_rxs;            /* the rx descs */
+        kib_pages_t         *ibc_rx_pages;       /* premapped rx msg pages */
 
-        struct rdma_cm_id *ibc_cmid;           /* CM id */
-        struct ib_cq      *ibc_cq;             /* completion queue */
+        struct rdma_cm_id   *ibc_cmid;           /* CM id */
+        struct ib_cq        *ibc_cq;             /* completion queue */
 
-        kib_connvars_t    *ibc_connvars;       /* in-progress connection state */
+        kib_connvars_t      *ibc_connvars;       /* in-progress connection state */
 } kib_conn_t;
 
-#define IBLND_CONN_INIT               0         /* being initialised */
+#define IBLND_CONN_INIT               0         /* being intialised */
 #define IBLND_CONN_ACTIVE_CONNECT     1         /* active sending req */
 #define IBLND_CONN_PASSIVE_WAIT       2         /* passive waiting for rtu */
 #define IBLND_CONN_ESTABLISHED        3         /* connection established */
