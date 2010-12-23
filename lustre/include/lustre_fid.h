@@ -164,6 +164,10 @@ struct lu_client_seq {
 
         /* Seq-server for direct talking */
         struct lu_server_seq   *lcs_srv;
+
+        /* wait queue for fid allocation and update indicator */
+        cfs_waitq_t             lcs_waitq;
+        int                     lcs_update;
 };
 
 /* server sequence manager interface */

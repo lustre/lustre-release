@@ -220,21 +220,61 @@ static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         RETURN(rc);
 }
 
+static int seq_fid_alloc_prep(struct lu_client_seq *seq,
+                              cfs_waitlink_t *link)
+{
+
+        cfs_waitq_add(&seq->lcs_waitq, link);
+        if (seq->lcs_update) {
+                cfs_up(&seq->lcs_sem);
+                cfs_set_current_state(CFS_TASK_UNINT);
+                cfs_waitq_wait(link, CFS_TASK_UNINT);
+                cfs_set_current_state(CFS_TASK_RUNNING);
+                cfs_down(&seq->lcs_sem);
+                return -EAGAIN;
+        }
+        ++seq->lcs_update;
+        cfs_up(&seq->lcs_sem);
+        return 0;
+}
+
+static void seq_fid_alloc_fini(struct lu_client_seq *seq,
+                               cfs_waitlink_t *link)
+{
+        LASSERT(seq->lcs_update == 1);
+        cfs_down(&seq->lcs_sem);
+        --seq->lcs_update;
+        cfs_waitq_del(&seq->lcs_waitq, link);
+        cfs_waitq_signal(&seq->lcs_waitq);
+}
+
 /* Allocate new fid on passed client @seq and save it to @fid. */
 int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 {
+        cfs_waitlink_t link;
         int rc;
         ENTRY;
 
         LASSERT(seq != NULL);
         LASSERT(fid != NULL);
 
+        cfs_waitlink_init(&link);
         cfs_down(&seq->lcs_sem);
 
-        if (fid_is_zero(&seq->lcs_fid) ||
-            fid_oid(&seq->lcs_fid) >= seq->lcs_width)
-        {
+        while (1) {
                 seqno_t seqnr;
+
+                if (!fid_is_zero(&seq->lcs_fid) &&
+                    fid_oid(&seq->lcs_fid) < seq->lcs_width) {
+                        /* Just bump last allocated fid and return to caller. */
+                        seq->lcs_fid.f_oid += 1;
+                        rc = 0;
+                        break;
+                }
+
+                rc = seq_fid_alloc_prep(seq, &link);
+                if (rc)
+                        continue;
 
                 rc = seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
@@ -256,10 +296,9 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                  * to setup FLD for it.
                  */
                 rc = 1;
-        } else {
-                /* Just bump last allocated fid and return to caller. */
-                seq->lcs_fid.f_oid += 1;
-                rc = 0;
+
+                seq_fid_alloc_fini(seq, &link);
+                break;
         }
 
         *fid = seq->lcs_fid;
@@ -364,6 +403,7 @@ int seq_client_init(struct lu_client_seq *seq,
         seq->lcs_type = type;
         cfs_sema_init(&seq->lcs_sem, 1);
         seq->lcs_width = LUSTRE_SEQ_MAX_WIDTH;
+        cfs_waitq_init(&seq->lcs_waitq);
 
         /* Make sure that things are clear before work is started. */
         seq_client_flush(seq);
