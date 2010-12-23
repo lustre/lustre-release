@@ -164,12 +164,10 @@ mount_client() {
 }
 
 remount_client() {
-	local SAVEMOUNTOPT=$MOUNTOPT
-	MOUNTOPT="remount,$1"
+	local mountopt="-o remount,$1"
 	local MOUNTPATH=$2
 	echo "remount '$1' lustre on ${MOUNTPATH}....."
-	zconf_mount `hostname`  $MOUNTPATH  || return 96
-	MOUNTOPT=$SAVEMOUNTOPT
+	zconf_mount `hostname`  $MOUNTPATH "$mountopt"  || return 96
 }
 
 umount_client() {
