@@ -332,7 +332,7 @@ Index: linux-2.6.18.8/fs/ext3/Makefile
 @@ -5,7 +5,7 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
- ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 -	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o
 +	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o mballoc.o
  

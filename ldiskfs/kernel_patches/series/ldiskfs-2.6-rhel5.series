@@ -1,6 +1,5 @@
 ext3-version-2.6-rhel5.patch
 ext3-wantedi-2.6-rhel4.patch
-iopen-2.6.18-rhel5.patch
 ext3-map_inode_page-2.6.18.patch
 export-ext3-2.6-rhel4.patch
 ext3-include-fixes-2.6-rhel4.patch

@@ -248,29 +248,40 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 
  void ext4_block_bitmap_set(struct super_block *sb,
 			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
-@@ -1286,6 +1287,7 @@
+@@ -1286,9 +1287,11 @@
 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
 	Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err, Opt_resize,
 	Opt_usrquota, Opt_grpquota, Opt_i_version,
 +	Opt_mballoc, Opt_extents,
 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
-	Opt_inode_readahead_blks, Opt_journal_ioprio,
-	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_bigendian_extents,
-@@ -1346,6 +1348,8 @@
+	Opt_block_validity, Opt_noblock_validity,
+-	Opt_inode_readahead_blks, Opt_journal_ioprio
++	Opt_inode_readahead_blks, Opt_journal_ioprio,
++	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ };
+ 
+ static match_table_t tokens = {
+@@ -1346,6 +1348,11 @@
 	{Opt_barrier, "barrier"},
 	{Opt_nobarrier, "nobarrier"},
 	{Opt_i_version, "i_version"},
 +	{Opt_mballoc, "mballoc"},
 +	{Opt_extents, "extents"},
++	{Opt_iopen, "iopen"},
++	{Opt_noiopen, "noiopen"},
++	{Opt_iopen_nopriv, "iopen_nopriv"},
 	{Opt_stripe, "stripe=%u"},
 	{Opt_resize, "resize"},
 	{Opt_delalloc, "delalloc"},
-@@ -1768,6 +1771,9 @@
+@@ -1768,6 +1771,12 @@
  		case Opt_bigendian_extents:
  			bigendian_extents = 1;
  			break;
 +		case Opt_mballoc:
 +		case Opt_extents:
++		case Opt_iopen:
++		case Opt_noiopen:
++		case Opt_iopen_nopriv:
 +			break;
  		default:
  			printk(KERN_ERR

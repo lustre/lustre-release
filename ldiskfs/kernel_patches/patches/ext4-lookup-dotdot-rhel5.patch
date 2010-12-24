@@ -1,31 +1,11 @@
-Index: linux-2.6.18.i386/fs/ext4/iopen.c
-===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/iopen.c
-+++ linux-2.6.18.i386/fs/ext4/iopen.c
-@@ -91,9 +91,12 @@ static struct dentry *iopen_lookup(struc
- 		assert(!(alternate->d_flags & DCACHE_DISCONNECTED));
- 	}
- 
--	if (!list_empty(&inode->i_dentry)) {
--		alternate = list_entry(inode->i_dentry.next,
--				       struct dentry, d_alias);
-+	list_for_each(lp, &inode->i_dentry) {
-+		alternate = list_entry(lp, struct dentry, d_alias);
-+		/* ignore dentries created for ".." to preserve
-+		 * proper dcache hierarchy -- bug 10458 */
-+		if (alternate->d_flags & DCACHE_NFSFS_RENAMED)
-+			continue;
- 		dget_locked(alternate);
- 		spin_lock(&alternate->d_lock);
- 		alternate->d_flags |= DCACHE_REFERENCED;
 Index: linux-2.6.18.i386/fs/ext4/namei.c
 ===================================================================
 --- linux-2.6.18.i386.orig/fs/ext4/namei.c
 +++ linux-2.6.18.i386/fs/ext4/namei.c
 @@ -1067,6 +1067,38 @@ static struct dentry *ext4_lookup(struct
- 			return ERR_CAST(inode);
+			}
+		}
  	}
- 
 +	/* ".." shouldn't go into dcache to preserve dcache hierarchy
 +	 * otherwise we'll get parent being a child of actual child.
 +	 * see bug 10458 for details -bzzz */
@@ -58,6 +38,6 @@ Index: linux-2.6.18.i386/fs/ext4/namei.c
 +		return goal;
 +	}
 +
- 	return iopen_connect_dentry(dentry, inode, 1);
+	return d_splice_alias(inode, dentry);
  }
  

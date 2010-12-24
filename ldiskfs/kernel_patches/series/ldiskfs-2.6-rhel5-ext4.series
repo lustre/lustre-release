@@ -1,6 +1,5 @@
 ext4-version-2.6-rhel5.patch
 ext4-wantedi-2.6-rhel5.patch
-iopen-2.6.18-rhel5-ext4.patch
 ext4-map_inode_page-2.6.18-rhel5.patch
 export-ext4-2.6-rhel5.patch
 ext4-remove-cond_resched-calls-rhel5.patch
@@ -12,9 +11,9 @@ ext4-print-inum-in-htree-warning-rhel5.patch
 ext4-xattr-no-update-ctime-rhel5.patch
 ext4-prealloc-rhel5.patch
 ext4-mballoc-extra-checks-rhel5.patch
+ext4-misc-rhel5.patch
 ext4-big-endian-check-2.6-rhel5.patch
 ext4-alloc-policy-2.6-rhel5.patch
-ext4-misc-rhel5.patch
 ext4-force_over_16tb-rhel5.patch
 ext4-pdir-fix.patch
 ext4-osd-iop-common.patch

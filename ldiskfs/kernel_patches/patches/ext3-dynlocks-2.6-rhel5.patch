@@ -4,7 +4,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/Makefile linux-2.6.18-128.1.6_2/fs/ext
 @@ -5,7 +5,8 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
- ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 -	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o mballoc.o
 +	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
 +	   mballoc.o dynlocks.o
