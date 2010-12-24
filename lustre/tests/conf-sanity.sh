@@ -2491,21 +2491,22 @@ thread_sanity() {
         lassert 23 "$msg (PDSH problems?)" '(($tstarted && $tmin && $tmax))' || return $?
         lassert 24 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' || return $?
 
-        # Check that we can lower min/max
-        do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin - 1))"
+        # Check that we can change min/max
+        do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin + 1))"
         do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmax - 1))"
         tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
         tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
-        lassert 25 "$msg" '(($tmin2 == ($tmin - 1) && $tmax2 == ($tmax -1)))' || return $?
+        lassert 25 "$msg" '(($tmin2 == ($tmin + 1) && $tmax2 == ($tmax -1)))' || return $?
 
         # Check that we can set min/max to the same value
-        do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmin - 1))"
+        tmin=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
+        do_facet $facet "lctl set_param ${paramp}.threads_max=$tmin"
         tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
         tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
-        lassert 26 "$msg" '(($tmin2 == ($tmin - 1) && $tmax2 == ($tmin - 1)))' || return $?
+        lassert 26 "$msg" '(($tmin2 == $tmin && $tmax2 == $tmin))' || return $?
 
         # Check that we can't set max < min
-        do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmin - 2))"
+        do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmin - 1))"
         tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
         tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
         lassert 27 "$msg" '(($tmin2 <= $tmax2))' || return $?
