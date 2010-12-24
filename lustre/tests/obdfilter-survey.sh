@@ -24,10 +24,6 @@ OBDSURVEY=${OBDSURVEY:-$(which obdfilter-survey)}
 build_test_filter
 check_and_setup_lustre
 
-min_ost_size () {
-    $LCTL get_param -n osc.*.kbytesavail | sort -n | head -n1
-}
-
 # FIXME: the summary file a bit smaller than OSTSIZE, add estimation
 minsize=$(min_ost_size)
 if [ $(( size * 1024 )) -ge $minsize  ]; then
