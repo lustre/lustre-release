@@ -2300,18 +2300,30 @@ static int osd_iam_container_init(const struct lu_env *env,
                                   struct osd_object *obj,
                                   struct osd_directory *dir)
 {
+        struct iam_container *bag = &dir->od_container;
         int result;
-        struct iam_container *bag;
 
-        bag    = &dir->od_container;
         result = iam_container_init(bag, &dir->od_descr, obj->oo_inode);
-        if (result == 0) {
-                result = iam_container_setup(bag);
-                if (result == 0)
-                        obj->oo_dt.do_index_ops = &osd_index_iam_ops;
-                else
-                        iam_container_fini(bag);
+        if (result != 0)
+                return result;
+
+        result = iam_container_setup(bag);
+        if (result != 0)
+                goto out;
+
+        if (osd_obj2dev(obj)->od_iop_mode) {
+                u32 ptr = bag->ic_descr->id_ops->id_root_ptr(bag);
+
+                bag->ic_root_bh = ldiskfs_bread(NULL, obj->oo_inode,
+                                                ptr, 0, &result);
         }
+
+ out:
+        if (result == 0)
+                obj->oo_dt.do_index_ops = &osd_index_iam_ops;
+        else
+                iam_container_fini(bag);
+
         return result;
 }
 
