@@ -447,15 +447,19 @@ struct iam_container {
          * Underlying flat file. IO against this object is issued to
          * read/write nodes.
          */
-        struct inode      *ic_object;
+        struct inode        *ic_object;
+        /*
+         * BH of root block
+         */
+        struct buffer_head  *ic_root_bh;
         /*
          * container flavor.
          */
-        struct iam_descr  *ic_descr;
+        struct iam_descr    *ic_descr;
         /*
          * read-write lock protecting index consistency.
          */
-        cfs_rw_semaphore_t ic_sem;
+        cfs_rw_semaphore_t   ic_sem;
 };
 
 /*
