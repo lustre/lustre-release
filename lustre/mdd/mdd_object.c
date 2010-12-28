@@ -372,7 +372,7 @@ static int mdd_path2fid(const struct lu_env *env, struct mdd_device *mdd,
                 if (obj == NULL)
                         GOTO(out, rc = -EREMOTE);
                 if (IS_ERR(obj))
-                        GOTO(out, rc = -PTR_ERR(obj));
+                        GOTO(out, rc = PTR_ERR(obj));
                 /* get child fid from parent and name */
                 rc = mdd_lookup(env, &obj->mod_obj, lname, f, NULL);
                 mdd_object_put(env, obj);
@@ -435,7 +435,7 @@ static int mdd_path_current(const struct lu_env *env,
                 if (mdd_obj == NULL)
                         GOTO(out, rc = -EREMOTE);
                 if (IS_ERR(mdd_obj))
-                        GOTO(out, rc = -PTR_ERR(mdd_obj));
+                        GOTO(out, rc = PTR_ERR(mdd_obj));
                 rc = lu_object_exists(&mdd_obj->mod_obj.mo_lu);
                 if (rc <= 0) {
                         mdd_object_put(env, mdd_obj);
