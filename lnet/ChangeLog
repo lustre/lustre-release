@@ -12,6 +12,10 @@ xxxx-xx-xx Oracle, Inc.
 	  mxlnd     - MX 1.2.10 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 23575
+Description: fix o2iblnd v2 regression of credit deadlock with v1 peers (bug 14425).
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.

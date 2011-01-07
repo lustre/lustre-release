@@ -13,10 +13,22 @@ xxxx-xx-xx Oracle, Inc.
 	  lock before replay feature (bug 16774) are disabled by default.
 
 Severity   : normal
+Bugzilla   : 23081
+Description: llap pages are moved to head of LRU list instead of tail
+
+Severity   : normal
 Bugzilla   : 21804
 Description: release request ref through ptlrpc_server_drop_request()
 Details    : make sure the request is protected by rq_refcount while
              being processed in ptlrpc_server_handle_req_in().
+
+Severity   : normal
+Bugzilla   : 20394
+Description: correct check for transno value in filter_finish_transno()
+
+Severity   : normal
+Bugzilla   : 24048
+Description: Set body->eadatasize in mdc_getattr_pack()
 
 Severity   : normal
 Bugzilla   : 23820
@@ -26,6 +38,34 @@ Severity   : normal
 Bugzilla   : 21760
 Description: apps stuck in ptlrpc_check_set() during direct I/O
 Details    : start async bulk unregistering at the same time at reply unlink
+
+Severity   : normal
+Bugzilla   : 24039
+Description: lfs setstripe --pool broken in 1.8.4
+Details    : fix llapi_search_fsname() to handle relative pathnames
+
+Severity   : normal
+Bugzilla   : 24226
+Description: Only force the mode change if we're changing the size as well
+Details    : Fix regression introduced in 1.8.0. The offending code was added
+             by commit 77ba4b2141d04180211efa8a75c11ab0abf7fafb to remove
+             setgid/setuid bits when do_truncate() is called on the file.
+             We should only force the change when that occurs, similarly to
+             ll_setattr() in lustre/llite/llite_lib.c
+
+Severity   : enhancement
+Bugzilla   : 24201
+Description: add procfs tunable to enable/disable lockless direct I/O
+Details    : llite.lustre-*.lockless_direct_io=0 will disable default semantics
+             of direct I/O that forces it to be lockless. lockless_direct_io
+             value, however, will be ignored if per-file LL_FILE_LOCKED_DIRECTIO
+             bit is set.
+
+Severity   : normal
+Bugzilla   : 21804
+Description: Lustre servers crashing with NULL pointer errors
+Details    : Make sure the request is protected by rq_refcount while being
+             processed in ptlrpc_server_handle_req_in().
 
 -------------------------------------------------------------------------------
 
