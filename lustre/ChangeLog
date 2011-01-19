@@ -67,6 +67,11 @@ Description: Lustre servers crashing with NULL pointer errors
 Details    : Make sure the request is protected by rq_refcount while being
              processed in ptlrpc_server_handle_req_in().
 
+Severity   : normal
+Bugzilla   : 23988
+Description: kernel BUG at drivers/scsi/sd.c
+Details    : Remove sd iostats patch from sles11 patch series.
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
