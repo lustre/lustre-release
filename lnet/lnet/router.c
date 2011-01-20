@@ -502,21 +502,69 @@ lnet_get_route (int idx, __u32 *net, __u32 *hops,
         return -ENOENT;
 }
 
-void
-lnet_swap_pinginfo(lnet_ping_info_t *info)
+int
+lnet_parse_pinginfo(lnet_ping_info_t *info, int len, int expected_nids)
 {
-        int               i;
-        lnet_ni_status_t *stat;
+        int rc = -EPROTO;  /* if I can't parse... */
+        int i, swab, n_nids;
 
-        __swab32s(&info->pi_version);
-        __swab32s(&info->pi_pid);
-        __swab32s(&info->pi_nnis);
-        for (i = 0; i < info->pi_nnis && i < LNET_MAX_RTR_NIS; i++) {
+        if (len < 8) { /* can't check magic/version */
+                CNETERR("Ping info too short %d\n", len);
+                return rc;
+        }
+
+        if (info->pi_magic == LNET_PROTO_PING_MAGIC) {
+                swab = 0;
+        } else if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC)) {
+                swab = 1;
+        } else {
+                CNETERR("Unexpected magic %08x\n", info->pi_magic);
+                return rc;
+        }
+
+        if (swab)
+                __swab32s(&info->pi_version);
+
+        if (info->pi_version != LNET_PROTO_PING_VERSION &&
+            info->pi_version != LNET_PROTO_PING_VERSION1) {
+                CNETERR("Unexpected version 0x%x\n", info->pi_version);
+                return rc;
+        }
+
+        if (len < lnet_pinginfo_size(0)) { /* can't check pid/nnis */
+                CNETERR("Short reply %d(%d min)\n", len,
+                        (int)lnet_pinginfo_size(0));
+                return rc;
+        }
+
+        if (swab) {
+                __swab32s(&info->pi_pid);
+                __swab32s(&info->pi_nnis);
+        }
+
+        n_nids = MIN(info->pi_nnis, expected_nids);
+        if (len < lnet_pinginfo_size_v(n_nids, info->pi_version)) {
+                CNETERR("Short reply %d(%d expected)\n", len,
+                        (int)lnet_pinginfo_size_v(n_nids, info->pi_version));
+                return rc;
+        }
+
+        if (!swab)
+                return 0;
+
+        for (i = 0; i < n_nids; i++) {
+                lnet_ni_status_t *stat;
+
+                if (info->pi_version == LNET_PROTO_PING_VERSION1) {
+                        __swab64s(&info->pi_nid[i]);
+                        continue;
+                }
+
                 stat = &info->pi_ni[i];
                 __swab64s(&stat->ns_nid);
                 __swab32s(&stat->ns_status);
         }
-        return;
+        return 0;
 }
 
 /* Returns # of down NIs, or negative error codes; ignore downed NIs
@@ -529,6 +577,7 @@ lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
         int               ptl_up = 0;
         int               ptl_down = 0;
         lnet_ping_info_t *info;
+        int               rc;
 
         if (!avoid_asym_router_failure)
                 return -ENOENT;
@@ -542,23 +591,16 @@ lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
         info = rtr->lp_rcd->rcd_pinginfo;
         LASSERT (info != NULL);
 
-        /* NB always racing with network! */
-        if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC)) {
-                lnet_swap_pinginfo(info);
-        } else if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
-                CNETERR("%s: Unexpected magic %08x\n",
-                        libcfs_nid2str(rtr->lp_nid), info->pi_magic);
+        rc = lnet_parse_pinginfo(info, /* NB always racing with network! */
+                                 LNET_MAX_PINGINFO_SIZE, LNET_MAX_RTR_NIS);
+        if (rc != 0) {
+                CNETERR("Bad ping reply from %s\n",
+                        libcfs_nid2str(rtr->lp_nid));
                 return -EPROTO;
         }
 
         if (info->pi_version == LNET_PROTO_PING_VERSION1)
                 return -ENOENT;  /* v1 doesn't carry NI status info */
-
-        if (info->pi_version != LNET_PROTO_PING_VERSION) {
-                CNETERR("%s: Unexpected version 0x%x\n",
-                        libcfs_nid2str(rtr->lp_nid), info->pi_version);
-                return -EPROTO;
-        }
 
         for (i = 0; i < info->pi_nnis && i < LNET_MAX_RTR_NIS; i++) {
                 lnet_ni_status_t *stat = &info->pi_ni[i];
@@ -745,7 +787,7 @@ lnet_destroy_rc_data (lnet_rc_data_t *rcd)
         /* detached from network */
         LASSERT (LNetHandleIsEqual(rcd->rcd_mdh, LNET_INVALID_HANDLE));
 
-        LIBCFS_FREE(rcd->rcd_pinginfo, LNET_PINGINFO_SIZE);
+        LIBCFS_FREE(rcd->rcd_pinginfo, LNET_MAX_PINGINFO_SIZE);
         LIBCFS_FREE(rcd, sizeof(*rcd));
         return;
 }
@@ -762,13 +804,13 @@ lnet_create_rc_data (void)
         if (rcd == NULL)
                 return NULL;
 
-        LIBCFS_ALLOC(pi, LNET_PINGINFO_SIZE);
+        LIBCFS_ALLOC(pi, LNET_MAX_PINGINFO_SIZE);
         if (pi == NULL) {
                 LIBCFS_FREE(rcd, sizeof(*rcd));
                 return NULL;
         }
 
-        memset(pi, 0, LNET_PINGINFO_SIZE);
+        memset(pi, 0, LNET_MAX_PINGINFO_SIZE);
         for (i = 0; i < LNET_MAX_RTR_NIS; i++) {
                 pi->pi_ni[i].ns_nid = LNET_NID_ANY;
                 pi->pi_ni[i].ns_status = LNET_NI_STATUS_INVALID;
@@ -780,7 +822,7 @@ lnet_create_rc_data (void)
         LASSERT (!LNetHandleIsEqual(the_lnet.ln_rc_eqh, LNET_EQ_NONE));
         rc = LNetMDBind((lnet_md_t){.start     = pi,
                                     .user_ptr  = rcd,
-                                    .length    = LNET_PINGINFO_SIZE,
+                                    .length    = LNET_MAX_PINGINFO_SIZE,
                                     .threshold = LNET_MD_THRESH_INF,
                                     .options   = LNET_MD_TRUNCATE,
                                     .eq_handle = the_lnet.ln_rc_eqh},

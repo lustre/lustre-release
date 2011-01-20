@@ -383,14 +383,48 @@ typedef struct lnet_lnd
 #endif
 } lnd_t;
 
+#define LNET_PROTO_PING_MATCHBITS     0x8000000000000000LL
+#define LNET_PROTO_PING_VERSION       2
+#define LNET_PROTO_PING_VERSION1      1
+
 #define LNET_NI_STATUS_UP      0x15aac0de
 #define LNET_NI_STATUS_DOWN    0xdeadface
 #define LNET_NI_STATUS_INVALID 0x00000000
+
 typedef struct {
         lnet_nid_t ns_nid;
         __u32      ns_status;
         __u32      ns_unused;
 } WIRE_ATTR lnet_ni_status_t;
+
+typedef struct {
+        __u32      pi_magic;
+        __u32      pi_version;
+        lnet_pid_t pi_pid;
+        __u32      pi_nnis;
+#define pi_ni      pi_body.pb_ni
+#define pi_nid     pi_body.pb_nid
+
+        union {
+                lnet_nid_t       pb_nid[0]; /* LNET_PROTO_PING_VERSION1 */
+                lnet_ni_status_t pb_ni[0];  /* LNET_PROTO_PING_VERSION */
+        } pi_body;
+} WIRE_ATTR lnet_ping_info_t;
+
+static inline size_t
+lnet_pinginfo_size_v(int n_ids, int version)
+{
+        LASSERT (n_ids >= 0);
+        LASSERT (version == LNET_PROTO_PING_VERSION ||
+                 version == LNET_PROTO_PING_VERSION1);
+
+        if (version == LNET_PROTO_PING_VERSION)
+                return offsetof(lnet_ping_info_t, pi_ni[n_ids]);
+
+        return offsetof(lnet_ping_info_t, pi_nid[n_ids]);
+}
+
+#define lnet_pinginfo_size(n) lnet_pinginfo_size_v((n), LNET_PROTO_PING_VERSION)
 
 #define LNET_MAX_INTERFACES   16
 
@@ -412,20 +446,10 @@ typedef struct lnet_ni {
         char             *ni_interfaces[LNET_MAX_INTERFACES]; /* equivalent interfaces to use */
 } lnet_ni_t;
 
-#define LNET_PROTO_PING_MATCHBITS     0x8000000000000000LL
-#define LNET_PROTO_PING_VERSION       2
-#define LNET_PROTO_PING_VERSION1      1
-typedef struct {
-        __u32            pi_magic;
-        __u32            pi_version;
-        lnet_pid_t       pi_pid;
-        __u32            pi_nnis;
-        lnet_ni_status_t pi_ni[0];
-} WIRE_ATTR lnet_ping_info_t;
-
 /* router checker data, per router */
-#define LNET_MAX_RTR_NIS   16
-#define LNET_PINGINFO_SIZE offsetof(lnet_ping_info_t, pi_ni[LNET_MAX_RTR_NIS])
+#define LNET_MAX_RTR_NIS       16
+#define LNET_MAX_PINGINFO_SIZE lnet_pinginfo_size(LNET_MAX_RTR_NIS)
+
 typedef struct {
         struct list_head  rcd_list;             /* chain on the_lnet.ln_zombie_rcd */
         lnet_handle_md_t  rcd_mdh;              /* ping buffer MD */

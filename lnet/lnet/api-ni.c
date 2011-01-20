@@ -1524,7 +1524,7 @@ lnet_create_ping_info(void)
                 LASSERT (rc == 0);
         }
 
-        infosz = offsetof(lnet_ping_info_t, pi_ni[n]);
+        infosz = lnet_pinginfo_size(n);
         LIBCFS_ALLOC(pinfo, infosz);
         if (pinfo == NULL) {
                 CERROR("Can't allocate ping info[%d]\n", n);
@@ -1574,8 +1574,7 @@ lnet_destroy_ping_info(void)
         LNET_UNLOCK();
 
         LIBCFS_FREE(the_lnet.ln_ping_info,
-                    offsetof(lnet_ping_info_t,
-                             pi_ni[the_lnet.ln_ping_info->pi_nnis]));
+                    lnet_pinginfo_size(the_lnet.ln_ping_info->pi_nnis));
         the_lnet.ln_ping_info = NULL;
         return;
 }
@@ -1586,7 +1585,6 @@ lnet_ping_target_init(void)
         lnet_handle_me_t  meh;
         int               rc;
         int               rc2;
-        int               infosz;
 
         rc = lnet_create_ping_info();
         if (rc != 0)
@@ -1611,11 +1609,9 @@ lnet_ping_target_init(void)
                 goto failed_1;
         }
 
-        infosz = offsetof(lnet_ping_info_t,
-                          pi_ni[the_lnet.ln_ping_info->pi_nnis]);
         rc = LNetMDAttach(meh,
                           (lnet_md_t){.start = the_lnet.ln_ping_info,
-                                      .length = infosz,
+                                      .length = lnet_pinginfo_size(the_lnet.ln_ping_info->pi_nnis),
                                       .threshold = LNET_MD_THRESH_INF,
                                       .options = (LNET_MD_OP_GET |
                                                   LNET_MD_TRUNCATE |
@@ -1688,11 +1684,10 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         int                  unlinked = 0;
         int                  replied = 0;
         const int            a_long_time = 60000; /* mS */
-        int                  infosz = offsetof(lnet_ping_info_t, pi_ni[n_ids]);
+        int                  infosz;
         lnet_ping_info_t    *info;
         lnet_process_id_t    tmpid;
         int                  i;
-        int                  nob;
         int                  rc;
         int                  rc2;
         cfs_sigset_t         blocked;
@@ -1706,6 +1701,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         if (id.pid == LNET_PID_ANY)
                 id.pid = LUSTRE_SRV_LNET_PID;
 
+        infosz = lnet_pinginfo_size(n_ids);
         LIBCFS_ALLOC(info, infosz);
         if (info == NULL)
                 return -ENOMEM;
@@ -1788,58 +1784,28 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
 
         if (!replied) {
                 if (rc >= 0)
-                        CWARN("%s: Unexpected rc >= 0 but no reply!\n",
-                              libcfs_id2str(id));
+                        CWARN("%s: Unexpected rc(%d) >= 0 but no reply!\n",
+                              libcfs_id2str(id), rc);
                 rc = -EIO;
                 goto out_1;
         }
 
-        nob = rc;
-        LASSERT (nob >= 0 && nob <= infosz);
-
-        rc = -EPROTO;                           /* if I can't parse... */
-
-        if (nob < 8) {
-                /* can't check magic/version */
-                CERROR("%s: ping info too short %d\n",
-                       libcfs_id2str(id), nob);
-                goto out_1;
-        }
-
-        if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC)) {
-                lnet_swap_pinginfo(info);
-        } else if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
-                CERROR("%s: Unexpected magic %08x\n", 
-                       libcfs_id2str(id), info->pi_magic);
-                goto out_1;
-        }
-
-        if (info->pi_version != LNET_PROTO_PING_VERSION) {
-                CERROR("%s: Unexpected version 0x%x\n",
-                       libcfs_id2str(id), info->pi_version);
-                goto out_1;
-        }
-
-        if (nob < offsetof(lnet_ping_info_t, pi_ni[0])) {
-                CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id),
-                       nob, (int)offsetof(lnet_ping_info_t, pi_ni[0]));
-                goto out_1;
-        }
-
-        if (info->pi_nnis < n_ids)
-                n_ids = info->pi_nnis;
-
-        if (nob < offsetof(lnet_ping_info_t, pi_ni[n_ids])) {
-                CERROR("%s: Short reply %d(%d expected)\n", libcfs_id2str(id),
-                       nob, (int)offsetof(lnet_ping_info_t, pi_ni[n_ids]));
+        LASSERT (rc >= 0 && rc <= infosz); /* rc == event.mlength */
+        rc = lnet_parse_pinginfo(info, rc, n_ids);
+        if (rc != 0) {
+                CERROR("Bad ping reply from %s\n", libcfs_id2str(id));
                 goto out_1;
         }
 
         rc = -EFAULT;                           /* If I SEGV... */
-
+        n_ids = MIN(info->pi_nnis, n_ids);
         for (i = 0; i < n_ids; i++) {
                 tmpid.pid = info->pi_pid;
-                tmpid.nid = info->pi_ni[i].ns_nid;
+                if (info->pi_version == LNET_PROTO_PING_VERSION)
+                        tmpid.nid = info->pi_ni[i].ns_nid;
+                else
+                        tmpid.nid = info->pi_nid[i];
+
 #ifdef __KERNEL__
                 if (copy_to_user(&ids[i], &tmpid, sizeof(tmpid)))
                         goto out_1;

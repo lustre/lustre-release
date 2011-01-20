@@ -16,6 +16,10 @@ Severity   : normal
 Bugzilla   : 23575
 Description: fix o2iblnd v2 regression of credit deadlock with v1 peers (bug 14425).
 
+Severity   : normal
+Bugzilla   : 21456
+Description: lctl ping of 1.6.6 server from 1.8 router causes protocol error
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
