@@ -294,7 +294,7 @@ load_module() {
         eval set -- \$$optvar
         if [ $# -eq 0 -a -n "$MODPROBECONF" ]; then
             # Nothing in $MODOPTS_<MODULE>; try modprobe.conf
-            set -- $(grep "^options\\s*\<${module}\>" $MODPROBECONF)
+            set -- $(grep -P "^options\\s+${BASE}" $MODPROBECONF)
             # Get rid of "options $module"
             (($# > 0)) && shift 2
 
