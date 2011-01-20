@@ -175,7 +175,7 @@ Index: linux-stage/fs/ext4/super.c
 +
 +		diff = jiffies - last_update_time;
 +		if (diff < mmp_update_interval * HZ)
-+			schedule_timeout_interruptible(EXT4_MMP_UPDATE_INTERVAL*
++			schedule_timeout_interruptible(mmp_update_interval *
 +						       HZ - diff);
 +
 +		/*

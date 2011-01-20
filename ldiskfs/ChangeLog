@@ -1,6 +1,10 @@
 xxxx-xx-xx Oracle, Inc.
 	* version 3.1.5
 
+Severity   : normal
+Bugzilla   : 22882
+Description: MMP might sleep negative time
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
