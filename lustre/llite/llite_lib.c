@@ -205,8 +205,9 @@ static struct ll_sb_info *ll_init_sbi(void)
                 spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
         }
 
-        /* metadata statahead is enabled by default */
-        sbi->ll_sa_max = LL_SA_RPC_DEF;
+        /* metadata statahead is disabled by default */
+        sbi->ll_sa_max = 0;
+        /* sbi->ll_sa_max = LL_SA_RPC_DEF; */
 
         RETURN(sbi);
 

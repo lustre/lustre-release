@@ -17,6 +17,11 @@ Bugzilla   : 23081
 Description: llap pages are moved to head of LRU list instead of tail
 
 Severity   : normal
+Bugzilla   : 15962
+Description: disable statahead by default due to important races found in the
+             statahead implementation.
+
+Severity   : normal
 Bugzilla   : 21804
 Description: release request ref through ptlrpc_server_drop_request()
 Details    : make sure the request is protected by rq_refcount while
