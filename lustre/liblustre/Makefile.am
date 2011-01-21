@@ -50,8 +50,8 @@ install-exec-hook: liblustre.so
 	@list=$< ; for p in $$list; do \
 	  if test -f $$p; then \
 	    f="`echo $$p | sed -e 's|^.*/||'`"; \
-	    echo " $(libLIBRARIES_INSTALL) $$p $(DESTDIR)$(libdir)/$$f"; \
-	    $(libLIBRARIES_INSTALL) $$p $(DESTDIR)$(libdir)/$$f; \
+	    echo " $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/$$f"; \
+	    $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/$$f; \
 	  else :; fi; \
 	done
 else
