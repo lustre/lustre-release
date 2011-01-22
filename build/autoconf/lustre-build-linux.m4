@@ -699,3 +699,20 @@ AC_CACHE_CHECK([for $1], ac_Header,
 AS_IF([test AS_VAR_GET(ac_Header) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([ac_Header])dnl
 ])
+
+#
+# LB_USES_DPKG
+#
+# Determine if the target is a dpkg system or rpm
+#
+AC_DEFUN([LB_USES_DPKG],
+[
+AC_MSG_CHECKING([if this distro uses dpkg])
+if dpkg --version >/dev/null; then
+	AC_MSG_RESULT([yes])
+	uses_dpkg=yes
+else
+	AC_MSG_RESULT([no])
+	uses_dpkg=no
+fi
+])

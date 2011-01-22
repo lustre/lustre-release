@@ -870,6 +870,7 @@ AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
 AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
+AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled
@@ -917,6 +918,7 @@ AC_DEFUN([LB_CONFIGURE],
 LB_CONFIG_DIST
 
 LB_DOWNSTREAM_RELEASE
+LB_USES_DPKG
 LB_BUILDID
 
 LB_LIBCFS_DIR

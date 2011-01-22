@@ -159,51 +159,10 @@ debs:
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
 	fi; \
 	if [ -d .git ]; then \
-		ver=$$(git describe --match [0-9v]\* --tags); \
-		if [[ $$ver = *-*-* ]]; then \
-			hash=$${ver##*-}; \
-			ffw=$${ver#*-}; \
-			ffw=$${ffw%-*}; \
-			ver=$${ver%%-*}; \
-		fi; \
-		if [ $$ffw -gt 0 ]; then \
-			tag=$$ver; \
-			if [[ $$ver =~ ^v([0-9]+_)+([0-9]+|RC[0-9]+)$$ ]]; then \
-				ver=$$(echo $$ver | \
-				  sed -e 's/^v\(.*\)/\1/' \
-				      -e 's/_RC[[0-9]].*$$//' \
-				      -e 's/_/./g'); \
-			fi; \
-			pdir="debian/patches"; \
-			if [ -d $$pdir ]; then \
-				rm -rf $$pdir; \
-			fi; \
-			mkdir $$pdir; \
-			git format-patch -o $$pdir $$tag..HEAD; \
-			pushd $$pdir; \
-			if [ -d ../patched ]; then \
-				rm -rf ../patched; \
-			fi; \
-			mkdir ../patched; \
-			rm -f 00list *.dpatch; \
-			for file in [0-9][0-9][0-9][0-9]-*.patch; do \
-				if ! grep -q "^ debian/changelog" $$file; then \
-					desc=$$(cat $$file | sed -e '1,/^$$/d' \
-								 -e '/^---$$/,$$d'); \
-					dpatch_file=$${file/.patch/.dpatch}; \
-					sed -e '1,/^---$$/d' $$file | \
-					  dpatch patch-template -p "$${file%.patch}" \
-					  "$$desc" > $$dpatch_file; \
-					echo "faked by make debs run from git" > \
-					  ../patched/$$dpatch_file; \
-					echo $$dpatch_file >> 00list; \
-				fi; \
-				rm -f $$file; \
-			done; \
-		fi; \
+		build/extract_patches .; \
 	fi
 	rm -rf debs
-	dpkg-buildpackage || { \
+	dpkg-buildpackage -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
 		exit 0; \
@@ -227,4 +186,4 @@ debs:
 	popd && \
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog); \
 	mkdir -p debs && \
-	mv ../liblustre_$${VER}_*.deb ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes ../lustre_$${VER}.tar.gz ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
+	mv ../liblustre_$${VER}_*.deb ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes ../lustre_$${VER%-[0-9]*}.orig.tar.gz ../lustre_$${VER}.diff.gz ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
