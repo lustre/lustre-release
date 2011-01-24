@@ -112,8 +112,10 @@ static int __init init_lustre_lite(void)
         struct timeval tv;
         lnet_process_id_t lnet_id;
 
+#ifndef CRAY_XT3
         printk(KERN_INFO "Lustre: Lustre Client File System; "
                "http://www.lustre.org/\n");
+#endif
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
