@@ -1500,7 +1500,7 @@ static int mds_verify_child(struct obd_device *obd,
                             struct ldlm_res_id *maxres)
 {
         struct dentry *vchild, *dchild = *dchildp;
-        int rc = 0, cleanup_phase = 2; /* parent, child locks */
+        int rc = 0, cleanup_phase = child_lockh == NULL ? 1:2; /* parent, child locks */
         ENTRY;
 
         /* not want child - not check it */

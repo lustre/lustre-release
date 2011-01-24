@@ -85,6 +85,10 @@ Severity   : normal
 Bugzilla   : 22660
 Description: lustre grants flock exclusive locks to two fd's in the same process
 
+Severity   : normal
+Bugzilla   : 24360
+Description: LBUG in the mfs_verify_child()
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
