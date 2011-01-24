@@ -77,6 +77,10 @@ Bugzilla   : 23988
 Description: kernel BUG at drivers/scsi/sd.c
 Details    : Remove sd iostats patch from sles11 patch series.
 
+Severity   : normal
+Bugzilla   : 23352
+Description: Modified value of at_min is not taken into account
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
