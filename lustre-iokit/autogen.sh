@@ -14,8 +14,8 @@ run_cmd() {
     $cmd || fatal "$cmd failed!"
 }
 
-run_cmd aclocal
-run_cmd "automake -a -c"
+run_cmd ${ACLOCAL:-aclocal}
+run_cmd "${AUTOMAKE:-automake} -a -c"
 run_cmd autoconf
 
 echo "Finished.  Ready for ./configure ..."
