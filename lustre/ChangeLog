@@ -81,6 +81,10 @@ Severity   : normal
 Bugzilla   : 23352
 Description: Modified value of at_min is not taken into account
 
+Severity   : normal
+Bugzilla   : 22660
+Description: lustre grants flock exclusive locks to two fd's in the same process
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.

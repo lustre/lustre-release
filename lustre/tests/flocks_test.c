@@ -268,6 +268,47 @@ out:
         return rc;
 }
 
+/** =================================================================
+ * test number 3
+ *
+ * Bug 22660: Two conflicting flocks from same process.
+ */
+int t3(int argc, char *argv[])
+{
+        int fd, fd2;
+        int rc = EXIT_SUCCESS;
+
+        if (argc != 3) {
+                fprintf(stderr, "Usage: ./flock_test 3 filename\n");
+                return EXIT_FAILURE;
+        }
+
+        if ((fd = open(argv[2], O_RDWR)) < 0) {
+                fprintf(stderr, "Couldn't open file: %s\n", argv[1]);
+                return EXIT_FAILURE;
+        }
+        if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
+                perror("first flock failed");
+                rc = EXIT_FAILURE;
+                goto out;
+        }
+        if ((fd2 = open(argv[2], O_RDWR)) < 0) {
+                fprintf(stderr, "Couldn't open file: %s\n", argv[1]);
+                rc = EXIT_FAILURE;
+                goto out;
+        }
+        if (flock(fd2, LOCK_EX | LOCK_NB) >= 0) {
+                fprintf(stderr, "Second flock succeeded - FAIL\n");
+                rc = EXIT_FAILURE;
+        }
+
+        close(fd2);
+out:
+        close(fd);
+        return rc;
+}
+
+
 /** ==============================================================
  * program entry
  */
@@ -293,6 +334,9 @@ int main(int argc, char* argv[])
                 break;
         case 2:
                 rc = t2(argc, argv);
+                break;
+        case 3:
+                rc = t3(argc, argv);
                 break;
         default:
                 fprintf(stderr, "unknow test number %s\n", argv[1]);
