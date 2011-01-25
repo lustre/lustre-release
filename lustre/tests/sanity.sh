@@ -5398,10 +5398,12 @@ test_123a() { # was test 123, statahead(bug 11401)
                 return 0
         fi
 
+        statahead_max_old=`lctl get_param -n llite.*.statahead_max | head -n 1`
+
         SLOWOK=0
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
                 log "testing on UP system. Performance may be not as good as expected."
-		SLOWOK=1
+                SLOWOK=1
         fi
 
         rm -rf $DIR/$tdir
@@ -5413,6 +5415,7 @@ test_123a() { # was test 123, statahead(bug 11401)
                 createmany -o $DIR/$tdir/$tfile $j $((i - j))
 
                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                [ $max -eq 0 ] && max=32
                 lctl set_param -n llite.*.statahead_max 0
                 lctl get_param llite.*.statahead_max
                 cancel_lru_locks mdc
@@ -5449,6 +5452,7 @@ test_123a() { # was test 123, statahead(bug 11401)
 
                                 lctl set_param debug=-1
                                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                                [ $max -eq 0 ] && max=32
                                 lctl set_param -n llite.*.statahead_max 0
                                 lctl get_param llite.*.statahead_max
                                 cancel_lru_locks mdc
@@ -5491,7 +5495,9 @@ test_123a() { # was test 123, statahead(bug 11401)
         delta=$((etime - stime))
         log "rm -r $DIR/$tdir/: $delta seconds"
         log "rm done"
-        lctl get_param -n llite.*.statahead_stats
+        # restore default value
+        $LCTL set_param llite.*.statahead_max=$statahead_max_old
+        $LCTL get_param -n llite.*.statahead_stats
 }
 run_test 123a "verify statahead work"
 
