@@ -2900,9 +2900,15 @@ error:
         RETURN(rc);
 }
 
+#ifdef HAVE_UNLOCKED_IOCTL
+long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+        struct inode *inode = file->f_dentry->d_inode;
+#else
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
+#endif
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         int flags;
         ENTRY;
@@ -3637,7 +3643,11 @@ struct file_operations ll_file_operations = {
 #else
         .aio_write      = ll_file_aio_write,
 #endif
+#ifdef HAVE_UNLOCKED_IOCTL
+        .unlocked_ioctl = ll_file_ioctl,
+#else
         .ioctl          = ll_file_ioctl,
+#endif
         .open           = ll_file_open,
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
@@ -3665,7 +3675,11 @@ struct file_operations ll_file_operations_flock = {
 #else
         .aio_write      = ll_file_aio_write,
 #endif
+#ifdef HAVE_UNLOCKED_IOCTL
+        .unlocked_ioctl = ll_file_ioctl,
+#else
         .ioctl          = ll_file_ioctl,
+#endif
         .open           = ll_file_open,
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
@@ -3698,7 +3712,11 @@ struct file_operations ll_file_operations_noflock = {
 #else
         .aio_write      = ll_file_aio_write,
 #endif
+#ifdef HAVE_UNLOCKED_IOCTL
+        .unlocked_ioctl = ll_file_ioctl,
+#else
         .ioctl          = ll_file_ioctl,
+#endif
         .open           = ll_file_open,
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
