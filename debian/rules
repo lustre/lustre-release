@@ -89,8 +89,8 @@ autogen-stamp: patch-stamp
 	#  needed autogen.sh scripts
 	#  see https://bugzilla.lustre.org/attachment.cgi?id=27156
 	#  for an example)
-	if grep "^--- .*\/autoconf" debian/patches/*; then \
-		if [ ! -f autogen.sh ]; then \
+	if grep -e "^--- .*\/autoconf" -e ".*\/configure\.ac" -e ".*\/configure\.in" debian/patches/*; then \
+		if [ ! -f build/autogen.sh ]; then \
 			echo "You have patches which require autogen.sh to be run, but it doesn't exist"; \
 			echo "Please see https://bugzilla.lustre.org/attachment.cgi?id=27156"; \
 			exit 1; \
@@ -101,7 +101,7 @@ autogen-stamp: patch-stamp
 		cp /usr/share/misc/config.guess config.guess; \
 		cp /usr/share/misc/config.guess libsysio/config.guess; \
 		cp /usr/share/misc/config.guess ldiskfs/config.guess; \
-		sh ./autogen.sh; \
+		sh build/autogen.sh; \
 	fi; \
 	touch $@
 
