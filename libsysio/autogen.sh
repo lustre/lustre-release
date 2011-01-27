@@ -1,5 +1,5 @@
 #!/bin/sh
 
-aclocal &&
-automake --add-missing --copy &&
+${ACLOCAL:-aclocal} &&
+${AUTOMAKE:-automake} --add-missing --copy &&
 ${AUTOCONF:-autoconf}
