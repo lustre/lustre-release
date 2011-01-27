@@ -2380,6 +2380,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
                        libcfs_id2str(target));
                 return -ENOMEM;
         }
+        msg->msg_vmflush = !!libcfs_memory_pressure_get();
 
         LNET_LOCK();
 

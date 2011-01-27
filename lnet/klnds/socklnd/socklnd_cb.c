@@ -926,6 +926,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 int
 ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
+        int               mpflag = 0;
         int               type = lntmsg->msg_type;
         lnet_process_id_t target = lntmsg->msg_target;
         unsigned int      payload_niov = lntmsg->msg_niov;
@@ -956,10 +957,14 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 desc_size = offsetof(ksock_tx_t,
                                      tx_frags.paged.kiov[payload_niov]);
 
+        if (lntmsg->msg_vmflush)
+                mpflag = libcfs_memory_pressure_get_and_set();
         tx = ksocknal_alloc_tx(KSOCK_MSG_LNET, desc_size);
         if (tx == NULL) {
                 CERROR("Can't allocate tx desc type %d size %d\n",
                        type, desc_size);
+                if (lntmsg->msg_vmflush)
+                        libcfs_memory_pressure_restore(mpflag);
                 return (-ENOMEM);
         }
 
@@ -990,6 +995,8 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         /* The first fragment will be set later in pro_pack */
         rc = ksocknal_launch_packet(ni, tx, target);
+        if (lntmsg->msg_vmflush)
+                libcfs_memory_pressure_restore(mpflag);
         if (rc == 0)
                 return (0);
 

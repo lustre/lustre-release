@@ -2036,7 +2036,7 @@ static int lop_makes_rpc(struct client_obd *cli, struct loi_oap_pages *lop,
         if (cmd & OBD_BRW_WRITE) {
                 /* trigger a write rpc stream as long as there are dirtiers
                  * waiting for space.  as they're waiting, they're not going to
-                 * create more pages to coallesce with what's waiting.. */
+                 * create more pages to coalesce with what's waiting.. */
                 if (!list_empty(&cli->cl_cache_waiters)) {
                         CDEBUG(D_CACHE, "cache waiters forcing RPC\n");
                         RETURN(1);
@@ -2339,10 +2339,13 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         struct osc_async_page *oap;
         struct ldlm_lock *lock = NULL;
         obd_valid valid;
-        int i, rc;
+        int i, rc, mpflag = 0;
 
         ENTRY;
         LASSERT(!list_empty(rpc_list));
+
+        if (cmd & OBD_BRW_MEMALLOC)
+                mpflag = libcfs_memory_pressure_get_and_set();
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
         if (pga == NULL)
@@ -2384,6 +2387,9 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         oa = &((struct ost_body *)lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
                                                  sizeof(struct ost_body)))->oa;
 
+        if (cmd & OBD_BRW_MEMALLOC)
+                req->rq_memalloc = 1;
+
         /* Need to update the timestamps after the request is built in case
          * we race with setattr (locally or in queue at OST).  If OST gets
          * later setattr before earlier BRW (as determined by the request xid),
@@ -2415,6 +2421,9 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         CFS_INIT_LIST_HEAD(rpc_list);
 
 out:
+        if (cmd & OBD_BRW_MEMALLOC)
+                libcfs_memory_pressure_restore(mpflag);
+
         if (IS_ERR(req)) {
                 if (oa)
                         OBDO_FREE(oa);
@@ -2434,8 +2443,9 @@ out:
  * \param cmd - OBD_BRW_* macroses
  * \param lop - pending pages
  *
- * \return zero if pages successfully add to send queue.
- * \return not zere if error occurring.
+ * \return zero if no page added to send queue.
+ * \return 1 if pages successfully added to send queue.
+ * \return negative on errors.
  */
 static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                             int cmd, struct loi_oap_pages *lop)
@@ -2448,7 +2458,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         CFS_LIST_HEAD(rpc_list);
         unsigned int ending_offset;
         unsigned  starting_offset = 0;
-        int srvlock = 0;
+        int srvlock = 0, mem_tight = 0;
         ENTRY;
 
         /* If there are HP OAPs we need to handle at least 1 of them,
@@ -2478,7 +2488,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                  * until completion unlocks it.  commit_write submits a page
                  * as not ready because its unlock will happen unconditionally
                  * as the call returns.  if we race with commit_write giving
-                 * us that page we dont' want to create a hole in the page
+                 * us that page we don't want to create a hole in the page
                  * stream, so we stop and leave the rpc to be fired by
                  * another dirtier or kupdated interval (the not ready page
                  * will still be on the dirty list).  we could call in
@@ -2561,6 +2571,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
                 /* now put the page back in our accounting */
                 list_add_tail(&oap->oap_rpc_item, &rpc_list);
+                if (oap->oap_brw_flags & OBD_BRW_MEMALLOC)
+                        mem_tight = 1;
                 if (page_count == 0)
                         srvlock = !!(oap->oap_brw_flags & OBD_BRW_SRVLOCK);
                 if (++page_count >= cli->cl_max_pages_per_rpc)
@@ -2591,7 +2603,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        req = osc_build_req(cli, &rpc_list, page_count, cmd);
+        req = osc_build_req(cli, &rpc_list, page_count,
+                            mem_tight ? (cmd | OBD_BRW_MEMALLOC) : cmd);
         if (IS_ERR(req)) {
                 /* this should happen rarely and is pretty bad, it makes the
                  * pending list not follow the dirty order */
@@ -2766,7 +2779,7 @@ static void osc_check_rpcs(struct client_obd *cli)
                                 race_counter++;
                 }
 
-                /* attempt some inter-object balancing by issueing rpcs
+                /* attempt some inter-object balancing by issuing rpcs
                  * for each object in turn */
                 if (!list_empty(&loi->loi_hp_ready_item))
                         list_del_init(&loi->loi_hp_ready_item);

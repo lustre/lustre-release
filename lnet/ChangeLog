@@ -13,8 +13,15 @@ xxxx-xx-xx Oracle, Inc.
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
+Bugzilla   : 21776
+Description: ptlrpcd stuck in lnet allocations under memory pressure
+Details    : Set PF_MEMALLOC on outgoing path to prevent deadlock on memory
+             allocation
+
+Severity   : normal
 Bugzilla   : 23575
-Description: fix o2iblnd v2 regression of credit deadlock with v1 peers (bug 14425).
+Description: fix o2iblnd v2 regression of credit deadlock with v1 peers
+             (bug 14425).
 
 Severity   : normal
 Bugzilla   : 21456

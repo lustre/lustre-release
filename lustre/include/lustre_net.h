@@ -319,6 +319,7 @@ struct ptlrpc_request {
                 rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_early:1, rq_must_unlink:1,
+                rq_memalloc:1,      /* req originated from "kswapd" */
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_hp:1,            /* high priority RPC */

@@ -122,6 +122,25 @@ extern void __cfs_free_pages(cfs_page_t *page, unsigned int order);
 #define CFS_NUM_CACHEPAGES num_physpages
 #endif
 
+static inline int libcfs_memory_pressure_get_and_set(void)
+{
+        int old = libcfs_memory_pressure_get();
+
+        if (!old)
+                libcfs_memory_pressure_set();
+        return old;
+}
+
+static inline void libcfs_memory_pressure_restore(int old)
+{
+        if (old)
+                libcfs_memory_pressure_set();
+        else
+                libcfs_memory_pressure_clr();
+        return;
+}
+
+
 /*
  * In Linux there is no way to determine whether current execution context is
  * blockable.

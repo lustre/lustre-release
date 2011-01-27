@@ -488,6 +488,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 {
         int rc;
         int rc2;
+        int mpflag = 0;
         struct ptlrpc_connection *connection;
         lnet_handle_me_t  reply_me_h;
         lnet_md_t         reply_md;
@@ -533,6 +534,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
         if (request->rq_resend)
                 lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
+
+        if (request->rq_memalloc)
+                mpflag = libcfs_memory_pressure_get_and_set();
 
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
@@ -633,11 +637,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                           request->rq_request_portal,
                           request->rq_xid, 0);
         if (rc == 0)
-                RETURN(rc);
+                GOTO(out, rc);
 
         ptlrpc_req_finished(request);
         if (noreply)
-                RETURN(rc);
+                GOTO(out, rc);
 
  cleanup_me:
         /* MEUnlink is safe; the PUT didn't even get off the ground, and
@@ -657,6 +661,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         /* We do sync unlink here as there was no real transfer here so
          * the chance to have long unlink to sluggish net is smaller here. */
         ptlrpc_unregister_bulk(request, 0);
+ out:
+        if (request->rq_memalloc)
+                libcfs_memory_pressure_restore(mpflag);
         return rc;
 }
 
