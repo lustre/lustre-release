@@ -1945,6 +1945,9 @@ nfs_client_mode () {
         # FIXME: remove hostname when 19215 fixed
         do_nodes $clients "echo \\\$(hostname); grep ' '$MOUNT' ' /proc/mounts"
         declare -a nfsexport=(`grep ' '$MOUNT' ' /proc/mounts | awk '{print $1}' | awk -F: '{print $1 " "  $2}'`)
+        if [[ ${#nfsexport[@]} -eq 0 ]]; then
+                error_exit NFSCLIENT=$NFSCLIENT mode, but no NFS export found!
+        fi 
         do_nodes ${nfsexport[0]} "echo \\\$(hostname); df -T  ${nfsexport[1]}"
         return
     fi
