@@ -195,6 +195,8 @@ int cfs_mem_cache_destroy(cfs_mem_cache_t *c);
 void *cfs_mem_cache_alloc(cfs_mem_cache_t *c, int gfp);
 void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr);
 
+#define libcfs_memory_pressure_get() (0)
+
 typedef int (cfs_read_proc_t)(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
 
