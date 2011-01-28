@@ -31,10 +31,10 @@ error_msg() {
 		echo -e "To install $cmd, you can use the command:\n# $1"
 	}
 	case $dist_id in
-		fUbuntu) howto "apt-get install $cmd" ;;
-	CentOS|RedHat*) howto "yum install $cmd" ;;
-	         SUSE*) howto "yast -i $cmd" ;;
-	             *) echo -e "\nInstallation instructions for the package $cmd on $dist_id are not known.\nIf you know how to install the required package, please file a bug at\njira.whamcloud.com and include your distribution and that the output from:\n\"lsb_release -is\" is: \"$dist_id\"" ;;
+		        Ubuntu) howto "apt-get install $cmd" ;;
+	CentOS|RedHat*|Fedora*) howto "yum install $cmd" ;;
+	                 SUSE*) howto "yast -i $cmd" ;;
+	                     *) echo -e "\nInstallation instructions for the package $cmd on $dist_id are not known.\nIf you know how to install the required package, please file a bug at\njira.whamcloud.com and include your distribution and that the output from:\n\"lsb_release -is\" is: \"$dist_id\"" ;;
 	esac
 
 	exit 1
