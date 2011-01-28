@@ -749,9 +749,9 @@ typedef struct { volatile int counter; } atomic_t;
 #endif
 
 #define libcfs_memory_pressure_get() (0) 
-#define libcfs_memory_pressure_set() do {} while (0) 
+#define libcfs_memory_pressure_set() do {} while (0)
 #define libcfs_memory_pressure_clr() do {} while (0)
-#define libcfs_memory_pressure_get_and_set() do {} while (0)
+#define libcfs_memory_pressure_get_and_set() (0)
 #define libcfs_memory_pressure_restore(old) do {} while (0)
 
 /* FIXME sys/capability will finally included linux/fs.h thus
