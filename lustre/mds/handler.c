@@ -323,7 +323,7 @@ static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
 
         rc = mds_connect_internal(exp, data);
         if (rc == 0)
-                mds_export_stats_init(obd, exp, 1, localdata);
+                mds_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }

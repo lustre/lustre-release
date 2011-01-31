@@ -235,7 +235,6 @@ static int lprocfs_init_rw_stats(struct obd_device *obd,
    plus the procfs overhead :( */
 static int filter_export_stats_init(struct obd_device *obd,
                                     struct obd_export *exp,
-                                    int reconnect,
                                     void *client_nid)
 {
         struct proc_dir_entry *brw_entry;
@@ -245,8 +244,7 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
                 RETURN(0);
-        rc = lprocfs_exp_setup(exp, (lnet_nid_t *)client_nid,
-                               reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, (lnet_nid_t *)client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -945,7 +943,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 } else {
                         fed = &exp->exp_filter_data;
                         fed->fed_lcd = lcd;
-                        filter_export_stats_init(obd, exp, 0, NULL);
+                        filter_export_stats_init(obd, exp, NULL);
                         rc = filter_client_add(obd, exp, cl_idx);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
@@ -2349,7 +2347,7 @@ static int filter_connect_internal(struct obd_export *exp,
                        LPU64" left: "LPU64"\n", exp->exp_obd->obd_name,
                        exp->exp_client_uuid.uuid, exp,
                        data->ocd_grant, want, left);
-                
+
                 filter->fo_tot_granted_clients ++;
         }
 
@@ -2440,7 +2438,7 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
 
         rc = filter_connect_internal(exp, data, 1);
         if (rc == 0)
-                filter_export_stats_init(obd, exp, 1, localdata);
+                filter_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -2475,7 +2473,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, exp, 0, localdata);
+        filter_export_stats_init(obd, exp, localdata);
 
         if (!obd->obd_replayable)
                 GOTO(cleanup, rc = 0);
@@ -2981,7 +2979,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
-        /* 
+        /*
          * We need to be atomic against a concurrent write
          * (which takes the semaphore for reading). fmd_mactime_xid
          * checks will have no effect if a write request with lower
@@ -3797,7 +3795,7 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                        oinfo->oi_policy.l_extent.end);
                 RETURN(-EFAULT);
         }
-        
+
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
                ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
                oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);

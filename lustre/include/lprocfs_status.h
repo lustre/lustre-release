@@ -397,7 +397,7 @@ struct obd_export;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
                                    cfs_proc_dir_entry_t *entry);
 extern int lprocfs_exp_setup(struct obd_export *exp,
-                             lnet_nid_t *peer_nid, int reconnect, int *newnid);
+                             lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
                                                 char *name,
@@ -769,7 +769,7 @@ struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 { return 0; }
 static inline int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid,
-                                    int reconnect, int *newnid)
+                                    int *newnid)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }

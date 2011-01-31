@@ -1077,7 +1077,8 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
                client_stat->nid_brw_stats);
 
         LASSERTF(atomic_read(&client_stat->nid_exp_ref_count) == 0,
-                 "count %d\n", atomic_read(&client_stat->nid_exp_ref_count));
+                 "nid %s:count %d\n", libcfs_nid2str(client_stat->nid),
+                 atomic_read(&client_stat->nid_exp_ref_count));
 
         hlist_del_init(&client_stat->nid_hash);
 
@@ -1665,8 +1666,7 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_write);
 
-int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
-                      int *newnid)
+int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 {
         int rc = 0;
         struct nid_stat *new_stat, *old_stat;
@@ -1706,15 +1706,16 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
                old_stat, libcfs_nid2str(*nid),
                atomic_read(&new_stat->nid_exp_ref_count));
 
+        /* we need to release old stats because lprocfs_exp_cleanup() hasn't
+         * been and will never be called. */
+        if (exp->exp_nid_stats != NULL) {
+                nidstat_putref(exp->exp_nid_stats);
+                exp->exp_nid_stats = NULL;
+        }
+
         /* Return -EALREADY here so that we know that the /proc
          * entry already has been created */
         if (old_stat != new_stat) {
-                /* if this reconnect to live export from diffrent nid, we need
-                 * to release old stats because disconnect will be never called.
-                 * */
-                if (reconnect && exp->exp_nid_stats)
-                        nidstat_putref(exp->exp_nid_stats);
-
                 exp->exp_nid_stats = old_stat;
                 GOTO(destroy_new, rc = -EALREADY);
         }

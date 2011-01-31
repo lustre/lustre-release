@@ -62,15 +62,13 @@
 #include "mds_internal.h"
 
 
-int mds_export_stats_init(struct obd_device *obd,
-                                 struct obd_export *exp,
-                                 int reconnect,
-                                 void *localdata)
+int mds_export_stats_init(struct obd_device *obd, struct obd_export *exp,
+                          void *localdata)
 {
         lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -214,7 +212,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         med->med_lr_off = le32_to_cpu(mds->mds_server_data->lsd_client_start) +
                 (cl_idx * le16_to_cpu(mds->mds_server_data->lsd_client_size));
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
-        mds_export_stats_init(obd, exp, 0, localdata);
+        mds_export_stats_init(obd, exp, localdata);
 
         if (new_client) {
                 struct lvfs_run_ctxt *saved = NULL;
@@ -269,7 +267,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
 }
 
 struct lsd_client_data zero_lcd; /* globals are implicitly zeroed */
- 
+
 int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;

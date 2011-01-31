@@ -266,7 +266,6 @@ int mds_update_client_epoch(struct obd_export *exp);
 void mds_update_last_epoch(struct obd_device *obd);
 int mds_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
-                          int reconnect,
                           void *client_nid);
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                    int cl_off, void *localdata);

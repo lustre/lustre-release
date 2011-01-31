@@ -61,13 +61,12 @@
 
 int mgs_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 int reconnect,
                                  void *localdata)
 {
         lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -111,7 +110,7 @@ int mgs_client_add(struct obd_device *obd,
 /* Remove client export data from the MGS */
 int mgs_client_free(struct obd_export *exp)
 {
-        return 0; 
+        return 0;
 }
 
 /* Same as mds_fid2dentry */
