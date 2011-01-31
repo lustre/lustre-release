@@ -51,6 +51,7 @@
 # include <linux/pagemap.h>
 # include <linux/pagevec.h>
 # include <linux/slab.h>
+# include <linux/sched.h>
 # ifdef HAVE_MM_INLINE
 #  include <linux/mm_inline.h>
 # endif
