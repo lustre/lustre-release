@@ -43,7 +43,11 @@ CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
 
 static int nconnds = 4;
 CFS_MODULE_PARM(nconnds, "i", int, 0444,
-                "# connection daemons");
+                "# connection daemons while starting");
+
+static int nconnds_max = 64;
+CFS_MODULE_PARM(nconnds_max, "i", int, 0444,
+                "max # connection daemons");
 
 static int min_reconnectms = 1000;
 CFS_MODULE_PARM(min_reconnectms, "i", int, 0644,
@@ -168,6 +172,7 @@ ksock_tunables_t ksocknal_tunables = {
         .ksnd_peerrtrcredits  = &peer_buffer_credits,
         .ksnd_peertimeout     = &peer_timeout,
         .ksnd_nconnds         = &nconnds,
+        .ksnd_nconnds_max     = &nconnds_max,
         .ksnd_min_reconnectms = &min_reconnectms,
         .ksnd_max_reconnectms = &max_reconnectms,
         .ksnd_eager_ack       = &eager_ack,
