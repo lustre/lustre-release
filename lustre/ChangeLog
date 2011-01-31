@@ -89,6 +89,12 @@ Severity   : normal
 Bugzilla   : 24360
 Description: LBUG in the mfs_verify_child()
 
+Severity   : normal
+Bugzilla   : 23499
+Description: ASSERTION(atomic_read(&client_stat->nid_exp_ref_count) == 0)
+Details    : Reconnecting from a different nid causes old per-nid stats not to be
+             released.
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
