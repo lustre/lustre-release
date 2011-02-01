@@ -592,10 +592,14 @@ test_10() {
 
     run_e2fsck $MMP_MDS_FAILOVER $MMP_MDSDEV "-fn"
     rc=${PIPESTATUS[0]}
-    if [ $rc -ne 8 ]; then
-        error_noexit "e2fsck $MMP_MDSDEV on $MMP_MDS_FAILOVER should return 8"
+
+    # e2fsck is always called with -n, i.e.
+    # 0 (No errors) and 4 (File system errors left uncorrected) are the only acceptable
+    # e2fsck exit codes in case
+    if [ $rc -ne 0 ] && [ $rc -ne 4 ]; then
+        error_noexit "e2fsck $MMP_MDSDEV on $MMP_MDS_FAILOVER returned $rc"
         stop $MMP_MDS || return ${PIPESTATUS[0]}
-        [ $rc -ne 0 ] && return $rc || return 1
+        return $rc
     fi
 
     log "Mounting $MMP_OSTDEV on $MMP_OSS..."
@@ -608,10 +612,8 @@ test_10() {
 
     run_e2fsck $MMP_OSS_FAILOVER $MMP_OSTDEV "-fn"
     rc=${PIPESTATUS[0]}
-    if [ $rc -ne 8 ]; then
-        error_noexit "e2fsck $MMP_OSTDEV on $MMP_OSS_FAILOVER should return 8"
-        stop_services primary || return ${PIPESTATUS[0]}
-        [ $rc -ne 0 ] && return $rc || return 1
+    if [ $rc -ne 0 ] && [ $rc -ne 4 ]; then
+        error_noexit "e2fsck $MMP_OSTDEV on $MMP_OSS_FAILOVER returned $rc"
     fi
 
     stop_services primary || return ${PIPESTATUS[0]}
