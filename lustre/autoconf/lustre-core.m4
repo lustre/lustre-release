@@ -1764,18 +1764,28 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.32 has new BDI interface.
-AC_DEFUN([LC_NEW_BACKING_DEV_INFO],
-[AC_MSG_CHECKING([if backing_dev_info has a bdi_list field])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/backing-dev.h>
+# 2.6.32 has bdi_register() functions.
+AC_DEFUN([LC_EXPORT_BDI_REGISTER],
+[LB_CHECK_SYMBOL_EXPORT([bdi_register],
+[mm/backing-dev.c],[
+        AC_DEFINE(HAVE_BDI_REGISTER, 1,
+                [bdi_register function is present])
 ],[
-        struct backing_dev_info bdi;
-        memset(&bdi.bdi_list, 0x00, sizeof(bdi.bdi_list));
+])
+])
+
+# 2.6.32 add s_bdi for super block
+AC_DEFUN([LC_SB_BDI],
+[AC_MSG_CHECKING([if super_block has s_bdi field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct super_block sb;
+        sb.s_bdi = NULL;
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_NEW_BACKING_DEV_INFO, 1,
-                  [backing_dev_info has a bdi_list field])
+        AC_DEFINE(HAVE_SB_BDI, 1,
+                  [super_block has s_bdi field])
 ],[
         AC_MSG_RESULT(no)
 ])
@@ -1989,7 +1999,8 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_BLK_QUEUE_LOG_BLK_SIZE
 
           # 2.6.32
-          LC_NEW_BACKING_DEV_INFO
+          LC_EXPORT_BDI_REGISTER
+          LC_SB_BDI
           if test x$enable_server = xyes ; then
               LC_WALK_SPACE_HAS_DATA_SEM
           fi

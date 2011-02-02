@@ -998,7 +998,7 @@ out:
 }
 /* end COMPAT_146 */
 
-#ifdef HAVE_NEW_BACKING_DEV_INFO
+#ifdef HAVE_BDI_REGISTER
 static atomic_t ll_bdi_num = ATOMIC_INIT(0);
 #endif
 
@@ -1134,16 +1134,19 @@ int ll_fill_super(struct super_block *sb)
                 GOTO(out_free, err);
 
 #ifdef HAVE_BDI_INIT
-        err = bdi_init(&lsi->bdi);
+        err = bdi_init(&lsi->lsi_bdi);
         if (err)
                 GOTO(out_free, err);
+        lsi->lsi_flags |= LSI_BDI_INITIALIZED;
+        lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
+#ifdef HAVE_BDI_REGISTER
+        err = bdi_register(&lsi->lsi_bdi, NULL, "lustre-%d",
+                           atomic_inc_return(&ll_bdi_num));
 #endif
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-        lsi->bdi.name = "lustre";
-        lsi->bdi.capabilities = BDI_CAP_MAP_COPY;
-        err = bdi_register(&lsi->bdi, NULL, "lustre-%d",
-                                atomic_inc_return(&ll_bdi_num));
-        sb->s_bdi = &lsi->bdi;
+#endif
+
+#ifdef HAVE_SB_BDI
+        sb->s_bdi    = &lsi->lsi_bdi;
 #endif
 
 out_free:
@@ -1208,13 +1211,10 @@ void ll_put_super(struct super_block *sb)
         if (profilenm)
                 class_del_profile(profilenm);
 
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-        if (lsi->bdi.wb_cnt > 0) {
-#endif
 #ifdef HAVE_BDI_INIT
-                bdi_destroy(&lsi->bdi);
-#endif
-#ifdef HAVE_NEW_BACKING_DEV_INFO
+        if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
+                bdi_destroy(&lsi->lsi_bdi);
+                lsi->lsi_flags &= ~LSI_BDI_INITIALIZED;
         }
 #endif
 
@@ -2014,7 +2014,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         /* OIDEBUG(inode); */
 
         /* initializing backing dev info. */
-        inode->i_mapping->backing_dev_info = &(s2lsi(inode->i_sb)->bdi);
+        inode->i_mapping->backing_dev_info = &s2lsi(inode->i_sb)->lsi_bdi;
 
         if (S_ISREG(inode->i_mode)) {
                 struct ll_sb_info *sbi = ll_i2sbi(inode);

@@ -95,6 +95,10 @@ Description: ASSERTION(atomic_read(&client_stat->nid_exp_ref_count) == 0)
 Details    : Reconnecting from a different nid causes old per-nid stats not to be
              released.
 
+Severity   : normal
+Bugzilla   : 23064
+Description: create proper macro check for bdi interface.
+
 -------------------------------------------------------------------------------
 
 2010-10-29 Oracle, Inc.
