@@ -13,6 +13,14 @@ xxxx-xx-xx Oracle, Inc.
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
+Bugzilla   : 24218
+Description: fix contention on ksock_tx_t
+
+Severity   : normal
+Bugzilla   : 14846
+Description: dynamically grow/shrink connd threads pool
+
+Severity   : normal
 Bugzilla   : 21776
 Description: ptlrpcd stuck in lnet allocations under memory pressure
 Details    : Set PF_MEMALLOC on outgoing path to prevent deadlock on memory
