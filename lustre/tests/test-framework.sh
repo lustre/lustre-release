@@ -2921,6 +2921,8 @@ skip_env () {
 skip () {
     echo
     log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
+    [ "$ALWAYS_SKIPPED" ] && \
+        skip_logged ${TESTNAME} "$@" || true
     [ "$TESTSUITELOG" ] && \
         echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
 }
@@ -2936,8 +2938,11 @@ build_test_filter() {
         log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
     [ "$EXCEPT_SLOW" ] && \
         log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
-    for E in $EXCEPT $ALWAYS_EXCEPT; do
+    for E in $EXCEPT; do
         eval EXCEPT_${E}=true
+    done
+    for E in $ALWAYS_EXCEPT; do
+        eval EXCEPT_ALWAYS_${E}=true
     done
     for E in $EXCEPT_SLOW; do
         eval EXCEPT_SLOW_${E}=true
@@ -2957,6 +2962,7 @@ basetest() {
 
 # print a newline if the last test was skipped
 export LAST_SKIPPED=
+export ALWAYS_SKIPPED=
 #
 # Main entry into test-framework. This is called with the name and
 # description of a test. The name is used to find the function to run
@@ -2998,6 +3004,20 @@ run_test() {
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
+    testname=EXCEPT_ALWAYS_$1
+    if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
+        ALWAYS_SKIPPED="y"
+        TESTNAME=test_$1 skip "skipping ALWAYS excluded test $1"
+        return 0
+    fi
+    testname=EXCEPT_ALWAYS_$base
+    if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
+        ALWAYS_SKIPPED="y"
+        TESTNAME=test_$1 skip "skipping ALWAYS excluded test $1 (base $base)"
+        return 0
+    fi
     testname=EXCEPT_SLOW_$1
     if [ ${!testname}x != x ]; then
         LAST_SKIPPED="y"
@@ -3012,6 +3032,7 @@ run_test() {
     fi
 
     LAST_SKIPPED=
+    ALWAYS_SKIPPED=
     run_one_logged $1 "$2"
 
     return $?
@@ -3149,6 +3170,14 @@ run_one_logged() {
     fi
 
     return 0
+}
+
+#
+# Print information of skipped tests to result.yml
+#
+skip_logged(){
+    log_sub_test_begin $1
+    log_sub_test_end "SKIP" "0" "0" "\"$2\""
 }
 
 canonical_path() {
@@ -4377,7 +4406,7 @@ init_logging() {
         echo "Logging to local directory: $LOGDIR"
     fi
 
-    yml_nodes_file $LOGDIR
+    yml_nodes_file $LOGDIR >> $YAML_LOG
     yml_results_file >> $YAML_LOG
 }
 
@@ -4390,11 +4419,11 @@ log_test_status() {
 }
 
 log_sub_test_begin() {
-    yml_log_sub_test_begin $@ >> $YAML_LOG
+    yml_log_sub_test_begin "$@" >> $YAML_LOG
 }
 
 log_sub_test_end() {
-    yml_log_sub_test_end $@ >> $YAML_LOG
+    yml_log_sub_test_end "$@" >> $YAML_LOG
 }
 
 run_llverdev()

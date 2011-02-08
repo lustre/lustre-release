@@ -1,0 +1,313 @@
+#!/bin/bash
+#
+#
+# auster - drive lustre tests
+# TODO
+#  1. --time-limt <seconds>  add per test time limit, kill test if it runs to long
+#  2. Read list of tests to run from a file. same syntax as cli, but one test per line
+#  3. Run test on remote node
+#  4. Use long opts for auster options
+
+set -e
+
+export TF_FAIL=/tmp/tf.fail
+
+usage() {
+    cat <<EOF
+Usage ${0##*/} [options]  suite [suite optoins] [suite [suite options]]
+Run Lustre regression tests suites.
+      -c CONFIG Test environment config file
+      -d LOGDIR Top level directory for logs
+      -f STR    Config name (cfg/<name>.sh)
+      -i N      Repeat tests N times (default 1). A new directory
+                will be created under LOGDIR for each iteration.
+      -k        Don't stop when subtests fail
+      -R        Remount lustre between tests
+      -r        Reformat (during initial configuration if needed)
+      -s        SLOW=yes
+      -v        Verbose mode
+      -l        No logger to Maloo database
+      -h        This help.
+
+Suite options
+These are suite specific options that can be specified after each suite on
+the command line.
+   suite-name  [options]
+      --only LIST         Run only specific list of subtests
+      --except LIST       Skip list of subtests
+      --start-at SUBTEST  Start testing from subtest
+      --stop-at SUBTEST   Stop testing at subtest
+      --time-limit LIMIT  Don't allow this suite to run longer
+                          than LIMT seconds. [UNIMPLEMENTED]
+
+Example usage:
+Run all of sanity and all of replay-single except for 70b with SLOW=y using
+the default "local" configuration.
+
+  auster -s sanity replay-single --except 70b
+
+Run test listed in batch-list 5 times  using large config.
+
+  auster -f large -r 5 -b batch-list
+
+EOF
+    exit
+}
+
+dry_run=false
+do_reset=false
+verbose=false
+repeat_count=1
+logging=true
+reformat=false
+test_logs_dir=/tmp/test_logs
+export SLOW=no
+export ${NAME:=local}
+while getopts "c:d:nkf:i:rRslhv" opt
+do
+    case "$opt" in
+	c) CONFIG=$OPTARG;;
+	d) test_logs_dir=$OPTARG;;
+	k) export FAIL_ON_ERROR=false;;
+        n) dry_run=:;;
+        v) verbose=:;;
+	i) repeat_count=$OPTARG;;
+	f) NAME=$OPTARG;;
+	R) do_reset=:;;
+	r) reformat=:;;
+	s) SLOW=yes;;
+	l) logging=false;;
+        h|\?) usage;;
+    esac
+done
+shift $((OPTIND -1))
+
+if [ $logging = true ] ; then
+  if [ ! -r ~/.maloorc ] ; then
+    echo "A ~/.maloorc file is required in order to upload results."
+    echo "  * Use -l to run without results upload (you can upload results later)"
+    echo "  or "
+    echo "  * Visit your maloo web interface to download your .maloorc file"
+    exit -1
+  fi
+fi
+
+#
+# Various paramters for the tests scripts
+# 
+#: ${SIZE:=$((RAMKB * 2))}
+#: ${RSIZE:=512}
+#: ${UID:=1000}
+#: ${MOUNT=/mnt/lustre}
+#: ${MOUNT2:=${MOUNT}2}
+#: ${COUNT:=1000}
+#: ${TMP:=/tmp}
+
+reset_lustre() {
+    if $do_reset; then
+	stopall
+	setupall
+    fi
+}
+
+STARTTIME=`date +%s`
+
+: ${LUSTRE:=$(cd $(dirname $0)/..; echo $PWD)}
+. $LUSTRE/tests/test-framework.sh
+init_test_env
+
+print_summary () {
+    trap 0
+    local form="%-13s %-17s %s\n"
+    printf "$form" "status" "script" "skipped tests E(xcluded) S(low)"
+    echo "------------------------------------------------------------------------------------"
+    echo "Done!"
+}
+
+
+setup_if_needed() {
+    nfs_client_mode && return
+    auster_cleanup=false
+
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if $(echo $MOUNTED | grep -w -q $MOUNT); then
+        check_config_clients $MOUNT
+       # init_facets_vars
+       # init_param_vars
+        return
+    fi
+
+    echo "Lustre is not mounted, trying to do setup ... "
+    $reformat && formatall
+    setupall
+
+    MOUNTED=$(mounted_lustre_filesystems)
+    if ! $(echo $MOUNTED | grep -w -q $MOUNT); then
+        echo "Lustre is not mounted after setup! "
+        exit 1
+    fi
+    auster_cleanup=true
+}
+
+cleanup_if_needed() {
+    if $auster_cleanup; then
+	cleanupall
+    fi
+}
+
+find_script_in_path() {
+    target=$1
+    path=$2
+    for dir in $(tr : " " <<< $path); do
+      if [ -e $dir/$target ]; then
+	  echo $dir/$target
+          return 0
+      fi
+      if [ -e $dir/$target.sh ]; then
+	  echo $dir/$target.sh
+          return 0
+      fi
+    done
+    return 1
+}
+
+title() {
+    log "-----============= acceptance-small: "$*" ============----- `date`"
+}
+
+doit() {
+    if $dry_run; then
+        printf "Would have run: %s\n" "$*"
+        return 0
+    fi
+    if $verbose; then
+        printf "Running: %s\n" "$*" 
+    fi
+    "$@"
+}
+
+
+run_suite() {
+    suite_name=$1
+    suite_script=$2
+    only=$3
+    title $suite_name
+    log_test $suite_name
+
+    local start_ts=$(date +%s)
+    doit bash $suite_script $only
+    rc=$?
+    duration=$(($(date +%s) - $start_ts))
+    if [ -f $TF_FAIL -o $rc -ne 0 ]; then
+        status="FAIL"
+    else
+        status="PASS"
+    fi
+    log_test_status $duration $status
+
+    reset_lustre
+}
+
+run_suite_logged() {
+    local suite_name=${1%.sh}
+    local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
+    local suite_only=${suite}_ONLY
+
+    suite_script=$(find_script_in_path $suite_name $PATH:$LUSTRE/tests)
+
+    if [[ -z $suite_script ]]; then
+        echo "Can't find test script for $suite_name"
+        return 1
+    fi
+    
+    echo "run_suite $suite_name $suite_script ${!suite_only}"
+    local log_name=${suite_name}.suite_log.$(hostname).log
+    run_suite $suite_name $suite_script "${!suite_only}"  > $LOGDIR/$log_name 2>&1
+#    run_suite $suite_name $suite_script "${!suite_only}" 2>&1 |tee  $LOGDIR/$log_name
+
+}
+
+#
+# Add this to test-framework somewhere.
+reset_logging() {
+    export LOGDIR=${1:-/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)}
+    unset YAML_LOG
+    init_logging
+}
+
+split_commas() {
+    echo "${*//,/ }"
+}
+
+run_suites() {
+    local n=0
+    local argv=("$@")
+    local basedir=${test_logs_dir}/$(date +%Y-%m-%d)/$(date +%H%M%S)
+    while ((n < repeat_count)); do
+	local RC=0
+	local logdir=$basedir
+	((repeat_count > 1)) && logdir="$logdir/$n"
+	reset_logging $logdir
+	set -- "${argv[@]}"
+	while [[ -n $1 ]]; do
+	    unset ONLY EXCEPT START_AT STOP_AT
+	    local opts=""
+	    local time_limit=""
+#	    echo "argv: $*"
+	    suite=$1
+	    shift;
+	    while [[ -n $1 ]]; do
+		case "$1" in
+		    --only)
+			shift;
+			export ONLY=$(split_commas $1)
+			opts+="ONLY=$ONLY ";;
+		    --except)
+			shift;
+			export EXCEPT=$(split_commas $1)
+			opts+="EXCEPT=$EXCEPT ";;
+		    --start-at)
+			shift;
+			export START_AT=$1
+			opts+="START_AT=$START_AT ";;
+	            --stop-at)
+			shift;
+			export STOP_AT=$1
+			opts+="STOP_AT=$STOP_AT ";;
+		    --time-limit)
+			shift;
+			time_limit=$1;;
+		    *)
+			break;;
+		esac
+		shift
+	    done
+	    echo "running: $suite $opts"
+	    run_suite_logged $suite || RC=$?
+	    echo $suite returned $RC
+	done
+	if [ $logging = true ]; then
+		./maloo_upload.sh $LOGDIR
+	fi
+	n=$((n + 1))
+    done
+}
+
+export NAME MOUNT START CLEAN
+. ${CONFIG:-$LUSTRE/tests/cfg/$NAME.sh}
+
+assert_env mds_HOST MDS_MKFS_OPTS
+assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
+assert_env FSNAME MOUNT MOUNT2
+
+setup_if_needed
+
+run_suites "$@"
+RC=$?
+
+if [[ $RC -eq 0 ]]; then
+    cleanup_if_needed
+fi
+
+echo "Finished at `date` in $((`date +%s` - $STARTTIME))s"
+echo "$0: completed with rc $RC" && exit $RC
