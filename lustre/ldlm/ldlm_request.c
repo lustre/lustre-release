@@ -488,6 +488,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         int is_replay = *flags & LDLM_FL_REPLAY;
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
+        struct ost_lvb *tmplvb;
         int cleanup_phase = 1;
         ENTRY;
 
@@ -509,12 +510,11 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                         if (reply == NULL)
                                 rc = -EPROTO;
                         if (lvb_len) {
-                                struct ost_lvb *tmplvb;
 
                                 req_capsule_set_size(&req->rq_pill,
                                                      &RMF_DLM_LVB, RCL_SERVER,
                                                      lvb_len);
-                            tmplvb = req_capsule_server_get(&req->rq_pill,
+                                tmplvb = req_capsule_server_get(&req->rq_pill,
                                                                  &RMF_DLM_LVB);
                                 if (tmplvb == NULL)
                                         GOTO(cleanup, rc = -EPROTO);
@@ -606,16 +606,25 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
         /* If the lock has already been granted by a completion AST, don't
          * clobber the LVB with an older one. */
-        if (lvb_len && (lock->l_req_mode != lock->l_granted_mode)) {
-                void *tmplvb;
+        if (lvb_len) {
+                /* We must lock or a racing completion might update lvb
+                   without letting us know and we'll clobber the correct value.
+                   Cannot unlock after the check either, a that still leaves
+                   a tiny window for completion to get in */
+                lock_res_and_lock(lock);
+                if (lock->l_req_mode != lock->l_granted_mode) {
 
-                req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-                                     lvb_len);
-                tmplvb = req_capsule_server_get(&req->rq_pill,
-                                                     &RMF_DLM_LVB);
-                if (tmplvb == NULL)
-                        GOTO(cleanup, rc = -EPROTO);
-                memcpy(lock->l_lvb_data, tmplvb, lvb_len);
+                        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
+                                             RCL_SERVER, lvb_len);
+                        tmplvb = req_capsule_server_get(&req->rq_pill,
+                                                             &RMF_DLM_LVB);
+                        if (tmplvb == NULL) {
+                                unlock_res_and_lock(lock);
+                                GOTO(cleanup, rc = -EPROTO);
+                        }
+                        memcpy(lock->l_lvb_data, tmplvb, lvb_len);
+                }
+                unlock_res_and_lock(lock);
         }
 
         if (!is_replay) {
