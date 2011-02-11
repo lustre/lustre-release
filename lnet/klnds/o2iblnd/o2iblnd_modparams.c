@@ -129,6 +129,15 @@ static int dev_failover = 0;
 CFS_MODULE_PARM(dev_failover, "i", int, 0444,
                "HCA failover for bonding (0 off, 1 on, other values reserved)");
 
+
+static int require_privileged_port = 0;
+CFS_MODULE_PARM(require_privileged_port, "i", int, 0644,
+                "require privileged port when accepting connection");
+
+static int use_privileged_port = 1;
+CFS_MODULE_PARM(use_privileged_port, "i", int, 0644,
+                "use privileged port when initiating connection");
+
 kib_tunables_t kiblnd_tunables = {
         .kib_dev_failover           = &dev_failover,
         .kib_service                = &service,
@@ -151,6 +160,8 @@ kib_tunables_t kiblnd_tunables = {
         .kib_fmr_flush_trigger      = &fmr_flush_trigger,
         .kib_fmr_cache              = &fmr_cache,
         .kib_pmr_pool_size          = &pmr_pool_size,
+        .kib_require_priv_port      = &require_privileged_port,
+        .kib_use_priv_port          = &use_privileged_port
 };
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM

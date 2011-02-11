@@ -125,6 +125,8 @@ typedef struct
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 #endif
+        int              *kib_require_priv_port;/* accept only privileged ports */
+        int              *kib_use_priv_port;    /* use privileged port for active connect */
 } kib_tunables_t;
 
 extern kib_tunables_t  kiblnd_tunables;
