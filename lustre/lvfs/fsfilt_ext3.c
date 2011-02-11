@@ -68,7 +68,7 @@
 # include <quota/quotaio_v2.h>
 # include <quota/quota_tree.h>
 # define V2_DQTREEOFF    QT_TREEOFF
-#else
+#elif defined(HAVE_FS_QUOTAIO_V1_H)
 # include <quotaio_v1.h>
 # include <quotaio_v2.h>
 # include <quota_tree.h>

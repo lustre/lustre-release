@@ -797,6 +797,48 @@ extern quota_interface_t lmv_quota_interface;
         "admin_quotafile_v2.grp"        /** group admin quotafile */\
 }
 
+/*
+ * Definitions of structures for vfsv0 quota format
+ * Source linux/fs/quota/quotaio_v2.h
+ *
+ * The following definitions are normally found in private kernel headers.
+ * However, some sites build Lustre against kernel development headers rather
+ * than than full kernel source, so we provide them here for compatibility.
+ */
+#ifdef __KERNEL__
+# if !defined(HAVE_QUOTAIO_V1_H) && !defined(HAVE_FS_QUOTA_QUOTAIO_V1_H) && \
+     !defined(HAVE_FS_QUOTAIO_V1_H)
+
+#include <linux/types.h>
+#include <linux/quota.h>
+
+#define V2_INITQMAGICS {\
+        0xd9c01f11,     /* USRQUOTA */\
+        0xd9c01927      /* GRPQUOTA */\
+}
+
+/* Header with type and version specific information */
+struct v2_disk_dqinfo {
+        __le32 dqi_bgrace;      /* Time before block soft limit becomes hard limit */
+        __le32 dqi_igrace;      /* Time before inode soft limit becomes hard limit */
+        __le32 dqi_flags;       /* Flags for quotafile (DQF_*) */
+        __le32 dqi_blocks;      /* Number of blocks in file */
+        __le32 dqi_free_blk;    /* Number of first free block in the list */
+        __le32 dqi_free_entry;  /* Number of block with at least one free entry */
+};
+
+/* First generic header */
+struct v2_disk_dqheader {
+        __le32 dqh_magic;       /* Magic number identifying file */
+        __le32 dqh_version;     /* File version */
+};
+#define V2_DQINFOOFF    sizeof(struct v2_disk_dqheader) /* Offset of info header in file */
+#define QT_TREEOFF      1                               /* Offset of tree in file in blocks */
+#define V2_DQTREEOFF    QT_TREEOFF
+
+# endif /* !defined(HAVE_QUOTAIO_V1_H) ... */
+#endif  /* __KERNEL__ */
+
 /** @} quota */
 
 #endif /* _LUSTRE_QUOTA_H */

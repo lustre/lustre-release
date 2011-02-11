@@ -1921,11 +1921,15 @@ AC_DEFUN([LC_HAVE_QUOTAIO_V1_H],
 [LB_CHECK_FILE([$LINUX/include/linux/quotaio_v1.h],[
         AC_DEFINE(HAVE_QUOTAIO_V1_H, 1,
                 [kernel has include/linux/quotaio_v1.h])
+],[LB_CHECK_FILE([$LINUX/fs/quotaio_v1.h],[
+               AC_DEFINE(HAVE_FS_QUOTAIO_V1_H, 1,
+                [kernel has fs/quotaio_v1.h])
 ],[LB_CHECK_FILE([$LINUX/fs/quota/quotaio_v1.h],[
                AC_DEFINE(HAVE_FS_QUOTA_QUOTAIO_V1_H, 1,
                 [kernel has fs/quota/quotaio_v1.h])
 ],[
         AC_MSG_RESULT([no])
+])
 ])
 ])
 ])
@@ -2121,7 +2125,11 @@ EXTRA_KCFLAGS="$tmp_flags"
 
 #
 # LC_QUOTA64
-# linux kernel have 64-bit limits support
+#
+# Check if kernel has been patched for 64-bit quota limits support.
+# The upstream version of this patch in RHEL6 2.6.32 kernels introduces
+# the constant QFMT_VFS_V1 in include/linux/quota.h, so we can check for
+# that in the absence of quotaio_v1.h in the kernel headers.
 #
 AC_DEFUN([LC_QUOTA64],[
         AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
@@ -2134,13 +2142,15 @@ EXTRA_KCFLAGS="-I$LINUX/fs"
                 # include <linux/quotaio_v2.h>
                 int versions[] = V2_INITQVERSIONS_R1;
                 struct v2_disk_dqblk_r1 dqblk_r1;
-                #else
-                # ifdef HAVE_FS_QUOTA_QUOTAIO_V1_H
-                #  include <quota/quotaio_v2.h>
-                # else
-                #  include <quotaio_v2.h>
-                # endif
+                #elif defined(HAVE_FS_QUOTA_QUOTAIO_V1_H)
+                # include <quota/quotaio_v2.h>
                 struct v2r1_disk_dqblk dqblk_r1;
+                #elif defined(HAVE_FS_QUOTAIO_V1_H)
+                # include <quotaio_v2.h>
+                struct v2r1_disk_dqblk dqblk_r1;
+                #else
+                #include <linux/quota.h>
+                int ver = QFMT_VFS_V1;
                 #endif
         ],[],[
                 AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
