@@ -191,7 +191,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 pga[i].count = min_t(int, CFS_PAGE_SIZE -(user_addr & ~CFS_PAGE_MASK),
                                      length);
 
-                pga[i].flag = OBD_BRW_SYNC;
+                pga[i].flag = OBD_BRW_SYNC | (cfs_capable(CFS_CAP_SYS_RESOURCE) ? OBD_BRW_NOQUOTA : 0);
                 if (!locked)
                         pga[i].flag |= OBD_BRW_SRVLOCK;
 
