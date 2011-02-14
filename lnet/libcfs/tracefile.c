@@ -894,8 +894,12 @@ int trace_set_debug_mb(int mb)
         int limit = trace_max_debug_mb();
         struct trace_cpu_data *tcd;
 
-        if (mb < num_possible_cpus())
+        if (mb < num_possible_cpus()) {
+                printk(KERN_ERR "Cannot set debug_mb to %d, "
+                       "the value should be >= %d\n",
+                       mb, num_possible_cpus());
                 return -EINVAL;
+        }
 
         if (mb > limit) {
                 printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
