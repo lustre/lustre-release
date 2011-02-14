@@ -2596,7 +2596,7 @@ exit_status () {
     local status=0
     local log=$TESTSUITELOG
 
-    [ -f "$log" ] && grep -q FAIL $log && status=1
+    [ -f "$log" ] && egrep -q .FAIL $log && status=1
     exit $status
 }
 
@@ -2752,7 +2752,7 @@ trace() {
 
 complete () {
     equals_msg $1 test complete, duration $2 sec
-    [ -f "$TESTSUITELOG" ] && egrep .FAIL $TESTSUITELOG || true
+    [ -f "$TESTSUITELOG" ] && grep ".IGNORE\|.FAIL" $TESTSUITELOG || true
     echo duration $2 >>$TESTSUITELOG
 }
 
