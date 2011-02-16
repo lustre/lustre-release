@@ -336,10 +336,10 @@ if test x$withval = xyes ; then
 	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
 	E2FSPROGS="ldiskfsprogs"
 	MKE2FS="mkfs.ldiskfs"
-	DEBUGFS="debug.ldiskfs"
-	TUNE2FS="tune.ldiskfs"
+	DEBUGFS="debugfs.ldiskfs"
+	TUNE2FS="tunefs.ldiskfs"
 	E2LABEL="label.ldiskfs"
-	DUMPE2FS="dump.ldiskfs"
+	DUMPE2FS="dumpfs.ldiskfs"
 	E2FSCK="fsck.ldiskfs"
 	AC_MSG_RESULT([enabled])
 else
