@@ -369,15 +369,17 @@ int main(int argc, char *argv[])
                         done = 0;
                         do {
                                 ret = write(fd, write_buf+done,write_size-done);
-                                if (verbose > 1 || ret <= 0) {
-                                        rprintf(rank, n, ret <= 0,
+                                if (verbose > 1 || ret < 0) {
+                                        rprintf(rank, n,
+                                                ret < 0 && errno != EINTR,
                                                 "write %d/%d @ %d: %s\n",
                                                 ret + done, write_size, done,
                                                 strerror(errno));
-                                        if (ret <= 0)
+                                        if (ret < 0 && errno != EINTR)
                                                 break;
                                 }
-                                done += ret;
+                                if (ret > 0)
+                                        done += ret;
                         } while (done != write_size);
                 }
 
@@ -396,17 +398,19 @@ int main(int argc, char *argv[])
                                 ret = write(fd, append_buf + done,
                                             append_size - done);
                                 if (ret < 0) {
-                                        rprintf(rank, n, ret < 0,
+                                        rprintf(rank, n, errno != EINTR,
                                                 "append %u/%u: %s\n",
                                                 ret + done, append_size,
                                                 strerror(errno));
-                                        break;
+                                        if (errno != EINTR)
+                                                break;
                                 } else if (verbose > 1 || ret != append_size) {
                                         rprintf(rank, n, ret != append_size,
                                                 "append %u/%u\n",
                                                 ret + done, append_size);
                                 }
-                                done += ret;
+                                if (ret > 0)
+                                        done += ret;
                         } while (done != append_size);
                 } else if (rank == trunc_rank) {
                         /* XXX: truncating the same file descriptor as the
