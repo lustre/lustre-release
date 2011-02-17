@@ -11,5 +11,6 @@ subdir-m += mgc
 @SERVER_TRUE@subdir-m += quota osp lod
 @CLIENT_TRUE@subdir-m += mdc lmv llite fld
 @ZFS_ENABLED_TRUE@subdir-m += osd-zfs
+@OSDADDON@
 
 @INCLUDE_RULES@

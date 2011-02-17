@@ -2274,6 +2274,46 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_OSD_ADDON
+#
+# configure support for optional OSD implementation
+#
+AC_DEFUN([LC_OSD_ADDON],
+[AC_MSG_CHECKING([for osd])
+AC_ARG_WITH([osd],
+	AC_HELP_STRING([--with-osd=path],
+                       [set path to optional osd]),
+        [
+		case $with_osd in
+			no)     ENABLEOSDADDON=0
+				;;
+			*)	OSDADDON="${with_osd}"
+				ENABLEOSDADDON=1
+				;;
+		esac
+	], [
+		ENABLEOSDADDON=0
+	])
+if test $ENABLEOSDADDON -eq 0; then
+	AC_MSG_RESULT([no])
+	OSDADDON=
+else
+	OSDMODNAME=`basename $OSDADDON`
+	if test -e $LUSTRE/$OSDMODNAME; then
+		AC_MSG_RESULT([can't link])
+		OSDADDON=
+	elif ln -s $OSDADDON $LUSTRE/$OSDMODNAME; then
+		AC_MSG_RESULT([$OSDMODNAME])
+		OSDADDON="subdir-m += $OSDMODNAME"
+	else
+		AC_MSG_RESULT([can't link])
+		OSDADDON=
+	fi
+fi
+AC_SUBST(OSDADDON)
+])
+
+#
 # LC_CONFIGURE
 #
 # other configure checks
