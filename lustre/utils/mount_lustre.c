@@ -293,7 +293,7 @@ int parse_options(char *orig_options, int *flagp)
                                 retry = MAX_RETRIES;
                         else if (retry < 0)
                                 retry = 0;
-                } else if (strncmp(opt, "force", 5) == 0) {
+                } else if (strcmp(opt, "force") == 0) {
                         //XXX special check for 'force' option
                         ++force;
                         printf("force: %d\n", force);
