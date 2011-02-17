@@ -2824,9 +2824,9 @@ run_one() {
     #check_mds
     cd $SAVE_PWD
     reset_fail_loc
-    check_grant ${testnum} || error "check_grant $testnum failed with $?"
-    check_catastrophe || error "LBUG/LASSERT detected"
-    ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
+    check_grant ${testnum} || $TEST_FAILED || error "check_grant $testnum failed"
+    check_catastrophe || $TEST_FAILED || error "LBUG/LASSERT detected"
+    ps auxww | grep -v grep | grep -q multiop && ($TEST_FAILED || error "multiop still running")
     pass "($((`date +%s` - $BEFORE))s)"
     TEST_FAILED=false
     unset TESTNAME
