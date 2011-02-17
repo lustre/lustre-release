@@ -13,7 +13,7 @@ set -e
 export TF_FAIL=/tmp/tf.fail
 
 usage() {
-    cat <<EOF
+    less -F <<EOF 
 Usage ${0##*/} [options]  suite [suite optoins] [suite [suite options]]
 Run Lustre regression tests suites.
       -c CONFIG Test environment config file
@@ -26,7 +26,8 @@ Run Lustre regression tests suites.
       -r        Reformat (during initial configuration if needed)
       -s        SLOW=yes
       -v        Verbose mode
-      -l        No logger to Maloo database
+      -l        Send logs to the Maloo database after run 
+                  (can be done later by running maloo_upload.sh)
       -h        This help.
 
 Suite options
@@ -58,7 +59,7 @@ dry_run=false
 do_reset=false
 verbose=false
 repeat_count=1
-logging=true
+upload_logs=false
 reformat=false
 test_logs_dir=/tmp/test_logs
 export SLOW=no
@@ -76,21 +77,11 @@ do
 	R) do_reset=:;;
 	r) reformat=:;;
 	s) SLOW=yes;;
-	l) logging=false;;
+	l) upload_logs=true;;
         h|\?) usage;;
     esac
 done
 shift $((OPTIND -1))
-
-if [ $logging = true ] ; then
-  if [ ! -r ~/.maloorc ] ; then
-    echo "A ~/.maloorc file is required in order to upload results."
-    echo "  * Use -l to run without results upload (you can upload results later)"
-    echo "  or "
-    echo "  * Visit your maloo web interface to download your .maloorc file"
-    exit -1
-  fi
-fi
 
 #
 # Various paramters for the tests scripts
@@ -222,15 +213,18 @@ run_suite_logged() {
     
     echo "run_suite $suite_name $suite_script ${!suite_only}"
     local log_name=${suite_name}.suite_log.$(hostname).log
-    run_suite $suite_name $suite_script "${!suite_only}"  > $LOGDIR/$log_name 2>&1
-#    run_suite $suite_name $suite_script "${!suite_only}" 2>&1 |tee  $LOGDIR/$log_name
+    if $verbose; then
+	run_suite $suite_name $suite_script "${!suite_only}" 2>&1 |tee  $LOGDIR/$log_name
+    else
+	run_suite $suite_name $suite_script "${!suite_only}"  > $LOGDIR/$log_name 2>&1
+    fi
 
 }
 
 #
 # Add this to test-framework somewhere.
 reset_logging() {
-    export LOGDIR=${1:-/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)}
+    export LOGDIR=${1:-${test_logs_dir}/$(date +%Y-%m-%d)/$(date +%H%M%S)}
     unset YAML_LOG
     init_logging
 }
@@ -286,12 +280,26 @@ run_suites() {
 	    run_suite_logged $suite || RC=$?
 	    echo $suite returned $RC
 	done
-	if [ $logging = true ]; then
-		./maloo_upload.sh $LOGDIR
+	if $upload_logs; then
+	    $upload_script
 	fi
 	n=$((n + 1))
     done
 }
+
+if [ $upload_logs = true ] ; then
+    upload_script=$(find_script_in_path maloo_upload.sh $PATH:$LUSTRE/tests)
+    if [[ -z $upload_script ]]; then
+        echo "Can't find maloo_upload.sh script"
+        exit 1 
+    fi
+
+    if [ ! -r ~/.maloorc ] ; then
+        echo "A ~/.maloorc file is required in order to upload results."
+        echo "Visit your maloo web interface to download your .maloorc file"
+        exit 1
+    fi
+fi
 
 export NAME MOUNT START CLEAN
 . ${CONFIG:-$LUSTRE/tests/cfg/$NAME.sh}
