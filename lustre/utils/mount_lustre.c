@@ -463,7 +463,7 @@ set_params:
                         if (verbose)
                                 fprintf(stderr, "warning: opening %s: %s\n",
                                         real_path, strerror(errno));
-                        return rc;
+                        return 0;
                 }
 
                 if (atoi(buf) >= md_stripe_cache_size)
