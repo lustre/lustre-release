@@ -159,7 +159,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
         if (obd_ioctl_getdata(&buf, &len, (void *)arg)) {
                 CERROR("OBD ioctl: data error\n");
-                GOTO(out, err = -EINVAL);
+                RETURN(-EINVAL);
         }
         data = (struct obd_ioctl_data *)buf;
 

@@ -412,7 +412,7 @@ void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool)
                 cfs_list_del(&req->rq_list);
                 LASSERT(req->rq_reqbuf);
                 LASSERT(req->rq_reqbuf_len == pool->prp_rq_size);
-                OBD_FREE(req->rq_reqbuf, pool->prp_rq_size);
+                OBD_FREE_LARGE(req->rq_reqbuf, pool->prp_rq_size);
                 OBD_FREE(req, sizeof(*req));
         }
         cfs_spin_unlock(&pool->prp_lock);
@@ -445,7 +445,7 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
                 OBD_ALLOC(req, sizeof(struct ptlrpc_request));
                 if (!req)
                         return;
-                OBD_ALLOC_GFP(msg, size, CFS_ALLOC_STD);
+                OBD_ALLOC_LARGE(msg, size);
                 if (!msg) {
                         OBD_FREE(req, sizeof(struct ptlrpc_request));
                         return;

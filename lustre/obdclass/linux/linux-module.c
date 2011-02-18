@@ -120,9 +120,11 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 RETURN(-EINVAL);
         }
 
-        /* XXX allocate this more intelligently, using kmalloc when
-         * appropriate */
-        OBD_VMALLOC(*buf, hdr.ioc_len);
+        /* When there are lots of processes calling vmalloc on multi-core
+         * system, the high lock contention will hurt performance badly,
+         * obdfilter-survey is an example, which relies on ioctl. So we'd
+         * better avoid vmalloc on ioctl path. LU-66 */
+        OBD_ALLOC_LARGE(*buf, hdr.ioc_len);
         if (*buf == NULL) {
                 CERROR("Cannot allocate control buffer of len %d\n",
                        hdr.ioc_len);
@@ -133,13 +135,13 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
         err = cfs_copy_from_user(*buf, (void *)arg, hdr.ioc_len);
         if ( err ) {
-                OBD_VFREE(*buf, hdr.ioc_len);
+                OBD_FREE_LARGE(*buf, hdr.ioc_len);
                 RETURN(err);
         }
 
         if (obd_ioctl_is_invalid(data)) {
                 CERROR("ioctl not correctly formatted\n");
-                OBD_VFREE(*buf, hdr.ioc_len);
+                OBD_FREE_LARGE(*buf, hdr.ioc_len);
                 RETURN(-EINVAL);
         }
 
@@ -198,8 +200,13 @@ static int obd_class_release(struct inode * inode, struct file * file)
 }
 
 /* to control /dev/obd */
+#ifdef HAVE_UNLOCKED_IOCTL
+static long obd_class_ioctl(struct file *filp, unsigned int cmd,
+                            unsigned long arg)
+#else
 static int obd_class_ioctl(struct inode *inode, struct file *filp,
                            unsigned int cmd, unsigned long arg)
+#endif
 {
         int err = 0;
         ENTRY;
@@ -218,7 +225,11 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
         .owner   = THIS_MODULE,
+#if HAVE_UNLOCKED_IOCTL
+        .unlocked_ioctl = obd_class_ioctl, /* unlocked_ioctl */
+#else
         .ioctl   = obd_class_ioctl,     /* ioctl */
+#endif
         .open    = obd_class_open,      /* open */
         .release = obd_class_release,   /* release */
 };

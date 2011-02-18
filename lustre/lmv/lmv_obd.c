@@ -2694,13 +2694,13 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 RETURN(mea_size);
 
         if (*lmmp && !lsm) {
-                OBD_FREE(*lmmp, mea_size);
+                OBD_FREE_LARGE(*lmmp, mea_size);
                 *lmmp = NULL;
                 RETURN(0);
         }
 
         if (*lmmp == NULL) {
-                OBD_ALLOC(*lmmp, mea_size);
+                OBD_ALLOC_LARGE(*lmmp, mea_size);
                 if (*lmmp == NULL)
                         RETURN(-ENOMEM);
         }
@@ -2744,14 +2744,14 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 return mea_size;
 
         if (*lsmp != NULL && lmm == NULL) {
-                OBD_FREE(*tmea, mea_size);
+                OBD_FREE_LARGE(*tmea, mea_size);
                 *lsmp = NULL;
                 RETURN(0);
         }
 
         LASSERT(mea_size == lmm_size);
 
-        OBD_ALLOC(*tmea, mea_size);
+        OBD_ALLOC_LARGE(*tmea, mea_size);
         if (*tmea == NULL)
                 RETURN(-ENOMEM);
 

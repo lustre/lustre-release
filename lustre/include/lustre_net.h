@@ -106,10 +106,6 @@
 # endif
 #endif /* __KERNEL__ */
 
-/* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
- * buffers */
-#define SVC_BUF_VMALLOC_THRESHOLD (2 * CFS_PAGE_SIZE)
-
 /**
  * The following constants determine how memory is used to buffer incoming
  * service requests.

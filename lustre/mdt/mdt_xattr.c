@@ -248,7 +248,7 @@ static int mdt_rmtlsetfacl(struct mdt_thread_info *info,
 
         buf->lb_len = rc;
         if (buf->lb_len > 0) {
-                OBD_ALLOC(buf->lb_buf, buf->lb_len);
+                OBD_ALLOC_LARGE(buf->lb_buf, buf->lb_len);
                 if (unlikely(buf->lb_buf == NULL))
                         RETURN(-ENOMEM);
 
@@ -266,7 +266,7 @@ static int mdt_rmtlsetfacl(struct mdt_thread_info *info,
 
 _out:
         if (rc <= 0 && buf->lb_buf != NULL)
-                OBD_FREE(buf->lb_buf, buf->lb_len);
+                OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
         return rc;
 }
 

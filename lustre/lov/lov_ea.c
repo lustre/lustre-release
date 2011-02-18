@@ -105,7 +105,7 @@ struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size)
         oinfo_ptrs_size = sizeof(struct lov_oinfo *) * stripe_count;
         *size = sizeof(struct lov_stripe_md) + oinfo_ptrs_size;
 
-        OBD_ALLOC(lsm, *size);
+        OBD_ALLOC_LARGE(lsm, *size);
         if (!lsm)
                 return NULL;;
 
@@ -122,7 +122,7 @@ struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size)
 err:
         while (--i >= 0)
                 OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab, sizeof(*loi));
-        OBD_FREE(lsm, *size);
+        OBD_FREE_LARGE(lsm, *size);
         return NULL;
 }
 
@@ -134,8 +134,8 @@ void lsm_free_plain(struct lov_stripe_md *lsm)
         for (i = 0; i < stripe_count; i++)
                 OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab,
                               sizeof(struct lov_oinfo));
-        OBD_FREE(lsm, sizeof(struct lov_stripe_md) +
-                 stripe_count * sizeof(struct lov_oinfo *));
+        OBD_FREE_LARGE(lsm, sizeof(struct lov_stripe_md) +
+                       stripe_count * sizeof(struct lov_oinfo *));
 }
 
 static void lsm_unpackmd_common(struct lov_stripe_md *lsm,

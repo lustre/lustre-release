@@ -5121,12 +5121,12 @@ static int mdt_export_cleanup(struct obd_export *exp)
                 int cookie_size;
 
                 lmm_size = mdt->mdt_max_mdsize;
-                OBD_ALLOC(ma->ma_lmm, lmm_size);
+                OBD_ALLOC_LARGE(ma->ma_lmm, lmm_size);
                 if (ma->ma_lmm == NULL)
                         GOTO(out_lmm, rc = -ENOMEM);
 
                 cookie_size = mdt->mdt_max_cookiesize;
-                OBD_ALLOC(ma->ma_cookie, cookie_size);
+                OBD_ALLOC_LARGE(ma->ma_cookie, cookie_size);
                 if (ma->ma_cookie == NULL)
                         GOTO(out_cookie, rc = -ENOMEM);
 
@@ -5143,10 +5143,10 @@ static int mdt_export_cleanup(struct obd_export *exp)
                         ma->ma_valid = MA_FLAGS;
                         mdt_mfd_close(info, mfd);
                 }
-                OBD_FREE(ma->ma_cookie, cookie_size);
+                OBD_FREE_LARGE(ma->ma_cookie, cookie_size);
                 ma->ma_cookie = NULL;
 out_cookie:
-                OBD_FREE(ma->ma_lmm, lmm_size);
+                OBD_FREE_LARGE(ma->ma_lmm, lmm_size);
                 ma->ma_lmm = NULL;
         }
 out_lmm:

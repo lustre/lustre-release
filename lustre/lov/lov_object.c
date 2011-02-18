@@ -183,7 +183,7 @@ static int lov_init_raid0(const struct lu_env *env,
         r0->lo_lsm = conf->u.coc_md->lsm;
         LASSERT(r0->lo_nr <= lov_targets_nr(dev));
 
-        OBD_ALLOC(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
+        OBD_ALLOC_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
         if (r0->lo_sub != NULL) {
                 result = 0;
                 subconf->coc_inode = conf->coc_inode;
@@ -300,7 +300,7 @@ static void lov_fini_raid0(const struct lu_env *env, struct lov_object *lov,
 
         ENTRY;
         if (r0->lo_sub != NULL) {
-                OBD_FREE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
+                OBD_FREE_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
                 r0->lo_sub = NULL;
         }
         EXIT;

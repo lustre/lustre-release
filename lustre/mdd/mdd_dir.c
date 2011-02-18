@@ -2442,7 +2442,7 @@ static int mdd_links_add(const struct lu_env *env,
                                PFID(mdd_object_fid(mdd_obj)));
         }
 
-        if (buf->lb_vmalloc)
+        if (buf->lb_len > OBD_ALLOC_BIG)
                 /* if we vmalloced a large buffer drop it */
                 mdd_buf_put(buf);
 
@@ -2529,7 +2529,7 @@ out:
                        oldlname->ln_namelen, oldlname->ln_name, rc,
                        PFID(mdd_object_fid(mdd_obj)));
 
-        if (buf->lb_vmalloc)
+        if (buf->lb_len > OBD_ALLOC_BIG)
                 /* if we vmalloced a large buffer drop it */
                 mdd_buf_put(buf);
 

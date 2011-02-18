@@ -601,7 +601,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         count = mds->mds_lov_desc.ld_tgt_count;
         size = sizeof(*idarray) * count;
 
-        OBD_VMALLOC(idarray, size);
+        OBD_ALLOC_LARGE(idarray, size);
         if (!idarray)
                 GOTO(release_ctxt, rc = -ENOMEM);
 
@@ -652,7 +652,7 @@ out_pop:
         pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 out_free:
         cfs_mutex_up(&obd->obd_olg.olg_cat_processing);
-        OBD_VFREE(idarray, size);
+        OBD_FREE_LARGE(idarray, size);
 release_ctxt:
         llog_ctxt_put(ctxt);
         return rc;

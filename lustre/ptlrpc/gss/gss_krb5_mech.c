@@ -240,7 +240,7 @@ int get_rawobj(char **ptr, const char *end, rawobj_t *res)
         if (q > end || q < p)
                 return -1;
 
-        OBD_ALLOC(res->data, len);
+        OBD_ALLOC_LARGE(res->data, len);
         if (!res->data)
                 return -1;
 
@@ -256,12 +256,12 @@ int get_keyblock(char **ptr, const char *end,
 {
         char *buf;
 
-        OBD_ALLOC(buf, keysize);
+        OBD_ALLOC_LARGE(buf, keysize);
         if (buf == NULL)
                 return -1;
 
         if (get_bytes(ptr, end, buf, keysize)) {
-                OBD_FREE(buf, keysize);
+                OBD_FREE_LARGE(buf, keysize);
                 return -1;
         }
 
@@ -735,7 +735,7 @@ __s32 krb5_make_checksum(__u32 enctype,
         }
 
         cksum->len = ll_crypto_hash_digestsize(tfm);
-        OBD_ALLOC(cksum->data, cksum->len);
+        OBD_ALLOC_LARGE(cksum->data, cksum->len);
         if (!cksum->data) {
                 cksum->len = 0;
                 goto out_tfm;
@@ -1563,7 +1563,7 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
         }
 
         /* decrypting */
-        OBD_ALLOC(tmpbuf, bodysize);
+        OBD_ALLOC_LARGE(tmpbuf, bodysize);
         if (!tmpbuf)
                 return GSS_S_FAILURE;
 
@@ -1660,7 +1660,7 @@ arc4_out:
 
         major = GSS_S_COMPLETE;
 out_free:
-        OBD_FREE(tmpbuf, bodysize);
+        OBD_FREE_LARGE(tmpbuf, bodysize);
         rawobj_free(&cksum);
         return major;
 }

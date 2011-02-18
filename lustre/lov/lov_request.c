@@ -78,7 +78,7 @@ void lov_finish_set(struct lov_request_set *set)
                 if (req->rq_oi.oi_oa)
                         OBDO_FREE(req->rq_oi.oi_oa);
                 if (req->rq_oi.oi_md)
-                        OBD_FREE(req->rq_oi.oi_md, req->rq_buflen);
+                        OBD_FREE_LARGE(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_osfs)
                         OBD_FREE(req->rq_oi.oi_osfs,
                                  sizeof(*req->rq_oi.oi_osfs));
@@ -87,7 +87,7 @@ void lov_finish_set(struct lov_request_set *set)
 
         if (set->set_pga) {
                 int len = set->set_oabufs * sizeof(*set->set_pga);
-                OBD_FREE(set->set_pga, len);
+                OBD_FREE_LARGE(set->set_pga, len);
         }
         if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
@@ -316,7 +316,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md) +
                         sizeof(struct lov_oinfo *) +
                         sizeof(struct lov_oinfo);
-                OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
+                OBD_ALLOC_LARGE(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_md == NULL) {
                         OBD_FREE(req, sizeof(*req));
                         GOTO(out_set, rc = -ENOMEM);
@@ -437,7 +437,7 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                         GOTO(out_set, rc = -ENOMEM);
 
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md);
-                OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
+                OBD_ALLOC_LARGE(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_md == NULL) {
                         OBD_FREE(req, sizeof(*req));
                         GOTO(out_set, rc = -ENOMEM);
@@ -524,7 +524,7 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
                         GOTO(out_set, rc = -ENOMEM);
 
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md);
-                OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
+                OBD_ALLOC_LARGE(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_md == NULL) {
                         OBD_FREE(req, sizeof(*req));
                         GOTO(out_set, rc = -ENOMEM);
@@ -875,11 +875,11 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oti = oti;
         set->set_oi = oinfo;
         set->set_oabufs = oa_bufs;
-        OBD_ALLOC(set->set_pga, oa_bufs * sizeof(*set->set_pga));
+        OBD_ALLOC_LARGE(set->set_pga, oa_bufs * sizeof(*set->set_pga));
         if (!set->set_pga)
                 GOTO(out, rc = -ENOMEM);
 
-        OBD_ALLOC(info, sizeof(*info) * oinfo->oi_md->lsm_stripe_count);
+        OBD_ALLOC_LARGE(info, sizeof(*info) * oinfo->oi_md->lsm_stripe_count);
         if (!info)
                 GOTO(out, rc = -ENOMEM);
 
@@ -924,7 +924,7 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_oa->o_stripe_idx = i;
 
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md);
-                OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
+                OBD_ALLOC_LARGE(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_md == NULL) {
                         OBDO_FREE(req->rq_oi.oi_oa);
                         OBD_FREE(req, sizeof(*req));
@@ -964,7 +964,8 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
         }
 out:
         if (info)
-                OBD_FREE(info, sizeof(*info) * oinfo->oi_md->lsm_stripe_count);
+                OBD_FREE_LARGE(info,
+                               sizeof(*info) * oinfo->oi_md->lsm_stripe_count);
 
         if (rc == 0)
                 *reqset = set;

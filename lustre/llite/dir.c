@@ -969,7 +969,7 @@ out_free:
                 if (rc)
                         RETURN(rc);
 
-                OBD_ALLOC(lmm, lmmsize);
+                OBD_ALLOC_LARGE(lmm, lmmsize);
                 if (cfs_copy_from_user(lmm, lum, lmmsize))
                         GOTO(free_lmm, rc = -EFAULT);
 
@@ -1014,7 +1014,7 @@ out_free:
         free_lsm:
                 obd_free_memmd(sbi->ll_dt_exp, &lsm);
         free_lmm:
-                OBD_FREE(lmm, lmmsize);
+                OBD_FREE_LARGE(lmm, lmmsize);
                 return rc;
         }
         case OBD_IOC_LLOG_CATINFO: {

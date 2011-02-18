@@ -461,7 +461,7 @@ void qos_shrink_lsm(struct lov_request_set *set)
                 oti_alloc_cookies(set->set_oti, set->set_count);
                 if (set->set_oti->oti_logcookies) {
                         memcpy(set->set_oti->oti_logcookies, cookies, newsize);
-                        OBD_FREE(cookies, oldsize);
+                        OBD_FREE_LARGE(cookies, oldsize);
                         set->set_cookies = set->set_oti->oti_logcookies;
                 } else {
                         CWARN("'leaking' %d bytes\n", oldsize - newsize);
@@ -473,7 +473,7 @@ void qos_shrink_lsm(struct lov_request_set *set)
         LASSERT(lsm->lsm_stripe_count >= set->set_count);
 
         newsize = lov_stripe_md_size(set->set_count);
-        OBD_ALLOC(lsm_new, newsize);
+        OBD_ALLOC_LARGE(lsm_new, newsize);
         if (lsm_new != NULL) {
                 int i;
                 memcpy(lsm_new, lsm, sizeof(*lsm));
@@ -486,8 +486,8 @@ void qos_shrink_lsm(struct lov_request_set *set)
                                       sizeof(struct lov_oinfo));
                 }
                 lsm_new->lsm_stripe_count = set->set_count;
-                OBD_FREE(lsm, sizeof(struct lov_stripe_md) +
-                         lsm->lsm_stripe_count * sizeof(struct lov_oinfo *));
+                OBD_FREE_LARGE(lsm, sizeof(struct lov_stripe_md) +
+                               lsm->lsm_stripe_count*sizeof(struct lov_oinfo*));
                 set->set_oi->oi_md = lsm_new;
         } else {
                 CWARN("'leaking' few bytes\n");
@@ -1074,7 +1074,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 lov_set_add_req(req, set);
 
                 req->rq_buflen = sizeof(*req->rq_oi.oi_md);
-                OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
+                OBD_ALLOC_LARGE(req->rq_oi.oi_md, req->rq_buflen);
                 if (req->rq_oi.oi_md == NULL)
                         GOTO(out_err, rc = -ENOMEM);
 

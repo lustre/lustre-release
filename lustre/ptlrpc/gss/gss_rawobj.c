@@ -65,7 +65,7 @@ int rawobj_alloc(rawobj_t *obj, char *buf, int len)
 
         obj->len = len;
         if (len) {
-                OBD_ALLOC(obj->data, len);
+                OBD_ALLOC_LARGE(obj->data, len);
                 if (!obj->data) {
                         obj->len = 0;
                         RETURN(-ENOMEM);
@@ -82,7 +82,7 @@ void rawobj_free(rawobj_t *obj)
 
         if (obj->len) {
                 LASSERT(obj->data);
-                OBD_FREE(obj->data, obj->len);
+                OBD_FREE_LARGE(obj->data, obj->len);
                 obj->len = 0;
                 obj->data = NULL;
         } else
@@ -103,7 +103,7 @@ int rawobj_dup(rawobj_t *dest, rawobj_t *src)
 
         dest->len = src->len;
         if (dest->len) {
-                OBD_ALLOC(dest->data, dest->len);
+                OBD_ALLOC_LARGE(dest->data, dest->len);
                 if (!dest->data) {
                         dest->len = 0;
                         return -ENOMEM;
@@ -167,7 +167,7 @@ static int __rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen,
         if (!alloc)
                 obj->data = (__u8 *) *buf;
         else {
-                OBD_ALLOC(obj->data, obj->len);
+                OBD_ALLOC_LARGE(obj->data, obj->len);
                 if (!obj->data) {
                         CERROR("fail to alloc %u bytes\n", obj->len);
                         obj->len = 0;
@@ -217,7 +217,7 @@ int rawobj_from_netobj_alloc(rawobj_t *rawobj, netobj_t *netobj)
         if (netobj->len == 0)
                 return 0;
                 
-        OBD_ALLOC(rawobj->data, netobj->len);
+        OBD_ALLOC_LARGE(rawobj->data, netobj->len);
         if (rawobj->data == NULL)
                 return -ENOMEM;
 

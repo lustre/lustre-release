@@ -80,9 +80,7 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 RETURN(-EINVAL);
         }
 
-        /* XXX allocate this more intelligently, using kmalloc when
-         * appropriate */
-        OBD_VMALLOC(*buf, hdr->ioc_len);
+        OBD_ALLOC_LARGE(*buf, hdr->ioc_len);
         if (*buf == NULL) {
                 CERROR("Cannot allocate control buffer of len %d\n",
                        hdr->ioc_len);
@@ -99,6 +97,7 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
         if (obd_ioctl_is_invalid(data)) {
                 CERROR("ioctl not correctly formatted\n");
+                OBD_FREE_LARGE(*buf, hdr->ioc_len);
                 return -EINVAL;
         }
 

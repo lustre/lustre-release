@@ -96,11 +96,9 @@ struct lmv_object *lmv_object_alloc(struct obd_device *obd,
         obj_size = sizeof(struct lmv_stripe) * 
                 lmv->desc.ld_tgt_count;
 
-        OBD_ALLOC(obj->lo_stripes, obj_size);
+        OBD_ALLOC_LARGE(obj->lo_stripes, obj_size);
         if (!obj->lo_stripes)
                 goto err_obj;
-
-        memset(obj->lo_stripes, 0, obj_size);
 
         CDEBUG(D_INODE, "Allocate object for "DFID"\n", 
                PFID(fid));
@@ -138,7 +136,7 @@ void lmv_object_free(struct lmv_object *obj)
         obj_size = sizeof(struct lmv_stripe) *
                 lmv->desc.ld_tgt_count;
 
-        OBD_FREE(obj->lo_stripes, obj_size);
+        OBD_FREE_LARGE(obj->lo_stripes, obj_size);
         OBD_SLAB_FREE(obj, lmv_object_cache, sizeof(*obj));
         cfs_atomic_dec(&lmv_object_count);
 }

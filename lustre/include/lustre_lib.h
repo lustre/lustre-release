@@ -364,9 +364,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 RETURN(-EINVAL);
         }
 
-        /* XXX allocate this more intelligently, using kmalloc when
-         * appropriate */
-        OBD_VMALLOC(*buf, hdr.ioc_len);
+        OBD_ALLOC_LARGE(*buf, hdr.ioc_len);
         if (*buf == NULL) {
                 CERROR("Cannot allocate control buffer of len %d\n",
                        hdr.ioc_len);
@@ -377,13 +375,13 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
         err = cfs_copy_from_user(*buf, (void *)arg, hdr.ioc_len);
         if (err) {
-                OBD_VFREE(*buf, hdr.ioc_len);
+                OBD_FREE_LARGE(*buf, hdr.ioc_len);
                 RETURN(err);
         }
 
         if (obd_ioctl_is_invalid(data)) {
                 CERROR("ioctl not correctly formatted\n");
-                OBD_VFREE(*buf, hdr.ioc_len);
+                OBD_FREE_LARGE(*buf, hdr.ioc_len);
                 RETURN(-EINVAL);
         }
 
@@ -422,7 +420,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 {
         ENTRY;
 
-        OBD_VFREE(buf, len);
+        OBD_FREE_LARGE(buf, len);
         EXIT;
         return;
 }

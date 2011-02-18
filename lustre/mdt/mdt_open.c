@@ -1664,13 +1664,13 @@ int mdt_done_writing(struct mdt_thread_info *info)
         info->mti_attr.ma_valid = 0;
 
         info->mti_attr.ma_lmm_size = info->mti_mdt->mdt_max_mdsize;
-        OBD_ALLOC(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
+        OBD_ALLOC_LARGE(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
         if (info->mti_attr.ma_lmm == NULL)
                 RETURN(-ENOMEM);
 
         rc = mdt_mfd_close(info, mfd);
 
-        OBD_FREE(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
+        OBD_FREE_LARGE(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
         mdt_empty_transno(info);
         RETURN(rc);
 }

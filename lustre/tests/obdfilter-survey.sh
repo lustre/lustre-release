@@ -5,6 +5,7 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+init_logging
 
 nobjhi=${nobjhi:-1}
 thrhi=${thrhi:-16}

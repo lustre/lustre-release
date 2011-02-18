@@ -126,10 +126,7 @@ void mdd_buf_put(struct lu_buf *buf)
 {
         if (buf == NULL || buf->lb_buf == NULL)
                 return;
-        if (buf->lb_vmalloc)
-                OBD_VFREE(buf->lb_buf, buf->lb_len);
-        else
-                OBD_FREE(buf->lb_buf, buf->lb_len);
+        OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
         buf->lb_buf = NULL;
         buf->lb_len = 0;
 }
@@ -145,28 +142,17 @@ const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
         return buf;
 }
 
-#define BUF_VMALLOC_SIZE (CFS_PAGE_SIZE<<2) /* 16k */
 struct lu_buf *mdd_buf_alloc(const struct lu_env *env, ssize_t len)
 {
         struct lu_buf *buf = &mdd_env_info(env)->mti_big_buf;
 
         if ((len > buf->lb_len) && (buf->lb_buf != NULL)) {
-                if (buf->lb_vmalloc)
-                        OBD_VFREE(buf->lb_buf, buf->lb_len);
-                else
-                        OBD_FREE(buf->lb_buf, buf->lb_len);
+                OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
                 buf->lb_buf = NULL;
         }
         if (buf->lb_buf == NULL) {
                 buf->lb_len = len;
-                if (buf->lb_len <= BUF_VMALLOC_SIZE) {
-                        OBD_ALLOC(buf->lb_buf, buf->lb_len);
-                        buf->lb_vmalloc = 0;
-                }
-                if (buf->lb_buf == NULL) {
-                        OBD_VMALLOC(buf->lb_buf, buf->lb_len);
-                        buf->lb_vmalloc = 1;
-                }
+                OBD_ALLOC_LARGE(buf->lb_buf, buf->lb_len);
                 if (buf->lb_buf == NULL)
                         buf->lb_len = 0;
         }
@@ -184,23 +170,15 @@ int mdd_buf_grow(const struct lu_env *env, ssize_t len)
         struct lu_buf buf;
 
         LASSERT(len >= oldbuf->lb_len);
-        if (len > BUF_VMALLOC_SIZE) {
-                OBD_VMALLOC(buf.lb_buf, len);
-                buf.lb_vmalloc = 1;
-        } else {
-                OBD_ALLOC(buf.lb_buf, len);
-                buf.lb_vmalloc = 0;
-        }
+        OBD_ALLOC_LARGE(buf.lb_buf, len);
+
         if (buf.lb_buf == NULL)
                 return -ENOMEM;
 
         buf.lb_len = len;
         memcpy(buf.lb_buf, oldbuf->lb_buf, oldbuf->lb_len);
 
-        if (oldbuf->lb_vmalloc)
-                OBD_VFREE(oldbuf->lb_buf, oldbuf->lb_len);
-        else
-                OBD_FREE(oldbuf->lb_buf, oldbuf->lb_len);
+        OBD_FREE_LARGE(oldbuf->lb_buf, oldbuf->lb_len);
 
         memcpy(oldbuf, &buf, sizeof(buf));
 
@@ -216,12 +194,13 @@ struct llog_cookie *mdd_max_cookie_get(const struct lu_env *env,
         max_cookie_size = mdd_lov_cookiesize(env, mdd);
         if (unlikely(mti->mti_max_cookie_size < max_cookie_size)) {
                 if (mti->mti_max_cookie)
-                        OBD_FREE(mti->mti_max_cookie, mti->mti_max_cookie_size);
+                        OBD_FREE_LARGE(mti->mti_max_cookie,
+                                       mti->mti_max_cookie_size);
                 mti->mti_max_cookie = NULL;
                 mti->mti_max_cookie_size = 0;
         }
         if (unlikely(mti->mti_max_cookie == NULL)) {
-                OBD_ALLOC(mti->mti_max_cookie, max_cookie_size);
+                OBD_ALLOC_LARGE(mti->mti_max_cookie, max_cookie_size);
                 if (likely(mti->mti_max_cookie != NULL))
                         mti->mti_max_cookie_size = max_cookie_size;
         }
@@ -239,12 +218,12 @@ struct lov_mds_md *mdd_max_lmm_get(const struct lu_env *env,
         max_lmm_size = mdd_lov_mdsize(env, mdd);
         if (unlikely(mti->mti_max_lmm_size < max_lmm_size)) {
                 if (mti->mti_max_lmm)
-                        OBD_FREE(mti->mti_max_lmm, mti->mti_max_lmm_size);
+                        OBD_FREE_LARGE(mti->mti_max_lmm, mti->mti_max_lmm_size);
                 mti->mti_max_lmm = NULL;
                 mti->mti_max_lmm_size = 0;
         }
         if (unlikely(mti->mti_max_lmm == NULL)) {
-                OBD_ALLOC(mti->mti_max_lmm, max_lmm_size);
+                OBD_ALLOC_LARGE(mti->mti_max_lmm, max_lmm_size);
                 if (likely(mti->mti_max_lmm != NULL))
                         mti->mti_max_lmm_size = max_lmm_size;
         }
@@ -509,7 +488,7 @@ static int mdd_path_current(const struct lu_env *env,
 
         EXIT;
 out:
-        if (buf && !IS_ERR(buf) && buf->lb_vmalloc)
+        if (buf && !IS_ERR(buf) && buf->lb_len > OBD_ALLOC_BIG)
                 /* if we vmalloced a large buffer drop it */
                 mdd_buf_put(buf);
 

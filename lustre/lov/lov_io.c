@@ -279,8 +279,8 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
          * Need to be optimized, we can't afford to allocate a piece of memory
          * when writing a page. -jay
          */
-        OBD_ALLOC(lio->lis_subs,
-                  lsm->lsm_stripe_count * sizeof lio->lis_subs[0]);
+        OBD_ALLOC_LARGE(lio->lis_subs,
+                        lsm->lsm_stripe_count * sizeof lio->lis_subs[0]);
         if (lio->lis_subs != NULL) {
                 lio->lis_nr_subios = lio->lis_stripe_count;
                 lio->lis_single_subio_index = -1;
@@ -352,7 +352,7 @@ static void lov_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
         if (lio->lis_subs != NULL) {
                 for (i = 0; i < lio->lis_nr_subios; i++)
                         lov_io_sub_fini(env, lio, &lio->lis_subs[i]);
-                OBD_FREE(lio->lis_subs,
+                OBD_FREE_LARGE(lio->lis_subs,
                          lio->lis_nr_subios * sizeof lio->lis_subs[0]);
                 lio->lis_nr_subios = 0;
         }
@@ -595,8 +595,8 @@ static int lov_io_submit(const struct lu_env *env,
 
         LASSERT(lio->lis_subs != NULL);
         if (alloc) {
-                OBD_ALLOC(stripes_qin,
-                          sizeof(*stripes_qin) * lio->lis_nr_subios);
+                OBD_ALLOC_LARGE(stripes_qin,
+                                sizeof(*stripes_qin) * lio->lis_nr_subios);
                 if (stripes_qin == NULL)
                         RETURN(-ENOMEM);
 
@@ -649,7 +649,7 @@ static int lov_io_submit(const struct lu_env *env,
         }
 
         if (alloc) {
-                OBD_FREE(stripes_qin,
+                OBD_FREE_LARGE(stripes_qin,
                          sizeof(*stripes_qin) * lio->lis_nr_subios);
         } else {
                 int i;

@@ -283,7 +283,7 @@ __u32 g_get_mech_oid(rawobj_t *mech, rawobj_t *in_buf)
 
         if ((len -= mech->len) < 0)
                 return (G_BAD_TOK_HEADER);
-        OBD_ALLOC(mech->data, mech->len);
+        OBD_ALLOC_LARGE(mech->data, mech->len);
         if (!mech->data) 
                 return (G_BUFFER_ALLOC);
         memcpy(mech->data, buf, mech->len);

@@ -296,7 +296,7 @@ __u32 gss_unseal_msg(struct gss_ctx *mechctx,
         /* allocate a temporary clear text buffer, same sized as token,
          * we assume the final clear text size <= token size */
         clear_buflen = lustre_msg_buflen(msgbuf, 1);
-        OBD_ALLOC(clear_buf, clear_buflen);
+        OBD_ALLOC_LARGE(clear_buf, clear_buflen);
         if (!clear_buf)
                 RETURN(GSS_S_FAILURE);
 
@@ -322,7 +322,7 @@ __u32 gss_unseal_msg(struct gss_ctx *mechctx,
 
         major = GSS_S_COMPLETE;
 out_free:
-        OBD_FREE(clear_buf, clear_buflen);
+        OBD_FREE_LARGE(clear_buf, clear_buflen);
         RETURN(major);
 }
 
@@ -919,7 +919,7 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
                 LASSERT(req->rq_reqbuf != req->rq_clrbuf);
                 LASSERT(req->rq_reqbuf_len >= wiresize);
         } else {
-                OBD_ALLOC(req->rq_reqbuf, wiresize);
+                OBD_ALLOC_LARGE(req->rq_reqbuf, wiresize);
                 if (!req->rq_reqbuf)
                         RETURN(-ENOMEM);
                 req->rq_reqbuf_len = wiresize;
@@ -979,7 +979,7 @@ redo:
 
 err_free:
         if (!req->rq_pool) {
-                OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
+                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
                 req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
@@ -1316,7 +1316,7 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
         if (!req->rq_reqbuf) {
                 bufsize = size_roundup_power2(bufsize);
 
-                OBD_ALLOC(req->rq_reqbuf, bufsize);
+                OBD_ALLOC_LARGE(req->rq_reqbuf, bufsize);
                 if (!req->rq_reqbuf)
                         RETURN(-ENOMEM);
 
@@ -1403,7 +1403,7 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
         if (!req->rq_clrbuf) {
                 clearsize = size_roundup_power2(clearsize);
 
-                OBD_ALLOC(req->rq_clrbuf, clearsize);
+                OBD_ALLOC_LARGE(req->rq_clrbuf, clearsize);
                 if (!req->rq_clrbuf)
                         RETURN(-ENOMEM);
         }
@@ -1464,7 +1464,7 @@ void gss_free_reqbuf(struct ptlrpc_sec *sec,
             req->rq_clrbuf < req->rq_reqbuf ||
             (char *) req->rq_clrbuf >=
             (char *) req->rq_reqbuf + req->rq_reqbuf_len)
-                OBD_FREE(req->rq_clrbuf, req->rq_clrbuf_len);
+                OBD_FREE_LARGE(req->rq_clrbuf, req->rq_clrbuf_len);
 
         req->rq_clrbuf = NULL;
         req->rq_clrbuf_len = 0;
@@ -1473,7 +1473,7 @@ release_reqbuf:
         if (!req->rq_pool && req->rq_reqbuf) {
                 LASSERT(req->rq_reqbuf_len);
 
-                OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
+                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
                 req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
@@ -1485,7 +1485,7 @@ static int do_alloc_repbuf(struct ptlrpc_request *req, int bufsize)
 {
         bufsize = size_roundup_power2(bufsize);
 
-        OBD_ALLOC(req->rq_repbuf, bufsize);
+        OBD_ALLOC_LARGE(req->rq_repbuf, bufsize);
         if (!req->rq_repbuf)
                 return -ENOMEM;
 
@@ -1605,7 +1605,7 @@ int gss_alloc_repbuf(struct ptlrpc_sec *sec,
 void gss_free_repbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req)
 {
-        OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
+        OBD_FREE_LARGE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
         req->rq_repdata = NULL;
@@ -1701,13 +1701,13 @@ int gss_enlarge_reqbuf_intg(struct ptlrpc_sec *sec,
         if (req->rq_reqbuf_len < newbuf_size) {
                 newbuf_size = size_roundup_power2(newbuf_size);
 
-                OBD_ALLOC(newbuf, newbuf_size);
+                OBD_ALLOC_LARGE(newbuf, newbuf_size);
                 if (newbuf == NULL)
                         RETURN(-ENOMEM);
 
                 memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
 
-                OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
+                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
                 req->rq_reqbuf = newbuf;
                 req->rq_reqbuf_len = newbuf_size;
                 req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, 1, 0);
@@ -1790,7 +1790,7 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
         if (req->rq_clrbuf_len < newclrbuf_size) {
                 newclrbuf_size = size_roundup_power2(newclrbuf_size);
 
-                OBD_ALLOC(newclrbuf, newclrbuf_size);
+                OBD_ALLOC_LARGE(newclrbuf, newclrbuf_size);
                 if (newclrbuf == NULL)
                         RETURN(-ENOMEM);
 
@@ -1800,7 +1800,7 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
                     req->rq_clrbuf < req->rq_reqbuf ||
                     (char *) req->rq_clrbuf >=
                     (char *) req->rq_reqbuf + req->rq_reqbuf_len) {
-                        OBD_FREE(req->rq_clrbuf, req->rq_clrbuf_len);
+                        OBD_FREE_LARGE(req->rq_clrbuf, req->rq_clrbuf_len);
                 }
 
                 req->rq_clrbuf = newclrbuf;
@@ -2579,7 +2579,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 /* pre-allocated */
                 LASSERT(rs->rs_size >= rs_size);
         } else {
-                OBD_ALLOC(rs, rs_size);
+                OBD_ALLOC_LARGE(rs, rs_size);
                 if (rs == NULL)
                         RETURN(-ENOMEM);
 
@@ -2651,7 +2651,7 @@ static int gss_svc_seal(struct ptlrpc_request *req,
 
         /* allocate temporary cipher buffer */
         token_buflen = gss_mech_payload(gctx->gsc_mechctx, msglen, 1);
-        OBD_ALLOC(token_buf, token_buflen);
+        OBD_ALLOC_LARGE(token_buf, token_buflen);
         if (token_buf == NULL)
                 RETURN(-ENOMEM);
 
@@ -2708,7 +2708,7 @@ static int gss_svc_seal(struct ptlrpc_request *req,
 
         rc = 0;
 out_free:
-        OBD_FREE(token_buf, token_buflen);
+        OBD_FREE_LARGE(token_buf, token_buflen);
         RETURN(rc);
 }
 
@@ -2769,7 +2769,7 @@ void gss_svc_free_rs(struct ptlrpc_reply_state *rs)
         rs->rs_svc_ctx = NULL;
 
         if (!rs->rs_prealloc)
-                OBD_FREE(rs, rs->rs_size);
+                OBD_FREE_LARGE(rs, rs->rs_size);
 }
 
 void gss_svc_free_ctx(struct ptlrpc_svc_ctx *ctx)

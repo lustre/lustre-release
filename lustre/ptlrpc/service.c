@@ -68,28 +68,6 @@ static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 static CFS_LIST_HEAD(ptlrpc_all_services);
 cfs_spinlock_t ptlrpc_all_services_lock;
 
-static char *
-ptlrpc_alloc_request_buffer (int size)
-{
-        char *ptr;
-
-        if (size > SVC_BUF_VMALLOC_THRESHOLD)
-                OBD_VMALLOC(ptr, size);
-        else
-                OBD_ALLOC(ptr, size);
-
-        return (ptr);
-}
-
-static void
-ptlrpc_free_request_buffer (char *ptr, int size)
-{
-        if (size > SVC_BUF_VMALLOC_THRESHOLD)
-                OBD_VFREE(ptr, size);
-        else
-                OBD_FREE(ptr, size);
-}
-
 struct ptlrpc_request_buffer_desc *
 ptlrpc_alloc_rqbd (struct ptlrpc_service *svc)
 {
@@ -104,7 +82,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_service *svc)
         rqbd->rqbd_cbid.cbid_fn = request_in_callback;
         rqbd->rqbd_cbid.cbid_arg = rqbd;
         CFS_INIT_LIST_HEAD(&rqbd->rqbd_reqs);
-        rqbd->rqbd_buffer = ptlrpc_alloc_request_buffer(svc->srv_buf_size);
+        OBD_ALLOC_LARGE(rqbd->rqbd_buffer, svc->srv_buf_size);
 
         if (rqbd->rqbd_buffer == NULL) {
                 OBD_FREE_PTR(rqbd);
@@ -132,7 +110,7 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         svc->srv_nbufs--;
         cfs_spin_unlock(&svc->srv_lock);
 
-        ptlrpc_free_request_buffer (rqbd->rqbd_buffer, svc->srv_buf_size);
+        OBD_FREE_LARGE(rqbd->rqbd_buffer, svc->srv_buf_size);
         OBD_FREE_PTR(rqbd);
 }
 
@@ -1028,7 +1006,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
         OBD_ALLOC(reqcopy, sizeof *reqcopy);
         if (reqcopy == NULL)
                 RETURN(-ENOMEM);
-        OBD_ALLOC(reqmsg, req->rq_reqlen);
+        OBD_ALLOC_LARGE(reqmsg, req->rq_reqlen);
         if (!reqmsg) {
                 OBD_FREE(reqcopy, sizeof *reqcopy);
                 RETURN(-ENOMEM);
@@ -1088,7 +1066,7 @@ out_put:
         class_export_put(reqcopy->rq_export);
 out:
         sptlrpc_svc_ctx_decref(reqcopy);
-        OBD_FREE(reqmsg, req->rq_reqlen);
+        OBD_FREE_LARGE(reqmsg, req->rq_reqlen);
         OBD_FREE(reqcopy, sizeof *reqcopy);
         RETURN(rc);
 }
@@ -2143,7 +2121,7 @@ static int ptlrpc_main(void *arg)
         env.le_ctx.lc_cookie = 0x6;
 
         /* Alloc reply state structure for this one */
-        OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, CFS_ALLOC_STD);
+        OBD_ALLOC_LARGE(rs, svc->srv_max_reply_size);
         if (!rs) {
                 rc = -ENOMEM;
                 goto out_srv_fini;
@@ -2726,7 +2704,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         cfs_list_for_each_entry_safe(rs, t, &service->srv_free_rs_list,
                                      rs_list) {
                 cfs_list_del(&rs->rs_list);
-                OBD_FREE(rs, service->srv_max_reply_size);
+                OBD_FREE_LARGE(rs, service->srv_max_reply_size);
         }
 
         /* In case somebody rearmed this in the meantime */

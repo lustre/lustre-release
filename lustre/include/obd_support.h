@@ -695,6 +695,37 @@ do {                                                                          \
 } while(0)
 #endif
 
+#ifdef __KERNEL__
+
+/* Allocations above this size are considered too big and could not be done
+ * atomically. 
+ *
+ * Be very careful when changing this value, especially when decreasing it,
+ * since vmalloc in Linux doesn't perform well on multi-cores system, calling 
+ * vmalloc in critical path would hurt peformance badly. See LU-66.
+ */
+#define OBD_ALLOC_BIG (4 * CFS_PAGE_SIZE)
+
+#define OBD_ALLOC_LARGE(ptr, size)                                            \
+do {                                                                          \
+        if (size > OBD_ALLOC_BIG)                                             \
+                OBD_VMALLOC(ptr, size);                                       \
+        else                                                                  \
+                OBD_ALLOC(ptr, size);                                         \
+} while (0)
+
+#define OBD_FREE_LARGE(ptr, size)                                             \
+do {                                                                          \
+        if (size > OBD_ALLOC_BIG)                                             \
+                OBD_VFREE(ptr, size);                                         \
+        else                                                                  \
+                OBD_FREE(ptr, size);                                          \
+} while (0)
+#else
+#define OBD_ALLOC_LARGE(ptr, size) OBD_ALLOC(ptr, size)
+#define OBD_FREE_LARGE(ptr, size) OBD_FREE(ptr,size)
+#endif
+
 #ifdef CONFIG_DEBUG_SLAB
 #define POISON(ptr, c, s) do {} while (0)
 #define POISON_PTR(ptr)  ((void)0)
