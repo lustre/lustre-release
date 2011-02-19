@@ -436,8 +436,7 @@ int obd_init_checks(void)
         char buf[64];
         int len, ret = 0;
 
-        CDEBUG(D_INFO, "LPU64=%s, LPD64=%s, LPX64=%s, LPSZ=%s, LPSSZ=%s\n",
-               LPU64, LPD64, LPX64, LPSZ, LPSSZ);
+        CDEBUG(D_INFO, "LPU64=%s, LPD64=%s, LPX64=%s\n", LPU64, LPD64, LPX64);
 
         CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", (__u64)OBD_OBJECT_EOF);
 

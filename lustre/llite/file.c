@@ -1429,8 +1429,9 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         ENTRY;
 
         count = ll_file_get_iov_count(iov, &nr_segs);
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size=%lu,offset=%lld\n",
+               inode->i_ino, inode->i_generation, inode, (unsigned long)count,
+               *ppos);
         /* "If nbyte is 0, read() will return 0 and have no other results."
          *                      -- Single Unix Spec */
         if (count == 0)
@@ -1599,8 +1600,8 @@ repeat:
         }
 
         chunk = end - *ppos + 1;
-        CDEBUG(D_INODE,"Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, chunk, *ppos, i_size_read(inode));
+        CDEBUG(D_INODE,"Read ino %lu, %ld bytes, offset %lld, i_size %llu\n",
+               inode->i_ino, (long)chunk, *ppos, i_size_read(inode));
 
         /* turn off the kernel's read-ahead */
         if (ltd.lock_style != LL_LOCK_STYLE_NOLOCK) {
@@ -1779,8 +1780,9 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
         count = ll_file_get_iov_count(iov, &nr_segs);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld\n",
+               inode->i_ino, inode->i_generation, inode, (unsigned long)count,
+               *ppos);
 
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
 
@@ -1882,8 +1884,8 @@ repeat:
 
         /* generic_file_write handles O_APPEND after getting i_mutex */
         chunk = end - *ppos + 1;
-        CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
-               inode->i_ino, chunk, *ppos);
+        CDEBUG(D_INFO, "Writing inode %lu, %ld bytes, offset %Lu\n",
+               inode->i_ino, (long)chunk, *ppos);
         if (tree_locked) {
                 struct ost_lvb *xtimes;
                 /* write under locks
@@ -2018,8 +2020,9 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
         __u64 kms;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld\n",
+               inode->i_ino, inode->i_generation, inode, (unsigned long)count,
+               *ppos);
 
         /* "If nbyte is 0, read() will return 0 and have no other results."
          *                      -- Single Unix Spec */
@@ -2083,8 +2086,8 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
                 ll_inode_size_unlock(inode, 1);
         }
 
-        CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, count, *ppos, i_size_read(inode));
+        CDEBUG(D_INFO, "Send ino %lu, %lu bytes, offset %lld, i_size %llu\n",
+               inode->i_ino, (unsigned long)count, *ppos, i_size_read(inode));
 
         ll_ra_read_init(in_file, &bead, *ppos, count);
         /* BUG: 5972 */
@@ -2117,8 +2120,9 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
         __u64 kms;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld\n",
+               inode->i_ino, inode->i_generation, inode, (unsigned long)count,
+               *ppos);
 
         /* "If nbyte is 0, read() will return 0 and have no other results."
          *                      -- Single Unix Spec */
@@ -2182,8 +2186,8 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
                 ll_inode_size_unlock(inode, 1);
         }
 
-        CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, count, *ppos, i_size_read(inode));
+        CDEBUG(D_INFO, "Send ino %lu, %lu bytes, offset %lld, i_size %llu\n",
+               inode->i_ino, (unsigned long)count, *ppos, i_size_read(inode));
 
         ll_ra_read_init(in_file, &bead, *ppos, count);
         /* BUG: 5972 */

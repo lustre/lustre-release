@@ -240,8 +240,8 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                                 sizeof(struct llog_cookie);
         int max_easize = sizeof(*lmmj);
 
-        CDEBUG(D_INFO, "change the max md size from %d to "LPSZ"\n",
-               mds->mds_max_mdsize, sizeof(*lmmj));
+        CDEBUG(D_INFO, "change the max md size from %d to %lu\n",
+               mds->mds_max_mdsize, (unsigned long)sizeof(*lmmj));
 
         if (mds->mds_max_mdsize < max_easize ||
             mds->mds_max_cookiesize < max_cookiesize) {

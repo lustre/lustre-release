@@ -143,20 +143,14 @@ typedef struct {
 # define LPU64 "%I64u"
 # define LPD64 "%I64d"
 # define LPX64 "%I64x"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
 #elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%I64u"
 # define LPD64 "%I64d"
 # define LPX64 "%I64x"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%I64u"
 # define LPD64 "%I64d"
 # define LPX64 "%I64x"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
 #endif
 #ifndef LPU64
 # error "No word size defined"

@@ -744,8 +744,8 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
                 const int blkbits = inode->i_sb->s_blocksize_bits;
                 const int blksize = inode->i_sb->s_blocksize;
 
-                CDEBUG(D_EXT2, "reading "LPSZ" at dir %lu+%llu\n",
-                       count, inode->i_ino, *off);
+                CDEBUG(D_EXT2, "reading %lu at dir %lu+%llu\n",
+                       (unsigned long)count, inode->i_ino, *off);
                 while (count > 0) {
                         struct buffer_head *bh;
 

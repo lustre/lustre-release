@@ -278,8 +278,8 @@ static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
         len = i_size_read(file->f_dentry->d_inode);
         CDEBUG(D_MOUNT, "Have %s, size %lu\n", MOUNT_DATA_FILE, len);
         if (len != sizeof(*ldd)) {
-                CERROR("disk data size does not match: see %lu expect "LPSZ"\n",
-                       len, sizeof(*ldd));
+                CERROR("disk data size does not match: see %lu expect %lu\n",
+                       len, (unsigned long)sizeof(*ldd));
                 GOTO(out_close, rc = -EINVAL);
         }
 

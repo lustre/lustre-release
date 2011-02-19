@@ -65,14 +65,10 @@ typedef struct stat     lstat_t;
 # define LPU64 "%llu"
 # define LPD64 "%lld"
 # define LPX64 "%#llx"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
 #endif
 #endif /* !LPU64 */
 

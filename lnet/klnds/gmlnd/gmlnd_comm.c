@@ -141,7 +141,7 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 
         case GMNAL_MSG_IMMEDIATE:
                 if (rx->rx_recv_nob < offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0])) {
-                        CERROR("Short IMMEDIATE from %u: %d("LPSZ")\n",
+                        CERROR("Short IMMEDIATE from %u: %d(%lu)\n",
                                rx->rx_recv_gmid, rx->rx_recv_nob,
                                offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0]));
                         return -EPROTO;

@@ -240,10 +240,11 @@ ssize_t ll_direct_IO(int rw, struct file *file,
         if (!lli->lli_smd || !lli->lli_smd->lsm_object_id)
                 RETURN(-EBADF);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ" (max %lu), "
-               "offset=%lld=%llx, pages "LPSZ" (max %lu)\n",
-               inode->i_ino, inode->i_generation, inode, count, MAX_DIO_SIZE,
-               file_offset, file_offset, count >> CFS_PAGE_SHIFT,
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size=%lu (max %lu), "
+               "offset=%lld=%llx, pages %lu (max %lu)\n",
+               inode->i_ino, inode->i_generation, inode, (unsigned long)count,
+               MAX_DIO_SIZE, file_offset, file_offset,
+               (unsigned long)count >> CFS_PAGE_SHIFT,
                MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
 
         if (rw == WRITE)

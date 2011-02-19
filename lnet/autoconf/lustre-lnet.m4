@@ -1128,58 +1128,6 @@ AC_COMPILE_IFELSE([
 CFLAGS="$tmp_flags"
 ])
 
-# check userland size_t type
-AC_DEFUN([LN_SIZE_T_LONG],
-[AC_MSG_CHECKING([size_t is unsigned long type])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
-AC_COMPILE_IFELSE([
-	#include <stdio.h>
-	#include <linux/types.h>
-	#include <linux/stddef.h>
-	int main(void) {
-		unsigned long *data1;
-		size_t *data2 = NULL;
-		
-		data1 = data2;
-		return 0;
-	}
-],[
-	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_SIZE_T_LONG, 1,
-                  [size_t is long type])
-],[
-	AC_MSG_RESULT([no])
-])
-CFLAGS="$tmp_flags"
-])
-
-AC_DEFUN([LN_SSIZE_T_LONG],
-[AC_MSG_CHECKING([ssize_t is signed long type])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -Werror"
-AC_COMPILE_IFELSE([
-	#include <stdio.h>
-	#include <linux/types.h>
-	#include <linux/stddef.h>
-	int main(void) {
-		long *data1;
-		ssize_t *data2 = NULL;
-		
-		data1 = data2;
-		return 0;
-	}
-],[
-	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_SSIZE_T_LONG, 1,
-                  [ssize_t is long type])
-],[
-	AC_MSG_RESULT([no])
-])
-CFLAGS="$tmp_flags"
-])
-
-
 # check kernel __le16, __le32 types
 AC_DEFUN([LN_LE_TYPES],
 [AC_MSG_CHECKING([__le16 and __le32 types are defined])
@@ -1590,8 +1538,6 @@ LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
 LN_FUNC_SHOW_TASK
 LN_KERN__U64_LONG_LONG
-LN_SSIZE_T_LONG
-LN_SIZE_T_LONG
 LN_LE_TYPES
 LN_TASK_RCU
 # 2.6.18

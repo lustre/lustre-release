@@ -123,8 +123,6 @@ typedef struct {
 #define LPU64 "%llu"
 #define LPD64 "%lld"
 #define LPX64 "%#llx"
-#define LPSZ  "%lu"
-#define LPSSZ "%ld"
 # define LI_POISON ((int)0x5a5a5a5a)
 # define LL_POISON ((long)0x5a5a5a5a)
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
