@@ -123,6 +123,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
+        struct lr_server_data *lsd = filter->fo_fsd;
         struct lsd_client_data *lcd = fed->fed_lcd;
         __u64 last_rcvd;
         loff_t off;
@@ -138,20 +139,25 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
         /* we don't allocate new transnos for replayed requests */
         spin_lock(&filter->fo_translock);
         if (oti->oti_transno == 0) {
-                last_rcvd = le64_to_cpu(filter->fo_fsd->lsd_last_transno) + 1;
-                filter->fo_fsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+                last_rcvd = le64_to_cpu(lsd->lsd_last_transno) + 1;
+                lsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+                LASSERT(last_rcvd >= le64_to_cpu(lcd->lcd_last_transno));
         } else {
                 last_rcvd = oti->oti_transno;
-                if (last_rcvd > le64_to_cpu(filter->fo_fsd->lsd_last_transno))
-                        filter->fo_fsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+                if (last_rcvd > le64_to_cpu(lsd->lsd_last_transno))
+                        lsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+                if (unlikely(last_rcvd < le64_to_cpu(lcd->lcd_last_transno))) {
+                        spin_lock(&exp->exp_lock);
+                        exp->exp_vbr_failed = 1;
+                        spin_unlock(&exp->exp_lock);
+                        spin_unlock(&filter->fo_translock);
+                        CERROR("last_rcvd ("LPU64") < lcd_last_transno "
+                               "("LPU64")\n", last_rcvd,
+                               le64_to_cpu(lcd->lcd_last_transno));
+                        RETURN (-EOVERFLOW);
+                }
         }
         oti->oti_transno = last_rcvd;
-        if (last_rcvd < le64_to_cpu(lcd->lcd_last_transno)) {
-                spin_unlock(&filter->fo_translock);
-                CERROR("last_rcvd ("LPU64") < lcd_last_transno ("LPU64")\n",
-                       last_rcvd, le64_to_cpu(lcd->lcd_last_transno));
-                LBUG();
-        }
         lcd->lcd_last_transno = cpu_to_le64(last_rcvd);
         lcd->lcd_pre_versions[0] = cpu_to_le64(oti->oti_pre_version);
         lcd->lcd_last_xid = cpu_to_le64(oti->oti_xid);
