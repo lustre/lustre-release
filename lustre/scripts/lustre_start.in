@@ -286,9 +286,6 @@ mass_start() {
         fi
     fi
 
-    # Start OST(s)
-    mass_op "start" "ost" || return ${PIPESTATUS[0]}
-
     # Start the MDT service on combo MGS/MDT (with "-o nomgs" option)
     if $combo_mgs_mdt; then
         start_service ${MGS_IDX[0]} "-o nomgs" || return ${PIPESTATUS[0]}
@@ -296,6 +293,9 @@ mass_start() {
 
     # Start MDT(s)
     mass_op "start" "mdt" || return ${PIPESTATUS[0]}
+
+    # Start OST(s)
+    mass_op "start" "ost" || return ${PIPESTATUS[0]}
 
     verbose_output "Success on all Lustre targets!"
     return 0
