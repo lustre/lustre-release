@@ -385,6 +385,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         struct lustre_handle old_hash_key;
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
+        struct ost_lvb *tmplvb;
         int cleanup_phase = 1;
         ENTRY;
 
@@ -409,7 +410,6 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                                 rc = -EPROTO;
                         }
                         if (lvb_len) {
-                                void *tmplvb;
                                 tmplvb = lustre_swab_repbuf(req,
                                                             DLM_REPLY_REC_OFF,
                                                             lvb_len,
@@ -506,13 +506,22 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
         /* If the lock has already been granted by a completion AST, don't
          * clobber the LVB with an older one. */
-        if (lvb_len && (lock->l_req_mode != lock->l_granted_mode)) {
-                void *tmplvb;
-                tmplvb = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, lvb_len,
-                                            lvb_swabber);
-                if (tmplvb == NULL)
-                        GOTO(cleanup, rc = -EPROTO);
-                memcpy(lock->l_lvb_data, tmplvb, lvb_len);
+        if (lvb_len) {
+                /* We must lock or a racing completion might update lvb
+                   without letting us know and we'll clobber the correct value.
+                   Cannot unlock after the check either, a that still leaves
+                   a tiny window for completion to get in */
+                lock_res_and_lock(lock);
+                if (lock->l_req_mode != lock->l_granted_mode) {
+                        tmplvb = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF,
+                                                    lvb_len, lvb_swabber);
+                        if (tmplvb == NULL) {
+                                unlock_res_and_lock(lock);
+                                GOTO(cleanup, rc = -EPROTO);
+                        }
+                        memcpy(lock->l_lvb_data, tmplvb, lvb_len);
+                }
+                unlock_res_and_lock(lock);
         }
 
         if (!is_replay) {
