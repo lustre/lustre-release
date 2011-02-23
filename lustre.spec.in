@@ -42,7 +42,7 @@ Release: %{release}
 License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
-URL: http://www.sun.com/software/products/lustre/index.xml
+URL: http://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
@@ -271,36 +271,6 @@ if [ -x /sbin/weak-modules ]; then
     rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' |
         /sbin/weak-modules --add-modules
 fi
-
-cat <<EOF
-Congratulations on finishing your Lustre installation!  To register
-your copy of Lustre and find out more about Lustre Support, Service,
-and Training offerings please visit
-
-http://www.sun.com/software/products/lustre/lustre_reg.jsp
-EOF
-
-# for update from < v1.4.6
-
-for f in /etc/modules.conf /etc/modprobe.conf /etc/modprobe.conf.local ; 
-do
-	if [ -f $f ]; then
-		if grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
-			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
-			TMPFILE=`mktemp $f.XXXXXX` && \
-			rm -f $TMPFILE && touch $TMPFILE && \
-			grep -v 'lustre llite' $f >> $TMPFILE && \
-			mv $TMPFILE $f
-		fi
-		if egrep "^[^#]*(add below|install) ptlrpc" $f ; then
-			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
-			TMPFILE=`mktemp $f.XXXXXX` && \
-			rm -f $TMPFILE && touch $TMPFILE && \
-			sed -e "s/^[^#]*\(add below\|install\) ptlrpc.*/#&/" $f >> $TMPFILE && \
-			mv $TMPFILE $f
-		fi
-	fi
-done
 
 # If the kernel was built to reject unsupported modules (e.g. not a Lustre
 # kernel), and this hasn't been overridden in /etc/modprobe.d yet, then
