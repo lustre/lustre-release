@@ -35,7 +35,12 @@
 #
 
 if MODULES
-modulefs_DATA = lustre$(KMODEXT) llite_lloop$(KMODEXT)
+if LLITE_LLOOP
+  LLOOP_MOD = llite_lloop$(KMODEXT)
+else
+  LLOOP_MOD =
+endif
+modulefs_DATA = lustre$(KMODEXT) $(LLOOP_MOD)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

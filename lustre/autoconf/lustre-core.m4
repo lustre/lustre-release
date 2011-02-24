@@ -1991,6 +1991,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CONFIG_HEALTH_CHECK_WRITE
          LC_CONFIG_LRU_RESIZE
          LC_QUOTA_MODULE
+         LC_LLITE_LLOOP_MODULE
 
          # RHEL4 patches
          LC_EXPORT_TRUNCATE_COMPLETE
@@ -2550,6 +2551,28 @@ AC_DEFUN([LC_TASK_CLENV_STORE],
 ])
 
 #
+# LC_LLITE_LLOOP_MODULE
+# lloop_llite.ko does not currently work with page sizes
+# of 64k or larger.
+#
+AC_DEFUN([LC_LLITE_LLOOP_MODULE],
+[AC_MSG_CHECKING([whether to enable llite_lloop module])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/page.h>
+],[
+        #if PAGE_SIZE >= 65536
+        #error "PAGE_SIZE >= 65536"
+        #endif
+],[
+        enable_llite_lloop_module='yes'
+        AC_MSG_RESULT([yes])
+],[
+        enable_llite_lloop_module='no'
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_CONFIGURE
 #
 # other configure checks
@@ -2679,6 +2702,7 @@ AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(GSS_KEYRING, test x$enable_gss_keyring = xyes)
 AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
+AM_CONDITIONAL(LLITE_LLOOP, test x$enable_llite_lloop_module = xyes)
 ])
 
 #
