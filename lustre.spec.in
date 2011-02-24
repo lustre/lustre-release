@@ -72,6 +72,9 @@ Summary: Kernel Lustre modules for Linux %{kversion}
 %if %sles10
 Requires: kernel-%{flavor}
 %endif
+%if ! %{is_client}
+Requires: lustre-backend-fs
+%endif
 Group: Development/Kernel
 
 %description modules
