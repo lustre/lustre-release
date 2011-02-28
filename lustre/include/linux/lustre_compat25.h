@@ -500,9 +500,7 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 
 #ifdef HAVE_REGISTER_SHRINKER
 
-#define SHRINKER_MASK_T gfp_t
-
-typedef int (*shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
+typedef int (*shrinker_t)(SHRINKER_FIRST_ARG int nr_to_scan, gfp_t gfp_mask);
 
 static inline
 struct shrinker *set_shrinker(int seek, shrinker_t func)
@@ -630,10 +628,6 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
                 return -ENOSYS;
 }
 
-#ifndef HAVE_BI_HW_SEGMENTS
-#define bio_hw_segments(q, bio) 0
-#endif
-
 #ifdef HAVE_FILE_UPDATE_TIME
 #define ll_update_time(file) file_update_time(file)
 #else
@@ -684,6 +678,21 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define queue_max_hw_sectors(rq)        ((rq)->max_hw_sectors)
 #define queue_max_hw_segments(rq)       ((rq)->max_hw_segments)
 #define queue_max_phys_segments(rq)     ((rq)->max_phys_segments)
+#endif
+
+#ifndef HAVE_BLK_QUEUE_MAX_SECTORS
+#define blk_queue_max_sectors           blk_queue_max_hw_sectors
+#endif
+
+#ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS
+#define blk_queue_max_segments(rq, seg)                         \
+        do {                                                    \
+                blk_queue_max_phys_segments(rq, seg);           \
+                blk_queue_max_hw_segments(rq, seg);             \
+        } while (0)
+#else
+#define queue_max_phys_segments(rq)       queue_max_segments(rq)
+#define queue_max_hw_segments(rq)         queue_max_segments(rq)
 #endif
 
 #endif /* __KERNEL__ */

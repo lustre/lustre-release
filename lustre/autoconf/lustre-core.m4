@@ -1176,27 +1176,29 @@ AC_DEFUN([LC_REGISTER_SHRINKER],
 [mm/vmscan.c],[
         AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
                   [kernel exports register_shrinker])
-],[
-        AC_MSG_CHECKING([if kernel using gfp_t for shrinker second paramter])
+# 2.6.32 added another argument to struct shrinker->shrink
+        AC_MSG_CHECKING([if passing shrinker as first argument])
         tmp_flags="$EXTRA_KCFLAGS"
         EXTRA_KCFLAGS="-Werror"
         LB_LINUX_TRY_COMPILE([
                 #include <linux/mm.h>
+                int test_shrink(struct shrinker *, int, gfp_t);
         ],[
-                struct shrinker *scb(int nts, gfp_t mask) {
-                        return 0;
-                }
-                shrinter_t fp = scb;
+                struct shrinker *shr = NULL;
+                shr->shrink = test_shrink;
         ],[
                 AC_MSG_RESULT([yes])
-                AC_DEFINE(SHRINKER_MASK_T, gfp_t, 
-                        [kernel using gfp_t for shrinker callback])
+                AC_DEFINE(SHRINKER_FIRST_ARG, [struct shrinker *shrinker,], 
+                        [kernel is passing shrinker as first argument])
         ],[
                 AC_MSG_RESULT([no])
-                AC_DEFINE(SHRINKER_MASK_T, unsigned int,
-                        [kernel using unsigned for shrinker callback])
+                AC_DEFINE(SHRINKER_FIRST_ARG, , 
+                        [kernel doesn't have shrinker as first argument])
         ])
         EXTRA_KCFLAGS="$tmp_flags"
+        ],[
+                AC_DEFINE(SHRINKER_FIRST_ARG, , 
+                        [kernel doesn't have shrinker as first argument])
 ])
 ])
 
@@ -1842,6 +1844,41 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# RHEL6(backport from 2.6.34) removes 2 functions blk_queue_max_phys_segments and
+# blk_queue_max_hw_segments add blk_queue_max_segments
+AC_DEFUN([LC_BLK_QUEUE_MAX_SEGMENTS],
+[AC_MSG_CHECKING([if blk_queue_max_segments is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkdev.h>
+],[
+        blk_queue_max_segments(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_BLK_QUEUE_MAX_SEGMENTS, 1,
+                  [blk_queue_max_segments is defined])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# RHEL6(backport from 2.6.34) removes blk_queue_max_sectors and add blk_queue_max_hw_sectors
+# check blk_queue_max_sectors and use it until disappear.
+AC_DEFUN([LC_BLK_QUEUE_MAX_SECTORS],
+[AC_MSG_CHECKING([if blk_queue_max_sectors is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkdev.h>
+],[
+        blk_queue_max_sectors(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_BLK_QUEUE_MAX_SECTORS, 1,
+                  [blk_queue_max_sectors is defined])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+
 #
 # LC_PROG_LINUX
 #
@@ -2006,6 +2043,8 @@ AC_DEFUN([LC_PROG_LINUX],
           fi
           LC_DQUOT_INIT
           LC_REQUEST_QUEUE_LIMITS
+          LC_BLK_QUEUE_MAX_SECTORS
+          LC_BLK_QUEUE_MAX_SEGMENTS
 
           #
           if test x$enable_server = xyes ; then

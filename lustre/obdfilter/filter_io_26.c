@@ -374,14 +374,13 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
 
                                 /* Dang! I have to fragment this I/O */
                                 CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
-                                       "sectors %d(%d) psg %d(%d) hsg %d(%d) "
+                                       "sectors %d(%d) psg %d(%d) max hsg %d "
                                        "sector "LPU64" next "LPU64"\n",
                                        bio->bi_size,
                                        bio->bi_vcnt, bio->bi_max_vecs,
                                        bio->bi_size >> 9, queue_max_sectors(q),
                                        bio_phys_segments(q, bio),
                                        queue_max_phys_segments(q),
-                                       bio_hw_segments(q, bio),
                                        queue_max_hw_segments(q),
                                        (u64)bio->bi_sector,
                                        (u64)sector);

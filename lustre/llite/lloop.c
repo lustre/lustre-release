@@ -506,9 +506,8 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         blk_queue_logical_block_size(lo->lo_queue,
                                      min_t(unsigned, CFS_PAGE_SIZE, 16384));
         blk_queue_max_sectors(lo->lo_queue,
-                              LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
-        blk_queue_max_phys_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
-        blk_queue_max_hw_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
+                                 LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
+        blk_queue_max_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
 
         set_capacity(disks[lo->lo_number], size);
         bd_set_size(bdev, size << 9);

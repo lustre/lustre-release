@@ -131,7 +131,7 @@ static int __init init_lustre_lite(void)
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
         init_rwsem(&ll_sb_sem);
-        ll_shrinker = set_shrinker(DEFAULT_SEEKS, ll_shrink_cache);
+        ll_shrinker = set_shrinker(DEFAULT_SEEKS, ll_cache_shrink);
 
         lustre_register_client_fill_super(ll_fill_super);
         lustre_register_kill_super_cb(ll_kill_super);
