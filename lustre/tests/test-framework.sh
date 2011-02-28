@@ -213,6 +213,7 @@ init_test_env() {
     # print the durations of each test if "true"
     DDETAILS=${DDETAILS:-false}
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
+    cntlog=0
     rm -f $TMP/*active
 }
 
@@ -2614,6 +2615,8 @@ error_noexit() {
 
     if $dump; then
         ERRLOG=$tmp/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
+        [[ $cntlog -eq 0 ]] || ERRLOG=$ERRLOG.$cntlog
+        (( cntlog+=1 )) 
         echo "Dumping lctl log to $ERRLOG"
         # We need to dump the logs on all nodes
         do_nodes $(comma_list $(nodes_list)) $NODE $LCTL dk $ERRLOG
@@ -2817,11 +2820,10 @@ run_one() {
     local BEFORE=`date +%s`
     echo
     log "== test $testnum: $message == `date +%H:%M:%S` ($BEFORE)"
-    #check_mds
     export TESTNAME=test_$testnum
     TEST_FAILED=false
+    cntlog=0
     test_${testnum} || error "test_$testnum failed with $?"
-    #check_mds
     cd $SAVE_PWD
     reset_fail_loc
     check_grant ${testnum} || $TEST_FAILED || error "check_grant $testnum failed"
@@ -2829,6 +2831,7 @@ run_one() {
     ps auxww | grep -v grep | grep -q multiop && ($TEST_FAILED || error "multiop still running")
     pass "($((`date +%s` - $BEFORE))s)"
     TEST_FAILED=false
+    cntlog=0
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
