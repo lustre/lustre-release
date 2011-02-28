@@ -75,6 +75,12 @@
 # define V2_DQTREEOFF    QT_TREEOFF
 #endif
 
+#ifdef QFMT_VFS_V1
+#define QFMT_LUSTRE QFMT_VFS_V1
+#else
+#define QFMT_LUSTRE QFMT_VFS_V0
+#endif
+
 #if defined(HAVE_EXT3_XATTR_H)
 #include <ext3/xattr.h>
 #else
@@ -1436,7 +1442,7 @@ static int fsfilt_ext3_setup(struct super_block *sb)
                 sbi->s_qf_names[USRQUOTA] = NULL;
                 return -ENOMEM;
         }
-        sbi->s_jquota_fmt = QFMT_VFS_V0;
+        sbi->s_jquota_fmt = QFMT_LUSTRE;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13))
         set_opt(sbi->s_mount_opt, QUOTA);
 #endif
@@ -1532,7 +1538,7 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
 
                                 LASSERT(oqc->qc_id == LUSTRE_QUOTA_V2);
 
-                                rc = ll_quota_on(sb, i, QFMT_VFS_V0,
+                                rc = ll_quota_on(sb, i, QFMT_LUSTRE,
                                                  name[i], 0);
                         } else if (oqc->qc_cmd == Q_QUOTAOFF) {
                                 rc = ll_quota_off(sb, i, 0);
