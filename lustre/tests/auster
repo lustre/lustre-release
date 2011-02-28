@@ -281,7 +281,7 @@ run_suites() {
 	    echo $suite returned $RC
 	done
 	if $upload_logs; then
-	    $upload_script
+	    $upload_script $LOGDIR
 	fi
 	n=$((n + 1))
     done
