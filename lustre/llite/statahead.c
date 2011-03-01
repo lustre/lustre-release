@@ -92,7 +92,7 @@ static inline int sa_received_empty(struct ll_statahead_info *sai)
 
 static inline int sa_not_full(struct ll_statahead_info *sai)
 {
-        return (sai->sai_index < sai->sai_hit + sai->sai_miss + sai->sai_max);
+        return !!(sai->sai_index < sai->sai_index_next + sai->sai_max);
 }
 
 static inline int sa_is_running(struct ll_statahead_info *sai)
@@ -194,16 +194,14 @@ static void ll_sai_put(struct ll_statahead_info *sai)
         lli = ll_i2info(inode);
         LASSERT(lli->lli_sai == sai);
 
-        if (cfs_atomic_dec_and_test(&sai->sai_refcount)) {
+        if (cfs_atomic_dec_and_lock(&sai->sai_refcount, &lli->lli_sa_lock)) {
                 struct ll_sai_entry *entry, *next;
 
-                cfs_spin_lock(&lli->lli_sa_lock);
                 if (unlikely(cfs_atomic_read(&sai->sai_refcount) > 0)) {
                         /* It is race case, the interpret callback just hold
                          * a reference count */
                         cfs_spin_unlock(&lli->lli_sa_lock);
-                        EXIT;
-                        return;
+                        RETURN_EXIT;
                 }
 
                 LASSERT(lli->lli_opendir_key == NULL);
@@ -691,7 +689,7 @@ static int ll_statahead_one(struct dentry *parent, const char* entry_name,
         struct ll_inode_info     *lli = ll_i2info(dir);
         struct ll_statahead_info *sai = lli->lli_sai;
         struct qstr               name;
-        struct dentry            *dentry;
+        struct dentry            *dentry = NULL;
         struct ll_sai_entry      *se;
         int                       rc;
         ENTRY;
@@ -711,26 +709,23 @@ static int ll_statahead_one(struct dentry *parent, const char* entry_name,
         dentry = d_lookup(parent, &name);
         if (!dentry) {
                 dentry = d_alloc(parent, &name);
-                if (dentry) {
+                if (dentry)
                         rc = do_sa_lookup(dir, dentry);
-                        if (rc)
-                                dput(dentry);
-                } else {
+                else
                         GOTO(out, rc = -ENOMEM);
-                }
         } else {
                 rc = do_sa_revalidate(dir, dentry);
-                if (rc)
-                        dput(dentry);
         }
 
         EXIT;
 
 out:
         if (rc) {
+                if (dentry != NULL)
+                        dput(dentry);
+                se->se_stat = rc < 0 ? rc : SA_ENTRY_STATED;
                 CDEBUG(D_READA, "set sai entry %p index %u stat %d rc %d\n",
                        se, se->se_index, se->se_stat, rc);
-                se->se_stat = rc < 0 ? rc : SA_ENTRY_STATED;
                 if (ll_sai_entry_to_stated(sai, se))
                         cfs_waitq_signal(&sai->sai_waitq);
         } else {
@@ -769,8 +764,10 @@ static int ll_statahead_thread(void *arg)
         cfs_waitq_signal(&thread->t_ctl_waitq);
         CDEBUG(D_READA, "start doing statahead for %s\n", parent->d_name.name);
 
+        sai->sai_pid = cfs_curproc_pid();
+        lli->lli_sa_pos = 0;
         ll_dir_chain_init(&chain);
-        page = ll_get_dir_page(dir, pos, 0, &chain);
+        page = ll_get_dir_page(NULL, dir, pos, 0, &chain);
 
         while (1) {
                 struct l_wait_info lwi = { 0 };
@@ -789,15 +786,25 @@ static int ll_statahead_thread(void *arg)
                 dp = page_address(page);
                 for (ent = lu_dirent_start(dp); ent != NULL;
                      ent = lu_dirent_next(ent)) {
-                        char *name = ent->lde_name;
-                        int namelen = le16_to_cpu(ent->lde_namelen);
+                        __u64 hash;
+                        int namelen;
+                        char *name;
 
+                        hash = le64_to_cpu(ent->lde_hash);
+                        if (unlikely(hash < pos))
+                                /*
+                                 * Skip until we find target hash value.
+                                 */
+                                continue;
+
+                        namelen = le16_to_cpu(ent->lde_namelen);
                         if (unlikely(namelen == 0))
                                 /*
                                  * Skip dummy record.
                                  */
                                 continue;
 
+                        name = ent->lde_name;
                         if (name[0] == '.') {
                                 if (namelen == 1) {
                                         /*
@@ -875,7 +882,8 @@ keep_de:
                          * chain is exhausted.
                          * Normal case: continue to the next page.
                          */
-                        page = ll_get_dir_page(dir, pos, 1, &chain);
+                        lli->lli_sa_pos = pos;
+                        page = ll_get_dir_page(NULL, dir, pos, 1, &chain);
                 } else {
                         /*
                          * go into overflow page.
@@ -963,6 +971,7 @@ enum {
 
 static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 {
+        struct ll_inode_info *lli = ll_i2info(dir);
         struct ll_dir_chain chain;
         struct qstr        *target = &dentry->d_name;
         struct page        *page;
@@ -971,8 +980,9 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
         int                 rc = LS_NONE_FIRST_DE;
         ENTRY;
 
+        lli->lli_sa_pos = 0;
         ll_dir_chain_init(&chain);
-        page = ll_get_dir_page(dir, pos, 0, &chain);
+        page = ll_get_dir_page(NULL, dir, pos, 0, &chain);
 
         while (1) {
                 struct lu_dirpage *dp;
@@ -992,15 +1002,17 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                 dp = page_address(page);
                 for (ent = lu_dirent_start(dp); ent != NULL;
                      ent = lu_dirent_next(ent)) {
-                        char *name = ent->lde_name;
-                        int namelen = le16_to_cpu(ent->lde_namelen);
+                        int namelen;
+                        char *name;
 
-                        if (namelen == 0)
+                        namelen = le16_to_cpu(ent->lde_namelen);
+                        if (unlikely(namelen == 0))
                                 /*
                                  * skip dummy record.
                                  */
                                 continue;
 
+                        name = ent->lde_name;
                         if (name[0] == '.') {
                                 if (namelen == 1)
                                         /*
@@ -1048,7 +1060,8 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                          * chain is exhausted
                          * Normal case: continue to the next page.
                          */
-                        page = ll_get_dir_page(dir, pos, 1, &chain);
+                        lli->lli_sa_pos = pos;
+                        page = ll_get_dir_page(NULL, dir, pos, 1, &chain);
                 } else {
                         /*
                          * go into overflow page.

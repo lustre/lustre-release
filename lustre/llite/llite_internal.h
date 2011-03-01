@@ -190,9 +190,14 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
+        __u64                   lli_sa_pos;
         struct cl_object       *lli_clob;
         /* the most recent timestamps obtained from mds */
         struct ost_lvb          lli_lvb;
+        /**
+         * serialize normal readdir and statahead-readdir
+         */
+        cfs_semaphore_t         lli_readdir_sem;
 };
 
 /*
@@ -502,6 +507,8 @@ struct ll_readahead_state {
 };
 
 struct ll_file_dir {
+        __u64 lfd_pos;
+        __u64 lfd_next;
 };
 
 extern cfs_mem_cache_t *ll_file_data_slab;
@@ -581,8 +588,8 @@ static inline void ll_put_page(struct page *page)
 
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
-struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
-                             struct ll_dir_chain *chain);
+struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
+                             int exact, struct ll_dir_chain *chain);
 
 int ll_get_mdt_idx(struct inode *inode);
 /* llite/namei.c */
@@ -1130,6 +1137,7 @@ struct ll_statahead_info {
         cfs_list_t              sai_entries_sent;     /* entries sent out */
         cfs_list_t              sai_entries_received; /* entries returned */
         cfs_list_t              sai_entries_stated;   /* entries stated */
+        pid_t                   sai_pid;        /* pid of statahead itself */
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);

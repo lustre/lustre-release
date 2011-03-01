@@ -273,7 +273,7 @@ static void ldd_print(struct lustre_disk_data *ldd)
 #endif
 
 static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
-                           struct lustre_disk_data *ldd)
+                     struct lustre_disk_data *ldd)
 {
         struct lvfs_run_ctxt saved;
         struct file *file;
@@ -1311,6 +1311,7 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         unsigned long page, s_flags;
         struct page *__page;
         int rc;
+        int len;
         ENTRY;
 
         OBD_ALLOC(ldd, sizeof(*ldd));
@@ -1363,11 +1364,18 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
 
         /* Glom up mount options */
         memset(options, 0, CFS_PAGE_SIZE);
-        strncpy(options, ldd->ldd_mount_opts, CFS_PAGE_SIZE - 2);
+        if (IS_MDT(ldd)) {
+                /* enable 64bithash for MDS by force */
+                strcpy(options, "64bithash,");
+                len = CFS_PAGE_SIZE - strlen(options) - 2;
+                strncat(options, ldd->ldd_mount_opts, len);
+        } else {
+                strncpy(options, ldd->ldd_mount_opts, CFS_PAGE_SIZE - 2);
+        }
 
         /* Add in any mount-line options */
         if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0)) {
-                int len = CFS_PAGE_SIZE - strlen(options) - 2;
+                len = CFS_PAGE_SIZE - strlen(options) - 2;
                 if (*options != 0)
                         strcat(options, ",");
                 strncat(options, lmd->lmd_opts, len);

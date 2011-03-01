@@ -37,3 +37,4 @@ ext3-mballoc-pa_free-mismatch.patch
 ext3_data_in_dirent.patch
 ext3_fix_i_flags.patch
 ext3-disable-mb-cache.patch
+ext3-export-64bit-name-hash.patch
