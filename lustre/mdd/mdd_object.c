@@ -1084,12 +1084,30 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 }
         }
 
+        if (la->la_valid & LA_KILL_SUID) {
+                la->la_valid &= ~LA_KILL_SUID;
+                if ((tmp_la->la_mode & S_ISUID) &&
+                    !(la->la_valid & LA_MODE)) {
+                        la->la_mode = tmp_la->la_mode;
+                        la->la_valid |= LA_MODE;
+                }
+                la->la_mode &= ~S_ISUID;
+        }
+
+        if (la->la_valid & LA_KILL_SGID) {
+                la->la_valid &= ~LA_KILL_SGID;
+                if (((tmp_la->la_mode & (S_ISGID | S_IXGRP)) ==
+                                        (S_ISGID | S_IXGRP)) &&
+                    !(la->la_valid & LA_MODE)) {
+                        la->la_mode = tmp_la->la_mode;
+                        la->la_valid |= LA_MODE;
+                }
+                la->la_mode &= ~S_ISGID;
+        }
+
         /* Make sure a caller can chmod. */
         if (la->la_valid & LA_MODE) {
-                /* Bypass la_vaild == LA_MODE,
-                 * this is for changing file with SUID or SGID. */
-                if ((la->la_valid & ~LA_MODE) &&
-                    !(ma->ma_attr_flags & MDS_PERM_BYPASS) &&
+                if (!(ma->ma_attr_flags & MDS_PERM_BYPASS) &&
                     (uc->mu_fsuid != tmp_la->la_uid) &&
                     !mdd_capable(uc, CFS_CAP_FOWNER))
                         RETURN(-EPERM);

@@ -742,10 +742,16 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         if (in & ATTR_ATTR_FLAG)
                 out |= LA_FLAGS;
 
+        if (in & ATTR_KILL_SUID)
+                out |= LA_KILL_SUID;
+
+        if (in & ATTR_KILL_SGID)
+                out |= LA_KILL_SGID;
+
         if (in & MDS_OPEN_OWNEROVERRIDE)
                 ma->ma_attr_flags |= MDS_OPEN_OWNEROVERRIDE;
 
-        if (in & (ATTR_KILL_SUID|ATTR_KILL_SGID))
+        if (in & ATTR_FORCE)
                 ma->ma_attr_flags |= MDS_PERM_BYPASS;
 
         /*XXX need ATTR_RAW?*/

@@ -3961,7 +3961,7 @@ test_71() {
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
-test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
+test_72a() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
 	[ "$RUNAS_ID" = "$UID" ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
@@ -3984,7 +3984,35 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	true
 	rm -f $DIR/f72
 }
-run_test 72 "Test that remove suid works properly (bug5695) ===="
+run_test 72a "Test that remove suid works properly (bug5695) ===="
+
+test_72b() { # bug 24226 -- keep mode setting when size is not changing
+	local perm
+
+	[ "$RUNAS_ID" = "$UID" ] && \
+		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ "$RUNAS_ID" -eq 0 ] && \
+		skip_env "RUNAS_ID = 0 -- skipping" && return
+
+	# Check that testing environment is properly set up. Skip if not
+	FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
+		skip_env "User $RUNAS_ID does not exist - skipping"
+		return 0
+	}
+	touch $DIR/${tfile}-f{g,u}
+	mkdir $DIR/${tfile}-d{g,u}
+	chmod 770 $DIR/${tfile}-{f,d}{g,u}
+	chmod g+s $DIR/${tfile}-{f,d}g
+	chmod u+s $DIR/${tfile}-{f,d}u
+	for perm in 777 2777 4777; do
+		$RUNAS chmod $perm $DIR/${tfile}-fg && error "S/gid file allowed improper chmod to $perm"
+		$RUNAS chmod $perm $DIR/${tfile}-fu && error "S/uid file allowed improper chmod to $perm"
+		$RUNAS chmod $perm $DIR/${tfile}-dg && error "S/gid dir allowed improper chmod to $perm"
+		$RUNAS chmod $perm $DIR/${tfile}-du && error "S/uid dir allowed improper chmod to $perm"
+	done
+	true
+}
+run_test 72b "Test that we keep mode setting if without file data changed (bug 24226)"
 
 # bug 3462 - multiple simultaneous MDC requests
 test_73() {

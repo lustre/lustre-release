@@ -445,6 +445,8 @@ enum la_valid {
         LA_NLINK  = 1 << 10,
         LA_RDEV   = 1 << 11,
         LA_BLKSIZE = 1 << 12,
+        LA_KILL_SUID = 1 << 13,
+        LA_KILL_SGID = 1 << 14,
 };
 
 /**
