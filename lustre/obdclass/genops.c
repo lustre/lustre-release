@@ -80,7 +80,6 @@ static struct obd_device *obd_device_alloc(void)
         }
         return obd;
 }
-EXPORT_SYMBOL(obd_device_alloc);
 
 static void obd_device_free(struct obd_device *obd)
 {
