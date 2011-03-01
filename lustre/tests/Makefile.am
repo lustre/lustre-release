@@ -27,6 +27,7 @@ noinst_SCRIPTS += lustre-rsync-test.sh ost-pools.sh rpc.sh yaml.sh liblustre.sh
 noinst_SCRIPTS += lnet-selftest.sh obdfilter-survey.sh mmp.sh
 noinst_SCRIPTS += sgpdd-survey.sh maloo_upload.sh auster
 nobase_noinst_SCRIPTS = cfg/local.sh
+nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_SCRIPTS += racer/dir_create.sh racer/file_create.sh racer/file_list.sh
 nobase_noinst_SCRIPTS += racer/file_rm.sh racer/racer.sh racer/file_concat.sh

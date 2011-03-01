@@ -20,6 +20,7 @@ Run Lustre regression tests suites.
       -d LOGDIR Top level directory for logs
       -D FULLLOGDIR Full directory for logs
       -f STR    Config name (cfg/<name>.sh)
+      -g GROUP  Test group file (Overrides tests listed on command line)
       -i N      Repeat tests N times (default 1). A new directory
                 will be created under LOGDIR for each iteration.
       -k        Don't stop when subtests fail
@@ -48,9 +49,9 @@ the default "local" configuration.
 
   auster -s sanity replay-single --except 70b
 
-Run test listed in batch-list 5 times  using large config.
+Run all tests in the regression group 5 times using large config.
 
-  auster -f large -r 5 -b batch-list
+  auster -f large -g test-groups/regression  -r 5 
 
 EOF
     exit
@@ -65,12 +66,13 @@ reformat=false
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export SLOW=no
 export ${NAME:=local}
-while getopts "c:d:D:nkf:i:rRslhv" opt
+while getopts "c:d:D:nkf:g:i:rRslhv" opt
 do
     case "$opt" in
 	c) CONFIG=$OPTARG;;
 	d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
 	D) test_logs_dir=$OPTARG;;
+	g) test_group_file=$OPTARG;;
 	k) export FAIL_ON_ERROR=false;;
         n) dry_run=:;;
         v) verbose=:;;
@@ -83,7 +85,14 @@ do
         h|\?) usage;;
     esac
 done
-shift $((OPTIND -1))
+
+# If a test_group_file is specified, then ignore rest of command line
+if [[ $test_group_file ]]; then
+    export TEST_GROUP=$(basename $test_group_file)
+    set $(sed 's/#.*$//' $test_group_file)
+else
+    shift $((OPTIND -1))
+fi
 
 #
 # Various paramters for the tests scripts
@@ -183,12 +192,12 @@ doit() {
 run_suite() {
     suite_name=$1
     suite_script=$2
-    only=$3
     title $suite_name
     log_test $suite_name
 
+    rm -f $TF_FAIL
     local start_ts=$(date +%s)
-    doit bash $suite_script $only
+    doit bash $suite_script
     rc=$?
     duration=$(($(date +%s) - $start_ts))
     if [ -f $TF_FAIL -o $rc -ne 0 ]; then
@@ -204,7 +213,6 @@ run_suite() {
 run_suite_logged() {
     local suite_name=${1%.sh}
     local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
-    local suite_only=${suite}_ONLY
 
     suite_script=$(find_script_in_path $suite_name $PATH:$LUSTRE/tests)
 
@@ -213,12 +221,12 @@ run_suite_logged() {
         return 1
     fi
     
-    echo "run_suite $suite_name $suite_script ${!suite_only}"
+    echo "run_suite $suite_name $suite_script"
     local log_name=${suite_name}.suite_log.$(hostname).log
     if $verbose; then
-	run_suite $suite_name $suite_script "${!suite_only}" 2>&1 |tee  $LOGDIR/$log_name
+	run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
     else
-	run_suite $suite_name $suite_script "${!suite_only}"  > $LOGDIR/$log_name 2>&1
+	run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
     fi
 
 }
@@ -309,6 +317,7 @@ assert_env mds_HOST MDS_MKFS_OPTS
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env FSNAME MOUNT MOUNT2
 
+echo "Started at `date`"
 setup_if_needed
 
 run_suites "$@"
