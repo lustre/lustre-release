@@ -138,6 +138,7 @@ struct ll_inode_info {
 
         /* for writepage() only to communicate to fsync */
         int                     lli_async_rc;
+        int                     lli_write_rc;
 
         struct posix_acl       *lli_posix_acl;
 

@@ -830,8 +830,9 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
                 struct vvp_io_args *args, struct file *file,
                 enum cl_io_type iot, loff_t *ppos, size_t count)
 {
-        struct cl_io       *io;
-        ssize_t             result;
+        struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
+        struct cl_io         *io;
+        ssize_t               result;
         ENTRY;
 
         io = &ccc_env_info(env)->cti_io;
@@ -840,7 +841,6 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
                 struct vvp_io *vio = vvp_env_io(env);
                 struct ccc_io *cio = ccc_env_io(env);
-                struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
                 int write_sem_locked = 0;
 
                 cio->cui_fd  = LUSTRE_FPRIVATE(file);
@@ -892,6 +892,8 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         GOTO(out, result);
 out:
         cl_io_fini(env, io);
+        if (iot == CIT_WRITE)
+                lli->lli_write_rc = result < 0 ? : 0;
         return result;
 }
 
@@ -1892,6 +1894,10 @@ int ll_flush(struct file *file)
         struct lov_stripe_md *lsm = lli->lli_smd;
         int rc, err;
 
+        /* the application should know write failure already. */
+        if (lli->lli_write_rc)
+                return 0;
+
         /* catch async errors that were recorded back when async writeback
          * failed for pages in this mapping. */
         rc = lli->lli_async_rc;
@@ -1965,6 +1971,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 if (!rc)
                         rc = err;
                 OBDO_FREE(oa);
+                lli->lli_write_rc = err < 0 ? : 0;
         }
 
         RETURN(rc);
