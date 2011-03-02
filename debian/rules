@@ -393,7 +393,7 @@ binary-modules: prep-deb-files
 clean:
 	dh_testdir
 	dh_testroot
-	dpatch deapply-all
+	dpatch deapply-all -v
 	-$(MAKE) distclean
 	rm -rf  debian/substvars debian/*.bak debian/*~ *~  *-stamp debian/$(PATCH_PKG)
 	ls -d debian/lustre-client-modules-* | grep -v _KVERS_ | xargs rm -f || true
@@ -408,11 +408,11 @@ clean:
 
 patch: patch-stamp
 patch-stamp:
-	dpatch apply-all
+	dpatch apply-all -v
 	touch $@
 
 unpatch:
-	dpatch deapply-all
+	dpatch deapply-all -v
 	rm -rf debian/patched patch-stamp
 
 .PHONY: binary-arch clean source diff  binary binary-indep binary-arch install configure
