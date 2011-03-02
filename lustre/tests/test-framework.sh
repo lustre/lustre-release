@@ -59,7 +59,6 @@ print_summary () {
         local o=$(echo $O | tr "[:upper:]" "[:lower:]")
         o=${o//_/-}
         local log=${TMP}/${o}.log
-        [ "$o" = racer ] && log=${TMP}/runracer.log
         if is_sanity_benchmark $o; then
             log=${TMP}/sanity-benchmark.log
         fi
