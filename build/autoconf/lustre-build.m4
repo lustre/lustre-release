@@ -258,7 +258,6 @@ case x$with_lustre_iokit in
 			AC_MSG_ERROR([A complete (built) external lustre-iokit was not found.])
 		])
 		LUSTREIOKIT="$with_lustre_iokit"
-		with_lustre_iokit="yes"
 		;;
 esac
 AC_SUBST(LUSTREIOKIT_SUBDIR)
