@@ -18,6 +18,7 @@ Usage ${0##*/} [options]  suite [suite optoins] [suite [suite options]]
 Run Lustre regression tests suites.
       -c CONFIG Test environment config file
       -d LOGDIR Top level directory for logs
+      -D FULLLOGDIR Full directory for logs
       -f STR    Config name (cfg/<name>.sh)
       -i N      Repeat tests N times (default 1). A new directory
                 will be created under LOGDIR for each iteration.
@@ -61,14 +62,15 @@ verbose=false
 repeat_count=1
 upload_logs=false
 reformat=false
-test_logs_dir=/tmp/test_logs
+test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export SLOW=no
 export ${NAME:=local}
-while getopts "c:d:nkf:i:rRslhv" opt
+while getopts "c:d:D:nkf:i:rRslhv" opt
 do
     case "$opt" in
 	c) CONFIG=$OPTARG;;
-	d) test_logs_dir=$OPTARG;;
+	d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
+	D) test_logs_dir=$OPTARG;;
 	k) export FAIL_ON_ERROR=false;;
         n) dry_run=:;;
         v) verbose=:;;
@@ -224,7 +226,7 @@ run_suite_logged() {
 #
 # Add this to test-framework somewhere.
 reset_logging() {
-    export LOGDIR=${1:-${test_logs_dir}/$(date +%Y-%m-%d)/$(date +%H%M%S)}
+    export LOGDIR=$1
     unset YAML_LOG
     init_logging
 }
@@ -236,10 +238,9 @@ split_commas() {
 run_suites() {
     local n=0
     local argv=("$@")
-    local basedir=${test_logs_dir}/$(date +%Y-%m-%d)/$(date +%H%M%S)
     while ((n < repeat_count)); do
 	local RC=0
-	local logdir=$basedir
+	local logdir=${test_logs_dir}
 	((repeat_count > 1)) && logdir="$logdir/$n"
 	reset_logging $logdir
 	set -- "${argv[@]}"
