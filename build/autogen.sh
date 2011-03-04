@@ -19,41 +19,25 @@ compare_versions() {
 }
 
 error_msg() {
-	echo "$cmd is $1.  version $required is required to build Lustre."
+	echo "$cmd is $1.  Version $required (or higher) is required to build Lustre."
 
-	if [ -e /usr/lib/autolustre/bin/$cmd ]; then
-		cat >&2 <<-EOF
-		You apparently already have Lustre-specific autoconf/make RPMs
-		installed on your system at /usr/lib/autolustre/share/$cmd.
-		Please set your PATH to point to those versions:
-
-		export PATH="/usr/lib/autolustre/bin:\$PATH"
-		EOF
-	else
-		cat >&2 <<-EOF
-		Sun provides RPMs which can be installed alongside your
-		existing autoconf/make RPMs, if you are nervous about
-		upgrading.  See
-
-		http://downloads.lustre.org/public/tools/autolustre/README.autolustre
-
-		You may be able to download newer version from:
-
-		http://ftp.gnu.org/gnu/$tool/$tool-$required.tar.gz
-	EOF
+	if [ ! -x /usr/bin/lsb_release ]; then
+		echo "lsb_release could not be found.  If it were available more help on how to resolve this\nsituation would be available."
+                exit 1
 	fi
-	[ "$cmd" = "autoconf" -a "$required" = "2.57" ] && cat >&2 <<EOF
 
-or for RH9 systems you can use:
+	local dist_id="$(lsb_release -is)"
+	local howto=""
+	howto() {
+		echo -e "To install $cmd, you can use the command:\n# $1"
+	}
+	case $dist_id in
+		 Ubuntu|Debian) howto "apt-get install $cmd" ;;
+	CentOS|RedHat*|Fedora*) howto "yum install $cmd" ;;
+	                 SUSE*) howto "yast -i $cmd" ;;
+	                     *) echo -e "\nInstallation instructions for the package $cmd on $dist_id are not known.\nIf you know how to install the required package, please file a bug at\njira.whamcloud.com and include your distribution and that the output from:\n\"lsb_release -is\" is: \"$dist_id\"" ;;
+	esac
 
-ftp://fr2.rpmfind.net/linux/redhat/9/en/os/i386/RedHat/RPMS/autoconf-2.57-3.noarch.rpm
-EOF
-	[ "$cmd" = "automake-1.7" -a "$required" = "1.7.8" ] && cat >&2 <<EOF
-
-or for RH9 systems you can use:
-
-ftp://fr2.rpmfind.net/linux/fedora/core/1/i386/os/Fedora/RPMS/automake-1.7.8-1.noarch.rpm
-EOF
 	exit 1
 }
 
@@ -66,7 +50,7 @@ check_version() {
     tool=$1
     cmd=$2
     required=$3
-    echo -n "checking for $cmd $required... "
+    echo -n "checking for $cmd >= $required... "
     if ! $cmd --version >/dev/null ; then
 	error_msg "missing"
     fi
@@ -105,13 +89,22 @@ for dir in $OPTIONAL_DIRS; do
     fi
 done
 
-for AMVER in 1.7 1.8 1.9 1.10 1.11; do
-     [ "$(which automake-$AMVER 2> /dev/null)" ] && break
+found=false
+for AMVER in 1.9 1.10 1.11; do
+    if which automake-$AMVER 2> /dev/null; then
+        found=true
+        break
+    fi
 done
+
+if ! $found; then
+    cmd=automake required="1.9" error_msg "not found"
+    exit 1
+fi
 
 [ "${AMVER#1.}" -ge "10" ] && AMOPT="-W no-portability"
 
-check_version automake automake-$AMVER "1.7.8"
+check_version automake automake-$AMVER "1.9"
 check_version autoconf autoconf "2.57"
 
 run_cmd()
@@ -128,9 +121,12 @@ run_cmd()
     echo
 }
 
-run_cmd "aclocal-$AMVER $ACLOCAL_FLAGS"
+export ACLOCAL="aclocal-$AMVER"
+export AUTOMAKE="automake-$AMVER"
+
+run_cmd "$ACLOCAL $ACLOCAL_FLAGS"
 run_cmd "autoheader"
-run_cmd "automake-$AMVER -a -c $AMOPT"
+run_cmd "$AUTOMAKE -a -c $AMOPT"
 run_cmd autoconf
 
 # Run autogen.sh in these directories
