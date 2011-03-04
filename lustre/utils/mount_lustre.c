@@ -308,7 +308,7 @@ int parse_options(char *orig_options, int *flagp)
                                 retry = 0;
                 } else if (val && strncmp(arg, "mgssec", 6) == 0) {
                         append_option(options, opt);
-                } else if (strncmp(opt, "force", 5) == 0) {
+                } else if (strcmp(opt, "force") == 0) {
                         //XXX special check for 'force' option
                         ++force;
                         printf("force: %d\n", force);
