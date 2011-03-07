@@ -1082,7 +1082,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH |/* OBD_CONNECT_ATTRFID |*/\
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT_FORCE | \

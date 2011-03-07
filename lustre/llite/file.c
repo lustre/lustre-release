@@ -2168,6 +2168,9 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
 
         exp = ll_i2mdexp(inode);
 
+        /* XXX: Enable OBD_CONNECT_ATTRFID to reduce unnecessary getattr RPC.
+         *      But under CMD case, it caused some lock issues, should be fixed
+         *      with new CMD ibits lock. See bug 12718 */
         if (exp->exp_connect_flags & OBD_CONNECT_ATTRFID) {
                 struct lookup_intent oit = { .it_op = IT_GETATTR };
                 struct md_op_data *op_data;
