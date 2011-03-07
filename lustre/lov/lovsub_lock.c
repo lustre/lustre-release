@@ -301,9 +301,7 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
 
         result = 0;
         switch (parent->cll_state) {
-        case CLS_NEW:
         case CLS_QUEUING:
-        case CLS_ENQUEUED:
         case CLS_FREEING:
                 cl_lock_signal(env, parent);
                 break;
@@ -337,6 +335,8 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                  * enqueues missing sub-lock.
                  */
                 cl_lock_state_set(env, parent, CLS_NEW);
+                /* fall through */
+        case CLS_NEW:
                 /*
                  * if last sub-lock is canceled, destroy the top-lock (which
                  * is now `empty') proactively.
@@ -376,6 +376,7 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                         }
                 }
                 break;
+        case CLS_ENQUEUED:
         case CLS_HELD:
                 CL_LOCK_DEBUG(D_ERROR, env, parent, "Delete CLS_HELD lock\n");
         default:
