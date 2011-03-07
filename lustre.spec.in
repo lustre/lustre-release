@@ -302,28 +302,6 @@ if [ -x /sbin/weak-modules ]; then
         /sbin/weak-modules --add-modules
 fi
 
-# for update from < v1.4.6
-
-for f in /etc/modules.conf /etc/modprobe.conf /etc/modprobe.conf.local ; 
-do
-	if [ -f $f ]; then
-		if grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
-			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
-			TMPFILE=`mktemp $f.XXXXXX` && \
-			rm -f $TMPFILE && touch $TMPFILE && \
-			grep -v 'lustre llite' $f >> $TMPFILE && \
-			mv $TMPFILE $f
-		fi
-		if egrep "^[^#]*(add below|install) ptlrpc" $f ; then
-			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
-			TMPFILE=`mktemp $f.XXXXXX` && \
-			rm -f $TMPFILE && touch $TMPFILE && \
-			sed -e "s/^[^#]*\(add below\|install\) ptlrpc.*/#&/" $f >> $TMPFILE && \
-			mv $TMPFILE $f
-		fi
-	fi
-done
-
 # If the kernel was built to reject unsupported modules (e.g. not a Lustre
 # kernel), and this hasn't been overridden in /etc/modprobe.d yet, then
 # print a warning so that users are aware of this issue.
