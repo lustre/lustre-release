@@ -556,7 +556,7 @@ test_9() {
     mdt_mmp_check_interval=$(get_mmp_check_interval $MMP_MDS $MMP_MDSDEV)
     run_e2fsck $MMP_MDS_FAILOVER $MMP_MDSDEV "-fy" &
     e2fsck_pid=$!
-    sleep $((2 * $mdt_mmp_check_interval + 1))
+    sleep $((2 * $mdt_mmp_check_interval))
     kill -s ABRT $e2fsck_pid
 
     log "Mounting $MMP_MDSDEV on $MMP_MDS..."
@@ -572,7 +572,7 @@ test_9() {
     ost_mmp_check_interval=$(get_mmp_check_interval $MMP_OSS $MMP_OSTDEV)
     run_e2fsck $MMP_OSS_FAILOVER $MMP_OSTDEV "-fy" &
     e2fsck_pid=$!
-    sleep $((2 * $ost_mmp_check_interval + 1))
+    sleep $((2 * $ost_mmp_check_interval))
     kill -s ABRT $e2fsck_pid
 
     log "Mounting $MMP_OSTDEV on $MMP_OSS..."
@@ -596,10 +596,14 @@ test_10() {
 
     run_e2fsck $MMP_MDS_FAILOVER $MMP_MDSDEV "-fn"
     rc=${PIPESTATUS[0]}
-    if [ $rc -ne 8 ]; then
-        error_noexit "e2fsck $MMP_MDSDEV on $MMP_MDS_FAILOVER should return 8"
+
+    # e2fsck is called with -n option (Open the filesystem read-only), so
+    # 0 (No errors) and 4 (File system errors left uncorrected) are the only
+    # acceptable exit codes in this case
+    if [ $rc -ne 0 ] && [ $rc -ne 4 ]; then
+        error_noexit "e2fsck $MMP_MDSDEV on $MMP_MDS_FAILOVER returned $rc"
         stop $MMP_MDS || return ${PIPESTATUS[0]}
-        [ $rc -ne 0 ] && return $rc || return 1
+        return $rc
     fi
 
     log "Mounting $MMP_OSTDEV on $MMP_OSS..."
@@ -612,10 +616,8 @@ test_10() {
 
     run_e2fsck $MMP_OSS_FAILOVER $MMP_OSTDEV "-fn"
     rc=${PIPESTATUS[0]}
-    if [ $rc -ne 8 ]; then
-        error_noexit "e2fsck $MMP_OSTDEV on $MMP_OSS_FAILOVER should return 8"
-        stop_services primary || return ${PIPESTATUS[0]}
-        [ $rc -ne 0 ] && return $rc || return 1
+    if [ $rc -ne 0 ] && [ $rc -ne 4 ]; then
+        error_noexit "e2fsck $MMP_OSTDEV on $MMP_OSS_FAILOVER returned $rc"
     fi
 
     stop_services primary || return ${PIPESTATUS[0]}
