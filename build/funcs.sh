@@ -179,6 +179,7 @@ autodetect_target() {
     case ${distro} in
           oel5) target="2.6-oel5";;
          rhel5) target="2.6-rhel5";;
+         rhel6) target="2.6-rhel6";;
         sles10) target="2.6-sles10";;
         sles11) target="2.6-sles11";;
             *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
