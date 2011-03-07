@@ -1482,7 +1482,8 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         }
         CDEBUG(D_INODE, "looking up object O/%.*s/%s\n",
                dparent->d_name.len, dparent->d_name.name, name);
-        dchild = /*ll_*/lookup_one_len(name, dparent, len);
+        /* dparent is already locked here, so we cannot use ll_lookup_one_len() */
+        dchild = lookup_one_len(name, dparent, len);
         if (dir_dentry == NULL)
                 filter_parent_unlock(dparent);
         if (IS_ERR(dchild)) {
