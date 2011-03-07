@@ -161,6 +161,7 @@ debs:
 	if [ -d .git ]; then \
 		build/extract_patches .; \
 	fi
+	cat debian/patches/* | sed -ne '/^diff --git/h' -e '/^deleted file/{G;s/^.* b\/\(.*\)/\1/p;}' | xargs rm -f; \
 	rm -rf debs
 	dpkg-buildpackage -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
