@@ -1,0 +1,172 @@
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
+# increment this if you have made a change that should force a new kernel
+# to build built for all releases of this distribution (only -- if you want
+# to force a kernel build on all distributions, update the BUILD_GEN variable
+# in build/lbuild)
+#BUILD_GEN+=".0"
+BUILD_GEN+=".1"	# refactor both rhel5 and rhel6
+
+DEVEL_KERNEL_TYPE="devel"
+RPM_HELPERS_DIR="/usr/lib/rpm/redhat"
+
+# a method which can be overriden by the release specific code
+get_rpmbuildopts() {
+
+    return 0
+
+}
+
+# patching common to all releases
+patch_spec_common() {
+
+    sed -i -e 's/^\(%define signmodules \).*/\10/' \
+           -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
+    cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3 \
+    cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
+          SPECS/$SPEC_NAME 2>&1 || \
+        fatal 1 "Error while editing SPECS/$SPEC_NAME"
+
+    # XXX - a building-on-Ubuntu hack
+    if grep -q "Ubuntu" /etc/issue; then
+        sed  -i -e 's/^\(BuildPreReq: .*\)$/#NOU \1/g' \
+               -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
+               -e 's/sha512hmac/md5sum/g' \
+            SPECS/$SPEC_NAME 2>&1 || \
+                fatal 1 "Error while editing SPECS/$SPEC_NAME"
+    fi
+
+
+}
+
+prepare_and_build_srpm() {
+
+    pushd $TOPDIR >/dev/null
+
+    # create the buildid
+    local buildid="_lustre${EXTRA_VERSION##*_lustre}"
+
+    # edit the SPEC with our changes
+    patch_spec
+
+    popd >/dev/null
+
+    # this concept of being able to build a list of targets with a single
+    # lbuild is a fine idea, but in reality I think it's (very) broken.  I
+    # don't even think the lustre.spec can handle being called with "--target
+    # <multiple arches>".  It certainly can't handle the issue where each
+    # arch has it's own kernel location.
+    # but we will do the best we can and put the plumbing in place so that
+    # this could work when the other broken bits are fixed.
+    # in reality, our current use of lbuild only ever has a single arch in
+    # $BUILD_ARCHS
+    local arch
+    local targets=""
+    for arch in $BUILD_ARCHS; do
+        # XXX - ok.  so here's a hack that needs to be fixed properly
+        #       ppc64 was merged to ppc some time ago pre 2.6.18
+        if [ $arch = ppc64 ]; then
+            arch=ppc
+        fi
+        targets="--target $arch $targets"
+        # copy our .config into the RPM build tree
+        (echo "# $(basearch $arch)"; cat $CONFIG_FILE) > \
+            SOURCES/kernel-$lnxmaj-$arch.config
+
+        # XXX - hackity hack -- until we get (or generate from the base
+        #                       config) configs for xen and debug
+        local f=""
+        for f in SOURCES/kernel-${lnxmaj}-*.config; do
+            grep -q "^CONFIG_SD_IOSTATS=y" $f || \
+                echo "CONFIG_SD_IOSTATS=y" >> $f
+        done
+    done
+
+    # do we need any special rpm build options
+    local rpmbuildopt="-bb"
+    if $DO_SRC; then
+        rpmbuildopt="-ba"
+    fi
+
+    # stupid Ubuntu's rpm doesn't do debuginfo properly
+    if [ ! -f /usr/lib/rpm/debugedit ]; then
+        rpmbuildopt="$rpmbuildopt --without debuginfo"
+    fi
+
+    # XXX - need to figure this kabichk crap out -- it fails the build
+    rpmbuildopt="$rpmbuildopt --without kabichk"
+
+    # get any release specific build options
+    rpmbuildopt="$rpmbuildopt $(get_rpmbuildopts)"
+
+    # now build it
+    if ! eval $RPMBUILD $rpmbuildopt $targets --with baseonly \
+                   --define \"_topdir $TOPDIR\" \
+                   --define \"buildid $buildid\" \
+                   --define \"_tmppath $TMPDIR\" \
+                   $TOPDIR/SPECS/$SPEC_NAME 2>&1; then
+        return 1
+    fi
+
+    return 0
+
+}
+
+devel_kernel_name() {
+    local lustre=${1:-false}
+
+    if $lustre; then
+        echo "kernel-lustre-$DEVEL_KERNEL_TYPE"
+    else
+        echo "kernel-$DEVEL_KERNEL_TYPE"
+    fi
+
+}
+
+rpm_BUILD_kernel_dirname() {
+    local rpmsmptype="$1"
+    local lnxmaj="$2"
+    local lnxmin="$3"
+    local arch="$4"
+
+    local lustre=""
+    if $KERNEL_LUSTRE_NAMING; then
+        $lustre="-lustre"
+    fi
+    echo kernel${lustre}${lnxmaj}${lnxmin}/linux-${lnxmaj}.$arch
+}
+
+find_linux_devel_paths() {
+    local path="$1"
+    local ARCH=$TARGET_ARCH
+
+    # If DEVEL_PATH_ARCH is set, use it. Added for fc11 as it needs i586 string for i686.
+    if [ $DEVEL_PATH_ARCH ];then
+        ARCH=$DEVEL_PATH_ARCH
+    fi
+
+    LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}${ARCH}
+    # RHEL doesn't have the -obj tree
+    LINUXOBJ=""
+    # XXX - i don't think we need this any more
+    #LINUXRELEASE=$(find_linux_release "$LINUX")
+    #if [ -z "$LINUXRELEASE" ]; then
+    #    echo "Failed to find linux release in $LINUX"
+    #    return 255
+    #fi
+
+    return 0
+}
+
+unpack_linux_devel_rpm-rhel() {
+    local callers_rpm="$1"
+
+    # now just sanity check that everything needed to build properly versioned
+    # modules is in place
+    if [ ! -f usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}$TARGET_ARCH/Module.symvers ]; then
+        fatal 1 "cannot build kernel modules: the Kernel's Module.symvers is missing."
+    fi
+
+    return 0
+
+}

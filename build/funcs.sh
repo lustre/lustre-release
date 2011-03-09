@@ -58,11 +58,12 @@ find_linux_rpms() {
     local prefix="$1"
     local pathtorpms=${2:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
 
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
     local kernel_rpms=$(find_linux_rpm "$prefix" "$pathtorpms")
     # call a distro specific hook, if available
     if type -p find_linux_rpms-$DISTRO; then
         local rpm
-        if rpm=$(find_linux_rpms-$DISTRO "$prefix" "$pathtorpms"); then
+        if rpm=$(find_linux_rpms-$DISTRO "$prefix" "$wanted_kernel" "$pathtorpms"); then
             kernel_rpms="$kernel_rpms $rpm"
         else
             return 255
@@ -87,13 +88,11 @@ find_linux_rpm() {
     local prefix="$1"
     local pathtorpms=${2:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
 
-    [ -d $pathtorpms ] || return 255
-
-    local kernelbinaryrpm rpmfile
+    local found_rpm=""
     local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
-
-    local arch ret=1
-        local found_rpm="" rpm
+    local ret=1
+    if [ -d "$pathtorpms" ]; then
+        local rpm
         for rpm in $(ls ${pathtorpms}/*.$(resolve_arch $TARGET_ARCH $PATCHLESS).rpm); do
             if rpm -q --provides -p "$rpm" 2>&$STDOUT | grep -q "kernel${prefix} = $wanted_kernel" 2>&$STDOUT; then
                 found_rpm="$rpm"
@@ -101,9 +100,23 @@ find_linux_rpm() {
                 break
             fi
         done
+    else
+        mkdir -p "$pathtorpms"
+    fi
     # see above "XXX"
     #     [ -f "$found_rpm" ] && break
     # done
+    if [ -z "$found_rpm" ]; then
+        # see if there is a distro specific way of getting the RPM
+        if type -p find_linux_rpm-$DISTRO; then
+            if found_rpm=$(find_linux_rpm-$DISTRO "$prefix" "$wanted_kernel" "$pathtorpms"); then
+                found_rpm="${pathtorpms}/$found_rpm"
+                ret=0
+            else
+                ret=${PIPESTATUS[0]}
+            fi
+        fi
+    fi
 
     echo "$found_rpm"
     return $ret
@@ -166,6 +179,7 @@ autodetect_target() {
     case ${distro} in
           oel5) target="2.6-oel5";;
          rhel5) target="2.6-rhel5";;
+         rhel6) target="2.6-rhel6";;
         sles10) target="2.6-sles10";;
         sles11) target="2.6-sles11";;
             *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;

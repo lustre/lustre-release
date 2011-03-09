@@ -299,6 +299,9 @@ check_options() {
     fi
 
     case $TARGET in
+        2.6-rhel6)
+            CANONICAL_TARGET="rhel6"
+            ;;
         2.6-rhel5)
             CANONICAL_TARGET="rhel5"
             ;;
@@ -385,6 +388,27 @@ uniqify() {
 
 }
 
+fetch_url() {
+    local url="$1"
+    local target="$2"
+
+    local rc=0
+    if which wget >/dev/null 2>&1; then
+        if ! wget -nv "$url" -O "$target"; then
+            rc=${PIPESTATUS[0]}
+        fi
+    elif which curl >/dev/null 2>&1; then
+        if ! curl -L -s -o "$target" "$url"; then
+            rc=${PIPESTATUS[0]}
+        fi
+    else
+        fatal 1 "Could not find either wget or curl to fetch URLs."
+    fi
+
+    return $rc
+
+}
+
 download_srpm() {
     local target=$1
     local srpm=$2
@@ -394,11 +418,22 @@ download_srpm() {
        [ ! -s "$KERNELDIR/$srpm" ]; then
         if $DOWNLOAD; then
             local location="http://downloads.lustre.org/public/kernels/$target/old"
+            # get the location from a distro specific method if it exists
+            if type -p kernel_srpm_location; then
+                location=$(kernel_srpm_location)
+            fi
             echo "Downloading $location/$srpm..."
-            if ! wget -nv "$location/$srpm" -O "$KERNELDIR/$srpm" 2>&1 ||
+            if ! fetch_url "$location/$srpm" "$KERNELDIR/$srpm" 2>&1 ||
                [ ! -s "$KERNELDIR/$srpm" ]; then
                 rm -f $KERNELDIR/$srpm
-                fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
+                # punt to a distro specific method if it exists
+                if ! type -p download_srpm-$DISTRO; then
+                    fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
+                else
+                    if ! download_srpm-$DISTRO "$target" "$srpm" "$force"; then
+                        fatal 1 "Could not download target $target's kernel SRPM $srpm using download_srpm-$DISTRO."
+                    fi
+                fi
             fi
         else
             fatal 1 "$srpm not found in directory $KERNELDIR."
@@ -471,7 +506,7 @@ download_file() {
             # flag others so they don't try to download also
             push_exit_trap "rm -f $to $semaphore" "download"
             touch $semaphore
-            if ! wget -nv "$from" -O "$to" || [ ! -s "$to" ]; then
+            if ! fetch_url "$from" "$to" || [ ! -s "$to" ]; then
                 # the trap will remove the files via the fatal below
                 fatal 1 "Could not download ${to##*/} from ${from%/*}/."
             fi
