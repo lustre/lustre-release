@@ -2340,7 +2340,7 @@ test_88() { # bug 19494
             error_noexit "lfs find does not report the affected $obd for $file"
     done
 
-    [[ $(echo $list | wc -w) -eq 2 ]] || 
+    [[ $(echo $list | wc -w) -eq 2 ]] ||
         error_noexit "lfs find reports the wrong list of affected files ${#list[@]}"
 
     echo "Check getstripe: lfs getstripe -r --obd $obd"
