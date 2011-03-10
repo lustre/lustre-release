@@ -18,7 +18,7 @@ yml_nodes_file() {
 
     if [ -f $logdir/shared ]; then
         do_rpc_nodes $(comma_list $(nodes_list)) \
-            "yml_node >> $logdir/node.\\\$(hostname).yml"
+            "yml_node >> $logdir/node.\\\$(hostname -s).yml"
     else
         do_rpc_nodes $(comma_list $(nodes_list)) yml_node | split_output
     fi
@@ -31,13 +31,15 @@ yml_results_file() {
     #TestGroup
     yml_test_group
 
+    #CodeReview
+    yml_code_review
+
     # Tests
     printf "Tests:\n"
 }
 
 # Called on the node for which we the info is needed.
 yml_node() {
-    local node=$(hostname)
     logdir=$1
 
     printf "Build:\n"
@@ -52,8 +54,8 @@ yml_node() {
 }
 
 yml_test_group() {
-    TEST_GROUP=${TEST_GROUP:-"acc-sm-$(hostname)"}
-    TEST_HOST=${TEST_HOST:-$(hostname)}
+    TEST_GROUP=${TEST_GROUP:-"acc-sm-$(hostname -s)"}
+    TEST_HOST=${TEST_HOST:-$(hostname -s)}
     TEST_USER=${TEST_USER:-$USER}
 
     # TestGroup information
@@ -63,8 +65,11 @@ TestGroup:
     testhost: $TEST_HOST
     submission: $(date)
     user_name: $TEST_USER
-
 EOF
+}
+
+yml_code_review() {
+    echo -e $CODE_REVIEW_YAML
 }
 
 release() {
@@ -85,7 +90,7 @@ release() {
 yml_build_info() {
     TEST_DISTRO=$(release)
     LUSTRE_VERSION=$(lctl lustre_build_version | awk '/Lustre version:/ {print $3}')
-    LUSTRE_BUILD=$(sed 's/-.*//' <<<$LUSTRE_VERSION)
+    LUSTRE_BUILD=${LUSTRE_BUILD_SOURCE:-$(sed 's/-.*//' <<<$LUSTRE_VERSION)}
 
 cat <<EOF
     lbats_build_id: $LBATS_ID
@@ -103,7 +108,7 @@ yml_node_info()
 {
     mem=$(awk '/MemTotal:/ {print $2 " " $3}' /proc/meminfo)
 cat <<EOF
-    node_name: $(hostname)
+    node_name: $(hostname -s)
     mem_size: $mem
     architecture: $(uname -m)
     networks:
@@ -124,17 +129,18 @@ EOF
 yml_entities() {
     local host
     for num in $(seq $MDSCOUNT); do
-        host=$(facet_active_host mds$num)
+        host=$(short_hostname $(facet_active_host mds$num))
         yml_entity "MDS $num" $host >> $logdir/node.$host.yml
     done
 
     for num in $(seq $OSTCOUNT); do
-        host=$(facet_active_host ost$num)
+        host=$(short_hostname $(facet_active_host ost$num))
         yml_entity "OST $num" $host >> $logdir/node.$host.yml
     done
 
     i=1
     for host in ${CLIENTS//,/ }; do
+        host=$(short_hostname $host)
         yml_entity "Client $i" $host >> $logdir/node.$host.yml
         i=$((i+1))
     done

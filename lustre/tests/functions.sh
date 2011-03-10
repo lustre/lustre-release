@@ -241,3 +241,12 @@ lst_setup_all () {
     do_rpc_nodes $list lst_setup 
 }
 
+###
+# short_hostname
+#
+# Passed a single argument, strips everything off following and includes the first period.
+# client-20.lab.whamcloud.com becomes client-20
+short_hostname() {
+  echo $(sed 's/\..*//' <<< $1)
+}
+

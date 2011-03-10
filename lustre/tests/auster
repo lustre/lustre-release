@@ -222,7 +222,7 @@ run_suite_logged() {
     fi
     
     echo "run_suite $suite_name $suite_script"
-    local log_name=${suite_name}.suite_log.$(hostname).log
+    local log_name=${suite_name}.suite_log.$(hostname -s).log
     if $verbose; then
 	run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
     else
