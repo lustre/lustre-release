@@ -155,18 +155,19 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
         if (dlmlock->l_granted_mode == dlmlock->l_req_mode) {
                 struct cl_object *obj = olck->ols_cl.cls_obj;
                 struct cl_attr *attr  = &osc_env_info(env)->oti_attr;
-                __u64 old_kms = cl2osc(obj)->oo_oinfo->loi_kms;
+                __u64 old_kms;
 
+                cl_object_attr_lock(obj);
+                /* Must get the value under the lock to avoid possible races. */
+                old_kms = cl2osc(obj)->oo_oinfo->loi_kms;
                 /* Update the kms. Need to loop all granted locks.
                  * Not a problem for the client */
                 attr->cat_kms = ldlm_extent_shift_kms(dlmlock, old_kms);
-                unlock_res_and_lock(dlmlock);
 
-                cl_object_attr_lock(obj);
                 cl_object_attr_set(env, obj, attr, CAT_KMS);
                 cl_object_attr_unlock(obj);
-        } else
-                unlock_res_and_lock(dlmlock);
+        }
+        unlock_res_and_lock(dlmlock);
 
         /* release a reference taken in osc_lock_upcall0(). */
         LASSERT(olck->ols_has_ref);
