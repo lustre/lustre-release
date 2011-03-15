@@ -1,0 +1,17 @@
+security_inode_unlink() is used in filter_vfs_unlink()
+to avoid lock ordering problems.  I'm not sure if this
+is still needed with ext4, and it definitely looks to
+be gone with DMU changes.
+
+Index: linux+rh+chaos/security/security.c
+===================================================================
+--- linux+rh+chaos.orig/security/security.c
++++ linux+rh+chaos/security/security.c
+@@ -60,6 +60,7 @@ int __init security_init(void)
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL(security_inode_unlink);
+ 
+ /* Save user chosen LSM */
+ static int __init choose_lsm(char *str)

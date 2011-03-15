@@ -239,7 +239,7 @@ static void enc_pools_release_free_pages(long npages)
  * could be called frequently for query (@nr_to_scan == 0).
  * we try to keep at least PTLRPC_MAX_BRW_PAGES pages in the pool.
  */
-static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
+static int KERN_SHRINKER(enc_pools_shrink)
 {
         if (unlikely(nr_to_scan != 0)) {
                 cfs_spin_lock(&page_pools.epp_lock);

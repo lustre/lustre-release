@@ -436,12 +436,13 @@ struct lustre_sb_info {
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
-        struct backing_dev_info   bdi;         /* Each client mountpoint needs own backing_dev_info */
+        struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs own backing_dev_info */
 };
 
 #define LSI_SERVER                       0x00000001
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
+#define LSI_BDI_INITIALIZED              0x00000040
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
 #define     s2lsi_nocast(sb) ((sb)->s_fs_info)

@@ -1,0 +1,63 @@
+Index: linux-2.6.32-el6-beta/fs/ext4/inode.c
+===================================================================
+--- linux-2.6.32-el6-beta.orig/fs/ext4/inode.c
++++ linux-2.6.32-el6-beta/fs/ext4/inode.c
+@@ -4920,11 +4920,11 @@ struct inode *ext4_iget(struct super_blo
+ 	EXT4_INODE_GET_XTIME(i_atime, inode, raw_inode);
+ 	EXT4_EINODE_GET_XTIME(i_crtime, ei, raw_inode);
+ 
+-	inode->i_version = le32_to_cpu(raw_inode->i_disk_version);
++	ei->i_fs_version = le32_to_cpu(raw_inode->i_disk_version);
+ 	if (EXT4_INODE_SIZE(inode->i_sb) > EXT4_GOOD_OLD_INODE_SIZE) {
+ 		if (EXT4_FITS_IN_INODE(raw_inode, ei, i_version_hi))
+-			inode->i_version |=
+-			(__u64)(le32_to_cpu(raw_inode->i_version_hi)) << 32;
++			ei->i_fs_version |= (__u64)(le32_to_cpu(raw_inode->i_version_hi))
++									 << 32;
+ 	}
+ 
+ 	ret = 0;
+@@ -5134,11 +5134,11 @@ static int ext4_do_update_inode(handle_t
+ 		for (block = 0; block < EXT4_N_BLOCKS; block++)
+ 			raw_inode->i_block[block] = ei->i_data[block];
+ 
+-	raw_inode->i_disk_version = cpu_to_le32(inode->i_version);
++	raw_inode->i_disk_version = cpu_to_le32(ei->i_fs_version);
+ 	if (ei->i_extra_isize) {
+ 		if (EXT4_FITS_IN_INODE(raw_inode, ei, i_version_hi))
+-			raw_inode->i_version_hi =
+-			cpu_to_le32(inode->i_version >> 32);
++			raw_inode->i_version_hi = cpu_to_le32(ei->i_fs_version
++							      >> 32);
+ 		raw_inode->i_extra_isize = cpu_to_le16(ei->i_extra_isize);
+ 	}
+ 
+Index: linux-2.6.32-el6-beta/fs/ext4/ialloc.c
+===================================================================
+--- linux-2.6.32-el6-beta.orig/fs/ext4/ialloc.c
++++ linux-2.6.32-el6-beta/fs/ext4/ialloc.c
+@@ -1018,6 +1018,7 @@ got:
+ 	ei->i_dtime = 0;
+ 	ei->i_block_group = group;
+ 	ei->i_last_alloc_group = ~0;
++	ei->i_fs_version = 0;
+ 
+ 	ext4_set_inode_flags(inode);
+ 	if (IS_DIRSYNC(inode))
+Index: linux-2.6.32-el6-beta/fs/ext4/ext4.h
+===================================================================
+--- linux-2.6.32-el6-beta.orig/fs/ext4/ext4.h
++++ linux-2.6.32-el6-beta/fs/ext4/ext4.h
+@@ -714,8 +714,12 @@ struct ext4_inode_info {
+ 	 */
+ 	tid_t i_sync_tid;
+ 	tid_t i_datasync_tid;
++
++	__u64 i_fs_version;
+ };
+ 
++#define HAVE_DISK_INODE_VERSION
++
+ /*
+  * File system states
+  */

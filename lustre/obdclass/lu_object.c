@@ -1626,24 +1626,24 @@ static void lu_site_stats_get(cfs_hash_t *hs,
 }
 
 #ifdef __KERNEL__
-static int lu_cache_shrink(int nr, unsigned int gfp_mask)
+static int KERN_SHRINKER(lu_cache_shrink)
 {
         lu_site_stats_t stats;
         struct lu_site *s;
         struct lu_site *tmp;
         int cached = 0;
-        int remain = nr;
+        int remain = nr_to_scan;
         CFS_LIST_HEAD(splice);
 
-        if (nr != 0) {
+        if (nr_to_scan != 0) {
                 if (!(gfp_mask & __GFP_FS))
                         return -1;
-                CDEBUG(D_INODE, "Shrink %d objects\n", nr);
+                CDEBUG(D_INODE, "Shrink %d objects\n", nr_to_scan);
         }
 
         cfs_down(&lu_sites_guard);
         cfs_list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
-                if (nr != 0) {
+                if (nr_to_scan != 0) {
                         remain = lu_site_purge(&lu_shrink_env, s, remain);
                         /*
                          * Move just shrunk site to the tail of site list to
@@ -1655,14 +1655,14 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
                 memset(&stats, 0, sizeof(stats));
                 lu_site_stats_get(s->ls_obj_hash, &stats, 0);
                 cached += stats.lss_total - stats.lss_busy;
-                if (nr && remain <= 0)
+                if (nr_to_scan && remain <= 0)
                         break;
         }
         cfs_list_splice(&splice, lu_sites.prev);
         cfs_up(&lu_sites_guard);
 
         cached = (cached / 100) * sysctl_vfs_cache_pressure;
-        if (nr == 0)
+        if (nr_to_scan == 0)
                 CDEBUG(D_INODE, "%d objects cached\n", cached);
         return cached;
 }

@@ -1,0 +1,42 @@
+Index: linux-2.6.32.i386/fs/ext4/namei.c
+===================================================================
+--- linux-2.6.32.i386.orig/fs/ext4/namei.c	2010-04-07 00:16:32.000000000 +0530
++++ linux-2.6.32.i386/fs/ext4/namei.c	2010-04-07 00:17:09.000000000 +0530
+@@ -144,6 +144,17 @@
+ 	u16 size;
+ };
+ 
++/*
++ * dentry_param used by ext4_new_inode_wantedi()
++ */
++#define LVFS_DENTRY_PARAM_MAGIC		20070216UL
++struct lvfs_dentry_params
++{
++	unsigned long   ldp_inum;
++	unsigned long	ldp_flags;
++	u32		ldp_magic;
++};
++
+ static inline ext4_lblk_t dx_get_block(struct dx_entry *entry);
+ static void dx_set_block(struct dx_entry *entry, ext4_lblk_t value);
+ static inline unsigned dx_get_hash(struct dx_entry *entry);
+@@ -1751,6 +1762,19 @@
+ 	return err;
+ }
+ 
++static unsigned ext4_dentry_goal(struct super_block *sb, struct dentry *dentry)
++{
++	unsigned inum = EXT4_SB(sb)->s_inode_goal;
++
++	if (dentry->d_fsdata != NULL) {
++		struct lvfs_dentry_params *param = dentry->d_fsdata;
++
++		if (param->ldp_magic == LVFS_DENTRY_PARAM_MAGIC)
++			inum = param->ldp_inum;
++	}
++	return inum;
++}
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it

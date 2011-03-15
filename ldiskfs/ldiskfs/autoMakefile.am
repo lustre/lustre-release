@@ -24,12 +24,16 @@ linux/ldiskfs%.h: linux-stage/include/linux/@BACKFS@%.h
 series := @top_srcdir@/kernel_patches/series/ldiskfs-$(LDISKFS_SERIES)
 patches := @top_srcdir@/kernel_patches/patches
 
-sources: $(backfs_sources) $(backfs_headers) $(linux_headers) $(series)
-	rm -rf linux-stage linux sources $(ldiskfs_SOURCES)
-	mkdir -p linux-stage/fs/@BACKFS@ linux-stage/include/linux
+sources: $(backfs_sources) $(backfs_headers) $(linux_headers) $(series) $(trace_headers)
+	rm -rf linux-stage linux sources trace $(ldiskfs_SOURCES)
+	mkdir -p linux-stage/fs/@BACKFS@ linux-stage/include/linux \
+		 linux-stage/include/trace/events
 	cp $(backfs_sources) $(backfs_headers) $(backfs_extra) linux-stage/fs/@BACKFS@
 	if test -n "$(linux_headers)" ; then \
 		cp $(linux_headers) linux-stage/include/linux; \
+	fi
+	if test -n "$(trace_headers)" ; then \
+		cp $(trace_headers) linux-stage/include/trace/events; \
 	fi
 if USE_QUILT
 	ln -s ../$(patches) linux-stage/patches
@@ -43,7 +47,7 @@ else
 	done
 	@echo
 endif
-	mkdir linux
+	mkdir -p linux trace/events
 	@echo -n "Replacing '@BACKFS@' with 'ldiskfs':"
 	for i in $(notdir $(backfs_headers) $(backfs_sources)) $(new_sources) ; do \
 		echo -n " $$i" ; \
@@ -62,6 +66,12 @@ endif
 			linux-stage/include/linux/@BACKFS@$$i \
 			> linux/ldiskfs$$i ; \
 	done
+	for i in $(subst @BACKFS@,,$(notdir $(trace_headers))) ; do \
+		echo -n " @BACKFS@$$i"; \
+		sed $(strip $(ldiskfs_sed_flags)) \
+			linux-stage/include/trace/events/@BACKFS@$$i \
+			> trace/events/ldiskfs$$i ; \
+	done
 	sed $(strip $(ldiskfs_sed_flags)) \
         linux-stage/include/linux/dynlocks.h \
         > linux/dynlocks.h
@@ -79,7 +89,7 @@ foo-check:
 	@echo "ldiskfs_LDADD: $(ldiskfs_LDADD)"
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-CLEANFILES = sources $(notdir $(linux_headers) $(backfs_headers) $(backfs_sources) $(new_sources) $(new_headers))
+CLEANFILES = sources $(notdir $(linux_headers) $(backfs_headers) $(backfs_sources) $(new_sources) $(new_headers) $(trace_headers))
 
 clean: clean-am
-	rm -rf linux linux-stage ldiskfs*.h
+	rm -rf linux linux-stage ldiskfs*.h trace

@@ -1,0 +1,62 @@
+Index: linux-2.6.32.i386/fs/ext4/ext4.h
+===================================================================
+--- linux-2.6.32.i386.orig/fs/ext4/ext4.h	2010-04-16 03:39:11.000000000 +0530
++++ linux-2.6.32.i386/fs/ext4/ext4.h	2010-04-16 04:27:41.000000000 +0530
+@@ -29,6 +29,7 @@
+ #ifndef _EXT4_H
+ #define _EXT4_H
+ 
++#include <linux/dynlocks.h>
+ #include <linux/types.h>
+ #include <linux/blkdev.h>
+ #include <linux/magic.h>
+@@ -621,6 +622,10 @@
+ 	ext4_fsblk_t	i_file_acl;
+ 	__u32	i_dtime;
+ 
++	/* following fields for parallel directory operations -bzzz */
++	struct dynlock   i_htree_lock;
++	struct semaphore i_append_sem;
++
+ 	/*
+ 	 * i_block_group is the number of the block group which contains
+ 	 * this file's inode.  Constant across the lifetime of the inode,
+Index: linux-2.6.32.i386/fs/ext4/namei.c
+===================================================================
+--- linux-2.6.32.i386.orig/fs/ext4/namei.c	2010-04-15 07:42:15.000000000 +0530
++++ linux-2.6.32.i386/fs/ext4/namei.c	2010-04-16 04:26:03.000000000 +0530
+@@ -54,6 +54,11 @@
+ 					ext4_lblk_t *block, int *err)
+ {
+ 	struct buffer_head *bh;
++	struct ext4_inode_info *ei = EXT4_I(inode);
++
++	/* with parallel dir operations all appends
++	* have to be serialized -bzzz */
++	down(&ei->i_append_sem);
+ 
+ 	*block = inode->i_size >> inode->i_sb->s_blocksize_bits;
+ 
+@@ -66,7 +71,9 @@
+ 			brelse(bh);
+ 			bh = NULL;
+ 		}
++		ei->i_disksize = inode->i_size;
+ 	}
++	up(&ei->i_append_sem);
+ 	return bh;
+ }
+ 
+Index: linux-2.6.32.i386/fs/ext4/super.c
+===================================================================
+--- linux-2.6.32.i386.orig/fs/ext4/super.c	2010-04-16 03:39:11.000000000 +0530
++++ linux-2.6.32.i386/fs/ext4/super.c	2010-04-16 04:26:03.000000000 +0530
+@@ -700,6 +700,8 @@
+ 
+ 	ei->vfs_inode.i_version = 1;
+ 	ei->vfs_inode.i_data.writeback_index = 0;
++	dynlock_init(&ei->i_htree_lock);
++	sema_init(&ei->i_append_sem, 1);
+ 	memset(&ei->i_cached_extent, 0, sizeof(struct ext4_ext_cache));
+ 	INIT_LIST_HEAD(&ei->i_prealloc_list);
+ 	spin_lock_init(&ei->i_prealloc_lock);

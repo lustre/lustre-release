@@ -1,0 +1,64 @@
+diff -rupN 2.6.27.21_2/fs/ext4/ext4.h 2.6.27.21_3/fs/ext4/ext4.h
+--- 2.6.27.21_2/fs/ext4/ext4.h	2009-07-17 12:19:59.000000000 +0530
++++ 2.6.27.21_3/fs/ext4/ext4.h	2009-07-17 12:38:59.000000000 +0530
+@@ -1181,6 +1181,9 @@ extern int ext4_orphan_add(handle_t *, s
+ #define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
+ extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
+ 			       struct inode *inode);
++extern struct buffer_head *ext4_append(handle_t *handle,
++				       struct inode *inode,
++				       ext4_lblk_t *block, int *err);
+ 
+ /* resize.c */
+ extern int ext4_group_add(struct super_block *sb,
+diff -rupN 2.6.27.21_2/fs/ext4/hash.c 2.6.27.21_3/fs/ext4/hash.c
+--- 2.6.27.21_2/fs/ext4/hash.c	2009-07-17 12:12:56.000000000 +0530
++++ 2.6.27.21_3/fs/ext4/hash.c	2009-07-17 12:40:22.000000000 +0530
+@@ -9,6 +9,7 @@
+  * License.
+  */
+ 
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/jbd2.h>
+ #include <linux/cryptohash.h>
+@@ -206,3 +207,4 @@ int ext4fs_dirhash(const char *name, int
+ 	hinfo->minor_hash = minor_hash;
+ 	return 0;
+ }
++EXPORT_SYMBOL(ext4fs_dirhash);
+diff -rupN 2.6.27.21_2/fs/ext4/namei.c 2.6.27.21_3/fs/ext4/namei.c
+--- 2.6.27.21_2/fs/ext4/namei.c	2009-07-17 12:23:51.000000000 +0530
++++ 2.6.27.21_3/fs/ext4/namei.c	2009-07-17 12:37:59.000000000 +0530
+@@ -51,9 +51,9 @@
+ #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
+ 
+-static struct buffer_head *ext4_append(handle_t *handle,
+-					struct inode *inode,
+-					ext4_lblk_t *block, int *err)
++struct buffer_head *ext4_append(handle_t *handle,
++				struct inode *inode,
++				ext4_lblk_t *block, int *err)
+ {
+ 	struct buffer_head *bh;
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+@@ -72,6 +72,7 @@ static struct buffer_head *ext4_append(h
+ 	up(&ei->i_append_sem);
+ 	return bh;
+ }
++EXPORT_SYMBOL(ext4_append);
+ 
+ #ifndef assert
+ #define assert(test) J_ASSERT(test)
+diff -rupN 2.6.27.21_2/fs/ext4/super.c 2.6.27.21_3/fs/ext4/super.c
+--- 2.6.27.21_2/fs/ext4/super.c	2009-07-17 12:12:57.000000000 +0530
++++ 2.6.27.21_3/fs/ext4/super.c	2009-07-17 12:40:52.000000000 +0530
+@@ -377,6 +377,7 @@ void __ext4_std_error(struct super_block
+ 
+ 	ext4_handle_error(sb);
+ }
++EXPORT_SYMBOL(__ext4_std_error);
+ 
+ /*
+  * ext4_abort is a much stronger failure handler than ext4_error.  The

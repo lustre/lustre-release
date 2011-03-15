@@ -1,0 +1,255 @@
+Index: linux-stage/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_jbd2.h	2011-03-14 16:33:17.087088010 +0800
++++ linux-stage/fs/ext4/ext4_jbd2.h	2011-03-14 16:42:28.416591789 +0800
+@@ -35,6 +35,8 @@
+ 	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
+ 	 ? 27U : 8U)
+ 
++#define ext4_journal_dirty_metadata(handle, bh)  \
++		ext4_handle_dirty_metadata(handle, NULL, bh)
+ /* Extended attribute operations touch at most two data buffers,
+  * two bitmap buffers, and two group summaries, in addition to the inode
+  * and the superblock, which are already accounted for. */
+Index: linux-stage/fs/ext4/ext4_extents.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_extents.h	2011-03-14 16:33:17.076087785 +0800
++++ linux-stage/fs/ext4/ext4_extents.h	2011-03-14 16:43:08.254267525 +0800
+@@ -58,6 +58,12 @@
+  */
+ #define EXT_STATS_
+ 
++/*
++ * define EXT4_ALLOC_NEEDED to 0 since block bitmap, group desc. and sb
++ * are now accounted in ext4_ext_calc_credits_for_insert()
++ */
++#define EXT4_ALLOC_NEEDED 0
++#define HAVE_EXT_PREPARE_CB_EXTENT
+ 
+ /*
+  * ext4_inode has i_block array (60 bytes total).
+@@ -160,6 +166,7 @@
+ #define EXT_INIT_MAX_LEN	(1UL << 15)
+ #define EXT_UNINIT_MAX_LEN	(EXT_INIT_MAX_LEN - 1)
+ 
++#define EXT4_EXT_HAS_NO_TREE	/* ext4_extents_tree struct is not used*/
+ 
+ #define EXT_FIRST_EXTENT(__hdr__) \
+ 	((struct ext4_extent *) (((char *) (__hdr__)) +		\
+@@ -239,6 +246,8 @@
+ extern int ext4_ext_calc_credits_for_single_extent(struct inode *inode,
+ 						   int num,
+ 						   struct ext4_ext_path *path);
++extern int ext4_ext_calc_credits_for_insert(struct inode *,
++					    struct ext4_ext_path *);
+ extern int ext4_can_extents_be_merged(struct inode *inode,
+ 				      struct ext4_extent *ex1,
+ 				      struct ext4_extent *ex2);
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c	2011-03-14 16:33:27.072292006 +0800
++++ linux-stage/fs/ext4/mballoc.c	2011-03-14 16:41:02.500138039 +0800
+@@ -4039,6 +4039,7 @@
+ 	if (ac)
+ 		kmem_cache_free(ext4_ac_cachep, ac);
+ }
++EXPORT_SYMBOL(ext4_discard_preallocations);
+ 
+ /*
+  * finds all preallocated spaces and return blocks being freed to them
+@@ -4831,3 +4832,6 @@
+ 		kmem_cache_free(ext4_ac_cachep, ac);
+ 	return;
+ }
++
++EXPORT_SYMBOL(ext4_free_blocks);
++
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c	2011-03-14 16:33:17.036086967 +0800
++++ linux-stage/fs/ext4/super.c	2011-03-14 16:41:14.964348396 +0800
+@@ -127,6 +127,7 @@
+ 		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
+ 		 (__u32)le16_to_cpu(bg->bg_itable_unused_hi) << 16 : 0);
+ }
++EXPORT_SYMBOL(ext4_itable_unused_count);
+ 
+ void ext4_block_bitmap_set(struct super_block *sb,
+ 			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
+@@ -1491,6 +1492,7 @@
+ 	Opt_block_validity, Opt_noblock_validity,
+ 	Opt_inode_readahead_blks, Opt_journal_ioprio,
+ 	Opt_discard, Opt_nodiscard,
++	Opt_mballoc,
+ };
+ 
+ static const match_table_t tokens = {
+@@ -1557,6 +1559,7 @@
+ 	{Opt_auto_da_alloc, "auto_da_alloc=%u"},
+ 	{Opt_auto_da_alloc, "auto_da_alloc"},
+ 	{Opt_noauto_da_alloc, "noauto_da_alloc"},
++	{Opt_mballoc, "mballoc"},
+ 	{Opt_discard, "discard"},
+ 	{Opt_nodiscard, "nodiscard"},
+ 	{Opt_err, NULL},
+@@ -1997,6 +2000,8 @@
+ 		case Opt_nodiscard:
+ 			clear_opt(sbi->s_mount_opt, DISCARD);
+ 			break;
++		case Opt_mballoc:
++			break;
+ 		default:
+ 			ext4_msg(sb, KERN_ERR,
+ 			       "Unrecognized mount option \"%s\" "
+Index: linux-stage/fs/ext4/ext4_jbd2.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_jbd2.c	2011-03-14 16:33:17.049087232 +0800
++++ linux-stage/fs/ext4/ext4_jbd2.c	2011-03-14 16:34:39.849759386 +0800
+@@ -31,6 +31,7 @@
+ 	}
+ 	return err;
+ }
++EXPORT_SYMBOL(__ext4_journal_get_write_access);
+ 
+ int __ext4_journal_forget(const char *where, handle_t *handle,
+ 				struct buffer_head *bh)
+@@ -107,3 +108,4 @@
+ 	}
+ 	return err;
+ }
++EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h	2011-03-14 16:33:17.056087375 +0800
++++ linux-stage/fs/ext4/ext4.h	2011-03-14 16:45:40.754870806 +0800
+@@ -1110,6 +1110,9 @@
+ 
+ #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
+ 
++/* Has been moved to linux/magic.h but we need it for Lustre */
++#define EXT4_SUPER_MAGIC	0xEF53
++
+ /*
+  * Codes for operating systems
+  */
+@@ -1528,6 +1531,8 @@
+ extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
+ extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
+ 						ext4_group_t, int);
++extern void ext4_mb_discard_inode_preallocations(struct inode *);
++
+ /* inode.c */
+ int ext4_forget(handle_t *handle, int is_metadata, struct inode *inode,
+ 		struct buffer_head *bh, ext4_fsblk_t blocknr);
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c	2011-03-14 16:33:17.063087519 +0800
++++ linux-stage/fs/ext4/inode.c	2011-03-14 16:34:39.913760434 +0800
+@@ -5199,6 +5199,7 @@
+ 	iget_failed(inode);
+ 	return ERR_PTR(ret);
+ }
++EXPORT_SYMBOL(ext4_iget);
+ 
+ static int ext4_inode_blocks_set(handle_t *handle,
+ 				struct ext4_inode *raw_inode,
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c	2011-03-14 16:33:17.070087661 +0800
++++ linux-stage/fs/ext4/extents.c	2011-03-14 16:41:04.894178430 +0800
+@@ -1866,9 +1866,7 @@
+ 	while (block < last && block != EXT_MAX_BLOCK) {
+ 		num = last - block;
+ 		/* find extent for this block */
+-		down_read(&EXT4_I(inode)->i_data_sem);
+ 		path = ext4_ext_find_extent(inode, block, path);
+-		up_read(&EXT4_I(inode)->i_data_sem);
+ 		if (IS_ERR(path)) {
+ 			err = PTR_ERR(path);
+ 			path = NULL;
+@@ -1965,6 +1963,7 @@
+ 
+ 	return err;
+ }
++EXPORT_SYMBOL(ext4_ext_walk_space);
+ 
+ static void
+ ext4_ext_put_in_cache(struct inode *inode, ext4_lblk_t block,
+@@ -2133,6 +2132,55 @@
+ }
+ 
+ /*
++ * This routine returns max. credits extent tree can consume.
++ * It should be OK for low-performance paths like ->writepage()
++ * To allow many writing process to fit a single transaction,
++ * caller should calculate credits under truncate_mutex and
++ * pass actual path.
++ */
++int ext4_ext_calc_credits_for_insert(struct inode *inode,
++				     struct ext4_ext_path *path)
++{
++	int depth, needed;
++
++	if (path) {
++		/* probably there is space in leaf? */
++		depth = ext_depth(inode);
++		if (le16_to_cpu(path[depth].p_hdr->eh_entries)
++				< le16_to_cpu(path[depth].p_hdr->eh_max))
++			return 1;
++	}
++
++	/*
++	 * given 32bit logical block (4294967296 blocks), max. tree
++	 * can be 4 levels in depth -- 4 * 340^4 == 53453440000.
++	 * let's also add one more level for imbalance.
++	 */
++	depth = 5;
++
++	/* allocation of new data block(s) */
++	needed = 2;
++
++	/*
++	 * tree can be full, so it'd need to grow in depth:
++	 * we need one credit to modify old root, credits for
++	 * new root will be added in split accounting
++	 */
++	needed += 1;
++	/*
++	 * Index split can happen, we'd need:
++	 *    allocate intermediate indexes (bitmap + group)
++	 *  + change two blocks at each level, but root (already included)
++	 */
++	needed += (depth * 2) + (depth * 2);
++
++	/* any allocation modifies superblock */
++	needed += 1;
++
++	return needed;
++}
++
++/*
+  * How many index/leaf blocks need to change/allocate to modify nrblocks?
+  *
+  * if nrblocks are fit in a single extent (chunk flag is 1), then
+@@ -3934,10 +3982,21 @@
+ 		 * Walk the extent tree gathering extent information.
+ 		 * ext4_ext_fiemap_cb will push extents back to user.
+ 		 */
++		down_read(&EXT4_I(inode)->i_data_sem);
+ 		error = ext4_ext_walk_space(inode, start_blk, len_blks,
+ 					  ext4_ext_fiemap_cb, fieinfo);
++		up_read(&EXT4_I(inode)->i_data_sem);
+ 	}
+ 
+ 	return error;
+ }
+ 
++EXPORT_SYMBOL(ext4_ext_store_pblock);
++EXPORT_SYMBOL(ext4_ext_search_right);
++EXPORT_SYMBOL(ext4_ext_search_left);
++EXPORT_SYMBOL(ext_pblock);
++EXPORT_SYMBOL(ext4_ext_insert_extent);
++EXPORT_SYMBOL(ext4_mb_new_blocks);
++EXPORT_SYMBOL(ext4_ext_calc_credits_for_insert);
++EXPORT_SYMBOL(ext4_mark_inode_dirty);
++

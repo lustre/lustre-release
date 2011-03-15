@@ -1,0 +1,317 @@
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h	2011-03-14 16:18:28.300241437 +0800
++++ linux-stage/fs/ext4/ext4.h	2011-03-14 16:33:17.056087375 +0800
+@@ -1770,6 +1770,7 @@
+ 	ext4_grpblk_t	bb_free;	/* total free blocks */
+ 	ext4_grpblk_t	bb_fragments;	/* nr of freespace fragments */
+ 	struct          list_head bb_prealloc_list;
++	unsigned long   bb_prealloc_nr;
+ #ifdef DOUBLE_CHECK
+ 	void            *bb_bitmap;
+ #endif
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c	2011-03-14 16:18:28.336242149 +0800
++++ linux-stage/fs/ext4/mballoc.c	2011-03-14 16:33:27.072292006 +0800
+@@ -337,7 +337,7 @@
+ static struct kmem_cache *ext4_pspace_cachep;
+ static struct kmem_cache *ext4_ac_cachep;
+ static struct kmem_cache *ext4_free_ext_cachep;
+-static void ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
++static int ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
+ 					ext4_group_t group);
+ static void ext4_mb_generate_from_freelist(struct super_block *sb, void *bitmap,
+ 						ext4_group_t group);
+@@ -659,7 +659,7 @@
+ }
+ 
+ static noinline_for_stack
+-void ext4_mb_generate_buddy(struct super_block *sb,
++int ext4_mb_generate_buddy(struct super_block *sb,
+ 				void *buddy, void *bitmap, ext4_group_t group)
+ {
+ 	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+@@ -691,14 +691,13 @@
+ 	grp->bb_fragments = fragments;
+ 
+ 	if (free != grp->bb_free) {
+-		ext4_grp_locked_error(sb, group,  __func__,
+-			"EXT4-fs: group %u: %u blocks in bitmap, %u in gd",
+-			group, free, grp->bb_free);
+-		/*
+-		 * If we intent to continue, we consider group descritor
+-		 * corrupt and update bb_free using bitmap value
+-		 */
+-		grp->bb_free = free;
++		struct ext4_group_desc *gdp;
++		gdp = ext4_get_group_desc (sb, group, NULL);
++		ext4_error(sb, "group %lu: %u blocks in bitmap, %u in bb, "
++			"%u in gd, %lu pa's\n", (long unsigned int)group,
++			free, grp->bb_free, ext4_free_blks_count(sb, gdp),
++			grp->bb_prealloc_nr);
++		return -EIO;
+ 	}
+ 
+ 	clear_bit(EXT4_GROUP_INFO_NEED_INIT_BIT, &(grp->bb_state));
+@@ -708,6 +707,8 @@
+ 	EXT4_SB(sb)->s_mb_buddies_generated++;
+ 	EXT4_SB(sb)->s_mb_generation_time += period;
+ 	spin_unlock(&EXT4_SB(sb)->s_bal_lock);
++
++	return 0;
+ }
+ 
+ /* The buddy information is attached the buddy cache inode
+@@ -839,7 +840,7 @@
+ 	first_block = page->index * blocks_per_page;
+ 	/* init the page  */
+ 	memset(page_address(page), 0xff, PAGE_CACHE_SIZE);
+-	for (i = 0; i < blocks_per_page; i++) {
++	for (i = 0; i < blocks_per_page && err == 0; i++) {
+ 		int group;
+ 		struct ext4_group_info *grinfo;
+ 
+@@ -874,7 +875,7 @@
+ 			 * incore got set to the group block bitmap below
+ 			 */
+ 			ext4_lock_group(sb, group);
+-			ext4_mb_generate_buddy(sb, data, incore, group);
++			err = ext4_mb_generate_buddy(sb, data, incore, group);
+ 			ext4_unlock_group(sb, group);
+ 			incore = NULL;
+ 		} else {
+@@ -888,7 +889,7 @@
+ 			memcpy(data, bitmap, blocksize);
+ 
+ 			/* mark all preallocated blks used in in-core bitmap */
+-			ext4_mb_generate_from_pa(sb, data, group);
++			err = ext4_mb_generate_from_pa(sb, data, group);
+ 			ext4_mb_generate_from_freelist(sb, data, group);
+ 			ext4_unlock_group(sb, group);
+ 
+@@ -898,7 +899,8 @@
+ 			incore = data;
+ 		}
+ 	}
+-	SetPageUptodate(page);
++	if (likely(err == 0))
++		SetPageUptodate(page);
+ 
+ out:
+ 	if (bh) {
+@@ -2142,9 +2144,11 @@
+ static int ext4_mb_seq_groups_show(struct seq_file *seq, void *v)
+ {
+ 	struct super_block *sb = seq->private;
++	struct ext4_group_desc *gdp;
+ 	ext4_group_t group = (ext4_group_t) ((unsigned long) v);
+ 	int i;
+ 	int err;
++	int free = 0;
+ 	struct ext4_buddy e4b;
+ 	struct sg {
+ 		struct ext4_group_info info;
+@@ -2153,10 +2157,10 @@
+ 
+ 	group--;
+ 	if (group == 0)
+-		seq_printf(seq, "#%-5s: %-5s %-5s %-5s "
++		seq_printf(seq, "#%-5s: %-5s %-5s %-5s %-5s %-5s"
+ 				"[ %-5s %-5s %-5s %-5s %-5s %-5s %-5s "
+ 				  "%-5s %-5s %-5s %-5s %-5s %-5s %-5s ]\n",
+-			   "group", "free", "frags", "first",
++			   "group", "free", "frags", "first", "first", "pa",
+ 			   "2^0", "2^1", "2^2", "2^3", "2^4", "2^5", "2^6",
+ 			   "2^7", "2^8", "2^9", "2^10", "2^11", "2^12", "2^13");
+ 
+@@ -2167,13 +2171,20 @@
+ 		seq_printf(seq, "#%-5u: I/O error\n", group);
+ 		return 0;
+ 	}
++
++	gdp = ext4_get_group_desc(sb, group, NULL);
++	if (gdp != NULL)
++		free = ext4_free_blks_count(sb, gdp);
++
+ 	ext4_lock_group(sb, group);
+ 	memcpy(&sg, ext4_get_group_info(sb, group), i);
+ 	ext4_unlock_group(sb, group);
+ 	ext4_mb_release_desc(&e4b);
+ 
+-	seq_printf(seq, "#%-5u: %-5u %-5u %-5u [", group, sg.info.bb_free,
+-			sg.info.bb_fragments, sg.info.bb_first_free);
++	seq_printf(seq, "#%-5lu: %-5u %-5u %-5u %-5u %-5lu [",
++			(long unsigned int)group, sg.info.bb_free, free,
++			sg.info.bb_fragments, sg.info.bb_first_free,
++			sg.info.bb_prealloc_nr);
+ 	for (i = 0; i <= 13; i++)
+ 		seq_printf(seq, " %-5u", i <= sb->s_blocksize_bits + 1 ?
+ 				sg.info.bb_counters[i] : 0);
+@@ -3354,23 +3365,68 @@
+ }
+ 
+ /*
++ * check free blocks in bitmap match free block in group descriptor
++ * do this before taking preallocated blocks into account to be able
++ * to detect on-disk corruptions. The group lock should be hold by the
++ * caller.
++ */
++int ext4_mb_check_ondisk_bitmap(struct super_block *sb, void *bitmap,
++				struct ext4_group_desc *gdp, int group)
++{
++	unsigned short max = EXT4_BLOCKS_PER_GROUP(sb);
++	unsigned short i, first, free = 0;
++
++	i = mb_find_next_zero_bit(bitmap, max, 0);
++
++	while (i < max) {
++		first = i;
++		i = mb_find_next_bit(bitmap, max, i);
++		if (i > max)
++			i = max;
++		free += i - first;
++		if (i < max)
++			i = mb_find_next_zero_bit(bitmap, max, i);
++	}
++
++	if (free != ext4_free_blks_count(sb, gdp)) {
++		ext4_error(sb, "on-disk bitmap for group %d"
++			"corrupted: %u blocks free in bitmap, %u - in gd\n",
++			group, free, ext4_free_blks_count(sb, gdp));
++		return -EIO;
++	}
++	return 0;
++}
++
++/*
+  * the function goes through all preallocation in this group and marks them
+  * used in in-core bitmap. buddy must be generated from this bitmap
+  * Need to be called with ext4 group lock held
+  */
+ static noinline_for_stack
+-void ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
++int ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
+ 					ext4_group_t group)
+ {
+ 	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+ 	struct ext4_prealloc_space *pa;
++	struct ext4_group_desc *gdp;
+ 	struct list_head *cur;
+ 	ext4_group_t groupnr;
+ 	ext4_grpblk_t start;
+ 	int preallocated = 0;
+ 	int count = 0;
++	int skip = 0;
++	int err;
+ 	int len;
+ 
++	gdp = ext4_get_group_desc (sb, group, NULL);
++	if (gdp == NULL)
++		return -EIO;
++
++	/* before applying preallocations, check bitmap consistency */
++	err = ext4_mb_check_ondisk_bitmap(sb, bitmap, gdp, group);
++	if (err)
++		return err;
++
+ 	/* all form of preallocation discards first load group,
+ 	 * so the only competing code is preallocation use.
+ 	 * we don't need any locking here
+@@ -3386,14 +3442,23 @@
+ 					     &groupnr, &start);
+ 		len = pa->pa_len;
+ 		spin_unlock(&pa->pa_lock);
+-		if (unlikely(len == 0))
++		if (unlikely(len == 0)) {
++			skip++;
+ 			continue;
++		}
+ 		BUG_ON(groupnr != group);
+ 		mb_set_bits(bitmap, start, len);
+ 		preallocated += len;
+ 		count++;
+ 	}
++	if (count + skip != grp->bb_prealloc_nr) {
++		ext4_error(sb, "lost preallocations: "
++			   "count %d, bb_prealloc_nr %lu, skip %d\n",
++			   count, grp->bb_prealloc_nr, skip);
++		return -EIO;
++	}
+ 	mb_debug(1, "prellocated %u for group %u\n", preallocated, group);
++	return 0;
+ }
+ 
+ static void ext4_mb_pa_callback(struct rcu_head *head)
+@@ -3452,6 +3517,7 @@
+ 	 */
+ 	ext4_lock_group(sb, grp);
+ 	list_del(&pa->pa_group_list);
++	ext4_get_group_info(sb, grp)->bb_prealloc_nr--;
+ 	ext4_unlock_group(sb, grp);
+ 
+ 	spin_lock(pa->pa_obj_lock);
+@@ -3543,6 +3609,7 @@
+ 
+ 	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
+ 	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
++	grp->bb_prealloc_nr++;
+ 	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
+ 
+ 	spin_lock(pa->pa_obj_lock);
+@@ -3604,6 +3671,7 @@
+ 
+ 	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
+ 	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
++	grp->bb_prealloc_nr++;
+ 	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
+ 
+ 	/*
+@@ -3802,6 +3870,8 @@
+ 
+ 		spin_unlock(&pa->pa_lock);
+ 
++		BUG_ON(grp->bb_prealloc_nr == 0);
++		grp->bb_prealloc_nr--;
+ 		list_del(&pa->pa_group_list);
+ 		list_add(&pa->u.pa_tmp_list, &list);
+ 	}
+@@ -3942,7 +4012,7 @@
+ 		if (err) {
+ 			ext4_error(sb, "Error loading buddy information for %u",
+ 					group);
+-			continue;
++			return;
+ 		}
+ 
+ 		bitmap_bh = ext4_read_block_bitmap(sb, group);
+@@ -3954,6 +4024,8 @@
+ 		}
+ 
+ 		ext4_lock_group(sb, group);
++		BUG_ON(e4b.bd_info->bb_prealloc_nr == 0);
++		e4b.bd_info->bb_prealloc_nr--;
+ 		list_del(&pa->pa_group_list);
+ 		ext4_mb_release_inode_pa(&e4b, bitmap_bh, pa, ac);
+ 		ext4_unlock_group(sb, group);
+@@ -4227,6 +4299,7 @@
+ 		}
+ 		ext4_lock_group(sb, group);
+ 		list_del(&pa->pa_group_list);
++		ext4_get_group_info(sb, group)->bb_prealloc_nr--;
+ 		ext4_mb_release_group_pa(&e4b, pa, ac);
+ 		ext4_unlock_group(sb, group);
+ 
+Index: linux-stage/fs/ext4/mballoc.h
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.h	2011-03-14 16:18:26.670209322 +0800
++++ linux-stage/fs/ext4/mballoc.h	2011-03-14 16:32:50.859552482 +0800
+@@ -88,7 +88,7 @@
+ /*
+  * for which requests use 2^N search using buddies
+  */
+-#define MB_DEFAULT_ORDER2_REQS		2
++#define MB_DEFAULT_ORDER2_REQS		8
+ 
+ /*
+  * default group prealloc size 512 blocks

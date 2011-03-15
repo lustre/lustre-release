@@ -690,8 +690,16 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define cpu_to_node(cpu)         0
 #endif
 
-#ifdef HAVE_REGISTER_SHRINKER
+#ifndef HAVE_REGISTER_SHRINKER
+#define KERN_SHRINKER(name) name(int nr_to_scan, gfp_t gfp_mask)
+#else
+#ifdef HAVE_SHRINK_3ARGS
+typedef int (*cfs_shrinker_t)(struct shrinker *shrink, int nr_to_scan, gfp_t gfp_mask);
+#define KERN_SHRINKER(name) name(struct shrinker *shrink, int nr_to_scan, gfp_t gfp_mask)
+#else
 typedef int (*cfs_shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
+#define KERN_SHRINKER(name) name(int nr_to_scan, gfp_t gfp_mask)
+#endif
 
 static inline
 struct shrinker *cfs_set_shrinker(int seek, cfs_shrinker_t func)

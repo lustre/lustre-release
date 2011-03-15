@@ -818,9 +818,18 @@ void ll_lli_init(struct ll_inode_info *lli)
         cfs_sema_init(&lli->lli_readdir_sem, 1);
 }
 
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-static atomic_t ll_bdi_num = ATOMIC_INIT(0);
+static inline int ll_bdi_register(struct backing_dev_info *bdi)
+{
+#ifdef HAVE_BDI_REGISTER
+        static atomic_t ll_bdi_num = ATOMIC_INIT(0);
+
+        bdi->name = "lustre";
+        return bdi_register(bdi, NULL, "lustre-%d",
+                            atomic_inc_return(&ll_bdi_num));
+#else
+        return 0;
 #endif
+}
 
 int ll_fill_super(struct super_block *sb)
 {
@@ -849,16 +858,17 @@ int ll_fill_super(struct super_block *sb)
         if (err)
                 GOTO(out_free, err);
 
-        err = ll_bdi_init(&lsi->bdi);
+        err = ll_bdi_init(&lsi->lsi_bdi);
+        if (err)
+                GOTO(out_free, err);
+        lsi->lsi_flags |= LSI_BDI_INITIALIZED;
+        lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
+        err = ll_bdi_register(&lsi->lsi_bdi);
         if (err)
                 GOTO(out_free, err);
 
-#ifdef HAVE_NEW_BACKING_DEV_INFO
-        lsi->bdi.name = "lustre";
-        lsi->bdi.capabilities = BDI_CAP_MAP_COPY;
-        err = bdi_register(&lsi->bdi, NULL, "lustre-%d",
-                           atomic_inc_return(&ll_bdi_num));
-        sb->s_bdi = &lsi->bdi;
+#ifdef HAVE_SB_BDI
+        sb->s_bdi = &lsi->lsi_bdi;
 #endif
 
         /* Generate a string unique to this super, in case some joker tries
@@ -965,8 +975,10 @@ void ll_put_super(struct super_block *sb)
         if (profilenm)
                 class_del_profile(profilenm);
 
-        if (ll_bdi_wb_cnt(lsi->bdi) > 0)
-                ll_bdi_destroy(&lsi->bdi);
+        if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
+                ll_bdi_destroy(&lsi->lsi_bdi);
+                lsi->lsi_flags &= ~LSI_BDI_INITIALIZED;
+        }
 
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
@@ -1668,7 +1680,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         /* OIDEBUG(inode); */
 
         /* initializing backing dev info. */
-        inode->i_mapping->backing_dev_info = &(s2lsi(inode->i_sb)->bdi);
+        inode->i_mapping->backing_dev_info = &s2lsi(inode->i_sb)->lsi_bdi;
 
 
         if (S_ISREG(inode->i_mode)) {

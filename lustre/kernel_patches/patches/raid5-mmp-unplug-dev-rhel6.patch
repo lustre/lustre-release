@@ -1,0 +1,27 @@
+Force MD devices to pass SYNC reads directly to the disk
+instead of handling from cache.  This is needed for MMP
+on MD RAID devices, and in theory could be accepted in
+the upstream kernel.  Not needed for DMU.
+
+Index: linux-2.6.32-71.18.1.el6-master/drivers/md/raid5.c
+===================================================================
+--- linux-2.6.32-71.18.1.el6-master.orig/drivers/md/raid5.c	2011-02-28 16:57:31.222666050 +0800
++++ linux-2.6.32-71.18.1.el6-master/drivers/md/raid5.c	2011-02-28 16:58:27.011983275 +0800
+@@ -2098,6 +2098,8 @@
+ 		bi->bi_next = *bip;
+ 	*bip = bi;
+ 	bi->bi_phys_segments++;
++ 	if (bio_rw_flagged(bi, BIO_RW_SYNCIO) && !forwrite)
++ 		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags); /* force to read from disk. */
+ 	spin_unlock_irq(&conf->device_lock);
+ 	spin_unlock(&sh->lock);
+ 
+@@ -4031,6 +4033,8 @@
+ 		wait_event(mddev->thread->wqueue,
+ 			   atomic_read(&conf->preread_active_stripes) == 0);
+ 	}
++	if (bio_rw_flagged(bi, BIO_RW_SYNCIO))
++		raid5_unplug_device(mddev->queue);
+ 	return 0;
+ }
+ 

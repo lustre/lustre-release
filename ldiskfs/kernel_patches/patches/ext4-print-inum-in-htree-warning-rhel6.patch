@@ -1,0 +1,15 @@
+Index: linux-stage/fs/ext4/namei.c
+===================================================================
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
+@@ -371,8 +371,8 @@ dx_probe(const struct qstr *d_name, stru
+ 	if (root->info.hash_version != DX_HASH_TEA &&
+ 	    root->info.hash_version != DX_HASH_HALF_MD4 &&
+ 	    root->info.hash_version != DX_HASH_LEGACY) {
+-		ext4_warning(dir->i_sb, "Unrecognised inode hash code %d",
+-			     root->info.hash_version);
++		ext4_warning(dir->i_sb, "Unrecognised inode hash code %d for directory "
++                             "#%lu", root->info.hash_version, dir->i_ino);
+ 		brelse(bh);
+ 		*err = ERR_BAD_DX_DIR;
+ 		goto fail;
