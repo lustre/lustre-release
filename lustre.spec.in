@@ -67,10 +67,16 @@ Userspace tools and files for the Lustre file system.
 
 %package modules
 Summary: Kernel Lustre modules for Linux %{kversion}
-# for RHEL5 and SLES11, we need nothing here
+# for SLES11, we need nothing here
 # for SLES10, we need (where %{flavor} is, i.e. smp):
 %if %sles10
 Requires: kernel-%{flavor}
+%else
+%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+# for RHEL we need to require the specific kernel still since weak-modules support on RH
+# is, well, weak, to be punny about it
+Requires: kernel = %{krequires}
+%endif
 %endif
 %if ! %{is_client}
 Requires: lustre-backend-fs
