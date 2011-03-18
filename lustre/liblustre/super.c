@@ -95,7 +95,7 @@ static void llu_fsop_gone(struct filesys *fs)
 {
         struct llu_sb_info *sbi = (struct llu_sb_info *) fs->fs_private;
         struct obd_device *obd = class_exp2obd(sbi->ll_md_exp);
-        int next = 0;
+        struct obd_device *prev = NULL;
         ENTRY;
 
         cfs_list_del(&sbi->ll_conn_chain);
@@ -103,7 +103,7 @@ static void llu_fsop_gone(struct filesys *fs)
         obd_disconnect(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_md_exp);
 
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
+        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &prev)) != NULL)
                 class_manual_cleanup(obd);
 
         OBD_FREE(sbi, sizeof(*sbi));

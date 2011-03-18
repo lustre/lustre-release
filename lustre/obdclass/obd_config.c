@@ -267,7 +267,7 @@ int class_attach(struct lustre_cfg *lcfg)
 {
         struct obd_device *obd = NULL;
         char *typename, *name, *uuid;
-        int rc, len;
+        int rc;
         ENTRY;
 
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
@@ -288,10 +288,16 @@ int class_attach(struct lustre_cfg *lcfg)
         }
         uuid = lustre_cfg_string(lcfg, 2);
 
+        if (strlen(uuid) >= sizeof(obd->obd_uuid)) {
+                CERROR("uuid must be < %d bytes long\n",
+                       (int)sizeof(obd->obd_uuid));
+                RETURN(-EINVAL);
+        }
+
         CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
                MKSTR(typename), MKSTR(name), MKSTR(uuid));
 
-        obd = class_newdev(typename, name);
+        obd = class_newdev(typename, name, uuid);
         if (IS_ERR(obd)) {
                 /* Already exists or out of obds */
                 rc = PTR_ERR(obd);
@@ -300,6 +306,7 @@ int class_attach(struct lustre_cfg *lcfg)
                        name, typename, rc);
                 GOTO(out, rc);
         }
+
         LASSERTF(obd != NULL, "Cannot get obd device %s of type %s\n",
                  name, typename);
         LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
@@ -338,14 +345,6 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
 
         llog_group_init(&obd->obd_olg, FID_SEQ_LLOG);
-
-        len = strlen(uuid);
-        if (len >= sizeof(obd->obd_uuid)) {
-                CERROR("uuid must be < %d bytes long\n",
-                       (int)sizeof(obd->obd_uuid));
-                GOTO(out, rc = -EINVAL);
-        }
-        memcpy(obd->obd_uuid.uuid, uuid, len);
 
         /* do the attach */
         if (OBP(obd, attach)) {
@@ -636,10 +635,7 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
         int err;
         int refs;
 
-        cfs_spin_lock(&obd->obd_dev_lock);
-        cfs_atomic_dec(&obd->obd_refcount);
-        refs = cfs_atomic_read(&obd->obd_refcount);
-        cfs_spin_unlock(&obd->obd_dev_lock);
+        refs = cfs_atomic_dec_return(&obd->obd_refcount);
         lu_ref_del(&obd->obd_reference, scope, source);
 
         CDEBUG(D_INFO, "Decref %s (%p) now %d\n", obd->obd_name, obd, refs);

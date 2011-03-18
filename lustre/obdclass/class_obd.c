@@ -264,7 +264,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
         case OBD_IOC_GETDEVICE: {
                 int     index = data->ioc_count;
-                char    *status, *str;
+                const char *status;
+                char    *str;
 
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");
@@ -279,14 +280,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (!obd)
                         GOTO(out, err = -ENOENT);
 
-                if (obd->obd_stopping)
-                        status = "ST";
-                else if (obd->obd_set_up)
-                        status = "UP";
-                else if (obd->obd_attached)
-                        status = "AT";
-                else
-                        status = "--";
+                status = obd_dev_status(obd);
                 str = (char *)data->ioc_bulk;
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
@@ -305,7 +299,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (strnlen(data->ioc_inlbuf4, MAX_OBD_NAME) >= MAX_OBD_NAME)
                         GOTO(out, err = -EINVAL);
                 obd = class_name2obd(data->ioc_inlbuf4);
-        } else if (data->ioc_dev < class_devno_max()) {
+        } else if (obd_minor_valid(data->ioc_dev)) {
+                /* XXX = max allocated minor */
                 obd = class_num2obd(data->ioc_dev);
         } else {
                 CERROR("OBD ioctl: No device\n");
@@ -386,9 +381,7 @@ EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);
 EXPORT_SYMBOL(class_get_type);
 EXPORT_SYMBOL(class_put_type);
-EXPORT_SYMBOL(class_name2dev);
 EXPORT_SYMBOL(class_name2obd);
-EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
 EXPORT_SYMBOL(class_devices_in_group);
@@ -513,8 +506,9 @@ static int __init init_obdclass(void)
 int init_obdclass(void)
 #endif
 {
-        int i, err;
+        int err;
 #ifdef __KERNEL__
+        int i;
         int lustre_register_fs(void);
 
         for (i = CAPA_SITE_CLIENT; i < CAPA_SITE_MAX; i++)
@@ -561,9 +555,6 @@ int init_obdclass(void)
                 return err;
         }
 
-        /* This struct is already zeroed for us (static global) */
-        for (i = 0; i < class_devno_max(); i++)
-                obd_devs[i] = NULL;
 
         /* Default the dirty page cache cap to 1/2 of system memory.
          * For clients with less memory, a larger fraction is needed
@@ -588,7 +579,12 @@ int init_obdclass(void)
 
 #ifdef __KERNEL__
         err = lustre_register_fs();
+        if (err)
+                return err;
 #endif
+        err = obd_hashes_init();
+        if (err)
+                return err;
 
         return err;
 }
@@ -598,24 +594,27 @@ int init_obdclass(void)
 #ifdef __KERNEL__
 static void cleanup_obdclass(void)
 {
-        int i;
         int lustre_unregister_fs(void);
         __u64 memory_leaked, pages_leaked;
         __u64 memory_max, pages_max;
+        struct obd_device *obd;
         ENTRY;
 
         lustre_unregister_fs();
 
         cfs_psdev_deregister(&obd_psdev);
-        for (i = 0; i < class_devno_max(); i++) {
-                struct obd_device *obd = class_num2obd(i);
-                if (obd && obd->obd_set_up &&
+        for (obd_devlist_first(&obd);
+             obd != NULL;
+             obd_devlist_next(&obd)) {
+                if (obd->obd_set_up &&
                     OBT(obd) && OBP(obd, detach)) {
                         /* XXX should this call generic detach otherwise? */
                         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         OBP(obd, detach)(obd);
                 }
         }
+        obd_hashes_fini();
+
         lu_global_fini();
 
         obd_cleanup_caches();
