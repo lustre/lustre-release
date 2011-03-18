@@ -1573,7 +1573,7 @@ void build_lqs(struct obd_device *obd)
  * string hashing using djb2 hash algorithm
  */
 static unsigned
-lqs_hash(cfs_hash_t *hs, void *key, unsigned mask)
+lqs_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 {
         struct quota_adjust_qunit *lqs_key;
         unsigned hash;
@@ -1597,7 +1597,7 @@ lqs_key(cfs_hlist_node_t *hnode)
 }
 
 static int
-lqs_keycmp(void *key, cfs_hlist_node_t *hnode)
+lqs_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct lustre_qunit_size *q =
                 cfs_hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);

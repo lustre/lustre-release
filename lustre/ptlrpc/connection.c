@@ -165,16 +165,16 @@ void ptlrpc_connection_fini(void) {
  * Hash operations for net_peer<->connection
  */
 static unsigned
-conn_hashfn(cfs_hash_t *hs,  void *key, unsigned mask)
+conn_hashfn(cfs_hash_t *hs, const void *key, unsigned mask)
 {
         return cfs_hash_djb2_hash(key, sizeof(lnet_process_id_t), mask);
 }
 
 static int
-conn_keycmp(void *key, cfs_hlist_node_t *hnode)
+conn_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct ptlrpc_connection *conn;
-        lnet_process_id_t *conn_key;
+        const lnet_process_id_t *conn_key;
 
         LASSERT(key != NULL);
         conn_key = (lnet_process_id_t*)key;

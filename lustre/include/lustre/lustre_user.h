@@ -241,7 +241,8 @@ struct obd_uuid {
         char uuid[40];
 };
 
-static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
+static inline int obd_uuid_equals(const struct obd_uuid *u1,
+                                  const struct obd_uuid *u2)
 {
         return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
 }

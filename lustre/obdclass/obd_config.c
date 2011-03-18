@@ -1518,7 +1518,7 @@ out:
  */
 
 static unsigned
-uuid_hash(cfs_hash_t *hs,  void *key, unsigned mask)
+uuid_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 {
         return cfs_hash_djb2_hash(((struct obd_uuid *)key)->uuid,
                                   sizeof(((struct obd_uuid *)key)->uuid), mask);
@@ -1539,14 +1539,14 @@ uuid_key(cfs_hlist_node_t *hnode)
  *       state with this function
  */
 static int
-uuid_keycmp(void *key, cfs_hlist_node_t *hnode)
+uuid_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
         LASSERT(key);
         exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
 
-        return obd_uuid_equals((struct obd_uuid *)key,&exp->exp_client_uuid) &&
+        return obd_uuid_equals(key, &exp->exp_client_uuid) &&
                !exp->exp_failed;
 }
 
@@ -1589,7 +1589,7 @@ static cfs_hash_ops_t uuid_hash_ops = {
  */
 
 static unsigned
-nid_hash(cfs_hash_t *hs,  void *key, unsigned mask)
+nid_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 {
         return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
 }
@@ -1609,7 +1609,7 @@ nid_key(cfs_hlist_node_t *hnode)
  *       state with this function
  */
 static int
-nid_kepcmp(void *key, cfs_hlist_node_t *hnode)
+nid_kepcmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct obd_export *exp;
 
@@ -1669,7 +1669,7 @@ nidstats_key(cfs_hlist_node_t *hnode)
 }
 
 static int
-nidstats_keycmp(void *key, cfs_hlist_node_t *hnode)
+nidstats_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         return *(lnet_nid_t *)nidstats_key(hnode) == *(lnet_nid_t *)key;
 }

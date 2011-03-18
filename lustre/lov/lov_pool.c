@@ -88,7 +88,7 @@ void lov_pool_putref_locked(struct pool_desc *pool)
  * Chapter 6.4.
  * Addison Wesley, 1973
  */
-static __u32 pool_hashfn(cfs_hash_t *hash_body, void *key, unsigned mask)
+static __u32 pool_hashfn(cfs_hash_t *hash_body, const void *key, unsigned mask)
 {
         int i;
         __u32 result;
@@ -112,7 +112,7 @@ static void *pool_key(cfs_hlist_node_t *hnode)
         return (pool->pool_name);
 }
 
-static int pool_hashkey_keycmp(void *key, cfs_hlist_node_t *compared_hnode)
+static int pool_hashkey_keycmp(const void *key, cfs_hlist_node_t *compared_hnode)
 {
         char *pool_name;
         struct pool_desc *pool;

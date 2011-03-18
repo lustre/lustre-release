@@ -467,7 +467,7 @@ cfs_hash_hlist_setup(cfs_hash_t *hs)
 
 static void
 cfs_hash_bd_from_key(cfs_hash_t *hs, cfs_hash_bucket_t **bkts,
-                     unsigned int bits, void *key, cfs_hash_bd_t *bd)
+                     unsigned int bits, const void *key, cfs_hash_bd_t *bd)
 {
         unsigned int index = cfs_hash_id(hs, key, (1U << bits) - 1);
 
@@ -478,7 +478,7 @@ cfs_hash_bd_from_key(cfs_hash_t *hs, cfs_hash_bucket_t **bkts,
 }
 
 void
-cfs_hash_bd_get(cfs_hash_t *hs, void *key, cfs_hash_bd_t *bd)
+cfs_hash_bd_get(cfs_hash_t *hs, const void *key, cfs_hash_bd_t *bd)
 {
         /* NB: caller should hold hs->hs_rwlock if REHASH is set */
         if (likely(hs->hs_rehash_buckets == NULL)) {
@@ -615,7 +615,7 @@ typedef enum cfs_hash_lookup_intent {
 
 static cfs_hlist_node_t *
 cfs_hash_bd_lookup_intent(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                          void *key, cfs_hlist_node_t *hnode,
+                          const void *key, cfs_hlist_node_t *hnode,
                           cfs_hash_lookup_intent_t intent)
 
 {
@@ -655,7 +655,7 @@ cfs_hash_bd_lookup_intent(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 }
 
 cfs_hlist_node_t *
-cfs_hash_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd, void *key)
+cfs_hash_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd, const void *key)
 {
         return cfs_hash_bd_lookup_intent(hs, bd, key, NULL,
                                          CFS_HS_LOOKUP_IT_FIND);
@@ -664,7 +664,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_bd_lookup_locked);
 
 cfs_hlist_node_t *
 cfs_hash_bd_findadd_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                           void *key, cfs_hlist_node_t *hnode,
+                           const void *key, cfs_hlist_node_t *hnode,
                            int noref)
 {
         return cfs_hash_bd_lookup_intent(hs, bd, key, hnode,
@@ -675,7 +675,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_bd_findadd_locked);
 
 cfs_hlist_node_t *
 cfs_hash_bd_finddel_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                           void *key, cfs_hlist_node_t *hnode)
+                           const void *key, cfs_hlist_node_t *hnode)
 {
         /* hnode can be NULL, we find the first item with @key */
         return cfs_hash_bd_lookup_intent(hs, bd, key, hnode,
@@ -723,7 +723,7 @@ cfs_hash_multi_bd_unlock(cfs_hash_t *hs, cfs_hash_bd_t *bds,
 
 static cfs_hlist_node_t *
 cfs_hash_multi_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds,
-                                unsigned n, void *key)
+                                unsigned n, const void *key)
 {
         cfs_hlist_node_t  *ehnode;
         unsigned           i;
@@ -739,7 +739,7 @@ cfs_hash_multi_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds,
 
 static cfs_hlist_node_t *
 cfs_hash_multi_bd_findadd_locked(cfs_hash_t *hs,
-                                 cfs_hash_bd_t *bds, unsigned n, void *key,
+                                 cfs_hash_bd_t *bds, unsigned n, const void *key,
                                  cfs_hlist_node_t *hnode, int noref)
 {
         cfs_hlist_node_t  *ehnode;
@@ -770,7 +770,8 @@ cfs_hash_multi_bd_findadd_locked(cfs_hash_t *hs,
 
 static cfs_hlist_node_t *
 cfs_hash_multi_bd_finddel_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds,
-                                 unsigned n, void *key, cfs_hlist_node_t *hnode)
+                                 unsigned n, const void *key,
+                                 cfs_hlist_node_t *hnode)
 {
         cfs_hlist_node_t  *ehnode;
         unsigned           i;
@@ -812,7 +813,7 @@ cfs_hash_bd_order(cfs_hash_bd_t *bd1, cfs_hash_bd_t *bd2)
 }
 
 void
-cfs_hash_dual_bd_get(cfs_hash_t *hs, void *key, cfs_hash_bd_t *bds)
+cfs_hash_dual_bd_get(cfs_hash_t *hs, const void *key, cfs_hash_bd_t *bds)
 {
         /* NB: caller should hold hs_lock.rw if REHASH is set */
         cfs_hash_bd_from_key(hs, hs->hs_buckets,
@@ -846,7 +847,8 @@ cfs_hash_dual_bd_unlock(cfs_hash_t *hs, cfs_hash_bd_t *bds, int excl)
 CFS_EXPORT_SYMBOL(cfs_hash_dual_bd_unlock);
 
 cfs_hlist_node_t *
-cfs_hash_dual_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds, void *key)
+cfs_hash_dual_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds,
+                               const void *key)
 {
         return cfs_hash_multi_bd_lookup_locked(hs, bds, 2, key);
 }
@@ -854,7 +856,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_dual_bd_lookup_locked);
 
 cfs_hlist_node_t *
 cfs_hash_dual_bd_findadd_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds,
-                                void *key, cfs_hlist_node_t *hnode,
+                                const void *key, cfs_hlist_node_t *hnode,
                                 int noref)
 {
         return cfs_hash_multi_bd_findadd_locked(hs, bds, 2, key,
@@ -864,7 +866,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_dual_bd_findadd_locked);
 
 cfs_hlist_node_t *
 cfs_hash_dual_bd_finddel_locked(cfs_hash_t *hs, cfs_hash_bd_t *bds,
-                                void *key, cfs_hlist_node_t *hnode)
+                                const void *key, cfs_hlist_node_t *hnode)
 {
         return cfs_hash_multi_bd_finddel_locked(hs, bds, 2, key, hnode);
 }
@@ -1209,7 +1211,7 @@ cfs_hash_rehash_inline(cfs_hash_t *hs)
  * ops->hs_get function will be called when the item is added.
  */
 void
-cfs_hash_add(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
+cfs_hash_add(cfs_hash_t *hs, const void *key, cfs_hlist_node_t *hnode)
 {
         cfs_hash_bd_t   bd;
         int             bits;
@@ -1232,7 +1234,7 @@ cfs_hash_add(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
 CFS_EXPORT_SYMBOL(cfs_hash_add);
 
 static cfs_hlist_node_t *
-cfs_hash_find_or_add(cfs_hash_t *hs, void *key,
+cfs_hash_find_or_add(cfs_hash_t *hs, const void *key,
                      cfs_hlist_node_t *hnode, int noref)
 {
         cfs_hlist_node_t *ehnode;
@@ -1264,7 +1266,7 @@ cfs_hash_find_or_add(cfs_hash_t *hs, void *key,
  * Returns 0 on success or -EALREADY on key collisions.
  */
 int
-cfs_hash_add_unique(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
+cfs_hash_add_unique(cfs_hash_t *hs, const void *key, cfs_hlist_node_t *hnode)
 {
         return cfs_hash_find_or_add(hs, key, hnode, 1) != hnode ?
                -EALREADY : 0;
@@ -1278,7 +1280,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_add_unique);
  * Otherwise ops->hs_get is called on the item which was added.
  */
 void *
-cfs_hash_findadd_unique(cfs_hash_t *hs, void *key,
+cfs_hash_findadd_unique(cfs_hash_t *hs, const void *key,
                         cfs_hlist_node_t *hnode)
 {
         hnode = cfs_hash_find_or_add(hs, key, hnode, 0);
@@ -1295,7 +1297,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_findadd_unique);
  * on the removed object.
  */
 void *
-cfs_hash_del(cfs_hash_t *hs, void *key, cfs_hlist_node_t *hnode)
+cfs_hash_del(cfs_hash_t *hs, const void *key, cfs_hlist_node_t *hnode)
 {
         void           *obj  = NULL;
         int             bits = 0;
@@ -1330,7 +1332,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_del);
  * will be returned and ops->hs_put is called on the removed object.
  */
 void *
-cfs_hash_del_key(cfs_hash_t *hs, void *key)
+cfs_hash_del_key(cfs_hash_t *hs, const void *key)
 {
         return cfs_hash_del(hs, key, NULL);
 }
@@ -1345,7 +1347,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_del_key);
  * in the hash @hs NULL is returned.
  */
 void *
-cfs_hash_lookup(cfs_hash_t *hs, void *key)
+cfs_hash_lookup(cfs_hash_t *hs, const void *key)
 {
         void                 *obj = NULL;
         cfs_hlist_node_t     *hnode;
@@ -1725,7 +1727,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_hlist_for_each);
  * is held so the callback must never sleep.
    */
 void
-cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
+cfs_hash_for_each_key(cfs_hash_t *hs, const void *key,
                       cfs_hash_for_each_cb_t func, void *data)
 {
         cfs_hlist_node_t   *hnode;
@@ -1974,7 +1976,7 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
  * the registered cfs_hash_get() and cfs_hash_put() functions will
  * not be called.
  */
-void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key,
+void cfs_hash_rehash_key(cfs_hash_t *hs, const void *old_key,
                          void *new_key, cfs_hlist_node_t *hnode)
 {
         cfs_hash_bd_t        bds[3];

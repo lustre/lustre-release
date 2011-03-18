@@ -613,7 +613,8 @@ static void cl_env_init0(struct cl_env *cle, void *debug)
 
 static cfs_hash_t *cl_env_hash;
 
-static unsigned cl_env_hops_hash(cfs_hash_t *lh, void *key, unsigned mask)
+static unsigned cl_env_hops_hash(cfs_hash_t *lh,
+                                 const void *key, unsigned mask)
 {
 #if BITS_PER_LONG == 64
         return cfs_hash_u64_hash((__u64)key, mask);
@@ -629,7 +630,7 @@ static void *cl_env_hops_obj(cfs_hlist_node_t *hn)
         return (void *)cle;
 }
 
-static int cl_env_hops_keycmp(void *key, cfs_hlist_node_t *hn)
+static int cl_env_hops_keycmp(const void *key, cfs_hlist_node_t *hn)
 {
         struct cl_env *cle = cl_env_hops_obj(hn);
 

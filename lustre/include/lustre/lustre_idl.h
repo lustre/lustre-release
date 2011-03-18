@@ -914,8 +914,8 @@ static inline int lustre_handle_is_used(struct lustre_handle *lh)
         return lh->cookie != 0ull;
 }
 
-static inline int lustre_handle_equal(struct lustre_handle *lh1,
-                                      struct lustre_handle *lh2)
+static inline int lustre_handle_equal(const struct lustre_handle *lh1,
+                                      const struct lustre_handle *lh2)
 {
         return lh1->cookie == lh2->cookie;
 }

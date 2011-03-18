@@ -376,9 +376,10 @@ int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
 
 #endif /* LPROCFS */
 
-static unsigned ldlm_res_hop_hash(cfs_hash_t *hs, void *key, unsigned mask)
+static unsigned ldlm_res_hop_hash(cfs_hash_t *hs,
+                                  const void *key, unsigned mask)
 {
-        struct ldlm_res_id     *id  = key;
+        const struct ldlm_res_id     *id  = key;
         unsigned                val = 0;
         unsigned                i;
 
@@ -387,9 +388,10 @@ static unsigned ldlm_res_hop_hash(cfs_hash_t *hs, void *key, unsigned mask)
         return val & mask;
 }
 
-static unsigned ldlm_res_hop_fid_hash(cfs_hash_t *hs, void *key, unsigned mask)
+static unsigned ldlm_res_hop_fid_hash(cfs_hash_t *hs,
+                                      const void *key, unsigned mask)
 {
-        struct ldlm_res_id *id = key;
+        const struct ldlm_res_id *id = key;
         struct lu_fid       fid;
         __u64               hash;
 
@@ -424,7 +426,7 @@ static int ldlm_res_eq(const struct ldlm_res_id *res0,
         return !memcmp(res0, res1, sizeof(*res0));
 }
 
-static int ldlm_res_hop_keycmp(void *key, cfs_hlist_node_t *hnode)
+static int ldlm_res_hop_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct ldlm_resource   *res;
 

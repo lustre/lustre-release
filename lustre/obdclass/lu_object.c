@@ -789,7 +789,8 @@ static int lu_htable_order(void)
         return bits;
 }
 
-static unsigned lu_obj_hop_hash(cfs_hash_t *hs, void *key, unsigned mask)
+static unsigned lu_obj_hop_hash(cfs_hash_t *hs,
+                                const void *key, unsigned mask)
 {
         struct lu_fid  *fid = (struct lu_fid *)key;
         unsigned        hash;
@@ -812,7 +813,7 @@ static void *lu_obj_hop_key(cfs_hlist_node_t *hnode)
         return &h->loh_fid;
 }
 
-static int lu_obj_hop_keycmp(void *key, cfs_hlist_node_t *hnode)
+static int lu_obj_hop_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct lu_object_header *h;
 
