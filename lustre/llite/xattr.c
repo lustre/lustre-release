@@ -432,20 +432,34 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                 struct ptlrpc_request *request = NULL;
                 int rc = 0, lmmsize = 0;
 
-                if (S_ISREG(inode->i_mode)) {
-                        rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode,
-                                                      dentry->d_name.name, &lmm,
+                if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
+                        return -ENODATA;
+
+                if (size == 0) {
+                        /* size == 0 just ask for buffer size */
+                        rc = ll_get_max_mdsize(ll_i2sbi(inode), &lmmsize);
+                        if (rc == 0)
+                                rc = lmmsize;
+                        GOTO(out, rc);
+                }
+
+                if (!ll_i2info(inode)->lli_smd) {
+                        if (S_ISDIR(inode->i_mode)) {
+                                rc = ll_dir_getstripe(inode, &lmm,
                                                       &lmmsize, &request);
-                } else if (S_ISDIR(inode->i_mode)) {
-                        rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
+                        } else {
+                                rc = -ENODATA;
+                        }
                 } else {
-                        rc = -ENODATA;
+                        /* LSM is present already after lookup/getattr call.
+                         * we need to grab layout lock once it is implemented */
+                        rc = obd_packmd(ll_i2dtexp(inode), &lmm,
+                                        ll_i2info(inode)->lli_smd);
+                        lmmsize = rc;
                 }
 
                 if (rc < 0)
                        GOTO(out, rc);
-                if (size == 0)
-                       GOTO(out, rc = lmmsize);
 
                 if (size < lmmsize) {
                         CERROR("server bug: replied size %d > %d for %s (%s)\n",
@@ -458,7 +472,10 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 
                 rc = lmmsize;
 out:
-                ptlrpc_req_finished(request);
+                if (request)
+                        ptlrpc_req_finished(request);
+                else if (lmm)
+                        obd_free_diskmd(ll_i2dtexp(inode), &lmm);
                 return(rc);
         }
 
