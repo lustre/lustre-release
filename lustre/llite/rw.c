@@ -1218,6 +1218,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
                 }
                 ll_cl_fini(lcc);
         } else {
+                unlock_page(vmpage);
                 result = PTR_ERR(lcc);
         }
         RETURN(result);
