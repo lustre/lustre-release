@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -289,7 +292,7 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
 }
 
 int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
-                      int pattern, int magic)
+                    int pattern, int magic)
 {
         int i, lsm_size;
         ENTRY;

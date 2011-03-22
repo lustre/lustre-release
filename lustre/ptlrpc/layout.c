@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -818,7 +821,19 @@ EXPORT_SYMBOL(RMF_CONN);
 struct req_msg_field RMF_CONNECT_DATA =
         DEFINE_MSGF("cdata",
                     RMF_F_NO_SIZE_CHECK /* we allow extra space for interop */,
-                    sizeof(struct obd_connect_data), lustre_swab_connect, NULL);
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 9, 0, 0)
+                    sizeof(struct obd_connect_data),
+#else
+/* For interoperability with 1.8 and 2.0 clients/servers.
+ * The RPC verification code allows larger RPC buffers, but not
+ * smaller buffers.  Until we no longer need to keep compatibility
+ * with older servers/clients we can only check that the buffer
+ * size is at least as large as obd_connect_data_v1.  That is not
+ * not in itself harmful, since the chance of just corrupting this
+ * field is low.  See JIRA LU-16 for details. */
+                    sizeof(struct obd_connect_data_v1),
+#endif
+                    lustre_swab_connect, NULL);
 EXPORT_SYMBOL(RMF_CONNECT_DATA);
 
 struct req_msg_field RMF_DLM_REQ =

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -410,7 +413,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_pre_versions[4]));
 
         /* Checks for struct obd_connect_data */
-        LASSERTF((int)sizeof(struct obd_connect_data) == 72, " found %lld\n",
+        LASSERTF((int)sizeof(struct obd_connect_data) == 192, " found %lld\n",
                  (long long)(int)sizeof(struct obd_connect_data));
         LASSERTF((int)offsetof(struct obd_connect_data, ocd_connect_flags) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, ocd_connect_flags));
@@ -456,45 +459,66 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_connect_data, ocd_cksum_types));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_cksum_types) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_cksum_types));
-        LASSERTF((int)offsetof(struct obd_connect_data, padding1) == 56, " found %lld\n",
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_max_easize) == 56, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_max_easize));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_max_easize) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_max_easize));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding) == 60, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding));
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_maxbytes) == 64, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_maxbytes));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_maxbytes) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_maxbytes));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding1) == 72, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, padding1));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding1) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->padding1));
-        LASSERTF((int)offsetof(struct obd_connect_data, padding2) == 64, " found %lld\n",
+        LASSERTF((int)offsetof(struct obd_connect_data, padding2) == 80, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, padding2));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding2) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->padding2));
-        CLASSERT(OBD_CONNECT_RDONLY == 0x1ULL);
-        CLASSERT(OBD_CONNECT_INDEX == 0x2ULL);
-        CLASSERT(OBD_CONNECT_GRANT == 0x8ULL);
-        CLASSERT(OBD_CONNECT_SRVLOCK == 0x10ULL);
-        CLASSERT(OBD_CONNECT_VERSION == 0x20ULL);
-        CLASSERT(OBD_CONNECT_REQPORTAL == 0x40ULL);
-        CLASSERT(OBD_CONNECT_ACL == 0x80ULL);
-        CLASSERT(OBD_CONNECT_XATTR == 0x100ULL);
-        CLASSERT(OBD_CONNECT_REAL == 0x8000000ULL);
-        CLASSERT(OBD_CONNECT_CKSUM == 0x20000000ULL);
-        CLASSERT(OBD_CONNECT_TRUNCLOCK == 0x400ULL);
-        CLASSERT(OBD_CONNECT_IBITS == 0x1000ULL);
-        CLASSERT(OBD_CONNECT_JOIN == 0x2000ULL);
-        CLASSERT(OBD_CONNECT_ATTRFID == 0x4000ULL);
-        CLASSERT(OBD_CONNECT_NODEVOH == 0x8000ULL);
-        CLASSERT(OBD_CONNECT_RMT_CLIENT == 0x10000ULL);
-        CLASSERT(OBD_CONNECT_RMT_CLIENT_FORCE == 0x20000ULL);
-        CLASSERT(OBD_CONNECT_BRW_SIZE == 0x40000ULL);
-        CLASSERT(OBD_CONNECT_QUOTA64 == 0x80000ULL);
-        CLASSERT(OBD_CONNECT_MDS_CAPA == 0x100000ULL);
-        CLASSERT(OBD_CONNECT_OSS_CAPA == 0x200000ULL);
-        CLASSERT(OBD_CONNECT_MDS_MDS == 0x4000000ULL);
-        CLASSERT(OBD_CONNECT_SOM == 0x800000ULL);
-        CLASSERT(OBD_CONNECT_AT == 0x1000000ULL);
-        CLASSERT(OBD_CONNECT_CANCELSET == 0x400000ULL);
-        CLASSERT(OBD_CONNECT_LRU_RESIZE == 0x2000000ULL);
-        CLASSERT(OBD_CONNECT_VBR == 0x80000000ULL);
-        CLASSERT(OBD_CONNECT_SKIP_ORPHAN == 0x400000000ULL);
-        CLASSERT(OBD_CONNECT_FULL20 == 0x1000000000ULL);
-        CLASSERT(OBD_CONNECT_LAYOUTLOCK == 0x2000000000ULL);
-        CLASSERT(OBD_CONNECT_64BITHASH == 0x4000000000ULL);
+        CLASSERT(OBD_CONNECT_RDONLY ==                    0x1ULL);
+        CLASSERT(OBD_CONNECT_INDEX ==                     0x2ULL);
+        CLASSERT(OBD_CONNECT_MDS ==                       0x4ULL);
+        CLASSERT(OBD_CONNECT_GRANT ==                     0x8ULL);
+        CLASSERT(OBD_CONNECT_SRVLOCK ==                  0x10ULL);
+        CLASSERT(OBD_CONNECT_VERSION ==                  0x20ULL);
+        CLASSERT(OBD_CONNECT_REQPORTAL ==                0x40ULL);
+        CLASSERT(OBD_CONNECT_ACL ==                      0x80ULL);
+        CLASSERT(OBD_CONNECT_XATTR ==                   0x100ULL);
+        CLASSERT(OBD_CONNECT_CROW ==                    0x200ULL);
+        CLASSERT(OBD_CONNECT_TRUNCLOCK ==               0x400ULL);
+        CLASSERT(OBD_CONNECT_TRANSNO ==                 0x800ULL);
+        CLASSERT(OBD_CONNECT_IBITS ==                  0x1000ULL);
+        CLASSERT(OBD_CONNECT_JOIN ==                   0x2000ULL);
+        CLASSERT(OBD_CONNECT_ATTRFID ==                0x4000ULL);
+        CLASSERT(OBD_CONNECT_NODEVOH ==                0x8000ULL);
+        CLASSERT(OBD_CONNECT_RMT_CLIENT ==            0x10000ULL);
+        CLASSERT(OBD_CONNECT_RMT_CLIENT_FORCE ==      0x20000ULL);
+        CLASSERT(OBD_CONNECT_BRW_SIZE ==              0x40000ULL);
+        CLASSERT(OBD_CONNECT_QUOTA64 ==               0x80000ULL);
+        CLASSERT(OBD_CONNECT_MDS_CAPA ==             0x100000ULL);
+        CLASSERT(OBD_CONNECT_OSS_CAPA ==             0x200000ULL);
+        CLASSERT(OBD_CONNECT_CANCELSET ==            0x400000ULL);
+        CLASSERT(OBD_CONNECT_SOM ==                  0x800000ULL);
+        CLASSERT(OBD_CONNECT_AT ==                  0x1000000ULL);
+        CLASSERT(OBD_CONNECT_LRU_RESIZE ==          0x2000000ULL);
+        CLASSERT(OBD_CONNECT_MDS_MDS ==             0x4000000ULL);
+        CLASSERT(OBD_CONNECT_REAL ==                0x8000000ULL);
+        CLASSERT(OBD_CONNECT_CHANGE_QS ==          0x10000000ULL);
+        CLASSERT(OBD_CONNECT_CKSUM ==              0x20000000ULL);
+        CLASSERT(OBD_CONNECT_FID ==                0x40000000ULL);
+        CLASSERT(OBD_CONNECT_VBR ==                0x80000000ULL);
+        CLASSERT(OBD_CONNECT_LOV_V3 ==            0x100000000ULL);
+        CLASSERT(OBD_CONNECT_GRANT_SHRINK ==      0x200000000ULL);
+        CLASSERT(OBD_CONNECT_SKIP_ORPHAN ==       0x400000000ULL);
+        CLASSERT(OBD_CONNECT_MAX_EASIZE ==        0x800000000ULL);
+        CLASSERT(OBD_CONNECT_FULL20 ==           0x1000000000ULL);
+        CLASSERT(OBD_CONNECT_LAYOUTLOCK ==       0x2000000000ULL);
+        CLASSERT(OBD_CONNECT_64BITHASH ==        0x4000000000ULL);
+        CLASSERT(OBD_CONNECT_MAXBYTES ==         0x8000000000ULL);
 
         /* Checks for struct obdo */
         LASSERTF((int)sizeof(struct obdo) == 208, " found %lld\n",

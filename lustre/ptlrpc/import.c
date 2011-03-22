@@ -1281,7 +1281,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
  * If we came to server that is in recovery, we enter IMP_REPLAY import state.
  * We go through our list of requests to replay and send them to server one by
  * one.
- * After sending all request from the list we change import state to 
+ * After sending all request from the list we change import state to
  * IMP_REPLAY_LOCKS and re-request all the locks we believe we have from server
  * and also all the locks we don't yet have and wait for server to grant us.
  * After that we send a special "replay completed" request and change import

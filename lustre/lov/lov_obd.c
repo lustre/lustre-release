@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -2742,7 +2745,6 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                         err = obd_set_info_async(tgt->ltd_exp, keylen, key,
                                                  sizeof(*info->capa),
                                                  info->capa, set);
-                       
                 } else {
                         /* Only want a specific OSC */
                         if (check_uuid &&

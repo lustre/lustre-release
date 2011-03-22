@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -1570,8 +1573,30 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab64s(&ocd->ocd_transno);
         __swab32s(&ocd->ocd_group);
         __swab32s(&ocd->ocd_cksum_types);
+        /* Fields after ocd_cksum_types are only accessible by the receiver
+         * if the corresponding flag in ocd_connect_flags is set. Accessing
+         * any field after ocd_maxbytes on the receiver without a valid flag
+         * may result in out-of-bound memory access and kernel oops. */
+        if (ocd->ocd_connect_flags & OBD_CONNECT_MAX_EASIZE)
+                __swab32s(&ocd->ocd_max_easize);
+        CLASSERT(offsetof(typeof(*ocd), padding) != 0);
+        if (ocd->ocd_connect_flags & OBD_CONNECT_MAXBYTES)
+                __swab64s(&ocd->ocd_maxbytes);
         CLASSERT(offsetof(typeof(*ocd), padding1) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding2) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding3) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding4) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding5) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding6) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding7) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding8) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding9) != 0);
+        CLASSERT(offsetof(typeof(*ocd), paddingA) != 0);
+        CLASSERT(offsetof(typeof(*ocd), paddingB) != 0);
+        CLASSERT(offsetof(typeof(*ocd), paddingC) != 0);
+        CLASSERT(offsetof(typeof(*ocd), paddingD) != 0);
+        CLASSERT(offsetof(typeof(*ocd), paddingE) != 0);
+        CLASSERT(offsetof(typeof(*ocd), paddingF) != 0);
 }
 
 void lustre_swab_obdo (struct obdo  *o)

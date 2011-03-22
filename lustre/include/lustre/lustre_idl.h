@@ -1101,6 +1101,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LAYOUTLOCK   0x2000000000ULL /* client supports layout lock */
 #define OBD_CONNECT_64BITHASH    0x4000000000ULL /* client supports 64-bits
                                                   * directory hash */
+#define OBD_CONNECT_MAXBYTES     0x8000000000ULL /* max stripe size */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -1134,7 +1135,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
                                 OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20 | \
-                                OBD_CONNECT_64BITHASH)
+                                OBD_CONNECT_64BITHASH | OBD_CONNECT_MAXBYTES)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
                                 OBD_CONNECT_FULL20)
@@ -1150,6 +1151,23 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
  *
  * If we eventually have separate connect data for different types, which we
  * almost certainly will, then perhaps we stick a union in here. */
+struct obd_connect_data_v1 {
+        __u64 ocd_connect_flags; /* OBD_CONNECT_* per above */
+        __u32 ocd_version;       /* lustre release version number */
+        __u32 ocd_grant;         /* initial cache grant amount (bytes) */
+        __u32 ocd_index;         /* LOV index to connect to */
+        __u32 ocd_brw_size;      /* Maximum BRW size in bytes */
+        __u64 ocd_ibits_known;   /* inode bits this client understands */
+        __u32 ocd_nllu;          /* non-local-lustre-user */
+        __u32 ocd_nllg;          /* non-local-lustre-group */
+        __u64 ocd_transno;       /* first transno from client to be replayed */
+        __u32 ocd_group;         /* MDS group on OST */
+        __u32 ocd_cksum_types;   /* supported checksum algorithms */
+        __u32 ocd_max_easize;    /* How big LOV EA can be on MDS */
+        __u32 padding;           /* also fix lustre_swab_connect */
+        __u64 ocd_maxbytes;      /* Maximum stripe size in bytes */
+};
+
 struct obd_connect_data {
         __u64 ocd_connect_flags; /* OBD_CONNECT_* per above */
         __u32 ocd_version;       /* lustre release version number */
@@ -1162,9 +1180,30 @@ struct obd_connect_data {
         __u64 ocd_transno;       /* first transno from client to be replayed */
         __u32 ocd_group;         /* MDS group on OST */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
-        __u64 padding1;          /* also fix lustre_swab_connect */
-        __u64 padding2;          /* also fix lustre_swab_connect */
+        __u32 ocd_max_easize;    /* How big LOV EA can be on MDS */
+        __u32 padding;           /* also fix lustre_swab_connect */
+        __u64 ocd_maxbytes;      /* Maximum stripe size in bytes */
+        /* Fields after ocd_maxbytes are only accessible by the receiver
+         * if the corresponding flag in ocd_connect_flags is set. Accessing
+         * any field after ocd_maxbytes on the receiver without a valid flag
+         * may result in out-of-bound memory access and kernel oops. */
+        __u64 padding1;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding2;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding3;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding4;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding5;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding6;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding7;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding8;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding9;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 paddingA;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 paddingB;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 paddingC;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 paddingD;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 paddingE;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 paddingF;          /* added 2.2.0. also fix lustre_swab_connect */
 };
+
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
 

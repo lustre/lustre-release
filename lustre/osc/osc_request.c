@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -109,6 +112,7 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                         struct lov_mds_md *lmm, int lmm_bytes)
 {
         int lsm_size;
+        struct obd_import *imp = class_exp2cliimp(exp);
         ENTRY;
 
         if (lmm != NULL) {
@@ -156,7 +160,11 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 LASSERT_SEQ_IS_MDT((*lsmp)->lsm_object_seq);
         }
 
-        (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+        if (imp != NULL &&
+            (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES))
+                (*lsmp)->lsm_maxbytes = imp->imp_connect_data.ocd_maxbytes;
+        else
+                (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
 
         RETURN(lsm_size);
 }
@@ -1117,7 +1125,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
                 CWARN("%s: available grant < 0, the OSS is probably not running"
                       " with patch from bug20278 (%ld) \n",
                       cli->cl_import->imp_obd->obd_name, cli->cl_avail_grant);
-                /* workaround for 1.6 servers which do not have 
+                /* workaround for 1.6 servers which do not have
                  * the patch from bug20278 */
                 cli->cl_avail_grant = ocd->ocd_grant;
         }
@@ -2437,7 +2445,7 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
          * to be canceled, the pages covered by the lock will be sent out
          * with ASYNC_HP. We have to send out them as soon as possible. */
         cfs_list_for_each_entry_safe(oap, tmp, &lop->lop_urgent, oap_urgent_item) {
-                if (oap->oap_async_flags & ASYNC_HP) 
+                if (oap->oap_async_flags & ASYNC_HP)
                         cfs_list_move(&oap->oap_pending_item, &tmp_list);
                 else
                         cfs_list_move_tail(&oap->oap_pending_item, &tmp_list);
@@ -3607,8 +3615,8 @@ static int osc_statfs_interpret(const struct lu_env *env,
          *                   avail < ~0.1% max          max = avail + used
          *            1025 * avail < avail + used       used = blocks - free
          *            1024 * avail < used
-         *            1024 * avail < blocks - free                      
-         *                   avail < ((blocks - free) >> 10)    
+         *            1024 * avail < blocks - free
+         *                   avail < ((blocks - free) >> 10)
          *
          * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
          * lose that amount of space so in those cases we report no space left

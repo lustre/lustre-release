@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -190,20 +193,24 @@ static void check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_transno);
         CHECK_MEMBER(obd_connect_data, ocd_group);
         CHECK_MEMBER(obd_connect_data, ocd_cksum_types);
+        CHECK_MEMBER(obd_connect_data, ocd_max_easize);
+        CHECK_MEMBER(obd_connect_data, padding);
+        CHECK_MEMBER(obd_connect_data, ocd_maxbytes);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
 
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);
+        CHECK_CDEFINE(OBD_CONNECT_MDS);
         CHECK_CDEFINE(OBD_CONNECT_GRANT);
         CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
         CHECK_CDEFINE(OBD_CONNECT_VERSION);
         CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
         CHECK_CDEFINE(OBD_CONNECT_ACL);
         CHECK_CDEFINE(OBD_CONNECT_XATTR);
-        CHECK_CDEFINE(OBD_CONNECT_REAL);
-        CHECK_CDEFINE(OBD_CONNECT_CKSUM);
+        CHECK_CDEFINE(OBD_CONNECT_CROW);
         CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
         CHECK_CDEFINE(OBD_CONNECT_IBITS);
         CHECK_CDEFINE(OBD_CONNECT_JOIN);
         CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
@@ -214,16 +221,24 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
         CHECK_CDEFINE(OBD_CONNECT_MDS_CAPA);
         CHECK_CDEFINE(OBD_CONNECT_OSS_CAPA);
-        CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
+        CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
         CHECK_CDEFINE(OBD_CONNECT_SOM);
         CHECK_CDEFINE(OBD_CONNECT_AT);
-        CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
+        CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
+        CHECK_CDEFINE(OBD_CONNECT_REAL);
+        CHECK_CDEFINE(OBD_CONNECT_CHANGE_QS);
+        CHECK_CDEFINE(OBD_CONNECT_CKSUM);
+        CHECK_CDEFINE(OBD_CONNECT_FID);
         CHECK_CDEFINE(OBD_CONNECT_VBR);
+        CHECK_CDEFINE(OBD_CONNECT_LOV_V3);
+        CHECK_CDEFINE(OBD_CONNECT_GRANT_SHRINK);
         CHECK_CDEFINE(OBD_CONNECT_SKIP_ORPHAN);
+        CHECK_CDEFINE(OBD_CONNECT_MAX_EASIZE);
         CHECK_CDEFINE(OBD_CONNECT_FULL20);
         CHECK_CDEFINE(OBD_CONNECT_LAYOUTLOCK);
         CHECK_CDEFINE(OBD_CONNECT_64BITHASH);
+        CHECK_CDEFINE(OBD_CONNECT_MAXBYTES);
 }
 
 static void
@@ -311,7 +326,7 @@ check_obdo(void)
         CHECK_CVALUE(OBD_FL_CKSUM_ADLER);
         CHECK_CVALUE(OBD_FL_SHRINK_GRANT);
         CHECK_CVALUE(OBD_FL_MMAP);
-        CHECK_CDEFINE(OBD_FL_RECOV_RESEND);
+        CHECK_CVALUE(OBD_FL_RECOV_RESEND);
         CHECK_CVALUE(OBD_CKSUM_CRC32);
         CHECK_CVALUE(OBD_CKSUM_ADLER);
 }
@@ -691,7 +706,7 @@ check_mdt_rec_rename(void)
         CHECK_MEMBER(mdt_rec_rename, rn_padding_1);
         CHECK_MEMBER(mdt_rec_rename, rn_padding_2);
         CHECK_MEMBER(mdt_rec_rename, rn_padding_3);
-        CHECK_MEMBER(mdt_rec_rename, rn_padding_4); 
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_4);
         CHECK_MEMBER(mdt_rec_rename, rn_bias);
         CHECK_MEMBER(mdt_rec_rename, rn_mode);
         CHECK_MEMBER(mdt_rec_rename, rn_padding_5);
