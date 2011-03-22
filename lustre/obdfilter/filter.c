@@ -241,7 +241,6 @@ static int lprocfs_init_rw_stats(struct obd_device *obd,
    plus the procfs overhead :( */
 static int filter_export_stats_init(struct obd_device *obd,
                                     struct obd_export *exp,
-                                    int reconnect,
                                     void *client_nid)
 {
         int rc, newnid = 0;
@@ -251,7 +250,7 @@ static int filter_export_stats_init(struct obd_device *obd,
                 /* Self-export gets no proc entry */
                 RETURN(0);
 
-        rc = lprocfs_exp_setup(exp, client_nid, reconnect, &newnid);
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -869,7 +868,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 fed = &exp->exp_filter_data;
                 *fed->fed_ted.ted_lcd = *lcd;
                 fed->fed_group = 0; /* will be assigned at connect */
-                filter_export_stats_init(obd, exp, 0, NULL);
+                filter_export_stats_init(obd, exp, NULL);
                 rc = filter_client_add(obd, exp, cl_idx);
                 /* can't fail for existing client */
                 LASSERTF(rc == 0, "rc = %d\n", rc);
@@ -2749,7 +2748,7 @@ static int filter_reconnect(const struct lu_env *env,
 
         rc = filter_connect_internal(exp, data, 1);
         if (rc == 0)
-                filter_export_stats_init(obd, exp, 1, localdata);
+                filter_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -2780,7 +2779,7 @@ static int filter_connect(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, lexp, 0, localdata);
+        filter_export_stats_init(obd, lexp, localdata);
         if (obd->obd_replayable) {
                 struct lsd_client_data *lcd = lexp->exp_target_data.ted_lcd;
                 LASSERT(lcd);

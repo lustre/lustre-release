@@ -90,7 +90,7 @@ static int mgs_connect(const struct lu_env *env,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        rc = mgs_export_stats_init(obd, lexp, 0, localdata);
+        rc = mgs_export_stats_init(obd, lexp, localdata);
 
         if (rc) {
                 class_disconnect(lexp);
@@ -119,7 +119,7 @@ static int mgs_reconnect(const struct lu_env *env,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        RETURN(mgs_export_stats_init(obd, exp, 1, localdata));
+        RETURN(mgs_export_stats_init(obd, exp, localdata));
 }
 
 static int mgs_disconnect(struct obd_export *exp)

@@ -1134,8 +1134,8 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
                client_stat->nid_brw_stats);
 
         LASSERTF(cfs_atomic_read(&client_stat->nid_exp_ref_count) == 0,
-                 "count %d\n",
-                 cfs_atomic_read(&client_stat->nid_exp_ref_count));
+                 "nid %s:count %d\n", libcfs_nid2str(client_stat->nid),
+                 atomic_read(&client_stat->nid_exp_ref_count));
 
         cfs_hlist_del_init(&client_stat->nid_hash);
 
@@ -1815,8 +1815,7 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_write);
 
-int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
-                      int *newnid)
+int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 {
         struct nid_stat *new_stat, *old_stat;
         struct obd_device *obd = NULL;
@@ -1856,15 +1855,16 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
                old_stat, libcfs_nid2str(*nid),
                cfs_atomic_read(&new_stat->nid_exp_ref_count));
 
+        /* We need to release old stats because lprocfs_exp_cleanup() hasn't
+         * been and will never be called. */
+        if (exp->exp_nid_stats) {
+                nidstat_putref(exp->exp_nid_stats);
+                exp->exp_nid_stats = NULL;
+        }
+
         /* Return -EALREADY here so that we know that the /proc
          * entry already has been created */
         if (old_stat != new_stat) {
-                /* if this connects to the existing export of same nid,
-                 * we need to release old stats for obd_disconnect won't
-                 * balance the reference gotten in "cfs_hash_findadd_uinque" */
-                if (reconnect && exp->exp_nid_stats)
-                        nidstat_putref(old_stat);
-
                 exp->exp_nid_stats = old_stat;
                 GOTO(destroy_new, rc = -EALREADY);
         }

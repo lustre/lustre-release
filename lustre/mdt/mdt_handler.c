@@ -5035,7 +5035,7 @@ static int mdt_obd_connect(const struct lu_env *env,
                 memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
                 rc = mdt_client_new(env, mdt);
                 if (rc == 0)
-                        mdt_export_stats_init(obd, lexp, 0, localdata);
+                        mdt_export_stats_init(obd, lexp, localdata);
         }
 
 out:
@@ -5074,7 +5074,7 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 
         rc = mdt_connect_internal(exp, mdt_dev(obd->obd_lu_dev), data);
         if (rc == 0)
-                mdt_export_stats_init(obd, exp, 1, localdata);
+                mdt_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -5234,7 +5234,7 @@ static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
         if (cfs_test_bit(MDT_FL_CFGLOG, &m->mdt_state) &&
             cfs_test_bit(MDT_FL_SYNCED, &m->mdt_state)) {
                 struct obd_device *obd = m->mdt_md_dev.md_lu_dev.ld_obd;
- 
+
                 /* Open for clients */
                 if (obd->obd_no_conn) {
                         cfs_spin_lock(&obd->obd_dev_lock);

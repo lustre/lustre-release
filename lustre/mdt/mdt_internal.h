@@ -576,7 +576,6 @@ int mdt_client_new(const struct lu_env *env,
 
 int mdt_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
-                          int reconnect,
                           void *client_nid);
 
 int mdt_pin(struct mdt_thread_info* info);
