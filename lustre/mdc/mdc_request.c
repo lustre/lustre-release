@@ -1360,7 +1360,9 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         case IMP_EVENT_OCD:
                 ptlrpc_import_setasync(imp, obd->obd_namespace->ns_max_unused);
                 break;
-
+        case IMP_EVENT_DEACTIVATE:
+        case IMP_EVENT_ACTIVATE:
+                break;
         default:
                 CERROR("Unknown import event %x\n", event);
                 LBUG();

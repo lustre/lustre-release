@@ -948,7 +948,10 @@ enum obd_notify_event {
         OBD_NOTIFY_SYNC_NONBLOCK,
         OBD_NOTIFY_SYNC,
         /* Configuration event */
-        OBD_NOTIFY_CONFIG
+        OBD_NOTIFY_CONFIG,
+        /* Administratively deactivate/activate event */
+        OBD_NOTIFY_DEACTIVATE,
+        OBD_NOTIFY_ACTIVATE
 };
 
 #define CONFIG_LOG      0x1  /* finished processing config log */
