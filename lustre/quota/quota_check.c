@@ -252,6 +252,12 @@ int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
                 if (!lov->lov_tgts[i])
                         continue;
 
+                /* Skip quota check on the administratively disabled OSTs. */
+                if (!lov->lov_tgts[i]->ltd_activate) {
+                        CWARN("lov idx %d was administratively disabled\n", i);
+                        continue;
+                }
+
                 if (!lov->lov_tgts[i]->ltd_active) {
                         CERROR("lov idx %d inactive\n", i);
                         rc = -EIO;
@@ -262,7 +268,7 @@ int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
-                if (!lov->lov_tgts[i])
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_activate)
                         continue;
 
                 err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
