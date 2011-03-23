@@ -4728,14 +4728,20 @@ static int mdt_process_config(const struct lu_env *env,
 
                 /*
                  * For interoperability between 1.8 and 2.0,
-                 * skip old "mdt.group_upcall" param.
                  */
                 {
+                        /* Skip old "mdt.group_upcall" param. */
                         char *param = lustre_cfg_string(cfg, 1);
                         if (param && !strncmp("mdt.group_upcall", param, 16)) {
                                 CWARN("For 1.8 interoperability, skip this"
                                        " mdt.group_upcall. It is obsolete\n");
                                 break;
+                        }
+                        /* Rename old "mdt.quota_type" to "mdd.quota_type. */
+                        if (param && !strncmp("mdt.quota_type", param, 14)) {
+                                CWARN("Found old param mdt.quota_type, changed"
+                                      " it to mdd.quota_type.\n");
+                                param[2] = 'd';
                         }
                 }
 
