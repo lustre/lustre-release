@@ -160,17 +160,11 @@ Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/mballoc.c	2011-03-14 17:17:59.872649833 +0800
 +++ linux-stage/fs/ext4/mballoc.c	2011-03-14 17:25:20.373903681 +0800
-@@ -4302,6 +4302,13 @@
+@@ -4302,6 +4302,7 @@
  		kmem_cache_free(ext4_ac_cachep, ac);
  }
++EXPORT_SYMBOL(ext4_discard_preallocations); 
  
-+/* For backward compatibility, since Lustre uses this symbol */
-+void ext4_mb_discard_inode_preallocations(struct inode *inode)
-+{
-+	ext4_discard_preallocations(inode);
-+}
-+EXPORT_SYMBOL(ext4_mb_discard_inode_preallocations);
-+
  /*
   * finds all preallocated spaces and return blocks being freed to them
   * if preallocated space becomes full (no block is used from the space)
