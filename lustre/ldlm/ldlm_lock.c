@@ -43,9 +43,7 @@
 
 #ifdef __KERNEL__
 # include <libcfs/libcfs.h>
-# ifndef HAVE_VFS_INTENT_PATCHES
 # include <linux/lustre_intent.h>
-# endif
 #else
 # include <liblustre.h>
 #endif

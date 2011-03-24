@@ -502,12 +502,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
                inode->i_generation, inode, file->f_flags);
 
-#ifdef HAVE_VFS_INTENT_PATCHES
-        it = file->f_it;
-#else
         it = file->private_data; /* XXX: compat macro */
         file->private_data = NULL; /* prevent ll_local_open assertion */
-#endif
 
         fd = ll_file_data_get();
         if (fd == NULL)
@@ -2576,9 +2572,6 @@ struct file_operations ll_file_operations_noflock = {
 };
 
 struct inode_operations ll_file_inode_operations = {
-#ifdef HAVE_VFS_INTENT_PATCHES
-        .setattr_raw    = ll_setattr_raw,
-#endif
         .setattr        = ll_setattr,
         .truncate       = ll_truncate,
         .getattr        = ll_getattr,

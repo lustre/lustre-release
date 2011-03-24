@@ -51,9 +51,7 @@
 # include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 # include <linux/mount.h>
-# ifndef HAVE_VFS_INTENT_PATCHES
-#  include <linux/lustre_intent.h>
-# endif
+# include <linux/lustre_intent.h>
 #endif
 
 typedef struct {

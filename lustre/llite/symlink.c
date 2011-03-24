@@ -140,24 +140,10 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                                                  struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
-#ifdef HAVE_VFS_INTENT_PATCHES
-        struct lookup_intent *it = ll_nd2it(nd);
-#endif
         struct ptlrpc_request *request = NULL;
         int rc;
         char *symname;
         ENTRY;
-
-#ifdef HAVE_VFS_INTENT_PATCHES
-        if (it != NULL) {
-                int op = it->it_op;
-                int mode = it->it_create_mode;
-
-                ll_intent_release(it);
-                it->it_op = op;
-                it->it_create_mode = mode;
-        }
-#endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* Limit the recursive symlink depth to 5 instead of default
@@ -212,9 +198,6 @@ static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cooki
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
-#ifdef HAVE_VFS_INTENT_PATCHES
-        .setattr_raw    = ll_setattr_raw,
-#endif
         .follow_link    = ll_follow_link,
 #ifdef HAVE_COOKIE_FOLLOW_LINK
         .put_link       = ll_put_link,

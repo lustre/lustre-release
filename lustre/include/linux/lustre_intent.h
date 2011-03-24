@@ -39,8 +39,6 @@
 
 #include <linux/lustre_version.h>
 
-#ifndef HAVE_VFS_INTENT_PATCHES
-
 /* intent IT_XXX are defined in lustre/include/obd.h */
 struct lustre_intent_data {
         int       it_disposition;
@@ -59,5 +57,4 @@ struct lookup_intent {
         } d;
 };
 
-#endif
 #endif

@@ -64,12 +64,10 @@ static void ll_release(struct dentry *de)
                 EXIT;
                 return;
         }
-#ifndef HAVE_VFS_INTENT_PATCHES
         if (lld->lld_it) {
                 ll_intent_release(lld->lld_it);
                 OBD_FREE(lld->lld_it, sizeof(*lld->lld_it));
         }
-#endif
         LASSERT(lld->lld_cwd_count == 0);
         LASSERT(lld->lld_mnt_count == 0);
         OBD_FREE(de->d_fsdata, sizeof(*lld));
@@ -144,7 +142,13 @@ static int find_cbdata(struct inode *inode)
         RETURN(rc);
 }
 
-/* should NOT be called with the dcache lock, see fs/dcache.c */
+/**
+ * Called when last reference to a dentry is dropped and dcache wants to know
+ * whether or not it should cache it:
+ * - return 1 to delete the dentry immediately
+ * - return 0 to cache the dentry
+ * Should NOT be called with the dcache lock, see fs/dcache.c
+ */
 static int ll_ddelete(struct dentry *de)
 {
         ENTRY;
@@ -238,10 +242,6 @@ void ll_intent_release(struct lookup_intent *it)
 
         CDEBUG(D_INFO, "intent %p released\n", it);
         ll_intent_drop_lock(it);
-#ifdef HAVE_VFS_INTENT_PATCHES
-        it->it_magic = 0;
-        it->it_op_release = 0;
-#endif
         /* We are still holding extra reference on a request, need to free it */
         if (it_disposition(it, DISP_ENQ_OPEN_REF))
                  ptlrpc_req_finished(it->d.lustre.it_data); /* ll_file_open */
@@ -387,20 +387,10 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-#ifdef HAVE_VFS_INTENT_PATCHES
-        if (it) {
-                LASSERTF(it->it_magic == INTENT_MAGIC,
-                         "%p has bad intent magic: %x\n",
-                         it, it->it_magic);
-        }
-#endif
 
         if (!it || it->it_op == IT_GETXATTR)
                 it = *itp = deft;
 
-#ifdef HAVE_VFS_INTENT_PATCHES
-        it->it_op_release = ll_intent_release;
-#endif
 }
 
 int ll_revalidate_it(struct dentry *de, int lookup_flags,
@@ -665,107 +655,6 @@ out_sa:
         return rc;
 }
 
-#if 0
-static void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
-{
-        struct inode *inode= de->d_inode;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_dentry_data *ldd = ll_d2d(de);
-        struct obd_client_handle *handle;
-        struct obd_capa *oc;
-        int rc = 0;
-        ENTRY;
-        LASSERT(ldd);
-
-        cfs_lock_kernel();
-        /* Strictly speaking this introduces an additional race: the
-         * increments should wait until the rpc has returned.
-         * However, given that at present the function is void, this
-         * issue is moot. */
-        if (flag == 1 && (++ldd->lld_mnt_count) > 1) {
-                cfs_unlock_kernel();
-                EXIT;
-                return;
-        }
-
-        if (flag == 0 && (++ldd->lld_cwd_count) > 1) {
-                cfs_unlock_kernel();
-                EXIT;
-                return;
-        }
-        cfs_unlock_kernel();
-
-        handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        oc = ll_mdscapa_get(inode);
-        rc = obd_pin(sbi->ll_md_exp, ll_inode2fid(inode), oc, handle, flag);
-        capa_put(oc);
-        if (rc) {
-                cfs_lock_kernel();
-                memset(handle, 0, sizeof(*handle));
-                if (flag == 0)
-                        ldd->lld_cwd_count--;
-                else
-                        ldd->lld_mnt_count--;
-                cfs_unlock_kernel();
-        }
-
-        EXIT;
-        return;
-}
-
-static void ll_unpin(struct dentry *de, struct vfsmount *mnt, int flag)
-{
-        struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
-        struct ll_dentry_data *ldd = ll_d2d(de);
-        struct obd_client_handle handle;
-        int count, rc = 0;
-        ENTRY;
-        LASSERT(ldd);
-
-        cfs_lock_kernel();
-        /* Strictly speaking this introduces an additional race: the
-         * increments should wait until the rpc has returned.
-         * However, given that at present the function is void, this
-         * issue is moot. */
-        handle = (flag) ? ldd->lld_mnt_och : ldd->lld_cwd_och;
-        if (handle.och_magic != OBD_CLIENT_HANDLE_MAGIC) {
-                /* the "pin" failed */
-                cfs_unlock_kernel();
-                EXIT;
-                return;
-        }
-
-        if (flag)
-                count = --ldd->lld_mnt_count;
-        else
-                count = --ldd->lld_cwd_count;
-        cfs_unlock_kernel();
-
-        if (count != 0) {
-                EXIT;
-                return;
-        }
-
-        rc = obd_unpin(sbi->ll_md_exp, &handle, flag);
-        EXIT;
-        return;
-}
-#endif
-
-#ifdef HAVE_VFS_INTENT_PATCHES
-int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
-{
-        int rc;
-        ENTRY;
-
-        if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
-                rc = ll_revalidate_it(dentry, nd->flags, &nd->intent);
-        else
-                rc = ll_revalidate_it(dentry, 0, NULL);
-
-        RETURN(rc);
-}
-#else
 int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
         int rc;
@@ -840,7 +729,6 @@ out_it:
 
         RETURN(rc);
 }
-#endif
 
 void ll_d_iput(struct dentry *de, struct inode *inode)
 {
@@ -856,8 +744,4 @@ struct dentry_operations ll_d_ops = {
         .d_delete  = ll_ddelete,
         .d_iput    = ll_d_iput,
         .d_compare = ll_dcompare,
-#if 0
-        .d_pin = ll_pin,
-        .d_unpin = ll_unpin,
-#endif
 };

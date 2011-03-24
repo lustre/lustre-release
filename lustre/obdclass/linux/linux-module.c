@@ -248,15 +248,9 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         *eof = 1;
-#ifdef HAVE_VFS_INTENT_PATCHES
-        return snprintf(page, count, "lustre: %s\nkernel: %u\nbuild:  %s\n",
-                        LUSTRE_VERSION_STRING, LUSTRE_KERNEL_VERSION,
-                        BUILD_VERSION);
-#else
         return snprintf(page, count, "lustre: %s\nkernel: %s\nbuild:  %s\n",
                         LUSTRE_VERSION_STRING, "patchless_client",
                         BUILD_VERSION);
-#endif
 }
 
 int obd_proc_read_pinger(char *page, char **start, off_t off, int count,

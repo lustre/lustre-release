@@ -57,9 +57,7 @@
 #   include <linux/posix_acl_xattr.h>
 #  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
 # endif /* CONFIG_FS_POSIX_ACL */
-# ifndef HAVE_VFS_INTENT_PATCHES
-#  include <linux/lustre_intent.h>
-# endif
+#include <linux/lustre_intent.h>
 /* XATTR_{REPLACE,CREATE} */
 #include <linux/xattr.h>
 #endif /* __KERNEL__ */

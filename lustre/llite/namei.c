@@ -596,21 +596,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         return retval;
 }
 
-#ifdef HAVE_VFS_INTENT_PATCHES
-static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
-                                   struct nameidata *nd)
-{
-        struct dentry *de;
-        ENTRY;
-
-        if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
-                de = ll_lookup_it(parent, dentry, &nd->intent, nd->flags);
-        else
-                de = ll_lookup_it(parent, dentry, NULL, 0);
-
-        RETURN(de);
-}
-#else
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags)
 {
@@ -732,7 +717,6 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 
         RETURN(de);
 }
-#endif
 
 /* We depend on "mode" being set with the proper file type/umask by now */
 static struct inode *ll_create_node(struct inode *dir, const char *name,
@@ -909,7 +893,6 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         RETURN(err);
 }
 
-#ifndef HAVE_VFS_INTENT_PATCHES
 static int ll_create_nd(struct inode *dir, struct dentry *dentry,
                         int mode, struct nameidata *nd)
 {
@@ -943,17 +926,6 @@ out:
 
         return rc;
 }
-#else
-static int ll_create_nd(struct inode *dir, struct dentry *dentry,
-                        int mode, struct nameidata *nd)
-{
-        if (!nd || !nd->intent.d.lustre.it_disposition)
-                /* No saved request? Just mknod the file */
-                return ll_mknod_generic(dir, &dentry->d_name, mode, 0, dentry);
-
-        return ll_create_it(dir, dentry, mode, &nd->intent);
-}
-#endif
 
 static int ll_symlink_generic(struct inode *dir, struct qstr *name,
                               const char *tgt, struct dentry *dchild)
@@ -1220,43 +1192,6 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
         RETURN(err);
 }
 
-#ifdef HAVE_VFS_INTENT_PATCHES
-static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
-{
-        return ll_mknod_generic(nd->dentry->d_inode, &nd->last, mode,rdev,NULL);
-}
-static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
-{
-        return ll_rename_generic(srcnd->dentry->d_inode, srcnd->dentry,
-                                 NULL, &srcnd->last,
-                                 tgtnd->dentry->d_inode, tgtnd->dentry,
-                                 NULL, &tgtnd->last);
-}
-static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
-{
-        return ll_link_generic(srcnd->dentry->d_inode, tgtnd->dentry->d_inode,
-                               &tgtnd->last, NULL);
-}
-static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
-{
-        return ll_symlink_generic(nd->dentry->d_inode, &nd->last, tgt, NULL);
-}
-static int ll_rmdir_raw(struct nameidata *nd)
-{
-        return ll_rmdir_generic(nd->dentry->d_inode, nd->dentry, NULL,
-                                &nd->last);
-}
-static int ll_mkdir_raw(struct nameidata *nd, int mode)
-{
-        return ll_mkdir_generic(nd->dentry->d_inode, &nd->last, mode, NULL);
-}
-static int ll_unlink_raw(struct nameidata *nd)
-{
-        return ll_unlink_generic(nd->dentry->d_inode, nd->dentry, NULL,
-                                 &nd->last);
-}
-#endif
-
 static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                     ll_dev_t rdev)
 {
@@ -1305,17 +1240,6 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
 }
 
 struct inode_operations ll_dir_inode_operations = {
-#ifdef HAVE_VFS_INTENT_PATCHES
-        .link_raw           = ll_link_raw,
-        .unlink_raw         = ll_unlink_raw,
-        .symlink_raw        = ll_symlink_raw,
-        .mkdir_raw          = ll_mkdir_raw,
-        .rmdir_raw          = ll_rmdir_raw,
-        .mknod_raw          = ll_mknod_raw,
-        .rename_raw         = ll_rename_raw,
-        .setattr            = ll_setattr,
-        .setattr_raw        = ll_setattr_raw,
-#endif
         .mknod              = ll_mknod,
         .lookup             = ll_lookup_nd,
         .create             = ll_create_nd,
@@ -1336,9 +1260,6 @@ struct inode_operations ll_dir_inode_operations = {
 };
 
 struct inode_operations ll_special_inode_operations = {
-#ifdef HAVE_VFS_INTENT_PATCHES
-        .setattr_raw    = ll_setattr_raw,
-#endif
         .setattr        = ll_setattr,
         .getattr        = ll_getattr,
         .permission     = ll_inode_permission,

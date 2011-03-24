@@ -59,21 +59,12 @@
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 
-#ifdef HAVE_VFS_INTENT_PATCHES
-static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
-{
-        return &nd->intent;
-}
-#endif
-
 struct ll_dentry_data {
         int                      lld_cwd_count;
         int                      lld_mnt_count;
         struct obd_client_handle lld_cwd_och;
         struct obd_client_handle lld_mnt_och;
-#ifndef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent    *lld_it;
-#endif
         unsigned int             lld_sa_generation;
 };
 
@@ -599,10 +590,8 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
 int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                        void *data, int flag);
-#ifndef HAVE_VFS_INTENT_PATCHES
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
-#endif
 int ll_lookup_it_finish(struct ptlrpc_request *request,
                         struct lookup_intent *it, void *data);
 
