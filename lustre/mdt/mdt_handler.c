@@ -818,7 +818,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct lu_name         *lname     = NULL;
         const char             *name      = NULL;
         int                     namelen   = 0;
-        struct mdt_lock_handle *lhp;
+        struct mdt_lock_handle *lhp       = NULL;
         struct ldlm_lock       *lock;
         struct ldlm_res_id     *res_id;
         int                     is_resent;
@@ -924,16 +924,15 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
-        /* step 1: lock parent */
-        lhp = &info->mti_lh[MDT_LH_PARENT];
-        mdt_lock_pdo_init(lhp, LCK_PR, name, namelen);
-        rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE,
-                             MDT_LOCAL_LOCK);
-
-        if (unlikely(rc != 0))
-                RETURN(rc);
-
         if (lname) {
+                /* step 1: lock parent */
+                lhp = &info->mti_lh[MDT_LH_PARENT];
+                mdt_lock_pdo_init(lhp, LCK_PR, name, namelen);
+                rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE,
+                                     MDT_LOCAL_LOCK);
+                if (unlikely(rc != 0))
+                        RETURN(rc);
+
                 /* step 2: lookup child's fid by name */
                 rc = mdo_lookup(info->mti_env, next, lname, child_fid,
                                 &info->mti_spec);
@@ -1057,7 +1056,8 @@ relock:
 out_child:
         mdt_object_put(info->mti_env, child);
 out_parent:
-        mdt_object_unlock(info, parent, lhp, 1);
+        if (lhp)
+                mdt_object_unlock(info, parent, lhp, 1);
         return rc;
 }
 
