@@ -170,3 +170,26 @@ unpack_linux_devel_rpm-rhel() {
     return 0
 
 }
+
+# this of course requires a sudo rule on the builder for real RHEL:
+# hudson ALL= NOPASSWD: /usr/bin/yumdownloader
+# also must disable the requiretty attribute in the sudoers file
+find_linux_rpm-rhel() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+
+    local tmpdir=$(mktemp -d $pathtorpms/yumXXXXXX)
+    local sudo=""
+    if [ "$(lsb_release -s -i)" = "RedHatEnterpriseServer" ]; then
+        sudo="sudo"
+    fi
+    $sudo yumdownloader --destdir "$tmpdir" kernel-devel-"$wanted_kernel" > /dev/null
+    local rpm=$(cd $tmpdir; echo *)
+    mv "$tmpdir/$rpm" "$pathtorpms"
+    rmdir $tmpdir
+    echo "$rpm"
+
+    return 0
+
+}

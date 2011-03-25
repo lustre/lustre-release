@@ -60,14 +60,7 @@ find_linux_rpm-rhel6() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
 
-    local tmpdir=$(mktemp -d $pathtorpms/yumXXXXXX)
-    sudo yumdownloader --destdir "$tmpdir" kernel-devel-"$wanted_kernel" > /dev/null
-    local rpm=$(cd $tmpdir; echo *)
-    mv "$tmpdir/$rpm" "$pathtorpms"
-    rmdir $tmpdir
-    echo "$rpm"
-
-    return 0
+    find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
 
 }
 

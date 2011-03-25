@@ -1231,7 +1231,7 @@ build_kernel_with_srpm() {
                                    "$REUSE_SIGNATURE"; then
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
-            echo "Downloading kernel SRPM"
+            echo "Downloading kernel SRPM" >&${outfd}
             download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&${outfd}
         fi
 
@@ -1256,7 +1256,7 @@ build_kernel_with_srpm() {
                                  "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
                                  "$CAN_LINK_FOR_REUSE"; then
                 error "Failed to store kernel RPMS for reuse"
-                echo "unknown"
+                echo "unknown" >&${outfd}
                 return 1
             fi
         fi

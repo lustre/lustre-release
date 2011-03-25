@@ -137,7 +137,7 @@ autodetect_distro() {
                 name="oel"
                 version="${version%%.*}"
                 ;;
-            "RedHatEnterpriseServer" | "ScientificSL")
+            "RedHatEnterpriseServer" | "ScientificSL" | "CentOS")
                 name="rhel"
                 version="${version%%.*}"
                 ;;

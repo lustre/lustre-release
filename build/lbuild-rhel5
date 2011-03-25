@@ -98,3 +98,17 @@ unpack_linux_devel_rpm-rhel5() {
     return 0
 
 }
+
+find_linux_rpm-rhel5() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+
+    find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+}
+
+kernel_srpm_location() {
+
+    echo "http://mirror.centos.org/centos-5/5/updates/SRPMS/"
+
+}
