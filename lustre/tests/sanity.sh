@@ -6849,8 +6849,17 @@ test_155_load() {
     local list=$(comma_list $(osts_nodes))
     local big=$(do_nodes $list grep "cache" /proc/cpuinfo | \
         awk '{sum+=$4} END{print sum}')
+    local min_avail=$(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail | \
+        sort -n | head -1)
+    local large_file_size=$((big * 2))
 
-    log big is $big K
+    log "cache size on OSS is $big KB"
+    log "large file size is $large_file_size KB"
+    log "min available OST size is $min_avail KB"
+
+    [ $min_avail -le $large_file_size ] && \
+        skip "the minimum available OST size needs > $large_file_size KB" && \
+        return 0
 
     dd if=/dev/urandom of=$temp bs=6096 count=1 || \
         error "dd of=$temp bs=6096 count=1 failed"
@@ -6870,14 +6879,14 @@ test_155_load() {
     echo "12345" >>$file
     cmp $temp $file || error "$temp $file differ (append2)"
 
-    dd if=/dev/urandom of=$temp bs=$((big*2)) count=1k || \
-        error "dd of=$temp bs=$((big*2)) count=1k failed"
+    dd if=/dev/urandom of=$temp bs=$large_file_size count=1k || \
+        error "dd of=$temp bs=$large_file_size count=1k failed"
     cp $temp $file
     ls -lh $temp $file
     cancel_lru_locks osc
     cmp $temp $file || error "$temp $file differ"
 
-    rm -f $temp
+    rm -f $temp $file
     true
 }
 
