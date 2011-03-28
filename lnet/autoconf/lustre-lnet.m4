@@ -1866,6 +1866,7 @@ lnet/ulnds/socklnd/Makefile
 lnet/ulnds/ptllnd/Makefile
 lnet/utils/Makefile
 lnet/include/libcfs/darwin/Makefile
+lnet/include/libcfs/winnt/Makefile
 lnet/include/lnet/darwin/Makefile
 lnet/libcfs/darwin/Makefile
 ])
