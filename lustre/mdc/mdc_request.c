@@ -60,6 +60,11 @@
 
 #define REQUEST_MINOR 244
 
+struct mdc_renew_capa_args {
+        struct obd_capa        *ra_oc;
+        renew_capa_cb_t         ra_cb;
+};
+
 static quota_interface_t *quota_interface;
 extern quota_interface_t mdc_quota_interface;
 
@@ -2165,11 +2170,10 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
 }
 
 static int mdc_interpret_renew_capa(const struct lu_env *env,
-                                    struct ptlrpc_request *req, void *unused,
+                                    struct ptlrpc_request *req, void *args,
                                     int status)
 {
-        struct obd_capa *oc = req->rq_async_args.pointer_arg[0];
-        renew_capa_cb_t cb = req->rq_async_args.pointer_arg[1];
+        struct mdc_renew_capa_args *ra = args;
         struct mdt_body *body = NULL;
         struct lustre_capa *capa;
         ENTRY;
@@ -2189,7 +2193,7 @@ static int mdc_interpret_renew_capa(const struct lu_env *env,
                 GOTO(out, capa = ERR_PTR(-EFAULT));
         EXIT;
 out:
-        cb(oc, capa);
+        ra->ra_cb(ra->ra_oc, capa);
         return 0;
 }
 
@@ -2197,6 +2201,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
                           renew_capa_cb_t cb)
 {
         struct ptlrpc_request *req;
+        struct mdc_renew_capa_args *ra;
         ENTRY;
 
         req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_MDS_GETATTR,
@@ -2210,8 +2215,10 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
         mdc_pack_body(req, &oc->c_capa.lc_fid, oc, OBD_MD_FLOSSCAPA, 0, -1, 0);
         ptlrpc_request_set_replen(req);
 
-        req->rq_async_args.pointer_arg[0] = oc;
-        req->rq_async_args.pointer_arg[1] = cb;
+        CLASSERT(sizeof(*ra) <= sizeof(req->rq_async_args));
+        ra = ptlrpc_req_async_args(req);
+        ra->ra_oc = oc;
+        ra->ra_cb = cb;
         req->rq_interpret_reply = mdc_interpret_renew_capa;
         ptlrpcd_add_req(req, PSCOPE_OTHER);
         RETURN(0);

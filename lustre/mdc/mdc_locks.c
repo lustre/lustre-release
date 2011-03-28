@@ -56,6 +56,12 @@
 #include <lprocfs_status.h>
 #include "mdc_internal.h"
 
+struct mdc_getattr_args {
+        struct obd_export           *ga_exp;
+        struct md_enqueue_info      *ga_minfo;
+        struct ldlm_enqueue_info    *ga_einfo;
+};
+
 int it_disposition(struct lookup_intent *it, int flag)
 {
         return it->d.lustre.it_disposition & flag;
@@ -958,11 +964,12 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
 static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
                                               struct ptlrpc_request *req,
-                                              void *unused, int rc)
+                                              void *args, int rc)
 {
-        struct obd_export        *exp = req->rq_async_args.pointer_arg[0];
-        struct md_enqueue_info   *minfo = req->rq_async_args.pointer_arg[1];
-        struct ldlm_enqueue_info *einfo = req->rq_async_args.pointer_arg[2];
+        struct mdc_getattr_args  *ga = args;
+        struct obd_export        *exp = ga->ga_exp;
+        struct md_enqueue_info   *minfo = ga->ga_minfo;
+        struct ldlm_enqueue_info *einfo = ga->ga_einfo;
         struct lookup_intent     *it;
         struct lustre_handle     *lockh;
         struct obd_device        *obddev;
@@ -1006,6 +1013,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         struct md_op_data       *op_data = &minfo->mi_data;
         struct lookup_intent    *it = &minfo->mi_it;
         struct ptlrpc_request   *req;
+        struct mdc_getattr_args *ga;
         struct obd_device       *obddev = class_exp2obd(exp);
         struct ldlm_res_id       res_id;
         /*XXX: Both MDS_INODELOCK_LOOKUP and MDS_INODELOCK_UPDATE are needed
@@ -1036,9 +1044,12 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                 RETURN(rc);
         }
 
-        req->rq_async_args.pointer_arg[0] = exp;
-        req->rq_async_args.pointer_arg[1] = minfo;
-        req->rq_async_args.pointer_arg[2] = einfo;
+        CLASSERT(sizeof(*ga) <= sizeof(req->rq_async_args));
+        ga = ptlrpc_req_async_args(req);
+        ga->ga_exp = exp;
+        ga->ga_minfo = minfo;
+        ga->ga_einfo = einfo;
+
         req->rq_interpret_reply = mdc_intent_getattr_async_interpret;
         ptlrpcd_add_req(req, PSCOPE_OTHER);
 

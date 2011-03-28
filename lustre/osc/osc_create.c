@@ -68,6 +68,7 @@ struct osc_create_async_args {
         struct osc_creator      *rq_oscc;
         struct lov_stripe_md    *rq_lsm;
         struct obd_info         *rq_oinfo;
+        int                      rq_grow_count;
 };
 
 static int oscc_internal_create(struct osc_creator *oscc);
@@ -76,7 +77,8 @@ static int handle_async_create(struct ptlrpc_request *req, int rc);
 static int osc_interpret_create(const struct lu_env *env,
                                 struct ptlrpc_request *req, void *data, int rc)
 {
-        struct osc_creator *oscc;
+        struct osc_create_async_args *args = ptlrpc_req_async_args(req);
+        struct osc_creator *oscc = args->rq_oscc;
         struct ost_body *body = NULL;
         struct ptlrpc_request *fake_req, *pos;
         ENTRY;
@@ -87,7 +89,6 @@ static int osc_interpret_create(const struct lu_env *env,
                         rc = -EPROTO;
         }
 
-        oscc = req->rq_async_args.pointer_arg[0];
         LASSERT(oscc && (oscc->oscc_obd != LP_POISON));
 
         cfs_spin_lock(&oscc->oscc_lock);
@@ -98,13 +99,13 @@ static int osc_interpret_create(const struct lu_env *env,
                         int diff =ostid_id(&body->oa.o_oi)- oscc->oscc_last_id;
 
                         /* oscc_internal_create() stores the original value of
-                         * grow_count in rq_async_args.space[0].
+                         * grow_count in osc_create_async_args::rq_grow_count.
                          * We can't compare against oscc_grow_count directly,
                          * because it may have been increased while the RPC
                          * is in flight, so we would always find ourselves
                          * having created fewer objects and decreasing the
                          * precreate request size.  b=18577 */
-                        if (diff < (int) req->rq_async_args.space[0]) {
+                        if (diff < args->rq_grow_count) {
                                 /* the OST has not managed to create all the
                                  * objects we asked for */
                                 oscc->oscc_grow_count = max(diff,
@@ -190,6 +191,7 @@ exit_wakeup:
 
 static int oscc_internal_create(struct osc_creator *oscc)
 {
+        struct osc_create_async_args *args;
         struct ptlrpc_request *request;
         struct ost_body *body;
         ENTRY;
@@ -236,8 +238,11 @@ static int oscc_internal_create(struct osc_creator *oscc)
         request->rq_request_portal = OST_CREATE_PORTAL;
         ptlrpc_at_set_req_timeout(request);
         body = req_capsule_client_get(&request->rq_pill, &RMF_OST_BODY);
+        args = ptlrpc_req_async_args(request);
+        args->rq_oscc = oscc;
 
         cfs_spin_lock(&oscc->oscc_lock);
+        args->rq_grow_count = oscc->oscc_grow_count;
 
         if (likely(fid_seq_is_mdt(oscc->oscc_oa.o_seq))) {
                 body->oa.o_oi.oi_seq = oscc->oscc_oa.o_seq;
@@ -249,10 +254,9 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 CWARN("o_seq: "LPU64" is not indicate any MDTs.\n",
                        oscc->oscc_oa.o_seq);
         }
+        cfs_spin_unlock(&oscc->oscc_lock);
 
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
-        request->rq_async_args.space[0] = oscc->oscc_grow_count;
-        cfs_spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
 
@@ -261,7 +265,6 @@ static int oscc_internal_create(struct osc_creator *oscc)
         request->rq_no_delay = request->rq_no_resend = 1;
         ptlrpc_request_set_replen(request);
 
-        request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;
         ptlrpcd_add_req(request, PSCOPE_OTHER);
 
