@@ -992,7 +992,7 @@ relock:
                         LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
                                         &child->mot_obj.mo_lu,
                                         "Object doesn't exist!\n");
-                        GOTO(out_child, rc = -ESTALE);
+                        GOTO(out_child, rc = -ENOENT);
                 }
 
                 if (!(child_bits & MDS_INODELOCK_UPDATE)) {
