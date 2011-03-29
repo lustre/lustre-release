@@ -2184,6 +2184,9 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
                 struct lookup_intent oit = { .it_op = IT_GETATTR };
                 struct md_op_data *op_data;
 
+                if (ibits == MDS_INODELOCK_LOOKUP)
+                        oit.it_op = IT_LOOKUP;
+
                 /* Call getattr by fid, so do not provide name at all. */
                 op_data = ll_prep_md_op_data(NULL, dentry->d_parent->d_inode,
                                              dentry->d_inode, NULL, 0, 0,
@@ -2260,14 +2263,14 @@ out:
         return rc;
 }
 
-int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
+int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
+                           __u64 ibits)
 {
         struct inode *inode = dentry->d_inode;
         int rc;
         ENTRY;
 
-        rc = __ll_inode_revalidate_it(dentry, it, MDS_INODELOCK_UPDATE |
-                                                  MDS_INODELOCK_LOOKUP);
+        rc = __ll_inode_revalidate_it(dentry, it, ibits);
 
         /* if object not yet allocated, don't validate size */
         if (rc == 0 && ll_i2info(dentry->d_inode)->lli_smd == NULL) {
@@ -2293,7 +2296,8 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
         struct ll_inode_info *lli = ll_i2info(inode);
         int res = 0;
 
-        res = ll_inode_revalidate_it(de, it);
+        res = ll_inode_revalidate_it(de, it, MDS_INODELOCK_UPDATE |
+                                             MDS_INODELOCK_LOOKUP);
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETATTR, 1);
 
         if (res)

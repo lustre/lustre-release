@@ -533,7 +533,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
          * not valid, revalidate it here. */
         if (parent->i_sb->s_root && (parent->i_sb->s_root->d_inode == parent) &&
             (it->it_op & (IT_OPEN | IT_CREAT))) {
-                rc = ll_inode_revalidate_it(parent->i_sb->s_root, it);
+                rc = ll_inode_revalidate_it(parent->i_sb->s_root, it,
+                                            MDS_INODELOCK_LOOKUP);
                 if (rc)
                         RETURN(ERR_PTR(rc));
         }
