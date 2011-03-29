@@ -8,7 +8,7 @@ set -e
 
 export REFORMAT=${REFORMAT:-""}
 export WRITECONF=${WRITECONF:-""}
-export VERBOSE=false
+export VERBOSE=${VERBOSE:-false}
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 #export PDSH="pdsh -S -Rssh -w"
@@ -1570,7 +1570,7 @@ do_node() {
     fi
     if $VERBOSE; then
         echo "CMD: $HOST $@" >&2
-        $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
+        $myPDSH $HOST "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
     fi
 
     if [ "$myPDSH" = "rsh" ]; then
@@ -1633,7 +1633,7 @@ do_nodes() {
 
     if $VERBOSE; then
         echo "CMD: $rnodes $@" >&2
-        $myPDSH $rnodes $LCTL mark "$@" > /dev/null 2>&1 || :
+        $myPDSH $rnodes "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
     fi
 
     # do not replace anything from pdsh output if -N is used
