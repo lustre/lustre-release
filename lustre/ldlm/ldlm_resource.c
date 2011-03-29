@@ -393,19 +393,25 @@ static unsigned ldlm_res_hop_fid_hash(cfs_hash_t *hs,
 {
         const struct ldlm_res_id *id = key;
         struct lu_fid       fid;
-        __u64               hash;
+        __u32               hash;
+        __u32               val;
 
         fid.f_seq = id->name[LUSTRE_RES_ID_SEQ_OFF];
         fid.f_oid = (__u32)id->name[LUSTRE_RES_ID_OID_OFF];
         fid.f_ver = (__u32)id->name[LUSTRE_RES_ID_VER_OFF];
 
-        hash = fid_flatten(&fid);
+        hash = fid_flatten32(&fid);
+        hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
+        if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0) {
+                val = id->name[LUSTRE_RES_ID_HSH_OFF];
+                hash += (val >> 5) + (val << 11);
+        } else {
+                val = fid_oid(&fid);
+        }
         hash = cfs_hash_long(hash, hs->hs_bkt_bits);
-        /* ignore a few low bits */
-        if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0)
-                hash += id->name[LUSTRE_RES_ID_HSH_OFF] >> 5;
-        else
-                hash = hash >> 5;
+        /* give me another random factor */
+        hash -= cfs_hash_long((unsigned long)hs, val % 11 + 3);
+
         hash <<= hs->hs_cur_bits - hs->hs_bkt_bits;
         hash |= ldlm_res_hop_hash(hs, key, CFS_HASH_NBKT(hs) - 1);
 
@@ -505,7 +511,7 @@ ldlm_ns_hash_def_t ldlm_ns_hash_defs[] =
         {
                 .nsd_type       = LDLM_NS_TYPE_MDC,
                 .nsd_bkt_bits   = 11,
-                .nsd_all_bits   = 15,
+                .nsd_all_bits   = 16,
                 .nsd_hops       = &ldlm_ns_fid_hash_ops,
         },
         {

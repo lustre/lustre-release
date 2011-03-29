@@ -793,10 +793,18 @@ static unsigned lu_obj_hop_hash(cfs_hash_t *hs,
                                 const void *key, unsigned mask)
 {
         struct lu_fid  *fid = (struct lu_fid *)key;
-        unsigned        hash;
+        __u32           hash;
 
-        hash = (fid_seq(fid) + fid_oid(fid)) & (CFS_HASH_NBKT(hs) - 1);
-        hash += fid_hash(fid, hs->hs_bkt_bits) << hs->hs_bkt_bits;
+        hash = fid_flatten32(fid);
+        hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
+        hash = cfs_hash_long(hash, hs->hs_bkt_bits);
+
+        /* give me another random factor */
+        hash -= cfs_hash_long((unsigned long)hs, fid_oid(fid) % 11 + 3);
+
+        hash <<= hs->hs_cur_bits - hs->hs_bkt_bits;
+        hash |= (fid_seq(fid) + fid_oid(fid)) & (CFS_HASH_NBKT(hs) - 1);
+
         return hash & mask;
 }
 
@@ -854,27 +862,29 @@ cfs_hash_ops_t lu_site_hash_ops = {
  * Initialize site \a s, with \a d as the top level device.
  */
 #define LU_SITE_BITS_MIN    12
-#define LU_SITE_BITS_MAX    23
+#define LU_SITE_BITS_MAX    24
 /**
- * total 128 buckets, we don't want too many buckets because:
+ * total 256 buckets, we don't want too many buckets because:
  * - consume too much memory
  * - avoid unbalanced LRU list
  */
-#define LU_SITE_BKT_BITS    7
+#define LU_SITE_BKT_BITS    8
 
 int lu_site_init(struct lu_site *s, struct lu_device *top)
 {
         struct lu_site_bkt_data *bkt;
         cfs_hash_bd_t bd;
+        char name[16];
         int bits;
         int i;
         ENTRY;
 
         memset(s, 0, sizeof *s);
         bits = lu_htable_order();
+        snprintf(name, 16, "lu_site_%s", top->ld_type->ldt_name);
         for (bits = min(max(LU_SITE_BITS_MIN, bits), LU_SITE_BITS_MAX);
              bits >= LU_SITE_BITS_MIN; bits--) {
-                s->ls_obj_hash = cfs_hash_create("lu_site", bits, bits,
+                s->ls_obj_hash = cfs_hash_create(name, bits, bits,
                                                  bits - LU_SITE_BKT_BITS,
                                                  sizeof(*bkt), 0, 0,
                                                  &lu_site_hash_ops,
