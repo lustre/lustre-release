@@ -474,8 +474,6 @@ static void
 ldlm_flock_interrupted_wait(void *data)
 {
         struct ldlm_lock *lock;
-        struct lustre_handle lockh;
-        int rc;
         ENTRY;
 
         lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
@@ -487,12 +485,6 @@ ldlm_flock_interrupted_wait(void *data)
 
         /* client side - set flag to prevent lock from being put on lru list */
         lock->l_flags |= LDLM_FL_CBPENDING;
-
-        ldlm_lock_decref_internal(lock, lock->l_req_mode);
-        ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
-        if (rc != ELDLM_OK)
-                CERROR("ldlm_cli_cancel: %d\n", rc);
 
         EXIT;
 }
@@ -526,17 +518,16 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
          * references being held, so that it can go away. No point in
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
-        lock_res_and_lock(lock);
         if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
             (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
-                unlock_res_and_lock(lock);
                 if (lock->l_req_mode == lock->l_granted_mode &&
                     lock->l_granted_mode != LCK_NL &&
                     NULL == data)
                         ldlm_lock_decref_internal(lock, lock->l_req_mode);
+                /* Need to wake up the waiter if we were evicted */
+                cfs_waitq_signal(&lock->l_waitq);
                 RETURN(0);
         }
-        unlock_res_and_lock(lock);
 
         LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
 
@@ -579,16 +570,19 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 granted:
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
 
-        lock_res_and_lock(lock);
-        if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
+        if (lock->l_destroyed) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
-                unlock_res_and_lock(lock);
+                RETURN(0);
+        }
+
+        if (lock->l_flags & LDLM_FL_FAILED) {
+                LDLM_DEBUG(lock, "client-side enqueue waking up: failed");
                 RETURN(-EIO);
         }
+
         if (rc) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
                            rc);
-                unlock_res_and_lock(lock);
                 RETURN(rc);
         }
 
@@ -599,6 +593,7 @@ granted:
         list_del_init(&lock->l_flock_waitq);
         spin_unlock(&ldlm_flock_waitq_lock);
 
+        lock_res_and_lock(lock);
         /* ldlm_lock_enqueue() has already placed lock on the granted list. */
         list_del_init(&lock->l_res_link);
 
