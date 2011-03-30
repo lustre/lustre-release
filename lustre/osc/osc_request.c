@@ -3512,7 +3512,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 }
 
                 /* We already have a lock, and it's referenced */
-                oinfo->oi_cb_up(oinfo, ELDLM_OK);
+                oinfo->oi_cb_up(oinfo, ELDLM_LOCK_MATCHED);
 
                 /* For async requests, decref the lock. */
                 if (einfo->ei_mode != mode)

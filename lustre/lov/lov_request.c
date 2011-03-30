@@ -194,6 +194,8 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
                        " kms="LPU64"\n", loi->loi_lvb.lvb_size, loi->loi_kms);
                 rc = ELDLM_OK;
+        } else if (rc == ELDLM_LOCK_MATCHED) {
+                rc = ELDLM_OK;
         } else {
                 struct obd_export *exp = set->set_exp;
                 struct lov_obd *lov = &exp->exp_obd->u.lov;
