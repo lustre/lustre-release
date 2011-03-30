@@ -997,33 +997,25 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
 
-int noinline mds_get_open_lock(struct obd_device *obd, struct dentry *dchild,
-                               int child_mode, struct lustre_handle *child_lockh,
-                               struct ldlm_reply *rep)
+static int noinline mds_get_open_lock(struct obd_device *obd,
+                                      struct dentry *dchild,
+                                      int child_mode,
+                                      struct lustre_handle *child_lockh)
 {
-        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN } };
-        struct ldlm_res_id child_res_id;
-        int rc = 0, lock_flags = 0;
+        ldlm_policy_data_t policy = {
+                .l_inodebits = { MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN }
+        };
+        struct ldlm_res_id child_res_id = {
+                .name[0] = dchild->d_inode->i_ino,
+                .name[1] = dchild->d_inode->i_generation,
+        };
+        int lock_flags = 0;
 
-        /* In case of replay we do not get a lock assuming that the
-           caller has it already */
-        memset(&child_res_id, 0, sizeof(child_res_id));
-        child_res_id.name[0] = dchild->d_inode->i_ino;
-        child_res_id.name[1] = dchild->d_inode->i_generation;
-
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
-                                    LDLM_IBITS, &policy, child_mode,
-                                    &lock_flags, ldlm_blocking_ast,
-                                    ldlm_completion_ast, NULL, NULL,
-                                    0, NULL, child_lockh);
-        if (rc != ELDLM_OK)
-                goto out;
-
-        /* Let mds_intent_policy know that we have a lock to return */
-        ldlm_reply_set_disposition(rep, DISP_OPEN_LOCK);
-
-out:
-        return rc;
+        return ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
+                                      LDLM_IBITS, &policy, child_mode,
+                                      &lock_flags, ldlm_blocking_ast,
+                                      ldlm_completion_ast, NULL, NULL,
+                                      0, NULL, child_lockh);
 }
 
 int mds_open(struct mds_update_record *rec, int offset,
@@ -1385,9 +1377,25 @@ found_child:
         }
 
         if (need_open_lock) {
-                rc = mds_get_open_lock(obd, dchild, child_mode, child_lockh, rep);
+                rc = mds_get_open_lock(obd, dchild, child_mode, child_lockh);
                 if (rc != ELDLM_OK)
                         GOTO(cleanup, rc);
+                /* Let mds_intent_policy know that we have a lock to return */
+                ldlm_reply_set_disposition(rep, DISP_OPEN_LOCK);
+        } else if (!(rec->ur_flags & MDS_OPEN_LOCK)    &&
+                   S_ISREG(dchild->d_inode->i_mode)    &&
+                   (dchild->d_inode->i_mode & S_IXUGO) &&
+                   (rec->ur_flags & (FMODE_WRITE | MDS_FMODE_EXEC))) {
+                /* if this is an executable, and a non-nfsd client open write or
+                 * execute it, revoke open lock in case other client holds a
+                 * open lock which denies writing/executing in mds_finish_open()
+                 * below. LU-146
+                 */
+                rc = mds_get_open_lock(obd, dchild, child_mode, child_lockh);
+                if (rc != ELDLM_OK)
+                        GOTO(cleanup, rc);
+                ldlm_lock_decref(child_lockh, child_mode);
+                memset(child_lockh, 0, sizeof(*child_lockh));
         }
 
         if (!S_ISREG(dchild->d_inode->i_mode) &&
