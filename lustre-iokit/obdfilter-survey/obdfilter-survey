@@ -66,6 +66,8 @@ nobjhi=${nobjhi:-16}
 thrlo=${thrlo:-1}
 thrhi=${thrhi:-16}
 
+export LC_ALL=POSIX
+
 # End of variables
 
 # create a set of objects, check there are 'n' contiguous ones and
