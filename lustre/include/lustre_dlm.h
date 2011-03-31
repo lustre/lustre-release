@@ -778,8 +778,10 @@ struct ldlm_resource {
         struct ldlm_interval_tree lr_itree[LCK_MODE_NUM];  /* interval trees*/
 
         /* Server-side-only lock value block elements */
+        /** to serialize lvbo_init */
         cfs_semaphore_t        lr_lvb_sem;
         __u32                  lr_lvb_len;
+        /** protect by lr_lock */
         void                  *lr_lvb_data;
 
         /* when the resource was considered as contended */

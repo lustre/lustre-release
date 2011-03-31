@@ -851,10 +851,10 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (lock->l_resource->lr_lvb_len) {
                 void *lvb = req_capsule_client_get(&req->rq_pill, &RMF_DLM_LVB);
 
-                cfs_down(&lock->l_resource->lr_lvb_sem);
+                lock_res(lock->l_resource);
                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                        lock->l_resource->lr_lvb_len);
-                cfs_up(&lock->l_resource->lr_lvb_sem);
+                unlock_res(lock->l_resource);
         }
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %lds wait)",
@@ -1137,6 +1137,9 @@ existing_lock:
                  * local_lock_enqueue by the policy function. */
                 cookie = req;
         } else {
+                /* based on the assumption that lvb size never changes during
+                 * resource life time otherwise it need resource->lr_lock's
+                 * protection */
                 if (lock->l_resource->lr_lvb_len) {
                         req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
                                              RCL_SERVER,
@@ -1244,17 +1247,19 @@ existing_lock:
 
                 if (rc == 0) {
                         if (lock->l_resource->lr_lvb_len > 0) {
+                                /* MDT path won't handle lr_lvb_data, so
+                                 * lock/unlock better be contained in the
+                                 * if block */
                                 void *lvb;
 
                                 lvb = req_capsule_server_get(&req->rq_pill,
                                                              &RMF_DLM_LVB);
                                 LASSERTF(lvb != NULL, "req %p, lock %p\n",
                                          req, lock);
-
-                                cfs_down(&lock->l_resource->lr_lvb_sem);
+                                lock_res(lock->l_resource);
                                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                                        lock->l_resource->lr_lvb_len);
-                                cfs_up(&lock->l_resource->lr_lvb_sem);
+                                unlock_res(lock->l_resource);
                         }
                 } else {
                         lock_res_and_lock(lock);

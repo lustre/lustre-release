@@ -95,7 +95,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                LPU64")\n", obd->obd_name, res->lr_name.name[1],
                res->lr_name.name[0]);
 
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
+        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1],
                                               res->lr_name.name[0]);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -129,8 +129,8 @@ out_dentry:
 
 /* This will be called in two ways:
  *
- *   m != NULL : called by the DLM itself after a glimpse callback
- *   m == NULL : called by the filter after a disk write
+ *   r != NULL : called by the DLM itself after a glimpse callback
+ *   r == NULL : called by the filter after a disk write
  *
  *   If 'increase_only' is true, don't allow values to move backwards.
  */
@@ -141,11 +141,12 @@ static int filter_lvbo_update(struct ldlm_resource *res,
         struct ost_lvb *lvb;
         struct obd_device *obd;
         struct inode *inode;
+        struct inode *tmpinode = NULL;
         ENTRY;
 
         LASSERT(res);
 
-        cfs_down(&res->lr_lvb_sem);
+        lock_res(res);
         lvb = res->lr_lvb_data;
         if (lvb == NULL) {
                 CERROR("No lvb when running lvbo_update!\n");
@@ -195,18 +196,28 @@ static int filter_lvbo_update(struct ldlm_resource *res,
         LASSERT(obd);
 
         inode = res->lr_lvb_inode;
-        /* filter_fid2dentry could fail */
-        if (unlikely(!inode)) {
+        /* filter_fid2dentry could fail, esp. in OBD_FAIL_OST_ENOENT test case */
+        if (unlikely(inode == NULL)) {
                 struct dentry *dentry;
 
-                dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
+                unlock_res(res);
+
+                dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1],
                                            res->lr_name.name[0]);
                 if (IS_ERR(dentry))
-                        GOTO(out, rc = PTR_ERR(dentry));
+                        RETURN(PTR_ERR(dentry));
 
                 if (dentry->d_inode)
-                        inode = res->lr_lvb_inode = igrab(dentry->d_inode);
+                        tmpinode = igrab(dentry->d_inode);
                 f_dput(dentry);
+                /* tmpinode could be NULL, but it does not matter if other
+                 * have set res->lr_lvb_inode */
+                lock_res(res);
+                if (res->lr_lvb_inode == NULL) {
+                        res->lr_lvb_inode = tmpinode;
+                        tmpinode = NULL;
+                }
+                inode = res->lr_lvb_inode;
         }
 
         if (!inode || !inode->i_nlink)
@@ -245,7 +256,9 @@ static int filter_lvbo_update(struct ldlm_resource *res,
         }
 
 out:
-        cfs_up(&res->lr_lvb_sem);
+        unlock_res(res);
+        if (tmpinode)
+                iput(tmpinode);
         return rc;
 }
 
