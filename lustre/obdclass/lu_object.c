@@ -1626,7 +1626,8 @@ static void lu_site_stats_get(cfs_hash_t *hs,
 }
 
 #ifdef __KERNEL__
-static int KERN_SHRINKER(lu_cache_shrink)
+static int lu_cache_shrink(SHRINKER_FIRST_ARG int nr_to_scan,
+                           unsigned int gfp_mask)
 {
         lu_site_stats_t stats;
         struct lu_site *s;

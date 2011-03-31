@@ -1598,7 +1598,29 @@ AC_DEFUN([LC_REGISTER_SHRINKER],
 [mm/vmscan.c],[
         AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
                   [kernel exports register_shrinker])
+# 2.6.32 added another argument to struct shrinker->shrink
+        AC_MSG_CHECKING([if passing shrinker as first argument])
+        tmp_flags="$EXTRA_KCFLAGS"
+        EXTRA_KCFLAGS="-Werror"
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/mm.h>
+                int test_shrink(struct shrinker *, int, gfp_t);
+        ],[
+                struct shrinker *shr = NULL;
+                shr->shrink = test_shrink;
+        ],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(SHRINKER_FIRST_ARG, [struct shrinker *shrinker,],
+                        [kernel is passing shrinker as first argument])
+        ],[
+                AC_DEFINE(SHRINKER_FIRST_ARG, ,
+                        [kernel is not passing shrinker as first argument])
+        ])
+        EXTRA_KCFLAGS="$tmp_flags"
 ],[
+	AC_DEFINE(SHRINKER_FIRST_ARG, ,
+                  [kernel does not exports register_shrinker,
+		   so SHRINKER_FIRST_ARG is empty])
 ])
 ])
 
@@ -2083,23 +2105,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.32-71 adds an argument to shrink callback
-AC_DEFUN([LC_SHRINK_3ARGS],
-[AC_MSG_CHECKING([if shrink has 3 arguments])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-],[
-        struct shrinker s;
-        return s.shrink(NULL, 0, 0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SHRINK_3ARGS, 1,
-                  [shrink has 3 arguments])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
 #
 # LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
 #
@@ -2346,7 +2351,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SB_BDI
          LC_BLK_QUEUE_MAX_SECTORS
          LC_BLK_QUEUE_MAX_SEGMENTS
-         LC_SHRINK_3ARGS
          LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
 
          #
