@@ -68,6 +68,7 @@
 #define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
 #define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
 #define LDD_F_PARAM         0x0400 /* process as lctl conf_param */
+#define LDD_F_NO_PRIMNODE   0x1000 /* all nodes are specified as servicenodes */
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0,
@@ -104,7 +105,7 @@ struct lustre_disk_data {
 
         __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
-        __u32      ldd_svindex;         /* server index (0001), must match 
+        __u32      ldd_svindex;         /* server index (0001), must match
                                            svname */
         __u32      ldd_mount_type;      /* target fs type LDD_MT_* */
         char       ldd_fsname[64];      /* filesystem this server is part of */
@@ -128,7 +129,7 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
                 sprintf(name, "%.8s-%s%04x", fs,
-                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",  
+                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
                         index);
         } else if (flags & LDD_F_SV_TYPE_MGS) {
                 sprintf(name, "MGS");
@@ -145,7 +146,7 @@ int server_name2index(char *svname, __u32 *idx, char **endptr);
 
 /****************** mount command *********************/
 
-/* The lmd is only used internally by Lustre; mount simply passes 
+/* The lmd is only used internally by Lustre; mount simply passes
    everything as string options */
 
 #define LMD_MAGIC    0xbdacbd03
@@ -160,7 +161,7 @@ struct lustre_mount_data {
         int        lmd_recovery_time_hard;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
-        char      *lmd_opts;          /* lustre mount options (as opposed to 
+        char      *lmd_opts;          /* lustre mount options (as opposed to
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
 };
@@ -174,7 +175,7 @@ struct lustre_mount_data {
                                         existing MGS services */
 #define LMD_FLG_WRITECONF    0x0040  /* Rewrite config log */
 
-#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
+#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 
 
 /****************** last_rcvd file *********************/
@@ -272,7 +273,7 @@ static inline void check_lcd(char *obd_name, int index,
                 lcd->lcd_uuid[length - 1] = '\0';
 
                 LCONSOLE_ERROR("the client UUID (%s) on %s for exports"
-                               "stored in last_rcvd(index = %d) is bad!\n", 
+                               "stored in last_rcvd(index = %d) is bad!\n",
                                lcd->lcd_uuid, obd_name, index);
         }
 }
@@ -331,9 +332,9 @@ void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb));
 
 
 int lustre_common_put_super(struct super_block *sb);
-int lustre_process_log(struct super_block *sb, char *logname, 
+int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
-int lustre_end_log(struct super_block *sb, char *logname, 
+int lustre_end_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
 struct lustre_mount_info *server_find_mount_locked(char *name);
 struct lustre_mount_info *server_get_mount(char *name);

@@ -1008,7 +1008,6 @@ static int mgs_write_log_failnids(struct obd_device *obd,
         char *ptr = mti->mti_params;
         lnet_nid_t nid;
         int rc = 0;
-
         /*
         #03 L add_uuid  nid=uml1@tcp(0x20000c0a80201) nal=90 0:  1:uml1_UUID
         #04 L add_uuid  nid=1@elan(0x1000000000001)   nal=90 0:  1:uml1_UUID

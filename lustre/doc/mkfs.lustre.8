@@ -47,6 +47,11 @@ Only print what would be done; does not affect the disk
 .TP
 .BI \--failnode= nid,...  
 Set the NID(s) of a failover partner. This option can be repeated as desired.
+Cannot be used with --servicenode.
+.TP
+.BI \--servicenode= nid,....
+Set the NID(s) of all service partner. This option treats all nodes as equal
+service nodes. Cannot be used with --failnode.
 .TP
 .BI \--fsname= filesystem_name  
 The Lustre filesystem this service will be part of.  The maximum
