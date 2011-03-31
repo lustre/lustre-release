@@ -122,6 +122,9 @@ void usage(FILE *out)
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
                 "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
+                "\t\t\tcannot be used with --servicenode\n"
+                "\t\t--servicenode=<nid>[,<...>] : NID(s) of all service partners\n"
+                "\t\t\ttreat all nodes as equal service node, cannot be used with --failnode\n"
                 "\t\t--param <key>=<value> : set a permanent parameter\n"
                 "\t\t\te.g. --param sys.timeout=40\n"
                 "\t\t\t     --param lov.stripesize=2M\n"
@@ -794,7 +797,7 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %#x\n", ldd->ldd_flags);
-        printf("              (%s%s%s%s%s%s%s%s%s)\n",
+        printf("              (%s%s%s%s%s%s%s%s%s%s)\n",
                IS_MDT(ldd) ? "MDT ":"",
                IS_OST(ldd) ? "OST ":"",
                IS_MGS(ldd) ? "MGS ":"",
@@ -803,6 +806,7 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
                ldd->ldd_flags & LDD_F_UPDATE     ? "update ":"",
                ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf ":"",
                ldd->ldd_flags & LDD_F_IAM_DIR  ? "IAM_dir_format ":"",
+               ldd->ldd_flags & LDD_F_NO_PRIMNODE? "no_primnode ":"",
                ldd->ldd_flags & LDD_F_UPGRADE14  ? "upgrade1.4 ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("Parameters:%s\n", ldd->ldd_params);
@@ -1268,15 +1272,17 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"print", 0, 0, 'n'},
                 {"quiet", 0, 0, 'q'},
                 {"reformat", 0, 0, 'r'},
+                {"servicenode", 1, 0, 's'},
                 {"verbose", 0, 0, 'v'},
                 {"writeconf", 0, 0, 'w'},
                 {"upgrade_to_18", 0, 0, 'U'},
                 {"network", 1, 0, 't'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqru:vw";
+        char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqrs:t:Uu:vw";
         int opt;
         int rc, longidx;
+        int failnode_set = 0, servicenode_set = 0;
 
         while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) !=
                EOF) {
@@ -1323,8 +1329,19 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         /* Must update the mgs logs */
                         mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
-                case 'f': {
-                        char *nids = convert_hostnames(optarg);
+                case 'f':
+                case 's': {
+                        char *nids;
+
+                        if ((opt == 'f' && servicenode_set)
+                            || (opt == 's' && failnode_set)) {
+                                fprintf(stderr, "%s: %s cannot use with --%s\n",
+                                        progname, long_opt[longidx].name,
+                                        opt == 'f' ? "servicenode" : "failnode");
+                                return 1;
+                        }
+
+                        nids = convert_hostnames(optarg);
                         if (!nids)
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
@@ -1334,6 +1351,12 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 return rc;
                         /* Must update the mgs logs */
                         mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
+                        if (opt == 'f') {
+                                failnode_set = 1;
+                        } else {
+                                mop->mo_ldd.ldd_flags |= LDD_F_NO_PRIMNODE;
+                                servicenode_set = 1;
+                        }
                         failover = 1;
                         break;
                 }

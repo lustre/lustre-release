@@ -87,6 +87,8 @@
 #define LDD_F_PARAM         0x0400
 /** backend fs make use of IAM directory format. */
 #define LDD_F_IAM_DIR       0x0800
+/** all nodes are specified as service nodes */
+#define LDD_F_NO_PRIMNODE   0x1000
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0,
@@ -311,7 +313,7 @@ static inline void check_lcd(char *obd_name, int index,
                 lcd->lcd_uuid[length - 1] = '\0';
 
                 LCONSOLE_ERROR("the client UUID (%s) on %s for exports"
-                               "stored in last_rcvd(index = %d) is bad!\n", 
+                               "stored in last_rcvd(index = %d) is bad!\n",
                                lcd->lcd_uuid, obd_name, index);
         }
 }

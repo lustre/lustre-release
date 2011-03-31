@@ -980,12 +980,17 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
                 if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND)
                         continue;
 
-                if (class_find_param(ldd->ldd_params,
-                                     PARAM_NETWORK, NULL) == 0 &&
-                    !class_match_net(ldd->ldd_params, id.nid)) {
-                        /* can't match specified network */
+                /* server use --servicenode param, only allow specified
+                 * nids be registered */
+                if ((ldd->ldd_flags & LDD_F_NO_PRIMNODE) != 0 &&
+                    class_match_nid(ldd->ldd_params,
+                                    PARAM_FAILNODE, id.nid) < 1)
                         continue;
-                }
+
+                /* match specified network */
+                if (!class_match_net(ldd->ldd_params,
+                                     PARAM_NETWORK, LNET_NIDNET(id.nid)))
+                        continue;
 
                 mti->mti_nids[mti->mti_nid_count] = id.nid;
                 mti->mti_nid_count++;

@@ -454,7 +454,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         /* Nothing wrong, or fatal error */
                         GOTO(out_nolock, rc);
         } else {
-                if ((rc = mgs_check_failover_reg(mti)))
+                if (!(mti->mti_flags & LDD_F_NO_PRIMNODE)
+                    && (rc = mgs_check_failover_reg(mti)))
                         GOTO(out_nolock, rc);
         }
 

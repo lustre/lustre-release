@@ -2637,16 +2637,25 @@ test_56() {
 }
 run_test 56 "check big indexes"
 
-test_57() { # bug 22656
+test_57a() { # bug 22656
 	local NID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
 	writeconf
 	do_facet ost1 "$TUNEFS --failnode=$NID `ostdevname 1`" || error "tunefs failed"
 	start_mgsmds
 	start_ost && error "OST registration from failnode should fail"
-	stop_mds
 	reformat
 }
-run_test 57 "initial registration from failnode should fail (should return errs)"
+run_test 57a "initial registration from failnode should fail (should return errs)"
+
+test_57b() {
+	local NID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
+	writeconf
+	do_facet ost1 "$TUNEFS --servicenode=$NID `ostdevname 1`" || error "tunefs failed"
+	start_mgsmds
+	start_ost || error "OST registration from servicenode should not fail"
+	reformat
+}
+run_test 57b "initial registration from servicenode should not fail"
 
 count_osts() {
         do_facet mgs $LCTL get_param mgs.MGS.live.$FSNAME | grep OST | wc -l

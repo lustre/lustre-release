@@ -235,19 +235,42 @@ int class_parse_net(char *buf, __u32 *net, char **endh)
         return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh);
 }
 
-int class_match_net(char *buf, lnet_nid_t nid)
+/* 1 param contains key and match
+ * 0 param contains key and not match
+ * -1 param does not contain key
+ */
+int class_match_nid(char *buf, char *key, lnet_nid_t nid)
 {
-        __u32 net;
+        lnet_nid_t tmp;
+        int   rc = -1;
 
-        while (class_find_param(buf, PARAM_NETWORK, &buf) == 0) {
+        while (class_find_param(buf, key, &buf) == 0) {
                 /* please restrict to the nids pertaining to
-                 * the specified networks */
-                while (class_parse_net(buf, &net, &buf) == 0) {
-                        if (LNET_NIDNET(nid) == net)
+                 * the specified nids */
+                while (class_parse_nid(buf, &tmp, &buf) == 0) {
+                        if (tmp == nid)
                                 return 1;
                 }
+                rc = 0;
         }
-        return 0;
+        return rc;
+}
+
+int class_match_net(char *buf, char *key, __u32 net)
+{
+        __u32 tmp;
+        int   rc = -1;
+
+        while (class_find_param(buf, key, &buf) == 0) {
+                /* please restrict to the nids pertaining to
+                 * the specified networks */
+                while (class_parse_net(buf, &tmp, &buf) == 0) {
+                        if (tmp == net)
+                                return 1;
+                }
+                rc = 0;
+        }
+        return rc;
 }
 
 EXPORT_SYMBOL(class_find_param);
@@ -255,6 +278,7 @@ EXPORT_SYMBOL(class_get_next_param);
 EXPORT_SYMBOL(class_match_param);
 EXPORT_SYMBOL(class_parse_nid);
 EXPORT_SYMBOL(class_parse_net);
+EXPORT_SYMBOL(class_match_nid);
 EXPORT_SYMBOL(class_match_net);
 
 /********************** class fns **********************/
