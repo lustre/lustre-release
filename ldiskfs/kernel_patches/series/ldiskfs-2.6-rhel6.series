@@ -27,3 +27,5 @@ ext4-mballoc-pa_free-mismatch-rhel6.patch
 ext4_data_in_dirent-rhel6.patch
 ext4-disable-mb-cache-rhel6.patch
 ext4-back-dquot-to-rhel6.patch
+ext4-nocmtime-2.6-rhel5.patch
+ext4-export-64bit-name-hash-rhel6.patch
