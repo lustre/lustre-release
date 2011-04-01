@@ -69,6 +69,9 @@
                vma->vm_file->f_dentry->d_inode->i_ino,                       \
                vma->vm_file->f_dentry->d_iname, ## arg);                     \
 
+struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
+                       int *type);
+
 static struct vm_operations_struct ll_file_vm_ops;
 
 void policy_from_vma(ldlm_policy_data_t *policy,
@@ -203,8 +206,8 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         struct lu_env           *env;
         struct cl_env_nest      nest;
         struct cl_io            *io;
-        struct page             *page;
-        struct vvp_io           *vio;
+        struct page             *page  = NOPAGE_SIGBUS;
+        struct vvp_io           *vio = NULL;
         unsigned long           ra_flags;
         pgoff_t                 pg_offset;
         int                     result;
@@ -220,26 +223,21 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 goto out_err;
 
         vio = vvp_env_io(env);
+
         vio->u.fault.ft_vma            = vma;
-        vio->u.fault.ft_vmpage         = NULL;
         vio->u.fault.nopage.ft_address = address;
         vio->u.fault.nopage.ft_type    = type;
 
         result = cl_io_loop(env, io);
 
-        page = vio->u.fault.ft_vmpage;
-        if (page != NULL) {
-                LASSERT(PageLocked(page));
-                unlock_page(page);
-
-                if (result != 0)
-                        page_cache_release(page);
-        }
-
-        LASSERT(ergo(result == 0, io->u.ci_fault.ft_page != NULL));
 out_err:
-        if (result != 0)
-                page = result == -ENOMEM ? NOPAGE_OOM : NOPAGE_SIGBUS;
+        if (result == 0) {
+                LASSERT(io->u.ci_fault.ft_page != NULL);
+                page = vio->u.fault.ft_vmpage;
+        } else {
+                if (result == -ENOMEM)
+                        page = NOPAGE_OOM;
+        }
 
         vma->vm_flags &= ~VM_RAND_READ;
         vma->vm_flags |= ra_flags;
@@ -261,11 +259,11 @@ out_err:
  * \retval VM_FAULT_ERROR on general error
  * \retval NOPAGE_OOM not have memory for allocate new page
  */
-int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
         struct lu_env           *env;
         struct cl_io            *io;
-        struct vvp_io           *vio;
+        struct vvp_io           *vio = NULL;
         unsigned long            ra_flags;
         struct cl_env_nest       nest;
         int                      result;
@@ -286,17 +284,8 @@ int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
         vio->u.fault.fault.ft_vmf = vmf;
 
         result = cl_io_loop(env, io);
-        if (unlikely(result != 0 && vio->u.fault.ft_vmpage != NULL)) {
-                struct page *vmpage = vio->u.fault.ft_vmpage;
-
-                LASSERT((vio->u.fault.fault.ft_flags & VM_FAULT_LOCKED) &&
-                        PageLocked(vmpage));
-                unlock_page(vmpage);
-                page_cache_release(vmpage);
-                vmf->page = NULL;
-        }
-
         fault_ret = vio->u.fault.fault.ft_flags;
+
 out_err:
         if (result != 0)
                 fault_ret |= VM_FAULT_ERROR;
@@ -309,6 +298,39 @@ out_err:
         RETURN(fault_ret);
 }
 
+int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+{
+        int count = 0;
+        bool printed = false;
+        int result;
+
+restart:
+        result = ll_fault0(vma, vmf);
+        LASSERT(!(result & VM_FAULT_LOCKED));
+        if (result == 0) {
+                struct page *vmpage = vmf->page;
+
+                /* check if this page has been truncated */
+                lock_page(vmpage);
+                if (unlikely(vmpage->mapping == NULL)) { /* unlucky */
+                        unlock_page(vmpage);
+                        page_cache_release(vmpage);
+                        vmf->page = NULL;
+
+                        if (!printed && ++count > 16) {
+                                CWARN("the page is under heavy contention,"
+                                      "maybe your app(%s) needs revising :-)\n",
+                                      current->comm);
+                                printed = true;
+                        }
+
+                        goto restart;
+                }
+
+                result |= VM_FAULT_LOCKED;
+        }
+        return result;
+}
 #endif
 
 /**

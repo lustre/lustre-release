@@ -634,14 +634,6 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
         LL_CDEBUG_PAGE(D_PAGE, vmpage, "got addr %lu type %lx\n",
                        cfio->nopage.ft_address, (long)cfio->nopage.ft_type);
 
-        lock_page(vmpage);
-        if (vmpage->mapping == NULL) {
-                CERROR("vmpage %lu@%p was truncated!\n", vmpage->index, vmpage);
-                unlock_page(vmpage);
-                page_cache_release(vmpage);
-                return -EFAULT;
-        }
-
         cfio->ft_vmpage = vmpage;
 
         return 0;
@@ -655,7 +647,12 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
                 LL_CDEBUG_PAGE(D_PAGE, cfio->fault.ft_vmf->page,
                                "got addr %p type NOPAGE\n",
                                cfio->fault.ft_vmf->virtual_address);
-                LASSERT(cfio->fault.ft_flags & VM_FAULT_LOCKED);
+                /*XXX workaround to bug in CLIO - he deadlocked with
+                 lock cancel if page locked  */
+                if (likely(cfio->fault.ft_flags & VM_FAULT_LOCKED)) {
+                        unlock_page(cfio->fault.ft_vmf->page);
+                        cfio->fault.ft_flags &= ~VM_FAULT_LOCKED;
+                }
 
                 cfio->ft_vmpage = cfio->fault.ft_vmf->page;
                 return 0;
@@ -708,15 +705,25 @@ static int vvp_io_fault_start(const struct lu_env *env,
         if (result != 0)
                 return result;
 
-        /* must return locked page */
+        /* must return unlocked page */
         kernel_result = vvp_io_kernel_fault(cfio);
         if (kernel_result != 0)
                 return kernel_result;
 
-        page = cl_page_find(env, obj, fio->ft_index, cfio->ft_vmpage,
-                            CPT_CACHEABLE);
-        if (IS_ERR(page))
+        /* Temporarily lock vmpage to keep cl_page_find() happy. */
+        lock_page(cfio->ft_vmpage);
+        /* Though we have already held a cl_lock upon this page, but
+         * it still can be truncated locally. */
+        page = ERR_PTR(-EFAULT);
+        if (likely(cfio->ft_vmpage->mapping != NULL))
+                page = cl_page_find(env, obj, fio->ft_index, cfio->ft_vmpage,
+                                    CPT_CACHEABLE);
+        unlock_page(cfio->ft_vmpage);
+        if (IS_ERR(page)) {
+                page_cache_release(cfio->ft_vmpage);
+                cfio->ft_vmpage = NULL;
                 return PTR_ERR(page);
+        }
 
         size = i_size_read(inode);
         last = cl_index(obj, size - 1);

@@ -1915,7 +1915,7 @@ void cl_lock_page_list_fixup(const struct lu_env *env,
                         page->cp_index < temp->cp_index));
 
                 found = cl_lock_at_page(env, lock->cll_descr.cld_obj,
-                                        page, lock, 0, 0);
+                                        page, lock, 1, 0);
                 if (found == NULL)
                         continue;
 
