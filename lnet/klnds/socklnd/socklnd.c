@@ -2422,15 +2422,31 @@ ksocknal_base_startup (void)
                 }
         }
 
+        ksocknal_data.ksnd_connd_starting         = 0;
+        ksocknal_data.ksnd_connd_failed_stamp     = 0;
+        ksocknal_data.ksnd_connd_starting_stamp   = cfs_time_current_sec();
         /* must have at least 2 connds to remain responsive to accepts while
          * connecting */
-        if (*ksocknal_tunables.ksnd_nconnds < 2)
-                *ksocknal_tunables.ksnd_nconnds = 2;
+        if (*ksocknal_tunables.ksnd_nconnds < SOCKNAL_CONND_RESV + 1)
+                *ksocknal_tunables.ksnd_nconnds = SOCKNAL_CONND_RESV + 1;
+
+        if (*ksocknal_tunables.ksnd_nconnds_max <
+            *ksocknal_tunables.ksnd_nconnds) {
+                ksocknal_tunables.ksnd_nconnds_max =
+                        ksocknal_tunables.ksnd_nconnds;
+        }
 
         for (i = 0; i < *ksocknal_tunables.ksnd_nconnds; i++) {
+                cfs_spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
+                ksocknal_data.ksnd_connd_starting++;
+                cfs_spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
+
                 rc = ksocknal_thread_start (ksocknal_connd,
                                             (void *)((ulong_ptr_t)i));
                 if (rc != 0) {
+                        cfs_spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
+                        ksocknal_data.ksnd_connd_starting--;
+                        cfs_spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
                         CERROR("Can't spawn socknal connd: %d\n", rc);
                         goto failed;
                 }

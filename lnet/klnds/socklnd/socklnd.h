@@ -102,6 +102,7 @@ typedef struct
 {
         int              *ksnd_timeout;         /* "stuck" socket timeout (seconds) */
         int              *ksnd_nconnds;         /* # connection daemons */
+        int              *ksnd_nconnds_max;     /* max # connection daemons */
         int              *ksnd_min_reconnectms; /* first connection retry after (ms)... */
         int              *ksnd_max_reconnectms; /* ...exponentially increasing to this */
         int              *ksnd_eager_ack;       /* make TCP ack eagerly? */
@@ -150,6 +151,11 @@ typedef struct
         ksock_interface_t ksnn_interfaces[LNET_MAX_INTERFACES];
 } ksock_net_t;
 
+/** connd timeout */
+#define SOCKNAL_CONND_TIMEOUT  120
+/** reserved thread for accepting & creating new connd */
+#define SOCKNAL_CONND_RESV     1
+
 typedef struct
 {
         int               ksnd_init;           /* initialisation state */
@@ -181,6 +187,14 @@ typedef struct
         cfs_list_t        ksnd_connd_routes;   /* routes waiting to be connected */
         cfs_waitq_t       ksnd_connd_waitq;    /* connds sleep here */
         int               ksnd_connd_connecting;/* # connds connecting */
+        /** time stamp of the last failed connecting attempt */
+        long              ksnd_connd_failed_stamp;
+        /** # starting connd */
+        unsigned          ksnd_connd_starting;
+        /** time stamp of the last starting connd */
+        long              ksnd_connd_starting_stamp;
+        /** # running connd */
+        unsigned          ksnd_connd_running;
         cfs_spinlock_t    ksnd_connd_lock;     /* serialise */
 
         cfs_list_t        ksnd_idle_noop_txs;  /* list head for freed noop tx */
