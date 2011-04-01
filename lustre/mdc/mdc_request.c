@@ -1843,7 +1843,9 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         case IMP_EVENT_OCD:
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;
-
+        case IMP_EVENT_DEACTIVATE:
+        case IMP_EVENT_ACTIVATE:
+                break;
         default:
                 CERROR("Unknown import event %x\n", event);
                 LBUG();

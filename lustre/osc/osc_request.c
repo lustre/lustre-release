@@ -4372,6 +4372,14 @@ static int osc_import_event(struct obd_device *obd,
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;
         }
+        case IMP_EVENT_DEACTIVATE: {
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_DEACTIVATE, NULL);
+                break;
+        }
+        case IMP_EVENT_ACTIVATE: {
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVATE, NULL);
+                break;
+        }
         default:
                 CERROR("Unknown import event %d\n", event);
                 LBUG();

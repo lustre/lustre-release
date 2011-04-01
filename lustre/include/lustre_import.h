@@ -124,6 +124,8 @@ enum obd_import_event {
         IMP_EVENT_INVALIDATE = 0x808003,
         IMP_EVENT_ACTIVE     = 0x808004,
         IMP_EVENT_OCD        = 0x808005,
+        IMP_EVENT_DEACTIVATE = 0x808006,
+        IMP_EVENT_ACTIVATE   = 0x808007,
 };
 
 /**

@@ -904,7 +904,10 @@ enum obd_notify_event {
         /* Configuration event */
         OBD_NOTIFY_CONFIG,
         /* Trigger quota recovery */
-        OBD_NOTIFY_QUOTA
+        OBD_NOTIFY_QUOTA,
+        /* Administratively deactivate/activate event */
+        OBD_NOTIFY_DEACTIVATE,
+        OBD_NOTIFY_ACTIVATE
 };
 
 /* bit-mask flags for config events */

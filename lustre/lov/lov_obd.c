@@ -121,7 +121,7 @@ static void lov_putref(struct obd_device *obd)
 }
 
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
-                              int activate);
+                              enum obd_notify_event ev);
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev, void *data);
 
@@ -384,15 +384,15 @@ out:
  *  any >= 0 : is log target index
  */
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
-                              int activate)
+                              enum obd_notify_event ev)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
-        int index;
+        int index, activate, active;
         ENTRY;
 
-        CDEBUG(D_INFO, "Searching in lov %p for uuid %s (activate=%d)\n",
-               lov, uuid->uuid, activate);
+        CDEBUG(D_INFO, "Searching in lov %p for uuid %s event(%d)\n",
+               lov, uuid->uuid, ev);
 
         obd_getref(obd);
         for (index = 0; index < lov->desc.ld_tgt_count; index++) {
@@ -410,26 +410,43 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
         if (index == lov->desc.ld_tgt_count)
                 GOTO(out, index = -EINVAL);
 
-        if (lov->lov_tgts[index]->ltd_active == activate) {
-                CDEBUG(D_INFO, "OSC %s already %sactive!\n", uuid->uuid,
-                       activate ? "" : "in");
-                GOTO(out, index);
-        }
+        if (ev == OBD_NOTIFY_DEACTIVATE || ev == OBD_NOTIFY_ACTIVATE) {
+                activate = (ev == OBD_NOTIFY_ACTIVATE) ? 1 : 0;
 
-        CDEBUG(D_CONFIG, "Marking OSC %s %sactive\n", obd_uuid2str(uuid),
-               activate ? "" : "in");
+                if (lov->lov_tgts[index]->ltd_activate == activate) {
+                        CDEBUG(D_INFO, "OSC %s already %sactivate!\n",
+                               uuid->uuid, activate ? "" : "de");
+                } else {
+                        lov->lov_tgts[index]->ltd_activate = activate;
+                        CDEBUG(D_CONFIG, "%sactivate OSC %s\n",
+                               activate ? "" : "de", obd_uuid2str(uuid));
+                }
 
-        lov->lov_tgts[index]->ltd_active = activate;
+        } else if (ev == OBD_NOTIFY_INACTIVE || ev == OBD_NOTIFY_ACTIVE) {
+                active = (ev == OBD_NOTIFY_ACTIVE) ? 1 : 0;
 
-        if (activate) {
-                lov->desc.ld_active_tgt_count++;
-                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
+                if (lov->lov_tgts[index]->ltd_active == active) {
+                        CDEBUG(D_INFO, "OSC %s already %sactive!\n",
+                               uuid->uuid, active ? "" : "in");
+                        GOTO(out, index);
+                } else {
+                        CDEBUG(D_CONFIG, "Marking OSC %s %sactive\n",
+                               obd_uuid2str(uuid), active ? "" : "in");
+                }
+
+                lov->lov_tgts[index]->ltd_active = active;
+                if (active) {
+                        lov->desc.ld_active_tgt_count++;
+                        lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
+                } else {
+                        lov->desc.ld_active_tgt_count--;
+                        lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
+                }
+                /* remove any old qos penalty */
+                lov->lov_tgts[index]->ltd_qos.ltq_penalty = 0;
         } else {
-                lov->desc.ld_active_tgt_count--;
-                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
+                CERROR("Unknown event(%d) for uuid %s", ev, uuid->uuid);
         }
-        /* remove any old qos penalty */
-        lov->lov_tgts[index]->ltd_qos.ltq_penalty = 0;
 
  out:
         obd_putref(obd);
@@ -442,7 +459,8 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         int rc = 0;
         ENTRY;
 
-        if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE) {
+        if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE ||
+            ev == OBD_NOTIFY_ACTIVATE || ev == OBD_NOTIFY_DEACTIVATE) {
                 struct obd_uuid *uuid;
 
                 LASSERT(watched);
@@ -458,10 +476,9 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 /* Set OSC as active before notifying the observer, so the
                  * observer can use the OSC normally.
                  */
-                rc = lov_set_osc_active(obd, uuid, ev == OBD_NOTIFY_ACTIVE);
+                rc = lov_set_osc_active(obd, uuid, ev);
                 if (rc < 0) {
-                        CERROR("%sactivation of %s failed: %d\n",
-                               (ev == OBD_NOTIFY_ACTIVE) ? "" : "de",
+                        CERROR("event(%d) of %s failed: %d\n", ev,
                                obd_uuid2str(uuid), rc);
                         RETURN(rc);
                 }

@@ -265,6 +265,8 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
                 imp->imp_deactive = 1;
                 cfs_spin_unlock(&imp->imp_lock);
 
+                obd_import_event(imp->imp_obd, imp, IMP_EVENT_DEACTIVATE);
+
                 ptlrpc_invalidate_import(imp);
         }
 
@@ -297,6 +299,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
         cfs_spin_lock(&imp->imp_lock);
         imp->imp_deactive = 0;
         cfs_spin_unlock(&imp->imp_lock);
+        obd_import_event(imp->imp_obd, imp, IMP_EVENT_ACTIVATE);
 
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
 

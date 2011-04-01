@@ -1059,6 +1059,9 @@ static int mgc_import_event(struct obd_device *obd,
                 break;
         case IMP_EVENT_OCD:
                 break;
+        case IMP_EVENT_DEACTIVATE:
+        case IMP_EVENT_ACTIVATE:
+                break;
         default:
                 CERROR("Unknown import event %#x\n", event);
                 LBUG();
