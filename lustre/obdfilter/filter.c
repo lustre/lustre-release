@@ -2704,7 +2704,18 @@ static int filter_connect_internal(struct obd_export *exp,
         } else if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
                 data->ocd_brw_size = min(data->ocd_brw_size,
                                (__u32)(PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT));
-                LASSERT(data->ocd_brw_size);
+                if (data->ocd_brw_size == 0) {
+                        CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
+                               " ocd_version: %x ocd_grant: %d ocd_index: %u "
+                               "ocd_brw_size is unexpectedly zero, "
+                               "network data corruption?"
+                               "Refusing connection of this client\n",
+                                exp->exp_obd->obd_name,
+                                exp->exp_client_uuid.uuid,
+                                exp, data->ocd_connect_flags, data->ocd_version,
+                                data->ocd_grant, data->ocd_index);
+                        RETURN(-EPROTO);
+                }
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_CKSUM) {
