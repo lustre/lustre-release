@@ -1194,10 +1194,10 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 	$LFS setquota -u root -b 10 -B 10 -i 10 -I 10 $DIR
 	createmany -m ${TESTFILE} 20 || \
 	    quota_error u root "unexpected: user(root) create files failly!"
-	dd if=/dev/zero of=$TESTFILE bs=4k count=4096 || \
+        multiop ${TESTFILE} oO_CREAT:O_WRONLY:O_DIRECT:w$((4096 * 4096))c || \
 	    quota_error u root "unexpected: user(root) write files failly!"
 	chmod 666 $TESTFILE
-	$RUNAS dd if=/dev/zero of=${TESTFILE} seek=4096 bs=4k count=4096 && \
+        $RUNAS multiop ${TESTFILE} oO_WRONLY:O_APPEND:O_DIRECT:w$((4096 * 4096))c && \
 	    quota_error u root "unexpected: user(quota_usr) write a file successfully!"
 
 	# trigger the llog
