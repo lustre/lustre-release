@@ -11,10 +11,10 @@ trace_headers := $(wildcard @LINUX@/include/trace/events/@BACKFS@*.h)
 
 backfs_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/@BACKFS@/*.c))
 
-ext3_new_sources := iopen.c iopen.h extents.c mballoc.c group.h dynlocks.c fiemap.h
+ext3_new_sources := extents.c mballoc.c group.h dynlocks.c fiemap.h
 ext3_new_headers := ext3_extents.h
 
-ext4_new_sources := iopen.c iopen.h  dynlocks.c fiemap.h
+ext4_new_sources := dynlocks.c fiemap.h
 ext4_new_headers :=
 
 new_sources := $(@BACKFS@_new_sources)

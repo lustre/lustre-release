@@ -70,6 +70,7 @@ Index: linux-2.6.18.i386/fs/ext4/inode.c
 +	ext4_journal_stop(handle);
 +	return rc;
 +}
++EXPORT_SYMBOL(ext4_map_inode_page);
 Index: linux-2.6.18.i386/fs/ext4/super.c
 ===================================================================
 --- linux-2.6.18.i386.orig/fs/ext4/super.c

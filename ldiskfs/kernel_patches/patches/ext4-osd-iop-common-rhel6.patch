@@ -1,8 +1,8 @@
-Index: linux-2.6.32.i386/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.32.i386.orig/fs/ext4/ext4.h	2010-04-16 04:57:39.000000000 +0530
-+++ linux-2.6.32.i386/fs/ext4/ext4.h	2010-04-16 05:27:02.000000000 +0530
-@@ -1512,6 +1512,19 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1599,6 +1599,19 @@ extern int ext4_orphan_add(handle_t *, s
  extern int ext4_orphan_del(handle_t *, struct inode *);
  extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
  				__u32 start_minor_hash, __u32 *next_hash);
@@ -22,10 +22,10 @@ Index: linux-2.6.32.i386/fs/ext4/ext4.h
  
  /* resize.c */
  extern int ext4_group_add(struct super_block *sb,
-Index: linux-2.6.32.i386/fs/ext4/namei.c
+Index: linux-stage/fs/ext4/namei.c
 ===================================================================
---- linux-2.6.32.i386.orig/fs/ext4/namei.c	2010-04-16 04:57:39.000000000 +0530
-+++ linux-2.6.32.i386/fs/ext4/namei.c	2010-04-16 05:28:25.000000000 +0530
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
 @@ -24,6 +24,7 @@
   *	Theodore Ts'o, 2002
   */
@@ -34,7 +34,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  #include <linux/fs.h>
  #include <linux/pagemap.h>
  #include <linux/jbd2.h>
-@@ -902,9 +903,9 @@
+@@ -873,9 +874,9 @@ static inline int search_dirblock(struct
   * The returned buffer_head has ->b_count elevated.  The caller is expected
   * to brelse() it when appropriate.
   */
@@ -47,7 +47,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  {
  	struct super_block *sb;
  	struct buffer_head *bh_use[NAMEI_RA_SIZE];
-@@ -1011,6 +1012,7 @@
+@@ -981,6 +982,7 @@ cleanup_and_exit:
  		brelse(bh_use[ra_ptr]);
  	return ret;
  }
@@ -55,7 +55,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  
  static struct buffer_head * ext4_dx_find_entry(struct inode *dir, const struct qstr *d_name,
  		       struct ext4_dir_entry_2 **res_dir, int *err)
-@@ -1538,8 +1540,8 @@
+@@ -1503,8 +1505,8 @@ static int make_indexed_dir(handle_t *ha
   * may not sleep between calling this and putting something into
   * the entry, as someone else might have used it while you slept.
   */
@@ -66,7 +66,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  {
  	struct inode *dir = dentry->d_parent->d_inode;
  	struct buffer_head *bh;
-@@ -1588,6 +1590,7 @@
+@@ -1553,6 +1555,7 @@ static int ext4_add_entry(handle_t *hand
  	brelse(bh);
  	return retval;
  }
@@ -74,7 +74,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  
  /*
   * Returns 0 for success, or a negative error value
-@@ -1728,10 +1731,10 @@
+@@ -1692,10 +1695,10 @@ cleanup:
   * ext4_delete_entry deletes a directory entry by merging it with the
   * previous entry
   */
@@ -89,7 +89,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  {
  	struct ext4_dir_entry_2 *de, *pde;
  	unsigned int blocksize = dir->i_sb->s_blocksize;
-@@ -1766,7 +1769,7 @@
+@@ -1730,7 +1733,7 @@ static int ext4_delete_entry(handle_t *h
  	}
  	return -ENOENT;
  }
@@ -98,7 +98,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  /*
   * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
   * since this indicates that nlinks count was previously 1.
-@@ -1831,6 +1834,26 @@
+@@ -1795,6 +1798,27 @@ static unsigned ext4_dentry_goal(struct 
  	return inum;
  }
  
@@ -106,7 +106,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
 +{
 +	struct inode *inode;
 +
-+	inode = ext4_new_inode(handle, dir, mode, 0, 0);
++	inode = ext4_new_inode(handle, dir, mode, 0, EXT4_SB(dir->i_sb)->s_inode_goal);
 +	if (!IS_ERR(inode)) {
 +		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
 +#ifdef CONFIG_LDISKFS_FS_XATTR
@@ -117,6 +117,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
 +			inode->i_fop = &ext4_file_operations;
 +			ext4_set_aops(inode);
 +		}
++		unlock_new_inode(inode);
 +	}
 +	return inode;
 +}
@@ -125,7 +126,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1905,40 +1928,33 @@
+@@ -1871,40 +1895,33 @@ retry:
  	return err;
  }
  
@@ -159,7 +160,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  		ext4_handle_sync(handle);
  
 -	inode = ext4_new_inode(handle, dir, S_IFDIR | mode,
--			       &dentry->d_name, 0);
+-			       &dentry->d_name, ext4_dentry_goal(dir->i_sb, dentry));
 -	err = PTR_ERR(inode);
 -	if (IS_ERR(inode))
 -		goto out_stop;
@@ -179,7 +180,7 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
  	BUFFER_TRACE(dir_block, "get_write_access");
  	ext4_journal_get_write_access(handle, dir_block);
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
-@@ -1960,9 +1976,43 @@
+@@ -1926,9 +1943,45 @@ retry:
  	ext4_handle_dirty_metadata(handle, dir, dir_block);
  	brelse(dir_block);
  	ext4_mark_inode_dirty(handle, inode);
@@ -215,8 +216,10 @@ Index: linux-2.6.32.i386/fs/ext4/namei.c
 +		goto out_stop;
 +
 +	err = ext4_add_dot_dotdot(handle, dir, inode);
-+	if (err)
++	if (err) {
++		unlock_new_inode(inode);
 +		goto out_stop;
++	}
 +
  	err = ext4_add_entry(handle, dentry, inode);
  	if (err) {

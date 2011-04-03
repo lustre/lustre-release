@@ -245,7 +245,7 @@ static int enc_pools_shrink(SHRINKER_FIRST_ARG int nr_to_scan,
         if (unlikely(nr_to_scan != 0)) {
                 cfs_spin_lock(&page_pools.epp_lock);
                 nr_to_scan = min(nr_to_scan, (int) page_pools.epp_free_pages -
-                                             PTLRPC_MAX_BRW_PAGES);
+                                 PTLRPC_MAX_BRW_PAGES);
                 if (nr_to_scan > 0) {
                         enc_pools_release_free_pages(nr_to_scan);
                         CDEBUG(D_SEC, "released %d pages, %ld left\n",

@@ -1,5 +1,4 @@
 ext4-wantedi-2.6-sles11.patch
-iopen-sles11.patch
 ext4-map_inode_page-sles11.patch
 export-ext4-2.6-sles11.patch
 ext4-include-fixes-2.6-sles11.patch

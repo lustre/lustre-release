@@ -2,12 +2,26 @@ Index: b/include/linux/blkdev.h
 ===================================================================
 --- a/include/linux/blkdev.h
 +++ b/include/linux/blkdev.h
-@@ -1026,7 +1026,7 @@ extern int blk_verify_command(unsigned c
+@@ -1026,6 +1026,6 @@ extern int blk_verify_command(unsigned c
  enum blk_default_limits {
- 	BLK_MAX_SEGMENTS	= 128,
+-	BLK_MAX_SEGMENTS	= 128,
++	BLK_MAX_SEGMENTS	= 256,
  	BLK_SAFE_MAX_SECTORS	= 255,
 -	BLK_DEF_MAX_SECTORS	= 1024,
 +	BLK_DEF_MAX_SECTORS	= 2048,
  	BLK_MAX_SEGMENT_SIZE	= 65536,
  	BLK_SEG_BOUNDARY_MASK	= 0xFFFFFFFFUL,
  };
+Index: linux-2.6.32.x86_64/include/scsi/scsi.h
+===================================================================
+--- linux-2.6.32.x86_64.orig/include/scsi/scsi.h	2010-10-26 21:45:52.000000000 +0300
++++ linux-2.6.32.x86_64/include/scsi/scsi.h	2010-10-29 11:16:35.000000000 +0300
+@@ -19,7 +19,7 @@ struct scsi_cmnd;
+  * to SG_MAX_SINGLE_ALLOC to pack correctly at the highest order.  The
+  * minimum value is 32
+  */
+-#define SCSI_MAX_SG_SEGMENTS	128
++#define SCSI_MAX_SG_SEGMENTS	256
+ 
+ /*
+  * Like SCSI_MAX_SG_SEGMENTS, but for archs that have sg chaining. This limit

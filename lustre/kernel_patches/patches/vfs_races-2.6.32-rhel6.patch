@@ -1,0 +1,30 @@
+Index: linux-2.6.32-71.18.1.el6/fs/dcache.c
+===================================================================
+--- linux-2.6.32-71.18.1.el6.orig/fs/dcache.c
++++ linux-2.6.32-71.18.1.el6/fs/dcache.c
+@@ -280,6 +280,13 @@ int d_invalidate(struct dentry * dentry)
+ 		spin_unlock(&dcache_lock);
+ 		return 0;
+ 	}
++
++	/* network invalidation by Lustre */
++	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) {
++		spin_unlock(&dcache_lock);
++		return 0;
++	}
++
+ 	/*
+ 	 * Check whether to do a partial shrink_dcache
+ 	 * to get rid of unused child entries.
+Index: linux-2.6.32-71.18.1.el6/include/linux/dcache.h
+===================================================================
+--- linux-2.6.32-71.18.1.el6.orig/include/linux/dcache.h
++++ linux-2.6.32-71.18.1.el6/include/linux/dcache.h
+@@ -185,6 +185,7 @@ d_iput:		no		no		no       yes
+ #define DCACHE_COOKIE		0x0040	/* For use by dcookie subsystem */
+ 
+ #define DCACHE_FSNOTIFY_PARENT_WATCHED	0x0080 /* Parent inode is watched by some fsnotify listener */
++#define DCACHE_LUSTRE_INVALID	0x0100  /* Lustre invalidated */
+ 
+ extern spinlock_t dcache_lock;
+ extern seqlock_t rename_lock;

@@ -60,19 +60,17 @@
 #include <linux/version.h>
 #include <linux/bitops.h>
 #include <linux/quota.h>
-#ifdef HAVE_QUOTAIO_V1_H
-# include <linux/quotaio_v1.h>
+#ifdef HAVE_QUOTAIO_H
 # include <linux/quotaio_v2.h>
-#elif defined(HAVE_FS_QUOTA_QUOTAIO_V1_H)
-# include <quota/quotaio_v1.h>
+#elif defined(HAVE_FS_QUOTA_QUOTAIO_H)
 # include <quota/quotaio_v2.h>
 # include <quota/quota_tree.h>
 # define V2_DQTREEOFF    QT_TREEOFF
 #elif defined(HAVE_FS_QUOTAIO_V1_H)
-# include <quotaio_v1.h>
 # include <quotaio_v2.h>
 # include <quota_tree.h>
 # define V2_DQTREEOFF    QT_TREEOFF
+# define V2_INITQVERSIONS_R1 V2_INITQVERSIONS
 #endif
 
 #ifdef QFMT_VFS_V1

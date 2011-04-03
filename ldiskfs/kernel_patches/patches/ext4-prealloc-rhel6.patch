@@ -18,6 +18,20 @@ Index: linux-stage/fs/ext4/ext4.h
  	unsigned int s_mb_group_prealloc;
  	unsigned int s_max_writeback_mb_bump;
  	/* where last allocation was done - for stream allocation */
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+@@ -3028,6 +3028,11 @@ static int ext4_da_writepages(struct add
+ 	if (unlikely(sbi->s_mount_flags & EXT4_MF_FS_ABORTED))
+ 		return -EROFS;
+ 
++	if (wbc->nr_to_write < sbi->s_mb_small_req) {
++		nr_to_writebump = sbi->s_mb_small_req - wbc->nr_to_write;
++		wbc->nr_to_write = sbi->s_mb_small_req;
++	}
++
+ 	if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX)
+ 		range_whole = 1;
+
 Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/mballoc.c	2011-03-11 14:03:32.000000000 +0800

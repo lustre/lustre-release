@@ -71,4 +71,4 @@ liblustre.a : $(LUSTRE_LIBS) $(LND_LIBS) $(LNET_LIBS) $(SYSIO_LIBS) $(QUOTA_LIBS
 
 EXTRA_DIST = genlib.sh
 
-CLEANFILES := liblsupport.a liblustre.so
+CLEANFILES = liblsupport.a liblustre.so

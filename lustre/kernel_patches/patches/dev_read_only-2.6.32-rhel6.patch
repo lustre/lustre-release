@@ -30,15 +30,26 @@ Index: linux-2.6.32-71.18.1.el6-master/block/blk-core.c
  /*
   * Check whether this bio extends beyond the end of the device.
   */
-@@ -1506,6 +1508,12 @@
+@@ -1506,6 +1508,23 @@
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
  
-+		/* This is Lustre's dev_rdonly check */
-+		if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
-+			bio_endio(bio, 0);
-+			break;
-+		}
++               /* this is cfs's dev_rdonly check */
++               if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
++                       struct block_device *bdev = bio->bi_bdev;
++
++                       printk(KERN_WARNING "Write to readonly device %s (%#x) "
++                              "bi_flags: %lx, bi_vcnt: %d, bi_idx: %d, "
++                              "bi->size: %d, bi_cnt: %d, bi_private: %p\n",
++                              bdev->bd_disk ? bdev->bd_disk->disk_name : "",
++                              bdev->bd_dev, bio->bi_flags, bio->bi_vcnt,
++                              bio->bi_idx, bio->bi_size,
++                              atomic_read(&bio->bi_cnt), bio->bi_private);
++                       set_bit(BIO_RDONLY, &bio->bi_flags);
++                       bio_endio(bio, 0);
++                       clear_bit(BIO_RDONLY, &bio->bi_flags);
++                       break;
++               }
 +
  		if (should_fail_request(bio))
  			goto end_io;
@@ -170,3 +181,15 @@ Index: linux-2.6.32-71.18.1.el6-master/include/linux/fs.h
  extern int set_blocksize(struct block_device *, int);
  extern int sb_set_blocksize(struct super_block *, int);
  extern int sb_min_blocksize(struct super_block *, int);
+Index: linux+rh+chaos/include/linux/bio.h
+===================================================================
+--- linux+rh+chaos.orig/include/linux/bio.h
++++ linux+rh+chaos/include/linux/bio.h
+@@ -126,6 +126,7 @@ struct bio {
+ #define BIO_NULL_MAPPED 9	/* contains invalid user pages */
+ #define BIO_FS_INTEGRITY 10	/* fs owns integrity data, not block layer */
+ #define BIO_QUIET	11	/* Make BIO Quiet */
++#define BIO_RDONLY	31	/* device is readonly */
+ #define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag)))
+ 
+ /*

@@ -685,37 +685,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define cpu_to_node(cpu)         0
 #endif
 
-#ifdef HAVE_REGISTER_SHRINKER
-typedef int (*cfs_shrinker_t)(SHRINKER_FIRST_ARG int nr_to_scan, gfp_t gfp_mask);
-
-static inline
-struct shrinker *cfs_set_shrinker(int seek, cfs_shrinker_t func)
-{
-        struct shrinker *s;
-
-        s = kmalloc(sizeof(*s), GFP_KERNEL);
-        if (s == NULL)
-                return (NULL);
-
-        s->shrink = func;
-        s->seeks = seek;
-
-        register_shrinker(s);
-
-        return s;
-}
-
-static inline
-void cfs_remove_shrinker(struct shrinker *shrinker)
-{
-        if (shrinker == NULL)
-                return;
-
-        unregister_shrinker(shrinker);
-        kfree(shrinker);
-}
-#endif
-
 #ifdef HAVE_BIO_ENDIO_2ARG
 #define cfs_bio_io_error(a,b)   bio_io_error((a))
 #define cfs_bio_endio(a,b,c)    bio_endio((a),(c))

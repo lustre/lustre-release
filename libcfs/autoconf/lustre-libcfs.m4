@@ -324,6 +324,22 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#2.6.23 has new shrinker API
+AC_DEFUN([LC_REGISTER_SHRINKER],
+[AC_MSG_CHECKING([if kernel has register_shrinker])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
+],[
+        register_shrinker(NULL);
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
+                [kernel has register_shrinker])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # 2.6.24 
 AC_DEFUN([LIBCFS_NETLINK_CBMUTEX],
 [AC_MSG_CHECKING([for mutex in netlink_kernel_create])
@@ -654,6 +670,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
+AC_DEFUN([LC_SHRINKER_WANT_SHRINK_PTR],
+[AC_MSG_CHECKING([shrinker want self pointer in handler])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
+],[
+        struct shrinker tmp;
+        tmp.shrink(NULL, 0, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SHRINKER_WANT_SHRINK_PTR, 1,
+                  [shrinker want self pointer in handler])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LIBCFS_PROG_LINUX
 #
@@ -684,6 +717,7 @@ LIBCFS_KMEM_CACHE
 # 2.6.23
 LIBCFS_KMEM_CACHE_CREATE_DTOR
 LIBCFS_NETLINK_CBMUTEX
+LC_REGISTER_SHRINKER
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
 LIBCFS_SCATTERLIST_SETPAGE
@@ -702,6 +736,7 @@ LIBCFS_FUNC_UNSHARE_FS_STRUCT
 LIBCFS_SOCK_MAP_FD_2ARG
 # 2.6.32
 LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
+LC_SHRINKER_WANT_SHRINK_PTR
 # 2.6.34
 LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
 ])

@@ -806,8 +806,8 @@ extern quota_interface_t lmv_quota_interface;
  * than than full kernel source, so we provide them here for compatibility.
  */
 #ifdef __KERNEL__
-# if !defined(HAVE_QUOTAIO_V1_H) && !defined(HAVE_FS_QUOTA_QUOTAIO_V1_H) && \
-     !defined(HAVE_FS_QUOTAIO_V1_H)
+# if !defined(HAVE_QUOTAIO_H) && !defined(HAVE_FS_QUOTA_QUOTAIO_H) && \
+     !defined(HAVE_FS_QUOTAIO_H)
 
 #include <linux/types.h>
 #include <linux/quota.h>

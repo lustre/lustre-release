@@ -143,12 +143,20 @@ static void mdd_lockdep_init(struct mdd_object *obj)
 static void mdd_lockdep_pd_acquire(struct mdd_object *obj,
                                    enum mdd_object_role role)
 {
+#ifdef HAVE_LOCK_MAP_ACQUIRE
+        lock_map_acquire(&obj->dep_map);
+#else
         lock_acquire(&obj->dep_map, role, 0, 1, 2, RETIP);
+#endif
 }
 
 static void mdd_lockdep_pd_release(struct mdd_object *obj)
 {
+#ifdef HAVE_LOCK_MAP_ACQUIRE
+        lock_map_release(&obj->dep_map);
+#else
         lock_release(&obj->dep_map, 0, RETIP);
+#endif
 }
 
 #else /* !CONFIG_LOCKDEP */

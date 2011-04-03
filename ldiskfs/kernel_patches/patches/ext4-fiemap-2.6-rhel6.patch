@@ -5,9 +5,9 @@ support is already in the kernel/ext4 for normal usage.
 
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h	2011-03-05 12:34:16.458850451 +0800
-+++ linux-stage/fs/ext4/ext4.h	2011-03-05 12:35:25.338882364 +0800
-@@ -405,7 +405,7 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -405,7 +405,7 @@ struct ext4_new_group_data {
  #define EXT4_IOC_GROUP_ADD		_IOW('f', 8, struct ext4_new_group_input)
  #define EXT4_IOC_MIGRATE		_IO('f', 9)
   /* note ioctl 10 reserved for an early version of the FIEMAP ioctl */
@@ -18,8 +18,8 @@ Index: linux-stage/fs/ext4/ext4.h
  
 Index: linux-stage/fs/ext4/ioctl.c
 ===================================================================
---- linux-stage.orig/fs/ext4/ioctl.c	2011-03-05 12:34:11.299779163 +0800
-+++ linux-stage/fs/ext4/ioctl.c	2011-03-05 12:34:16.862856069 +0800
+--- linux-stage.orig/fs/ext4/ioctl.c
++++ linux-stage/fs/ext4/ioctl.c
 @@ -18,6 +18,71 @@
  #include "ext4_jbd2.h"
  #include "ext4.h"
@@ -92,7 +92,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  {
  	struct inode *inode = filp->f_dentry->d_inode;
-@@ -330,6 +395,9 @@
+@@ -330,6 +395,9 @@ mext_out:
  		mnt_drop_write(filp->f_path.mnt);
  		return err;
  	}
@@ -104,8 +104,8 @@ Index: linux-stage/fs/ext4/ioctl.c
  		return -ENOTTY;
 Index: linux-stage/fs/ext4/fiemap.h
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ linux-stage/fs/ext4/fiemap.h	2011-03-05 12:36:24.606879702 +0800
+--- /dev/null
++++ linux-stage/fs/ext4/fiemap.h
 @@ -0,0 +1,2 @@
 +
 +#include_next <fiemap.h>
