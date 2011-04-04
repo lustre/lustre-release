@@ -27,7 +27,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
         \fB[--count | -c ] [--index | -i | --offset | -o ]
         \fB[--size | -s ] [--pool | -p ] [--directory | -d ]
-        \fB[--recursive | -r] <directory|filename> ...\fR
+        \fB[--recursive | -r] [--raw|-R] <dirname|filename> ...\fR
 .br
 .B lfs setstripe [--size|-s stripe-size] [--count|-c stripe-cnt]
         \fB[--index|-i|--offset|-o start_ost_index ] [--pool|-p <pool>]
@@ -111,7 +111,7 @@ to that filesystem are displayed.
 .B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
         \fB[--count | -c ] [--index | -i | --offset | -o  ]
         \fB[--pool | -p ] [--size | -s ] [--directory | -d ]
-        \fB[--recursive|-r] <dirname|filename>\fR
+        \fB[--recursive | -r ] [--raw | -R ] <dirname|filename>\fR
 .br
 List the striping information for a given filename or directory tree.
 By default the stripe count, size, and offset will be returned. If you
@@ -124,6 +124,12 @@ or
 .B --pool  
 can be used to return only the specific fields.
 .br
+If the
+.B --raw
+option is specified, the stripe information is printed without substituting the
+filesystem's default values for unspecified fields. If the striping EA is not
+set, 0, 0, and -1 will be printed for the stripe count, size, and offset
+respectively.
 In the case where you only want details about the files' object id
 information then the
 .B --quiet

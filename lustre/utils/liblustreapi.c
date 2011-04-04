@@ -1395,10 +1395,164 @@ int llapi_ostlist(char *path, struct find_param *param)
         return ret;
 }
 
+/*
+ * Given a filesystem name, or a pathname of a file on a lustre filesystem,
+ * tries to determine the path to the filesystem's clilov directory under /proc
+ *
+ * fsname is limited to MTI_NAME_MAXLEN in lustre_idl.h
+ * The NUL terminator is compensated by the additional "%s" bytes. */
+#define LOV_LEN (sizeof("/proc/fs/lustre/lov/%s-clilov-*") + MTI_NAME_MAXLEN)
+static int clilovpath(const char *fsname, const char *const pathname,
+                      char *clilovpath)
+{
+        int rc;
+        char pattern[LOV_LEN];
+        char buffer[PATH_MAX + 1];
+
+        if (fsname == NULL) {
+                if ((rc = llapi_search_fsname(pathname, buffer)) != 0)
+                        return rc;
+                fsname = buffer;
+        }
+
+        snprintf(pattern, sizeof(pattern), "/proc/fs/lustre/lov/%s-clilov-*",
+                 fsname);
+
+        if ((rc = first_match(pattern, buffer)) != 0)
+                return rc;
+
+        strncpy(clilovpath, buffer, sizeof(buffer));
+
+        return 0;
+}
+
+/*
+ * Given the path to a stripe attribute proc file, tries to open and
+ * read the attribute and return the value using the attr parameter
+ */
+static int sattr_read_attr(const char *const fpath,
+                           unsigned int *attr)
+{
+
+        FILE *f;
+        char line[PATH_MAX + 1];
+        int rc = 0;
+
+        if ((f = fopen(fpath, "r")) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Cannot open '%s'", fpath);
+                return errno;
+        }
+
+        if (fgets(line, sizeof(line), f) != NULL) {
+                *attr = atoi(line);
+        } else {
+                llapi_err(LLAPI_MSG_ERROR, "Cannot read from '%s'", fpath);
+                rc = 1;
+        }
+
+        fclose(f);
+        return rc;
+}
+
+/*
+ * Tries to determine the default stripe attributes for a given filesystem. The
+ * filesystem to check should be specified by fsname, or will be determined
+ * using pathname.
+ */
+static int sattr_get_defaults(const char *const fsname,
+                              const char *const pathname,
+                              unsigned int *scount,
+                              unsigned int *ssize,
+                              unsigned int *soffset)
+{
+        int rc;
+        char dpath[PATH_MAX + 1];
+        char fpath[PATH_MAX + 1];
+
+        if ((rc = clilovpath(fsname, pathname, dpath)) != 0)
+                return rc;
+
+        if (scount) {
+                snprintf(fpath, PATH_MAX, "%s/stripecount", dpath);
+                if ((rc = sattr_read_attr(fpath, scount)) != 0)
+                        return rc;
+        }
+
+        if (ssize) {
+                snprintf(fpath, PATH_MAX, "%s/stripesize", dpath);
+                if ((rc = sattr_read_attr(fpath, ssize)) != 0)
+                        return rc;
+        }
+
+        if (soffset) {
+                snprintf(fpath, PATH_MAX, "%s/stripeoffset", dpath);
+                if ((rc = sattr_read_attr(fpath, soffset)) != 0)
+                        return rc;
+        }
+
+        return 0;
+}
+
+/*
+ * Tries to gather the default stripe attributes for a given filesystem. If
+ * the attributes can be determined, they are cached for easy retreival the
+ * next time they are needed. Only a single filesystem's attributes are
+ * cached at a time.
+ */
+static int sattr_cache_get_defaults(const char *const fsname,
+                                    const char *const pathname,
+                                    unsigned int *scount,
+                                    unsigned int *ssize,
+                                    unsigned int *soffset)
+{
+        static struct {
+                char fsname[PATH_MAX + 1];
+                unsigned int stripecount;
+                unsigned int stripesize;
+                unsigned int stripeoffset;
+        } cache = {
+                .fsname = {'\0'}
+        };
+
+        int rc;
+        char fsname_buf[PATH_MAX + 1];
+        unsigned int tmp[3];
+
+        if (fsname == NULL)
+                llapi_search_fsname(pathname, fsname_buf);
+        else
+                strncpy(fsname_buf, fsname, PATH_MAX);
+
+        if (strncmp(fsname_buf, cache.fsname, PATH_MAX) != 0) {
+                /*
+                 * Ensure all 3 sattrs (count, size, and offset) are
+                 * successfully retrieved and stored in tmp before writing to
+                 * cache.
+                 */
+                if ((rc = sattr_get_defaults(fsname_buf, NULL, &tmp[0],
+                                             &tmp[1], &tmp[2])) != 0)
+                        return rc;
+
+                cache.stripecount = tmp[0];
+                cache.stripesize = tmp[1];
+                cache.stripeoffset = tmp[2];
+                strncpy(cache.fsname, fsname_buf, PATH_MAX);
+        }
+
+        if (scount)
+                *scount = cache.stripecount;
+        if (ssize)
+                *ssize = cache.stripesize;
+        if (soffset)
+                *soffset = cache.stripeoffset;
+
+        return 0;
+}
+
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                                      struct lov_user_ost_data_v1 *objects,
                                      int is_dir, int verbose, int depth,
-                                     char *pool_name)
+                                     int raw, char *pool_name)
 {
         char *prefix = is_dir ? "" : "lmm_";
         char nl = is_dir ? ' ' : '\n';
@@ -1425,22 +1579,48 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 if (verbose & ~VERBOSE_COUNT)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
                                      prefix);
-                if (is_dir)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
-                                     lum->lmm_stripe_count ==
-                                     (typeof(lum->lmm_stripe_count))(-1) ? -1 :
-                                     lum->lmm_stripe_count, nl);
-                else
+                if (is_dir) {
+                        if (!raw && lum->lmm_stripe_count == 0) {
+                                unsigned int scount;
+                                if (sattr_cache_get_defaults(NULL, path,
+                                                             &scount, NULL,
+                                                             NULL) == 0)
+                                        llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
+                                                     scount, nl);
+                                else
+                                        llapi_err(LLAPI_MSG_ERROR,
+                                                "Cannot determine default"
+                                                " stripe count.");
+                        } else {
+                                llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
+                                             lum->lmm_stripe_count ==
+                                             (typeof(lum->lmm_stripe_count))(-1)
+                                             ? -1 : lum->lmm_stripe_count, nl);
+                        }
+                } else {
                         llapi_printf(LLAPI_MSG_NORMAL, "%hd%c",
                                      (__s16)lum->lmm_stripe_count, nl);
+                }
         }
 
         if (verbose & VERBOSE_SIZE) {
                 if (verbose & ~VERBOSE_SIZE)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_size:    ",
                                      prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c", lum->lmm_stripe_size,
-                             nl);
+                if (is_dir && !raw && lum->lmm_stripe_size == 0) {
+                        unsigned int ssize;
+                        if (sattr_cache_get_defaults(NULL, path, NULL, &ssize,
+                                                     NULL) == 0)
+                                llapi_printf(LLAPI_MSG_NORMAL, "%u%c", ssize,
+                                             nl);
+                        else
+                                llapi_err(LLAPI_MSG_ERROR,
+                                          "Cannot determine default"
+                                          " stripe size.");
+                } else {
+                        llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
+                                     lum->lmm_stripe_size, nl);
+                }
         }
 
         if ((verbose & VERBOSE_DETAIL) && !is_dir) {
@@ -1452,7 +1632,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 if (verbose & ~VERBOSE_OFFSET)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:  ",
                                      prefix);
-                if (is_dir) 
+                if (is_dir)
                         llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
                                      lum->lmm_stripe_offset ==
                                      (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
@@ -1476,7 +1656,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                             struct lov_user_ost_data_v1 *objects,
                             char *path, int is_dir,
-                            int obdindex, int depth, int header)
+                            int obdindex, int depth, int header, int raw)
 {
         int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
 
@@ -1490,8 +1670,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
         }
 
         if (obdstripe == 1)
-                lov_dump_user_lmm_header(lum, path, objects, is_dir, header, depth,
-                                         pool_name);
+                lov_dump_user_lmm_header(lum, path, objects, is_dir, header,
+                                         depth, raw, pool_name);
 
         if (!is_dir && (header & VERBOSE_OBJID)) {
                 if (obdstripe == 1)
@@ -1521,7 +1701,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
                                        param->lmd->lmd_lmm.lmm_objects,
                                        path, is_dir,
                                        param->obdindex, param->maxdepth,
-                                       param->verbose);
+                                       param->verbose, param->raw);
                 break;
         case LOV_USER_MAGIC_V3: {
                 char pool_name[LOV_MAXPOOLNAME + 1];
@@ -1534,7 +1714,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, pool_name,
                                        objects, path, is_dir,
                                        param->obdindex, param->maxdepth,
-                                       param->verbose);
+                                       param->verbose, param->raw);
                 break;
         }
         default:

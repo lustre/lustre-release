@@ -7666,6 +7666,124 @@ run_test 201c "Remove a pool ============================================"
 
 cleanup_pools $FSNAME
 
+# usage: default_attr <count | size | offset>
+default_attr() {
+	$LCTL get_param -n lov.$FSNAME-clilov-\*.stripe${1}
+}
+
+# usage: trim <string>
+# Trims leading and trailing whitespace from the parameter string
+trim() {
+    echo $@
+}
+
+# usage: check_default_stripe_attr <count | size | offset>
+check_default_stripe_attr() {
+	# $GETSTRIPE returns trailing whitespace which needs to be trimmed off
+	ACTUAL=$(trim $($GETSTRIPE --$1 $DIR/$tdir))
+	if [ $1 = "count" -o $1 = "size" ]; then
+		EXPECTED=`default_attr $1`;
+	else
+		# the 'stripeoffset' parameter prints as an unsigned int, so
+		# until this is fixed we hard-code -1 here
+		EXPECTED=-1;
+	fi
+	[ "x$ACTUAL" != "x$EXPECTED" ] &&
+		error "$DIR/$tdir has stripe $1 '$ACTUAL', not '$EXPECTED'"
+}
+
+# usage: check_raw_stripe_attr <count | size | offset>
+check_raw_stripe_attr() {
+	# $GETSTRIPE returns trailing whitespace which needs to be trimmed off
+	ACTUAL=$(trim $($GETSTRIPE --raw --$1 $DIR/$tdir))
+	if [ $1 = "count" -o $1 = "size" ]; then
+		EXPECTED=0;
+	else
+		EXPECTED=-1;
+	fi
+	[ "x$ACTUAL" != "x$EXPECTED" ] &&
+		error "$DIR/$tdir has raw stripe $1 '$ACTUAL', not '$EXPECTED'"
+}
+
+
+test_204a() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --count 0 --size 0 --offset -1 $DIR/$tdir
+
+	check_default_stripe_attr count
+	check_default_stripe_attr size
+	check_default_stripe_attr offset
+
+	return 0
+}
+run_test 204a "Print default stripe attributes ================="
+
+test_204b() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --count 1 $DIR/$tdir
+
+	check_default_stripe_attr size
+	check_default_stripe_attr offset
+
+	return 0
+}
+run_test 204b "Print default stripe size and offset  ==========="
+
+test_204c() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --size 65536 $DIR/$tdir
+
+	check_default_stripe_attr count
+	check_default_stripe_attr offset
+
+	return 0
+}
+run_test 204c "Print default stripe count and offset ==========="
+
+test_204d() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --offset 0 $DIR/$tdir
+
+	check_default_stripe_attr count
+	check_default_stripe_attr size
+
+	return 0
+}
+run_test 204d "Print default stripe count and size ============="
+
+test_204f() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --count 1 $DIR/$tdir
+
+	check_raw_stripe_attr size
+	check_raw_stripe_attr offset
+
+	return 0
+}
+run_test 204f "Print raw stripe size and offset  ==========="
+
+test_204g() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --size 65536 $DIR/$tdir
+
+	check_raw_stripe_attr count
+	check_raw_stripe_attr offset
+
+	return 0
+}
+run_test 204g "Print raw stripe count and offset ==========="
+
+test_204h() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --offset 0 $DIR/$tdir
+
+	check_raw_stripe_attr count
+	check_raw_stripe_attr size
+
+	return 0
+}
+run_test 204h "Print raw stripe count and size ============="
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))

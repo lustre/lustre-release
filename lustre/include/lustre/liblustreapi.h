@@ -138,7 +138,8 @@ struct find_param {
                         exclude_atime:1,
                         exclude_mtime:1,
                         exclude_ctime:1,
-                        get_mdt_index:1;
+                        get_mdt_index:1,
+                        raw:1;
 
         int     verbose;
         int     quiet;
