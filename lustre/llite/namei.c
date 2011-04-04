@@ -610,7 +610,7 @@ struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                 it->it_op = IT_OPEN;
                 if (lookup_flags & LOOKUP_CREATE)
                         it->it_op |= IT_CREAT;
-                it->it_create_mode = oit->create_mode;
+                it->it_create_mode = (oit->create_mode & S_IALLUGO) | S_IFREG;
                 it->it_flags = oit->flags;
         } else {
                 it->it_op = IT_GETATTR;
