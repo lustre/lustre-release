@@ -108,6 +108,11 @@ prepare_and_build_srpm() {
         return 1
     fi
 
+    # for informative purposes, display a diff between the .config that
+    # was actually built and what we proposed as a .config
+    echo "Diffs between $(basename $CONFIG_FILE) and the built kernel's .config:"
+    diff -u $CONFIG_FILE $TOPDIR/BUILD/kernel-${lnxmaj}-${lnxrel}/linux-${lnxmaj}-${lnxrel}.${BUILD_ARCHS# }/.config
+
     return 0
 
 }
