@@ -106,8 +106,8 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/autoconf/lustre-build-linux.m4				\
 	build/autoconf/lustre-build-darwin.m4				\
 	build/autoconf/lustre-build.m4 build/rdac_spec                  \
-	build/mptlinux.spec.patch build/patches				\
-	build/exit_traps.sh
+	build/mptlinux.spec.patch build/patches                         \
+	build/funcs.sh build/find_linux_rpms build/exit_traps.sh
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | sed -re 's/--(en|dis)able-tests//'); \
@@ -157,6 +157,7 @@ debs:
 	if [ -d .git ]; then \
 		build/extract_patches .; \
 	fi
+	cat debian/patches/* | sed -ne '/^diff --git/h' -e '/^deleted file/{G;s/^.* b\/\(.*\)/\1/p;}' | xargs rm -f; \
 	rm -rf debs
 	dpkg-buildpackage -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \

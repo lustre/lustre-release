@@ -17,6 +17,7 @@ shopt -s extdebug
 
 # include the exit_traps library
 . ${0%/lbuild}/exit_traps.sh
+. ${0%/lbuild}/funcs.sh
 
 # our children should die when we do
 push_exit_trap "kill -INT -$$ || true" kill_children
@@ -37,9 +38,10 @@ DOWNLOAD=true
 TAG=
 CANONICAL_TARGET=
 TARGET=
-TARGET_ARCH=$(uname -m)
-TARGET_ARCHS=
-TARGET_ARCHS_ALL=$TARGET_ARCH
+TARGET_ARCH="$(uname -m)"
+# change default behavior to only build for the current arch
+TARGET_ARCHS="$TARGET_ARCH"
+TARGET_ARCHS_ALL="$TARGET_ARCH"
 [ "$TARGET_ARCH" = "i686" ] && TARGET_ARCHS_ALL="i686 i586 i386"
 CONFIGURE_FLAGS=
 EXTERNAL_PATCHES=
@@ -113,26 +115,6 @@ readlink() {
     else
         return 1
     fi
-}
-
-cleanup() {
-
-    true
-}
-
-error() {
-    local msg="$1"
-
-    [ -n "$msg" ] && echo -e "\n${0##*/}: $msg" >&3
-
-}
-
-fatal() {
-
-    cleanup
-    error "$2"
-    exit $1
-
 }
 
 usage() {
@@ -288,6 +270,8 @@ check_options() {
             usage 1 "A branch/tag name must be specified with --tag when not building from a tarball."
     fi
 
+    [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
+
     if [ -z "$LINUX" ]; then
         [ "$KERNELDIR" -o "$KERNELTREE" ] || \
             usage 1 "A kernel directory must be specified with --kerneldir or --kerneltree."
@@ -300,7 +284,7 @@ check_options() {
                 usage 1 "When building a snapshot, a tag name must be used."
         fi
 
-        [ "$TARGET" ] || usage 1 "A target must be specified with --target."
+        [ "$TARGET" ] || TARGET=$(autodetect_target "$DISTRO")
 #       TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
 #       [ -r "$TARGET_FILE" ] || \
 #               usage 1 "Target '$TARGET' was not found."
@@ -383,32 +367,6 @@ check_options() {
         fi
     fi
 
-    [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
-
-    return 0
-
-}
-
-# autodetect used Distro
-autodetect_distro() {
-
-    local name
-    local version
-
-    if [ -f /etc/SuSE-release ]; then
-        name=sles
-        version=$(grep ^VERSION /etc/SuSE-release)
-        version=${version#*= }
-    elif [ -f /etc/redhat-release ]; then
-        name=$(head -1 /etc/redhat-release)
-        version=$(echo "$distroname" |
-                  sed -e 's/^[^0-9.]*//g' | sed -e 's/[ \.].*//')
-    fi
-    if [ -z "$name" -o -z "$version" ]; then
-        fatal 1 "I don't know how to determine distro type/version.\nEither update autodetect_distro() or use the --distro argument"
-    fi
-
-    echo ${name}${version}
     return 0
 
 }
@@ -416,6 +374,27 @@ autodetect_distro() {
 uniqify() {
 
     echo $(echo "$*" | xargs -n 1 | sort -u)
+
+}
+
+fetch_url() {
+    local url="$1"
+    local target="$2"
+
+    local rc=0
+    if which wget >/dev/null 2>&1; then
+        if ! wget -nv "$url" -O "$target"; then
+            rc=${PIPESTATUS[0]}
+        fi
+    elif which curl >/dev/null 2>&1; then
+        if ! curl -L -s -o "$target" "$url"; then
+            rc=${PIPESTATUS[0]}
+        fi
+    else
+        fatal 1 "Could not find either wget or curl to fetch URLs."
+    fi
+
+    return $rc
 
 }
 
@@ -428,11 +407,22 @@ download_srpm() {
        [ ! -s "$KERNELDIR/$srpm" ]; then
         if $DOWNLOAD; then
             local location="http://downloads.lustre.org/public/kernels/$target/old"
+            # get the location from a distro specific method if it exists
+            if type -p kernel_srpm_location; then
+                location=$(kernel_srpm_location)
+            fi
             echo "Downloading $location/$srpm..."
-            if ! wget -nv "$location/$srpm" -O "$KERNELDIR/$srpm" 2>&1 ||
+            if ! fetch_url "$location/$srpm" "$KERNELDIR/$srpm" 2>&1 ||
                [ ! -s "$KERNELDIR/$srpm" ]; then
                 rm -f $KERNELDIR/$srpm
-                fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
+                # punt to a distro specific method if it exists
+                if ! type -p download_srpm-$DISTRO; then
+                    fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
+                else
+                    if ! download_srpm-$DISTRO "$target" "$srpm" "$force"; then
+                        fatal 1 "Could not download target $target's kernel SRPM $srpm using download_srpm-$DISTRO."
+                    fi
+                fi
             fi
         else
             fatal 1 "$srpm not found in directory $KERNELDIR."
@@ -505,7 +495,7 @@ download_file() {
             # flag others so they don't try to download also
             push_exit_trap "rm -f $to $semaphore" "download"
             touch $semaphore
-            if ! wget -nv "$from" -O "$to" || [ ! -s "$to" ]; then
+            if ! fetch_url "$from" "$to" || [ ! -s "$to" ]; then
                 # the trap will remove the files via the fatal below
                 fatal 1 "Could not download ${to##*/} from ${from%/*}/."
             fi
@@ -979,36 +969,6 @@ find_linux_release() {
 
 }
 
-# XXX this needs to be re-written as a wrapper around find_rpm
-#     or just gotten rid of.  :-)
-find_linux_rpm() {
-    local prefix="$1"
-
-    local pathtorpms="${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
-    [ -d $pathtorpms ] || return 255
-
-    local kernelbinaryrpm rpmfile
-    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
-
-    local arch ret=1
-    for arch in $TARGET_ARCHS_ALL; do
-        local found_rpm="" rpm
-        for rpm in ${pathtorpms}/${arch}/*.rpm; do
-            if rpm -q --provides -p "$rpm" 2>&3 | grep -q "kernel${prefix} = $wanted_kernel" 2>&3; then
-
-                found_rpm="$rpm"
-                ret=0
-                break
-            fi
-        done
-        [ -f "$found_rpm" ] && break
-    done
-
-    echo "$found_rpm"
-    return $ret
-
-}
-
 # unpack kernel(/source/devel) RPM
 #
 # This function and it's setting of $LINUX and $LINUXOBJ is a total hack that
@@ -1226,42 +1186,6 @@ basearch() {
 
 }
 
-#
-# in a given directory, find the first rpm matching given requirements
-#
-find_rpm() {
-    local dir="$1"
-    local match_type="$2"
-    local match="$3"
-
-    pushd "$dir" > /dev/null || \
-        fatal 1 "Unable to chdir to directory \"$dir\" in find_rpm()"
-
-    local file
-    for file in $(ls *.rpm); do
-        if [ ! -f "$file" ]; then
-            continue
-        fi
-        case "$match_type" in
-            provides)
-                # match is any valid ERE (i.e. given to egrep) match
-                if rpm -q --provides -p "$file" 2>&3 | egrep -q "$match"; then
-                    echo "$file"
-                    popd >/dev/null
-                    return 0
-                fi
-                ;;
-            *)
-                popd >/dev/null
-                fatal 1 "Unknown match type \"$match_type\" given to find_rpm()"
-                ;;
-        esac
-    done
-
-    popd >/dev/null
-    return 1
-}
-
 build_kernel_with_srpm() {
     local outfd=$1
 
@@ -1303,7 +1227,7 @@ build_kernel_with_srpm() {
                                    "$REUSE_SIGNATURE"; then
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
-            echo "Downloading kernel SRPM"
+            echo "Downloading kernel SRPM" >&${outfd}
             download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&${outfd}
         fi
 
@@ -1328,7 +1252,7 @@ build_kernel_with_srpm() {
                                  "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
                                  "$CAN_LINK_FOR_REUSE"; then
                 error "Failed to store kernel RPMS for reuse"
-                echo "unknown"
+                echo "unknown" >&${outfd}
                 return 1
             fi
         fi

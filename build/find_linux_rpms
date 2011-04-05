@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# this is an alternative FD for stdout, to be used especially when we are
+# taking stdout from a function as it's return value.  i.e. foo=$(bar)
+# this is a workaround until a version of bash where we can put xtrace
+# on a specific FD
+#exec 3>&1; STDOUT=3
+STDOUT=2
+
+. ${0%/find_linux_rpms}/funcs.sh
+
+TOPDIR=$PWD
+
+# same as lbuild's --kernelrpm switch
+KERNELRPMSDIR="$1"
+
+DISTRO=$(autodetect_distro)
+
+source ${0%/*}/lbuild-$DISTRO
+
+TARGET_ARCH="$(uname -m)"
+TARGET_ARCHS="$(uname -m)"
+TARGET_ARCHS_ALL="$(uname -m)"
+
+# need lnxmaj from the target file
+TARGET=$(autodetect_target "$DISTRO")
+TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
+. "$TARGET_FILE"
+
+if ! kernelrpm=$(find_linux_rpms "-$DEVEL_KERNEL_TYPE" "$KERNELRPMSDIR"); then
+    fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in ${KERNELRPMSDIR}"
+fi
+
+echo "$kernelrpm"

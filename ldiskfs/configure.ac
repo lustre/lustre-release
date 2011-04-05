@@ -16,6 +16,14 @@ LB_CANONICAL_SYSTEM
 LB_INCLUDE_RULES
 LB_PROG_CC
 
+AC_ARG_ENABLE([dist],
+	AC_HELP_STRING([--enable-dist],
+			[only configure enough for make dist]),
+	[enable_dist='yes'],[enable_dist='no'])
+AC_MSG_RESULT([$enable_dist])
+if test x$enable_dist != xno; then
+	enable_modules='no'
+fi
 
 #
 # LC_TARGET_SUPPORTED

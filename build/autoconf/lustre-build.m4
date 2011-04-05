@@ -598,6 +598,29 @@ AC_ARG_ENABLE([tests],
 AC_MSG_RESULT([$enable_tests])
 ])
 
+# LB_CONFIG_DIST
+#
+# Just enough configure so that "make dist" is useful
+#
+# this simply re-adjusts some defaults, which of course can be overridden
+# on the configure line after the --enable-dist option
+#
+AC_DEFUN([LB_CONFIG_DIST],
+[AC_MSG_CHECKING([whether to configure just enough for make dist])
+AC_ARG_ENABLE([dist],
+	AC_HELP_STRING([--enable-dist],
+			[only configure enough for make dist]),
+	[enable_dist='yes'],[enable_dist='no'])
+AC_MSG_RESULT([$enable_dist])
+if test x$enable_dist != xno; then
+	enable_modules='no'
+	enable_utils='no'
+        enable_liblustre='no'
+        enable_doc='no'
+        enable_tests='no'
+fi
+])
+
 #
 # LB_CONFIG_DOCS
 #
@@ -610,7 +633,7 @@ AC_ARG_ENABLE(doc,
 			[skip creation of pdf documentation]),
 	[
 		if test x$enable_doc = xyes ; then
-		    ENABLE_DOC=1	   
+		    ENABLE_DOC=1
 		else
 		    ENABLE_DOC=0
 		fi
@@ -810,6 +833,8 @@ AC_PACKAGE_TARNAME[.spec]
 #
 AC_DEFUN([LB_CONFIGURE],
 [LB_CANONICAL_SYSTEM
+
+LB_CONFIG_DIST
 
 LB_USES_DPKG
 
