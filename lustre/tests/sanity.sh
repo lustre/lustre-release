@@ -3507,7 +3507,8 @@ test_57b() {
 	sync
 	sleep 1
 	df $dir  #make sure we get new statfs data
-	local MDSFREE=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
+	local MDSFREE=$(do_facet $mymds \
+		lctl get_param -n osd*.*MDT000$((num -1)).kbytesfree)
 	local MDCFREE=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
 	echo "opening files to create objects/EAs"
 	local FILE
@@ -3521,7 +3522,8 @@ test_57b() {
 
 	sleep 1  #make sure we get new statfs data
 	df $dir
-	local MDSFREE2=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
+	local MDSFREE2=$(do_facet $mymds \
+		lctl get_param -n osd*.*MDT000$((num -1)).kbytesfree)
 	local MDCFREE2=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
 	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then

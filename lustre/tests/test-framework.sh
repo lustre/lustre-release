@@ -3084,8 +3084,11 @@ pass() {
 }
 
 check_mds() {
-    FFREE=$(do_node $SINGLEMDS lctl get_param -n osd.*MDT*.filesfree | awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}')
-    FTOTAL=$(do_node $SINGLEMDS lctl get_param -n osd.*MDT*.filestotal | awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}')
+    local FFREE=$(do_node $SINGLEMDS \
+        lctl get_param -n osd*.*MDT*.filesfree | calc_sum)
+    local FTOTAL=$(do_node $SINGLEMDS \
+        lctl get_param -n osd*.*MDT*.filestotal | calc_sum)
+
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 
