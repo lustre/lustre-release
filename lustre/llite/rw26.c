@@ -507,6 +507,15 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 }
 #endif
 
+#ifdef CONFIG_MIGRATION
+int ll_migratepage(struct address_space *mapping,
+                   struct page *newpage, struct page *page)
+{
+        /* Always fail page migration until we have a proper implementation */
+        return -EIO;
+}
+#endif
+
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
 //        .readpages      = ll_readpages,
@@ -524,5 +533,8 @@ struct address_space_operations ll_aops = {
 #endif
         .invalidatepage = ll_invalidatepage,
         .releasepage    = (void *)ll_releasepage,
+#ifdef CONFIG_MIGRATION
+        .migratepage    = ll_migratepage,
+#endif
         .bmap           = NULL
 };
