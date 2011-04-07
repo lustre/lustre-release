@@ -195,7 +195,8 @@ test_fsx() {
     $LFS setstripe -c -1 $testfile
     echo Using FSX_SEED=$FSX_SEED FSX_SIZE=$FSX_SIZE FSX_COUNT=$FSX_COUNT
     fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
-	-N $(($FSX_COUNT * 100)) $DIR/fsxfile
+	-N $(($FSX_COUNT * 100)) $testfile
+    rm -f $testfile
     $DEBUG_ON
 }
 run_test fsx "fsx"
