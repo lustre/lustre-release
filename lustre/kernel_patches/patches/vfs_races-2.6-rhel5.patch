@@ -40,24 +40,6 @@ diff -urp linux-2.6.18.rawops/fs/dcache.c linux-2.6.18.races/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-@@ -1481,7 +1496,7 @@ static void switch_names(struct dentry *
-  * Update the dcache to reflect the move of a file name. Negative
-  * dcache entries should not be moved in this way.
-  */
--static void d_move_locked(struct dentry * dentry, struct dentry * target)
-+void d_move_locked(struct dentry * dentry, struct dentry * target)
- {
- 	struct hlist_head *list;
- 
-@@ -1549,6 +1563,8 @@ already_unhashed:
- 	spin_unlock(&dentry->d_lock);
- 	write_sequnlock(&rename_lock);
- }
-+
-+EXPORT_SYMBOL(d_move_locked);
- 
- /**
-  * d_move - move a dentry
 diff -urp linux-2.6.18.rawops/include/linux/dcache.h linux-2.6.18.races/include/linux/dcache.h
 --- linux-2.6.18.rawops/include/linux/dcache.h	2007-02-14 16:52:37.000000000 +0200
 +++ linux-2.6.18.races/include/linux/dcache.h	2007-02-14 19:21:14.000000000 +0200
@@ -77,11 +59,3 @@ diff -urp linux-2.6.18.rawops/include/linux/dcache.h linux-2.6.18.races/include/
  
  /**
   * d_add - add dentry to hash queues
-@@ -289,6 +291,7 @@ static inline struct dentry *d_add_uniqu
- 
- /* used for rename() and baskets */
- extern void d_move(struct dentry *, struct dentry *);
-+extern void d_move_locked(struct dentry *, struct dentry *);
- 
- /* appendix may either be NULL or be used for transname suffixes */
- extern struct dentry * d_lookup(struct dentry *, struct qstr *);

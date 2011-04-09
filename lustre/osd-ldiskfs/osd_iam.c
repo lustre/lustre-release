@@ -116,7 +116,6 @@
 #include "osd_internal.h"
 
 #include "xattr.h"
-#include "iopen.h"
 #include "acl.h"
 
 /*

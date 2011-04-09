@@ -157,18 +157,6 @@ LB_CHECK_SYMBOL_EXPORT([__d_rehash],
 				  [__d_rehash is exported by the kernel])],
 				  [])
 
-LB_CHECK_SYMBOL_EXPORT([d_move_locked],
-		       [fs/dcache.c],
-		       [AC_DEFINE(HAVE_D_MOVE_LOCKED, 1,
-				  [d_move_locked is exported by the kernel])],
-				  [])
-
-LB_CHECK_SYMBOL_EXPORT([__d_move],
-		       [fs/dcache.c],
-		       [AC_DEFINE(HAVE___D_MOVE, 1,
-				  [__d_move exported by the kernel])],
-				  [])
-
 LB_CONFIG_FILES
 AC_CONFIG_FILES([ldiskfs/autoMakefile ldiskfs/Makefile])
 

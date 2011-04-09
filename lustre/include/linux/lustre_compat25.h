@@ -252,11 +252,6 @@ static inline int cfs_cleanup_group_info(void)
 extern void __d_rehash(struct dentry *dentry, int lock);
 #endif
 
-#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
-#define d_move_locked(dentry, target) __d_move(dentry, target)
-extern void __d_move(struct dentry *dentry, struct dentry *target);
-#endif
-
 #ifdef HAVE_CAN_SLEEP_ARG
 #define ll_flock_lock_file_wait(file, lock, can_sleep) \
         flock_lock_file_wait(file, lock, can_sleep)

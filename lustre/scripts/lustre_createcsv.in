@@ -88,7 +88,7 @@ let "LDD_F_SV_TYPE_MGS = 0x0004"
 
 # Permanent mount options for ext3 or ldiskfs
 ALWAYS_MNTOPTS=${ALWAYS_MNTOPTS:-"errors=remount-ro"}
-MDT_MGS_ALWAYS_MNTOPTS=${MDT_MGS_ALWAYS_MNTOPTS:-",iopen_nopriv,user_xattr"}
+MDT_MGS_ALWAYS_MNTOPTS=${MDT_MGS_ALWAYS_MNTOPTS:-"user_xattr"}
 OST_ALWAYS_MNTOPTS=${OST_ALWAYS_MNTOPTS:-",asyncdel"}
 OST_DEFAULT_MNTOPTS=${OST_DEFAULT_MNTOPTS:-",extents,mballoc"}
 
