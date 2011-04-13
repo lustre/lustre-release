@@ -89,7 +89,12 @@ autogen-stamp: patch-stamp
 	#  needed autogen.sh scripts
 	#  see https://bugzilla.lustre.org/attachment.cgi?id=27156
 	#  for an example)
-	if grep -e "^--- .*\/autoconf" -e ".*\/configure\.ac" -e ".*\/configure\.in" debian/patches/*; then \
+	if grep -e "^--- .*\/autoconf\/" \
+		-e "^--- .*\/autoMakefile\.am" \
+		-e "^--- .*\/Makefile\.am" \
+		-e "^--- .*\/configure\.ac" \
+		-e "^--- .*\/configure\.in" \
+	    debian/patches/*; then \
 		if [ ! -f build/autogen.sh ]; then \
 			echo "You have patches which require autogen.sh to be run, but it doesn't exist"; \
 			echo "Please see https://bugzilla.lustre.org/attachment.cgi?id=27156"; \

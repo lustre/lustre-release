@@ -158,10 +158,6 @@ debs:
 	if [ "$$lversion" != "$$cversion" ]; then \
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
 	fi; \
-	if [ -d .git ]; then \
-		build/extract_patches .; \
-	fi
-	cat debian/patches/* | sed -ne '/^diff --git/h' -e '/^deleted file/{G;s/^.* b\/\(.*\)/\1/p;}' | xargs rm -f; \
 	rm -rf debs
 	dpkg-buildpackage -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \

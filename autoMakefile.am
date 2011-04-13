@@ -55,15 +55,3 @@ module-dist-hook:
 	    echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
 	    exit 1; \
 	fi
-	if [ -d .git ]; then \
-		build/extract_patches $(distdir); \
-		if grep -e "^--- .*\/autoconf" -e "^--- .*\/Makefile\.am" -e ".*\/configure\.ac" -e ".*\/configure\.in" $(distdir)/debian/patches/*; then \
-			cp build/autogen.sh $(distdir)/build; \
-			cp libsysio/autogen.sh $(distdir)/libsysio; \
-			cp lustre-iokit/autogen.sh $(distdir)/lustre-iokit; \
-		fi; \
-		mkdir empty; \
-		diff -urN empty $(distdir)/debian > debian.diff; \
-		rm -rf $(distdir)/debian; \
-		rmdir empty; \
-	fi
