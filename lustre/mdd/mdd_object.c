@@ -2077,6 +2077,15 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 #endif
         ENTRY;
 
+        if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
+                mdd_obj->mod_count--;
+
+                if (mdd_obj->mod_flags & ORPHAN_OBJ && !mdd_obj->mod_count)
+                        CDEBUG(D_HA, "Object "DFID" is retained in orphan "
+                               "list\n", PFID(mdd_object_fid(mdd_obj)));
+                RETURN(0);
+        }
+
         /* check without any lock */
         if (mdd_obj->mod_count == 1 &&
             (mdd_obj->mod_flags & (ORPHAN_OBJ | DEAD_OBJ)) != 0) {
@@ -2090,8 +2099,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         }
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        if (handle == NULL &&
-            mdd_obj->mod_count == 1 &&
+        if (handle == NULL && mdd_obj->mod_count == 1 &&
             (mdd_obj->mod_flags & ORPHAN_OBJ) != 0) {
                 mdd_write_unlock(env, mdd_obj);
                 goto again;
@@ -2135,8 +2143,8 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                         rc = mdd_lov_destroy(env, mdd, mdd_obj, &ma->ma_attr);
                 } else {
                         rc = mdd_object_kill(env, mdd_obj, ma);
-                                if (rc == 0)
-                                        reset = 0;
+                        if (rc == 0)
+                                reset = 0;
                 }
 
                 if (rc != 0)

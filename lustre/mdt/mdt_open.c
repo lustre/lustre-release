@@ -1477,7 +1477,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         }
 
         ma->ma_need |= MA_INODE;
-        ma->ma_valid = 0;
+        ma->ma_valid &= ~MA_INODE;
 
         if (!MFD_CLOSED(mode))
                 rc = mo_close(info->mti_env, next, ma);
