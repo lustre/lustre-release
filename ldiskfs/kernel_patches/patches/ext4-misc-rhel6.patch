@@ -1,7 +1,7 @@
 Index: linux-stage/fs/ext4/ext4_jbd2.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_jbd2.h	2011-04-01 09:35:54.779619166 +0800
-+++ linux-stage/fs/ext4/ext4_jbd2.h	2011-04-01 10:55:10.328938378 +0800
+--- linux-stage.orig/fs/ext4/ext4_jbd2.h
++++ linux-stage/fs/ext4/ext4_jbd2.h
 @@ -35,6 +35,8 @@
  	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
  	 ? 27U : 8U)
@@ -13,8 +13,8 @@ Index: linux-stage/fs/ext4/ext4_jbd2.h
   * and the superblock, which are already accounted for. */
 Index: linux-stage/fs/ext4/ext4_extents.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_extents.h	2011-04-01 09:35:55.688621923 +0800
-+++ linux-stage/fs/ext4/ext4_extents.h	2011-04-01 09:35:57.573627638 +0800
+--- linux-stage.orig/fs/ext4/ext4_extents.h
++++ linux-stage/fs/ext4/ext4_extents.h
 @@ -58,6 +58,12 @@
   */
  #define EXT_STATS_
@@ -28,7 +28,7 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  
  /*
   * ext4_inode has i_block array (60 bytes total).
-@@ -160,6 +166,7 @@
+@@ -160,6 +166,7 @@ typedef int (*ext_prepare_callback)(stru
  #define EXT_INIT_MAX_LEN	(1UL << 15)
  #define EXT_UNINIT_MAX_LEN	(EXT_INIT_MAX_LEN - 1)
  
@@ -36,7 +36,7 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  
  #define EXT_FIRST_EXTENT(__hdr__) \
  	((struct ext4_extent *) (((char *) (__hdr__)) +		\
-@@ -239,6 +246,8 @@
+@@ -239,6 +246,8 @@ extern int ext4_extent_tree_init(handle_
  extern int ext4_ext_calc_credits_for_single_extent(struct inode *inode,
  						   int num,
  						   struct ext4_ext_path *path);
@@ -47,9 +47,9 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  				      struct ext4_extent *ex2);
 Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.c	2011-04-01 09:35:57.382627058 +0800
-+++ linux-stage/fs/ext4/mballoc.c	2011-04-01 10:55:08.194931915 +0800
-@@ -4039,6 +4039,7 @@
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -4039,6 +4039,7 @@ repeat:
  	if (ac)
  		kmem_cache_free(ext4_ac_cachep, ac);
  }
@@ -57,7 +57,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  /*
   * finds all preallocated spaces and return blocks being freed to them
-@@ -4831,3 +4832,6 @@
+@@ -4831,3 +4832,6 @@ error_return:
  		kmem_cache_free(ext4_ac_cachep, ac);
  	return;
  }
@@ -66,9 +66,9 @@ Index: linux-stage/fs/ext4/mballoc.c
 +
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c	2011-04-01 09:35:57.207626528 +0800
-+++ linux-stage/fs/ext4/super.c	2011-04-01 10:57:29.490360042 +0800
-@@ -127,6 +127,7 @@
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -127,6 +127,7 @@ __u32 ext4_itable_unused_count(struct su
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		 (__u32)le16_to_cpu(bg->bg_itable_unused_hi) << 16 : 0);
  }
@@ -76,7 +76,7 @@ Index: linux-stage/fs/ext4/super.c
  
  void ext4_block_bitmap_set(struct super_block *sb,
  			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
-@@ -1486,11 +1487,13 @@
+@@ -1497,11 +1498,13 @@ enum {
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
  	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
@@ -90,7 +90,7 @@ Index: linux-stage/fs/ext4/super.c
  };
  
  static const match_table_t tokens = {
-@@ -1542,6 +1545,9 @@
+@@ -1553,6 +1556,9 @@ static const match_table_t tokens = {
  	{Opt_noquota, "noquota"},
  	{Opt_quota, "quota"},
  	{Opt_usrquota, "usrquota"},
@@ -100,7 +100,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_barrier, "barrier"},
  	{Opt_nobarrier, "nobarrier"},
-@@ -1557,6 +1563,7 @@
+@@ -1568,6 +1574,7 @@ static const match_table_t tokens = {
  	{Opt_auto_da_alloc, "auto_da_alloc=%u"},
  	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
@@ -108,7 +108,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
  	{Opt_err, NULL},
-@@ -1914,6 +1921,10 @@
+@@ -1925,6 +1932,10 @@ set_qf_format:
  			else
  				clear_opt(sbi->s_mount_opt, BARRIER);
  			break;
@@ -119,7 +119,7 @@ Index: linux-stage/fs/ext4/super.c
  		case Opt_ignore:
  			break;
  		case Opt_resize:
-@@ -1997,6 +2008,8 @@
+@@ -2008,6 +2019,8 @@ set_qf_format:
  		case Opt_nodiscard:
  			clear_opt(sbi->s_mount_opt, DISCARD);
  			break;
@@ -130,9 +130,9 @@ Index: linux-stage/fs/ext4/super.c
  			       "Unrecognized mount option \"%s\" "
 Index: linux-stage/fs/ext4/ext4_jbd2.c
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_jbd2.c	2011-04-01 09:35:54.145617245 +0800
-+++ linux-stage/fs/ext4/ext4_jbd2.c	2011-04-01 09:35:57.678627955 +0800
-@@ -31,6 +31,7 @@
+--- linux-stage.orig/fs/ext4/ext4_jbd2.c
++++ linux-stage/fs/ext4/ext4_jbd2.c
+@@ -31,6 +31,7 @@ int __ext4_journal_get_write_access(cons
  	}
  	return err;
  }
@@ -140,16 +140,16 @@ Index: linux-stage/fs/ext4/ext4_jbd2.c
  
  int __ext4_journal_forget(const char *where, handle_t *handle,
  				struct buffer_head *bh)
-@@ -107,3 +108,4 @@
+@@ -107,3 +108,4 @@ int __ext4_handle_dirty_metadata(const c
  	}
  	return err;
  }
 +EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h	2011-04-01 09:35:57.349626959 +0800
-+++ linux-stage/fs/ext4/ext4.h	2011-04-01 10:55:17.605960429 +0800
-@@ -1110,6 +1110,9 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1110,6 +1110,9 @@ static inline void ext4_clear_inode_stat
  
  #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
  
@@ -159,7 +159,7 @@ Index: linux-stage/fs/ext4/ext4.h
  /*
   * Codes for operating systems
   */
-@@ -1528,6 +1531,8 @@
+@@ -1539,6 +1542,8 @@ extern int ext4_mb_add_groupinfo(struct 
  extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
  extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
  						ext4_group_t, int);
@@ -170,9 +170,9 @@ Index: linux-stage/fs/ext4/ext4.h
  		struct buffer_head *bh, ext4_fsblk_t blocknr);
 Index: linux-stage/fs/ext4/inode.c
 ===================================================================
---- linux-stage.orig/fs/ext4/inode.c	2011-04-01 09:35:55.884622516 +0800
-+++ linux-stage/fs/ext4/inode.c	2011-04-01 09:35:57.750628175 +0800
-@@ -5199,6 +5199,7 @@
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -5204,6 +5204,7 @@ bad_inode:
  	iget_failed(inode);
  	return ERR_PTR(ret);
  }
@@ -182,19 +182,9 @@ Index: linux-stage/fs/ext4/inode.c
  				struct ext4_inode *raw_inode,
 Index: linux-stage/fs/ext4/extents.c
 ===================================================================
---- linux-stage.orig/fs/ext4/extents.c	2011-04-01 09:35:55.753622118 +0800
-+++ linux-stage/fs/ext4/extents.c	2011-04-01 10:55:10.320938356 +0800
-@@ -1866,9 +1866,7 @@
- 	while (block < last && block != EXT_MAX_BLOCK) {
- 		num = last - block;
- 		/* find extent for this block */
--		down_read(&EXT4_I(inode)->i_data_sem);
- 		path = ext4_ext_find_extent(inode, block, path);
--		up_read(&EXT4_I(inode)->i_data_sem);
- 		if (IS_ERR(path)) {
- 			err = PTR_ERR(path);
- 			path = NULL;
-@@ -1965,6 +1963,7 @@
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -1965,6 +1965,7 @@ int ext4_ext_walk_space(struct inode *in
  
  	return err;
  }
@@ -202,7 +192,7 @@ Index: linux-stage/fs/ext4/extents.c
  
  static void
  ext4_ext_put_in_cache(struct inode *inode, ext4_lblk_t block,
-@@ -2133,6 +2132,55 @@
+@@ -2133,6 +2134,55 @@ int ext4_ext_calc_credits_for_single_ext
  }
  
  /*
@@ -258,16 +248,7 @@ Index: linux-stage/fs/ext4/extents.c
   * How many index/leaf blocks need to change/allocate to modify nrblocks?
   *
   * if nrblocks are fit in a single extent (chunk flag is 1), then
-@@ -3934,10 +3982,21 @@
- 		 * Walk the extent tree gathering extent information.
- 		 * ext4_ext_fiemap_cb will push extents back to user.
- 		 */
-+		down_read(&EXT4_I(inode)->i_data_sem);
- 		error = ext4_ext_walk_space(inode, start_blk, len_blks,
- 					  ext4_ext_fiemap_cb, fieinfo);
-+		up_read(&EXT4_I(inode)->i_data_sem);
- 	}
- 
+@@ -3941,3 +3991,12 @@ int ext4_fiemap(struct inode *inode, str
  	return error;
  }
  
