@@ -345,7 +345,7 @@ Index: linux-stage/fs/ext4/super.c
 +		goto failed;
 +	}
 +
-+	mmpd_data = kmalloc(sizeof(struct mmpd_data *), GFP_KERNEL);
++	mmpd_data = kmalloc(sizeof(struct mmpd_data), GFP_KERNEL);
 +	if (!mmpd_data) {
 +		ext4_warning(sb, KERN_ERR, "not enough memory for mmpd_data");
 +		goto failed;
