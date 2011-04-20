@@ -300,8 +300,8 @@ case x$with_ldiskfs in
 		;;
 	xinkernel)
 		AC_MSG_RESULT([inkernel])
-		LB_CHECK_FILE([$LINUX/fs/ldiskfs/inode.c],[],[
-			AC_MSG_ERROR([ldiskfs was not found in $LINUX/fs/ldiskfs/inode.c])
+		LB_CHECK_FILE([$LINUX/include/linux/ldiskfs_fs.h],[],[
+			AC_MSG_ERROR([ldiskfs was not found in $LINUX])
 		])
 		;;
 	*)
