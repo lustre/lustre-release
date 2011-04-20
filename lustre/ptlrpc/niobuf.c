@@ -518,12 +518,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
         connection = request->rq_import->imp_connection;
 
-        if (request->rq_bulk != NULL) {
-                rc = ptlrpc_register_bulk (request);
-                if (rc != 0)
-                        RETURN(rc);
-        }
-
         lustre_msg_set_handle(request->rq_reqmsg,
                               &request->rq_import->imp_remote_handle);
         lustre_msg_set_type(request->rq_reqmsg, PTL_RPC_MSG_REQUEST);
@@ -537,6 +531,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
         if (request->rq_memalloc)
                 mpflag = libcfs_memory_pressure_get_and_set();
+
+        if (request->rq_bulk != NULL) {
+                rc = ptlrpc_register_bulk (request);
+                if (rc != 0)
+                        GOTO(out, rc);
+        }
 
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
