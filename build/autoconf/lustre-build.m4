@@ -268,110 +268,6 @@ AC_SUBST(LUSTREIOKIT_SUBDIR)
 AC_CONFIG_SUBDIRS(lustre-iokit)
 ])
 
-#
-# LB_PATH_LDISKFS
-#
-# Handle internal/external ldiskfs
-#
-AC_DEFUN([LB_PATH_LDISKFS],
-[AC_ARG_WITH([ldiskfs],
-	AC_HELP_STRING([--with-ldiskfs=path],
-			[set path to ldiskfs source (default is included ldiskfs)]),
-	[],[
-		if test x$linux25$enable_server = xyesyes ; then
-			with_ldiskfs=yes
-		else
-			with_ldiskfs=no
-		fi
-	])
-AC_ARG_WITH([ldiskfs-inkernel],
-	AC_HELP_STRING([--with-ldiskfs-inkernel],
-			[use ldiskfs built in to the kernel]),
-	[with_ldiskfs=inkernel], [])
-AC_MSG_CHECKING([location of ldiskfs])
-case x$with_ldiskfs in
-	xyes)
-		AC_MSG_RESULT([internal])
-		LB_CHECK_FILE([$srcdir/ldiskfs/lustre-ldiskfs.spec.in],[],[
-			AC_MSG_ERROR([A complete internal ldiskfs was not found.])
-		])
-		LDISKFS_SUBDIR="ldiskfs"
-		LDISKFS_DIR="$PWD/ldiskfs"
-		;;
-	xno)
-		AC_MSG_RESULT([disabled])
-		;;
-	xinkernel)
-		AC_MSG_RESULT([inkernel])
-		LB_CHECK_FILE([$LINUX/include/linux/ldiskfs_fs.h],[],[
-			AC_MSG_ERROR([ldiskfs was not found in $LINUX])
-		])
-		;;
-	*)
-		AC_MSG_RESULT([$with_ldiskfs])
-		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/inode.c],[],[
-			AC_MSG_ERROR([A complete (built) external ldiskfs was not found.])
-		])
-		LDISKFS_DIR=$with_ldiskfs
-		;;
-esac
-AC_SUBST(LDISKFS_DIR)
-AC_SUBST(LDISKFS_SUBDIR)
-AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
-AM_CONDITIONAL(LDISKFS_IN_KERNEL, test x$with_ldiskfs = xinkernel)
-
-if test x$with_ldiskfs != xno ; then
-	LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET
-fi
-
-if test x$enable_ext4 = xyes ; then
-	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
-fi
-
-# We have to configure even if we don't build here for make dist to work
-AC_CONFIG_SUBDIRS(ldiskfs)
-])
-
-AC_DEFUN([LC_KERNEL_WITH_EXT4],
-[if test -f $LINUX/fs/ext4/ext4.h ; then
-$1
-else
-$2
-fi
-])
-
-#
-# LB_HAVE_EXT4_ENABLED
-#
-AC_DEFUN([LB_HAVE_EXT4_ENABLED],
-[
-if test x$RHEL_KERNEL = xyes; then
-	AC_ARG_ENABLE([ext4],
-		 AC_HELP_STRING([--enable-ext4],
-				[enable building of ldiskfs based on ext4]),
-		[],
-		[
-			if test x$ldiskfs_is_ext4 = xyes; then
-				enable_ext4=yes
-			else
-				enable_ext4=no
-			fi
-		])
-else
-	case $LINUXRELEASE in
-	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
-	2.6.2[[0-9]]*) enable_ext4='no' ;;
-	*)  LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
-				[enable_ext4='no']) ;;
-	esac
-fi
-if test x$enable_ext4 = xyes; then
-	 ac_configure_args="$ac_configure_args --enable-ext4"
-fi
-AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
-AC_MSG_RESULT([$enable_ext4])
-])
-
 # Define no libcfs by default.
 AC_DEFUN([LB_LIBCFS_DIR],
 [
@@ -387,86 +283,6 @@ case x$libcfs_is_module in
 esac
 AC_SUBST(LIBCFS_SUBDIR)
 AC_SUBST(LIBCFS_INCLUDE_DIR)
-])
- 
-#
-# Check for jbd2_journal_callback_set(), which is needed for commit
-# callbacks.  When LU-433 lands jbd2_journal_callback_set() will only
-# remain for legacy reasons and AC_MSG_ERROR can be removed.
-#
-# 2.6.18 with ext3 still uses journal_callback_set() for commit callbacks.
-#
-AC_DEFUN([LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET],
-[
-	LB_CHECK_SYMBOL_EXPORT([jbd2_journal_callback_set],
-	[fs/jbd2/journal.c],
-	[AC_DEFINE(HAVE_JBD2_JOURNAL_CALLBACK_SET, 1,
-		   [kernel exports jbd2_journal_callback_set])],
-	[LB_CHECK_SYMBOL_EXPORT([journal_callback_set],
-		[fs/jbd/journal.c],
-		[AC_DEFINE(HAVE_JOURNAL_CALLBACK_SET, 1,
-			   [kernel exports journal_callback_set])],
-		[if test x$with_ldiskfs != xno ; then
-			AC_MSG_ERROR([ldiskfs needs jbd2-jcberr patch])
-		fi])])
-])
-
-#
-# LB_DEFINE_LDISKFS_OPTIONS
-#
-# Enable config options related to ldiskfs.  These are used both by ldiskfs
-# and lvfs (which includes ldiskfs headers.)
-#
-AC_DEFUN([LB_DEFINE_LDISKFS_OPTIONS],
-[
-	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
-	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFSDEV_FS_POSIX_ACL, 1, [enable posix acls for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFSDEV_FS_XATTR, 1, [enable extented attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFSDEV_FS_SECURITY, 1, [enable fs security for ldiskfs])
-])
-
-#
-# LB_DEFINE_E2FSPROGS_NAMES
-#
-# Enable the use of alternate naming of ldiskfs-enabled e2fsprogs package.
-#
-AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
-[AC_ARG_WITH([ldiskfsprogs],
-        AC_HELP_STRING([--with-ldiskfsprogs],
-                       [use alternate names for ldiskfs-enabled e2fsprogs]),
-	[],[withval='no'])
-
-AC_MSG_CHECKING([whether to use alternate names for e2fsprogs])
-if test x$withval = xyes ; then
-	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
-	E2FSPROGS="ldiskfsprogs"
-	MKE2FS="mkfs.ldiskfs"
-	DEBUGFS="debugfs.ldiskfs"
-	TUNE2FS="tunefs.ldiskfs"
-	E2LABEL="label.ldiskfs"
-	DUMPE2FS="dumpfs.ldiskfs"
-	E2FSCK="fsck.ldiskfs"
-	AC_MSG_RESULT([enabled])
-else
-	E2FSPROGS="e2fsprogs"
-	MKE2FS="mke2fs"
-	DEBUGFS="debugfs"
-	TUNE2FS="tune2fs"
-	E2LABEL="e2label"
-	DUMPE2FS="dumpe2fs"
-	E2FSCK="e2fsck"
-	AC_MSG_RESULT([disabled])
-fi
-	AC_DEFINE_UNQUOTED(E2FSPROGS, "$E2FSPROGS", [name of ldiskfs e2fsprogs package])
-	AC_DEFINE_UNQUOTED(MKE2FS, "$MKE2FS", [name of ldiskfs mkfs program])
-	AC_DEFINE_UNQUOTED(DEBUGFS, "$DEBUGFS", [name of ldiskfs debug program])
-	AC_DEFINE_UNQUOTED(TUNE2FS, "$TUNE2FS", [name of ldiskfs tune program])
-	AC_DEFINE_UNQUOTED(E2LABEL, "$E2LABEL", [name of ldiskfs label program])
-	AC_DEFINE_UNQUOTED(DUMPE2FS,"$DUMPE2FS", [name of ldiskfs dump program])
-	AC_DEFINE_UNQUOTED(E2FSCK, "$E2FSCK", [name of ldiskfs fsck program])
 ])
 
 #
@@ -974,7 +790,6 @@ LC_QUOTA
 
 LB_CONFIG_MODULES
 LN_CONFIG_USERSPACE
-LB_HAVE_EXT4_ENABLED
 
 LB_PATH_DMU
 LB_PATH_LIBSYSIO

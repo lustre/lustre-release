@@ -179,29 +179,6 @@ AC_DEFUN([LC_MDS_MAX_THREADS],
 ])
 
 #
-# LC_CONFIG_BACKINGFS
-#
-# setup, check the backing filesystem
-#
-AC_DEFUN([LC_CONFIG_BACKINGFS],
-[
-BACKINGFS="ldiskfs"
-
-if test x$with_ldiskfs = xno ; then
-	if test x$linux25$enable_server = xyesyes ; then
-		AC_MSG_ERROR([ldiskfs is required for 2.6-based servers.])
-	fi
-else
-	# ldiskfs is enabled
-	LB_DEFINE_LDISKFS_OPTIONS
-fi #ldiskfs
-
-AC_MSG_CHECKING([which backing filesystem to use])
-AC_MSG_RESULT([$BACKINGFS])
-AC_SUBST(BACKINGFS)
-])
-
-#
 # LC_CONFIG_PINGER
 #
 # the pinger is temporary, until we have the recovery node in place
@@ -349,30 +326,6 @@ AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
                                             [node_to_cpumask is exported by
                                              the kernel])]) # i386
           ])
-
-#
-# LC_HEADER_LDISKFS_XATTR
-#
-# CHAOS kernel-devel package will not include fs/ldiskfs/xattr.h
-#
-AC_DEFUN([LC_HEADER_LDISKFS_XATTR],
-[AC_MSG_CHECKING([if ldiskfs has xattr.h header])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-I$LINUX/fs -I$LDISKFS_DIR -I$LDISKFS_DIR/ldiskfs"
-LB_LINUX_TRY_COMPILE([
-	#include <ldiskfs/xattr.h>
-],[
-        ldiskfs_xattr_get(NULL, 0, "", NULL, 0);
-        ldiskfs_xattr_set_handle(NULL, NULL, 0, "", NULL, 0, 0);
-
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_LDISKFS_XATTR_H, 1, [ldiskfs/xattr.h found])
-],[
-	AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
 
 #
 # LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
@@ -1163,49 +1116,6 @@ AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
        AC_MSG_ERROR([no way to invalidate pages])
   ])
     ],[])
-])
-
-#
-# LC_EXT4_DISCARD_PREALLOCATIONS
-#
-AC_DEFUN([LC_EXT4_DISCARD_PREALLOCATIONS],
-[AC_MSG_CHECKING([if ext4_discard_preallocatoins defined])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-I$LINUX/fs"
-LB_LINUX_TRY_COMPILE([
-        #include <ext4/ext4.h>
-],[
-        struct inode i;
-        ext4_discard_preallocations(&i);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(LDISKFS_DISCARD_PREALLOCATIONS, 1,
-                  [ext4_discard_preacllocations defined])
-],[
-        AC_MSG_RESULT(no)
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
-#
-# LC_EXT_INSERT_EXTENT_WITH_5ARGS
-#
-AC_DEFUN([LC_EXT_INSERT_EXTENT_WITH_5ARGS],
-[AC_MSG_CHECKING([ext4_ext_insert_extent needs 5 arguments])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-I$LINUX/fs"
-LB_LINUX_TRY_COMPILE([
-        #include <ext4/ext4_extents.h>
-],[
-        ext4_ext_insert_extent(NULL, NULL, NULL, NULL, 0);
-],[
-        AC_DEFINE([EXT_INSERT_EXTENT_WITH_5ARGS], 1,
-                  [ext4_ext_insert_exent needs 5 arguments])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #2.6.18 + RHEL5 (fc6)
@@ -2080,50 +1990,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
-#
-AC_DEFUN([LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB],
-[AC_MSG_CHECKING([if EXT4_SINGLEDATA_TRANS_BLOCKS takes the sb as argument])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-I$LINUX/fs"
-LB_LINUX_TRY_COMPILE([
-        #include <ext4/ext4.h>
-        #include <ext4/ext4_jbd2.h>
-],[
-        struct super_block sb;
-        EXT4_SINGLEDATA_TRANS_BLOCKS(&sb);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(LDISKFS_SINGLEDATA_TRANS_BLOCKS_HAS_SB, 1,
-                  [EXT4_SINGLEDATA_TRANS_BLOCKS takes sb as argument])
-],[
-        AC_MSG_RESULT(no)
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
-#
-# LC_WALK_SPACE_HAS_DATA_SEM
-#
-# 2.6.32 ext4_ext_walk_space() takes i_data_sem internally.
-#
-AC_DEFUN([LC_WALK_SPACE_HAS_DATA_SEM],
-[AC_MSG_CHECKING([if ext4_ext_walk_space() takes i_data_sem])
-WALK_SPACE_DATA_SEM="$(awk 'BEGIN { in_walk_space = 0 }                                 \
-                            /^int ext4_ext_walk_space\(/ { in_walk_space = 1 }          \
-                            /^}/ { if (in_walk_space) in_walk_space = 0 }               \
-                            /i_data_sem/ { if (in_walk_space) { print("yes"); exit } }' \
-                       $LINUX/fs/ext4/extents.c)"
-if test x"$WALK_SPACE_DATA_SEM" == xyes ; then
-       AC_DEFINE(WALK_SPACE_HAS_DATA_SEM, 1,
-                 [ext4_ext_walk_space takes i_data_sem])
-       AC_MSG_RESULT([yes])
-else
-       AC_MSG_RESULT([no])
-fi
-])
-
-#
 # LC_QUOTA64
 #
 # Check if kernel has been patched for 64-bit quota limits support.
@@ -2207,7 +2073,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_EXPORT___D_REHASH
          LC_EXPORT_NODE_TO_CPUMASK
 
-         LC_HEADER_LDISKFS_XATTR
          LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
          LC_STRUCT_STATFS
          LC_FILEMAP_POPULATE
@@ -2261,8 +2126,6 @@ AC_DEFUN([LC_PROG_LINUX],
          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES
          fi
-         LC_EXT4_DISCARD_PREALLOCATIONS
-         LC_EXT_INSERT_EXTENT_WITH_5ARGS
 
          #2.6.18 + RHEL5 (fc6)
          LC_PG_FS_MISC
@@ -2338,15 +2201,12 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SB_BDI
          LC_BLK_QUEUE_MAX_SECTORS
          LC_BLK_QUEUE_MAX_SEGMENTS
-         LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
-         LC_WALK_SPACE_HAS_DATA_SEM
 
          #
          if test x$enable_server = xyes ; then
              AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
              LC_FUNC_DEV_SET_RDONLY
              LC_STACK_SIZE
-             LC_CONFIG_BACKINGFS
              LC_QUOTA64
          fi
 ])

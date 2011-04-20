@@ -52,9 +52,9 @@ if LINUX
 modulefs_DATA := lvfs$(KMODEXT)
 
 if SERVER
-modulefs_DATA += fsfilt_$(BACKINGFS)$(KMODEXT)
+modulefs_DATA += fsfilt_ldiskfs$(KMODEXT)
 
-sources: fsfilt_$(BACKINGFS).c
+sources: fsfilt_ldiskfs.c
 	touch sources
 
 else #SERVER

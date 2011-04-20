@@ -1,12 +1,8 @@
 SUBDIRS := @LDISKFS_SUBDIR@ @SPL_SUBDIR@ @ZFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ @LIBCFS_SUBDIR@ lnet lustre
-DIST_SUBDIRS := @SNMP_DIST_SUBDIR@ libsysio ldiskfs lustre-iokit @LIBCFS_SUBDIR@ lnet lustre 
+DIST_SUBDIRS := @LDISKFS_DIST_SUBDIR@ @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre
 SOURCES_SUBDIRS := @LDISKFS_SUBDIR@ @LIBCFS_SUBDIR@ lnet lustre
 RPM_SUBDIRS := @LDISKFS_SUBDIR@ @LUSTREIOKIT_SUBDIR@
-if LDISKFS_ENABLED
-if !LDISKFS_IN_KERNEL
-SYMVERFILE_DEPENDECY := @SYMVERFILE@
-endif
-endif
+MODULE_SYMVERS_DEPS = module-symvers
 
 @TESTS_TRUE@BUILD_TESTS = true
 @TESTS_FALSE@BUILD_TESTS = false
@@ -19,17 +15,21 @@ if USES_DPKG
 EXTRA_DIST += debian/*
 endif
 
+module-symvers-ldiskfs:
 if LDISKFS_ENABLED
-if !LDISKFS_IN_KERNEL
+	@if [ -f @LDISKFS_DIR@/@SYMVERFILE@ ]; then \
+		cat @LDISKFS_DIR@/@SYMVERFILE@ >>@SYMVERFILE@; \
+	elif [ -f @LDISKFS_DIR@/ldiskfs/@SYMVERFILE@ ]; then \
+		cat @LDISKFS_DIR@/ldiskfs/@SYMVERFILE@ >>@SYMVERFILE@; \
+	else \
+		echo -e "\n" \
+		"*** Missing ldiskfs symbols. Ensure you have built ldiskfs:\n"\
+		"*** - @LDISKFS_OBJ@/ldiskfs/@SYMVERFILE@\n"; \
+		exit 1; \
+	fi
+endif # LDISKFS_ENABLED
 
-EXTRA_DIST += @SYMVERFILE@
-
-@SYMVERFILE@: @LDISKFS_DIR@/@SYMVERFILE@
-	touch @SYMVERFILE@
-	-grep -v ldiskfs @SYMVERFILE@ > @SYMVERFILE@.old
-	cat @SYMVERFILE@.old @LDISKFS_DIR@/@SYMVERFILE@ > @SYMVERFILE@
-endif
-endif
+module-symvers: module-symvers-ldiskfs
 
 CSTK=/tmp/checkstack
 CSTKO=/tmp/checkstack.orig

@@ -5,11 +5,11 @@ MODULES := ldiskfs
 # copy makefile over to not break patches
 backfs_extra := $(wildcard @LINUX@/fs/@BACKFS@/Makefile)
 
-backfs_headers := $(wildcard @LINUX@/fs/@BACKFS@/*.h)
+backfs_headers := $(wildcard @EXT_DIR@/*.h)
 linux_headers := $(wildcard @LINUX@/include/linux/@BACKFS@*.h)
 trace_headers := $(wildcard @LINUX@/include/trace/events/@BACKFS@*.h)
 
-backfs_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/@BACKFS@/*.c))
+backfs_sources := $(filter-out %.mod.c,$(wildcard @EXT_DIR@/*.c))
 
 ext3_new_sources := extents.c mballoc.c group.h dynlocks.c fiemap.h
 ext3_new_headers := ext3_extents.h

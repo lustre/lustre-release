@@ -2,7 +2,6 @@
 
 AC_INIT([Lustre ldiskfs], 3.3.0, [http://bugs.whamcloud.com/])
 AC_CONFIG_SRCDIR([lustre-ldiskfs.spec.in])
-ldiskfs_is_ext4=yes
 
 # Don't look for install-sh, etc. in ..
 AC_CONFIG_AUX_DIR([.])
@@ -47,7 +46,6 @@ $2
 esac
 ])
 
-
 AC_MSG_CHECKING([whether to build kernel modules])
 AC_ARG_ENABLE([modules],
 	      AC_HELP_STRING([--disable-modules],
@@ -62,6 +60,21 @@ if test x$linux25 = xyes ; then
 	LB_LINUX_MODPOST
 fi
 fi
+
+LB_LDISKFS_SERIES([test x$enable_dist = xno])
+
+AC_MSG_CHECKING([whether to build Lustre server support])
+AC_ARG_ENABLE([server],
+	AC_HELP_STRING([--disable-server],
+	               [disable Lustre server support]),
+	[],[
+		if test -n "$LDISKFS_SERIES"; then
+			enable_server='yes'
+		else
+			enable_server='no'
+		fi
+	])
+AC_MSG_RESULT([$enable_server])
 
 LB_CONFIG_HEADERS
 
@@ -89,51 +102,26 @@ else
     AC_PATH_PROG(QUILT, quilt, [no])
 fi
 
-if test x$enable_ldiskfs$PATCH$QUILT = xyesnono ; then
+if test x$enable_server$PATCH$QUILT = xyesnono ; then
 	AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module])
 fi
 
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
+AM_CONDITIONAL(USE_EXT4, test x$enable_ext4 = xyes)
 
-LB_DEFINE_LDISKFS_OPTIONS
+if test x$enable_server$enable_dist = xyesno ; then
+LB_LDISKFS_EXT_RELEASE
+LB_LDISKFS_EXT_DIR
+LB_LDISKFS_EXT_SOURCE
+LB_LDISKFS_DEFINE_OPTIONS
 
-LB_HAVE_EXT4_ENABLED
-
-if test x$enable_ext4 = xyes ; then
-	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [ldiskfs based on ext4])
-	BACKFS=ext4
-else
-	BACKFS=ext3
-fi
-
+BACKFS=$LDISKFS_BACKFS
 AC_SUBST(BACKFS)
 BACKFSU=${BACKFS/ext/EXT}
 AC_SUBST(BACKFSU) # We need a Upper string
-
-AM_CONDITIONAL(USE_EXT4, test x$enable_ext4 = xyes)
-
-if test x$enable_dist != xyes; then
-	# don't need to do this if only configuring for make dist
-AC_MSG_CHECKING([which ldiskfs series to use])
-case $LINUXRELEASE in
-2.6.18*)
-	if test x$RHEL_KERNEL = xyes; then
-		LDISKFS_SERIES="2.6-rhel5-ext4.series"
-	fi
-	;;
-2.6.32*)
-	if test x$RHEL_KERNEL = xyes; then
-		 LDISKFS_SERIES="2.6-rhel6.series"
-	fi
-	;;
-*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix ldiskfs/configure.ac])
-esac
-AC_MSG_RESULT([$LDISKFS_SERIES])
 fi
-AC_SUBST(LDISKFS_SERIES)
 
 AC_SUBST(ac_configure_args)
-
 
 LB_CONFIG_FILES
 AC_CONFIG_FILES([ldiskfs/autoMakefile ldiskfs/Makefile])
