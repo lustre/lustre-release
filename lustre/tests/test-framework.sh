@@ -265,7 +265,7 @@ esac
 
 
 module_loaded () {
-   /sbin/lsmod | grep -q $1
+   /sbin/lsmod | grep -q "^\<$1\>"
 }
 
 # Load a module on the system where this is running.
