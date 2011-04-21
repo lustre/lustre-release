@@ -101,7 +101,8 @@ AC_DEFUN([LIBCFS_KMEM_CACHE_DESTROY_INT],
 LB_LINUX_TRY_COMPILE([
         #include <linux/slab.h>
 ],[
-	int i = kmem_cache_destroy(NULL);
+	int i __attribute__ ((unused));
+	i = kmem_cache_destroy(NULL);
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_KMEM_CACHE_DESTROY_INT, 1,
@@ -118,7 +119,7 @@ AC_DEFUN([LIBCFS_3ARGS_INIT_WORK],
 LB_LINUX_TRY_COMPILE([
 	#include <linux/workqueue.h>
 ],[
-	struct work_struct work;
+	struct work_struct work __attribute__ ((unused));
 
 	INIT_WORK(&work, NULL, NULL);
 ],[
@@ -137,7 +138,7 @@ AC_DEFUN([LIBCFS_2ARGS_REGISTER_SYSCTL],
 LB_LINUX_TRY_COMPILE([
         #include <linux/sysctl.h>
 ],[
-	return register_sysctl_table(NULL,0);
+	register_sysctl_table(NULL,0);
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_2ARGS_REGISTER_SYSCTL, 1,
@@ -220,7 +221,8 @@ AC_DEFUN([LIBCFS_NETWORK_NAMESPACE],
 LB_LINUX_TRY_COMPILE([
         #include <net/net_namespace.h>
 ],[
-        struct net *net = &init_net;
+        struct net *net __attribute__ ((unused));
+        net = &init_net;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_INIT_NET, 1,
@@ -310,8 +312,8 @@ AC_DEFUN([LIBCFS_SEM_COUNT],
 LB_LINUX_TRY_COMPILE([
         #include <asm/semaphore.h>
 ],[
-	struct semaphore s;
-	
+	struct semaphore s __attribute__ ((unused));
+
 	atomic_read(&s.count);
 ],[
         AC_MSG_RESULT(yes)
@@ -413,7 +415,8 @@ AC_DEFUN([LIBCFS_HAVE_IS_COMPAT_TASK],
 LB_LINUX_TRY_COMPILE([
         #include <linux/compat.h>
 ],[
-        int i = is_compat_task();
+        int i __attribute__ ((unused));
+        i = is_compat_task();
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_IS_COMPAT_TASK, 1, [is_compat_task() is available])
