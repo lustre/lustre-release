@@ -870,15 +870,10 @@ no_export:
               export, (long)cfs_time_current_sec(),
               export ? (long)export->exp_last_request_time : 0);
 
-        /* Tell the client if we're in recovery. */
-        if (target->obd_recovering) {
-                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
-                /* If this is the first time a client connects,
-                   reset the recovery timer */
-                if (rc == 0)
-                        target_start_and_reset_recovery_timer(target, req,
-                                                              !export);
-        }
+        /* If this is the first time a client connects,
+         * reset the recovery timer */
+        if (rc == 0 && target->obd_recovering)
+                target_start_and_reset_recovery_timer(target, req, !export);
 
         /* We want to handle EALREADY but *not* -EALREADY from
          * target_handle_reconnect(), return reconnection state in a flag */
@@ -1019,6 +1014,11 @@ dont_check_exports:
                         cfs_waitq_signal(&target->obd_next_transno_waitq);
         }
         cfs_spin_unlock(&target->obd_recovery_task_lock);
+
+        /* Tell the client we're in recovery, when client is involved in it. */
+        if (target->obd_recovering)
+                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
+
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
         conn = *tmp;
 

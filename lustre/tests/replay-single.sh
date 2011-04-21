@@ -919,6 +919,19 @@ test_44b() {
 }
 run_test 44b "race in target handle connect"
 
+test_44c() {
+    replay_barrier $SINGLEMDS
+    createmany -m $DIR/$tfile-%d 100
+#define OBD_FAIL_TGT_RCVG_FLAG 0x712
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000712"
+    fail_abort $SINGLEMDS
+    unlinkmany $DIR/$tfile-%d 100 && return 1
+    fail $SINGLEMDS
+    unlinkmany $DIR/$tfile-%d 100 && return 1
+    return 0
+}
+run_test 44c "race in target handle connect"
+
 # Handle failed close
 test_45() {
     mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`

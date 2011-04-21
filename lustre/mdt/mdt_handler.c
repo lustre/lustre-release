@@ -5028,6 +5028,9 @@ static int mdt_obd_connect(const struct lu_env *env,
         if (rc)
                 GOTO(out, rc);
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
+                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
+
         rc = mdt_connect_internal(lexp, mdt, data);
         if (rc == 0) {
                 struct mdt_thread_info *mti;
