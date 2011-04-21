@@ -27,5 +27,4 @@ ext4-hash-indexed-dir-dotdot-update.patch
 ext4-disable-write-bar-by-default.patch
 ext4-mballoc-skip-grps.patch
 ext4-disable-mb-cache-sles11.patch
-ext4-bug23780-remove-i_data_sem-from-walk_space.patch
 ext4-fiemap-2.6-rhel5.patch
