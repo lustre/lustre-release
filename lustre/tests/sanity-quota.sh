@@ -932,21 +932,33 @@ GB=$((KB * 1024 * 1024))
 # inode->i_blkbits = min(PTLRPC_MAX_BRW_BITS+1, LL_MAX_BLKSIZE_BITS);
 blksize=$((1 << 21)) # 2Mb
 size_file=$((GB * 9 / 2))
-# this check is just for test9 and test10
-OST0_MIN=4900000 #4.67G
-check_whether_skip () {
-    OST0_SIZE=`$LFS df $DIR | awk '/\[OST:0\]/ {print $4}'`
-    log "OST0_SIZE: $OST0_SIZE  required: $OST0_MIN"
-    if [ $OST0_SIZE -lt $OST0_MIN ]; then
-        echo "WARN: OST0 has less than $OST0_MIN free, skip this test."
-        return 0
-    else
-        return 1
-    fi
+
+ost_idx=-1
+# select the ost with enough free space to test
+select_ost() {
+    local ost_min=$1
+    local OLDIFS=$IFS
+    IFS=$'\n'
+
+    for line in `$LFS df $DIR`; do
+        ost_idx=`echo $line |  awk '/\[OST:/ {print $6}' | sed "s/.*\[OST://" | sed "s/\]//"`
+        ost_size=`echo $line | awk '/\[OST:/ {print $4}'`
+        if [ $ost_idx ] ; then
+                if [ $ost_size -gt $ost_min ]; then
+                        IFS=$OLDIFS
+                        return
+                fi
+        fi
+    done
+
+    IFS=$OLDIFS
+    ost_idx=-1
+    echo "WARN: no ost has enough space: $ost_min, skip this test."
 }
 
 test_9() {
-        check_whether_skip && return 0
+        select_ost 4900000 #4.67G
+        [ $ost_idx -lt 0 ] && return 0
 
         wait_delete_completed
 
@@ -970,7 +982,7 @@ test_9() {
         quota_show_check a g $TSTUSR
 
         echo "  Set stripe"
-        $LFS setstripe $TESTFILE -c 1
+        $LFS setstripe $TESTFILE -c 1 -i $ost_idx
         touch $TESTFILE
         chown $TSTUSR.$TSTUSR $TESTFILE
 
@@ -1001,7 +1013,9 @@ run_test_with_stat 9 "run for fixing bug10707(64bit) ==========="
 test_10() {
         mkdir -p $DIR/$tdir
         chmod 0777 $DIR/$tdir
-        check_whether_skip && return 0
+
+        select_ost 4900000 #4.67G
+        [ $ost_idx -lt 0 ] && return 0
 
         wait_delete_completed
 
@@ -1025,7 +1039,7 @@ test_10() {
         quota_show_check a g $TSTUSR
 
         echo "  Set stripe"
-        $LFS setstripe $TESTFILE -c 1
+        $LFS setstripe $TESTFILE -c 1 -i $ost_idx
         touch $TESTFILE
         chown $TSTUSR.$TSTUSR $TESTFILE
 
@@ -1819,7 +1833,7 @@ test_23_sub() {
         sleep 3
         quota_show_check b u $TSTUSR
 
-        $LFS setstripe $TESTFILE -c 1
+        $LFS setstripe $TESTFILE -c 1 -i $ost_idx
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Step1: trigger quota with 0_DIRECT"
@@ -1845,13 +1859,17 @@ test_23_sub() {
 }
 
 test_23() {
-        log "run for $((OSTCOUNT * 3))MB test file"
-        test_23_sub $((OSTCOUNT * 3 * 1024))
+        local slave_cnt=$((OSTCOUNT + 1)) # 1 mds, n osts
 
-        OST0_MIN=120000
-        check_whether_skip && return 0
-        log "run for $((OSTCOUNT * 30))MB test file"
-        test_23_sub $((OSTCOUNT * 30 * 1024))
+        select_ost $((6 * $slave_cnt * 1024)) # extra space for meta blocks.
+        [ $ost_idx -lt 0 ] && return 0
+        log "run for $((3 * $slave_cnt))MB test file"
+        test_23_sub $((3 * $slave_cnt * 1024))
+
+        select_ost $((60 * $slave_cnt * 1024)) # extra space for meta blocks.
+        [ $ost_idx -lt 0 ] && return 0
+        log "run for $((30 * $slave_cnt))MB test file"
+        test_23_sub $((30 * $slave_cnt * 1024))
 }
 run_test_with_stat 23 "run for fixing bug16125 ==========="
 
