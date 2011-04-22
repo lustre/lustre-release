@@ -74,10 +74,10 @@ Index: b/fs/ext4/namei.c
 +	if (info->hash_version != DX_HASH_TEA &&
 +	    info->hash_version != DX_HASH_HALF_MD4 &&
 +	    info->hash_version != DX_HASH_LEGACY) {
- 		ext4_warning(dir->i_sb, __func__,
- 			     "Unrecognised inode hash code %d for directory "
--			     "#%lu", root->info.hash_version, dir->i_ino);
-+			     "#%lu", info->hash_version, dir->i_ino);
+		ext4_warning(dir->i_sb, "Unrecognised inode hash code %d"
+			     "for directory #%lu",
+-			     root->info.hash_version, dir->i_ino);
++			     info->hash_version, dir->i_ino);
  		brelse(bh);
  		*err = ERR_BAD_DX_DIR;
  		goto fail;
@@ -87,14 +87,13 @@ Index: b/fs/ext4/namei.c
 	if (hinfo->hash_version <= DX_HASH_TEA)
 		hinfo->hash_version += EXT4_SB(dir->i_sb)->s_hash_unsigned;
  	hinfo->seed = EXT4_SB(dir->i_sb)->s_hash_seed;
-@@ -398,29 +399,28 @@ dx_probe(struct dentry *dentry, struct i
+@@ -398,27 +399,26 @@ dx_probe(struct dentry *dentry, struct i
  		ext4fs_dirhash(dentry->d_name.name, dentry->d_name.len, hinfo);
  	hash = hinfo->hash;
  
 -	if (root->info.unused_flags & 1) {
 +	if (info->unused_flags & 1) {
- 		ext4_warning(dir->i_sb, __func__,
- 			     "Unimplemented inode hash flags: %#06x",
+		ext4_warning(dir->i_sb, "Unimplemented inode hash flags: %#06x",
 -			     root->info.unused_flags);
 +			     info->unused_flags);
  		brelse(bh);
@@ -104,8 +103,7 @@ Index: b/fs/ext4/namei.c
  
 -	if ((indirect = root->info.indirect_levels) > 1) {
 +	if ((indirect = info->indirect_levels) > 1) {
- 		ext4_warning(dir->i_sb, __func__,
- 			     "Unimplemented inode hash depth: %#06x",
+		ext4_warning(dir->i_sb, "Unimplemented inode hash depth: %#06x",
 -			     root->info.indirect_levels);
 +			     info->indirect_levels);
  		brelse(bh);
@@ -120,9 +118,9 @@ Index: b/fs/ext4/namei.c
  	if (dx_get_limit(entries) != dx_root_limit(dir,
 -						   root->info.info_length)) {
 +						   info->info_length)) {
- 		ext4_warning(dir->i_sb, __func__,
- 			     "dx entry: limit != root limit");
+		ext4_warning(dir->i_sb, "dx entry: limit != root limit");
  		brelse(bh);
+
 @@ -509,10 +510,12 @@ fail:
  
  static void dx_release (struct dx_frame *frames)
@@ -180,7 +178,7 @@ Index: b/fs/ext4/namei.c
 +		ext4_rec_len_from_disk(dotdot_de->rec_len, blocksize));
 -	if ((char *) de >= (((char *) root) + blocksize)) {
 +	if ((char *) de >= (((char *) dot_de) + blocksize)) {
-		ext4_error(dir->i_sb, __func__,
+		ext4_error(dir->i_sb,
 			   "invalid rec_len for '..' in inode %lu",
 			   dir->i_ino);
 		brelse(bh);

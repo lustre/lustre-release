@@ -137,13 +137,12 @@ Index: linux-2.6.18-128.1.6/fs/jbd2/journal.c
 ===================================================================
 --- linux-2.6.18-128.1.6.orig/fs/jbd2/journal.c	2009-04-15 08:35:28.000000000 +0530
 +++ linux-2.6.18-128.1.6/fs/jbd2/journal.c	2009-05-28 17:13:35.000000000 +0530
-@@ -80,6 +80,9 @@
+@@ -80,6 +80,8 @@
  EXPORT_SYMBOL(jbd2_journal_init_jbd_inode);
  EXPORT_SYMBOL(jbd2_journal_release_jbd_inode);
  EXPORT_SYMBOL(jbd2_journal_begin_ordered_truncate);
 +EXPORT_SYMBOL(jbd2_journal_callback_set);
 +EXPORT_SYMBOL(jbd2_journal_bmap);
-+EXPORT_SYMBOL(jbd2_log_start_commit);
  
  static int journal_convert_superblock_v1(journal_t *, journal_superblock_t *);
  static void __journal_abort_soft (journal_t *journal, int errno);

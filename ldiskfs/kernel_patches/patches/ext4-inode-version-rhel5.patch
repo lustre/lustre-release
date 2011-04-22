@@ -51,9 +51,9 @@ Index: linux-2.6.18-128.1.6/fs/ext4/ext4.h
  typedef int ext4_grpblk_t;
  
 @@ -164,6 +166,8 @@ struct ext4_inode_info {
-	struct list_head i_aio_dio_complete_list;
-	/* current io_end structure for async DIO write*/
-	ext4_io_end_t *cur_aio_dio;
+	 */
+	tid_t i_sync_tid;
+	tid_t i_datasync_tid;
 +
 +	__u64 i_fs_version;
  };

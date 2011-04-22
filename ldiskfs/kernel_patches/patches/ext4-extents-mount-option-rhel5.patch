@@ -122,7 +122,7 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
 +		case Opt_extents:
 +			if (!EXT4_HAS_INCOMPAT_FEATURE(sb,
 +					EXT4_FEATURE_INCOMPAT_EXTENTS)) {
-+				ext4_warning(sb, __func__,
++				ext4_warning(sb,
 +					"extents feature not enabled "
 +					"on this filesystem, use tune2fs");
 +				return 0;
@@ -160,7 +160,7 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
 +	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS))
 +		set_opt(sbi->s_mount_opt, EXTENTS);
 +	else
-+		ext4_warning(sb, __func__,
++		ext4_warning(sb,
 +			"extents feature not enabled on this filesystem, "
 +			"use tune2fs.");
 +

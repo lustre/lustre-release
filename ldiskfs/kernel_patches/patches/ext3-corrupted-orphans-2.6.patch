@@ -36,12 +36,12 @@
  
 -	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
 -	    S_ISLNK(inode->i_mode)))
--		return;
+-		goto out_notrans;
 -	if (ext3_inode_is_fast_symlink(inode))
--		return;
+-		goto out_notrans;
 -	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 +	if (!ext3_can_truncate(inode))
- 		return;
+		goto out_notrans;
  
  	/*
 --- linux-2.6.18-128.7.1.orig/fs/ext3/ialloc.c	2009-09-15 10:24:17.000000000 -0400

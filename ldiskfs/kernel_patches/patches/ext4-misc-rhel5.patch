@@ -254,12 +254,12 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-07-07 14:48:53.000000000 +0530
 @@ -1086,8 +1087,8 @@
 	ext4_warning(sb, function, "%s", msg);
-	ext4_warning(sb, function, "MMP failure info: last update time: %llu, "
-		     "last update node: %s, last update device: %s\n",
--		     le64_to_cpu(mmp->mmp_time), mmp->mmp_nodename,
--		     mmp->mmp_bdevname);
-+		     (unsigned long long)(le64_to_cpu(mmp->mmp_time)),
-+		     mmp->mmp_nodename, mmp->mmp_bdevname);
+	__ext4_warning(sb, function, "MMP failure info: last update time: %llu, "
+		       "last update node: %s, last update device: %s\n",
+-		       le64_to_cpu(mmp->mmp_time), mmp->mmp_nodename,
+-		       mmp->mmp_bdevname);
++		       (unsigned long long)(le64_to_cpu(mmp->mmp_time)),
++		       mmp->mmp_nodename, mmp->mmp_bdevname);
  }
  
  /*

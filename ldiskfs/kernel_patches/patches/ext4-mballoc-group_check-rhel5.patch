@@ -259,7 +259,7 @@ Index: linux-2.6.32/fs/ext4/mballoc.c
 @@ -2257,6 +2298,7 @@ int ext4_mb_add_groupinfo(struct super_b
  	INIT_LIST_HEAD(&meta_group_info[i]->bb_prealloc_list);
  	init_rwsem(&meta_group_info[i]->alloc_sem);
- 	meta_group_info[i]->bb_free_root.rb_node = NULL;
+	meta_group_info[i]->bb_free_root = RB_ROOT;
 +	meta_group_info[i]->bb_largest_free_order = -1;  /* uninit */
  
  #ifdef DOUBLE_CHECK
@@ -284,8 +284,8 @@ Index: linux-2.6.32/fs/ext4/mballoc.c
  }
 @@ -3796,7 +3838,7 @@ repeat:
  		if (bitmap_bh == NULL) {
- 			ext4_error(sb, __func__, "Error in reading block "
- 					"bitmap for %u", group);
+			ext4_error(sb, "Error reading block bitmap for %u",
+					group);
 -			ext4_mb_release_desc(&e4b);
 +			ext4_mb_unload_buddy(&e4b);
  			continue;

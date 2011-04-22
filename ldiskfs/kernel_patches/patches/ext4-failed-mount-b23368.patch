@@ -6,7 +6,7 @@ Index: linux-stage/fs/ext4/super.c
  	brelse(bh);
  out_fail:
  	sb->s_fs_info = NULL;
--	kfree(&sbi->s_blockgroup_lock);
+-	kfree(sbi->s_blockgroup_lock);
  	kfree(sbi);
  	lock_kernel();
  	return ret;

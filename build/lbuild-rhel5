@@ -91,8 +91,10 @@ unpack_linux_devel_rpm-rhel5() {
 
     unpack_linux_devel_rpm-rhel "$callers_rpm"
 
-    if [ ! -f usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}-$TARGET_ARCH/symsets-${lnxmaj}${lnxmin}-${lnxrel}.tar.gz ]; then
-        fatal 1 "cannot build modules: the Kernel's symsets is missing."
+    if $USE_KABI; then
+        if [ ! -f usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}-$TARGET_ARCH/symsets-${lnxmaj}${lnxmin}-${lnxrel}.tar.gz ]; then
+            fatal 1 "cannot build modules: the Kernel's symsets is missing."
+        fi
     fi
 
     return 0
