@@ -949,12 +949,15 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         rc = mdc_enter_request(&obddev->u.cli);
-        if (rc)
+        if (rc) {
+                ptlrpc_req_finished(req);
                 RETURN(rc);
+        }
         rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, &policy, &flags, NULL,
                               0, NULL, &minfo->mi_lockh, 1);
         if (rc < 0) {
                 mdc_exit_request(&obddev->u.cli);
+                ptlrpc_req_finished(req);
                 RETURN(rc);
         }
 
