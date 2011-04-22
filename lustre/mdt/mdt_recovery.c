@@ -753,8 +753,21 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         LASSERT(ergo(mti->mti_transno == 0, rc != 0));
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
             lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
-                if (mti->mti_transno != 0)
+                if (mti->mti_transno != 0) {
+                        if (lcd->lcd_last_close_transno > mti->mti_transno) {
+                                LASSERT(req_is_replay(req));
+                                CERROR("Trying to overwrite bigger transno:"
+                                       "on-disk: "LPU64", new: "LPU64"\n",
+                                       lcd->lcd_last_close_transno,
+                                       mti->mti_transno);
+                                cfs_spin_lock(&req->rq_export->exp_lock);
+                                req->rq_export->exp_vbr_failed = 1;
+                                cfs_spin_unlock(&req->rq_export->exp_lock);
+                                cfs_mutex_up(&ted->ted_lcd_lock);
+                                RETURN(-EOVERFLOW);
+                        }
                         lcd->lcd_last_close_transno = mti->mti_transno;
+                }
                 lcd->lcd_last_close_xid = req->rq_xid;
                 lcd->lcd_last_close_result = rc;
         } else {
@@ -766,8 +779,21 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                         lcd->lcd_pre_versions[2] = pre_versions[2];
                         lcd->lcd_pre_versions[3] = pre_versions[3];
                 }
-                if (mti->mti_transno != 0)
+                if (mti->mti_transno != 0) {
+                        if (lcd->lcd_last_transno > mti->mti_transno) {
+                                LASSERT(req_is_replay(req));
+                                CERROR("Trying to overwrite bigger transno:"
+                                       "on-disk: "LPU64", new: "LPU64"\n",
+                                       lcd->lcd_last_transno,
+                                       mti->mti_transno);
+                                cfs_spin_lock(&req->rq_export->exp_lock);
+                                req->rq_export->exp_vbr_failed = 1;
+                                cfs_spin_unlock(&req->rq_export->exp_lock);
+                                cfs_mutex_up(&ted->ted_lcd_lock);
+                                RETURN(-EOVERFLOW);
+                        }
                         lcd->lcd_last_transno = mti->mti_transno;
+                }
                 lcd->lcd_last_xid = req->rq_xid;
                 lcd->lcd_last_result = rc;
                 /*XXX: save intent_disposition in mdt_thread_info?

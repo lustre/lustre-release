@@ -152,14 +152,25 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
         if (oti->oti_transno == 0) {
                 last_rcvd = le64_to_cpu(lsd->lsd_last_transno) + 1;
                 lsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+                LASSERT(last_rcvd >= le64_to_cpu(lcd->lcd_last_transno));
         } else {
                 last_rcvd = oti->oti_transno;
                 if (last_rcvd > le64_to_cpu(lsd->lsd_last_transno))
                         lsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+                if (unlikely(last_rcvd < le64_to_cpu(lcd->lcd_last_transno))) {
+                        CERROR("Trying to overwrite bigger transno, on-disk: "
+                               LPU64", new: "LPU64"\n",
+                               le64_to_cpu(lcd->lcd_last_transno), last_rcvd);
+                        cfs_spin_lock(&exp->exp_lock);
+                        exp->exp_vbr_failed = 1;
+                        cfs_spin_unlock(&exp->exp_lock);
+                        cfs_spin_unlock(&obt->obt_lut->lut_translock);
+                        cfs_mutex_up(&ted->ted_lcd_lock);
+                        RETURN(-EOVERFLOW);
+                }
         }
         oti->oti_transno = last_rcvd;
 
-        LASSERT(last_rcvd >= le64_to_cpu(lcd->lcd_last_transno));
         lcd->lcd_last_transno = cpu_to_le64(last_rcvd);
         lcd->lcd_pre_versions[0] = cpu_to_le64(oti->oti_pre_version);
         lcd->lcd_last_xid = cpu_to_le64(oti->oti_xid);

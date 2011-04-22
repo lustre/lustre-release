@@ -684,6 +684,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                                 class_handle_unhash(&old_mfd->mfd_handle);
                                 cfs_list_del_init(&old_mfd->mfd_list);
                                 cfs_spin_unlock(&med->med_open_lock);
+                                /* no attr update for that close */
+                                la->la_valid = 0;
                                 mdt_mfd_close(info, old_mfd);
                         }
                         CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
