@@ -1165,7 +1165,10 @@ existing_lock:
         }
 
         if (dlm_req->lock_desc.l_resource.lr_type != LDLM_PLAIN)
-                lock->l_policy_data = dlm_req->lock_desc.l_policy_data;
+                ldlm_convert_policy_to_local(
+                                          dlm_req->lock_desc.l_resource.lr_type,
+                                          &dlm_req->lock_desc.l_policy_data,
+                                          &lock->l_policy_data);
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
@@ -1537,7 +1540,10 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
         }
 
         if (lock->l_resource->lr_type != LDLM_PLAIN) {
-                lock->l_policy_data = dlm_req->lock_desc.l_policy_data;
+                ldlm_convert_policy_to_local(
+                                          dlm_req->lock_desc.l_resource.lr_type,
+                                          &dlm_req->lock_desc.l_policy_data,
+                                          &lock->l_policy_data);
                 LDLM_DEBUG(lock, "completion AST, new policy data");
         }
 

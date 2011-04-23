@@ -583,6 +583,28 @@ typedef enum {
                                * in the same RPC */
 } ldlm_cancel_flags_t;
 
+struct ldlm_flock {
+        __u64 start;
+        __u64 end;
+        __u64 owner;
+        __u64 blocking_owner;
+        void *blocking_export;
+        __u32 pid;
+};
+
+typedef union {
+        struct ldlm_extent l_extent;
+        struct ldlm_flock l_flock;
+        struct ldlm_inodebits l_inodebits;
+} ldlm_policy_data_t;
+
+void ldlm_convert_policy_to_wire(ldlm_type_t type,
+                                 const ldlm_policy_data_t *lpolicy,
+                                 ldlm_wire_policy_data_t *wpolicy);
+void ldlm_convert_policy_to_local(ldlm_type_t type,
+                                  const ldlm_wire_policy_data_t *wpolicy,
+                                  ldlm_policy_data_t *lpolicy);
+
 struct ldlm_lock {
         /**
          * Must be first in the structure.

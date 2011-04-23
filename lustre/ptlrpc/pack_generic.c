@@ -1995,7 +1995,7 @@ void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)
                 __swab64s (&id->name[i]);
 }
 
-void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d)
+void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d)
 {
         /* the lock data is a union and the first two fields are always an
          * extent so it's ok to process an LDLM_EXTENT and LDLM_FLOCK lock
@@ -2003,7 +2003,8 @@ void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d)
         __swab64s(&d->l_extent.start);
         __swab64s(&d->l_extent.end);
         __swab64s(&d->l_extent.gid);
-        __swab32s(&d->l_flock.pid);
+        __swab64s(&d->l_flock.lfw_owner);
+        __swab32s(&d->l_flock.lfw_pid);
 }
 
 void lustre_swab_ldlm_intent (struct ldlm_intent *i)

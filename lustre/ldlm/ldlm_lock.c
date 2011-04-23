@@ -71,6 +71,48 @@ char *ldlm_typename[] = {
         [LDLM_IBITS] "IBT",
 };
 
+static ldlm_policy_wire_to_local_t ldlm_policy_wire_to_local[] = {
+        [LDLM_PLAIN - LDLM_MIN_TYPE] ldlm_plain_policy_wire_to_local,
+        [LDLM_EXTENT - LDLM_MIN_TYPE] ldlm_extent_policy_wire_to_local,
+        [LDLM_FLOCK - LDLM_MIN_TYPE] ldlm_flock_policy_wire_to_local,
+        [LDLM_IBITS - LDLM_MIN_TYPE] ldlm_ibits_policy_wire_to_local,
+};
+
+static ldlm_policy_local_to_wire_t ldlm_policy_local_to_wire[] = {
+        [LDLM_PLAIN - LDLM_MIN_TYPE] ldlm_plain_policy_local_to_wire,
+        [LDLM_EXTENT - LDLM_MIN_TYPE] ldlm_extent_policy_local_to_wire,
+        [LDLM_FLOCK - LDLM_MIN_TYPE] ldlm_flock_policy_local_to_wire,
+        [LDLM_IBITS - LDLM_MIN_TYPE] ldlm_ibits_policy_local_to_wire,
+};
+
+/**
+ * Converts lock policy from local format to on the wire lock_desc format
+ */
+void ldlm_convert_policy_to_wire(ldlm_type_t type,
+                                 const ldlm_policy_data_t *lpolicy,
+                                 ldlm_wire_policy_data_t *wpolicy)
+{
+        ldlm_policy_local_to_wire_t convert;
+
+        convert = ldlm_policy_local_to_wire[type - LDLM_MIN_TYPE];
+
+        convert(lpolicy, wpolicy);
+}
+
+/**
+ * Converts lock policy from on the wire lock_desc format to local format
+ */
+void ldlm_convert_policy_to_local(ldlm_type_t type,
+                                  const ldlm_wire_policy_data_t *wpolicy,
+                                  ldlm_policy_data_t *lpolicy)
+{
+        ldlm_policy_wire_to_local_t convert;
+
+        convert = ldlm_policy_wire_to_local[type - LDLM_MIN_TYPE];
+
+        convert(wpolicy, lpolicy);
+}
+
 char *ldlm_it2str(int it)
 {
         switch (it) {
@@ -552,7 +594,9 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
                 ldlm_res2desc(lock->l_resource, &desc->l_resource);
                 desc->l_req_mode = lock->l_req_mode;
                 desc->l_granted_mode = lock->l_granted_mode;
-                desc->l_policy_data = lock->l_policy_data;
+                ldlm_convert_policy_to_wire(lock->l_resource->lr_type,
+                                            &lock->l_policy_data,
+                                            &desc->l_policy_data);
         }
 }
 

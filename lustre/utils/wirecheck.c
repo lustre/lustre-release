@@ -745,11 +745,11 @@ static void
 check_ldlm_flock(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(ldlm_flock);
-        CHECK_MEMBER(ldlm_flock, start);
-        CHECK_MEMBER(ldlm_flock, end);
-        CHECK_MEMBER(ldlm_flock, blocking_pid);
-        CHECK_MEMBER(ldlm_flock, pid);
+        CHECK_STRUCT(ldlm_flock_wire);
+        CHECK_MEMBER(ldlm_flock_wire, lfw_start);
+        CHECK_MEMBER(ldlm_flock_wire, lfw_end);
+        CHECK_MEMBER(ldlm_flock_wire, lfw_owner);
+        CHECK_MEMBER(ldlm_flock_wire, lfw_pid);
 }
 
 static void

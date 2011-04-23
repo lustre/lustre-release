@@ -5093,6 +5093,14 @@ test_105d() { # bug 15924
 }
 run_test 105d "flock race (should not freeze) ========"
 
+test_105e() { # bug 22660 && 22040
+	[ -z "`mount | grep \"$DIR.*flock\" | grep -v noflock`" ] && \
+		skip "mount w/o flock enabled" && return
+	touch $DIR/$tfile
+	flocks_test 3 $DIR/$tfile
+}
+run_test 105e "Two conflicting flocks from same process ======="
+
 test_106() { #bug 10921
 	mkdir -p $DIR/$tdir
 	$DIR/$tdir && error "exec $DIR/$tdir succeeded"

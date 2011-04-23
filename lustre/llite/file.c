@@ -1988,7 +1988,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                                            .ei_cbdata = file_lock };
         struct md_op_data *op_data;
         struct lustre_handle lockh = {0};
-        ldlm_policy_data_t flock;
+        ldlm_policy_data_t flock = {{0}};
         int flags = 0;
         int rc;
         ENTRY;
@@ -2000,13 +2000,18 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
         if (file_lock->fl_flags & FL_FLOCK) {
                 LASSERT((cmd == F_SETLKW) || (cmd == F_SETLK));
-                /* set missing params for flock() calls */
-                file_lock->fl_end = OFFSET_MAX;
-                file_lock->fl_pid = current->tgid;
+                /* flocks are whole-file locks */
+                flock.l_flock.end = OFFSET_MAX;
+                /* For flocks owner is determined by the local file desctiptor*/
+                flock.l_flock.owner = (unsigned long)file_lock->fl_file;
+        } else if (file_lock->fl_flags & FL_POSIX) {
+                flock.l_flock.owner = (unsigned long)file_lock->fl_owner;
+                flock.l_flock.start = file_lock->fl_start;
+                flock.l_flock.end = file_lock->fl_end;
+        } else {
+                RETURN(-EINVAL);
         }
         flock.l_flock.pid = file_lock->fl_pid;
-        flock.l_flock.start = file_lock->fl_start;
-        flock.l_flock.end = file_lock->fl_end;
 
         switch (file_lock->fl_type) {
         case F_RDLCK:

@@ -82,8 +82,8 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 static inline int
 ldlm_same_flock_owner(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
-        return((new->l_policy_data.l_flock.pid ==
-                lock->l_policy_data.l_flock.pid) &&
+        return((new->l_policy_data.l_flock.owner ==
+                lock->l_policy_data.l_flock.owner) &&
                (new->l_export == lock->l_export));
 }
 
@@ -127,21 +127,22 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *blocking_lock)
 {
         struct obd_export *req_export = req->l_export;
         struct obd_export *blocking_export = blocking_lock->l_export;
-        pid_t req_pid = req->l_policy_data.l_flock.pid;
-        pid_t blocking_pid = blocking_lock->l_policy_data.l_flock.pid;
+        __u64 req_owner = req->l_policy_data.l_flock.owner;
+        __u64 blocking_owner = blocking_lock->l_policy_data.l_flock.owner;
         struct ldlm_lock *lock;
 
         cfs_spin_lock(&ldlm_flock_waitq_lock);
 restart:
         cfs_list_for_each_entry(lock, &ldlm_flock_waitq, l_flock_waitq) {
-                if ((lock->l_policy_data.l_flock.pid != blocking_pid) ||
+                if ((lock->l_policy_data.l_flock.owner != blocking_owner) ||
                     (lock->l_export != blocking_export))
                         continue;
 
-                blocking_pid = lock->l_policy_data.l_flock.blocking_pid;
-                blocking_export = (struct obd_export *)(long)
+                blocking_owner = lock->l_policy_data.l_flock.blocking_owner;
+                blocking_export = (struct obd_export *)
                         lock->l_policy_data.l_flock.blocking_export;
-                if (blocking_pid == req_pid && blocking_export == req_export) {
+                if (blocking_owner == req_owner &&
+                    blocking_export == req_export) {
                         cfs_spin_unlock(&ldlm_flock_waitq_lock);
                         return 1;
                 }
@@ -172,8 +173,9 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         const struct ldlm_callback_suite null_cbs = { NULL };
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "LPU64
-               "\n", *flags, new->l_policy_data.l_flock.pid, mode,
+        CDEBUG(D_DLMTRACE, "flags %#x owner "LPU64" pid %u mode %u start "LPU64
+               " end "LPU64"\n", *flags, new->l_policy_data.l_flock.owner,
+               new->l_policy_data.l_flock.pid, mode,
                req->l_policy_data.l_flock.start,
                req->l_policy_data.l_flock.end);
 
@@ -250,10 +252,10 @@ reprocess:
                                 RETURN(LDLM_ITER_STOP);
                         }
 
-                        req->l_policy_data.l_flock.blocking_pid =
-                                lock->l_policy_data.l_flock.pid;
+                        req->l_policy_data.l_flock.blocking_owner =
+                                lock->l_policy_data.l_flock.owner;
                         req->l_policy_data.l_flock.blocking_export =
-                                (long)(void *)lock->l_export;
+                                lock->l_export;
 
                         LASSERT(cfs_list_empty(&req->l_flock_waitq));
                         cfs_spin_lock(&ldlm_flock_waitq_lock);
@@ -395,6 +397,8 @@ reprocess:
                 new2->l_granted_mode = lock->l_granted_mode;
                 new2->l_policy_data.l_flock.pid =
                         new->l_policy_data.l_flock.pid;
+                new2->l_policy_data.l_flock.owner =
+                        new->l_policy_data.l_flock.owner;
                 new2->l_policy_data.l_flock.start =
                         lock->l_policy_data.l_flock.start;
                 new2->l_policy_data.l_flock.end =
@@ -659,4 +663,28 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         cfs_list_del_init(&lock->l_flock_waitq);
         cfs_spin_unlock(&ldlm_flock_waitq_lock);
         RETURN(0);
+}
+
+void ldlm_flock_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
+                                     ldlm_policy_data_t *lpolicy)
+{
+        memset(lpolicy, 0, sizeof(*lpolicy));
+        lpolicy->l_flock.start = wpolicy->l_flock.lfw_start;
+        lpolicy->l_flock.end = wpolicy->l_flock.lfw_end;
+        lpolicy->l_flock.pid = wpolicy->l_flock.lfw_pid;
+        lpolicy->l_flock.owner = wpolicy->l_flock.lfw_owner;
+        /* Compat code, old clients had no idea about owner field and
+         * relied solely on pid for ownership. Introduced in 2.1, April 2011 */
+        if (!lpolicy->l_flock.owner)
+                lpolicy->l_flock.owner = wpolicy->l_flock.lfw_pid;
+}
+
+void ldlm_flock_policy_local_to_wire(const ldlm_policy_data_t *lpolicy,
+                                     ldlm_wire_policy_data_t *wpolicy)
+{
+        memset(wpolicy, 0, sizeof(*wpolicy));
+        wpolicy->l_flock.lfw_start = lpolicy->l_flock.start;
+        wpolicy->l_flock.lfw_end = lpolicy->l_flock.end;
+        wpolicy->l_flock.lfw_pid = lpolicy->l_flock.pid;
+        wpolicy->l_flock.lfw_owner = lpolicy->l_flock.owner;
 }

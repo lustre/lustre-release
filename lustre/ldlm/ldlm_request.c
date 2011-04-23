@@ -587,8 +587,11 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                 if (with_policy)
                         if (!(type == LDLM_IBITS && !(exp->exp_connect_flags &
                                                     OBD_CONNECT_IBITS)))
-                                lock->l_policy_data =
-                                                 reply->lock_desc.l_policy_data;
+                                /* We assume lock type cannot change on server*/
+                                ldlm_convert_policy_to_local(
+                                                lock->l_resource->lr_type,
+                                                &reply->lock_desc.l_policy_data,
+                                                &lock->l_policy_data);
                 if (type != LDLM_PLAIN)
                         LDLM_DEBUG(lock,"client-side enqueue, new policy data");
         }
