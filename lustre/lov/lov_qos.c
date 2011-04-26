@@ -577,8 +577,8 @@ static int min_stripe_count(int stripe_cnt, int flags)
                 stripe_cnt - (stripe_cnt / 4) : stripe_cnt);
 }
 
-#define LOV_CREATE_RESEED_MULT 4
-#define LOV_CREATE_RESEED_MIN  1000
+#define LOV_CREATE_RESEED_MULT 30
+#define LOV_CREATE_RESEED_MIN  2000
 /* Allocate objects on osts with round-robin algorithm */
 static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                     char *poolname, int flags)
