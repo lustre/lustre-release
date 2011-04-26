@@ -1969,12 +1969,10 @@ stop_writeback() {
 
 # ensure that all stripes have some grant before we test client-side cache
 setup_test42() {
-	[ "$SETUP_TEST42" ] && return
 	for i in `seq -f $DIR/f42-%g 1 $OSTCOUNT`; do
 		dd if=/dev/zero of=$i bs=4k count=1
 		rm $i
 	done
-	SETUP_TEST42=DONE
 }
 
 # Tests 42* verify that our behaviour is correct WRT caching, file closure,
@@ -4054,26 +4052,23 @@ test_101() {
 }
 run_test 101 "check read-ahead for random reads ================"
 
-export SETUP_TEST101b=no
-setup_101b() {
-	[ "$SETUP_TEST101b" = "yes" ] && return
+setup_test101bc() {
 	mkdir -p $DIR/$tdir
 	STRIPE_SIZE=1048576
 	STRIPE_COUNT=$OSTCOUNT
 	STRIPE_OFFSET=0
 
-	trap cleanup_101 EXIT
+	trap cleanup_test101bc EXIT
 	# prepare the read-ahead file
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1024k count=100 2> /dev/null
-	SETUP_TEST101b=yes
 }
 
-cleanup_101() {
+cleanup_test101bc() {
 	trap 0
-	rm -rf $DIR/$tdir $DIR/$tfile
-	SETUP_TEST101b=no
+	rm -rf $DIR/$tdir
+	rm -f $DIR/$tfile
 }
 
 calc_total() {
@@ -4094,7 +4089,7 @@ ra_check_101b() {
 
 	if [ $DISCARD -gt $discard_limit ]; then
 		lctl get_param llite.*.read_ahead_stats
-		error "Too many ($DISCARD) discarded pages (size ${READ_SIZE})"
+		error "Too many ($DISCARD) discarded pages with size $READ_SIZE"
 	else
 		echo "Read-ahead success for size ${READ_SIZE}"
 	fi
@@ -4107,7 +4102,7 @@ test_101b() {
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
-	setup_101b
+	setup_test101bc
 	cancel_lru_locks osc
 	for BIDX in 2 4 8 16 32 64 128 256; do
 		local BSIZE=$((BIDX*4096))
@@ -4120,6 +4115,7 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101b $BSIZE
 	done
+	cleanup_test101bc
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
@@ -4129,7 +4125,7 @@ test_101c() {
         local FILE_LENGTH=$((STRIPE_SIZE*100))
         local nreads=10000
 
-        setup_101b
+        setup_test101bc
 
         cancel_lru_locks osc
         $LCTL set_param osc.*.rpc_stats 0
@@ -4144,10 +4140,10 @@ test_101c() {
                         continue
                 fi
 
-		rpc4k=$($LCTL get_param -n $OSC | awk '$1 == "1:" { print $2; exit; }')
-                rpc8k=$($LCTL get_param -n $OSC | awk '$1 == "2:" { print $2; exit; }')
-                rpc16k=$($LCTL get_param -n $OSC | awk '$1 == "4:" { print $2; exit; }')
-                rpc32k=$($LCTL get_param -n $OSC | awk '$1 == "8:" { print $2; exit; }')
+                rpc4k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "1:" { print $2; exit; }')
+                rpc8k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "2:" { print $2; exit; }')
+                rpc16k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "4:" { print $2; exit; }')
+                rpc32k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "8:" { print $2; exit; }')
 
                 [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
                 [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
@@ -4155,11 +4151,11 @@ test_101c() {
                 [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
 
                 echo "Small rpc check passed!"
-       	        rpc64k=$($LCTL get_param -n $OSC | awk '$1 == "16:" { print $2; exit; }')
-                rpc128k=$($LCTL get_param -n $OSC | awk '$1 == "32:" { print $2; exit; }')
-                rpc256k=$($LCTL get_param -n $OSC | awk '$1 == "64:" { print $2; exit; }')
-                rpc512k=$($LCTL get_param -n $OSC | awk '$1 == "128:" { print $2; exit; }')
-                rpc1024k=$($LCTL get_param -n $OSC | awk '$1 == "256:" { print $2; exit; }')
+                rpc64k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "16:" { print $2; exit; }')
+                rpc128k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "32:" { print $2; exit; }')
+                rpc256k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "64:" { print $2; exit; }')
+                rpc512k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "128:" { print $2; exit; }')
+                rpc1024k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "256:" { print $2; exit; }')
 
                 [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}"
                 [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}"
@@ -4168,7 +4164,7 @@ test_101c() {
                 [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}"
                 echo "Big rpc check passed!"
         done
-        cleanup_101
+        cleanup_test101bc
         true
 }
 run_test 101c "check stripe_size aligned read-ahead ================="
@@ -4218,9 +4214,7 @@ test_101d() {
 }
 run_test 101d "file read with and without read-ahead enabled  ================="
 
-export SETUP_TEST102=no
 setup_test102() {
-	[ "$SETUP_TEST102" = "yes" ] && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	STRIPE_SIZE=65536
@@ -4247,14 +4241,12 @@ setup_test102() {
 
 	cd $DIR
 	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
-	SETUP_TEST102=yes
 }
 
 cleanup_test102() {
 	trap 0
-	[ "$SETUP_TEST102" = "yes" ] || return 0
-	rm -f $TMP/f102.tar
-	SETUP_TEST102=no
+	rm -f $TMP/f102.tar $DIR/f102*
+	rm -rf $DIR/d0.$TESTSUITE/d102 $DIR/d102*
 }
 
 test_102a() {

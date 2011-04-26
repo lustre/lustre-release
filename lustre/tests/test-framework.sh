@@ -146,8 +146,8 @@ init_test_env() {
     if ! echo $PATH | grep -q $LUSTRE/utils; then
         export PATH=$PATH:$LUSTRE/utils
     fi
-    if ! echo $PATH | grep -q $LUSTRE/test; then
-        export PATH=$PATH:$LUSTRE/tests
+    if ! echo ":$PATH:" | grep -q ":$LUSTRE/tests:"; then
+        export PATH=$LUSTRE/tests:$PATH
     fi
     if ! echo $PATH | grep -q $LUSTRE/../lustre-iokit/sgpdd-survey; then
         export PATH=$PATH:$LUSTRE/../lustre-iokit/sgpdd-survey
