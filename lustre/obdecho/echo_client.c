@@ -82,6 +82,7 @@ struct echo_object_conf {
 
 struct echo_page {
         struct cl_page_slice   ep_cl;
+        cfs_mutex_t            ep_lock;
         cfs_page_t            *ep_vmpage;
 };
 
@@ -259,6 +260,29 @@ cfs_page_t *echo_page_vmpage(const struct lu_env *env,
         return cl2echo_page(slice)->ep_vmpage;
 }
 
+static int echo_page_own(const struct lu_env *env,
+                         const struct cl_page_slice *slice,
+                         struct cl_io *io, int nonblock)
+{
+        struct echo_page *ep = cl2echo_page(slice);
+
+        if (!nonblock)
+                cfs_mutex_lock(&ep->ep_lock);
+        else if (!cfs_mutex_trylock(&ep->ep_lock))
+                return -EAGAIN;
+        return 0;
+}
+
+static void echo_page_disown(const struct lu_env *env,
+                             const struct cl_page_slice *slice,
+                             struct cl_io *io)
+{
+        struct echo_page *ep = cl2echo_page(slice);
+
+        LASSERT(cfs_mutex_is_locked(&ep->ep_lock));
+        cfs_mutex_unlock(&ep->ep_lock);
+}
+
 static void echo_page_discard(const struct lu_env *env,
                               const struct cl_page_slice *slice,
                               struct cl_io *unused)
@@ -269,7 +293,7 @@ static void echo_page_discard(const struct lu_env *env,
 static int echo_page_is_vmlocked(const struct lu_env *env,
                                  const struct cl_page_slice *slice)
 {
-        return 1;
+        return cfs_mutex_is_locked(&cl2echo_page(slice)->ep_lock);
 }
 
 static void echo_page_completion(const struct lu_env *env,
@@ -306,12 +330,14 @@ static int echo_page_print(const struct lu_env *env,
 {
         struct echo_page *ep = cl2echo_page(slice);
 
-        (*printer)(env, cookie, LUSTRE_ECHO_CLIENT_NAME"-page@%p vm@%p\n",
-                   ep, ep->ep_vmpage);
+        (*printer)(env, cookie, LUSTRE_ECHO_CLIENT_NAME"-page@%p %d vm@%p\n",
+                   ep, cfs_mutex_is_locked(&ep->ep_lock), ep->ep_vmpage);
         return 0;
 }
 
 static const struct cl_page_operations echo_page_ops = {
+        .cpo_own           = echo_page_own,
+        .cpo_disown        = echo_page_disown,
         .cpo_discard       = echo_page_discard,
         .cpo_vmpage        = echo_page_vmpage,
         .cpo_fini          = echo_page_fini,
@@ -387,6 +413,7 @@ static struct cl_page *echo_page_init(const struct lu_env *env,
                 struct echo_object *eco = cl2echo_obj(obj);
                 ep->ep_vmpage = vmpage;
                 page_cache_get(vmpage);
+                cfs_mutex_init(&ep->ep_lock);
                 cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
                 cfs_atomic_inc(&eco->eo_npages);
         }
@@ -793,29 +820,8 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
         struct echo_object     *eco;
         struct lu_device       *next = ed->ed_next;
 
-        CDEBUG(D_INFO, "echo device:%p is going to be freed, next = %p\n", ed, next);
-
-        /* destroy locks */
-        cfs_spin_lock(&ec->ec_lock);
-        while (!cfs_list_empty(&ec->ec_locks)) {
-                struct echo_lock *ecl = cfs_list_entry(ec->ec_locks.next,
-                                                       struct echo_lock,
-                                                       el_chain);
-                int still_used = 0;
-
-                if (cfs_atomic_dec_and_test(&ecl->el_refcount))
-                        cfs_list_del_init(&ecl->el_chain);
-                else
-                        still_used = 1;
-                cfs_spin_unlock(&ec->ec_lock);
-
-                CERROR("echo client: pending lock %p refs %d\n",
-                       ecl, cfs_atomic_read(&ecl->el_refcount));
-
-                echo_lock_release(env, ecl, still_used);
-                cfs_spin_lock(&ec->ec_lock);
-        }
-        cfs_spin_unlock(&ec->ec_lock);
+        CDEBUG(D_INFO, "echo device:%p is going to be freed, next = %p\n",
+               ed, next);
 
         LASSERT(ed->ed_site);
         lu_site_purge(env, &ed->ed_site->cs_lu, -1);
@@ -847,6 +853,8 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
                 cfs_spin_lock(&ec->ec_lock);
         }
         cfs_spin_unlock(&ec->ec_lock);
+
+        LASSERT(cfs_list_empty(&ec->ec_locks));
 
         CDEBUG(D_INFO, "No object exists, exiting...\n");
 
@@ -971,7 +979,6 @@ static int cl_echo_object_put(struct echo_object *eco)
                 struct lu_object_header *loh = obj->co_lu.lo_header;
                 LASSERT(&eco->eo_hdr == luh2coh(loh));
                 cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &loh->loh_flags);
-                cl_object_prune(env, obj);
         }
 
         cl_object_put(env, obj);
