@@ -501,21 +501,30 @@ static int mdc_req_avail(struct client_obd *cli, struct mdc_cache_waiter *mcw)
 /* We record requests in flight in cli->cl_r_in_flight here.
  * There is only one write rpc possible in mdc anyway. If this to change
  * in the future - the code may need to be revisited. */
-void mdc_enter_request(struct client_obd *cli)
+int mdc_enter_request(struct client_obd *cli)
 {
+        int rc = 0;
         struct mdc_cache_waiter mcw;
-        struct l_wait_info lwi = { 0 };
+        struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
         if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
                 cfs_list_add_tail(&mcw.mcw_entry, &cli->cl_cache_waiters);
                 cfs_waitq_init(&mcw.mcw_waitq);
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
-                l_wait_event(mcw.mcw_waitq, mdc_req_avail(cli, &mcw), &lwi);
+                rc = l_wait_event(mcw.mcw_waitq, mdc_req_avail(cli, &mcw), &lwi);
+                if (rc) {
+                        client_obd_list_lock(&cli->cl_loi_list_lock);
+                        if (cfs_list_empty(&mcw.mcw_entry))
+                                cli->cl_r_in_flight--;
+                        cfs_list_del_init(&mcw.mcw_entry);
+                        client_obd_list_unlock(&cli->cl_loi_list_lock);
+                }
         } else {
                 cli->cl_r_in_flight++;
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
         }
+        return rc;
 }
 
 void mdc_exit_request(struct client_obd *cli)

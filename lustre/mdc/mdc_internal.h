@@ -74,7 +74,7 @@ void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen);
 void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
-void mdc_enter_request(struct client_obd *cli);
+int mdc_enter_request(struct client_obd *cli);
 void mdc_exit_request(struct client_obd *cli);
 
 /* mdc/mdc_locks.c */

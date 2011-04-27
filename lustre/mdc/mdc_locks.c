@@ -693,7 +693,12 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
          * rpcs in flight counter. We do not do flock request limiting, though*/
         if (it) {
                 mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-                mdc_enter_request(&obddev->u.cli);
+                rc = mdc_enter_request(&obddev->u.cli);
+                if (rc != 0) {
+                        mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+                        ptlrpc_req_finished(req);
+                        RETURN(rc);
+                }
         }
 
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
@@ -1023,7 +1028,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                                         .l_inodebits = { MDS_INODELOCK_LOOKUP | 
                                                          MDS_INODELOCK_UPDATE }
                                  };
-        int                      rc;
+        int                      rc = 0;
         int                      flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
@@ -1036,11 +1041,17 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         if (!req)
                 RETURN(-ENOMEM);
 
-        mdc_enter_request(&obddev->u.cli);
+        rc = mdc_enter_request(&obddev->u.cli);
+        if (rc != 0) {
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
+
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
                               0, &minfo->mi_lockh, 1);
         if (rc < 0) {
                 mdc_exit_request(&obddev->u.cli);
+                ptlrpc_req_finished(req);
                 RETURN(rc);
         }
 

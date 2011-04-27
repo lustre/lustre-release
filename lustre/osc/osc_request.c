@@ -2866,7 +2866,7 @@ static int osc_enter_cache(const struct lu_env *env,
                            struct osc_async_page *oap)
 {
         struct osc_cache_waiter ocw;
-        struct l_wait_info lwi = { 0 };
+        struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 
         ENTRY;
 
