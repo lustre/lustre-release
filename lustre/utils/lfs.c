@@ -279,12 +279,12 @@ static int lfs_setstripe(int argc, char **argv)
         unsigned long long size_units;
 
         struct option long_opts[] = {
-                {"size",        required_argument, 0, 's'},
                 {"count",       required_argument, 0, 'c'},
+                {"delete",      no_argument,       0, 'd'},
                 {"index",       required_argument, 0, 'i'},
                 {"offset",      required_argument, 0, 'o'},
                 {"pool",        required_argument, 0, 'p'},
-                {"delete",      no_argument,       0, 'd'},
+                {"size",        required_argument, 0, 's'},
                 {0, 0, 0, 0}
         };
 
@@ -304,7 +304,7 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
         {
                 optind = 0;
-                while ((c = getopt_long(argc, argv, "c:di:o:s:p:",
+                while ((c = getopt_long(argc, argv, "c:di:o:p:s:",
                                         long_opts, NULL)) >= 0) {
                         switch (c) {
                         case 0:
@@ -495,28 +495,26 @@ static int lfs_find(int argc, char **argv)
         time_t t;
         struct find_param param = { .maxdepth = -1 };
         struct option long_opts[] = {
-                /* New find options. */
                 {"atime",     required_argument, 0, 'A'},
                 {"ctime",     required_argument, 0, 'C'},
-                {"mtime",     required_argument, 0, 'M'},
                 {"maxdepth",  required_argument, 0, 'D'},
                 {"gid",       required_argument, 0, 'g'},
                 {"group",     required_argument, 0, 'G'},
-                {"uid",       required_argument, 0, 'u'},
-                {"user",      required_argument, 0, 'U'},
+                {"mtime",     required_argument, 0, 'M'},
                 {"name",      required_argument, 0, 'n'},
-                /* no short option for pool, p/P already used */
-                {"pool",      required_argument, 0, FIND_POOL_OPT},
                 /* --obd is considered as a new option. */
                 {"obd",       required_argument, 0, 'O'},
                 {"ost",       required_argument, 0, 'O'},
-                {"print",     no_argument,       0, 'P'},
+                /* no short option for pool, p/P already used */
+                {"pool",      required_argument, 0, FIND_POOL_OPT},
                 {"print0",    no_argument,       0, 'p'},
-                /* Old find options. */
+                {"print",     no_argument,       0, 'P'},
                 {"quiet",     no_argument,       0, 'q'},
                 {"recursive", no_argument,       0, 'r'},
                 {"size",      required_argument, 0, 's'},
                 {"type",      required_argument, 0, 't'},
+                {"uid",       required_argument, 0, 'u'},
+                {"user",      required_argument, 0, 'U'},
                 {"verbose",   no_argument,       0, 'v'},
                 {0, 0, 0, 0}
         };
@@ -532,7 +530,7 @@ static int lfs_find(int argc, char **argv)
 
         optind = 0;
         /* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
-        while ((c = getopt_long_only(argc,argv,"-A:C:D:g:G:M:n:PpO:qrs:t:u:U:v",
+        while ((c = getopt_long_only(argc,argv,"-A:C:D:g:G:M:n:O:Ppqrs:t:u:U:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -792,17 +790,18 @@ static int lfs_find(int argc, char **argv)
 static int lfs_getstripe(int argc, char **argv)
 {
         struct option long_opts[] = {
+                {"count", 0, 0, 'c'},
+                {"directory", 0, 0, 'd'},
+                {"index", 0, 0, 'i'},
+                {"mdt", 0, 0, 'M'},
+                {"offset", 0, 0, 'o'},
                 {"obd", 1, 0, 'O'},
+                {"pool", 0, 0, 'p'},
                 {"quiet", 0, 0, 'q'},
                 {"recursive", 0, 0, 'r'},
-                {"count", 0, 0, 'c'},
+                {"raw", 0, 0, 'R'},
                 {"size", 0, 0, 's'},
-                {"index", 0, 0, 'i'},
-                {"offset", 0, 0, 'o'},
-                {"pool", 0, 0, 'p'},
                 {"verbose", 0, 0, 'v'},
-                {"directory", 0, 0, 'd'},
-                {"mdt", 0, 0, 'M'},
                 {0, 0, 0, 0}
         };
         int c, rc;
@@ -1277,7 +1276,7 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qchk, 0, sizeof(qchk));
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ug")) != -1) {
+        while ((c = getopt(argc, argv, "gu")) != -1) {
                 switch (c) {
                 case 'u':
                         check_type |= 0x01;
@@ -1345,7 +1344,7 @@ static int lfs_quotaon(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ugf")) != -1) {
+        while ((c = getopt(argc, argv, "fgu")) != -1) {
                 switch (c) {
                 case 'u':
                         qctl.qc_type |= 0x01;
@@ -1404,7 +1403,7 @@ static int lfs_quotaoff(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ug")) != -1) {
+        while ((c = getopt(argc, argv, "gu")) != -1) {
                 switch (c) {
                 case 'u':
                         qctl.qc_type |= 0x01;
@@ -1456,7 +1455,7 @@ static int lfs_quotainv(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_INVALIDATE;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ugf")) != -1) {
+        while ((c = getopt(argc, argv, "fgu")) != -1) {
                 switch (c) {
                 case 'u':
                         qctl.qc_type |= 0x01;
@@ -1594,11 +1593,11 @@ int lfs_setquota_times(int argc, char **argv)
         struct obd_dqblk *dqb = &qctl.qc_dqblk;
         struct obd_dqinfo *dqi = &qctl.qc_dqinfo;
         struct option long_opts[] = {
-                {"user",            no_argument,       0, 'u'},
-                {"group",           no_argument,       0, 'g'},
                 {"block-grace",     required_argument, 0, 'b'},
+                {"group",           no_argument,       0, 'g'},
                 {"inode-grace",     required_argument, 0, 'i'},
                 {"times",           no_argument,       0, 't'},
+                {"user",            no_argument,       0, 'u'},
                 {0, 0, 0, 0}
         };
 
@@ -1607,7 +1606,7 @@ int lfs_setquota_times(int argc, char **argv)
         qctl.qc_type = UGQUOTA;
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "b:i:gtu", long_opts, NULL)) != -1) {
+        while ((c = getopt_long(argc, argv, "b:gi:tu", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
                 case 'g':
@@ -1676,12 +1675,12 @@ int lfs_setquota(int argc, char **argv)
         char *mnt, *obd_type = (char *)qctl.obd_type;
         struct obd_dqblk *dqb = &qctl.qc_dqblk;
         struct option long_opts[] = {
-                {"user",            required_argument, 0, 'u'},
-                {"group",           required_argument, 0, 'g'},
                 {"block-softlimit", required_argument, 0, 'b'},
                 {"block-hardlimit", required_argument, 0, 'B'},
+                {"group",           required_argument, 0, 'g'},
                 {"inode-softlimit", required_argument, 0, 'i'},
                 {"inode-hardlimit", required_argument, 0, 'I'},
+                {"user",            required_argument, 0, 'u'},
                 {0, 0, 0, 0}
         };
         unsigned limit_mask = 0;
@@ -1697,7 +1696,7 @@ int lfs_setquota(int argc, char **argv)
                                  * isn't reinitialized from command line */
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "b:B:i:I:g:u:", long_opts, NULL)) != -1) {
+        while ((c = getopt_long(argc, argv, "b:B:g:i:I:u:", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
                 case 'g':
@@ -2037,7 +2036,7 @@ static int lfs_quota(int argc, char **argv)
         __u32 valid = QC_GENERAL, idx = 0;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ugto:i:I:qv")) != -1) {
+        while ((c = getopt(argc, argv, "gi:I:o:qtuv")) != -1) {
                 switch (c) {
                 case 'u':
                         if (qctl.qc_type != UGQUOTA) {
