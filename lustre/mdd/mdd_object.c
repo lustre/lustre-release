@@ -608,6 +608,14 @@ int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm)
         RETURN(sizeof(*lum));
 }
 
+static int is_rootdir(struct mdd_object *mdd_obj)
+{
+        const struct mdd_device *mdd_dev = mdd_obj2mdd_dev(mdd_obj);
+        const struct lu_fid *fid = mdo2fid(mdd_obj);
+
+        return lu_fid_eq(&mdd_dev->mdd_root_fid, fid);
+}
+
 /* get lov EA only */
 static int __mdd_lmm_get(const struct lu_env *env,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
@@ -620,7 +628,7 @@ static int __mdd_lmm_get(const struct lu_env *env,
 
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
                         XATTR_NAME_LOV);
-        if (rc == 0 && (ma->ma_need & MA_LOV_DEF))
+        if (rc == 0 && (ma->ma_need & MA_LOV_DEF) && is_rootdir(mdd_obj))
                 rc = mdd_get_default_md(mdd_obj, ma->ma_lmm);
         if (rc > 0) {
                 ma->ma_lmm_size = rc;

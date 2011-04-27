@@ -2291,7 +2291,23 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
         }
 
         if (ret) {
-                if (errno == ENODATA) {
+                if (errno == ENODATA && d != NULL) {
+                        /* We need to "fake" the "use the default" values
+                         * since the lmm struct is zeroed out at this point.
+                         * The magic needs to be set in order to satisfy
+                         * a check later on in the code path.
+                         * The object_seq needs to be set for the "(Default)"
+                         * prefix to be displayed. */
+                        struct lov_user_md *lmm = &param->lmd->lmd_lmm;
+                        lmm->lmm_magic = LOV_MAGIC_V1;
+                        if (!param->raw)
+                                lmm->lmm_object_seq = LOV_OBJECT_GROUP_DEFAULT;
+                        lmm->lmm_stripe_count = 0;
+                        lmm->lmm_stripe_size = 0;
+                        lmm->lmm_stripe_offset = -1;
+                        goto dump;
+
+                } else if (errno == ENODATA && parent != NULL) {
                         if (!param->obduuid)
                                 llapi_printf(LLAPI_MSG_NORMAL,
                                              "%s has no stripe info\n", path);
@@ -2315,6 +2331,7 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
                 return ret;
         }
 
+dump:
         if (!param->get_mdt_index)
                 llapi_lov_dump_user_lmm(param, path, d ? 1 : 0);
 

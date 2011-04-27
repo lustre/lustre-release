@@ -7751,6 +7751,18 @@ test_204d() {
 }
 run_test 204d "Print default stripe count and size ============="
 
+test_204e() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -d $DIR/$tdir
+
+	check_raw_stripe_attr count
+	check_raw_stripe_attr size
+	check_raw_stripe_attr offset
+
+	return 0
+}
+run_test 204e "Print raw stripe attributes ================="
+
 test_204f() {
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE --count 1 $DIR/$tdir
