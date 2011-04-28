@@ -1345,6 +1345,31 @@ void ll_clear_inode(struct inode *inode)
 
         EXIT;
 }
+
+void ll_delete_inode(struct inode *inode)
+{
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
+               inode->i_generation, inode);
+
+        truncate_inode_pages(&inode->i_data, 0);
+        if (inode->i_data.nrpages) {
+                /* Workaround for LU-118 */
+#ifdef HAVE_RW_TREE_LOCK
+                write_lock_irq(&inode->i_data.tree_lock);
+                write_unlock_irq(&inode->i_data.tree_lock);
+#else
+                spin_lock_irq(&inode->i_data.tree_lock);
+                spin_unlock_irq(&inode->i_data.tree_lock);
+#endif
+                LASSERTF(inode->i_data.nrpages == 0,
+                         "inode=%lu/%u(%p) nrpages=%lu, see "
+                         "http://jira.whamcloud.com/browse/LU-118\n",
+                         inode->i_ino, inode->i_generation, inode,
+                         inode->i_data.nrpages);
+        }
+        clear_inode(inode);
+}
+
 static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
