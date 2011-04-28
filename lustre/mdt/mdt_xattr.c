@@ -282,7 +282,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         struct mdt_reint_record *rr   = &info->mti_rr;
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_object       *obj; 
+        struct mdt_object       *obj;
         struct md_object        *child;
         __u64                    valid = attr->la_valid;
         const char              *xattr_name;
@@ -335,7 +335,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                         GOTO(out, rc = 0);
         } else if ((valid & OBD_MD_FLXATTR) &&
                    (strncmp(xattr_name, XATTR_NAME_ACL_ACCESS,
-                             sizeof(XATTR_NAME_ACL_ACCESS) - 1) == 0)) {
+                            sizeof(XATTR_NAME_ACL_ACCESS) - 1) == 0 ||
+                    strncmp(xattr_name, XATTR_NAME_ACL_DEFAULT,
+                            sizeof(XATTR_NAME_ACL_DEFAULT) - 1) == 0)) {
                 /* currently lustre limit acl access size */
                 xattr_len = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
 
@@ -344,6 +346,12 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         }
 
         lockpart = MDS_INODELOCK_UPDATE;
+        /* Revoke all clients' lookup lock, since the access
+         * permissions for this inode is changed when ACL_ACCESS is
+         * set. This isn't needed for ACL_DEFAULT, since that does
+         * not change the access permissions of this inode, nor any
+         * other existing inodes. It is setting the ACLs inherited
+         * by new directories/files at create time. */
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
