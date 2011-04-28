@@ -123,10 +123,9 @@ EOF
 
 yml_entities() {
     local host
-    for num in $(seq $MDSCOUNT); do
-        host=$(facet_active_host mds$num)
-        yml_entity "MDS $num" $host >> $logdir/node.$host.yml
-    done
+
+    host=$(facet_active_host mds)
+    yml_entity "MDS 1" $host >> $logdir/node.$host.yml
 
     for num in $(seq $OSTCOUNT); do
         host=$(facet_active_host ost$num)
