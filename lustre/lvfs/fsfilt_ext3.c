@@ -819,26 +819,13 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
         return 0;
 }
 
-/*
- * We need to hack the return value for the free inode counts because
- * the current EA code requires one filesystem block per inode with EAs,
- * so it is possible to run out of blocks before we run out of inodes.
- *
- * This can be removed when the ext3 EA code is fixed.
- */
 static int fsfilt_ext3_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
         struct kstatfs sfs;
         int rc;
 
         memset(&sfs, 0, sizeof(sfs));
-        rc = ll_do_statfs(sb,&sfs);
-
-        if (!rc && sfs.f_bfree < sfs.f_ffree) {
-                sfs.f_files = (sfs.f_files - sfs.f_ffree) + sfs.f_bfree;
-                sfs.f_ffree = sfs.f_bfree;
-        }
-
+        rc = ll_do_statfs(sb, &sfs);
         statfs_pack(osfs, &sfs);
         return rc;
 }
