@@ -165,6 +165,20 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# Allow the user to set the MDS thread upper limit
+#
+AC_DEFUN([LC_MDS_MAX_THREADS],
+[
+        AC_ARG_WITH([mds_max_threads],
+        AC_HELP_STRING([--with-mds-max-threads=size],
+                        [define the maximum number of threads available on the MDS: (default=512)]),
+        [
+                MDS_THREAD_COUNT=$with_mds_max_threads
+                AC_DEFINE_UNQUOTED(MDT_MAX_THREADS, $MDS_THREAD_COUNT, [maximum number of mdt threads])
+        ])
+])
+
+#
 # LC_CONFIG_BACKINGFS
 #
 # setup, check the backing filesystem
@@ -2579,6 +2593,9 @@ AC_DEFUN([LC_CONFIGURE],
 if test $target_cpu == "i686" -o $target_cpu == "x86_64"; then
         CFLAGS="$CFLAGS -Werror"
 fi
+
+# maximum MDS thread count
+LC_MDS_MAX_THREADS
 
 # include/liblustre.h
 AC_CHECK_HEADERS([sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
