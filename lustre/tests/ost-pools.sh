@@ -951,7 +951,7 @@ create_perf() {
 test_18() {
     set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=9877
+    local numfiles=30000
     local plaindir=$POOL_ROOT/plaindir
     local pooldir=$POOL_ROOT/pooldir
 	local t1=0
