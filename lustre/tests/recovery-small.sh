@@ -325,6 +325,7 @@ test_18c() {
     # lost reply to connect request
     do_facet ost1 lctl set_param fail_loc=0x80000225
     # force reconnect
+    sleep 1
     df $MOUNT > /dev/null 2>&1
     sleep 2
     # my understanding is that there should be nothing in the page
