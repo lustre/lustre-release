@@ -24,7 +24,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
  	{Opt_bigendian_extents, "bigendian_extents"},
-+	{Opt_force_over_16tb, "force_over_16th"},
++	{Opt_force_over_16tb, "force_over_16tb"},
  	{Opt_mballoc, "mballoc"},
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
