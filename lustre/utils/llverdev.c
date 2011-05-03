@@ -26,7 +26,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  */
 /*
@@ -41,14 +41,17 @@
  * This tool have two working modes
  * 1. full mode
  * 2. fast mode
- *	The full mode is basic mode in which program writes the test pattern
- * on entire disk. The test pattern (device offset and timestamp) is written
- * at the beginning of each 4kB block. When the whole device is full then
- * read operation is performed to verify that the test pattern is correct.
- *	In the fast mode the program writes data at the critical locations
+ *
+ * In full mode, the program writes a test pattern on the entire disk.
+ * The test pattern (device offset and timestamp) is written at the
+ * beginning of each 4kB block. When the whole device is full the read
+ * operation is performed to verify that the test pattern is correct.
+ *
+ * In fast mode, the program writes data at the critical locations
  * of the device such as start of the device, before and after multiple of 1GB
  * offset and at the end.
- *	A chunk buffer with default size of 1MB is used to write and read test
+ *
+ * A chunk buffer with default size of 1MB is used to write and read test
  * pattern in bulk.
  */
 
@@ -97,8 +100,9 @@
 
 /* Structure for writting test pattern */
 struct block_data {
-	long long  bd_offset;
-	time_t  bd_time;
+	unsigned long long bd_offset;
+	unsigned long long bd_time;
+	unsigned long long bd_inode;
 };
 static char *progname;		/* name by which this program was run. */
 static unsigned verbose = 1;	/* prints offset in kB, operation rate */
@@ -106,7 +110,7 @@ static int readoption;		/* run test in read-only (verify) mode */
 static int writeoption;		/* run test in write_only mode */
 const char *devname;		/* name of device to be tested. */
 static unsigned full = 1;	/* flag to full check */
-static int fd;
+static int error_count;		/* number of IO errors hit during run */
 static int isatty_flag;
 
 static struct option const longopts[] =
@@ -122,6 +126,7 @@ static struct option const longopts[] =
 	{ "verbose", no_argument, 0, 'v' },
 	{ "write", no_argument, 0, 'w' },
 	{ "long", no_argument, 0, 'l' },
+	{ "full", no_argument, 0, 'l' },
 	{ 0, 0, 0, 0}
 };
 
@@ -132,22 +137,22 @@ static struct option const longopts[] =
 void usage(int status)
 {
 	if (status != 0) {
-	      printf("\nUsage: %s [OPTION]... <device-name> ...\n",
-		     progname);
-	      printf("Block device verification tool.\n"
-		     "\t-t {seconds}, --timestamp, "
-		     "set test time  (default=current time())\n"
-		     "\t-o {offset}, --offset, "
-		     "offset in kB of start of test, default=0\n"
-		     "\t-r, --read run test in verify mode\n"
-		     "\t-w, --write run test in test-pattern mode, default=rw\n"
-		     "\t-v, --verbose\n"
-		     "\t-q, --quiet\n"
-		     "\t-l, --long, full check of device\n"
-		     "\t-p, --partial, for partial check (1GB steps)\n"
-		     "\t-c, --chunksize, IO chunk size, default=1048576\n"
-		     "\t-f, --force, force test to run without confirmation\n"
-		     "\t-h, --help display this help and exit\n");
+		printf("\nUsage: %s [OPTION]... <device-name> ...\n",
+		       progname);
+		printf("Block device verification tool.\n"
+		       "\t-t {seconds}, --timestamp, "
+		       "set test time  (default=current time())\n"
+		       "\t-o {offset}, --offset, "
+		       "offset in kB of start of test, default=0\n"
+		       "\t-r, --read, run in verify mode\n"
+		       "\t-w, --write, run in test-pattern mode, default=rw\n"
+		       "\t-v, --verbose\n"
+		       "\t-q, --quiet\n"
+		       "\t-l, --long, --full check of device\n"
+		       "\t-p, --partial, for partial check (1GB steps)\n"
+		       "\t-c {bytes}, --chunksize, IO size, default=1048576\n"
+		       "\t-f, --force, force test to run without confirmation\n"
+		       "\t-h, --help, display this help and exit\n");
 	}
 	exit(status);
 }
@@ -157,9 +162,10 @@ void usage(int status)
  */
 static int open_dev(const char *devname, int mode)
 {
+	int     fd;
 #ifdef HAVE_EXT2FS_EXT2FS_H
-	int	mount_flags;
-	char	mountpt[80] = "";
+	int     mount_flags;
+	char    mountpt[80] = "";
 
 	if (ext2fs_check_mount_point(devname, &mount_flags, mountpt,
 				     sizeof(mountpt))) {
@@ -178,10 +184,9 @@ static int open_dev(const char *devname, int mode)
 		fprintf(stderr, "%s: Open failed: %s",progname,strerror(errno));
 		exit(3);
 	}
-	return (fd);
+	return fd;
 }
 
-#undef HAVE_BLKID_BLKID_H /* sigh, RHEL3 systems do not have libblkid.so.1 */
 #ifdef HAVE_BLKID_BLKID_H
 #include <blkid/blkid.h>
 #endif
@@ -224,7 +229,7 @@ static loff_t sizeof_dev(int fd)
 		}
 	}
 	fprintf(stderr, "%s: unable to determine size of %s\n",
-			progname, devname);
+		progname, devname);
 	return 0;
 #endif
 
@@ -241,8 +246,9 @@ out:
  * Verify_chunk: Verifies test pattern in each 4kB (BLOCKSIZE) is correct.
  * Returns 0 if test offset and timestamp is correct otherwise 1.
  */
-int verify_chunk(char *chunk_buf, size_t chunksize,
-		 unsigned long long chunk_off, time_t time_st)
+int verify_chunk(char *chunk_buf, const size_t chunksize,
+		 unsigned long long chunk_off, const unsigned long long time_st,
+		 const unsigned long long inode_st, const char *file)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -251,12 +257,15 @@ int verify_chunk(char *chunk_buf, size_t chunksize,
 	     (char *)chunk_buf < chunk_end;
 	     chunk_buf += BLOCKSIZE, chunk_off += BLOCKSIZE) {
 		bd = (struct block_data *)chunk_buf;
-		if ((bd->bd_offset == chunk_off) && (bd->bd_time == time_st))
+		if ((bd->bd_offset == chunk_off) && (bd->bd_time == time_st) &&
+		    (bd->bd_inode == inode_st))
 			continue;
 
-		fprintf(stderr, "\n%s: verify failed at offset/timestamp "
-			"%llu/%lu: found %llu/%lu instead\n", progname,
-			chunk_off, time_st, bd->bd_offset, bd->bd_time);
+		fprintf(stderr, "\n%s: verify %s failed offset/timestamp/inode "
+			"%llu/%llu/%llu: found %llu/%llu/%llu instead\n",
+			progname, file, chunk_off, time_st, inode_st,
+			bd->bd_offset, bd->bd_time, bd->bd_inode);
+		error_count++;
 		return 1;
 	}
 	return 0;
@@ -268,7 +277,7 @@ int verify_chunk(char *chunk_buf, size_t chunksize,
  * each 4kB(BLOCKSIZE) blocks in chunk_buf.
  */
 void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
-		time_t time_st)
+		const time_t time_st, const ino_t inode_st)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -279,6 +288,7 @@ void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
 		bd = (struct block_data *)chunk_buf;
 		bd->bd_offset = chunk_off;
 		bd->bd_time = time_st;
+		bd->bd_inode = inode_st;
 	}
 }
 
@@ -309,57 +319,101 @@ void show_rate(char *op, unsigned long long offset, unsigned long long *count)
 }
 
 /*
- * write_chunk: write the chunk_buf on the device. The number of write
- * operations are based on the parameters write_end, offset, and chunksize.
+ * Write a chunk to disk, handling errors, interrupted writes, etc.
+ *
+ * If there is an IO error hit during the write, it is possible that
+ * this will just show up as a short write, and a subsequent write
+ * will return the actual error.  We want to continue in the face of
+ * minor media errors so that we can validate the whole device if
+ * possible, but if there are many errors we don't want to loop forever.
+ *
+ * The error count will be returned upon exit to ensure that the
+ * media errors are detected even if nobody is looking at the output.
+ *
+ * Returns 0 on success, or -ve errno on failure.
  */
-int write_chunks(unsigned long long offset, unsigned long long write_end,
-		 char *chunk_buf, size_t chunksize, time_t time_st)
+size_t write_retry(int fd, const char *chunk_buf, size_t nrequested,
+		   unsigned long long offset, const char *file)
+{
+	long nwritten;
+
+retry:
+	nwritten = write(fd, chunk_buf, nrequested);
+	if (nwritten < 0) {
+		if (errno != ENOSPC) {
+			fprintf(stderr, "\n%s: write %s@%llu+%zi failed: %s\n",
+				progname, file, offset, nrequested,
+				strerror(errno));
+			if (error_count++ < 100)
+				return 0;
+		}
+		return -errno;
+	}
+	if (nwritten < nrequested) {
+		fprintf(stderr, "\n%s: write %s@%llu+%zi short: %ld written\n",
+			progname, file, offset, nrequested, nwritten);
+		offset += nwritten;
+		nrequested -= nwritten;
+		goto retry;
+	}
+
+	return 0;
+}
+
+/*
+ * write_chunks: write the chunk_buf on the device. The number of write
+ * operations are based on the parameters write_end, offset, and chunksize.
+ *
+ * Returns 0 on success, or -ve error number on failure.
+ */
+int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
+		 char *chunk_buf, size_t chunksize, const time_t time_st,
+		 const ino_t inode_st, const char *file)
 {
 	unsigned long long stride, count = 0;
 
 	stride = full ? chunksize : (ONE_GB - chunksize);
-
 	for (offset = offset & ~(chunksize - 1); offset < write_end;
 	     offset += stride) {
+		int ret;
+
 		if (lseek64(fd, offset, SEEK_SET) == -1) {
-			fprintf(stderr, "\n%s: lseek64(%llu) failed: %s\n",
-				progname, offset, strerror(errno));
-			return 1;
+			fprintf(stderr, "\n%s: lseek64(%s+%llu) failed: %s\n",
+				progname, file, offset, strerror(errno));
+			return -errno;
 		}
 		if (offset + chunksize > write_end)
 			chunksize = write_end - offset;
-
 		if (!full && offset > chunksize) {
-			fill_chunk(chunk_buf, chunksize, offset, time_st);
-			if (write(fd, chunk_buf, chunksize) < 0) {
-				fprintf(stderr, "\n%s: write %llu failed: %s\n",
-					progname, offset, strerror(errno));
-				return 1;
-			}
+			fill_chunk(chunk_buf, chunksize, offset, time_st,
+				   inode_st);
+			ret = write_retry(fd, chunk_buf, chunksize,
+					  offset, file);
+			if (ret < 0)
+				return ret;
 			offset += chunksize;
+			count += chunksize;
 			if (offset + chunksize > write_end)
 				chunksize = write_end - offset;
 		}
-
-		fill_chunk(chunk_buf, chunksize, offset, time_st);
-		if (write(fd, chunk_buf, chunksize) < 0) {
-			fprintf(stderr, "\n%s: write %llu failed: %s\n",
-				progname, offset, strerror(errno));
-			return 1;
-		}
+		fill_chunk(chunk_buf, chunksize, offset, time_st, inode_st);
+		ret = write_retry(fd, chunk_buf, chunksize, offset, file);
+		if (ret < 0)
+			return ret;
 
 		count += chunksize;
 		if (verbose > 1)
 			show_rate("write", offset, &count);
 	}
+
 	if (verbose > 1) {
 		show_rate("write", offset, &count);
 		printf("\nwrite complete\n");
 	}
 	if (fsync(fd) == -1) {
-		fprintf(stderr, "%s: fsync faild: %s\n", progname,
+		fprintf(stderr, "%s: fsync failed: %s\n", progname,
 			strerror(errno));
-			return 1;
+		return -errno;
 	}
 	return 0;
 }
@@ -368,19 +422,21 @@ int write_chunks(unsigned long long offset, unsigned long long write_end,
  * read_chunk: reads the chunk_buf from the device. The number of read
  * operations are based on the parameters read_end, offset, and chunksize.
  */
-int read_chunks(unsigned long long offset, unsigned long long read_end,
-		char *chunk_buf, size_t chunksize, time_t time_st)
+int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
+		char *chunk_buf, size_t chunksize, const time_t time_st,
+		const ino_t inode_st, const char *file)
 {
 	unsigned long long stride, count = 0;
-
-	stride = full ? chunksize : (ONE_GB - chunksize);
 
 	if (ioctl(fd, BLKFLSBUF, 0) < 0 && verbose)
 		fprintf(stderr, "%s: ioctl BLKFLSBUF failed: %s (ignoring)\n",
 			progname, strerror(errno));
 
+	stride = full ? chunksize : (ONE_GB - chunksize);
 	for (offset = offset & ~(chunksize - 1); offset < read_end;
 	     offset += stride) {
+		ssize_t nread;
+
 		if (lseek64(fd, offset, SEEK_SET) == -1) {
 			fprintf(stderr, "\n%s: lseek64(%llu) failed: %s\n",
 				progname, offset, strerror(errno));
@@ -390,26 +446,54 @@ int read_chunks(unsigned long long offset, unsigned long long read_end,
 			chunksize = read_end - offset;
 
 		if (!full && offset > chunksize) {
-			if (read (fd, chunk_buf, chunksize) < 0) {
-				fprintf(stderr, "\n%s: read %llu failed: %s\n",
-					progname, offset, strerror(errno));
+			nread = read(fd, chunk_buf, chunksize);
+			if (nread < 0) {
+				fprintf(stderr,"\n%s: read %s@%llu+%zi failed: "
+					"%s\n", progname, file, offset,
+					chunksize, strerror(errno));
+				error_count++;
 				return 1;
 			}
-			if (verify_chunk(chunk_buf, chunksize, offset,
-					 time_st) != 0)
+			if (nread < chunksize) {
+				fprintf(stderr, "\n%s: read %s@%llu+%zi short: "
+					"%zi read\n", progname, file, offset,
+					chunksize, nread);
+				error_count++;
+			}
+			if (verify_chunk(chunk_buf, nread, offset, time_st,
+					 inode_st, file) != 0)
 				return 1;
 			offset += chunksize;
+			count += chunksize;
+
+			/* Need to reset position after read error */
+			if (nread < chunksize &&
+			    lseek64(fd, offset, SEEK_SET) == -1) {
+				fprintf(stderr,
+					"\n%s: lseek64(%s@%llu) failed: %s\n",
+					progname, file, offset,strerror(errno));
+				return 1;
+			}
 			if (offset + chunksize >= read_end)
 				chunksize = read_end - offset;
 		}
 
-		if (read(fd, chunk_buf, chunksize) < 0) {
+		nread = read(fd, chunk_buf, chunksize);
+		if (nread < 0) {
 			fprintf(stderr, "\n%s: read failed: %s\n", progname,
 				strerror(errno));
+			error_count++;
 			return 1;
 		}
+		if (nread < chunksize) {
+			fprintf(stderr, "\n%s: read %s@%llu+%zi short: "
+				"%zi read\n", progname, file, offset,
+				chunksize, nread);
+			error_count++;
+		}
 
-		if (verify_chunk(chunk_buf, chunksize, offset, time_st) != 0)
+		if (verify_chunk(chunk_buf, nread, offset, time_st,
+				 inode_st, file) != 0)
 			return 1;
 
 		count += chunksize;
@@ -433,6 +517,7 @@ int main(int argc, char **argv)
 	unsigned long long dev_size = 0;
 	char yesno[4];
 	int mode = O_RDWR;		/* mode which device should be opened */
+	int fd;
 	int error = 0, c;
 
 	progname = strrchr(argv[0], '/') == NULL ?
@@ -549,16 +634,18 @@ int main(int argc, char **argv)
 		goto close_dev;
 	}
 	if (writeoption) {
-		if (write_chunks(offset, dev_size, chunk_buf, chunksize,
-				 time_st)) {
+		c = write_chunks(fd, offset, dev_size, chunk_buf, chunksize,
+				 time_st, 0, devname);
+		if (c < 0 && c != -ENOSPC) {
 			error = 3;
 			goto chunk_buf;
 		}
-		if (!full) {  /* end of device aligned to a block */
+		if (!full) { /* end of device aligned to a block */
 			offset = ((dev_size - chunksize + BLOCKSIZE - 1) &
 				  ~(BLOCKSIZE - 1));
-			if (write_chunks(offset, dev_size, chunk_buf, chunksize,
-					 time_st)) {
+			c = write_chunks(fd, offset, dev_size, chunk_buf,
+					 chunksize, time_st, 0, devname);
+			if (c < 0 && c != -ENOSPC) {
 				error = 3;
 				goto chunk_buf;
 			}
@@ -566,16 +653,16 @@ int main(int argc, char **argv)
 		offset = offset_orig;
 	}
 	if (readoption) {
-		if (read_chunks(offset, dev_size, chunk_buf, chunksize,
-				time_st)) {
+		if (read_chunks(fd, offset, dev_size, chunk_buf, chunksize,
+				time_st, 0, devname)) {
 			error = 2;
 			goto chunk_buf;
 		}
 		if (!full) { /* end of device aligned to a block */
 			offset = ((dev_size - chunksize + BLOCKSIZE - 1) &
 				  ~(BLOCKSIZE - 1));
-			if (read_chunks(offset, dev_size, chunk_buf, chunksize,
-					time_st)) {
+			if (read_chunks(fd, offset, dev_size, chunk_buf,
+					chunksize, time_st, 0, devname)) {
 				error = 2;
 				goto chunk_buf;
 			}
@@ -583,7 +670,7 @@ int main(int argc, char **argv)
 		if (verbose)
 			printf("\n%s: data verified successfully\n", progname);
 	}
-	error = 0;
+	error = error_count;
 chunk_buf:
 	free(chunk_buf);
 close_dev:

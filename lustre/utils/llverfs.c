@@ -26,7 +26,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  */
 /*
@@ -35,22 +35,27 @@
  *
  * lustre/utils/llverfs.c
  *
- * ext3 Filesystem Verification Tool.
- * This program tests the correct operation of ext3 filesystem.
+ * Filesystem Verification Tool.
+ * This program tests the correct operation of large filesystems and
+ * the underlying block storage device(s).
  * This tool have two working modes
  * 1. full mode
  * 2. fast mode
- *	The full mode is basic mode in which program creates a subdirectory
- * in the test fileysytem, writes n(files_in_dir, default=16) large(4GB) files
- * to the directory with the test pattern at the start of each 4kb block.
- * The test pattern contains timestamp, relative file offset and per file
- * unique idenfifier(inode number). this continues until whole filesystem is
- * full and then this tooll verifies that the data in all of the test files
- * is correct.
- *	In the fast mode the tool creates a test directories with
- * EXT3_TOPDIR_FL flag set. the number of directories equals to the number
- * of block groups in the filesystem(e.g. 65536 directories for 8TB filesystem)
- * and then writes a single 1MB file in each directory. The tool then verifies
+ *
+ * In full mode, the program creates a subdirectory in the test
+ * fileysytem, writes n(files_in_dir, default=16) large(4GB) files to
+ * the directory with the test pattern at the start of each 4kb block.
+ * The test pattern contains timestamp, relative file offset and per
+ * file unique idenfifier(inode number).  This continues until the
+ * whole filesystem is full and then the tool verifies that the data
+ * in all of the test files is correct.
+ *
+ * In fast mode, the tool creates test directories with the
+ * EXT3_TOPDIR_FL flag set (if supported) to spread the directory data
+ * around the block device instead of localizing it in a single place.
+ * The number of directories equals to the number of block groups in the
+ * filesystem (e.g. 65536 directories for 8TB ext3/ext4 filesystem) and
+ * then writes a single 1MB file in each directory. The tool then verifies
  * that the data in each file is correct.
  */
 
@@ -108,13 +113,13 @@ static int readoption;		    /* run test in read-only (verify) mode */
 static int writeoption;		    /* run test in write_only mode */
 char *testdir;			    /* name of device to be tested. */
 static unsigned full = 1;	    /* flag to full check */
-static int errno_local;		    /* local copy of errno */
-static unsigned long num_files;     /* Total number of files for read/write */
+static int error_count;		    /* number of IO errors hit during run */
+char filecount[PATH_MAX];	    /* file with total number of files written*/
+static unsigned long num_files;	    /* Total number of files for read/write */
 static loff_t file_size = 4*ONE_GB; /* Size of each file */
 static unsigned files_in_dir = 32;  /* number of files in each directioy */
 static unsigned num_dirs = 30000;   /* total number of directories */
 const int dirmode = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
-static int fd = -1;
 static int isatty_flag;
 static int perms =  S_IRWXU | S_IRGRP | S_IROTH;
 
@@ -124,9 +129,11 @@ static struct option const longopts[] =
 	{ "help", no_argument, 0, 'h' },
 	{ "offset", required_argument, 0, 'o' },
 	{ "long", no_argument, 0, 'l' },
+	{ "full", no_argument, 0, 'l' },
 	{ "partial", required_argument, 0, 'p' },
 	{ "quiet", required_argument, 0, 'q' },
 	{ "read", no_argument, 0, 'r' },
+	{ "filesize", no_argument, 0, 's' },
 	{ "timestamp", required_argument, 0, 't' },
 	{ "verbose", no_argument, 0, 'v' },
 	{ "write", no_argument, 0, 'w' },
@@ -139,23 +146,22 @@ static struct option const longopts[] =
  */
 void usage(int status)
 {
-	if (status != 0)
-	{
-	      printf("\nUsage: %s [OPTION]... <filesystem path> ...\n",
-			progname);
-	      printf("ext3 filesystem verification tool.\n"
-		  "\t-t {seconds} for --timestamp,  set test time"
-		  "(default=current time())\n"
-		  "\t-o {offset}  for --offset, directory starting offset"
-		  " from which tests should start\n"
-		  "\t-r run test in read (verify) mode\n"
-		  "\t-w run test in write (test-pattern) mode (default=r&w)\n"
-		  "\t-v for verbose\n"
-		  "\t-p for --partial, for partial check (1MB files)\n"
-		  "\t-l for --long, full check (4GB file with 4k blocks)\n"
-		  "\t-c for --chunksize, IO chunk size (default=1048576)\n"
-		  "\t-h display this help and exit\n"
-		  "\t--help display this help and exit\n");
+	if (status != 0) {
+		printf("\nUsage: %s [OPTION]... <filesystem path> ...\n",
+		       progname);
+		printf("Filesystem verification tool.\n"
+		       "\t-t {seconds}, --timestamp,  set test time"
+		       "(default=current time())\n"
+		       "\t-o {offset}, --offset, directory starting offset"
+		       " from which tests should start\n"
+		       "\t-r, --read, run in verify mode\n"
+		       "\t-w, --write, run in test-pattern mode, default=rw\n"
+		       "\t-v, --verbose\n"
+		       "\t-p, --partial, for partial check (1MB files)\n"
+		       "\t-l, --long, --full check (4GB file with 4k blocks)\n"
+		       "\t-c, --chunksize, IO chunk size in MB (default=1)\n"
+		       "\t-s, --filesize, file size in MB (default=4096)\n"
+		       "\t-h, --help, display this help and exit\n");
 	}
 	exit(status);
 }
@@ -165,11 +171,10 @@ void usage(int status)
  */
 static int open_file(const char *file, int flag)
 {
-	fd = open(file, flag, perms);
+	int fd = open(file, flag, perms);
 	if (fd < 0) {
 		fprintf(stderr, "\n%s: Open '%s' failed:%s\n",
 			progname, file, strerror(errno));
-		exit(3);
 	}
 	return (fd);
 }
@@ -178,9 +183,9 @@ static int open_file(const char *file, int flag)
  * Verify_chunk: Verifies test pattern in each 4kB (BLOCKSIZE) is correct.
  * Returns 0 if test offset and timestamp is correct otherwise 1.
  */
-int verify_chunk(char *chunk_buf, size_t chunksize,unsigned long long chunk_off,
-		 unsigned long long time_st, unsigned long long inode_st,
-		 char *file)
+int verify_chunk(char *chunk_buf, const size_t chunksize,
+		 unsigned long long chunk_off, const unsigned long long time_st,
+		 const unsigned long long inode_st, const char *file)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -192,7 +197,7 @@ int verify_chunk(char *chunk_buf, size_t chunksize,unsigned long long chunk_off,
 		if ((bd->bd_offset == chunk_off) && (bd->bd_time == time_st) &&
 		    (bd->bd_inode == inode_st))
 			continue;
-		fprintf(stderr,"\n%s: verify %s failed offset/timestamp/inode "
+		fprintf(stderr, "\n%s: verify %s failed offset/timestamp/inode "
 			"%llu/%llu/%llu: found %llu/%llu/%llu instead\n",
 			progname, file, chunk_off, time_st, inode_st,
 			bd->bd_offset, bd->bd_time, bd->bd_inode);
@@ -207,7 +212,7 @@ int verify_chunk(char *chunk_buf, size_t chunksize,unsigned long long chunk_off,
  * each 4kB(BLOCKSIZE) blocks in chunk_buf.
  */
 void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
-		time_t time_st, ino_t inode_st)
+		const time_t time_st, const ino_t inode_st)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -223,52 +228,85 @@ void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
 }
 
 /*
- * write_chunk: write the chunk_buf on the device. The number of write
+ * Write a chunk to disk, handling errors, interrupted writes, etc.
+ *
+ * If there is an IO error hit during the write, it is possible that
+ * this will just show up as a short write, and a subsequent write
+ * will return the actual error.  We want to continue in the face of
+ * minor media errors so that we can validate the whole device if
+ * possible, but if there are many errors we don't want to loop forever.
+ *
+ * The error count will be returned upon exit to ensure that the
+ * media errors are detected even if nobody is looking at the output.
+ *
+ * Returns 0 on success, or -ve errno on failure.
+ */
+int write_retry(int fd, const char *chunk_buf, size_t nrequested,
+		unsigned long long offset, const char *file)
+{
+	long nwritten;
+
+retry:
+	nwritten = write(fd, chunk_buf, nrequested);
+	if (nwritten < 0) {
+		if (errno != ENOSPC) {
+			fprintf(stderr, "\n%s: write %s@%llu+%zi failed: %s\n",
+				progname, file, offset, nrequested,
+				strerror(errno));
+			if (error_count++ < 100)
+				return 0;
+		}
+		return -errno;
+	}
+	if (nwritten < nrequested) {
+		fprintf(stderr, "\n%s: write %s@%llu+%zi short: %ld written\n",
+			progname, file, offset, nrequested, nwritten);
+		offset += nwritten;
+		nrequested -= nwritten;
+		goto retry;
+	}
+
+	return 0;
+}
+
+/*
+ * write_chunks: write the chunk_buf on the device. The number of write
  * operations are based on the parameters write_end, offset, and chunksize.
+ *
+ * Returns 0 on success, or -ve error number on failure.
  */
 int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
-		 char *chunk_buf, size_t chunksize, time_t time_st,
-		 ino_t inode_st, const char *file)
+		 char *chunk_buf, size_t chunksize, const time_t time_st,
+		 const ino_t inode_st, const char *file)
 {
 	unsigned long long stride;
 
 	stride = full ? chunksize : (ONE_GB - chunksize);
 	for (offset = offset & ~(chunksize - 1); offset < write_end;
 	     offset += stride) {
+		int ret;
+
 		if (lseek64(fd, offset, SEEK_SET) == -1) {
 			fprintf(stderr, "\n%s: lseek64(%s+%llu) failed: %s\n",
 				progname, file, offset, strerror(errno));
-			return 1;
+			return -errno;
 		}
 		if (offset + chunksize > write_end)
 			chunksize = write_end - offset;
 		if (!full && offset > chunksize) {
 			fill_chunk(chunk_buf, chunksize, offset, time_st,
-				    inode_st);
-			if (write(fd, chunk_buf, chunksize) < 0) {
-				if (errno == ENOSPC) {
-					errno_local = errno;
-					return 0;
-				}
-				fprintf(stderr,
-					"\n%s: write %s+%llu failed: %s\n",
-					progname, file, offset,strerror(errno));
-				return errno;
-			}
+				   inode_st);
+			ret = write_retry(fd, chunk_buf, chunksize,offset,file);
+			if (ret < 0)
+				return ret;
 			offset += chunksize;
 			if (offset + chunksize > write_end)
 				chunksize = write_end - offset;
 		}
 		fill_chunk(chunk_buf, chunksize, offset, time_st, inode_st);
-		if (write(fd, (char *) chunk_buf, chunksize) < 0) {
-			if (errno == ENOSPC) {
-				errno_local = errno;
-				return 0;
-			}
-			fprintf(stderr, "\n%s: write %s+%llu failed: %s\n",
-				progname, file, offset, strerror(errno));
-			return 1;
-		}
+		ret = write_retry(fd, chunk_buf, chunksize, offset, file);
+		if (ret < 0)
+			return ret;
 	}
 	return 0;
 }
@@ -278,14 +316,16 @@ int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
  * operations are based on the parameters read_end, offset, and chunksize.
  */
 int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
-		char *chunk_buf, size_t chunksize, time_t time_st,
-		ino_t inode_st, char *file)
+		char *chunk_buf, size_t chunksize, const time_t time_st,
+		const ino_t inode_st, const char *file)
 {
 	unsigned long long stride;
 
 	stride = full ? chunksize : (ONE_GB - chunksize);
 	for (offset = offset & ~(chunksize - 1); offset < read_end;
 	     offset += stride) {
+		ssize_t nread;
+
 		if (lseek64(fd, offset, SEEK_SET) == -1) {
 			fprintf(stderr, "\n%s: lseek64(%s+%llu) failed: %s\n",
 				progname, file, offset, strerror(errno));
@@ -293,28 +333,58 @@ int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
 		}
 		if (offset + chunksize > read_end)
 			chunksize = read_end - offset;
+
 		if (!full && offset > chunksize) {
-			if (read(fd, chunk_buf, chunksize) < 0) {
+			nread = read(fd, chunk_buf, chunksize);
+			if (nread < 0) {
+				fprintf(stderr,"\n%s: read %s@%llu+%zi failed: "
+					"%s\n", progname, file, offset,
+					chunksize, strerror(errno));
+				error_count++;
+				return 1;
+			}
+			if (nread < chunksize) {
+				fprintf(stderr, "\n%s: read %s@%llu+%zi short: "
+					"%zi read\n", progname, file, offset,
+					chunksize, nread);
+				error_count++;
+			}
+			if (verify_chunk(chunk_buf, nread, offset, time_st,
+					 inode_st, file) != 0) {
+				return 1;
+			}
+			offset += chunksize;
+
+			/* Need to reset position after read error */
+			if (nread < chunksize &&
+			    lseek64(fd, offset, SEEK_SET) == -1) {
 				fprintf(stderr,
-					"\n%s: read %s+%llu failed: %s\n",
+					"\n%s: lseek64(%s@%llu) failed: %s\n",
 					progname, file, offset,strerror(errno));
 				return 1;
 			}
-			if (verify_chunk(chunk_buf, chunksize, offset,
-					 time_st, inode_st, file) != 0)
-				return 1;
-			offset += chunksize;
 			if (offset + chunksize >= read_end)
 				chunksize = read_end - offset;
 		}
-		if (read(fd, chunk_buf, chunksize) < 0) {
-			fprintf(stderr, "\n%s: read %s+%llu failed: %s\n",
-				progname, file, offset, strerror(errno));
+		nread = read(fd, chunk_buf, chunksize);
+		if (nread < 0) {
+			fprintf(stderr, "\n%s: read %s@%llu+%zi failed: %s\n",
+				progname, file, offset, chunksize,
+				strerror(errno));
+			error_count++;
 			return 1;
 		}
-		if (verify_chunk(chunk_buf, chunksize, offset, time_st,
-				 inode_st, file) != 0)
+		if (nread < chunksize) {
+			fprintf(stderr, "\n%s: read %s@%llu+%zi short: "
+				"%zi read\n", progname, file, offset,
+				chunksize, nread);
+			error_count++;
+		}
+
+		if (verify_chunk(chunk_buf, nread, offset, time_st,
+				 inode_st, file) != 0) {
 			return 1;
+		}
 	}
 	return 0;
 }
@@ -369,6 +439,7 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 {
 	char tempfile[PATH_MAX];
 	char tempdir[PATH_MAX];
+	FILE *countfile;
 	struct stat64 file;
 	int file_num = 999999999;
 	ino_t inode_st = 0;
@@ -376,10 +447,25 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 #ifdef HAVE_EXT2FS_EXT2FS_H
 	if (!full && fsetflags(testdir, EXT2_TOPDIR_FL))
 		fprintf(stderr,
-			"\n%s: can't set TOPDIR_FL on %s: %s (ignoring)\n",
+			"\n%s: can't set TOPDIR_FL on %s: %s (ignoring)",
 			progname, testdir, strerror(errno));
 #endif
+	countfile = fopen(filecount, "w");
+	if (countfile == NULL) {
+		fprintf(stderr, "\n%s: creating %s failed :%s\n",
+			progname, filecount, strerror(errno));
+		return 5;
+	}
+	/* reserve space for the countfile */
+	if (fprintf(countfile, "%lu", num_files) < 1 ||
+	    fflush(countfile) != 0) {
+		fprintf(stderr, "\n%s: writing %s failed :%s\n",
+			progname, filecount, strerror(errno));
+		return 6;
+	}
 	for (; dir_num < num_dirs; num_files++, file_num++) {
+		int fd, ret;
+
 		if (file_num >= files_in_dir) {
 			if (dir_num == num_dirs - 1)
 				break;
@@ -397,30 +483,42 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 			}
 			dir_num++;
 		}
+
 		fd = open_file(new_file(tempfile, tempdir, file_num),
 			       O_WRONLY | O_CREAT | O_TRUNC | O_LARGEFILE);
-
-		if (fd >= 0 && fstat64(fd, &file) == 0) {
-			inode_st = file.st_ino;
+		if (fd >= 0) {
+			if (fstat64(fd, &file) == 0) {
+				inode_st = file.st_ino;
+			} else {
+				fprintf(stderr, "\n%s: write stat '%s': %s",
+					progname, tempfile, strerror(errno));
+				close(fd);
+				break;
+			}
 		} else {
-			fprintf(stderr, "\n%s: write stat64 to file %s: %s",
-				progname, tempfile, strerror(errno));
-			exit(1);
+			break;
 		}
 
 		if (verbose > 1)
 			show_filename("write", tempfile);
 
-		if (write_chunks(fd, 0, file_size, chunk_buf, chunksize,
-				 time_st, inode_st, tempfile)) {
-			close(fd);
-			return 1;
-		}
+		ret = write_chunks(fd, 0, file_size, chunk_buf, chunksize,
+				   time_st, inode_st, tempfile);
 		close(fd);
-
-		if (errno_local == ENOSPC)
+		if (ret < 0) {
+			if (ret != -ENOSPC)
+				return 1;
 			break;
+		}
+
+		fseek(countfile, 0, SEEK_SET);
+		if (fprintf(countfile, "%lu", num_files) < 1 ||
+		    fflush(countfile) != 0) {
+			fprintf(stderr, "\n%s: writing %s failed :%s\n",
+				progname, filecount, strerror(errno));
+		}
 	}
+	fclose(countfile);
 
 	if (verbose) {
 		verbose++;
@@ -447,6 +545,8 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 	ino_t inode_st = 0;
 
 	for (count = 0; count < num_files && dir_num < num_dirs; count++) {
+		int fd, ret;
+
 		if (file_num == 0) {
 			if (dir_num == num_dirs - 1)
 				break;
@@ -457,12 +557,17 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 
 		fd = open_file(new_file(tempfile, tempdir, file_num),
 			       O_RDONLY | O_LARGEFILE);
-		if (fd >= 0 && fstat64(fd, &file) == 0) {
-			inode_st = file.st_ino;
+		if (fd >= 0) {
+			if (fstat64(fd, &file) == 0) {
+				inode_st = file.st_ino;
+			} else {
+				fprintf(stderr, "\n%s: read stat '%s': %s\n",
+					progname, tempfile, strerror(errno));
+				close(fd);
+				return 1;
+			}
 		} else {
-			fprintf(stderr, "\n%s: read stat64 file '%s': %s\n",
-				progname, tempfile, strerror(errno));
-			return 1;
+			break;
 		}
 
 		if (verbose > 1)
@@ -470,12 +575,11 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 
 		if (count == num_files)
 			file_size = file.st_size;
-		if (read_chunks(fd, 0, file_size, chunk_buf, chunksize,
-				time_st, inode_st, tempfile)) {
-			close(fd);
-			return 1;
-		}
+		ret = read_chunks(fd, 0, file_size, chunk_buf, chunksize,
+				  time_st, inode_st, tempfile);
 		close(fd);
+		if (ret)
+			return 1;
 
 		if (++file_num >= files_in_dir)
 			file_num = 0;
@@ -496,19 +600,18 @@ int main(int argc, char **argv)
 	char *chunk_buf;		/* chunk buffer */
 	int error = 0;
 	FILE *countfile = NULL;
-	char filecount[PATH_MAX];
 	unsigned long dir_num = 0, dir_num_orig = 0;/* starting directory */
 	int c;
 
 	progname = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
-	while ((c = getopt_long(argc, argv, "t:rwvplo:h",
+	while ((c = getopt_long(argc, argv, "c:hlo:pqrs:t:vw",
 				      longopts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
-			chunksize = (strtoul(optarg, NULL, 0) * ONE_MB);
-			if (!chunksize) {
-				fprintf(stderr, "%s: Chunk size value should be"
-					"a multiple of 1MB\n", progname);
+			chunksize = strtoul(optarg, NULL, 0) * ONE_MB;
+			if (chunksize == 0) {
+				fprintf(stderr, "%s: bad chunk size '%s'\n",
+					optarg, progname);
 				return -1;
 			}
 			break;
@@ -519,6 +622,9 @@ int main(int argc, char **argv)
 			dir_num = strtoul(optarg, NULL, 0);
 			break;
 		case 'p':
+			file_size = ONE_MB;
+			chunksize = ONE_MB;
+			files_in_dir = 1;
 			full = 0;
 			break;
 		case 'q':
@@ -527,14 +633,22 @@ int main(int argc, char **argv)
 		case 'r':
 			readoption = 1;
 			break;
+		case 's':
+			file_size = strtoul(optarg, NULL, 0) * ONE_MB;
+			if (file_size == 0) {
+				fprintf(stderr, "%s: bad file size '%s'\n",
+					optarg, progname);
+				return -1;
+			}
+			break;
 		case 't':
 			time_st = (time_t)strtoul(optarg, NULL, 0);
 			break;
-		case 'w':
-			writeoption = 1;
-			break;
 		case 'v':
 			verbose++;
+			break;
+		case 'w':
+			writeoption = 1;
 			break;
 
 		case 'h':
@@ -603,11 +717,11 @@ int main(int argc, char **argv)
 			       fs->super->s_blocks_per_group);
 		ext2fs_close(fs);
 #else
-                goto guess;
+		goto guess;
 #endif
 		if (0) { /* ugh */
 			struct statfs64 statbuf;
-		guess:
+guess:
 			if (statfs64(testdir, &statbuf) == 0) {
 				num_dirs = (long long)statbuf.f_blocks *
 					statbuf.f_bsize / (128ULL << 20);
@@ -622,10 +736,6 @@ int main(int argc, char **argv)
 					printf("dirs: %u\n", num_dirs);
 			}
 		}
-
-		file_size = ONE_MB;
-		chunksize = ONE_MB;
-		files_in_dir = 1;
 	}
 	chunk_buf = (char *)calloc(chunksize, 1);
 	if (chunk_buf == NULL) {
@@ -647,22 +757,14 @@ int main(int argc, char **argv)
 			error = 3;
 			goto out;
 		}
-		countfile = fopen(filecount, "w");
-		if (countfile != NULL) {
-			if (fprintf(countfile, "%lu", num_files) < 1 ||
-			    fflush(countfile) != 0) {
-				fprintf(stderr, "\n%s: writing %s failed :%s\n",
-					progname, filecount, strerror(errno));
-			}
-			fclose(countfile);
-		}
 		dir_num = dir_num_orig;
 	}
 	if (readoption) {
 		if (!writeoption) {
 			countfile = fopen(filecount, "r");
 			if (countfile == NULL ||
-			    fscanf(countfile, "%lu", &num_files) != 1) {
+			    fscanf(countfile, "%lu", &num_files) != 1 ||
+			    num_files == 0) {
 				fprintf(stderr, "\n%s: reading %s failed :%s\n",
 					progname, filecount, strerror(errno));
 				num_files = num_dirs * files_in_dir;
@@ -679,7 +781,7 @@ int main(int argc, char **argv)
 			goto out;
 		}
 	}
-	error = 0;
+	error = error_count;
 out:
 	free(chunk_buf);
 	return error;
