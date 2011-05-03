@@ -528,7 +528,12 @@ download_ofed() {
         return 0
     fi
 
-    local location="http://www.openfabrics.org/downloads/OFED/ofed-${OFED_VERSION}/"
+    local OFED_BASE_VERSION=$OFED_VERSION
+    if [[ $OFED_VERSION = *.*.*.* ]]; then
+        OFED_BASE_VERSION=${OFED_VERSION%.*}
+    fi
+
+    local location="http://www.openfabrics.org/downloads/OFED/ofed-${OFED_BASE_VERSION}/"
 
     if [[ $OFED_VERSION = daily-* ]]; then
         local Mmv daily
