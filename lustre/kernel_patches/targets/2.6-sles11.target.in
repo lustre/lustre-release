@@ -1,10 +1,10 @@
-lnxmaj="2.6.27"
-lnxmin=".23"
-lnxrel="0.1"
+lnxmaj="2.6.32"
+lnxmin=".36"
+lnxrel="0.5"
 # use this when there is an "RPM fix" which means that the name of the
 # (source) RPM has been updated but the version of the kernel inside the
 # RPM is not also updated
-#rpmfix=".1"
+rpmfix=".2"
 
 # this is the delimeter that goes before the "smp" at the end of the version
 # defaults to empty
@@ -16,7 +16,7 @@ VERSION=$lnxmaj
 EXTRA_VERSION="${lnxmin#.}-${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@
 
-OFED_VERSION=1.5.1
+OFED_VERSION=inkernel
 
 BASE_ARCHS="i686 ppc x86_64 ia64 ppc64"
 BIGMEM_ARCHS=""

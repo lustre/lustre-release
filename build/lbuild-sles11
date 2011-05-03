@@ -75,4 +75,28 @@ unpack_linux_devel_rpm-sles11() {
         fatal 1 "Unpack error for $kernelrpm"
     fi
 
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-default-devel in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+}
+
+find_linux_rpm-sles11() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+
+    # what, oh what, do we do for sles11?
+    # if anyone knows how we get an arbitrary (kernel-source and
+    # kernel-default-base in this case) from the Suse update mechanism,
+    # please feel free to fix this
+
+    fatal 1 "I don't know how to get packages for SLES11"
+
+    return 0
+
 }
