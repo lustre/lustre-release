@@ -2071,15 +2071,26 @@ run_test 36f "utime on file racing with OST BRW write =========="
 
 test_36g() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	local fmd_max_age
+	local fmd_before
+	local fmd_after
 
 	mkdir -p $DIR/$tdir
-	export FMD_MAX_AGE=`do_facet ost1 lctl get_param -n obdfilter.*.client_cache_seconds 2> /dev/null | head -n 1`
-	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
+	fmd_max_age=$(do_facet ost1 \
+		"lctl get_param -n obdfilter.*.client_cache_seconds 2> /dev/null | \
+		head -n 1")
+
+	fmd_before=$(do_facet ost1 \
+		"awk '/ll_fmd_cache/ {print \\\$2}' /proc/slabinfo")
 	touch $DIR/$tdir/$tfile
-	sleep $((FMD_MAX_AGE + 12))
-	FMD_AFTER="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
-	[ "$FMD_AFTER" -gt "$FMD_BEFORE" ] && \
-		echo "AFTER : $FMD_AFTER > BEFORE $FMD_BEFORE" && \
+	sleep $((fmd_max_age + 12))
+	fmd_after=$(do_facet ost1 \
+		"awk '/ll_fmd_cache/ {print \\\$2}' /proc/slabinfo")
+
+	echo "fmd_before: $fmd_before"
+	echo "fmd_after: $fmd_after"
+	[ "$fmd_after" -gt "$fmd_before" ] && \
+		echo "AFTER: $fmd_after > BEFORE: $fmd_before" && \
 		error "fmd didn't expire after ping" || true
 }
 run_test 36g "filter mod data cache expiry ====================="
