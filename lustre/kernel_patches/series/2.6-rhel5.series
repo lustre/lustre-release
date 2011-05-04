@@ -4,7 +4,6 @@ jbd-jcberr-2.6.18-vanilla.patch
 export_symbols-2.6.12.patch
 dev_read_only-2.6.18-vanilla.patch
 export-2.6.18-vanilla.patch
-export-show_task-2.6.18-vanilla.patch
 sd_iostats-2.6-rhel5.patch
 export_symbol_numa-2.6-fc5.patch
 blkdev_tunables-2.6-rhel5.patch
