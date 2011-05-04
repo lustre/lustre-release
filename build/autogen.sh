@@ -109,21 +109,31 @@ check_version autoconf autoconf "2.57"
 export ACLOCAL="aclocal-$AMVER"
 export AUTOMAKE="automake-$AMVER"
 
-echo "Running $ACLOCAL $ACLOCAL_FLAGS..."
-$ACLOCAL $ACLOCAL_FLAGS || exit 1
-echo "Running autoheader..."
-autoheader || exit 1
-echo "Running $AUTOMAKE..."
-$AUTOMAKE -a -c $AMOPT || exit 1
-echo "Running autoconf..."
-autoconf || exit 1
+run_cmd()
+{
+    cmd="$@"
+    echo -n "Running $cmd... "
+    eval $cmd
+    res=$?
+    if [ $res -ne 0 ]; then
+        echo " failed: $res"
+        echo "Aborting"
+        exit 1
+    fi
+    echo
+}
+
+run_cmd "$ACLOCAL $ACLOCAL_FLAGS"
+run_cmd "autoheader"
+run_cmd "$AUTOMAKE -a -c $AMOPT"
+run_cmd autoconf
 
 # Run autogen.sh in these directories
 for dir in $CONFIGURE_DIRS; do
     if [ -d $dir ] ; then
         pushd $dir >/dev/null
         echo "Running autogen for $dir..."
-        sh autogen.sh || exit $?
+        run_cmd "sh autogen.sh"
         popd >/dev/null
     fi
 done
