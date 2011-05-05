@@ -41,6 +41,9 @@
 #%%global _use_internal_dependency_generator 0
 
 %define is_client %(bash -c "if [[ %{lustre_name} = *-client ]]; then echo -n '1'; else echo -n '0'; fi")
+# for those uses that don't want the -smp/-bigsmp (or the .arch) on the end
+# of %kversion
+%define krequires %(bash -c "echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
 
 %define sles10 %(bash -c "if [ "%sles_version" = "10" ]; then echo -n '1'; else echo -n '0'; fi")
 
@@ -75,7 +78,7 @@ Requires: kernel-%{flavor}
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 # for RHEL we need to require the specific kernel still since weak-modules
 # support on RH is, well, weak, to be punny about it
-Requires: kernel = %{kversion}
+Requires: kernel = %{krequires}
 %endif
 %endif
 %if ! %{is_client}
