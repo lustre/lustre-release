@@ -9,7 +9,7 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 16260 19742 
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 16260 19742
 ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b  $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
@@ -2229,7 +2229,7 @@ test_39e() {
 	local mtime1=`stat -c %Y $DIR1/$tfile`
 
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
-	
+
 	for (( i=0; i < 2; i++ )) ; do
 		local mtime2=`stat -c %Y $DIR1/$tfile`
 		[ $mtime2 = $TEST_39_MTIME ] || \
@@ -2267,7 +2267,7 @@ test_39g() {
 
 	sleep 2
 	chmod o+r $DIR1/$tfile
- 
+
 	for (( i=0; i < 2; i++ )) ; do
 		local mtime2=`stat -c %Y $DIR1/$tfile`
 		[ "$mtime1" = "$mtime2" ] || \
@@ -2362,7 +2362,7 @@ test_39k() {
 
 	kill -USR1 $multipid
 	wait $multipid || error "multiop close failed"
-		
+
 	for (( i=0; i < 2; i++ )) ; do
 		local mtime2=`stat -c %Y $DIR1/$tfile`
 
@@ -2442,8 +2442,6 @@ test_39m() {
 		cancel_lru_locks osc
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
-
-	
 }
 run_test 39m "test atime and mtime before 1970"
 
@@ -3188,7 +3186,7 @@ test_54e() {
 }
 run_test 54e "console/tty device works in lustre ======================"
 
-#The test_55 used to be iopen test and it was removed by bz#24037. 
+#The test_55 used to be iopen test and it was removed by bz#24037.
 #run_test 55 "check iopen_connect_dentry() ======================"
 
 test_56a() {	# was test_56
@@ -3440,7 +3438,7 @@ run_test 56q "check lfs find -gid and ! -gid ==============================="
 test_56r() {
 	setup_56 $NUMFILES $NUMDIRS
 	TDIR=$DIR/${tdir}g
-	
+
 	EXPECTED=12
 	NUMS=`$LFIND -size 0 -t f $TDIR | wc -l`
 	[ $NUMS -eq $EXPECTED ] || \
@@ -3854,7 +3852,7 @@ cleanup_68() {
 	if [ ! -z "$LLITELOOPLOAD" ]; then
 		rmmod llite_lloop
 		unset LLITELOOPLOAD
-	fi 
+	fi
 	rm -f $DIR/f68*
 }
 
@@ -7368,15 +7366,15 @@ test_180a() {
         local rmmod_local=0
 
         if ! module_loaded obdecho; then
-            load_module obdecho/obdecho 
-            rmmod_local=1           
+            load_module obdecho/obdecho
+            rmmod_local=1
         fi
 
         local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
         local host=$(awk '/current_connection:/ {print $2}' /proc/fs/lustre/osc/$osc/import)
         local target=$(awk '/target:/ {print $2}' /proc/fs/lustre/osc/$osc/import)
         target=${target%_UUID}
-        
+
         [[ -n $target ]]  && { setup_obdecho_osc $host $target || rc=1; } || rc=1
         [ $rc -eq 0 ] && { obdecho_create_test ${target}_osc client || rc=2; }
         [[ -n $target ]] && cleanup_obdecho_osc $target
@@ -7564,8 +7562,8 @@ run_test 201b "Remove all targets from a pool =========================="
 test_201c() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-	
-	sleep 2                        
+
+	sleep 2
     # striping on an empty/nonexistant pool should fall back to "pool of everything"
 	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
 	# setstripe on an empty pool should fail
@@ -7834,4 +7832,4 @@ check_and_cleanup_lustre
 if [ "$I_MOUNTED" != "yes" ]; then
 	lctl set_param debug="$OLDDEBUG" 2> /dev/null || true
 fi
-exit_status 
+exit_status
