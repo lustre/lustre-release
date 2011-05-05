@@ -1344,9 +1344,9 @@ struct obd_ops {
         int (*o_punch)(struct obd_export *exp, struct obd_info *oinfo,
                        struct obd_trans_info *oti,
                        struct ptlrpc_request_set *rqset);
-        int (*o_sync)(struct obd_export *exp, struct obdo *oa,
-                      struct lov_stripe_md *ea, obd_size start, obd_size end,
-                      void *capa);
+        int (*o_sync)(struct obd_export *exp, struct obd_info *oinfo,
+                      obd_size start, obd_size end,
+                      struct ptlrpc_request_set *set);
         int (*o_migrate)(struct lustre_handle *conn, struct lov_stripe_md *dst,
                          struct lov_stripe_md *src, obd_size start,
                          obd_size end, struct obd_trans_info *oti);

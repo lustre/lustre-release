@@ -1275,9 +1275,30 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         RETURN(rc);
 }
 
-static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
-                           struct lov_stripe_md *ea, obd_size start,
-                           obd_size end, void *capa)
+static inline int obd_sync_rqset(struct obd_export *exp, struct obd_info *oinfo,
+                                 obd_size start, obd_size end)
+{
+        struct ptlrpc_request_set *set = NULL;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, sync, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, sync);
+
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        rc = OBP(exp->exp_obd, sync)(exp, oinfo, start, end, set);
+        if (rc == 0)
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
+        RETURN(rc);
+}
+
+static inline int obd_sync(struct obd_export *exp, struct obd_info *oinfo,
+                           obd_size start, obd_size end,
+                           struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
@@ -1285,7 +1306,7 @@ static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
         OBD_CHECK_DT_OP(exp->exp_obd, sync, -EOPNOTSUPP);
         EXP_COUNTER_INCREMENT(exp, sync);
 
-        rc = OBP(exp->exp_obd, sync)(exp, oa, ea, start, end, capa);
+        rc = OBP(exp->exp_obd, sync)(exp, oinfo, start, end, set);
         RETURN(rc);
 }
 

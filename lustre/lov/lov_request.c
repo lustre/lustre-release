@@ -1413,8 +1413,18 @@ int lov_fini_sync_set(struct lov_request_set *set)
         RETURN(rc);
 }
 
+/* The callback for osc_sync that finilizes a request info when a
+ * response is recieved. */
+static int cb_sync_update(void *cookie, int rc)
+{
+        struct obd_info *oinfo = cookie;
+        struct lov_request *lovreq;
+
+        lovreq = container_of(oinfo, struct lov_request, rq_oi);
+        return lov_update_common_set(lovreq->rq_rqset, lovreq, rc);
+}
+
 int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
-                      struct obdo *src_oa, struct lov_stripe_md *lsm,
                       obd_off start, obd_off end,
                       struct lov_request_set **reqset)
 {
@@ -1423,18 +1433,16 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
         int rc = 0, i;
         ENTRY;
 
-        OBD_ALLOC(set, sizeof(*set));
+        OBD_ALLOC_PTR(set);
         if (set == NULL)
                 RETURN(-ENOMEM);
         lov_init_set(set);
 
         set->set_exp = exp;
         set->set_oi = oinfo;
-        set->set_oi->oi_md = lsm;
-        set->set_oi->oi_oa = src_oa;
 
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++) {
+                struct lov_oinfo *loi = oinfo->oi_md->lsm_oinfo[i];
                 struct lov_request *req;
                 obd_off rs, re;
 
@@ -1444,10 +1452,11 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                         continue;
                 }
 
-                if (!lov_stripe_intersects(lsm, i, start, end, &rs, &re))
+                if (!lov_stripe_intersects(oinfo->oi_md, i, start, end, &rs,
+                                           &re))
                         continue;
 
-                OBD_ALLOC(req, sizeof(*req));
+                OBD_ALLOC_PTR(req);
                 if (req == NULL)
                         GOTO(out_set, rc = -ENOMEM);
                 req->rq_stripe = i;
@@ -1458,7 +1467,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                         OBD_FREE(req, sizeof(*req));
                         GOTO(out_set, rc = -ENOMEM);
                 }
-                memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
+                *req->rq_oi.oi_oa = *oinfo->oi_oa;
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
                 req->rq_oi.oi_oa->o_seq = loi->loi_seq;
                 req->rq_oi.oi_oa->o_stripe_idx = i;
@@ -1466,6 +1475,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_policy.l_extent.start = rs;
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
+                req->rq_oi.oi_cb_up = cb_sync_update;
 
                 lov_set_add_req(req, set);
         }

@@ -227,9 +227,8 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
                        struct lov_request_set **reqset);
 int lov_fini_punch_set(struct lov_request_set *set);
 int lov_prep_sync_set(struct obd_export *exp, struct obd_info *obd_info,
-                      struct obdo *src_oa,
-                      struct lov_stripe_md *lsm, obd_off start,
-                      obd_off end, struct lov_request_set **reqset);
+                      obd_off start, obd_off end,
+                      struct lov_request_set **reqset);
 int lov_fini_sync_set(struct lov_request_set *set);
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct ldlm_enqueue_info *einfo,

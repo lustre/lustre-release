@@ -4240,9 +4240,9 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(rc);
 }
 
-static int filter_sync(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *lsm, obd_off start, obd_off end,
-                       void *capa)
+static int filter_sync(struct obd_export *exp, struct obd_info *oinfo,
+                       obd_off start, obd_off end,
+                       struct ptlrpc_request_set *set)
 {
         struct lvfs_run_ctxt saved;
         struct obd_device_target *obt;
@@ -4250,22 +4250,23 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         int rc, rc2;
         ENTRY;
 
-        rc = filter_auth_capa(exp, NULL, oa->o_seq,
-                              (struct lustre_capa *)capa, CAPA_OPC_OSS_WRITE);
+        rc = filter_auth_capa(exp, NULL, oinfo->oi_oa->o_seq,
+                              (struct lustre_capa *)oinfo->oi_capa,
+                              CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
 
         obt = &exp->exp_obd->u.obt;
 
         /* An objid of zero is taken to mean "sync whole filesystem" */
-        if (!oa || !(oa->o_valid & OBD_MD_FLID)) {
+        if (!oinfo->oi_oa || !(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
                 rc = fsfilt_sync(exp->exp_obd, obt->obt_sb);
                 /* Flush any remaining cancel messages out to the target */
                 filter_sync_llogs(exp->exp_obd, exp);
                 RETURN(rc);
         }
 
-        dentry = filter_oa2dentry(exp->exp_obd, &oa->o_oi);
+        dentry = filter_oa2dentry(exp->exp_obd, &oinfo->oi_oa->o_oi);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
@@ -4287,8 +4288,9 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         }
         UNLOCK_INODE_MUTEX(dentry->d_inode);
 
-        oa->o_valid = OBD_MD_FLID;
-        obdo_from_inode(oa, dentry->d_inode, NULL, FILTER_VALID_FLAGS);
+        oinfo->oi_oa->o_valid = OBD_MD_FLID;
+        obdo_from_inode(oinfo->oi_oa, dentry->d_inode, NULL,
+                        FILTER_VALID_FLAGS);
 
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 

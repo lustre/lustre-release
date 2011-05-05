@@ -72,7 +72,7 @@ CFS_MODULE_PARM(oss_num_create_threads, "i", int, 0444,
 /**
  * Do not return server-side uid/gid to remote client
  */
-static void ost_drop_id(struct obd_export *exp, struct  obdo *oa)
+static void ost_drop_id(struct obd_export *exp, struct obdo *oa)
 {
         if (exp_connect_rmtclient(exp)) {
                 oa->o_uid = -1;
@@ -249,8 +249,9 @@ static void ost_lock_put(struct obd_export *exp,
 static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
-        struct obd_info oinfo = { { { 0 } } };
+        struct obd_info *oinfo;
         struct lustre_handle lh = { 0 };
+        struct lustre_capa *capa = NULL;
         int rc;
         ENTRY;
 
@@ -266,24 +267,31 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        repbody->oa = body->oa;
-
         rc = ost_lock_get(exp, &body->oa, 0, OBD_OBJECT_EOF, &lh, LCK_PR, 0);
         if (rc)
                 RETURN(rc);
 
-        oinfo.oi_oa = &repbody->oa;
-        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
-                oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
-                                                       &RMF_CAPA1);
-                if (oinfo.oi_capa == NULL) {
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
+                if (capa == NULL) {
                         CERROR("Missing capability for OST GETATTR");
                         RETURN (-EFAULT);
                 }
         }
 
-        req->rq_status = obd_getattr(exp, &oinfo);
+        OBD_ALLOC_PTR(oinfo);
+        if (!oinfo)
+                RETURN(-ENOMEM);
+        oinfo->oi_oa = &body->oa;
+        oinfo->oi_capa = capa;
+
+        req->rq_status = obd_getattr(exp, oinfo);
+
+        OBD_FREE_PTR(oinfo);
+
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+        repbody->oa = body->oa;
+
         ost_lock_put(exp, &lh, LCK_PR);
 
         ost_drop_id(exp, &repbody->oa);
@@ -331,8 +339,8 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                 RETURN(rc);
 
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        oti->oti_logcookies = &repbody->oa.o_lcookie;
+        repbody->oa = body->oa;
+        oti->oti_logcookies = &body->oa.o_lcookie;
 
         req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
@@ -342,7 +350,6 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
-        struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
         int rc, flags = 0;
         struct lustre_handle lh = {0,};
@@ -359,11 +366,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
-        oinfo.oi_oa = &body->oa;
-        oinfo.oi_policy.l_extent.start = oinfo.oi_oa->o_size;
-        oinfo.oi_policy.l_extent.end = oinfo.oi_oa->o_blocks;
-
-        if ((oinfo.oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+        if ((body->oa.o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EPROTO);
 
@@ -373,34 +376,48 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 
         /* standard truncate optimization: if file body is completely
          * destroyed, don't send data back to the server. */
-        if (oinfo.oi_oa->o_size == 0)
+        if (body->oa.o_size == 0)
                 flags |= LDLM_AST_DISCARD_DATA;
 
-        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        rc = ost_lock_get(exp, oinfo.oi_oa, oinfo.oi_oa->o_size,
-                          oinfo.oi_oa->o_blocks, &lh, LCK_PW, flags);
+        rc = ost_lock_get(exp, &body->oa, body->oa.o_size, body->oa.o_blocks,
+                          &lh, LCK_PW, flags);
         if (rc == 0) {
-                if (oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
-                    oinfo.oi_oa->o_flags == OBD_FL_SRVLOCK)
+                struct obd_info *oinfo;
+                struct lustre_capa *capa = NULL;
+
+                if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+                    body->oa.o_flags == OBD_FL_SRVLOCK)
                         /*
                          * If OBD_FL_SRVLOCK is the only bit set in
                          * ->o_flags, clear OBD_MD_FLFLAGS to avoid falling
                          * through filter_setattr() to filter_iocontrol().
                          */
-                        oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
+                        body->oa.o_valid &= ~OBD_MD_FLFLAGS;
 
-                if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
-                        oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
-                                                               &RMF_CAPA1);
-                        if (oinfo.oi_capa == NULL) {
+                if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                        capa = req_capsule_client_get(&req->rq_pill,
+                                                      &RMF_CAPA1);
+                        if (capa == NULL) {
                                 CERROR("Missing capability for OST PUNCH");
                                 RETURN (-EFAULT);
                         }
                 }
-                req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
+
+                OBD_ALLOC_PTR(oinfo);
+                if (!oinfo)
+                        RETURN(-ENOMEM);
+                oinfo->oi_oa = &body->oa;
+                oinfo->oi_policy.l_extent.start = oinfo->oi_oa->o_size;
+                oinfo->oi_policy.l_extent.end = oinfo->oi_oa->o_blocks;
+                oinfo->oi_capa = capa;
+
+                req->rq_status = obd_punch(exp, oinfo, oti, NULL);
+                OBD_FREE_PTR(oinfo);
                 ost_lock_put(exp, &lh, LCK_PW);
         }
-        repbody->oa = *oinfo.oi_oa;
+
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+        repbody->oa = body->oa;
         ost_drop_id(exp, &repbody->oa);
         RETURN(rc);
 }
@@ -408,6 +425,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
+        struct obd_info *oinfo;
         struct lustre_capa *capa = NULL;
         int rc;
         ENTRY;
@@ -432,10 +450,18 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
+        OBD_ALLOC_PTR(oinfo);
+        if (!oinfo)
+                RETURN(-ENOMEM);
+
+        oinfo->oi_oa = &body->oa;
+        oinfo->oi_capa = capa;
+        req->rq_status = obd_sync(exp, oinfo, body->oa.o_size,
+                                  body->oa.o_blocks, NULL);
+        OBD_FREE_PTR(oinfo);
+
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_sync(exp, &repbody->oa, NULL, repbody->oa.o_size,
-                                  repbody->oa.o_blocks, capa);
+        repbody->oa = body->oa;
         ost_drop_id(exp, &repbody->oa);
         RETURN(0);
 }
@@ -444,8 +470,9 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
+        struct obd_info *oinfo;
+        struct lustre_capa *capa = NULL;
         int rc;
-        struct obd_info oinfo = { { { 0 } } };
         ENTRY;
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
@@ -460,19 +487,26 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
-        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        repbody->oa = body->oa;
-
-        oinfo.oi_oa = &repbody->oa;
-        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
-                oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
-                                                       &RMF_CAPA1);
-                if (oinfo.oi_capa == NULL) {
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
+                if (capa == NULL) {
                         CERROR("Missing capability for OST SETATTR");
                         RETURN (-EFAULT);
                 }
         }
-        req->rq_status = obd_setattr(exp, &oinfo, oti);
+
+        OBD_ALLOC_PTR(oinfo);
+        if (!oinfo)
+                RETURN(-ENOMEM);
+        oinfo->oi_oa = &body->oa;
+        oinfo->oi_capa = capa;
+
+        req->rq_status = obd_setattr(exp, oinfo, oti);
+
+        OBD_FREE_PTR(oinfo);
+
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+        repbody->oa = body->oa;
         ost_drop_id(exp, &repbody->oa);
         RETURN(0);
 }
@@ -1744,24 +1778,35 @@ int ost_blocking_ast(struct ldlm_lock *lock,
             (sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
              (sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
               lock->l_flags & LDLM_FL_CBPENDING))) {
+                struct obd_info *oinfo;
                 struct obdo *oa;
                 int rc;
 
+                OBD_ALLOC_PTR(oinfo);
+                if (!oinfo)
+                        RETURN(-ENOMEM);
                 OBDO_ALLOC(oa);
+                if (!oa) {
+                        OBD_FREE_PTR(oa);
+                        RETURN(-ENOMEM);
+                }
                 oa->o_id = lock->l_resource->lr_name.name[0];
                 oa->o_seq = lock->l_resource->lr_name.name[1];
                 oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
+                oinfo->oi_oa = oa;
 
-                rc = obd_sync(lock->l_export, oa, NULL,
+                rc = obd_sync(lock->l_export, oinfo,
                               lock->l_policy_data.l_extent.start,
                               lock->l_policy_data.l_extent.end, NULL);
                 if (rc)
                         CERROR("Error %d syncing data on lock cancel\n", rc);
 
                 OBDO_FREE(oa);
+                OBD_FREE_PTR(oinfo);
         }
 
-        return ldlm_server_blocking_ast(lock, desc, data, flag);
+        rc = ldlm_server_blocking_ast(lock, desc, data, flag);
+        RETURN(rc);
 }
 
 static int ost_filter_recovery_request(struct ptlrpc_request *req,

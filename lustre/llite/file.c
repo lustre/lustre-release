@@ -1952,27 +1952,32 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 ptlrpc_req_finished(req);
 
         if (data && lsm) {
-                struct obdo *oa;
+                struct obd_info *oinfo;
 
-                OBDO_ALLOC(oa);
-                if (!oa)
+                OBD_ALLOC_PTR(oinfo);
+                if (!oinfo)
                         RETURN(rc ? rc : -ENOMEM);
-
-                oa->o_id = lsm->lsm_object_id;
-                oa->o_seq = lsm->lsm_object_seq;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-                obdo_from_inode(oa, inode, &ll_i2info(inode)->lli_fid,
+                OBDO_ALLOC(oinfo->oi_oa);
+                if (!oinfo->oi_oa) {
+                        OBD_FREE_PTR(oinfo);
+                        RETURN(rc ? rc : -ENOMEM);
+                }
+                oinfo->oi_oa->o_id = lsm->lsm_object_id;
+                oinfo->oi_oa->o_seq = lsm->lsm_object_seq;
+                oinfo->oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+                obdo_from_inode(oinfo->oi_oa, inode, &ll_i2info(inode)->lli_fid,
                                 OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                 OBD_MD_FLGROUP);
-
-                oc = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
-                err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,
-                               0, OBD_OBJECT_EOF, oc);
-                capa_put(oc);
+                oinfo->oi_md = lsm;
+                oinfo->oi_capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
+                err = obd_sync_rqset(ll_i2sbi(inode)->ll_dt_exp, oinfo, 0,
+                                     OBD_OBJECT_EOF);
+                capa_put(oinfo->oi_capa);
                 if (!rc)
                         rc = err;
-                OBDO_FREE(oa);
+                OBDO_FREE(oinfo->oi_oa);
+                OBD_FREE_PTR(oinfo);
                 lli->lli_write_rc = err < 0 ? : 0;
         }
 

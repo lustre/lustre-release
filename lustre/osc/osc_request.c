@@ -564,16 +564,40 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
                               oinfo->oi_cb_up, oinfo, rqset);
 }
 
-static int osc_sync(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *md, obd_size start, obd_size end,
-                    void *capa)
+static int osc_sync_interpret(const struct lu_env *env,
+                              struct ptlrpc_request *req,
+                              void *arg, int rc)
+{
+        struct osc_async_args *aa = arg;
+        struct ost_body *body;
+        ENTRY;
+
+        if (rc)
+                GOTO(out, rc);
+
+        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL) {
+                CERROR ("can't unpack ost_body\n");
+                GOTO(out, rc = -EPROTO);
+        }
+
+        *aa->aa_oi->oi_oa = body->oa;
+out:
+        rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
+        RETURN(rc);
+}
+
+static int osc_sync(struct obd_export *exp, struct obd_info *oinfo,
+                    obd_size start, obd_size end,
+                    struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct ost_body       *body;
+        struct osc_async_args *aa;
         int                    rc;
         ENTRY;
 
-        if (!oa) {
+        if (!oinfo->oi_oa) {
                 CDEBUG(D_INFO, "oa NULL\n");
                 RETURN(-EINVAL);
         }
@@ -582,7 +606,7 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        osc_set_capa_size(req, &RMF_CAPA1, capa);
+        osc_set_capa_size(req, &RMF_CAPA1, oinfo->oi_capa);
         rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_SYNC);
         if (rc) {
                 ptlrpc_request_free(req);
@@ -592,28 +616,21 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         /* overload the size and blocks fields in the oa with start/end */
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
-        lustre_set_wire_obdo(&body->oa, oa);
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
         body->oa.o_size = start;
         body->oa.o_blocks = end;
         body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-        osc_pack_capa(req, body, capa);
+        osc_pack_capa(req, body, oinfo->oi_capa);
 
         ptlrpc_request_set_replen(req);
+        req->rq_interpret_reply = osc_sync_interpret;
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out, rc);
+        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+        aa = ptlrpc_req_async_args(req);
+        aa->aa_oi = oinfo;
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        if (body == NULL)
-                GOTO(out, rc = -EPROTO);
-
-        lustre_get_wire_obdo(oa, &body->oa);
-
-        EXIT;
- out:
-        ptlrpc_req_finished(req);
-        return rc;
+        ptlrpc_set_add_req(set, req);
+        RETURN (0);
 }
 
 /* Find and cancel locally locks matched by @mode in the resource found by
