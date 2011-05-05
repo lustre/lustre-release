@@ -2150,9 +2150,11 @@ err_mntput:
 static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
         struct lprocfs_static_vars lvars;
+        cfs_proc_dir_entry_t *entry;
         unsigned long addr;
         struct page *page;
         int rc;
+        ENTRY;
 
         CLASSERT(offsetof(struct obd_device, u.obt) ==
                  offsetof(struct obd_device, u.filter.fo_obt));
@@ -2160,69 +2162,89 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1) || !LUSTRE_CFG_BUFLEN(lcfg, 2))
                 RETURN(-EINVAL);
 
-        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
-        OBD_PAGE_ALLOC(page, CFS_ALLOC_STD);
-        if (!page)
-                RETURN(-ENOMEM);
-        addr = (unsigned long)cfs_page_address(page);
-        clear_page((void *)addr);
-
         /* lprocfs must be setup before the filter so state can be safely added
          * to /proc incrementally as the filter is setup */
         lprocfs_filter_init_vars(&lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
-            lprocfs_alloc_obd_stats(obd, LPROC_FILTER_LAST) == 0) {
-                /* Init obdfilter private stats here */
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_READ_BYTES,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "read_bytes", "bytes");
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "write_bytes", "bytes");
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_GET_PAGE,
-                                     LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
-                                     "get_page", "usec");
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_NO_PAGE,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "get_page_failures", "num");
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_access", "pages");
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_HIT,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_hit", "pages");
-                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_MISS,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_miss", "pages");
-
-                lproc_filter_attach_seqstat(obd);
-                obd->obd_proc_exports_entry = lprocfs_register("exports",
-                                                        obd->obd_proc_entry,
-                                                        NULL, NULL);
-                if (IS_ERR(obd->obd_proc_exports_entry)) {
-                        rc = PTR_ERR(obd->obd_proc_exports_entry);
-                        CERROR("error %d setting up lprocfs for %s\n",
-                               rc, "exports");
-                        obd->obd_proc_exports_entry = NULL;
-                }
+        rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+        if (rc) {
+                CERROR("%s: lprocfs_obd_setup failed: %d.\n",
+                       obd->obd_name, rc);
+                RETURN(rc);
         }
-        if (obd->obd_proc_exports_entry)
-                lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
+
+        rc = lprocfs_alloc_obd_stats(obd, LPROC_FILTER_LAST);
+        if (rc) {
+                CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
+                       obd->obd_name, rc);
+                GOTO(obd_cleanup, rc);
+        }
+
+        /* Init obdfilter private stats here */
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_READ_BYTES,
+                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
+                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_GET_PAGE,
+                             LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
+                             "get_page", "usec");
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_NO_PAGE,
+                             LPROCFS_CNTR_AVGMINMAX, "get_page_failures", "num");
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS,
+                             LPROCFS_CNTR_AVGMINMAX, "cache_access", "pages");
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_HIT,
+                             LPROCFS_CNTR_AVGMINMAX, "cache_hit", "pages");
+        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_MISS,
+                             LPROCFS_CNTR_AVGMINMAX, "cache_miss", "pages");
+
+        rc = lproc_filter_attach_seqstat(obd);
+        if (rc) {
+                CERROR("%s: create seqstat failed: %d.\n", obd->obd_name, rc);
+                GOTO(free_obd_stats, rc);
+        }
+
+        entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
+        if (IS_ERR(entry)) {
+                rc = PTR_ERR(entry);
+                CERROR("%s: error %d setting up lprocfs for %s\n",
+                       obd->obd_name, rc, "exports");
+                GOTO(free_obd_stats, rc);
+        }
+        obd->obd_proc_exports_entry = entry;
+
+        entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
                                    lprocfs_nid_stats_clear_read,
                                    lprocfs_nid_stats_clear_write, obd, NULL);
+        if (IS_ERR(entry)) {
+                rc = PTR_ERR(entry);
+                CERROR("%s: add proc entry 'clear' failed: %d.\n",
+                       obd->obd_name, rc);
+                GOTO(free_obd_stats, rc);
+        }
 
+        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
+        OBD_PAGE_ALLOC(page, CFS_ALLOC_STD);
+        if (!page)
+                GOTO(remove_entry_clear, rc = -ENOMEM);
+        addr = (unsigned long)cfs_page_address(page);
+        clear_page((void *)addr);
         memcpy((void *)addr, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
         rc = filter_common_setup(obd, lcfg, (void *)addr);
         OBD_PAGE_FREE(page);
-
         if (rc) {
-                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
-                lprocfs_free_per_client_stats(obd);
-                lprocfs_free_obd_stats(obd);
-                lprocfs_obd_cleanup(obd);
+                CERROR("%s: filter_common_setup failed: %d.\n",
+                       obd->obd_name, rc);
+                GOTO(remove_entry_clear, rc);
         }
 
+        RETURN(0);
+
+remove_entry_clear:
+        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+free_obd_stats:
+        lprocfs_free_obd_stats(obd);
+obd_cleanup:
+        lprocfs_obd_cleanup(obd);
         return rc;
 }
 
