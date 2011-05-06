@@ -642,10 +642,11 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, &policy, &flags,
                                       NULL, 0, NULL, lockh, 0);
                 mdc_exit_request(&obddev->u.cli);
+                if (rc < 0)
+                        CERROR("ldlm_cli_enqueue error: %d\n", rc);
         }
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         if (rc < 0) {
-                CERROR("ldlm_cli_enqueue: %d\n", rc);
                 mdc_clear_replay_flag(req, rc);
                 ptlrpc_req_finished(req);
                 RETURN(rc);

@@ -964,6 +964,13 @@ int mdc_enter_request(struct client_obd *cli)
                 spin_unlock(&cli->cl_loi_list_lock);
                 rc = l_wait_event(mcw.mcw_waitq, mdc_req_avail(cli, &mcw),
                                   &lwi);
+                if (rc) {
+                        spin_lock(&cli->cl_loi_list_lock);
+                        if (list_empty(&mcw.mcw_entry))
+                                cli->cl_r_in_flight--;
+                        list_del_init(&mcw.mcw_entry);
+                        spin_unlock(&cli->cl_loi_list_lock);
+                }
         } else {
                 cli->cl_r_in_flight++;
                 spin_unlock(&cli->cl_loi_list_lock);
