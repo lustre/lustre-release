@@ -179,7 +179,7 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 
 
         if (imp->imp_invalid) {
-                CERROR("not connecting OSC %s; administratively "
+                CDEBUG(D_CONFIG, "not connecting OSC %s; administratively "
                        "disabled\n", obd_uuid2str(tgt_uuid));
                 RETURN(0);
         }

@@ -113,11 +113,13 @@ static int __init init_lustre_lite(void)
         struct timeval tv;
         lnet_process_id_t lnet_id;
 
+#ifndef CRAY_XT3
         /* print an address of _any_ initialized kernel symbol from this
          * module, to allow debugging with gdb that doesn't support data
          * symbols from modules.*/
         CDEBUG(D_CONSOLE, "Lustre client module (%p).\n",
                &lustre_super_operations);
+#endif
 
         rc = ll_init_inodecache();
         if (rc)
