@@ -363,9 +363,9 @@ int write_file(char *path, char *buf)
 /* This is to tune the kernel for good SCSI performance.
  * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
  * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
-int set_blockdev_tunables(char *source)
+int set_blockdev_tunables(char *source, int fan_out)
 {
-        glob_t glob_info;
+        glob_t glob_info = { 0 };
         struct stat stat_buf;
         char *chk_major, *chk_minor;
         char *savept, *dev;
@@ -422,6 +422,7 @@ int set_blockdev_tunables(char *source)
                 if (verbose)
                         fprintf(stderr, "warning: failed to read entries under "
                                 "/sys/block\n");
+                globfree(&glob_info);
                 return rc;
         }
 
@@ -494,10 +495,47 @@ set_params:
                 snprintf(real_path, sizeof(real_path), "%s/%s", path,
                          MAX_SECTORS_KB_PATH);
                 rc = write_file(real_path, buf);
-                if (rc && verbose)
-                        fprintf(stderr, "warning: writing to %s: %s\n",
-                                real_path, strerror(errno));
+                if (rc) {
+                        if (verbose)
+                                fprintf(stderr, "warning: writing to %s: %s\n",
+                                        real_path, strerror(errno));
+                        return rc;
+                }
         }
+
+        if (fan_out) {
+                char *slave = NULL;
+                glob_info.gl_pathc = 0;
+                glob_info.gl_offs = 0;
+                /* if device is multipath device, tune its slave devices */
+                snprintf(real_path, sizeof(real_path), "%s/slaves/*", path);
+                rc = glob(real_path, GLOB_NOSORT, NULL, &glob_info);
+
+                for (i = 0; rc == 0 && i < glob_info.gl_pathc; i++){
+                        slave = basename(glob_info.gl_pathv[i]);
+                        snprintf(real_path, sizeof(real_path), "/dev/%s", slave);
+                        rc = set_blockdev_tunables(real_path, 0);
+                }
+
+                if (rc == GLOB_NOMATCH) {
+                        /* no slave device is not an error */
+                        rc = 0;
+                } else if (rc && verbose) {
+                        if (slave == NULL) {
+                                fprintf(stderr, "warning: %s, failed to read"
+                                        " entries under %s/slaves\n",
+                                        strerror(errno), path);
+                        } else {
+                                fprintf(stderr, "unable to set tunables for"
+                                        " slave device %s (slave would be"
+                                        " unable to handle IO request from"
+                                        " master %s)\n",
+                                        real_path, source);
+                        }
+                }
+                globfree(&glob_info);
+        }
+
         return rc;
 }
 
@@ -670,7 +708,7 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (!strstr(usource, ":/") && set_blockdev_tunables(source)) {
+        if (!strstr(usource, ":/") && set_blockdev_tunables(source, 1)) {
                 if (verbose)
                         fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)\n",
