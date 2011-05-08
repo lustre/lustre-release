@@ -15,7 +15,7 @@ insanity
 sanity-quota
 sanity-sec
 sanity-gss
-lustre_rsync-test
+lustre-rsync-test
 ost-pools
 mmp
 obdfilter-survey
