@@ -1,19 +1,22 @@
 TBD  Oracle, Inc.
        * version 2.1.0
        * Server support for kernels:
-         2.6.18-194.17.1.el5 (RHEL 5)
-         2.6.18-194.17.1.0.1.el5 (OEL 5)
+         2.6.18-238.9.1.el5 (RHEL5)
+         2.6.32-71.18.2.el6 (RHEL6)
        * Client support for unpatched kernels:
-	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-         2.6.18-194.17.1.el5 (RHEL 5),
-         2.6.18-194.17.1.0.1.el5 (OEL 5)
-         2.6.16.60-0.69.1 (SLES 10),
-         2.6.27.19-5 (SLES11)
-	 2.6.29.4-167.fc11 (FC11)
+         (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+         2.6.18-238.9.1.el5 (RHEL5)
+         2.6.32-71.18.2.el6 (RHEL6)
+         2.6.29.4-167.fc11  (FC11)
+         2.6.16.60-0.69.1 (SLES10)
+         2.6.27.19-5      (SLES11)
        * Recommended e2fsprogs version: 1.41.10-sun2
-       * NFS export disabled when stack size < 8192. Since the NFSv4 export of 
+       * NFS export disabled when stack size < 8192. Since the NFSv4 export of
          Lustre filesystem with 4K stack may cause a stack overflow. For more
          information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Description: Update RHEL5.6 kernel to 2.6.18-238.9.1.el5
 
 Severity   : normal
 Frequency  : only with SLES10

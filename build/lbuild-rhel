@@ -94,7 +94,9 @@ prepare_and_build_srpm() {
     fi
 
     # XXX - need to figure this kabichk crap out -- it fails the build
-    rpmbuildopt="$rpmbuildopt --without kabichk"
+    if ! $USE_KABI; then
+        rpmbuildopt="$rpmbuildopt --without kabichk"
+    fi
 
     # get any release specific build options
     rpmbuildopt="$rpmbuildopt $(get_rpmbuildopts)"

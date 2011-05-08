@@ -18,9 +18,9 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/ext4.h linux-2.6.27.21-0.1_2//fs/ext4/
 +#define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(dir, &(dentry)->d_name, res_dir)
 +extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +				  struct inode *inode);
- extern unsigned int ext4_rec_len_from_disk(__le16 dlen, unsigned blocksize);
- extern __le16 ext4_rec_len_to_disk(unsigned len, unsigned blocksize);
  extern int ext4_orphan_add(handle_t *, struct inode *);
+ extern int ext4_orphan_del(handle_t *, struct inode *);
+ extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
 diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4/namei.c
 --- linux-2.6.27.21-0.1_1//fs/ext4/namei.c	2009-08-24 15:32:00.000000000 +0530
 +++ linux-2.6.27.21-0.1_2//fs/ext4/namei.c	2009-08-24 15:43:56.000000000 +0530
@@ -149,7 +149,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4
 -retry:
 -	handle = ext4_journal_start(dir, EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
 -					EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3 +
--					2*EXT4_QUOTA_INIT_BLOCKS(dir->i_sb));
+-					EXT4_MAXQUOTAS_INIT_BLOCKS(dir->i_sb));
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
  

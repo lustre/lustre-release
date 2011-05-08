@@ -74,8 +74,8 @@ Index: linux-stage/fs/ext4/super.c
 +	}
 +#endif
 +	if (!*bh) {
-+		ext4_warning(sb, __func__,
-+			     "Error while reading MMP block %lu", mmp_block);
++		__ext4_warning(sb, __func__,
++			       "Error while reading MMP block %lu", mmp_block);
 +		return -EIO;
 +	}
 +
@@ -92,11 +92,11 @@ Index: linux-stage/fs/ext4/super.c
 +static void dump_mmp_msg(struct super_block *sb, struct mmp_struct *mmp,
 +			 const char *function, const char *msg)
 +{
-+	ext4_warning(sb, function, "%s", msg);
-+	ext4_warning(sb, function, "MMP failure info: last update time: %llu, "
-+		     "last update node: %s, last update device: %s\n",
-+		     (long long unsigned int)le64_to_cpu(mmp->mmp_time),
-+		     mmp->mmp_nodename, mmp->mmp_bdevname);
++	__ext4_warning(sb, function, "%s", msg);
++	__ext4_warning(sb, function, "MMP failure info: last update time: %llu, "
++		       "last update node: %s, last update device: %s\n",
++		       (long long unsigned int)le64_to_cpu(mmp->mmp_time),
++		       mmp->mmp_nodename, mmp->mmp_bdevname);
 +}
 +
 +/*
@@ -148,23 +148,23 @@ Index: linux-stage/fs/ext4/super.c
 +		 * (s_mmp_update_interval * 60) seconds.
 +		 */
 +		if (retval && (failed_writes % 60) == 0) {
-+			ext4_error(sb, __func__,
-+				   "Error writing to MMP block");
++			__ext4_error(sb, __func__,
++				     "Error writing to MMP block");
 +			failed_writes++;
 +		}
 +
 +		if (!(le32_to_cpu(es->s_feature_incompat) &
 +		    EXT4_FEATURE_INCOMPAT_MMP)) {
-+			ext4_warning(sb, __func__, "kmmpd being stopped "
-+				     "since MMP feature has been disabled.");
++			__ext4_warning(sb, __func__, "kmmpd being stopped "
++				       "since MMP feature has been disabled.");
 +			EXT4_SB(sb)->s_mmp_tsk = NULL;
 +			goto failed;
 +		}
 +
 +		if (sb->s_flags & MS_RDONLY) {
-+			ext4_warning(sb, __func__, "kmmpd being stopped "
-+				     "since filesystem has been remounted as "
-+				     "readonly.");
++			__ext4_warning(sb, __func__, "kmmpd being stopped "
++				       "since filesystem has been remounted as "
++				       "readonly.");
 +			EXT4_SB(sb)->s_mmp_tsk = NULL;
 +			goto failed;
 +		}
@@ -186,8 +186,8 @@ Index: linux-stage/fs/ext4/super.c
 +
 +			retval = read_mmp_block(sb, &bh_check, mmp_block);
 +			if (retval) {
-+				ext4_error(sb, __func__, "error reading MMP"
-+					   "data: %d", retval);
++				__ext4_error(sb, __func__, "error reading MMP"
++					     "data: %d", retval);
 +				EXT4_SB(sb)->s_mmp_tsk = NULL;
 +				goto failed;
 +			}
@@ -200,7 +200,7 @@ Index: linux-stage/fs/ext4/super.c
 +					     "Error while updating MMP info. "
 +					     "The filesystem seems to have "
 +					     "been multiply mounted.");
-+				ext4_error(sb, __func__, "abort");
++				__ext4_error(sb, __func__, "abort");
 +				goto failed;
 +			}
 +			put_bh(bh_check);
@@ -261,8 +261,8 @@ Index: linux-stage/fs/ext4/super.c
 +
 +	if (mmp_block < le32_to_cpu(es->s_first_data_block) ||
 +	    mmp_block >= ext4_blocks_count(es)) {
-+		ext4_warning(sb, __func__,
-+			     "Invalid MMP block in superblock");
++		__ext4_warning(sb, __func__,
++			       "Invalid MMP block in superblock");
 +		goto failed;
 +	}
 +
@@ -297,12 +297,12 @@ Index: linux-stage/fs/ext4/super.c
 +
 +	/* Print MMP interval if more than 20 secs. */
 +	if (wait_time > EXT4_MMP_MIN_CHECK_INTERVAL * 4)
-+		ext4_warning(sb, __func__, "MMP interval %u higher than "
-+			     "expected, please wait.\n", wait_time * 2);
++		__ext4_warning(sb, __func__, "MMP interval %u higher than "
++			       "expected, please wait.\n", wait_time * 2);
 +
 +	if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
-+		ext4_warning(sb, __func__, "MMP startup interrupted, failing "
-+			     "mount\n");
++		__ext4_warning(sb, __func__, "MMP startup interrupted, failing "
++			       "mount\n");
 +		goto failed;
 +	}
 +
@@ -330,8 +330,8 @@ Index: linux-stage/fs/ext4/super.c
 +	 * wait for MMP interval and check mmp_seq.
 +	 */
 +	if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
-+		ext4_warning(sb, __func__, "MMP startup interrupted, failing "
-+			     "mount\n");
++		__ext4_warning(sb, __func__, "MMP startup interrupted, failing "
++			       "mount\n");
 +		goto failed;
 +	}
 +
@@ -347,7 +347,7 @@ Index: linux-stage/fs/ext4/super.c
 +
 +	mmpd_data = kmalloc(sizeof(struct mmpd_data), GFP_KERNEL);
 +	if (!mmpd_data) {
-+		ext4_warning(sb, KERN_ERR, "not enough memory for mmpd_data");
++		__ext4_warning(sb, KERN_ERR, "not enough memory for mmpd_data");
 +		goto failed;
 +	}
 +	mmpd_data->sb = sb;
@@ -361,8 +361,8 @@ Index: linux-stage/fs/ext4/super.c
 +						      mmp->mmp_bdevname));
 +	if (IS_ERR(EXT4_SB(sb)->s_mmp_tsk)) {
 +		EXT4_SB(sb)->s_mmp_tsk = NULL;
-+		ext4_warning(sb, __func__, "Unable to create kmmpd thread "
-+			     "for %s.", sb->s_id);
++		__ext4_warning(sb, __func__, "Unable to create kmmpd thread "
++			       "for %s.", sb->s_id);
 +		goto failed;
 +	}
 +

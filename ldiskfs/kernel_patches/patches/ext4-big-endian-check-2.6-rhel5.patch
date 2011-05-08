@@ -51,6 +51,6 @@ Index: linux-2.6.18-128.1.6/fs/ext4/super.c
 +	}
 +#endif
 +
- 	bgl_lock_init(&sbi->s_blockgroup_lock);
+ 	bgl_lock_init(sbi->s_blockgroup_lock);
  
  	sbi->s_last_alloc_group = -1;

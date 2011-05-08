@@ -41,7 +41,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 +        /* "free < pa->pa_free" means we maybe double alloc the same blocks,
 +         * otherwise maybe leave some free blocks unavailable, no need to BUG.*/
 +        if ((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) {
-+                ext4_error(sb, __FUNCTION__, "pa free mismatch: [pa %p] "
++                ext4_error(sb,"pa free mismatch: [pa %p] "
 +                              "[phy %lu] [logic %lu] [len %u] [free %u] "
 +                              "[error %u] [inode %lu] [freed %u]", pa,
 +                              (unsigned long)pa->pa_pstart,
@@ -61,9 +61,9 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	return err;
 @@ -4800,6 +4813,24 @@
- 		*errp = -EDQUOT;
- 		goto out3;
- 	}
+		}
+	}
+ 
 +
 +        if (dev_check_rdonly(sb->s_bdev)) {
 +                struct block_device *bdev = sb->s_bdev;
@@ -82,9 +82,9 @@ Index: linux-stage/fs/ext4/mballoc.c
 +		       ar->len, ar->flags);
 +        }
 +
- 	inquota = ar->len;
- 
- 	if (EXT4_I(ar->inode)->i_delalloc_reserved_flag)
+	ac = kmem_cache_alloc(ext4_ac_cachep, GFP_NOFS);
+	if (!ac) {
+		ar->len = 0;
 @@ -4850,6 +4881,25 @@
  			ac->ac_b_ex.fe_len = 0;
  			ar->len = 0;
@@ -96,7 +96,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 +                               	 * been updated or not when fail case. So can
 +                                 * not revert pa_free back, just mark pa_error*/
 +                                pa->pa_error++;
-+                                ext4_error(sb, __FUNCTION__,
++                                ext4_error(sb,
 +                                            "Updating bitmap error: [err %d] "
 +                                            "[pa %p] [phy %lu] [logic %lu] "
 +                                            "[len %u] [free %u] [error %u] "

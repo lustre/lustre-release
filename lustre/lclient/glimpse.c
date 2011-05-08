@@ -174,8 +174,8 @@ int cl_glimpse_size(struct inode *inode)
          * cl_glimpse_size(), which doesn't make sense: glimpse locks are not
          * blocking anyway.
          */
-        struct lu_env          *env;
-        struct cl_io           *io;
+        struct lu_env          *env = NULL;
+        struct cl_io           *io  = NULL;
         int                     result;
         int                     refcheck;
 
@@ -200,8 +200,8 @@ int cl_glimpse_size(struct inode *inode)
 
 int cl_local_size(struct inode *inode)
 {
-        struct lu_env           *env;
-        struct cl_io            *io;
+        struct lu_env           *env = NULL;
+        struct cl_io            *io  = NULL;
         struct ccc_thread_info  *cti;
         struct cl_object        *clob;
         struct cl_lock_descr    *descr;

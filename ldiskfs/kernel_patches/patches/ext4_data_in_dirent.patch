@@ -169,9 +169,9 @@ Index: b/fs/ext4/ext4.h
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 -				  struct inode *inode);
 +			  struct inode *inode, const void *, const void *);
- extern unsigned int ext4_rec_len_from_disk(__le16 dlen, unsigned blocksize);
- extern __le16 ext4_rec_len_to_disk(unsigned len, unsigned blocksize);
  extern int ext4_orphan_add(handle_t *, struct inode *);
+ extern int ext4_orphan_del(handle_t *, struct inode *);
+ extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
 @@ -1343,6 +1386,28 @@ static inline int ext4_is_group_locked(s
 
  	return spin_is_locked(ext4_group_lock_ptr(sb, group));
@@ -286,7 +286,7 @@ Index: b/fs/ext4/namei.c
 -		at = entries = ((struct dx_node *) bh->b_data)->entries;
 +		entries = ((struct dx_node *) bh->b_data)->entries;
  		if (dx_get_limit(entries) != dx_node_limit (dir)) {
- 			ext4_warning(dir->i_sb, __func__,
+ 			ext4_warning(dir->i_sb,
 -				     "dx entry: limit != node limit");
 +                                    "block %u(%lu): limit %u != node limit %u",
 +                                    dx_get_block(at), (long)bh->b_blocknr,
@@ -355,9 +355,9 @@ Index: b/fs/ext4/namei.c
  		de = (struct ext4_dir_entry_2 *)bh->b_data;
  		top = bh->b_data + dir->i_sb->s_blocksize - reclen;
 @@ -1364,7 +1380,7 @@ static int add_dirent_to_buf(handle_t *h
- 				brelse (bh);
- 				return -EEXIST;
- 			}
+				return -EIO;
+			if (ext4_match(namelen, name, de))
+				return -EEXIST;
 -			nlen = EXT4_DIR_REC_LEN(de->name_len);
 +			nlen = EXT4_DIR_REC_LEN(de);
 			rlen = ext4_rec_len_from_disk(de->rec_len, blocksize);

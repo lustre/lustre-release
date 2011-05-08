@@ -35,7 +35,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
 -		grp->bb_free = free;
 +		struct ext4_group_desc *gdp;
 +		gdp = ext4_get_group_desc (sb, group, NULL);
-+		ext4_error(sb, __FUNCTION__,
++		ext4_error(sb,
 +			"group %lu: %u blocks in bitmap, %u in bb, "
 +			"%u in gd, %lu pa's\n", (long unsigned int)group,
 +			free, grp->bb_free, ext4_free_blks_count(sb, gdp),
@@ -183,7 +183,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
 +	}
 +
 +	if (free != ext4_free_blks_count(sb, gdp)) {
-+		ext4_error(sb, __FUNCTION__, "on-disk bitmap for group %d"
++		ext4_error(sb, "on-disk bitmap for group %d"
 +			"corrupted: %u blocks free in bitmap, %u - in gd\n",
 +			group, free, ext4_free_blks_count(sb, gdp));
 +		return -EIO;
@@ -240,7 +240,7 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
  		count++;
  	}
 +	if (count + skip != grp->bb_prealloc_nr) {
-+		ext4_error(sb, __FUNCTION__, "lost preallocations: "
++		ext4_error(sb, "lost preallocations: "
 +			   "count %d, bb_prealloc_nr %lu, skip %d\n",
 +			   count, grp->bb_prealloc_nr, skip);
 +		return -EIO;
@@ -293,8 +293,8 @@ diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/
  	}
 @@ -4107,7 +4183,7 @@ repeat:
  		if (err) {
- 			ext4_error(sb, __func__, "Error in loading buddy "
- 					"information for %u", group);
+			ext4_error(sb, "Error loading buddy information for %u",
+					group);
 -			continue;
 +			return;
  		}

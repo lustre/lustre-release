@@ -7,7 +7,7 @@ Index: linux-stage/fs/ext4/super.c
  	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS))
  		set_opt(sbi->s_mount_opt, EXTENTS);
 -	else
--		ext4_warning(sb, __func__,
+-		ext4_warning(sb,
 -			"extents feature not enabled on this filesystem, "
 -			"use tune2fs.");
  
