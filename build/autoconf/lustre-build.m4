@@ -61,7 +61,7 @@ BUILDID=""
 if git branch >/dev/null 2>&1; then
 	ffw=0
 	hash=""
-	ver=$(git describe --match [[0-9v]]\* --tags)
+	ver=$(git describe --match v[[0-9]]_*_[[0-9]] --tags)
 	if [[[ $ver = *-*-* ]]]; then
 		hash=${ver##*-}
 		ffw=${ver#*-}
@@ -84,7 +84,10 @@ if git branch >/dev/null 2>&1; then
 	if [[[ $ver = v*_*_*_0 ]]]; then
 		ver=${ver%_0}
 	fi
-
+	if [[[ $ver = v*_*_* ]]]; then
+		ver=${ver#v}
+		ver=${ver//_/.}
+	fi
 
 	# only do this test for lustre (not ldiskfs)
 	if test "$PACKAGE" = "lustre" -a "$ver" != "$VERSION"; then
