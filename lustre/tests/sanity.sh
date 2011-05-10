@@ -6596,7 +6596,9 @@ test_170() {
         local expected_good=$((good_line1 + good_line2*2))
 
         rm -f $TMP/${tfile}*
-        if [ $bad_line -ne $bad_line_new ]; then
+	# LU-231, short malformed line may not be counted into bad lines
+        if [ $bad_line -ne $bad_line_new ] &&
+		   [ $bad_line -ne $((bad_line_new - 1)) ]; then
                 error "expected $bad_line bad lines, but got $bad_line_new"
                 return 1
         fi
