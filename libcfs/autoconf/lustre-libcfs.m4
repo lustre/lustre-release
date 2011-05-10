@@ -676,7 +676,7 @@ AC_DEFUN([LC_SHRINKER_WANT_SHRINK_PTR],
 LB_LINUX_TRY_COMPILE([
         #include <linux/mm.h>
 ],[
-        struct shrinker tmp;
+        struct shrinker tmp = {0};
         tmp.shrink(NULL, 0, 0);
 ],[
         AC_MSG_RESULT(yes)
