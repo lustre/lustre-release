@@ -7385,6 +7385,9 @@ setup_obdecho_osc () {
         local ost_nid=$1
         local obdfilter_name=$2
         echo "Creating new osc for $obdfilter_name on $ost_nid"
+        # make sure we can find loopback nid
+        $LCTL add_uuid $ost_nid $ost_nid >/dev/null 2>&1
+
         [ $rc -eq 0 ] && { $LCTL attach osc ${obdfilter_name}_osc     \
                            ${obdfilter_name}_osc_UUID || rc=2; }
         [ $rc -eq 0 ] && { $LCTL --device ${obdfilter_name}_osc setup \
