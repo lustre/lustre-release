@@ -141,16 +141,16 @@ init_test_env() {
     fi
     export HOSTNAME=${HOSTNAME:-`hostname`}
     if ! echo $PATH | grep -q $LUSTRE/utils; then
-        export PATH=$PATH:$LUSTRE/utils
+        export PATH=$LUSTRE/utils:$PATH
     fi
     if ! echo $PATH | grep -q $LUSTRE/utils/gss; then
-        export PATH=$PATH:$LUSTRE/utils/gss
+        export PATH=$LUSTRE/utils/gss:$PATH
     fi
     if ! echo $PATH | grep -q $LUSTRE/tests; then
         export PATH=$LUSTRE/tests:$PATH
     fi
     if ! echo $PATH | grep -q $LUSTRE/../lustre-iokit/sgpdd-survey; then
-        export PATH=$PATH:$LUSTRE/../lustre-iokit/sgpdd-survey
+        export PATH=$LUSTRE/../lustre-iokit/sgpdd-survey:$PATH
     fi
     export LST=${LST:-"$LUSTRE/../lnet/utils/lst"}
     [ ! -f "$LST" ] && export LST=$(which lst)
@@ -165,7 +165,7 @@ init_test_env() {
         export PATH=$LUSTRE/tests/racer:$PATH:
     fi
     if ! echo $PATH | grep -q $LUSTRE/tests/mpi; then
-        export PATH=$PATH:$LUSTRE/tests/mpi
+        export PATH=$LUSTRE/tests/mpi:$PATH
     fi
     export RSYNC_RSH=${RSYNC_RSH:-rsh}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
@@ -380,7 +380,10 @@ load_modules_local() {
     $LCTL modules > $OGDB/ogdb-$HOSTNAME
 
     # 'mount' doesn't look in $PATH, just sbin
-    [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
+    local bindmount=$(mount | grep "/sbin/mount.lustre")
+    if [ -f $LUSTRE/utils/mount.lustre ] && [ "x$bindmount" == "x" ]; then
+	    mount --bind $LUSTRE/utils/mount.lustre /sbin/mount.lustre || true
+    fi
 }
 
 load_modules () {
@@ -421,6 +424,8 @@ unload_modules() {
             do_rpc_nodes $list check_mem_leak
         fi
     fi
+
+    umount /sbin/mount.lustre
 
     check_mem_leak || return 254
 
