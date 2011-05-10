@@ -435,12 +435,10 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                 if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
                         return -ENODATA;
 
-                if (size == 0) {
-                        /* size == 0 just ask for buffer size */
-                        rc = ll_get_max_mdsize(ll_i2sbi(inode), &lmmsize);
-                        if (rc == 0)
-                                rc = lmmsize;
-                        GOTO(out, rc);
+                if (size == 0 && S_ISDIR(inode->i_mode)) {
+                        /* XXX directory EA is fix for now, optimize to save
+                         * RPC transfer */
+                        GOTO(out, rc = sizeof(struct lov_user_md));
                 }
 
                 if (!ll_i2info(inode)->lli_smd) {
@@ -460,6 +458,15 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 
                 if (rc < 0)
                        GOTO(out, rc);
+
+                if (size == 0) {
+                        /* used to call ll_get_max_mdsize() forward to get
+                         * the maximum buffer size, while some apps (such as
+                         * rsync 3.0.x) care much about the exact xattr value
+                         * size */
+                        rc = lmmsize;
+                        GOTO(out, rc);
+                }
 
                 if (size < lmmsize) {
                         CERROR("server bug: replied size %d > %d for %s (%s)\n",
