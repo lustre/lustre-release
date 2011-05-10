@@ -6615,9 +6615,12 @@ test_171() { # bug20592
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
         $LCTL set_param fail_loc=0x50e
         $LCTL set_param fail_val=3000
-        multiop_bg_pause $DIR/$tfile Os || true
+        multiop_bg_pause $DIR/$tfile O_s || true
+        local MULTIPID=$!
+        kill -USR1 $MULTIPID
         # cause log dump
         sleep 3
+        wait $MULTIPID
         if dmesg | grep "recursive fault"; then
                 error "caught a recursive fault"
         fi
