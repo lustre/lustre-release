@@ -1033,7 +1033,7 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io = &ccc_env_info(env)->cti_io;
+        io = ccc_env_thread_io(env);
         io->ci_obj = cl_i2info(inode)->lli_clob;
 
         io->u.ci_setattr.sa_attr.lvb_atime = LTIME_S(attr->ia_atime);

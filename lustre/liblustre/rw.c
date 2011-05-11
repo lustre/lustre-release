@@ -329,8 +329,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io = &ccc_env_info(env)->cti_io;
-
+        io = ccc_env_thread_io(env);
         if (cl_io_rw_init(env, io, session->lis_cmd == OBD_BRW_WRITE?CIT_WRITE:
                                                                       CIT_READ,
                           pos, len) == 0) {
@@ -425,8 +424,6 @@ void llu_io_init(struct cl_io *io, struct inode *inode, int write)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
 
-        memset(io, 0, sizeof *io);
-
         io->u.ci_rw.crw_nonblock = lli->lli_open_flags & O_NONBLOCK;
         if (write)
                 io->u.ci_wr.wr_append = lli->lli_open_flags & O_APPEND;
@@ -454,7 +451,7 @@ int llu_iop_read(struct inode *ino,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io = &ccc_env_info(env)->cti_io;
+        io = ccc_env_thread_io(env);
         llu_io_init(io, ino, 0);
 
         ret = llu_file_rwx(ino, ioctx, 1);
@@ -478,7 +475,7 @@ int llu_iop_write(struct inode *ino,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io = &ccc_env_info(env)->cti_io;
+        io = ccc_env_thread_io(env);
         llu_io_init(io, ino, 1);
 
         ret = llu_file_rwx(ino, ioctx, 0);

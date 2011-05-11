@@ -141,7 +141,6 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 static int cl_io_get(struct inode *inode, struct lu_env **envout,
                      struct cl_io **ioout, int *refcheck)
 {
-        struct ccc_thread_info *info;
         struct lu_env          *env;
         struct cl_io           *io;
         struct cl_inode_info   *lli = cl_i2info(inode);
@@ -151,8 +150,7 @@ static int cl_io_get(struct inode *inode, struct lu_env **envout,
         if (S_ISREG(cl_inode_mode(inode))) {
                 env = cl_env_get(refcheck);
                 if (!IS_ERR(env)) {
-                        info = ccc_env_info(env);
-                        io = &info->cti_io;
+                        io = ccc_env_thread_io(env);
                         io->ci_obj = clob;
                         *envout = env;
                         *ioout  = io;

@@ -159,7 +159,7 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
                  * so cl_io has to be created here.
                  */
 
-                io = &ccc_env_info(env)->cti_io;
+                io = ccc_env_thread_io(env);
                 vio = vvp_env_io(env);
                 ll_io_init(io, file, 1);
 
@@ -1142,11 +1142,11 @@ int ll_writepage(struct page *vmpage, struct writeback_control *unused)
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io    = &ccc_env_info(env)->cti_io;
         queue = &vvp_env_info(env)->vti_queue;
         clob  = ll_i2info(inode)->lli_clob;
         LASSERT(clob != NULL);
 
+        io = ccc_env_thread_io(env);
         io->ci_obj = clob;
         result = cl_io_init(env, io, CIT_MISC, clob);
         if (result == 0) {

@@ -135,6 +135,13 @@ static inline struct cl_attr *ccc_env_thread_attr(const struct lu_env *env)
         return attr;
 }
 
+static inline struct cl_io *ccc_env_thread_io(const struct lu_env *env)
+{
+        struct cl_io *io = &ccc_env_info(env)->cti_io;
+        memset(io, 0, sizeof(*io));
+        return io;
+}
+
 struct ccc_session {
         struct ccc_io cs_ios;
 };
@@ -378,6 +385,7 @@ int cl_ocd_update(struct obd_device *host,
 
 struct ccc_grouplock {
         struct lu_env   *cg_env;
+        struct cl_io    *cg_io;
         struct cl_lock  *cg_lock;
         unsigned long    cg_gid;
 };

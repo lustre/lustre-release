@@ -808,7 +808,6 @@ void ll_io_init(struct cl_io *io, const struct file *file, int write)
 {
         struct inode *inode = file->f_dentry->d_inode;
 
-        memset(io, 0, sizeof *io);
         io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
         if (write)
                 io->u.ci_wr.wr_append = !!(file->f_flags & O_APPEND);
@@ -831,7 +830,7 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         ssize_t               result;
         ENTRY;
 
-        io = &ccc_env_info(env)->cti_io;
+        io = ccc_env_thread_io(env);
         ll_io_init(io, file, iot == CIT_WRITE);
 
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {

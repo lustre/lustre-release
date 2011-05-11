@@ -119,8 +119,10 @@ struct vm_area_struct * our_vma(unsigned long addr, size_t count)
  * \retval EINVAL if env can't allocated
  * \return other error codes from cl_io_init.
  */
-int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
-                     struct cl_env_nest *nest, pgoff_t index, unsigned long *ra_flags)
+struct cl_io *ll_fault_io_init(struct vm_area_struct *vma,
+                               struct lu_env **env_ret,
+                               struct cl_env_nest *nest,
+                               pgoff_t index, unsigned long *ra_flags)
 {
         struct file       *file  = vma->vm_file;
         struct inode      *inode = file->f_dentry->d_inode;
@@ -130,8 +132,9 @@ int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
         struct lu_env     *env;
         ENTRY;
 
+        *env_ret = NULL;
         if (ll_file_nolock(file))
-                RETURN(-EOPNOTSUPP);
+                RETURN(ERR_PTR(-EOPNOTSUPP));
 
         /*
          * page fault can be called when lustre IO is
@@ -141,14 +144,12 @@ int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
          * one.
          */
         env = cl_env_nested_get(nest);
-        if (IS_ERR(env)) {
-                *env_ret = NULL;
-                 RETURN(-EINVAL);
-        }
+        if (IS_ERR(env))
+                 RETURN(ERR_PTR(-EINVAL));
 
         *env_ret = env;
 
-        io = &ccc_env_info(env)->cti_io;
+        io = ccc_env_thread_io(env);
         io->ci_obj = ll_i2info(inode)->lli_clob;
         LASSERT(io->ci_obj != NULL);
 
@@ -182,7 +183,7 @@ int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
                 cio->cui_fd  = fd;
         }
 
-        return io->ci_result;
+        return io;
 }
 
 #ifndef HAVE_VM_OP_FAULT
@@ -214,16 +215,15 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         ENTRY;
 
         pg_offset = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
-        result = ll_fault_io_init(vma, &env,  &nest, pg_offset, &ra_flags);
-        if (env == NULL)
+        io = ll_fault_io_init(vma, &env,  &nest, pg_offset, &ra_flags);
+        if (IS_ERR(io))
                 return NOPAGE_SIGBUS;
 
-        io = &ccc_env_info(env)->cti_io;
+        result = io->ci_result;
         if (result < 0)
                 goto out_err;
 
         vio = vvp_env_io(env);
-
         vio->u.fault.ft_vma            = vma;
         vio->u.fault.nopage.ft_address = address;
         vio->u.fault.nopage.ft_type    = type;
@@ -270,11 +270,11 @@ int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
         int                      fault_ret = 0;
         ENTRY;
 
-        result = ll_fault_io_init(vma, &env,  &nest, vmf->pgoff, &ra_flags);
-        if (env == NULL)
+        io = ll_fault_io_init(vma, &env,  &nest, vmf->pgoff, &ra_flags);
+        if (IS_ERR(io))
                 RETURN(VM_FAULT_ERROR);
 
-        io = &ccc_env_info(env)->cti_io;
+        result = io->ci_result;
         if (result < 0)
                 goto out_err;
 

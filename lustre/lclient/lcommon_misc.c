@@ -136,7 +136,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
         if (IS_ERR(env))
                 return PTR_ERR(env);
 
-        io = &ccc_env_info(env)->cti_io;
+        io = ccc_env_thread_io(env);
         io->ci_obj = obj;
 
         rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
@@ -163,9 +163,10 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
                 return PTR_ERR(lock);
         }
 
-        cg->cg_env = cl_env_get(&refcheck);
+        cg->cg_env  = cl_env_get(&refcheck);
+        cg->cg_io   = io;
         cg->cg_lock = lock;
-        cg->cg_gid = gid;
+        cg->cg_gid  = gid;
         LASSERT(cg->cg_env == env);
 
         cl_env_unplant(env, &refcheck);
@@ -174,9 +175,10 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 
 void cl_put_grouplock(struct ccc_grouplock *cg)
 {
-        struct lu_env          *env = cg->cg_env;
-        struct cl_lock         *lock = cg->cg_lock;
-        int                     refcheck;
+        struct lu_env  *env  = cg->cg_env;
+        struct cl_io   *io   = cg->cg_io;
+        struct cl_lock *lock = cg->cg_lock;
+        int             refcheck;
 
         LASSERT(cg->cg_env);
         LASSERT(cg->cg_gid);
@@ -186,7 +188,7 @@ void cl_put_grouplock(struct ccc_grouplock *cg)
 
         cl_unuse(env, lock);
         cl_lock_release(env, lock, GROUPLOCK_SCOPE, cfs_current());
-        cl_io_fini(env, &ccc_env_info(env)->cti_io);
+        cl_io_fini(env, io);
         cl_env_put(env, NULL);
 }
 
