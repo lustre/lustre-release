@@ -6,7 +6,8 @@
 # variable in build/lbuild-rhel and if you want to force kernel bulid for all
 # distributions, update the BUILD_GEN variable in build/lbuild)
 #BUILD_GEN+=".0"
-BUILD_GEN+=".1"		# added --with firmware to rpmbuild for rhel6
+#BUILD_GEN+=".1"		# added --with firmware to rpmbuild for rhel6
+BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
 
 source ${0%/*}/lbuild-rhel
 
