@@ -6872,20 +6872,20 @@ test_155_small_load() {
 test_155_big_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile
-    local list=$(comma_list $(osts_nodes))
-    local big=$(do_nodes $list grep "cache" /proc/cpuinfo | \
-        awk '{sum+=$4} END{print sum}')
-    local min_avail=$(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail | \
-        sort -n | head -1)
-    local large_file_size=$((big * 2))
 
-    log "cache size on OSS is $big KB"
-    log "large file size is $large_file_size KB"
-    log "min available OST size is $min_avail KB"
+    free_min_max
+    local cache_size=$(do_facet ost$((MAXI+1)) \
+        "awk '/cache/ {sum+=\\\$4} END {print sum}' /proc/cpuinfo")
+    local large_file_size=$((cache_size * 2))
 
-    [ $min_avail -le $large_file_size ] && \
-        skip "the minimum available OST size needs > $large_file_size KB" && \
+    echo "OSS cache size: $cache_size KB"
+    echo "Large file size: $large_file_size KB"
+
+    [ $MAXV -le $large_file_size ] && \
+        skip_env "max available OST size needs > $large_file_size KB" && \
         return 0
+
+    $SETSTRIPE $file -c 1 -i $MAXI || error "$SETSTRIPE $file failed"
 
     dd if=/dev/urandom of=$temp bs=$large_file_size count=1k || \
         error "dd of=$temp bs=$large_file_size count=1k failed"
