@@ -27,7 +27,8 @@ push_exit_trap "kill -INT -$$ || true" kill_children
 #BUILD_GEN=1
 #BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
 #BUILD_GEN=3	# bz19975: enable the building of src.rpms by default
-BUILD_GEN=4	# bz22281: use the git hash in the kernel extra version
+#BUILD_GEN=4	# bz22281: use the git hash in the kernel extra version
+BUILD_GEN=5	# TT-107: don't cache the BUILD dir
 
 TOPDIR=$PWD
 
@@ -1259,7 +1260,7 @@ build_kernel_with_srpm() {
         else
             # store the resulting kernel RPM build tree for future use
             echo "Storing the built kernel for future reuse" >&${outfd}
-            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,SRPMS,RPMS}" \
                                  "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
                                  "$CAN_LINK_FOR_REUSE"; then
                 error "Failed to store kernel RPMS for reuse"

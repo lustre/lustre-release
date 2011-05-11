@@ -8,5 +8,6 @@ source ${0%/*}/lbuild-rhel5
 # to build built
 #BUILD_GEN=1
 #BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
-BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
+#BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
+BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
 
