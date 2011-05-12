@@ -3926,16 +3926,18 @@ init_logging() {
     mkdir -p $LOGDIR
     init_clients_lists
 
-    do_rpc_nodes $(comma_list $(nodes_list)) check_logdir $LOGDIR
-    if check_write_access $LOGDIR; then
-        touch $LOGDIR/shared
-        echo "Logging to shared log directory: $LOGDIR"
-    else
-        echo "Logging to local directory: $LOGDIR"
-    fi
+    if [ ! -f $YAML_LOG ]; then       # If the yaml log already exists then we will just append to it
+      do_rpc_nodes $(comma_list $(nodes_list)) check_logdir $LOGDIR
+      if check_write_access $LOGDIR; then
+          touch $LOGDIR/shared
+          echo "Logging to shared log directory: $LOGDIR"
+      else
+          echo "Logging to local directory: $LOGDIR"
+      fi
 
-    yml_nodes_file $LOGDIR >> $YAML_LOG
-    yml_results_file >> $YAML_LOG
+      yml_nodes_file $LOGDIR >> $YAML_LOG
+      yml_results_file >> $YAML_LOG
+    fi
 }
 
 log_test() {
