@@ -1,10 +1,9 @@
 SERIES                VERSION                  COMMENT
 
 SUPPORTED KERNELS:
+2.6-rhel5             RHEL5: 2.6.18-238.9.1.el5
 2.6-sles10            SLES10: 2.6.16.60-0.69.1
-2.6-rhel5             RHEL5: 2.6.18-194.17.1.el5
 2.6-sles11            SLES11: 2.6.32.19-0.2.1
-2.6-oel5              OEL5: 2.6.18-194.17.1.0.1.el5
 
 CLIENT SUPPORT FOR UNPATCHED KERNELS:
                    kernel.org 2.6.16-2.6.32
