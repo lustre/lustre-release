@@ -510,6 +510,22 @@ test_17k() { #bug 22301
 }
 run_test 17k "symlinks: rsync with xattrs enabled ========================="
 
+test_17l() { # LU-279
+	mkdir -p $DIR/$tdir
+	touch $DIR/$tdir/$tfile
+	ln -s $DIR/$tdir/$tfile $DIR/$tdir/$tfile.lnk
+	for path in "$DIR/$tdir" "$DIR/$tdir/$tfile" "$DIR/$tdir/$tfile.lnk"; do
+		# -h to not follow symlinks. -m '' to list all the xattrs.
+		# grep to remove first line: '# file: $path'.
+		for xattr in `getfattr -hm '' $path 2>/dev/null | grep -v '^#'`;
+		do
+			lgetxattr_size_check $path $xattr ||
+				error "lgetxattr_size_check $path $xattr failed"
+		done
+	done
+}
+run_test 17l "Ensure lgetxattr's returned xattr size is consistent ========"
+
 # LU-1540
 test_17m() {
 	local short_sym="0123456789"
