@@ -327,21 +327,21 @@ test_2c() {
     do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL OST0000
     drain_pool $POOL
 
-    # 2. lustre-OST0000
+    # 2. $FSNAME-OST0000
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000: $RC"
     do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
     drain_pool $POOL
 
-    # 3. lustre-OST0000_UUID
+    # 3. $FSNAME-OST0000_UUID
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000_UUID: $RC"
     do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
     drain_pool $POOL
 
-    # 4. lustre-OST[0,1,2,3,]
+    # 4. $FSNAME-OST[0,1,2,3,]
     TGT="$FSNAME-OST["
     for i in $TGT_LIST; do TGT=${TGT}$(printf "$i," $i); done
     TGT="${TGT}]"
@@ -351,7 +351,7 @@ test_2c() {
     do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $TGT
     drain_pool $POOL
 
-    # 5. lustre-OST[0-5/1]
+    # 5. $FSNAME-OST[0-5/1]
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL" "$TGT_ALL $RC"
