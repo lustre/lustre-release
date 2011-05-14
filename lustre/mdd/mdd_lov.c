@@ -118,11 +118,11 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         if (!bufs)
                 GOTO(cleanup_mem, rc = -ENOMEM);
 
-        snprintf(name, strlen(MDD_OBD_NAME) + 35, "%s-%s-%d",
-                 MDD_OBD_NAME, dev, mds_id);
+        snprintf(name, strlen(MDD_OBD_NAME) + 35, "%s-%s",
+                 MDD_OBD_NAME, dev);
 
-        snprintf(uuid, strlen(MDD_OBD_UUID) + 35, "%s-%s-%d",
-                 MDD_OBD_UUID, dev, mds_id);
+        snprintf(uuid, strlen(MDD_OBD_UUID) + 35, "%s-%s",
+                 MDD_OBD_UUID, dev);
 
         lustre_cfg_bufs_reset(bufs, name);
         lustre_cfg_bufs_set_string(bufs, 1, MDD_OBD_TYPE);
