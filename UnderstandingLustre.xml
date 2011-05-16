@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='understandinglustre'>
   <info>
-    <title>Understanding Lustre</title>
+    <title xml:id='understandinglustre.title'>Understanding Lustre</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438250_pgfId-1294042" xreflabel=""/>This chapter describes the Lustre architecture and features of Lustre. It includes the following sections:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438250_pgfId-1294066" xreflabel=""/><link xl:href="UnderstandingLustre.html#50438250_92658">What Lustre Is (and What It Isnâ€™t)</link></para>
+      <para><anchor xml:id="dbdoclet.50438250_pgfId-1294066" xreflabel=""/><link xl:href="UnderstandingLustre.html#50438250_92658">What Lustre Is (and What It Isn't)</link></para>
     </listitem>
 <listitem>
       <para> </para>

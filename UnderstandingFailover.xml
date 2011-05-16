@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='understandingfailover'>
   <info>
-    <title>Understanding Failover in Lustre</title>
+    <title xml:id='understandingfailover.title'>Understanding Failover in Lustre</title>
   </info>
   <para><anchor xml:id="dbdoclet.50540653_pgfId-1304328" xreflabel=""/>This chapter describes failover in a Lustre system. It includes:</para>
   <itemizedlist><listitem>
