@@ -1234,7 +1234,7 @@ static int filter_prep_groups(struct obd_device *obd)
         if (off == 0)
                 last_group = FID_SEQ_OST_MDT0;
 
-        CWARN("%s: initialize groups [%d,%d]\n", obd->obd_name,
+        CWARN("%s: initialize groups [%u,%u]\n", obd->obd_name,
               FID_SEQ_OST_MDT0, last_group);
         filter->fo_committed_group = last_group;
         rc = filter_read_groups(obd, last_group, 1);

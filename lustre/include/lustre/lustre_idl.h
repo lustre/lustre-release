@@ -416,7 +416,8 @@ enum fid_seq {
         FID_SEQ_START      = 0x200000000ULL,
         FID_SEQ_LOCAL_FILE = 0x200000001ULL,
         FID_SEQ_DOT_LUSTRE = 0x200000002ULL,
-        FID_SEQ_NORMAL     = 0x200000400ULL
+        FID_SEQ_NORMAL     = 0x200000400ULL,
+        FID_SEQ_LOV_DEFAULT= 0xffffffffffffffffULL
 };
 
 #define OBIF_OID_MAX_BITS           32
@@ -1214,9 +1215,6 @@ enum obdo_flags {
 #define LOV_PATTERN_RAID1 0x002   /* stripes are mirrors of each other */
 #define LOV_PATTERN_FIRST 0x100   /* first stripe is not in round-robin */
 #define LOV_PATTERN_CMOBD 0x200
-
-#define LOV_OBJECT_GROUP_DEFAULT ~0ULL
-#define LOV_OBJECT_GROUP_CLEAR 0ULL
 
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/

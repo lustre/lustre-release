@@ -178,7 +178,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         /* This check is only valid before FID-on-OST and it should
          * be removed after FID-on-OST is implemented */
         if (oa->o_seq > FID_SEQ_OST_MAX) {
-                CERROR("%s: invalid group number "LPU64" > MAX_CMD_GROUP %d\n",
+                CERROR("%s: invalid group number "LPU64" > MAX_CMD_GROUP %u\n",
                         exp->exp_obd->obd_name, oa->o_seq, FID_SEQ_OST_MAX);
                 RETURN(-EINVAL);
         }
