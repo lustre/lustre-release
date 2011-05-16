@@ -1,69 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
     <title>Testing Lustre Network Performance (LNET Self-Test)</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="IV_LustreTuning.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="BenchmarkingTests.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438223_pgfId-874" xreflabel=""/>C H A P T E R  23<anchor xml:id="dbdoclet.50438223_71556" xreflabel=""/></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438223_pgfId-5529" xreflabel=""/>Testing Lustre Network Performance (<anchor xml:id="dbdoclet.50438223_21832" xreflabel=""/>LNET Self-Test)</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438223_pgfId-1290818" xreflabel=""/><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET self-test, which is used by site administrators to confirm that Lustre Networking (LNET) has been properly installed and configured, and that underlying network software and hardware are performing according to expectations. The chapter includes:</para>
   <para><anchor xml:id="dbdoclet.50438223_pgfId-1300593" xreflabel=""/><link xl:href="LNETSelfTest.html#50438223_91742">LNET Self-Test Overview</link></para>
   <para><anchor xml:id="dbdoclet.50438223_pgfId-1300598" xreflabel=""/><link xl:href="LNETSelfTest.html#50438223_48138">Using LNET Self-Test</link></para>
@@ -837,56 +776,7 @@ se options.
         </informaltable>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1302373" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302379" xreflabel=""/>$ lst show_error clientsclients<anchor xml:id="dbdoclet.50438223_pgfId-1302380" xreflabel=""/>12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors] \<anchor xml:id="dbdoclet.50438223_pgfId-1303569" xreflabel=""/>[RPC: 20 errors, 0 dropped,<anchor xml:id="dbdoclet.50438223_pgfId-1303575" xreflabel=""/>12345-192.168.1.16@tcp: [Session: 0 brw errors, 0 ping errors] \<anchor xml:id="dbdoclet.50438223_pgfId-1303570" xreflabel=""/>[RPC: 1 errors, 0 dropped, Total 2 error nodes in clients<anchor xml:id="dbdoclet.50438223_pgfId-1303571" xreflabel=""/>$ lst show_error --session clients<anchor xml:id="dbdoclet.50438223_pgfId-1302382" xreflabel=""/>clients<anchor xml:id="dbdoclet.50438223_pgfId-1302383" xreflabel=""/>12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors]<anchor xml:id="dbdoclet.50438223_pgfId-1302384" xreflabel=""/>Total 1 error nodes in clients</screen>
-        <!--
-Begin SiteCatalyst code version: G.5.
--->
-        <!--
-End SiteCatalyst code version: G.5.
--->
-          <informaltable frame="none">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            
-            
-            
-            <tbody>
-              <row>
-                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-                <entry align="right"><para>821-2076-10</para></entry>
-                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="IV_LustreTuning.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="BenchmarkingTests.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link></para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><link xl:href=""/></para>
-        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
       </section>
     </section>
   </section>
-</article>
+</chapter>
