@@ -1,69 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
     <title>Lustre Troubleshooting</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="V_LustreTroubleshooting.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="TroubleShootingRecovery.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438198_pgfId-874" xreflabel=""/>C H A P T E R  26</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438198_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438198_66186" xreflabel=""/>Lustre Troubleshooting</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438198_pgfId-1291311" xreflabel=""/>This chapter provides information to troubleshoot Lustre, submit a Lustre bug, and Lustre performance tips. It includes the following sections:</para>
   <itemizedlist><listitem>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1293366" xreflabel=""/><link xl:href="LustreTroubleshooting.html#50438198_11171">Lustre Error Messages</link></para>
@@ -317,7 +256,7 @@
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1291436" xreflabel=""/>26.3.4 <anchor xml:id="dbdoclet.50438198_69657" xreflabel=""/>Fixing a Bad LAST_ID on an OST</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296775" xreflabel=""/>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote><para><anchor xml:id="dbdoclet.50438198_pgfId-1296778" xreflabel=""/>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para></footnote> <link linkend="dbdoclet.50438198_pgfId-1296778"></link>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296775" xreflabel=""/>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote><para><anchor xml:id="dbdoclet.50438198_pgfId-1296778" xreflabel=""/>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para></footnote>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296779" xreflabel=""/>During normal operation, the MDT keeps some pre-created (but unallocated) objects on the OST, and the relationship between LAST_ID and lov_objid should be LAST_ID &lt;= lov_objid. Any difference in the file values results in objects being created on the OST when it next connects to the MDS. These objects are never actually allocated to a file, since they are of 0 length (empty), but they do no harm. Creating empty objects enables the OST to catch up to the MDS, so normal operations resume.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296780" xreflabel=""/>However, in the case where lov_objid &lt; LAST_ID, bad things can happen as the MDS is not aware of objects that have already been allocated on the OST, and it reallocates them to new files, overwriting their existing contents.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296781" xreflabel=""/>Here is the rule to avoid this scenario:</para>
@@ -598,57 +537,7 @@ LAST_ID&quot;
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1294801" xreflabel=""/>26.3.14 Setting SCSI <anchor xml:id="dbdoclet.50438198_marker-1294800" xreflabel=""/>I/O Sizes</title>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1294802" xreflabel=""/>Some SCSI drivers default to a maximum I/O size that is too small for good Lustre performance. we have fixed quite a few drivers, but you may still find that some drivers give unsatisfactory performance with Lustre. As the default value is hard-coded, you need to recompile the drivers to change their default. On the other hand, some drivers may have a wrong default set.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1294803" xreflabel=""/>If you suspect bad I/O performance and an analysis of Lustre statistics indicates that I/O is not 1 MB, check /sys/block/&lt;device&gt;/queue/max_sectors_kb. If the max_sectors_kb value is less than 1024, set it to at least 1024 to improve performance. If changing max_sectors_kb does not change the I/O size as reported by Lustre, you may want to examine the SCSI driver code.</para>
-        <!--para><emphasis role="bold"><superscript>1<link linkend="fnote1">(Footnote)</link><anchor xml:id="dbdoclet.50438198_pgfId-1296778" xreflabel=""/>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</superscript></emphasis></para-->
-        <!--
-Begin SiteCatalyst code version: G.5.
--->
-        <!--
-End SiteCatalyst code version: G.5.
--->
-          <informaltable frame="none">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            
-            
-            
-            <tbody>
-              <row>
-                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-                <entry align="right"><para>821-2076-10</para></entry>
-                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="V_LustreTroubleshooting.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="TroubleShootingRecovery.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link></para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><link xl:href=""/></para>
-        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
       </section>
     </section>
   </section>
-</article>
+</chapter>
