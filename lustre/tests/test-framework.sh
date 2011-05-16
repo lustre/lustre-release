@@ -117,21 +117,13 @@ init_test_env() {
     export DUMPE2FS=${DUMPE2FS:-dumpe2fs}
     export E2FSCK=${E2FSCK:-e2fsck}
     export LFSCK_BIN=${LFSCK_BIN:-lfsck}
-    export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check filesystem after each test suit
-    export SKIP_LFSCK=${SKIP_LFSCK:-"yes"} # bug 13698, change to "no" when fixed
-    export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
-    export FSCK_MAX_ERR=4   # File system errors left uncorrected
-    if [ "$SKIP_LFSCK" == "no" ]; then
-        if [ ! -x `which $LFSCK_BIN` ]; then
-            log "$($E2FSCK -V)"
-            error_exit "$E2FSCK does not support lfsck"
-        fi
 
-        export MDSDB=${MDSDB:-$SHARED_DIRECTORY/mdsdb}
-        export OSTDB=${OSTDB:-$SHARED_DIRECTORY/ostdb}
-        export MDSDB_OPT="--mdsdb $MDSDB"
-        export OSTDB_OPT="--ostdb $OSTDB-\$ostidx"
-    fi
+    export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check fs after each test suite
+    export FSCK_MAX_ERR=4   # File system errors left uncorrected
+    export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
+    export MDSDB=${MDSDB:-$SHARED_DIRECTORY/mdsdb}
+    export OSTDB=${OSTDB:-$SHARED_DIRECTORY/ostdb}
+
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
@@ -2451,11 +2443,10 @@ get_svr_devs() {
 run_e2fsck() {
     local node=$1
     local target_dev=$2
-    local ostidx=$3
-    local ostdb_opt=$4
+    local extra_opts=$3
 
     df > /dev/null      # update statfs data on disk
-    local cmd="$E2FSCK -d -v -f -n $MDSDB_OPT $ostdb_opt $target_dev"
+    local cmd="$E2FSCK -d -v -t -t -f -n $extra_opts $target_dev"
     echo $cmd
     local rc=0
     do_node $node $cmd || rc=$?
@@ -2483,15 +2474,14 @@ generate_db() {
         error "$SHARED_DIRECTORY is not a shared directory"
     rm $tmp_file
 
-    run_e2fsck $(mdts_nodes) $MDTDEV
+    run_e2fsck $(mdts_nodes) $MDTDEV "--mdsdb $MDSDB"
 
     i=0
     ostidx=0
     OSTDB_LIST=""
     for node in $(osts_nodes); do
         for dev in ${OSTDEVS[i]}; do
-            local ostdb_opt=`eval echo $OSTDB_OPT`
-            run_e2fsck $node $dev $ostidx "$ostdb_opt"
+            run_e2fsck $node $dev "--mdsdb $MDSDB --ostdb $OSTDB-$ostidx"
             OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
             ostidx=$((ostidx + 1))
         done
@@ -2513,14 +2503,10 @@ run_lfsck() {
 }
 
 check_and_cleanup_lustre() {
-    if [ "$LFSCK_ALWAYS" = "yes" ]; then
+    if [ "$LFSCK_ALWAYS" = "yes" -a "$TESTSUITE" != "lfsck" ]; then
         get_svr_devs
         generate_db
-        if [ "$SKIP_LFSCK" == "no" ]; then
-            run_lfsck
-        else
-            echo "skip lfsck"
-        fi
+        run_lfsck
     fi
 
     if is_mounted $MOUNT; then

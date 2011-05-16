@@ -19,8 +19,13 @@ OBJGRP=${OBJGRP:-0} # the OST object group
     { skip "SHARED_DIRECTORY should be specified with a shared directory \
 which can be accessable on all of the nodes" && exit 0; }
 
-which getfattr > /dev/null 2>&1 || { skip "could not find getfattr" && exit 0; }
-which setfattr > /dev/null 2>&1 || { skip "could not find setfattr" && exit 0; }
+which getfattr &>/dev/null || { skip_env "could not find getfattr" && exit 0; }
+which setfattr &>/dev/null || { skip_env "could not find setfattr" && exit 0; }
+
+if [ ! -x `which $LFSCK_BIN` ]; then
+    log "$($E2FSCK -V)"
+    error "e2fsprogs does not support lfsck"
+fi
 
 MOUNT_2=""
 check_and_setup_lustre
@@ -208,7 +213,7 @@ init_logging
 # get the server target devices
 get_svr_devs
 
-if [ "$SKIP_LFSCK" = "no" ] && is_empty_fs $MOUNT; then
+if is_empty_fs $MOUNT; then
     # create test directory
     TESTDIR=$DIR/d0.$TESTSUITE
     mkdir -p $TESTDIR || error "mkdir $TESTDIR failed"
@@ -244,7 +249,7 @@ if [ "$SKIP_LFSCK" = "no" ] && is_empty_fs $MOUNT; then
     duplicate_files $SINGLEMDS $MDTDEV $MDS_DUPE || \
         error "duplicating files failed"
     FSCK_MAX_ERR=1   # file system errors corrected
-else    # I_MOUNTED=no
+else # is_empty_fs $MOUNT
     FSCK_MAX_ERR=4   # file system errors left uncorrected
 fi
 
@@ -252,34 +257,29 @@ fi
 # lfsck will return 1 if the filesystem had errors fixed
 # run e2fsck to generate databases used for lfsck
 generate_db
-if [ "$SKIP_LFSCK" != "no" ]; then
-    echo "skip lfsck"
-else
-    # remount filesystem
-    REFORMAT=""
-    check_and_setup_lustre
 
-    # run lfsck
+# remount filesystem
+REFORMAT=""
+check_and_setup_lustre
+
+# run lfsck
+rc=0
+run_lfsck || rc=$?
+if [ $rc -eq 0 ]; then
+    echo "clean after the first check"
+else
+    # run e2fsck again to generate databases used for lfsck
+    generate_db
+
+    # run lfsck again
     rc=0
     run_lfsck || rc=$?
     if [ $rc -eq 0 ]; then
-	echo "clean after the first check"
+        echo "clean after the second check"
     else
-        # run e2fsck again to generate databases used for lfsck
-	generate_db
-
-        # run lfsck again
-	rc=0
-	run_lfsck || rc=$?
-	if [ $rc -eq 0 ]; then
-	    echo "clean after the second check"
-	else
-	    error "lfsck test 2 - finished with rc=$rc"
-	fi
+        error "lfsck test 2 - finished with rc=$rc"
     fi
 fi
-
-LFSCK_ALWAYS=no
 
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
