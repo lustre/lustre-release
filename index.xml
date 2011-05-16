@@ -20,13 +20,6 @@
   <xi:include href="V_LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
   <xi:include href="VI_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="InstallingLustreFromSourceCode.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="LustreRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="LustreProc.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="UserUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="LustreProgrammingInterfaces.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="SettingLustreProperties.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="ConfigurationFilesModuleParameters.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="SystemConfigurationUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
   <xi:include href="Glossary.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </book>
