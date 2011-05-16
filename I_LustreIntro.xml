@@ -3,10 +3,6 @@
     <title>Introducing Lustre</title>
     <partintro>
   <para><anchor xml:id="dbdoclet.50438249_pgfId-369630" xreflabel=""/>Part I provides background information to help you understand the Lustre architecture and how the major components fit together. You will find information in this section about:</para>
-  <para><anchor xml:id="dbdoclet.50438249_pgfId-369631" xreflabel=""/><link xl:href="UnderstandingLustre.html#50438250_60900">Understanding Lustre</link></para>
-  <para><anchor xml:id="dbdoclet.50438249_pgfId-369632" xreflabel=""/><link xl:href="UnderstandingLustreNetworking.html#50438191_40026">Understanding Lustre Networking (LNET)</link></para>
-  <para><anchor xml:id="dbdoclet.50438249_pgfId-369633" xreflabel=""/><link xl:href="UnderstandingFailover.html#50540653_24013">Understanding Failover in Lustre</link></para>
-  <para><anchor xml:id="dbdoclet.50438249_pgfId-369060" xreflabel=""/> </para>
   </partintro>
 
   <xi:include href="UnderstandingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
