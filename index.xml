@@ -10,39 +10,52 @@
       <holder>Whamcloud, Inc.</holder>
   </copyright>
   </info>
-  <xi:include href="UnderstandingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="UnderstandingLustreNetworking.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="UnderstandingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="InstallOverview.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingUpLustreSystem.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringStorage.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingUpBonding.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="InstallingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreMonitoring.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreMaintenance.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ManagingLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="UpgradingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="BackupAndRestore.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ManagingStripingFreeSpace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ManagingFileSystemIO.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LNETSelfTest.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="BenchmarkingTests.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="TroubleShootingRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreDebugging.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="InstallingLustreFromSourceCode.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreProc.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="UserUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreProgrammingInterfaces.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingLustreProperties.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfigurationFilesModuleParameters.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SystemConfigurationUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="copyright.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+  <xi:include href="I_LustreIntro.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="UnderstandingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="UnderstandingLustreNetworking.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="UnderstandingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+
+  <xi:include href="II_LustreInstallConfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="InstallOverview.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="SettingUpLustreSystem.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ConfiguringStorage.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="SettingUpBonding.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="InstallingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ConfiguringLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ConfiguringLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ConfiguringFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+  <xi:include href="III_LustreAdministration.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreMonitoring.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreMaintenance.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ManagingLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="UpgradingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="BackupAndRestore.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ManagingStripingFreeSpace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ManagingFileSystemIO.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="IV_LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LNETSelfTest.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="BenchmarkingTests.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="V_LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="TroubleShootingRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreDebugging.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="VI_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="InstallingLustreFromSourceCode.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreProc.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="UserUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="LustreProgrammingInterfaces.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="SettingLustreProperties.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="ConfigurationFilesModuleParameters.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+      <xi:include href="SystemConfigurationUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Glossary.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </book>
