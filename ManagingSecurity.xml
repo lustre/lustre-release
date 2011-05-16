@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Managing Lustre Security</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringQuotas.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="IV_LustreTuning.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438221_pgfId-874" xreflabel=""/>C H A P T E R  22</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438221_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438221_60239" xreflabel=""/>Managing Lustre Security</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438221_pgfId-1292300" xreflabel=""/>This chapter describes Lustre security and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438221_pgfId-1292304" xreflabel=""/><link xl:href="ManagingSecurity.html#50438221_16221">Using ACLs</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438221_pgfId-1294616" xreflabel=""/><link xl:href="ManagingSecurity.html#50438221_64726">Using Root Squash</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438221_pgfId-1292307" xreflabel=""/></title>
+    <section remap="h2">
+      <title>22.1 <anchor xml:id="dbdoclet.50438221_16221" xreflabel=""/>Using <anchor xml:id="dbdoclet.50438221_marker-1292306" xreflabel=""/>ACLs</title>
+      <para><anchor xml:id="dbdoclet.50438221_pgfId-1292308" xreflabel=""/>An access control list (ACL), is a set of data that informs an operating system about permissions or access rights that each user or group has to specific system objects, such as directories or files. Each object has a unique security attribute that identifies users who have access to it. The ACL lists each object and user access privileges such as read, write or execute.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438221_pgfId-1292309" xreflabel=""/>22.1.1 How ACLs Work</title>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292310" xreflabel=""/>Implementing ACLs varies between operating systems. Systems that support the Portable Operating System Interface (POSIX) family of standards share a simple yet powerful file system permission model, which should be well-known to the Linux/Unix administrator. ACLs add finer-grained permissions to this model, allowing for more complicated permission schemes. For a detailed explanation of ACLs on Linux, refer to the SuSE Labs article, <emphasis>Posix Access Control Lists on Linux</emphasis>:</para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292312" xreflabel=""/><link xl:href="http://www.suse.de/~agruen/acl/linux-acls/online/">http://www.suse.de/~agruen/acl/linux-acls/online/</link></para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292313" xreflabel=""/>We have implemented ACLs according to this model. Lustre works with the standard Linux ACL tools, setfacl, getfacl, and the historical chacl, normally installed with the ACL package.</para>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438221_pgfId-1292438" xreflabel=""/>ACL support is a system-range feature, meaning that all clients have ACL enabled or not. You cannot specify which clients should enable ACL.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438221_pgfId-1292315" xreflabel=""/>22.1.2 Using <anchor xml:id="dbdoclet.50438221_marker-1292314" xreflabel=""/>ACLs with Lustre</title>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292557" xreflabel=""/>POSIX Access Control Lists (ACLs) can be used with Lustre. An ACL consists of file entries representing permissions based on standard POSIX file system object permissions that define three classes of user (owner, group and other). Each class is associated with a set of permissions [read (r), write (w) and execute (x)].</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1292560" xreflabel=""/> Owner class permissions define access privileges of the file owner.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1292569" xreflabel=""/> Group class permissions define access privileges of the owning group.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1292572" xreflabel=""/> Other class permissions define access privileges of all users not in the owner or group class.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292563" xreflabel=""/>The ls -l command displays the owner, group, and other class permissions in the first column of its output (for example, -rw-r- -- for a regular file with read and write access for the owner class, read access for the group class, and no access for others).</para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292512" xreflabel=""/>Minimal ACLs have three entries. Extended ACLs have more than the three entries. Extended ACLs also contain a mask entry and may contain any number of named user and named group entries.</para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292536" xreflabel=""/>The MDS needs to be configured to enable ACLs. Use --mountfsoptions to enable ACLs when creating your configuration:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292318" xreflabel=""/>$ mkfs.lustre --fsname spfs --mountfsoptions=acl --mdt -mgs /dev/sda
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292319" xreflabel=""/>Alternately, you can enable ACLs at run time by using the --acl option with mkfs.lustre:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292320" xreflabel=""/>$ mount -t lustre -o acl /dev/sda /mnt/mdt
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292472" xreflabel=""/>To check ACLs on the MDS:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292484" xreflabel=""/>$ lctl get_param -n mdc.home-MDT0000-mdc-*.connect_flags | grep acl acl
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292593" xreflabel=""/>To mount the client with no ACLs:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292597" xreflabel=""/>$ mount -t lustre -o noacl ibmds2@o2ib:/home /home
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292321" xreflabel=""/>ACLs are enabled in Lustre on a system-wide basis; either all clients enable ACLs or none do. Activating ACLs is controlled by MDS mount options acl / noacl (enable/disableACLs). Client-side mount options acl/noacl are ignored. You do not need to change the client configuration, and the â€œaclâ€ string will not appear in the client /etc/mtab. The client acl mount option is no longer needed. If a client is mounted with that option, then this message appears in the MDS syslog:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292322" xreflabel=""/>...MDS requires ACL support but client does not
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292323" xreflabel=""/>The message is harmless but indicates a configuration issue, which should be corrected.</para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292324" xreflabel=""/>If ACLs are not enabled on the MDS, then any attempts to reference an ACL on a client return an Operation not supported error.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438221_pgfId-1292326" xreflabel=""/>22.1.3 <anchor xml:id="dbdoclet.50438221_marker-1292325" xreflabel=""/>Examples</title>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292327" xreflabel=""/>These examples are taken directly from the POSIX paper referenced above. ACLs on a Lustre file system work exactly like ACLs on any Linux file system. They are manipulated with the standard tools in the standard manner. Below, we create a directory and allow a specific user access.</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292328" xreflabel=""/>[root@client lustre]# umask 027
+<anchor xml:id="dbdoclet.50438221_pgfId-1292329" xreflabel=""/>[root@client lustre]# mkdir rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292330" xreflabel=""/>[root@client lustre]# ls -ld rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292331" xreflabel=""/>drwxr-x---  2 root root 4096 Feb 20 06:50 rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292332" xreflabel=""/>[root@client lustre]# getfacl rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292333" xreflabel=""/># file: rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292334" xreflabel=""/># owner: root
+<anchor xml:id="dbdoclet.50438221_pgfId-1292335" xreflabel=""/># group: root
+<anchor xml:id="dbdoclet.50438221_pgfId-1292336" xreflabel=""/>user::rwx
+<anchor xml:id="dbdoclet.50438221_pgfId-1292337" xreflabel=""/>group::r-x
+<anchor xml:id="dbdoclet.50438221_pgfId-1292338" xreflabel=""/>other::---
+<anchor xml:id="dbdoclet.50438221_pgfId-1292339" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438221_pgfId-1292340" xreflabel=""/>[root@client lustre]# setfacl -m user:chirag:rwx rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292341" xreflabel=""/>[root@client lustre]# ls -ld rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292342" xreflabel=""/>drwxrwx---+ 2 root root 4096 Feb 20 06:50 rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292343" xreflabel=""/>[root@client lustre]# getfacl --omit-heade rain
+<anchor xml:id="dbdoclet.50438221_pgfId-1292344" xreflabel=""/>user::rwx
+<anchor xml:id="dbdoclet.50438221_pgfId-1292345" xreflabel=""/>user:chirag:rwx
+<anchor xml:id="dbdoclet.50438221_pgfId-1292346" xreflabel=""/>group::r-x
+<anchor xml:id="dbdoclet.50438221_pgfId-1292347" xreflabel=""/>mask::rwx
+<anchor xml:id="dbdoclet.50438221_pgfId-1292348" xreflabel=""/>other::---
+</screen>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>22.2 <anchor xml:id="dbdoclet.50438221_64726" xreflabel=""/>Using <anchor xml:id="dbdoclet.50438221_marker-1294644" xreflabel=""/>Root Squash</title>
+      <para><anchor xml:id="dbdoclet.50438221_pgfId-1296220" xreflabel=""/>Lustre 1.6 introduced root squash functionality, a security feature which controls super user access rights to an Lustre file system. Before the root squash feature was added, Lustre users could run rm -rf * as root, and remove data which should not be deleted. Using the root squash feature prevents this outcome.</para>
+      <para><anchor xml:id="dbdoclet.50438221_pgfId-1296221" xreflabel=""/>The root squash feature works by re-mapping the user ID (UID) and group ID (GID) of the root user to a UID and GID specified by the system administrator, via the Lustre configuration management server (MGS). The root squash feature also enables the Lustre administrator to specify a set of client for which UID/GID re-mapping does not apply.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438221_pgfId-1292937" xreflabel=""/>22.2.1 Configuring <anchor xml:id="dbdoclet.50438221_marker-1294610" xreflabel=""/>Root Squash</title>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296229" xreflabel=""/>Root squash functionality is managed by two configuration parameters, root_squash and nosquash_nids.</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296230" xreflabel=""/> The root_squash parameter specifies the UID and GID with which the root user accesses the Lustre file system.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296231" xreflabel=""/> The nosquash_nids parameter specifies the set of clients to which root squash does not apply. LNET NID range syntax is used for this parameter (see the NID range syntax rules described in <link xl:href="ManagingSecurity.html#50438221_48757">Enabling and Tuning Root Squash</link>). For example:</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296235" xreflabel=""/>nosquash_nids=172.16.245.[0-255/2]@tcp
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296236" xreflabel=""/>In this example, root squash does not apply to TCP clients on subnet 172.16.245.0 that have an even number as the last component of their IP address.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438221_pgfId-1292749" xreflabel=""/>22.2.2 <anchor xml:id="dbdoclet.50438221_48757" xreflabel=""/>Enabling and <anchor xml:id="dbdoclet.50438221_marker-1294611" xreflabel=""/>Tuning Root Squash</title>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296245" xreflabel=""/>The default value for nosquash_nids is NULL, which means that root squashing applies to all clients. Setting the root squash UID and GID to 0 turns root squash off.</para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296246" xreflabel=""/>Root squash parameters can be set when the MDT is created (mkfs.lustre --mdt). For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296247" xreflabel=""/>mkfs.lustre --reformat --fsname=Lustre --mdt --mgs \
+<anchor xml:id="dbdoclet.50438221_pgfId-1296248" xreflabel=""/>       --param &quot;mds.root_squash=500:501&quot; \
+<anchor xml:id="dbdoclet.50438221_pgfId-1296249" xreflabel=""/>       --param &quot;mds.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296250" xreflabel=""/>Root squash parameters can also be changed on an unmounted device with tunefs.lustre. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296251" xreflabel=""/>tunefs.lustre --param &quot;mds.root_squash=65534:65534&quot;  \
+<anchor xml:id="dbdoclet.50438221_pgfId-1296252" xreflabel=""/>--param &quot;mds.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296253" xreflabel=""/>Root squash parameters can also be changed with the lctl conf_param command. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296254" xreflabel=""/>lctl conf_param Lustre.mds.root_squash=&quot;1000:100&quot;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296255" xreflabel=""/>lctl conf_param Lustre.mds.nosquash_nids=&quot;*@tcp&quot;
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438221_pgfId-1296256" xreflabel=""/>When using the lctl conf_param command, keep in mind:</para><para> * lctl conf_param must be run on a live MGS</para><para> * lctl conf_param causes the parameter to change on all MDSs</para><para> * lctl conf_param is to be used once per a parameter</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296271" xreflabel=""/>The nosquash_nids list can be cleared with:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296272" xreflabel=""/>lctl conf_param Lustre.mds.nosquash_nids=&quot;NONE&quot;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296273" xreflabel=""/>- OR -</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296274" xreflabel=""/>lctl conf_param Lustre.mds.nosquash_nids=&quot;clear&quot;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296275" xreflabel=""/>If the nosquash_nids value consists of several NID ranges (e.g. 0@elan, 1@elan1), the list of NID ranges must be quoted with single (&apos;) or double (&apos;&apos;) quotation marks. List elements must be separated with a space. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296276" xreflabel=""/>mkfs.lustre ... --param &quot;mds.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
+<anchor xml:id="dbdoclet.50438221_pgfId-1296277" xreflabel=""/>lctl conf_param Lustre.mds.nosquash_nids=&quot;24@elan 15@elan1&quot;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296278" xreflabel=""/>These are examples of incorrect syntax:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296279" xreflabel=""/>mkfs.lustre ... --param &quot;mds.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
+<anchor xml:id="dbdoclet.50438221_pgfId-1296280" xreflabel=""/>lctl conf_param Lustre.mds.nosquash_nids=24@elan 15@elan1
+</screen>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296281" xreflabel=""/>To check root squash parameters, use the lctl get_param command:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296282" xreflabel=""/>lctl get_param mds.Lustre-MDT0000.root_squash
+<anchor xml:id="dbdoclet.50438221_pgfId-1296283" xreflabel=""/>lctl get_param mds.Lustre-MDT000*.nosquash_nids
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438221_pgfId-1296284" xreflabel=""/>An empty nosquash_nids list is reported as NONE.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438221_pgfId-1293871" xreflabel=""/>22.2.3 Tips on Using <anchor xml:id="dbdoclet.50438221_marker-1296366" xreflabel=""/>Root Squash</title>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296298" xreflabel=""/>Lustre configuration management limits root squash in several ways.</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296299" xreflabel=""/> The lctl conf_param value overwrites the parameterâ€™s previous value. If the new value uses an incorrect syntax, then the system continues with the old parameters and the previously-correct value is lost on remount. That is, be careful doing root squash tuning.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296300" xreflabel=""/>mkfs.lustre  and tunefs.lustre do not perform syntax checking. If the root squash parameters are incorrect, they are ignored on mount and the default values are used instead.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296301" xreflabel=""/> Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as &lt;decnum&gt;&apos;:&apos;&lt;decnum&gt;. The nosquash_nids parameter should follow LNET NID range list syntax.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1296302" xreflabel=""/>LNET NID range syntax:</para>
+        <screen><anchor xml:id="dbdoclet.50438221_pgfId-1296303" xreflabel=""/>&lt;nidlist&gt;     :== &lt;nidrange&gt; [ &apos; &apos; &lt;nidrange&gt; ]
+<anchor xml:id="dbdoclet.50438221_pgfId-1296304" xreflabel=""/>&lt;nidrange&gt;   :== &lt;addrrange&gt; &apos;@&apos; &lt;net&gt;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296305" xreflabel=""/>&lt;addrrange&gt;  :== &apos;*&apos; |
+<anchor xml:id="dbdoclet.50438221_pgfId-1296306" xreflabel=""/>           &lt;ipaddr_range&gt; |
+<anchor xml:id="dbdoclet.50438221_pgfId-1296307" xreflabel=""/>           &lt;numaddr_range&gt;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296308" xreflabel=""/>&lt;ipaddr_range&gt;       :==
+<anchor xml:id="dbdoclet.50438221_pgfId-1296309" xreflabel=""/>&lt;numaddr_range&gt;.&lt;numaddr_range&gt;.&lt;numaddr_range&gt;.&lt;numaddr_range&gt;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296310" xreflabel=""/>&lt;numaddr_range&gt;      :== &lt;number&gt; |
+<anchor xml:id="dbdoclet.50438221_pgfId-1296311" xreflabel=""/>                   &lt;expr_list&gt;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296312" xreflabel=""/>&lt;expr_list&gt;  :== &apos;[&apos; &lt;range_expr&gt; [ &apos;,&apos; &lt;range_expr&gt;] &apos;]&apos;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296313" xreflabel=""/>&lt;range_expr&gt; :== &lt;number&gt; |
+<anchor xml:id="dbdoclet.50438221_pgfId-1296314" xreflabel=""/>           &lt;number&gt; &apos;-&apos; &lt;number&gt; |
+<anchor xml:id="dbdoclet.50438221_pgfId-1296315" xreflabel=""/>           &lt;number&gt; &apos;-&apos; &lt;number&gt; &apos;/&apos; &lt;number&gt;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296316" xreflabel=""/>&lt;net&gt;        :== &lt;netname&gt; | &lt;netname&gt;&lt;number&gt;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296317" xreflabel=""/>&lt;netname&gt;    :== &quot;lo&quot; | &quot;tcp&quot; | &quot;o2ib&quot; | &quot;cib&quot; | &quot;openib&quot; | &quot;iib&quot; | 
+<anchor xml:id="dbdoclet.50438221_pgfId-1296318" xreflabel=""/>           &quot;vib&quot; | &quot;ra&quot; | &quot;elan&quot; | &quot;gm&quot; | &quot;mx&quot; | &quot;ptl&quot;
+<anchor xml:id="dbdoclet.50438221_pgfId-1296319" xreflabel=""/>&lt;number&gt;     :== &lt;nonnegative decimal&gt; | &lt;hexadecimal&gt;
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438221_pgfId-1296320" xreflabel=""/>For networks using numeric addresses (e.g. elan), the address range must be specified in the &lt;numaddr_range&gt; syntax. For networks using IP addresses, the address range must be in the &lt;ipaddr_range&gt;. For example, if elan is using numeric addresses, 1.2.3.4@elan is incorrect.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1295697" xreflabel=""/> </para>
+        <!--
+Begin SiteCatalyst code version: G.5.
+-->
+        <!--
+End SiteCatalyst code version: G.5.
+-->
+          <informaltable frame="none">
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="33*"/>
+            <colspec colname="c2" colwidth="33*"/>
+            <colspec colname="c3" colwidth="33*"/>
+            
+            
+            
+            <tbody>
+              <row>
+                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                <entry align="right"><para>821-2076-10</para></entry>
+                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringQuotas.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="IV_LustreTuning.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link></para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><link xl:href=""/></para>
+        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+      </section>
+    </section>
+  </section>
+</article>

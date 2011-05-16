@@ -1,0 +1,825 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Benchmarking Lustre Performance (Lustre I/O Kit)</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="LNETSelfTest.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="LustreTuning.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438212_pgfId-874" xreflabel=""/>C H A P T E R  24<anchor xml:id="dbdoclet.50438212_37215" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438212_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438212_66186" xreflabel=""/>Benchmarking Lustre Performance (Lustre I/O Kit)</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438212_pgfId-1289895" xreflabel=""/>This chapter describes the Lustre I/O kit, a collection of I/O benchmarking tools for a Lustre cluster, and PIOS, a parallel I/O simulator for Linux and Solaris. It includes:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1289899" xreflabel=""/><link xl:href="BenchmarkingTests.html#50438212_44437">Using Lustre I/O Kit Tools</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303084" xreflabel=""/><link xl:href="BenchmarkingTests.html#50438212_51053">Testing I/O Performance of Raw Hardware (sgpdd_survey)</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303088" xreflabel=""/><link xl:href="BenchmarkingTests.html#50438212_26516">Testing OST Performance (obdfilter_survey)</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303097" xreflabel=""/><link xl:href="BenchmarkingTests.html#50438212_85136">Testing OST I/O Performance (ost_survey)</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303101" xreflabel=""/><link xl:href="BenchmarkingTests.html#50438212_58201">Collecting Application Profiling Information (stats-collect)</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438212_pgfId-1289909" xreflabel=""/></title>
+    <section remap="h2">
+      <title>24.1 <anchor xml:id="dbdoclet.50438212_44437" xreflabel=""/>Using Lustre I/O Kit Tools</title>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1302857" xreflabel=""/>The tools in the Lustre I/O Kit are used to benchmark Lustre hardware and validate that it is working as expected before you install the Lustre software. It can also be used to to validate the performance of the various hardware and software layers in the cluster and also to find and troubleshoot I/O issues.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1300612" xreflabel=""/>Typically, performance is measured starting with single raw devices and then proceeding to groups of devices. Once raw performance has been established, other software layers are then added incrementally and tested.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1289911" xreflabel=""/>24.1.1 Contents of the Lustre I/O Kit</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303002" xreflabel=""/>The I/O kit contains three tests, each of which tests a progressively higher layer in the Lustre stack:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1300548" xreflabel=""/>sgpdd_survey  - Measure basic â€œbare metalâ€ performance of devices while bypassing the kernel block device layers, buffer cache, and file system.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1300572" xreflabel=""/>obdfilter_survey  - Measure the performance of one or more OSTs directly on the OSS node or alternately over the network from a Lustre client.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1300557" xreflabel=""/>ost_survey  - Performs I/O against OSTs individually to allow performance comparisons to detect if an OST is performing suboptimally due to hardware issues.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1300595" xreflabel=""/>Typically with these tests, Lustre should deliver 85-90% of the raw device performance.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1300756" xreflabel=""/>A utility stats-collect is also provided to collect application profiling information from Lustre clients and servers. See <link xl:href="BenchmarkingTests.html#50438212_58201">Collecting Application Profiling Information (stats-collect)</link> for more information.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1289914" xreflabel=""/>24.1.2 Preparing to Use the Lustre <anchor xml:id="dbdoclet.50438212_marker-1289913" xreflabel=""/>I/O Kit</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1300699" xreflabel=""/>The following prerequisites must be met to use the tests in the Lustre I/O kit:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1300700" xreflabel=""/> Password-free remote access to nodes in the system (provided by ssh or rsh).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303852" xreflabel=""/> LNET self-test completed to test that Lustre Networking has been properly installed and configured. See <link xl:href="LNETSelfTest.html#50438223_71556">Chapter 23</link>: <link xl:href="LNETSelfTest.html#50438223_21832">Testing Lustre Network Performance (LNET Self-Test)</link>.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1300701" xreflabel=""/> Lustre file system software installed.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1300702" xreflabel=""/>sg3_utils  package providing the sgp_dd tool (sg3_utils is a separate RPM package available online using YUM).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1289915" xreflabel=""/>Download the Lustre I/O kit (lustre-iokit)from:</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1300015" xreflabel=""/><link xl:href="http://downloads.lustre.org/public/tools/lustre-iokit/">http://downloads.lustre.org/public/tools/lustre-iokit/</link></para>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>24.2 Testing I/O Performance of Raw Hardware (sgpdd_survey<anchor xml:id="dbdoclet.50438212_51053" xreflabel=""/><anchor xml:id="dbdoclet.50438212_marker-1302844" xreflabel=""/>)</title>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1289936" xreflabel=""/>The sgpdd_survey tool is used to test bare metal I/O performance of the raw hardware, while bypassing as much of the kernel as possible. This survey may be used to characterize the performance of a SCSI device by simulating an OST serving multiple stripe files. The data gathered by this survey can help set expectations for the performance of a Lustre OST using this device.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1300866" xreflabel=""/>The script uses sgp_dd to carry out raw sequential disk I/O. It runs with variable numbers of sgp_dd threads to show how performance varies with different request queue depths.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1300867" xreflabel=""/>The script spawns variable numbers of sgp_dd instances, each reading or writing a separate area of the disk to demonstrate performance variance within a number of concurrent stripe files.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1305925" xreflabel=""/>Several tips and insights for disk performance measurement are described below. Some of this information is specific to RAID arrays and/or the Linux RAID implementation.</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1305926" xreflabel=""/><emphasis>Performance is limited by the slowest disk.</emphasis></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1305927" xreflabel=""/>Before creating a RAID array, benchmark all disks individually. We have frequently encountered situations where drive performance was not consistent for all devices in the array. Replace any disks that are significantly slower than the rest.</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1305928" xreflabel=""/><emphasis>Disks and arrays are very sensitive to request size.</emphasis></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1305929" xreflabel=""/>To identify the optimal request size for a given disk, benchmark the disk with different record sizes ranging from 4 KB to 1 to 2 MB.</para>
+      <informaltable frame="none">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="5*"/>
+          <colspec colname="c2" colwidth="95*"/>
+          
+          
+          <tbody>
+            <row>
+              <entry><para><inlinemediaobject><imageobject role="html">
+                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
+                    </imageobject>
+<imageobject role="fo">
+                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
+                    </imageobject>
+</inlinemediaobject></para></entry>
+              <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1300876" xreflabel=""/>The sgpdd_survey script overwrites the device being tested, which results in the <emphasis>LOSS OF ALL DATA</emphasis> on that device. Exercise caution when selecting the device to be tested.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis> Array performance with all LUNs loaded does not always match the performance of a single LUN when tested in isolation.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303815" xreflabel=""/></para>
+      <para><emphasis role="bold">Prequisites:</emphasis></para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1300842" xreflabel=""/>sgp_dd  tool in the sg3_utils package</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1300845" xreflabel=""/> Lustre software is <emphasis>NOT</emphasis> required</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1289939" xreflabel=""/>The device(s) being tested must meet one of these two requirements:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1300909" xreflabel=""/> If the device is a SCSI device, it must appear in the output of sg_map (make sure the kernel module sg is loaded).</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1300920" xreflabel=""/> If the device is a raw device, it must appear in the output of raw -qa.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1300930" xreflabel=""/>Raw and SCSI devices cannot be mixed in the test specification.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1300900" xreflabel=""/>If you need to create raw devices to use the sgpdd_survey tool, note that raw device 0 cannot be used due to a bug in certain versions of the &quot;raw&quot; utility (including that shipped with RHEL4U4.)</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1289945" xreflabel=""/>24.2.1 Tuning Linux Storage Devices</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303368" xreflabel=""/>To get large I/O transfers (1 MB) to disk, it may be necessary to tune several kernel parameters as specified:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1303369" xreflabel=""/>/sys/block/sdN/queue/max_sectors_kb = 4096
+<anchor xml:id="dbdoclet.50438212_pgfId-1303370" xreflabel=""/>/sys/block/sdN/queue/max_phys_segments = 256
+<anchor xml:id="dbdoclet.50438212_pgfId-1303371" xreflabel=""/>/proc/scsi/sg/allow_dio = 1
+<anchor xml:id="dbdoclet.50438212_pgfId-1303372" xreflabel=""/>/sys/module/ib_srp/parameters/srp_sg_tablesize = 255
+<anchor xml:id="dbdoclet.50438212_pgfId-1304119" xreflabel=""/>/sys/block/sdN/queue/scheduler</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1303366" xreflabel=""/>24.2.2 Running sgpdd_survey</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304151" xreflabel=""/>The sgpdd_survey script must be customized for the particular device being tested and for the location where the script saves its working and result files (by specifying the ${rslt} variable). Customization variables are described at the beginning of the script.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1301030" xreflabel=""/>When the sgpdd_survey script runs, it creates a number of working files and a pair of result files. The names of all the files created start with the prefixdefined in the variable ${rslt}. (The default value is /tmp.) The files include:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301035" xreflabel=""/> File containing standard output data (same as stdout)</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1301031" xreflabel=""/>${rslt}_<emphasis>&lt;date/time&gt;</emphasis>.summary<emphasis/></screen>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301053" xreflabel=""/> Temporary (tmp) files</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1301032" xreflabel=""/>${rslt}_<emphasis>&lt;date/time&gt;</emphasis>_*
+</screen>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301063" xreflabel=""/> Collected tmp files for post-mortem</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1289951" xreflabel=""/>${rslt}_<emphasis>&lt;date/time&gt;</emphasis>.detail
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1289952" xreflabel=""/>The stdout and the .summary file will contain lines like this:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1289953" xreflabel=""/>total_size 8388608K rsz 1024 thr 1 crg 1 180.45 MB/s 1 x 180.50 \=/ 180.50 \
+MB/s
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1289954" xreflabel=""/>Each line corresponds to a run of the test. Each test run will have a different number of threads, record size, or number of regions.</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303307" xreflabel=""/>total_size  - Size of file being tested in KBs (8 GB in above example).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303308" xreflabel=""/>rsz  - Record size in KBs (1 MB in above example).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303311" xreflabel=""/>thr  - Number of threads generating I/O (1 thread in above example).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303312" xreflabel=""/> crg - Current regions, the number of disjount areas on the disk to which I/O is being sent (1 region in above example, indicating that no seeking is done).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303313" xreflabel=""/>MB/s  - Aggregate bandwidth measured by dividing the total amount of data by the elapsed time (180.45 MB/s in the above example).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1303314" xreflabel=""/>MB/s  - The remaining numbers show the number of regions X performance of the slowest disk as a sanity check on the aggregate bandwidth.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1289955" xreflabel=""/>If there are so many threads that the sgp_dd script is unlikely to be able to allocate I/O buffers, then ENOMEM is printed in place of the aggregate bandwidth result.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1289956" xreflabel=""/>If one or more sgp_dd instances do not successfully report a bandwidth number, then FAILED is printed in place of the aggregate bandwidth result.</para>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>24.3 <anchor xml:id="dbdoclet.50438212_26516" xreflabel=""/><anchor xml:id="dbdoclet.50438212_40624" xreflabel=""/>Testing OST Performance (obdfilter_survey<anchor xml:id="dbdoclet.50438212_marker-1289957" xreflabel=""/>)</title>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1301303" xreflabel=""/>The obdfilter_survey script generates sequential I/O from varying numbers of threads and objects (files) to simulate the I/O patterns of a Lustre client.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1301200" xreflabel=""/>The obdfilter_survey script can be run directly on the OSS node to measure the OST storage performance without any intervening network, or it can be run remotely on a Lustre client to measure the OST performance including network overhead.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303417" xreflabel=""/>The obdfilter_survey is used to characterize the performance of the following:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1289960" xreflabel=""/><emphasis role="bold">Local file system</emphasis>  - In this mode, the obdfilter_survey script exercises one or more instances of the obdfilter directly. The script may run on one or more OSS nodes, for example, when the OSSs are all attached to the same multi-ported disk subsystem.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1289962" xreflabel=""/>Run the script using the case=disk parameter to run the test against all the local OSTs. The script automatically detects all local OSTs and includes them in the survey.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303453" xreflabel=""/>To run the test against only specific OSTs, run the script using the target= parameter to list the OSTs to be tested explicitly. If some OSTs are on remote nodes, specify their hostnames in addition to the OST name (for example, oss2:lustre-OST0004).</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303461" xreflabel=""/>All obdfilter instances are driven directly. The script automatically loads the obdecho module (if required) and creates one instance of echo_client for each obdfilter instance in order to generate I/O requests directly to the OST.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1304398" xreflabel=""/>For more details, see <link xl:href="BenchmarkingTests.html#50438212_59319">Testing Local Disk Performance</link>.</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1289963" xreflabel=""/><emphasis role="bold">Network</emphasis>  - In this mode, the Lustre client generates I/O requests over the network but these requests are not sent to the OST file system. The OSS node runs the obdecho server to receive the requests but discards them before they are sent to the disk.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1303500" xreflabel=""/>Pass the parameters case=network and target=<emphasis>&lt;hostname</emphasis>|<emphasis>IP_of_server&gt;</emphasis> to the script. For each network case, the script does the required setup.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1304403" xreflabel=""/>For more details, see <link xl:href="BenchmarkingTests.html#50438212_36037">Testing Network Performance</link></para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1304334" xreflabel=""/><emphasis role="bold">Remote file system over the network</emphasis>  - In this mode the obdfilter_survey script generates I/O from a Lustre client to a remote OSS to write the data to the file system.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1304336" xreflabel=""/>To run the test against all the local OSCs, pass the parameter case=netdisk to the script. Alternately you can pass the target= parameter with one or more OSC devices (e.g., lustre-OST0000-osc-ffff88007754bc00) against which the tests are to be run.</para>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1304408" xreflabel=""/>For more details, see <link xl:href="BenchmarkingTests.html#50438212_62662">Testing Remote Disk Performance</link>.</para>
+      <informaltable frame="none">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="5*"/>
+          <colspec colname="c2" colwidth="95*"/>
+          
+          
+          <tbody>
+            <row>
+              <entry><para><inlinemediaobject><imageobject role="html">
+                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
+                    </imageobject>
+<imageobject role="fo">
+                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
+                    </imageobject>
+</inlinemediaobject></para></entry>
+              <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1304418" xreflabel=""/>The obdfilter_survey script is destructive and should not be run on devices that containing existing data that needs to be preserved. Thus, tests using obdfilter_survey should be run before the Lustre file system is placed in production.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis> If the obdfilter_survey test is terminated before it completes, some small amount of space is leaked. You can either ignore it or reformat the file system.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis> The obdfilter_survey script is <emphasis>NOT</emphasis> scalable beyond tens of OSTs since it is only intended to measure the I/O performance of individual storage subsystems, not the scalability of the entire system.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1297549" xreflabel=""/>The obdfilter_survey script must be customized, depending on the components under test and where the scriptâ€™s working files should be kept. Customization variables are described at the beginning of the obdfilter_survey script. In particular, pay attention to the listed maximum values listed for each parameter in the script.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1289969" xreflabel=""/>24.3.1 <anchor xml:id="dbdoclet.50438212_59319" xreflabel=""/>Testing Local Disk Performance</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1298366" xreflabel=""/>The obdfilter_survey script can be run automatically or manually against a local disk. This script profiles the overall throughput of storage hardware, including the file system and RAID layers managing the storage, by sending workloads to the OSTs that vary in thread count, object count, and I/O size.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1298465" xreflabel=""/>When the obdfilter_survey script is run, it provides information about the performance abilities of the storage hardware and shows the saturation points.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303569" xreflabel=""/>The plot-obdfilter script generates from the output of the obdfilter_survey a CSV file and parameters for importing into a spreadsheet or gnuplot to visualize the data.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297883" xreflabel=""/>To run the obdfilter_survey script, create a standard Lustre configuration; no special setup is needed.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297701" xreflabel=""/><emphasis role="bold">To perform an automatic run:</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297574" xreflabel=""/> 1. Start the Lustre OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304489" xreflabel=""/>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297587" xreflabel=""/> 2. Verify that the obdecho module is loaded. Run:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1304502" xreflabel=""/>modprobe obdecho</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297591" xreflabel=""/> 3. Run the obdfilter_survey script with the parameter case=disk.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304517" xreflabel=""/>For example, to run a local test with up to two objects (nobjhi), up to two threads (thrhi), and 1024 MB transfer size (size):</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1297595" xreflabel=""/>$ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey
+<anchor xml:id="dbdoclet.50438212_pgfId-1304711" xreflabel=""/> 
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1299344" xreflabel=""/><emphasis role="bold">To perform a manual run:</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303657" xreflabel=""/> 1. Start the Lustre OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304535" xreflabel=""/>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305056" xreflabel=""/> 2. Verify that the obdecho module is loaded. Run:</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305057" xreflabel=""/>modprobe obdecho</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303655" xreflabel=""/> 3. Determine the OST names.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304551" xreflabel=""/>On the OSS nodes to be tested, run the lctldl command. The OST device names are listed in the fourth column of the output. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1303717" xreflabel=""/>$ lctl dl |grep obdfilter
+<anchor xml:id="dbdoclet.50438212_pgfId-1303733" xreflabel=""/>0 UP obdfilter lustre-OST0001 lustre-OST0001_UUID 1159
+<anchor xml:id="dbdoclet.50438212_pgfId-1303751" xreflabel=""/>2 UP obdfilter lustre-OST0002 lustre-OST0002_UUID 1159
+<anchor xml:id="dbdoclet.50438212_pgfId-1303742" xreflabel=""/>...
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303687" xreflabel=""/> 4. List all OSTs you want to test.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304568" xreflabel=""/>Use the target= parameter to list the OSTs separated by spaces. List the individual OSTs by name using the format <emphasis>&lt;fsname&gt;-&lt;OSTnumber&gt;</emphasis> (for example, lustre-OST0001). You do not have to specify an MDS or LOV.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1303805" xreflabel=""/> 5. Run the obdfilter_survey script with the target= parameter.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304650" xreflabel=""/>For example, to run a local test with up to two objects (nobjhi), up to two threads (thrhi), and 1024 Mb (size) transfer size:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1303806" xreflabel=""/>$ nobjhi=2 thrhi=2 size=1024 targets=â€lustre-OST0001 \
+<anchor xml:id="dbdoclet.50438212_pgfId-1304757" xreflabel=""/>lustre-OST0002â€ sh obdfilter-survey
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1289982" xreflabel=""/>24.3.2 <anchor xml:id="dbdoclet.50438212_36037" xreflabel=""/>Testing Network Performance</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1289983" xreflabel=""/>The obdfilter_survey script can only be run automatically against a network; no manual test is provided.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297847" xreflabel=""/>To run the network test, a specific Lustre setup is needed. Make sure that these configuration requirements have been met.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305077" xreflabel=""/><emphasis role="bold">To perform an automatic run:</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305363" xreflabel=""/> 1. Start the Lustre OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305364" xreflabel=""/>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305365" xreflabel=""/> 2. Verify that the obdecho module is loaded. Run:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1305366" xreflabel=""/>modprobe obdecho</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305389" xreflabel=""/> 3. Start lctl and check the device list, which must be empty. Run:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1305940" xreflabel=""/>lctl dl
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305639" xreflabel=""/> 4. Run the obdfilter_survey script with the parameters case=network and <emphasis role="bold">targets=</emphasis><emphasis>&lt;hostname</emphasis>|<emphasis>ip_of_server&gt;</emphasis>. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1304777" xreflabel=""/>$ nobjhi=2 thrhi=2 size=1024 targets=â€oss1 oss2â€ case=network sh obdfilte\
+r-survey
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297769" xreflabel=""/> 5. On the server side, view the statistics at:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1297820" xreflabel=""/>/proc/fs/lustre/obdecho/<emphasis>&lt;echo_srv&gt;</emphasis>/stats
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297824" xreflabel=""/>where <emphasis>&lt;echo_srv&gt;</emphasis> is the obdecho server created by the script.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1297766" xreflabel=""/>24.3.3 <anchor xml:id="dbdoclet.50438212_62662" xreflabel=""/>Testing Remote Disk Performance</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297832" xreflabel=""/>The obdfilter_survey script can be run automatically or manually against a network disk. To run the network disk test, start with a standard Lustre configuration. No special setup is needed.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297904" xreflabel=""/><emphasis role="bold">To perform an automatic run:</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305421" xreflabel=""/> 1. Start the Lustre OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305422" xreflabel=""/>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305423" xreflabel=""/> 2. Verify that the obdecho module is loaded. Run:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1305424" xreflabel=""/>modprobe obdecho</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297925" xreflabel=""/> 3. Run the obdfilter_survey script with the parameter case=netdisk. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1297926" xreflabel=""/>$ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1297909" xreflabel=""/><emphasis role="bold">To perform a manual run:</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305433" xreflabel=""/> 1. Start the Lustre OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305434" xreflabel=""/>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305435" xreflabel=""/> 2. Verify that the obdecho module is loaded. Run:</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305436" xreflabel=""/>modprobe obdecho</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305437" xreflabel=""/> 3. Determine the OSC names.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305438" xreflabel=""/>On the OSS nodes to be tested, run the lctldl command. The OSC device names are listed in the fourth column of the output. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1305483" xreflabel=""/>$ lctl dl |grep obdfilter
+<anchor xml:id="dbdoclet.50438212_pgfId-1305461" xreflabel=""/>3 UP osc lustre-OST0000-osc-ffff88007754bc00 54b91eab-0ea9-1516-b571-5e6df3\
+49592e 5
+<anchor xml:id="dbdoclet.50438212_pgfId-1305462" xreflabel=""/>4 UP osc lustre-OST0001-osc-ffff88007754bc00 54b91eab-0ea9-1516-b571-5e6df3\
+49592e 5
+<anchor xml:id="dbdoclet.50438212_pgfId-1305515" xreflabel=""/>...
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305443" xreflabel=""/> 4. List all OSCs you want to test.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305444" xreflabel=""/>Use the target= parameter to list the OSCs separated by spaces. List the individual OSCs by name seperated by spaces using the format <emphasis>&lt;fsname&gt;-&lt;OST_name&gt;</emphasis>-osc-<emphasis>&lt;OSC_number&gt;</emphasis> (for example, lustre-OST0000-osc-ffff88007754bc00). You <emphasis role="bold">do not have to specify an MDS or LOV.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305445" xreflabel=""/> 5. Run the <emphasis role="bold">o</emphasis>bdfilter_survey script with the target= parameter and case=netdisk.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305446" xreflabel=""/>An example of a local test run with up to two objects (nobjhi), up to two threads (thrhi), and 1024 Mb (size) transfer size is shown below:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1305576" xreflabel=""/>$ nobjhi=2 thrhi=2 size=1024 \
+<anchor xml:id="dbdoclet.50438212_pgfId-1305577" xreflabel=""/>targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
+<anchor xml:id="dbdoclet.50438212_pgfId-1305578" xreflabel=""/>lustre-OST0001-osc-ffff88007754bc00&quot; \ 
+<anchor xml:id="dbdoclet.50438212_pgfId-1305579" xreflabel=""/>sh obdfilter-survey
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1290021" xreflabel=""/>24.3.4 Output Files</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1298013" xreflabel=""/>When the obdfilter_survey script runs, it creates a number of working files and a pair of result files. All files start with the prefix defined in the variable ${rslt}.</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="50*"/>
+            <colspec colname="c2" colwidth="50*"/>
+            <thead>
+              <row>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438212_pgfId-1303053" xreflabel=""/>File</emphasis></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438212_pgfId-1303055" xreflabel=""/>Description</emphasis></para></entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303057" xreflabel=""/>${rslt}.summary</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303059" xreflabel=""/>Same as stdout</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303061" xreflabel=""/>${rslt}.script_*</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303063" xreflabel=""/>Per-host test script files</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303065" xreflabel=""/>${rslt}.detail_tmp*</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303067" xreflabel=""/>Per-OST result files</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303069" xreflabel=""/>${rslt}.detail</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1303071" xreflabel=""/>Collected result files for post-mortem</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1290022" xreflabel=""/>The obdfilter_survey script iterates over the given number of threads and objects performing the specified tests and checks that all test processes have completed successfully.</para>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1298109" xreflabel=""/>The obdfilter_survey script may not clean up properly if it is aborted or if it encounters an unrecoverable error. In this case, a manual cleanup may be required, possibly including killing any running instances of lctl (local or remote), removing echo_client instances created by the script and unloading obdecho.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438212_pgfId-1298104" xreflabel=""/>24.3.4.1 Script Output</title>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1298134" xreflabel=""/>The .summary file and stdout of the obdfilter_survey script contain lines like:</para>
+          <screen><anchor xml:id="dbdoclet.50438212_pgfId-1294098" xreflabel=""/>ost 8 sz 67108864K rsz 1024 obj 8 thr 8 write 613.54 [ 64.00, 82.00]
+</screen>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1294150" xreflabel=""/>Where:</para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438212_pgfId-1294115" xreflabel=""/>Parameter and value</emphasis></para></entry>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438212_pgfId-1294117" xreflabel=""/>Description</emphasis></para></entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294119" xreflabel=""/>ost 8</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294121" xreflabel=""/>Total number of OSTs being tested.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294123" xreflabel=""/>sz 67108864K</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294125" xreflabel=""/>Total amount of data read or written (in KB).</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294127" xreflabel=""/>rsz 1024</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294129" xreflabel=""/>Record size (size of each echo_client I/O, in KB).</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294131" xreflabel=""/>obj 8</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294133" xreflabel=""/>Total number of objects over all OSTs.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294135" xreflabel=""/>thr 8</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294137" xreflabel=""/>Total number of threads over all OSTs and objects.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294139" xreflabel=""/>write</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294141" xreflabel=""/>Test name. If more tests have been specified, they all appear on the same line.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294143" xreflabel=""/>613.54</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294145" xreflabel=""/>Aggregate bandwidth over all OSTs (measured by dividing the total number of MB by the elapsed time).</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294147" xreflabel=""/>[64, 82.00]</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438212_pgfId-1294149" xreflabel=""/>Minimum and maximum instantaneous bandwidths on an individual OST.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          <informaltable frame="none">
+            <tgroup cols="1">
+              <colspec colname="c1" colwidth="100*"/>
+              <tbody>
+                <row>
+                  <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1290062" xreflabel=""/>Although the numbers of threads and objects are specified per-OST in the customization section of the script, the reported results are aggregated over all OSTs.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438212_pgfId-1290063" xreflabel=""/>24.3.4.2 Visualizing Results</title>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1290064" xreflabel=""/>It is useful to import the obdfilter_survey script summary data (it is fixed width) into Excel (or any graphing package) and graph the bandwidth versus the number of threads for varying numbers of concurrent regions. This shows how the OSS performs for a given number of concurrently-accessed objects (files) with varying numbers of I/Os in flight.</para>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1305127" xreflabel=""/>It is also useful to monitor and record average disk I/O sizes during each test using the â€œdisk io sizeâ€ histogram in the file /proc/fs/lustre/obdfilter/ (see <link xl:href="LustreProc.html#50438271_55057">Watching the OST Block I/O Stream</link> for details). These numbers help identify problems in the system when full-sized I/Os are not submitted to the underlying disk. This may be caused by problems in the device driver or Linux block layer.</para>
+          <para> */brw_stats</para>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1290066" xreflabel=""/>The plot-obdfilter script included in the I/O toolkit is an example of processing output files to a .csv format and plotting a graph using gnuplot.</para>
+        </section>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>24.4 <anchor xml:id="dbdoclet.50438212_85136" xreflabel=""/>Testing OST I/O Performance (ost_<anchor xml:id="dbdoclet.50438212_marker-1290067" xreflabel=""/>survey)</title>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1290069" xreflabel=""/>The ost_survey tool is a shell script that uses lfs setstripe to perform I/O against a single OST. The script writes a file (currently using dd) to each OST in the Lustre file system, and compares read and write speeds. The ost_survey tool is used to detect anomalies between otherwise identical disk subsystems.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438212_pgfId-1290070" xreflabel=""/>We have frequently discovered wide performance variations across all LUNs in a cluster. This may be caused by faulty disks, RAID parity reconstruction during the test, or faulty network hardware.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1290071" xreflabel=""/>To run the ost_survey script, supply a file size (in KB) and the Lustre mount point. For example, run:</para>
+      <screen><anchor xml:id="dbdoclet.50438212_pgfId-1290072" xreflabel=""/>$ ./ost-survey.sh 10 /mnt/lustre
+</screen>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1301765" xreflabel=""/>Typical output is:</para>
+      <screen><anchor xml:id="dbdoclet.50438212_pgfId-1290073" xreflabel=""/>Average read Speed:                  6.73
+<anchor xml:id="dbdoclet.50438212_pgfId-1290074" xreflabel=""/>Average write Speed:                       5.41
+<anchor xml:id="dbdoclet.50438212_pgfId-1290075" xreflabel=""/>read - Worst OST indx 0                    5.84 MB/s
+<anchor xml:id="dbdoclet.50438212_pgfId-1290076" xreflabel=""/>write - Worst OST indx 0           3.77 MB/s
+<anchor xml:id="dbdoclet.50438212_pgfId-1290077" xreflabel=""/>read - Best OST indx 1                     7.38 MB/s
+<anchor xml:id="dbdoclet.50438212_pgfId-1290078" xreflabel=""/>write - Best OST indx 1                    6.31 MB/s
+<anchor xml:id="dbdoclet.50438212_pgfId-1290079" xreflabel=""/>3 OST devices found
+<anchor xml:id="dbdoclet.50438212_pgfId-1290080" xreflabel=""/>Ost index 0 Read speed                     5.84            Write speed     \
+        3.77
+<anchor xml:id="dbdoclet.50438212_pgfId-1290081" xreflabel=""/>Ost index 0 Read time                      0.17            Write time      \
+        0.27
+<anchor xml:id="dbdoclet.50438212_pgfId-1290082" xreflabel=""/>Ost index 1 Read speed                     7.38            Write speed     \
+        6.31
+<anchor xml:id="dbdoclet.50438212_pgfId-1290083" xreflabel=""/>Ost index 1 Read time                      0.14            Write time      \
+        0.16
+<anchor xml:id="dbdoclet.50438212_pgfId-1290084" xreflabel=""/>Ost index 2 Read speed                     6.98            Write speed     \
+        6.16
+<anchor xml:id="dbdoclet.50438212_pgfId-1290085" xreflabel=""/>Ost index 2 Read time                      0.14            Write time      \
+        0.16 
+</screen>
+    </section>
+    <section remap="h2">
+      <title>24.5 <anchor xml:id="dbdoclet.50438212_58201" xreflabel=""/>Collecting Application Profiling Information (stats-collect)</title>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1299523" xreflabel=""/>The stats-collect utility contains the following scripts used to collect application profiling information from Lustre clients and servers:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1299524" xreflabel=""/>lstat.sh  - Script for a single node that is run on each profile node.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1299525" xreflabel=""/>gather_stats_everywhere.sh  - Script that collect statistics.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1299526" xreflabel=""/>config.sh  - Script that contains customized configuration descriptions.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438212_pgfId-1299527" xreflabel=""/>The stats-collect utility requires:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1299528" xreflabel=""/> Lustre to be installed and set up on your cluster</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438212_pgfId-1299529" xreflabel=""/> SSH and SCP access to these nodes without requiring a password</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438212_pgfId-1299531" xreflabel=""/>24.5.1 Using stats-collect</title>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1301821" xreflabel=""/>The stats-collect utility is configured by including profiling configuration variables in the config.sh script. Each configuration variable takes the following form, where 0 indicates statistics are to be collected only when the script starts and stops and <emphasis>n</emphasis> indicates the interval in seconds at which statistics are to be collected:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1301853" xreflabel=""/><emphasis>&lt;statistic&gt;</emphasis>_INTERVAL=<emphasis>[</emphasis>0<emphasis>|n]</emphasis></screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1301887" xreflabel=""/>Statistics that can be collected include:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301893" xreflabel=""/>VMSTAT  - Memory and CPU usage and aggregate read/write operations</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301898" xreflabel=""/>SERVICE  - Lustre OST and MDT RPC service statistics</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301899" xreflabel=""/>BRW  - OST block read/write statistics (brw_stats)</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301900" xreflabel=""/>SDIO  - SCSI disk IO statistics (sd_iostats)</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301901" xreflabel=""/>MBALLOC  - ldiskfs block allocation statistics</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301902" xreflabel=""/>IO  - Lustre target operations statistics</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301903" xreflabel=""/>JBD  - ldisfs journal statistics</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438212_pgfId-1301904" xreflabel=""/>CLIENT  - Lustre OSC request statistics</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1301989" xreflabel=""/>To collect profile information:</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1302001" xreflabel=""/> 1. Begin collecting statistics on each node specified in the config.sh script.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304893" xreflabel=""/>Starting the collect profile daemon on each node by entering:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1302024" xreflabel=""/>sh gather_stats_everywhere.sh config.sh start 
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1302184" xreflabel=""/> 2. Run the test.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1302047" xreflabel=""/> 3. Stop collecting statistics on each node, clean up the temporary file, and create a profiling tarball.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1304926" xreflabel=""/>Enter:</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1302051" xreflabel=""/>sh gather_stats_everywhere.sh config.sh stop <emphasis>&lt;log_name.tgz&gt;</emphasis></screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1305257" xreflabel=""/>When <emphasis>&lt;log_name.tgz&gt;</emphasis> is specified, a profile tarball /tmp/<emphasis>&lt;log_name.tgz&gt;</emphasis> is created.</para>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1302055" xreflabel=""/> 4. Analyze the collected statistics and create a csv tarball for the specified profiling data.</para>
+        <screen><anchor xml:id="dbdoclet.50438212_pgfId-1302059" xreflabel=""/>sh gather_stats_everywhere.sh config.sh analyse log_tarball.tgz csv
+</screen>
+        <para><anchor xml:id="dbdoclet.50438212_pgfId-1302020" xreflabel=""/> </para>
+        <!--
+Begin SiteCatalyst code version: G.5.
+-->
+        <!--
+End SiteCatalyst code version: G.5.
+-->
+          <informaltable frame="none">
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="33*"/>
+            <colspec colname="c2" colwidth="33*"/>
+            <colspec colname="c3" colwidth="33*"/>
+            
+            
+            
+            <tbody>
+              <row>
+                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                <entry align="right"><para>821-2076-10</para></entry>
+                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="LNETSelfTest.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="LustreTuning.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link></para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><link xl:href=""/></para>
+        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+      </section>
+    </section>
+  </section>
+</article>

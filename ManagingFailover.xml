@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Managing Failover</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingFileSystemIO.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringQuotas.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438213_pgfId-874" xreflabel=""/>C H A P T E R  20</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438213_pgfId-5529" xreflabel=""/>Managing <anchor xml:id="dbdoclet.50438213_24013" xreflabel=""/>Failover</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438213_pgfId-1301682" xreflabel=""/>This chapter describes failover in a Lustre system and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438213_pgfId-1287559" xreflabel=""/><link xl:href="ManagingFailover.html#50438213_13563">Lustre Failover and Multiple-Mount Protection</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438213_pgfId-1302083" xreflabel=""/>For information about high availability(HA) management software, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link> or the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</link>.<anchor xml:id="dbdoclet.50438213_61775" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438213_pgfId-1292319" xreflabel=""/></title>
+    <section remap="h2">
+      <title>20.1 <anchor xml:id="dbdoclet.50438213_13563" xreflabel=""/>Lustre Failover and <anchor xml:id="dbdoclet.50438213_marker-1301522" xreflabel=""/>Multiple-Mount Protection</title>
+      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292341" xreflabel=""/>The failover functionality in Lustre is implemented with the multiple-mount protection (MMP) feature, which protects the file system from being mounted simultaneously to more than one node. This feature is important in a shared storage environment (for example, when a failover pair of OSTs share a partition).</para>
+      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292342" xreflabel=""/>Lustre&apos;s backend file system, ldiskfs, supports the MMP mechanism. A block in the file system is updated by a kmmpd daemon at one second intervals, and a sequence number is written in this block. If the file system is cleanly unmounted, then a special &quot;clean&quot; sequence is written to this block. When mounting the file system, ldiskfs checks if the MMP block has a clean sequence or not.</para>
+      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292344" xreflabel=""/>Even if the MMP block has a clean sequence, ldiskfs waits for some interval to guard against the following situations:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438213_pgfId-1292346" xreflabel=""/> If I/O traffic is heavy, it may take longer for the MMP block to be updated.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438213_pgfId-1292404" xreflabel=""/> If another node is trying to mount the same file system, a &quot;race&quot; condition may occur.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292349" xreflabel=""/>With MMP enabled, mounting a clean file system takes at least 10 seconds. If the file system was not cleanly unmounted, then the file system mount may require additional time.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438213_pgfId-1292351" xreflabel=""/>The MMP feature is only supported on Linux kernel versions &gt;= 2.6.9.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438213_pgfId-1292355" xreflabel=""/>20.1.1 Working with Multiple-Mount Protection</title>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1300904" xreflabel=""/>On a new Lustre file system, MMP is automatically enabled by mkfs.lustre at format time if failover is being used and the kernel and e2fsprogs version support it. On an existing file system, a Lustre administrator can manually enable MMP when the file system is unmounted.</para>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1294096" xreflabel=""/>Use the following commands to determine whether MMP is running in Lustre and to enable or disable the MMP feature.</para>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1294086" xreflabel=""/>To determine if MMP is enabled, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1294100" xreflabel=""/>dumpe2fs -h &lt;device&gt;|grep mmp
+</screen>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292415" xreflabel=""/>Here is a sample command:</para>
+        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1292417" xreflabel=""/>dumpe2fs -h /dev/sdc | grep mmp 
+<anchor xml:id="dbdoclet.50438213_pgfId-1294106" xreflabel=""/>Filesystem features: has_journal ext_attr resize_inode dir_index 
+<anchor xml:id="dbdoclet.50438213_pgfId-1294109" xreflabel=""/>filetype extent mmp sparse_super large_file uninit_bg
+</screen>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292423" xreflabel=""/>To manually disable MMP, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1294115" xreflabel=""/>tune2fs -O ^mmp &lt;device&gt; 
+</screen>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292487" xreflabel=""/>To manually enable MMP, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1294119" xreflabel=""/>tune2fs -O mmp &lt;device&gt;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292426" xreflabel=""/>When MMP is enabled, if ldiskfs detects multiple mount attempts after the file system is mounted, it blocks these later mount attempts and reports the time when the MMP block was last updated, the node name, and the device name of the node where the file system is currently mounted.</para>
+        <!--
+Begin SiteCatalyst code version: G.5.
+-->
+        <!--
+End SiteCatalyst code version: G.5.
+-->
+          <informaltable frame="none">
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="33*"/>
+            <colspec colname="c2" colwidth="33*"/>
+            <colspec colname="c3" colwidth="33*"/>
+            
+            
+            
+            <tbody>
+              <row>
+                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                <entry align="right"><para>821-2076-10</para></entry>
+                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingFileSystemIO.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringQuotas.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link></para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><link xl:href=""/></para>
+        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+      </section>
+    </section>
+  </section>
+</article>

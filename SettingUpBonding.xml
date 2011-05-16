@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title></title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringStorage.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="InstallingLustre.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438258_pgfId-874" xreflabel=""/>C H A P T E R  7<anchor xml:id="dbdoclet.50438258_72593" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <screen><anchor xml:id="dbdoclet.50438258_pgfId-1295015" xreflabel=""/> 
+</screen>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438258_pgfId-1301675" xreflabel=""/><anchor xml:id="dbdoclet.50438258_99571" xreflabel=""/>Setting Up Network Interface Bonding</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438258_pgfId-1301676" xreflabel=""/>This chapter describes how to use multiple network interfaces in parallel to increase bandwidth and/or redundancy. Topics include:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301677" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_95824">Network Interface Bonding Overview</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301970" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_29107">Requirements</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301979" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_25353">Bonding Module Parameters</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301983" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_26899">Setting Up Bonding</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301987" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_54769">Configuring Lustre with Bonding</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301991" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_92244">Bonding References</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+   <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438258_pgfId-1302006" xreflabel=""/>Using network interface bonding is optional.</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438258_pgfId-1301679" xreflabel=""/></title>
+    <section remap="h2">
+      <title>7.1 <anchor xml:id="dbdoclet.50438258_95824" xreflabel=""/>Network Interface <anchor xml:id="dbdoclet.50438258_marker-1301678" xreflabel=""/>Bonding Overview</title>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301680" xreflabel=""/>Bonding, also known as link aggregation, trunking and port trunking, is a method of aggregating multiple physical network links into a single logical link for increased bandwidth.</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301681" xreflabel=""/>Several different types of bonding are available in Linux. All these types are referred to as â€œmodes,â€ and use the bonding kernel module.</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301682" xreflabel=""/>Modes 0 to 3 allow load balancing and fault tolerance by using multiple interfaces. Mode 4 aggregates a group of interfaces into a single virtual interface where all members of the group share the same speed and duplex settings. This mode is described under IEEE spec 802.3ad, and it is referred to as either â€œmode 4â€ or â€œ802.3ad.â€</para>
+    </section>
+    <section remap="h2">
+      <title>7.2 <anchor xml:id="dbdoclet.50438258_29107" xreflabel=""/>Require<anchor xml:id="dbdoclet.50438258_marker-1301684" xreflabel=""/>ments</title>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301686" xreflabel=""/>The most basic requirement for successful bonding is that both endpoints of the connection must be capable of bonding. In a normal case, the non-server endpoint is a switch. (Two systems connected via crossover cables can also use bonding.) Any switch used must explicitly handle 802.3ad Dynamic Link Aggregation.</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301687" xreflabel=""/>The kernel must also be configured with bonding. All supported Lustre kernels have bonding functionality. The network driver for the interfaces to be bonded must have the ethtool functionality to determine slave speed and duplex settings. All recent network drivers implement it.</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301688" xreflabel=""/>To verify that your interface works with ethtool, run:</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301689" xreflabel=""/># which ethtool
+<anchor xml:id="dbdoclet.50438258_pgfId-1301690" xreflabel=""/>/sbin/ethtool
+<anchor xml:id="dbdoclet.50438258_pgfId-1301691" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301692" xreflabel=""/># ethtool eth0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301693" xreflabel=""/>Settings for eth0:
+<anchor xml:id="dbdoclet.50438258_pgfId-1301694" xreflabel=""/>           Supported ports: [ TP MII ]
+<anchor xml:id="dbdoclet.50438258_pgfId-1301695" xreflabel=""/>           Supported link modes:   10baseT/Half 10baseT/Full/ 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301696" xreflabel=""/>                                   100baseT/Half 100baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301697" xreflabel=""/>           Supports auto-negotiation: Yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301698" xreflabel=""/>           Advertised link modes:  10baseT/Half 10baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301699" xreflabel=""/>                                   100baseT/Half 100baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301700" xreflabel=""/>           Advertised auto-negotiation: Yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301701" xreflabel=""/>           Speed: 100Mb/s
+<anchor xml:id="dbdoclet.50438258_pgfId-1301702" xreflabel=""/>           Duplex: Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301703" xreflabel=""/>           Port: MII
+<anchor xml:id="dbdoclet.50438258_pgfId-1301704" xreflabel=""/>           PHYAD: 1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301705" xreflabel=""/>           Transceiver: internal
+<anchor xml:id="dbdoclet.50438258_pgfId-1301706" xreflabel=""/>           Auto-negotiation: on
+<anchor xml:id="dbdoclet.50438258_pgfId-1301707" xreflabel=""/>           Supports Wake-on: pumbg
+<anchor xml:id="dbdoclet.50438258_pgfId-1301708" xreflabel=""/>           Wake-on: d
+<anchor xml:id="dbdoclet.50438258_pgfId-1301709" xreflabel=""/>           Current message level: 0x00000001 (1)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301710" xreflabel=""/>           Link detected: yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301711" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301712" xreflabel=""/># ethtool eth1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301713" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301714" xreflabel=""/>Settings for eth1:
+<anchor xml:id="dbdoclet.50438258_pgfId-1301715" xreflabel=""/>   Supported ports: [ TP MII ]
+<anchor xml:id="dbdoclet.50438258_pgfId-1301716" xreflabel=""/>   Supported link modes:   10baseT/Half 10baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301717" xreflabel=""/>                           100baseT/Half 100baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301718" xreflabel=""/>   Supports auto-negotiation: Yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301719" xreflabel=""/>   Advertised link modes:  10baseT/Half 10baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301720" xreflabel=""/>   100baseT/Half 100baseT/Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301721" xreflabel=""/>   Advertised auto-negotiation: Yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301722" xreflabel=""/>   Speed: 100Mb/s
+<anchor xml:id="dbdoclet.50438258_pgfId-1301723" xreflabel=""/>   Duplex: Full
+<anchor xml:id="dbdoclet.50438258_pgfId-1301724" xreflabel=""/>   Port: MII
+<anchor xml:id="dbdoclet.50438258_pgfId-1301725" xreflabel=""/>   PHYAD: 32
+<anchor xml:id="dbdoclet.50438258_pgfId-1301726" xreflabel=""/>   Transceiver: internal
+<anchor xml:id="dbdoclet.50438258_pgfId-1301727" xreflabel=""/>   Auto-negotiation: on
+<anchor xml:id="dbdoclet.50438258_pgfId-1301728" xreflabel=""/>   Supports Wake-on: pumbg
+<anchor xml:id="dbdoclet.50438258_pgfId-1301729" xreflabel=""/>   Wake-on: d
+<anchor xml:id="dbdoclet.50438258_pgfId-1301730" xreflabel=""/>   Current message level: 0x00000007 (7)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301731" xreflabel=""/>   Link detected: yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301732" xreflabel=""/>   To quickly check whether your kernel supports bonding, run:     
+<anchor xml:id="dbdoclet.50438258_pgfId-1301733" xreflabel=""/>   # grep ifenslave /sbin/ifup
+<anchor xml:id="dbdoclet.50438258_pgfId-1301734" xreflabel=""/>   # which ifenslave
+<anchor xml:id="dbdoclet.50438258_pgfId-1301735" xreflabel=""/>   /sbin/ifenslave
+</screen>
+    </section>
+    <section remap="h2">
+      <title>7.3 <anchor xml:id="dbdoclet.50438258_25353" xreflabel=""/>Bonding <anchor xml:id="dbdoclet.50438258_marker-1301747" xreflabel=""/>Module Parameters</title>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301749" xreflabel=""/>Bonding module parameters control various aspects of bonding.</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301750" xreflabel=""/>Outgoing traffic is mapped across the slave interfaces according to the transmit hash policy. For Lustre, we recommend that you set the xmit_hash_policy option to the layer3+4 option for bonding. This policy uses upper layer protocol information if available to generate the hash. This allows traffic to a particular network peer to span multiple slaves, although a single connection does not span multiple slaves.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301751" xreflabel=""/>$ xmit_hash_policy=layer3+4
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301752" xreflabel=""/>The miimon option enables users to monitor the link status. (The parameter is a time interval in milliseconds.) It makes an interface failure transparent to avoid serious network degradation during link failures. A reasonable default setting is 100 milliseconds; run:</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301753" xreflabel=""/>$ miimon=100
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301754" xreflabel=""/>For a busy network, increase the timeout.</para>
+    </section>
+    <section remap="h2">
+      <title>7.4 <anchor xml:id="dbdoclet.50438258_26899" xreflabel=""/><anchor xml:id="dbdoclet.50438258_26702" xreflabel=""/>Setting Up <anchor xml:id="dbdoclet.50438258_marker-1301757" xreflabel=""/>Bonding</title>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301759" xreflabel=""/>To set up bonding:</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301760" xreflabel=""/> 1. Create a virtual &apos;bond&apos; interface by creating a configuration file in:</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301761" xreflabel=""/>/etc/sysconfig/network-scripts/ # vi /etc/sysconfig/ network-scripts/ifcfg-\
+bond0
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301762" xreflabel=""/> 2. Append the following lines to the file.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301763" xreflabel=""/>DEVICE=bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301764" xreflabel=""/>IPADDR=192.168.10.79 # Use the free IP Address of your network
+<anchor xml:id="dbdoclet.50438258_pgfId-1301765" xreflabel=""/>NETWORK=192.168.10.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301766" xreflabel=""/>NETMASK=255.255.255.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301767" xreflabel=""/>USERCTL=no
+<anchor xml:id="dbdoclet.50438258_pgfId-1301768" xreflabel=""/>BOOTPROTO=none
+<anchor xml:id="dbdoclet.50438258_pgfId-1301769" xreflabel=""/>ONBOOT=yes
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301770" xreflabel=""/> 3. Attach one or more slave interfaces to the bond interface. Modify the eth0 and eth1 configuration files (using a VI text editor).</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301771" xreflabel=""/>a. Use the VI text editor to open the eth0 configuration file.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301772" xreflabel=""/># vi /etc/sysconfig/network-scripts/ifcfg-eth0
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301773" xreflabel=""/>b. Modify/append the eth0 file as follows:</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301774" xreflabel=""/>DEVICE=eth0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301775" xreflabel=""/>USERCTL=no
+<anchor xml:id="dbdoclet.50438258_pgfId-1301776" xreflabel=""/>ONBOOT=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301777" xreflabel=""/>MASTER=bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301778" xreflabel=""/>SLAVE=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301779" xreflabel=""/>BOOTPROTO=none
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301780" xreflabel=""/>c. Use the VI text editor to open the eth1 configuration file.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301781" xreflabel=""/># vi /etc/sysconfig/network-scripts/ifcfg-eth1
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301782" xreflabel=""/>d. Modify/append the eth1 file as follows:</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301783" xreflabel=""/>DEVICE=eth1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301784" xreflabel=""/>USERCTL=no
+<anchor xml:id="dbdoclet.50438258_pgfId-1301785" xreflabel=""/>ONBOOT=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301786" xreflabel=""/>MASTER=bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301787" xreflabel=""/>SLAVE=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301788" xreflabel=""/>BOOTPROTO=none
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301789" xreflabel=""/> 4. Set up the bond interface and its options in /etc/modprobe.conf. Start the slave interfaces by your normal network method.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301790" xreflabel=""/># vi /etc/modprobe.conf
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301791" xreflabel=""/>a. Append the following lines to the file.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301792" xreflabel=""/>alias bond0 bonding
+<anchor xml:id="dbdoclet.50438258_pgfId-1301793" xreflabel=""/>options bond0 mode=balance-alb miimon=100
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301794" xreflabel=""/>b. Load the bonding module.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301795" xreflabel=""/># modprobe bonding
+<anchor xml:id="dbdoclet.50438258_pgfId-1301796" xreflabel=""/># ifconfig bond0 up
+<anchor xml:id="dbdoclet.50438258_pgfId-1301797" xreflabel=""/># ifenslave bond0 eth0 eth1
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301798" xreflabel=""/> 5. Start/restart the slave interfaces (using your normal network method).</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438258_pgfId-1301799" xreflabel=""/>You must modprobe the bonding module for each bonded interface. If you wish to create bond0 and bond1, two entries in modprobe.conf are required.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301800" xreflabel=""/>The examples below are from RedHat systems. For setup use: /etc/sysconfig/networking-scripts/ifcfg-* The website referenced below includes detailed instructions for other configuration methods, instructions to use DHCP with bonding, and other setup details. We strongly recommend you use this website.</para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1302123" xreflabel=""/><link xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding">http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link></para>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301803" xreflabel=""/> 6. Check /proc/net/bonding to determine status on bonding. There should be a file there for each bond interface.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301804" xreflabel=""/># cat /proc/net/bonding/bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301805" xreflabel=""/>Ethernet Channel Bonding Driver: v3.0.3 (March 23, 2006)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301806" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301807" xreflabel=""/>Bonding Mode: load balancing (round-robin)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301808" xreflabel=""/>MII Status: up
+<anchor xml:id="dbdoclet.50438258_pgfId-1301809" xreflabel=""/>MII Polling Interval (ms): 0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301810" xreflabel=""/>Up Delay (ms): 0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301811" xreflabel=""/>Down Delay (ms): 0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301812" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301813" xreflabel=""/>Slave Interface: eth0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301814" xreflabel=""/>MII Status: up
+<anchor xml:id="dbdoclet.50438258_pgfId-1301815" xreflabel=""/>Link Failure Count: 0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301816" xreflabel=""/>Permanent HW addr: 4c:00:10:ac:61:e0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301817" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301818" xreflabel=""/>Slave Interface: eth1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301819" xreflabel=""/>MII Status: up
+<anchor xml:id="dbdoclet.50438258_pgfId-1301820" xreflabel=""/>Link Failure Count: 0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301821" xreflabel=""/>Permanent HW addr: 00:14:2a:7c:40:1d
+</screen>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301822" xreflabel=""/> 7. Use ethtool or ifconfig to check the interface state. ifconfig lists the first bonded interface as â€œbond0.â€</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301823" xreflabel=""/>ifconfig
+<anchor xml:id="dbdoclet.50438258_pgfId-1301824" xreflabel=""/>bond0      Link encap:Ethernet  HWaddr 4C:00:10:AC:61:E0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301825" xreflabel=""/>   inet addr:192.168.10.79  Bcast:192.168.10.255 \     Mask:255.255.255.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301826" xreflabel=""/>   inet6 addr: fe80::4e00:10ff:feac:61e0/64 Scope:Link
+<anchor xml:id="dbdoclet.50438258_pgfId-1301827" xreflabel=""/>   UP BROADCAST RUNNING MASTER MULTICAST  MTU:1500 Metric:1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301828" xreflabel=""/>   RX packets:3091 errors:0 dropped:0 overruns:0 frame:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301829" xreflabel=""/>   TX packets:880 errors:0 dropped:0 overruns:0 carrier:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301830" xreflabel=""/>   collisions:0 txqueuelen:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301831" xreflabel=""/>   RX bytes:314203 (306.8 KiB)  TX bytes:129834 (126.7 KiB)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301832" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301833" xreflabel=""/>eth0       Link encap:Ethernet  HWaddr 4C:00:10:AC:61:E0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301834" xreflabel=""/>   inet6 addr: fe80::4e00:10ff:feac:61e0/64 Scope:Link
+<anchor xml:id="dbdoclet.50438258_pgfId-1301835" xreflabel=""/>   UP BROADCAST RUNNING SLAVE MULTICAST  MTU:1500 Metric:1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301836" xreflabel=""/>   RX packets:1581 errors:0 dropped:0 overruns:0 frame:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301837" xreflabel=""/>   TX packets:448 errors:0 dropped:0 overruns:0 carrier:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301838" xreflabel=""/>   collisions:0 txqueuelen:1000
+<anchor xml:id="dbdoclet.50438258_pgfId-1301839" xreflabel=""/>   RX bytes:162084 (158.2 KiB)  TX bytes:67245 (65.6 KiB)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301840" xreflabel=""/>   Interrupt:193 Base address:0x8c00
+<anchor xml:id="dbdoclet.50438258_pgfId-1301841" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301842" xreflabel=""/>eth1       Link encap:Ethernet  HWaddr 4C:00:10:AC:61:E0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301843" xreflabel=""/>   inet6 addr: fe80::4e00:10ff:feac:61e0/64 Scope:Link
+<anchor xml:id="dbdoclet.50438258_pgfId-1301844" xreflabel=""/>   UP BROADCAST RUNNING SLAVE MULTICAST  MTU:1500 Metric:1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301845" xreflabel=""/>   RX packets:1513 errors:0 dropped:0 overruns:0 frame:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301846" xreflabel=""/>   TX packets:444 errors:0 dropped:0 overruns:0 carrier:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301847" xreflabel=""/>   collisions:0 txqueuelen:1000
+<anchor xml:id="dbdoclet.50438258_pgfId-1301848" xreflabel=""/>   RX bytes:152299 (148.7 KiB)  TX bytes:64517 (63.0 KiB)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301849" xreflabel=""/>   Interrupt:185 Base address:0x6000
+</screen>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438258_pgfId-1301850" xreflabel=""/>7.4.1 Examples</title>
+        <para><anchor xml:id="dbdoclet.50438258_pgfId-1301851" xreflabel=""/>This is an example showing modprobe.conf entries for bonding Ethernet interfaces eth1 and eth2 to bond0:</para>
+        <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301852" xreflabel=""/># cat /etc/modprobe.conf
+<anchor xml:id="dbdoclet.50438258_pgfId-1301853" xreflabel=""/>alias eth0 8139too
+<anchor xml:id="dbdoclet.50438258_pgfId-1301854" xreflabel=""/>alias scsi_hostadapter sata_via
+<anchor xml:id="dbdoclet.50438258_pgfId-1301855" xreflabel=""/>alias scsi_hostadapter1 usb-storage
+<anchor xml:id="dbdoclet.50438258_pgfId-1301856" xreflabel=""/>alias snd-card-0 snd-via82xx
+<anchor xml:id="dbdoclet.50438258_pgfId-1301857" xreflabel=""/>options snd-card-0 index=0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301858" xreflabel=""/>options snd-via82xx index=0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301859" xreflabel=""/>alias bond0 bonding
+<anchor xml:id="dbdoclet.50438258_pgfId-1301860" xreflabel=""/>options bond0 mode=balance-alb miimon=100
+<anchor xml:id="dbdoclet.50438258_pgfId-1301861" xreflabel=""/>options lnet networks=tcp
+<anchor xml:id="dbdoclet.50438258_pgfId-1301862" xreflabel=""/>alias eth1 via-rhine
+<anchor xml:id="dbdoclet.50438258_pgfId-1301863" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301864" xreflabel=""/># cat /etc/sysconfig/network-scripts/ifcfg-bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301865" xreflabel=""/>DEVICE=bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301866" xreflabel=""/>BOOTPROTO=none
+<anchor xml:id="dbdoclet.50438258_pgfId-1301867" xreflabel=""/>NETMASK=255.255.255.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301868" xreflabel=""/>IPADDR=192.168.10.79 # (Assign here the IP of the bonded interface.)
+<anchor xml:id="dbdoclet.50438258_pgfId-1301869" xreflabel=""/>ONBOOT=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301870" xreflabel=""/>USERCTL=no
+<anchor xml:id="dbdoclet.50438258_pgfId-1301871" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301872" xreflabel=""/>ifcfg-ethx 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301873" xreflabel=""/># cat /etc/sysconfig/network-scripts/ifcfg-eth0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301874" xreflabel=""/>TYPE=Ethernet
+<anchor xml:id="dbdoclet.50438258_pgfId-1301875" xreflabel=""/>DEVICE=eth0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301876" xreflabel=""/>HWADDR=4c:00:10:ac:61:e0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301877" xreflabel=""/>BOOTPROTO=none
+<anchor xml:id="dbdoclet.50438258_pgfId-1301878" xreflabel=""/>ONBOOT=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301879" xreflabel=""/>USERCTL=no
+<anchor xml:id="dbdoclet.50438258_pgfId-1301880" xreflabel=""/>IPV6INIT=no
+<anchor xml:id="dbdoclet.50438258_pgfId-1301881" xreflabel=""/>PEERDNS=yes
+<anchor xml:id="dbdoclet.50438258_pgfId-1301882" xreflabel=""/>MASTER=bond0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301883" xreflabel=""/>SLAVE=yes
+</screen>
+        <para><anchor xml:id="dbdoclet.50438258_pgfId-1301884" xreflabel=""/>In the following example, the bond0 interface is the master (MASTER) while eth0 and eth1 are slaves (SLAVE).</para>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438258_pgfId-1301885" xreflabel=""/>All slaves of bond0 have the same MAC address (Hwaddr) - bond0. All modes, except TLB and ALB, have this MAC address. TLB and ALB require a unique MAC address for each slave.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301886" xreflabel=""/>$ /sbin/ifconfig
+<anchor xml:id="dbdoclet.50438258_pgfId-1301887" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301888" xreflabel=""/>bond0Link encap:EthernetHwaddr 00:C0:F0:1F:37:B4
+<anchor xml:id="dbdoclet.50438258_pgfId-1301889" xreflabel=""/>inet addr:XXX.XXX.XXX.YYY Bcast:XXX.XXX.XXX.255 Mask:255.255.252.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301890" xreflabel=""/>UP BROADCAST RUNNING MASTER MULTICAST MTU:1500  Metric:1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301891" xreflabel=""/>RX packets:7224794 errors:0 dropped:0 overruns:0 frame:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301892" xreflabel=""/>TX packets:3286647 errors:1 dropped:0 overruns:1 carrier:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301893" xreflabel=""/>collisions:0 txqueuelen:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301894" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301895" xreflabel=""/>eth0Link encap:EthernetHwaddr 00:C0:F0:1F:37:B4
+<anchor xml:id="dbdoclet.50438258_pgfId-1301896" xreflabel=""/>inet addr:XXX.XXX.XXX.YYY Bcast:XXX.XXX.XXX.255 Mask:255.255.252.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301897" xreflabel=""/>UP BROADCAST RUNNING SLAVE MULTICAST MTU:1500  Metric:1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301898" xreflabel=""/>RX packets:3573025 errors:0 dropped:0 overruns:0 frame:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301899" xreflabel=""/>TX packets:1643167 errors:1 dropped:0 overruns:1 carrier:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301900" xreflabel=""/>collisions:0 txqueuelen:100
+<anchor xml:id="dbdoclet.50438258_pgfId-1301901" xreflabel=""/>Interrupt:10 Base address:0x1080
+<anchor xml:id="dbdoclet.50438258_pgfId-1301902" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438258_pgfId-1301903" xreflabel=""/>eth1Link encap:EthernetHwaddr 00:C0:F0:1F:37:B4
+<anchor xml:id="dbdoclet.50438258_pgfId-1301904" xreflabel=""/>inet addr:XXX.XXX.XXX.YYY Bcast:XXX.XXX.XXX.255 Mask:255.255.252.0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301905" xreflabel=""/>UP BROADCAST RUNNING SLAVE MULTICAST MTU:1500  Metric:1
+<anchor xml:id="dbdoclet.50438258_pgfId-1301906" xreflabel=""/>RX packets:3651769 errors:0 dropped:0 overruns:0 frame:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301907" xreflabel=""/>TX packets:1643480 errors:0 dropped:0 overruns:0 carrier:0
+<anchor xml:id="dbdoclet.50438258_pgfId-1301908" xreflabel=""/>collisions:0 txqueuelen:100
+<anchor xml:id="dbdoclet.50438258_pgfId-1301909" xreflabel=""/>Interrupt:9 Base address:0x1400
+</screen>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>7.5 <anchor xml:id="dbdoclet.50438258_54769" xreflabel=""/>Configuring <anchor xml:id="dbdoclet.50438258_marker-1301911" xreflabel=""/>Lustre with Bonding</title>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301913" xreflabel=""/>Lustre uses the IP address of the bonded interfaces and requires no special configuration. It treats the bonded interface as a regular TCP/IP interface. If needed, specify bond0 using the Lustre networks parameter in /etc/modprobe.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301914" xreflabel=""/>options lnet networks=tcp(bond0)
+</screen>
+    </section>
+    <section remap="h2">
+      <title>7.6 <anchor xml:id="dbdoclet.50438258_92244" xreflabel=""/>Bonding <anchor xml:id="dbdoclet.50438258_marker-1301915" xreflabel=""/>References</title>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301917" xreflabel=""/>We recommend the following bonding references:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438258_pgfId-1301918" xreflabel=""/> In the Linux kernel source tree, see documentation/networking/bonding.txt</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438258_pgfId-1301920" xreflabel=""/><link xl:href="http://linux-ip.net/html/ether-bonding.html">http://linux-ip.net/html/ether-bonding.html</link></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438258_pgfId-1301922" xreflabel=""/><link xl:href="http://www.sourceforge.net/projects/bonding">http://www.sourceforge.net/projects/bonding</link></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438258_pgfId-1301923" xreflabel=""/> Linux Foundation bonding website: <link xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding">http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438258_pgfId-1301924" xreflabel=""/>This is the most extensive reference and we highly recommend it. This website includes explanations of more complicated setups, including the use of DHCP with bonding.</para>
+      <screen><anchor xml:id="dbdoclet.50438258_pgfId-1301673" xreflabel=""/> 
+</screen>
+      <!--
+Begin SiteCatalyst code version: G.5.
+-->
+      <!--
+End SiteCatalyst code version: G.5.
+-->
+        <informaltable frame="none">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          
+          
+          
+          <tbody>
+            <row>
+              <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+              <entry align="right"><para>821-2076-10</para></entry>
+              <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringStorage.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="InstallingLustre.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><link xl:href=""/></para>
+      <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+    </section>
+  </section>
+</article>

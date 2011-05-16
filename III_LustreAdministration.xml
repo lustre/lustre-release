@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>P A R T III - Administering Lustre</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringFailover.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="LustreMonitoring.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438269_pgfId-369067" xreflabel=""/>P A R T  III</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438269_15166" xreflabel=""/>Administering Lustre</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438269_pgfId-1804" xreflabel=""/>Part III provides information about tools and procedures to use to administer a Lustre file system. You will find information in this section about:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369854" xreflabel=""/><link xl:href="LustreMonitoring.html#50438273_66186">Lustre Monitoring</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369901" xreflabel=""/><link xl:href="LustreOperations.html#50438194_31337">Lustre Operations</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369905" xreflabel=""/><link xl:href="LustreMaintenance.html#50438199_88593">Lustre Maintenance</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369909" xreflabel=""/><link xl:href="ManagingLNET.html#50438203_73376">Managing Lustre Networking (LNET)</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369913" xreflabel=""/><link xl:href="UpgradingLustre.html#50438205_66186">Upgrading Lustre</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369917" xreflabel=""/><link xl:href="BackupAndRestore.html#50438207_66186">Backing Up and Restoring a File System</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369921" xreflabel=""/><link xl:href="ManagingStripingFreeSpace.html#50438209_66186">Managing File Striping and Free Space</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369925" xreflabel=""/><link xl:href="ManagingFileSystemIO.html#50438211_66186">Managing the File System and I/O</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369929" xreflabel=""/><link xl:href="ManagingFailover.html#50438213_24013">Managing Failover</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369933" xreflabel=""/><link xl:href="ConfiguringQuotas.html#50438217_40026">Configuring and Managing Quotas</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438269_pgfId-369937" xreflabel=""/><link xl:href="ManagingSecurity.html#50438221_60239">Managing Lustre Security</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+   <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry><para><emphasis role="bold">Tip -</emphasis><anchor xml:id="dbdoclet.50438269_pgfId-369891" xreflabel=""/>The starting point for administering Lustre is to monitor all logs and console logs for system health:</para><para> - Monitor logs on all servers and all clients.</para><para> - Invest in tools that allow you to condense logs from multiple systems.</para><para> - Use the logging resources provided by Linux.</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+   <!--
+Begin SiteCatalyst code version: G.5.
+-->
+  <!--
+End SiteCatalyst code version: G.5.
+-->
+    <informaltable frame="none">
+    <tgroup cols="3">
+      <colspec colname="c1" colwidth="33*"/>
+      <colspec colname="c2" colwidth="33*"/>
+      <colspec colname="c3" colwidth="33*"/>
+      
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right"><para>821-2076-10</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringFailover.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="LustreMonitoring.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+</article>

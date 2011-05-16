@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title></title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="SettingUpBonding.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringLNET.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438261_pgfId-874" xreflabel=""/>C H A P T E R  8<anchor xml:id="dbdoclet.50438261_81829" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438261_pgfId-1288901" xreflabel=""/> </para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438261_pgfId-1292575" xreflabel=""/><anchor xml:id="dbdoclet.50438261_62973" xreflabel=""/>Installing the Lustre Software</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438261_pgfId-1292576" xreflabel=""/>This chapter describes how to install the Lustre software. It includes:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1293002" xreflabel=""/><link xl:href="InstallingLustre.html#50438261_99193">Preparing to Install the Lustre Software</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1293010" xreflabel=""/><link xl:href="InstallingLustre.html#50438261_41900">Lustre Installation Procedure</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <para><anchor xml:id="dbdoclet.50438261_pgfId-1294003" xreflabel=""/>For hardware/system requirements, see <link xl:href="SettingUpLustreSystem.html#50438256_38751">Chapter 5</link>: <link xl:href="SettingUpLustreSystem.html#50438256_66186">Setting Up a Lustre File System</link>.</para>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438261_pgfId-1294006" xreflabel=""/></title>
+    <section remap="h2">
+      <title>8.1 <anchor xml:id="dbdoclet.50438261_99193" xreflabel=""/>Preparing to Install the Lustre Software</title>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292580" xreflabel=""/>If you are using a supported Linux distribution and architecture, you can install Lustre from downloaded packages (RPMs). For a list of supported configurations, see the <link xl:href="http://wiki.lustre.org/index.php/Lustre_2.0">Lustre_2.0</link> topic on the Lustre wiki.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292581" xreflabel=""/>A list of supported Lustre LNET drivers can be found in <link xl:href="UnderstandingLustreNetworking.html#50438191_53094">Chapter 2</link>: <link xl:href="UnderstandingLustreNetworking.html#50438191_40026">Understanding Lustre Networking (LNET)</link>.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292583" xreflabel=""/>If you are not using a supported configuration, you can install Lustre directly from the source code. For more information on this installation method, see <link xl:href="InstallingLustrefrSourceCode.html#50438210_75891">Chapter 29</link>: <link xl:href="InstallingLustrefrSourceCode.html#50438210_67391">Installing Lustre from Source Code</link>.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438261_pgfId-1292590" xreflabel=""/>8.1.1 <anchor xml:id="dbdoclet.50438261_37079" xreflabel=""/>Required Software</title>
+        <para><anchor xml:id="dbdoclet.50438261_pgfId-1292591" xreflabel=""/>To install Lustre, the following are required:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1292592" xreflabel=""/><emphasis>(On Linux servers only)</emphasis>  Linux kernel patched with Lustre-specific patches for your platform and architecture. A Linux patched kernel can be installed on a client if it is desireable to use the same kernel on all nodes, but this is not required.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1292593" xreflabel=""/> Lustre modules compiled for the Linux kernel (see <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> for which packages are required for servers and clients in your configuration).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1292594" xreflabel=""/> Lustre utilities required for configuring Lustre (see <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> for which packages are required for servers and clients in your configuration).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1294336" xreflabel=""/><emphasis>(On Linux servers only)</emphasis>e2fsprogs  package containing Lustre-specific tools (e2fsck and lfsck) used to repair a backing file system. This replaces the existing e2fsprogs package but provides complete e2fsprogs functionality</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1294337" xreflabel=""/><emphasis>(Optional)</emphasis>  Network-specific kernel modules and libraries such as the Lustre-specific OFED package required for an InfiniBand network interconnect.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438261_pgfId-1294922" xreflabel=""/>At least one Lustre RPM must be installed on each server and on each client in a Lustre file system. <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> lists required Lustre packages and indicates where they are to be installed. Some Lustre packages are installed on Lustre servers (MGS, MDS, and OSSs), some are installed on Lustre clients, and some are installed on all Lustre nodes.</para>
+        <para><anchor xml:id="dbdoclet.50438261_pgfId-1296420" xreflabel=""/>.</para>
+        <table frame="all">
+          <title><anchor xml:id="dbdoclet.50438261_pgfId-1295320" xreflabel=""/> TABLE 8-1 <anchor xml:id="dbdoclet.50438261_21654" xreflabel=""/> Lustre required packages, descriptions and installation guidance</title>
+          <tgroup cols="5">
+            <colspec colname="c1" colwidth="20*"/>
+            <colspec colname="c2" colwidth="20*"/>
+            <colspec colname="c3" colwidth="20*"/>
+            <colspec colname="c4" colwidth="20*"/>
+            <colspec colname="c5" colwidth="20*"/>
+            <thead>
+              <row>
+                <entry nameend="c2" namest="c1"><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438261_pgfId-1295330" xreflabel=""/><anchor xml:id="dbdoclet.50438261_97803" xreflabel=""/>Lustre Package</emphasis></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438261_pgfId-1295334" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438261_pgfId-1295336" xreflabel=""/>Install on servers</emphasis>
+                        <footnote><para><anchor xml:id="dbdoclet.50438261_pgfId-1295562" xreflabel=""/>Installing a patched kernel on a client node is not required. However, if a client node will be used as both a client and a server, or if you want to install the same kernel on all nodes for any reason, install the server packages designated with an asterisk (*) on the client node.</para></footnote></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438261_pgfId-1295338" xreflabel=""/>Install on clients</emphasis></para></entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry nameend="c3" namest="c1"><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295340" xreflabel=""/><emphasis role="bold"> Lustre patched kernel RPMs:</emphasis></para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295346" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295348" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295350" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295352" xreflabel=""/>kernel-&lt;ver&gt;_lustre.&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295355" xreflabel=""/>For OEL 5 or RHEL 5 server platform</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295357" xreflabel=""/>X*</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295359" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295415" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295417" xreflabel=""/>kernel-ib-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295419" xreflabel=""/>Lustre OFED package. Required only if the network interconnect is InfiniBand.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295421" xreflabel=""/>X*</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295424" xreflabel=""/>X</para></entry>
+              </row>
+              <row>
+                <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295427" xreflabel=""/><emphasis>  Lustre module RPMs:</emphasis></para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295431" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295433" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295435" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295437" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295439" xreflabel=""/>lustre-modules-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295441" xreflabel=""/>For Lustre-patched kernel.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295443" xreflabel=""/>X*</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295445" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295447" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295449" xreflabel=""/>lustre-client-modules-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295451" xreflabel=""/>For clients.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295453" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295455" xreflabel=""/>X</para></entry>
+              </row>
+              <row>
+                <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295457" xreflabel=""/><emphasis>  Lustre utilities:</emphasis></para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295461" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295463" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295465" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295467" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295469" xreflabel=""/>lustre-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295471" xreflabel=""/>Lustre utilities package. This includes userspace utilities to configure and run Lustre.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295473" xreflabel=""/> </para><para><anchor xml:id="dbdoclet.50438261_pgfId-1295474" xreflabel=""/> </para><para><anchor xml:id="dbdoclet.50438261_pgfId-1295475" xreflabel=""/>X*</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295477" xreflabel=""/> </para><para><anchor xml:id="dbdoclet.50438261_pgfId-1295478" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295480" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295482" xreflabel=""/>lustre-client-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295484" xreflabel=""/>Lustre utilities for clients.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295486" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295488" xreflabel=""/>X</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295490" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295492" xreflabel=""/>lustre-ldiskfs-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295494" xreflabel=""/>Lustre-patched backing file system kernel module package for the ldiskfs file system.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295496" xreflabel=""/> </para><para><anchor xml:id="dbdoclet.50438261_pgfId-1295497" xreflabel=""/>X</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295499" xreflabel=""/> </para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295501" xreflabel=""/> </para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295503" xreflabel=""/>e2fsprogs-&lt;ver&gt;</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295505" xreflabel=""/>Utilities package used to maintain the ldiskfs backing file system.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295507" xreflabel=""/> </para><para><anchor xml:id="dbdoclet.50438261_pgfId-1295508" xreflabel=""/>X</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438261_pgfId-1295510" xreflabel=""/> </para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+         <para><anchor xml:id="dbdoclet.50438261_pgfId-1295527" xreflabel=""/>In all supported Lustre installations, a patched kernel must be run on each server, including the the MGS, the MDS, and all OSSs. Running a patched kernel on a Lustre client is only required if the client will be used for multiple purposes, such as running as both a client and an OST or if you want to use the same kernel on all nodes.</para>
+        <para><anchor xml:id="dbdoclet.50438261_pgfId-1293056" xreflabel=""/>Lustre RPM packages are available on the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>. They must be installed in the order described in the <link xl:href="InstallingLustre.html#50438261_41900">Lustre Installation Procedure</link>.</para>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438261_pgfId-1292891" xreflabel=""/>8.1.1.1 Network-specific Kernel Modules and Libraries</title>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1294344" xreflabel=""/>Network-specific kernel modules and libraries may be needed such as the Lustre-specific OFED package required for an InfiniBand network interconnect.</para>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438261_pgfId-1293747" xreflabel=""/>8.1.1.2 Lustre-Specific Tools <anchor xml:id="dbdoclet.50438261_marker-1292890" xreflabel=""/>and Utilities</title>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292892" xreflabel=""/>Several third-party utilities are must be installed on servers:</para>
+          <itemizedlist><listitem>
+              <para><anchor xml:id="dbdoclet.50438261_pgfId-1292894" xreflabel=""/><emphasis role="bold">e2fsprogs</emphasis><anchor xml:id="dbdoclet.50438261_marker-1292893" xreflabel=""/> : Lustre requires a recent version of e2fsprogs that understands extents. Use e2fsprogs-1.41-10-sun2 or later, available at:</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+</itemizedlist>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292896" xreflabel=""/><link xl:href="http://downloads.lustre.org/public/tools/e2fsprogs/">http://downloads.lustre.org/public/tools/e2fsprogs/</link></para>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292897" xreflabel=""/>A quilt patchset of all changes to the vanilla e2fsprogs is available in e2fsprogs-{version}-patches.tgz.</para>
+           <informaltable frame="none">
+            <tgroup cols="1">
+              <colspec colname="c1" colwidth="100*"/>
+              <tbody>
+                <row>
+                  <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438261_pgfId-1292898" xreflabel=""/>The Lustre-patched e2fsprogs utility is only required on machines that mount backend (ldiskfs) file systems, such as the OSS, MDS and MGS nodes. It does not need to be loaded on clients.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+           <itemizedlist><listitem>
+              <para><anchor xml:id="dbdoclet.50438261_pgfId-1292900" xreflabel=""/><emphasis role="bold">Perl</emphasis><anchor xml:id="dbdoclet.50438261_marker-1292899" xreflabel=""/>  - Various userspace utilities are written in Perl. Any recent version of Perl will work with Lustre.</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+</itemizedlist>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438261_pgfId-1292903" xreflabel=""/>8.1.1.3 <anchor xml:id="dbdoclet.50438261_29838" xreflabel=""/>(Optional) <anchor xml:id="dbdoclet.50438261_marker-1292902" xreflabel=""/>High-Availability Software</title>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292904" xreflabel=""/>If you plan to enable failover server functionality with Lustre (either on an OSS or the MDS), you must add high-availability (HA) software to your cluster software. For more information, see <link xl:href="ConfiguringFailover.html#50438188_92688">Setting up High-Availability (HA) Software with Lustre</link>.</para>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438261_pgfId-1292911" xreflabel=""/>8.1.1.4 (Optional) Debugging Tools and Other Optional Packages</title>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292912" xreflabel=""/>A variety of optional packages are provided on the <emphasis><link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link></emphasis>. These include debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages.</para>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1294094" xreflabel=""/>For more information about debugging tools, see the topic <emphasis><link xl:href="http://wiki.lustre.org/index.php/Debugging_Lustre">Debugging Lustre</link></emphasis> on the Lustre wiki.</para>
+        </section>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438261_pgfId-1292915" xreflabel=""/>8.1.2 <anchor xml:id="dbdoclet.50438261_19503" xreflabel=""/>Environmental <anchor xml:id="dbdoclet.50438261_marker-1292914" xreflabel=""/>Requirements</title>
+        <para><anchor xml:id="dbdoclet.50438261_pgfId-1292916" xreflabel=""/>Make sure the following environmental requirements are met before installing Lustre:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1294402" xreflabel=""/><emphasis>(Required)</emphasis><emphasis role="bold">Disable Security-Enhanced Linux (SELinux) on servers and clients</emphasis> . Lustre does not support SELinux. Therefore, disable the SELinux system extension on all Lustre nodes and make sure other security extensions, like Novell AppArmorand network packet filtering tools (such as iptables) do not interfere with Lustre. See <link xl:href="InstallingLustre.html#50438261_88296">Step 3</link> in the <link xl:href="InstallingLustre.html#50438261_41900">Lustre Installation Procedure</link> below.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1294954" xreflabel=""/><emphasis>(Required)</emphasis><emphasis role="bold">Maintain uniform user and group databases on all cluster nodes</emphasis> . Use the same user IDs (UID) and group IDs (GID) on all clients. If use of supplemental groups is required, verify that the group_upcall requirements have been met. See <link xl:href="LustreProgrammingInterfaces.html#50438291_32926">User/Group Cache Upcall</link>.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1292917" xreflabel=""/><emphasis>(Recommended)</emphasis><emphasis role="bold">Provide remote shell access to clients</emphasis> . Although not strictly required to run Lustre, we recommend that all cluster nodes have remote shell client access to facilitate the use of Lustre configuration and monitoring scripts. Parallel Distributed SHell (pdsh) is preferable, although Secure SHell (SSH) is acceptable.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438261_pgfId-1292918" xreflabel=""/><emphasis>(Recommended)</emphasis><emphasis role="bold">Ensure client clocks are synchronized</emphasis> . Lustre uses client clocks for timestamps. If clocks are out of sync between clients, files will appear with different time stamps when accessed by different clients. Drifting clocks can also cause problems, for example, by making it difficult to debug multi-node issues or correlate logs, which depend on timestamps. We recommend that you use Network Time Protocol (NTP) to keep client and server clocks in sync with each other. For more information about NTP, see: <link xl:href="http://www.ntp.org/">http://www.ntp.org</link>.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>8.2 <anchor xml:id="dbdoclet.50438261_41900" xreflabel=""/>Lustre Installation Procedure</title>
+      <informaltable frame="none">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="5*"/>
+          <colspec colname="c2" colwidth="95*"/>
+          
+          
+          <tbody>
+            <row>
+              <entry><para><inlinemediaobject><imageobject role="html">
+                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
+                    </imageobject>
+<imageobject role="fo">
+                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
+                    </imageobject>
+</inlinemediaobject></para></entry>
+              <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438261_pgfId-1292926" xreflabel=""/>Before installing Lustre, back up ALL data. Lustre contains kernel modifications which interact with storage devices and may introduce security issues and data loss if not installed, configured or administered properly.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <para><anchor xml:id="dbdoclet.50438261_pgfId-1292927" xreflabel=""/>Use this procedure to install Lustre from RPMs.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292928" xreflabel=""/> 1. Verify that all Lustre installation requirements have been met.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292929" xreflabel=""/>For more information on these prerequisites, see:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292930" xreflabel=""/> Hardware requirements in <link xl:href="SettingUpLustreSystem.html#50438256_38751">Chapter 5</link>: <link xl:href="SettingUpLustreSystem.html#50438256_66186">Setting Up a Lustre File System</link></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438261_pgfId-1292931" xreflabel=""/> Software and environmental requirements in <link xl:href="InstallingLustre.html#50438261_99193">Preparing to Install the Lustre Software</link></para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292934" xreflabel=""/> 2. <anchor xml:id="dbdoclet.50438261_38673" xreflabel=""/>Download the Lustre RPMs.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292936" xreflabel=""/>a. On the <emphasis role="bold">Lustre download site</emphasis>, select your platform.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292937" xreflabel=""/>The files required to install Lustre (kernels, modules and utilities RPMs) are listed for the selected platform.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292938" xreflabel=""/>b. Download the required files.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292940" xreflabel=""/> 3. <anchor xml:id="dbdoclet.50438261_88296" xreflabel=""/>Install the Lustre packages on the servers.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292942" xreflabel=""/>a. Refer to <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> to determine which Lustre packages are to be installed on servers for your platform and architecture.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1293257" xreflabel=""/>Some Lustre packages are installed on the Lustre servers (MGS, MDS, and OSSs). Others are installed on Lustre clients.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1293274" xreflabel=""/>Lustre packages must be installed in the order specified in the following steps.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292946" xreflabel=""/>b. Install the kernel, modules and ldiskfs packages.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292947" xreflabel=""/>Use the rpm -ivh command to install the kernel, module and ldiskfs packages.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438261_pgfId-1294574" xreflabel=""/>It is not recommended that you use the rpm -Uvh command to install a kernel, because this may leave you with an unbootable system if the new kernel doesnâ€™t work for some reason.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294565" xreflabel=""/>For example, the command in the following example would install required packages on a server with Infiniband networking</para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1292948" xreflabel=""/>$ rpm -ivh kernel-&lt;ver&gt;_lustre-&lt;ver&gt; kernel-ib-&lt;ver&gt; \
+<anchor xml:id="dbdoclet.50438261_pgfId-1292950" xreflabel=""/>lustre-modules-&lt;ver&gt; lustre-ldiskfs-&lt;ver&gt;
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295656" xreflabel=""/>c. Update the bootloader (grub.conf or lilo.conf) configuration file as needed.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295665" xreflabel=""/> i. <emphasis role="bold">Verify that the bootloader configuration file has been updated with an entry for the patched kernel.</emphasis></para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295636" xreflabel=""/>Before you can boot to a new distribution or kernel, there must be an entry for it in the bootloader configuration file. Often this is added automatically when the kernel RPM is installed.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295650" xreflabel=""/> ii. <emphasis role="bold">Disable security-enhanced (SE) Linux on servers and clients by including an entry in the bootloader configuration file as shown below:</emphasis></para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1295651" xreflabel=""/>selinux=0 
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292952" xreflabel=""/>d. Install the utilities/userspace packages.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292953" xreflabel=""/>Use the rpm -ivh command to install the utilities packages. For example:</para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1292954" xreflabel=""/>$ rpm -ivh lustre-&lt;ver&gt;
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292955" xreflabel=""/>e. Install the e2fsprogs package.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292956" xreflabel=""/>Use the rpm -ivh command to install the e2fsprogs package. For example:</para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1292957" xreflabel=""/>$ rpm -ivh e2fsprogs-&lt;ver&gt;
+<anchor xml:id="dbdoclet.50438261_pgfId-1292958" xreflabel=""/> 
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292959" xreflabel=""/>If e2fsprogs is already installed on your Linux system, install the Lustre-specific e2fsprogs version by using rpm -Uvh to upgrade the existing e2fsprogs package. For example:</para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1295617" xreflabel=""/>$ rpm -Uvh e2fsprogs-&lt;ver&gt; </screen>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438261_pgfId-1293343" xreflabel=""/>The rpm command options --force or --nodeps should not be used to install or update the Lustre-specific e2fsprogs package. If errors are reported, file a bug (for instructions see the topic <emphasis><link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link></emphasis> on the Lustre wiki).</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292960" xreflabel=""/>f. (Optional) To add optional packages to your Lustre file system, install them now.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292961" xreflabel=""/>Optional packages include file system creation and repair tools, debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages. A complete list of optional packages for your platform is provided on the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294441" xreflabel=""/> 4. Install the Lustre packages on the clients.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294445" xreflabel=""/>a. Refer to <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> to determine which Lustre packages are to be installed on clients for your platform and architecture.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294458" xreflabel=""/>b. Install the module packages for clients.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294459" xreflabel=""/>Use the rpm -ivh command to install the lustre-client and lustre-client-modules-&lt;ver&gt; packages. For example:</para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1294468" xreflabel=""/>$ rpm -ivh lustre-client-modules-&lt;ver&gt; kernel-ib-&lt;ver&gt; 
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294521" xreflabel=""/>c. Install the utilities/userspace packages for clients.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1294522" xreflabel=""/>Use the rpm -ivh command to install the utilities packages. For example:</para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1294532" xreflabel=""/>$ rpm -ivh lustre-client
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295693" xreflabel=""/>d. Update the bootloader (grub.conf or lilo.conf) configuration file as needed.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295694" xreflabel=""/> i. <emphasis role="bold">Verify that the bootloader configuration file has been updated with an entry for the patched kernel.</emphasis></para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295695" xreflabel=""/>Before you can boot to a new distribution or kernel, there must be an entry for it in the bootloader configuration file. Often this is added automatically when the kernel RPM is installed.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1295696" xreflabel=""/> ii. <emphasis role="bold">Disable security-enhanced (SE) Linux on servers and clients by including an entry in the bootloader configuration file as shown below:</emphasis></para>
+      <screen><anchor xml:id="dbdoclet.50438261_pgfId-1295697" xreflabel=""/>selinux=0 
+</screen>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292964" xreflabel=""/> 5. Reboot the patched clients and the servers.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292965" xreflabel=""/>a. If you applied the patched kernel to any clients, reboot them.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292966" xreflabel=""/>Unpatched clients do not need to be rebooted.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292967" xreflabel=""/>b. Reboot the servers.</para>
+      <para><anchor xml:id="dbdoclet.50438261_pgfId-1292971" xreflabel=""/>To configure LNET, go next to <link xl:href="ConfiguringLNET.html#50438216_64580">Chapter 9</link>: <link xl:href="ConfiguringLNET.html#50438216_29256">Configuring Lustre Networking (LNET)</link>. If default settings will be used for LNET, go to <link xl:href="ConfiguringLustre.html#50438267_88428">Chapter 10</link>: <link xl:href="ConfiguringLustre.html#50438267_66186">Configuring Lustre</link>.</para>
+      <!--
+Begin SiteCatalyst code version: G.5.
+-->
+      <!--
+End SiteCatalyst code version: G.5.
+-->
+        <informaltable frame="none">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          
+          
+          
+          <tbody>
+            <row>
+              <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+              <entry align="right"><para>821-2076-10</para></entry>
+              <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="SettingUpBonding.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ConfiguringLNET.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><link xl:href=""/></para>
+      <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+    </section>
+  </section>
+</article>

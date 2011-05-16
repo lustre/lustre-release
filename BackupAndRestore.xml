@@ -1,0 +1,626 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Backing Up and Restoring a File System</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="UpgradingLustre.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingStripingFreeSpace.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438207_pgfId-874" xreflabel=""/>C H A P T E R  17<anchor xml:id="dbdoclet.50438207_37220" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438207_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438207_66186" xreflabel=""/>Backing Up and Restoring a File System</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438207_pgfId-1292628" xreflabel=""/>Lustre provides backups at the file system-level, device-level and file-level. This chapter describes how to backup and restore on Lustre, and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292632" xreflabel=""/><link xl:href="BackupAndRestore.html#50438207_56395">Backing up a File System</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292636" xreflabel=""/><link xl:href="BackupAndRestore.html#50438207_71633">Backing Up and Restoring an MDS or OST (Device Level)</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292640" xreflabel=""/><link xl:href="BackupAndRestore.html#50438207_21638">Making a File-Level Backup of an OST File System</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292644" xreflabel=""/><link xl:href="BackupAndRestore.html#50438207_22325">Restoring a File-Level Backup</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292648" xreflabel=""/><link xl:href="BackupAndRestore.html#50438207_31553">Using LVM Snapshots with Lustre</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438207_pgfId-1292650" xreflabel=""/></title>
+    <section remap="h2">
+      <title>17.1 <anchor xml:id="dbdoclet.50438207_56395" xreflabel=""/>Backing up a File System</title>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292651" xreflabel=""/>Backing up a complete file system gives you full control over the files to back up, and allows restoration of individual files as needed. File system-level backups are also the easiest to integrate into existing backup solutions.</para>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292652" xreflabel=""/>File system backups are performed from a Lustre client (or many clients working parallel in different directories) rather than on individual server nodes; this is no different than backing up any other file system.</para>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292653" xreflabel=""/>However, due to the large size of most Lustre file systems, it is not always possible to get a complete backup. We recommend that you back up subsets of a file system. This includes subdirectories of the entire file system, filesets for a single user, files incremented by date, and so on.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1294680" xreflabel=""/>In order to allow Lustre to scale the filesystem namespace for future applications, Lustre 2.x internally uses a 128-bit file identifier for all files. To interface with user applications, Lustre presents 64-bit inode numbers for the stat(), fstat(), and readdir() system calls on 64-bit applications, and 32-bit inode numbers to 32-bit applications.</para><para> Some 32-bit applications accessing Lustre filesystems (on both 32-bit and 64-bit CPUs) may experience problems with the stat(), fstat() or readdir() system calls under certain circumstances, though the Lustre client should return 32-bit inode numbers to these applications.</para><para> In particular, if the Lustre filesystem is exported from a 64-bit client via NFS to a 32-bit client, the Linux NFS server will export 64-bit inode numbers to applications running on the NFS client. If the 32-bit applications are not compiled with Large File Support (LFS), then they return EOVERFLOW errors when accessing the Lustre files. To avoid this problem, Linux NFS clients can use the kernel command-line option &quot;nfs.enable_ino64=0&quot; in order to force the NFS client to export 32-bit inode numbers to the client.</para><para><emphasis role="bold">Workaround</emphasis>: We very strongly recommend that backups using tar(1) and other utilities that depend on the inode number to uniquely identify an inode to be run on 64-bit clients. The 128-bit Lustre file identifiers cannot be uniquely mapped to a 32-bit inode number, and as a result these utilities may operate incorrectly on 32-bit clients.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1293842" xreflabel=""/>17.1.1 Lustre_rsync</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1293843" xreflabel=""/>The lustre_rsync feature keeps the entire file system in sync on a backup by replicating the file systemâ€™s changes to a second file system (the second file system need not be a Lustre file system, but it must be sufficiently large). Lustre_rsync uses Lustre changelogs to efficiently synchronize the file systems without having to scan (directory walk) the Lustre file system. This efficiency is critically important for large file systems, and distinguishes the Lustre lustre_rsync feature from other replication/backup solutions.</para>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438207_pgfId-1293847" xreflabel=""/>17.1.1.1 Using Lustre_rsync</title>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293848" xreflabel=""/>The lustre_rsync feature works by periodically running lustre_rsync, a userspace program used to synchronize changes in the Lustre file system onto the target file system. The lustre_rsync utility keeps a status file, which enables it to be safely interrupted and restarted without losing synchronization between the file systems.</para>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293849" xreflabel=""/>The first time that lustre_rsync is run, the user must specify a set of parameters for the program to use. These parameters are described in the following table and in <link xl:href="SystemConfigurationUtilities.html#50438219_63667">lustre_rsync</link>. On subsequent runs, these parameters are stored in the the status file, and only the name of the status file needs to be passed to lustre_rsync.</para>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293853" xreflabel=""/>Before using lustre_rsync:</para>
+          <itemizedlist><listitem>
+              <para><anchor xml:id="dbdoclet.50438207_pgfId-1293857" xreflabel=""/> Register the changelog user. For details, see the <link xl:href="SystemConfigurationUtilities.html#50438219_pgfId-1314995">changelog_register</link> parameter in the <link xl:href="SystemConfigurationUtilities.html#50438219_38274">lctl</link>.</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+</itemizedlist>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293858" xreflabel=""/>- AND -</para>
+          <itemizedlist><listitem>
+              <para><anchor xml:id="dbdoclet.50438207_pgfId-1293859" xreflabel=""/> Verify that the Lustre file system (source) and the replica file system (target) are identical <emphasis>before</emphasis> registering the changelog user. If the file systems are discrepant, use a utility, e.g. regular rsync (not lustre_rsync), to make them identical.</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+</itemizedlist>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293930" xreflabel=""/>The lustre_rsync utility uses the following parameters:</para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438207_pgfId-1294813" xreflabel=""/>Parameter</emphasis></para></entry>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438207_pgfId-1294815" xreflabel=""/>Description</emphasis></para></entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294817" xreflabel=""/>--source=&lt;src&gt;</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294819" xreflabel=""/>The path to the root of the Lustre file system (source) which will be synchronized. This is a mandatory option if a valid status log created during a previous synchronization operation (--statuslog) is not specified.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294821" xreflabel=""/>--target=&lt;tgt&gt;</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294823" xreflabel=""/>The path to the root where the source file system will be synchronized (target). This is a mandatory option if the status log created during a previous synchronization operation (--statuslog) is not specified. This option can be repeated if multiple synchronization targets are desired.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294825" xreflabel=""/>--mdt=&lt;mdt&gt;</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294827" xreflabel=""/>The metadata device to be synchronized. A changelog user must be registered for this device. This is a mandatory option if a valid status log created during a previous synchronization operation (--statuslog) is not specified.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294829" xreflabel=""/>--user=&lt;user id&gt;</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294831" xreflabel=""/>The changelog user ID for the specified MDT. To use lustre_rsync, the changelog user must be registered. For details, see the changelog_register parameter in <link xl:href="SystemConfigurationUtilities.html#50438219_38274">lctl</link>. This is a mandatory option if a valid status log created during a previous synchronization operation (--statuslog) is not specified.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294833" xreflabel=""/>--statuslog=&lt;log&gt;</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294835" xreflabel=""/>A log file to which synchronization status is saved. When the lustre_rsync utility starts, if the status log from a previous synchronization operation is specified, then the state is read from the log and otherwise mandatory --source, --target and --mdt options can be skipped. Specifying the --source, --target and/or --mdt options, in addition to the --statuslog option, causes the specified parameters in the status log to be overriden. Command line options take precedence over options in the status log.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294837" xreflabel=""/>--xattr &lt;yes|no&gt;</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294839" xreflabel=""/>Specifies whether extended attributes (xattrs) are synchronized or not. The default is to synchronize extended attributes.</para><para><anchor xml:id="dbdoclet.50438207_pgfId-1294840" xreflabel=""/><emphasis role="bold">Note -</emphasis> Disabling xattrs causes Lustre striping information not to be synchronized.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294842" xreflabel=""/>--verbose</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294844" xreflabel=""/>Produces verbose output.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294846" xreflabel=""/>--dry-run</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294848" xreflabel=""/>Shows the output of lustre_rsync commands (copy, mkdir, etc.) on the target file system without actually executing them.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294850" xreflabel=""/>--abort-on-err</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438207_pgfId-1294852" xreflabel=""/>Stops processing the lustre_rsync operation if an error occurs. The default is to continue the operation.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438207_pgfId-1293938" xreflabel=""/>17.1.1.2 lustre_rsync Examples</title>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293939" xreflabel=""/>Sample lustre_rsync commands are listed below.</para>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293940" xreflabel=""/>Register a changelog user for an MDT (e.g. lustre-MDT0000).</para>
+          <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293941" xreflabel=""/># lctl --device lustre-MDT0000 changelog_register lustre-MDT0000 Registered\
+ changelog userid &apos;cl1&apos;
+</screen>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293942" xreflabel=""/>Synchronize a Lustre file system (/mnt/lustre) to a target file system (/mnt/target).</para>
+          <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293943" xreflabel=""/>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target --mdt=lustre-MDT00\
+00 --user=cl1 --statuslog sync.log  --verbose 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293946" xreflabel=""/>Lustre filesystem: lustre 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293947" xreflabel=""/>MDT device: lustre-MDT0000 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293948" xreflabel=""/>Source: /mnt/lustre 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293949" xreflabel=""/>Target: /mnt/target 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293950" xreflabel=""/>Statuslog: sync.log 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293951" xreflabel=""/>Changelog registration: cl1 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293952" xreflabel=""/>Starting changelog record: 0 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293953" xreflabel=""/>Errors: 0 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293954" xreflabel=""/>lustre_rsync took 1 seconds 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293955" xreflabel=""/>Changelog records consumed: 22
+</screen>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293956" xreflabel=""/>After the file system undergoes changes, synchronize the changes onto the target file system. Only the statuslog name needs to be specified, as it has all the parameters passed earlier.</para>
+          <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293957" xreflabel=""/>$ lustre_rsync --statuslog sync.log --verbose 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293958" xreflabel=""/>Replicating Lustre filesystem: lustre 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293959" xreflabel=""/>MDT device: lustre-MDT0000 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293960" xreflabel=""/>Source: /mnt/lustre 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293961" xreflabel=""/>Target: /mnt/target 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293962" xreflabel=""/>Statuslog: sync.log 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293963" xreflabel=""/>Changelog registration: cl1 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293964" xreflabel=""/>Starting changelog record: 22 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293965" xreflabel=""/>Errors: 0 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293966" xreflabel=""/>lustre_rsync took 2 seconds 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293967" xreflabel=""/>Changelog records consumed: 42
+</screen>
+          <para><anchor xml:id="dbdoclet.50438207_pgfId-1293968" xreflabel=""/>To synchronize a Lustre file system (/mnt/lustre) to two target file systems (/mnt/target1 and /mnt/target2).</para>
+          <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293969" xreflabel=""/>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target1 --target=/mnt/tar\
+get2 \ 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293971" xreflabel=""/>           --mdt=lustre-MDT0000 --user=cl1 
+<anchor xml:id="dbdoclet.50438207_pgfId-1293972" xreflabel=""/>           --statuslog sync.log
+</screen>
+        </section>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>17.2 <anchor xml:id="dbdoclet.50438207_71633" xreflabel=""/>Backing Up and Restoring an MDS or OST (Device Level)</title>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1294928" xreflabel=""/>In some cases, it is useful to do a full device-level backup of an individual device (MDT or OST), before replacing hardware, performing maintenance, etc. Doing full device-level backups ensures that all of the data and configuration files is preserved in the original state and is the easiest method of doing a backup. For the MDT file system, it may also be the fastest way to perform the backup and restore, since it can do large streaming read and write operations at the maximum bandwidth of the underlying devices.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1294930" xreflabel=""/>Keeping an updated full backup of the MDT is especially important because a permanent failure of the MDT file system renders the much larger amount of data in all the OSTs largely inaccessible and unusable.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1294932" xreflabel=""/>In Lustre 2.0 and 2.1 the only correct way to perform an MDT backup and restore is to do a device-level backup as is described in this section. The ability to do MDT file-level backups is not functional in these releases because of the inability to restore the Object Index (OI) file correctly (see bug 22741 for details).</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292658" xreflabel=""/>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292659" xreflabel=""/>dd if=/dev/{original} of=/dev/{new} bs=1M
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292660" xreflabel=""/>If hardware errors cause read problems on the original device, use the command below to allow as much data as possible to be read from the original device while skipping sections of the disk with errors:</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292661" xreflabel=""/>dd if=/dev/{original} of=/dev/{new} bs=4k conv=sync,noerror count={original\
+ size in 4kB blocks}
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292662" xreflabel=""/>Even in the face of hardware errors, the ldiskfs file system is very robust and it may be possible to recover the file system data after running e2fsck -f on the new device.</para>
+    </section>
+    <section remap="h2">
+      <title>17.3 <anchor xml:id="dbdoclet.50438207_21638" xreflabel=""/>Making a File-Level Backup of an OST File System</title>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1294992" xreflabel=""/>This procedure provides another way to backup or migrate the data of an OST at the file level, so that the unused space of the OST does not need to be backed up. Backing up a single OST device is not necessarily the best way to perform backups of the Lustre file system, since the files stored in the backup are not usable without metadata stored on the MDT. However, it is the preferred method for migration of OST devices, especially when it is desirable to reformat the underlying file system with different configuration options or to reduce fragmentation.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1294994" xreflabel=""/>In Lustre 2.0 and 2.1 the only correct way to perform an MDT backup and restore is to do a device-level backup as is described in this section. The ability to do MDT file-level backups is not functional in these releases because of the inability to restore the Object Index (OI) file correctly (see bug 22741 for details).</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <para><anchor xml:id="dbdoclet.50438207_pgfId-1292698" xreflabel=""/> 1. Make a mountpoint for the file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292699" xreflabel=""/>[oss]# mkdir -p /mnt/ost
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292700" xreflabel=""/> 2. Mount the file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292701" xreflabel=""/>[oss]# mount -t ldiskfs /<emphasis>dev</emphasis>/{ostdev} /mnt/ost
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292702" xreflabel=""/> 3. Change to the mountpoint being backed up.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292703" xreflabel=""/>[oss]# cd /mnt/ost
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292704" xreflabel=""/> 4. Back up the extended attributes.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1295034" xreflabel=""/>[oss]# getfattr -R -d -m &apos;.*&apos; -e hex -P . &gt; ea-$(date +%Y%m%d).bak
+</screen>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1295041" xreflabel=""/>If the tar(1) command supports the --xattr option, the getfattr step may be unnecessary as long as it does a backup of the &quot;trusted&quot; attributes. However, completing this step is not harmful and can serve as an added safety measure.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1295043" xreflabel=""/>In most distributions, the getfattr command is part of the &quot;attr&quot; package. If the getfattr command returns errors like Operation not supported, then the kernel does not correctly support EAs. Stop and use a different backup method.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292707" xreflabel=""/> 5. Verify that the ea-$date.bak file has properly backed up the EA data on the OST.</para>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1295104" xreflabel=""/>Without this attribute data, the restore process may be missing extra data that can be very useful in case of later file system corruption. Look at this file with more or a text editor. Each object file should hae a corresponding item similar to this:</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1295089" xreflabel=""/>[oss]# file: O/0/d0/100992
+<anchor xml:id="dbdoclet.50438207_pgfId-1295090" xreflabel=""/>trusted.fid= \
+<anchor xml:id="dbdoclet.50438207_pgfId-1295210" xreflabel=""/>0x0d822200000000004a8a73e500000000808a0100000000000000000000000000
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292710" xreflabel=""/> 6. Back up all file system data.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292711" xreflabel=""/>[oss]# tar czvf {backup file}.tgz --sparse .
+</screen>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1295126" xreflabel=""/>In Lustre 1.6.7 and later, the --sparse option reduces the size of the backup file. Be sure to use it so the tar command does not mistakenly create an archive full of zeros.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <para><anchor xml:id="dbdoclet.50438207_pgfId-1292712" xreflabel=""/> 7. Change directory out of the file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292713" xreflabel=""/>[oss]# cd -
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292714" xreflabel=""/> 8. Unmount the file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292715" xreflabel=""/>[oss]# umount /mnt/ost
+</screen>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1295223" xreflabel=""/>When restoring an OST backup on a different node as part of an OST migration, you also have to change server NIDs and use the --writeconf command to re-generate the configuration logs. See <link xl:href="LustreMaintenance.html#50438199_31353">Changing a Server NID</link>.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+     </section>
+    <section remap="h2">
+      <title>17.4 <anchor xml:id="dbdoclet.50438207_22325" xreflabel=""/>Restoring a File-Level Backup</title>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292721" xreflabel=""/>To restore data from a file-level backup, you need to format the device, restore the file data and then restore the EA data.</para>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292722" xreflabel=""/> 1. Format the new device.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1295250" xreflabel=""/>[oss]# mkfs.lustre --ost --index {<emphasis>OST index</emphasis>} {<emphasis>other options</emphasis>} newdev}
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293049" xreflabel=""/> 2. Mount the file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293051" xreflabel=""/>[oss]# mount -t ldiskfs {<emphasis>newdev</emphasis>} /mnt/ost
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293053" xreflabel=""/> 3. Change to the new file system mount point.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293055" xreflabel=""/>[oss]# cd /mnt/ost
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293057" xreflabel=""/> 4. Restore the file system backup.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293059" xreflabel=""/>[oss]# tar xzvpf {<emphasis>backup file</emphasis>} --sparse
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293061" xreflabel=""/> 5. Restore the file system extended attributes.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293063" xreflabel=""/>[oss]# setfattr --restore=ea-${date}.bak
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293041" xreflabel=""/> 6. Verify that the extended attributes were restored.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1295296" xreflabel=""/>[oss]# getfattr -d -m &quot;.*&quot; -e hex O/0/d0/100992 trusted.fid= \
+<anchor xml:id="dbdoclet.50438207_pgfId-1295303" xreflabel=""/>0x0d822200000000004a8a73e500000000808a0100000000000000000000000000
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293161" xreflabel=""/> 7. Change directory out of the file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293163" xreflabel=""/>[oss]# cd -
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1293165" xreflabel=""/> 8. Unmount the new file system.</para>
+      <screen><anchor xml:id="dbdoclet.50438207_pgfId-1293167" xreflabel=""/>[oss]# umount /mnt/ost
+</screen>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1295335" xreflabel=""/>If the file system was used between the time the backup was made and when it was restored, then the lfsck tool (part of Lustre e2fsprogs) can optionally be run to ensure the file system is coherent. If all of the device file systems were backed up at the same time after the entire Lustre file system was stopped, this is not necessary. In either case, the file system should be immediately usable even if lfsck is not run, though there may be I/O errors reading from files that are present on the MDT but not the OSTs, and files that were created after the MDT backup will not be accessible/visible.</para>
+    </section>
+    <section remap="h2">
+      <title>17.5 <anchor xml:id="dbdoclet.50438207_31553" xreflabel=""/>Using LVM Snapshots with Lustre</title>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292749" xreflabel=""/>If you want to perform disk-based backups (because, for example, access to the backup system needs to be as fast as to the primary Lustre file system), you can use the Linux LVM snapshot tool to maintain multiple, incremental file system backups.</para>
+      <para><anchor xml:id="dbdoclet.50438207_pgfId-1292750" xreflabel=""/>Because LVM snapshots cost CPU cycles as new files are written, taking snapshots of the main Lustre file system will probably result in unacceptable performance losses. You should create a new, backup Lustre file system and periodically (e.g., nightly) back up new/changed files to it. Periodic snapshots can be taken of this backup file system to create a series of &quot;full&quot; backups.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1292751" xreflabel=""/>Creating an LVM snapshot is not as reliable as making a separate backup, because the LVM snapshot shares the same disks as the primary MDT device, and depends on the primary MDT device for much of its data. If the primary MDT device becomes corrupted, this may result in the snapshot being corrupted.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1292752" xreflabel=""/>17.5.1 Creating an LVM-based Backup File System</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292753" xreflabel=""/>Use this procedure to create a backup Lustre file system for use with the LVM snapshot mechanism.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292754" xreflabel=""/> 1. Create LVM volumes for the MDT and OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292755" xreflabel=""/>Create LVM devices for your MDT and OST targets. Make sure not to use the entire disk for the targets; save some room for the snapshots. The snapshots start out as 0 size, but grow as you make changes to the current file system. If you expect to change 20% of the file system between backups, the most recent snapshot will be 20% of the target size, the next older one will be 40%, etc. Here is an example:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292756" xreflabel=""/>cfs21:~# pvcreate /dev/sda1
+<anchor xml:id="dbdoclet.50438207_pgfId-1292757" xreflabel=""/>   Physical volume &quot;/dev/sda1&quot; successfully created
+<anchor xml:id="dbdoclet.50438207_pgfId-1292758" xreflabel=""/>cfs21:~# vgcreate volgroup /dev/sda1
+<anchor xml:id="dbdoclet.50438207_pgfId-1292759" xreflabel=""/>   Volume group &quot;volgroup&quot; successfully created
+<anchor xml:id="dbdoclet.50438207_pgfId-1292760" xreflabel=""/>cfs21:~# lvcreate -L200M -nMDT volgroup
+<anchor xml:id="dbdoclet.50438207_pgfId-1292761" xreflabel=""/>   Logical volume &quot;MDT&quot; created
+<anchor xml:id="dbdoclet.50438207_pgfId-1292762" xreflabel=""/>cfs21:~# lvcreate -L200M -nOST0 volgroup
+<anchor xml:id="dbdoclet.50438207_pgfId-1292763" xreflabel=""/>   Logical volume &quot;OST0&quot; created
+<anchor xml:id="dbdoclet.50438207_pgfId-1292764" xreflabel=""/>cfs21:~# lvscan
+<anchor xml:id="dbdoclet.50438207_pgfId-1292765" xreflabel=""/>   ACTIVE                  &apos;/dev/volgroup/MDT&apos; [200.00 MB] inherit
+<anchor xml:id="dbdoclet.50438207_pgfId-1292766" xreflabel=""/>   ACTIVE                  &apos;/dev/volgroup/OST0&apos; [200.00 MB] inherit
+</screen>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292767" xreflabel=""/> 2. Format the LVM volumes as Lustre targets.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292768" xreflabel=""/>In this example, the backup file system is called â€œmainâ€ and designates the current, most up-to-date backup.</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292769" xreflabel=""/>cfs21:~# mkfs.lustre --mdt --fsname=main /dev/volgroup/MDT
+<anchor xml:id="dbdoclet.50438207_pgfId-1292770" xreflabel=""/> No management node specified, adding MGS to this MDT.
+<anchor xml:id="dbdoclet.50438207_pgfId-1292771" xreflabel=""/>    Permanent disk data:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292772" xreflabel=""/> Target:     main-MDTffff
+<anchor xml:id="dbdoclet.50438207_pgfId-1292773" xreflabel=""/> Index:      unassigned
+<anchor xml:id="dbdoclet.50438207_pgfId-1292774" xreflabel=""/> Lustre FS:  main
+<anchor xml:id="dbdoclet.50438207_pgfId-1292775" xreflabel=""/> Mount type: ldiskfs
+<anchor xml:id="dbdoclet.50438207_pgfId-1292776" xreflabel=""/> Flags:      0x75
+<anchor xml:id="dbdoclet.50438207_pgfId-1292777" xreflabel=""/>               (MDT MGS needs_index first_time update )
+<anchor xml:id="dbdoclet.50438207_pgfId-1292778" xreflabel=""/> Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
+<anchor xml:id="dbdoclet.50438207_pgfId-1292779" xreflabel=""/> Parameters:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292780" xreflabel=""/>checking for existing Lustre data
+<anchor xml:id="dbdoclet.50438207_pgfId-1292781" xreflabel=""/> device size = 200MB
+<anchor xml:id="dbdoclet.50438207_pgfId-1292782" xreflabel=""/> formatting backing filesystem ldiskfs on /dev/volgroup/MDT
+<anchor xml:id="dbdoclet.50438207_pgfId-1292783" xreflabel=""/>         target name  main-MDTffff
+<anchor xml:id="dbdoclet.50438207_pgfId-1292784" xreflabel=""/>         4k blocks     0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292785" xreflabel=""/>         options        -i 4096 -I 512 -q -O dir_index -F
+<anchor xml:id="dbdoclet.50438207_pgfId-1292786" xreflabel=""/> mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDTffff  -i 4096 -I 512 -q -O dir_\
+index -F /dev/volgroup/MDT
+<anchor xml:id="dbdoclet.50438207_pgfId-1292787" xreflabel=""/> Writing CONFIGS/mountdata
+<anchor xml:id="dbdoclet.50438207_pgfId-1292788" xreflabel=""/>cfs21:~# mkfs.lustre --ost --mgsnode=cfs21 --fsname=main /dev/volgroup/OST0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292789" xreflabel=""/>    Permanent disk data:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292790" xreflabel=""/> Target:     main-OSTffff
+<anchor xml:id="dbdoclet.50438207_pgfId-1292791" xreflabel=""/>Index:      unassigned
+<anchor xml:id="dbdoclet.50438207_pgfId-1292792" xreflabel=""/> Lustre FS:  main
+<anchor xml:id="dbdoclet.50438207_pgfId-1292793" xreflabel=""/> Mount type: ldiskfs
+<anchor xml:id="dbdoclet.50438207_pgfId-1292794" xreflabel=""/> Flags:      0x72
+<anchor xml:id="dbdoclet.50438207_pgfId-1292795" xreflabel=""/>               (OST needs_index first_time update )
+<anchor xml:id="dbdoclet.50438207_pgfId-1292796" xreflabel=""/> Persistent mount opts: errors=remount-ro,extents,mballoc
+<anchor xml:id="dbdoclet.50438207_pgfId-1292797" xreflabel=""/> Parameters: mgsnode=192.168.0.21@tcp
+<anchor xml:id="dbdoclet.50438207_pgfId-1292798" xreflabel=""/>checking for existing Lustre data
+<anchor xml:id="dbdoclet.50438207_pgfId-1292799" xreflabel=""/> device size = 200MB
+<anchor xml:id="dbdoclet.50438207_pgfId-1292800" xreflabel=""/> formatting backing filesystem ldiskfs on /dev/volgroup/OST0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292801" xreflabel=""/>         target name  main-OSTffff
+<anchor xml:id="dbdoclet.50438207_pgfId-1292802" xreflabel=""/>         4k blocks     0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292803" xreflabel=""/>         options        -I 256 -q -O dir_index -F
+<anchor xml:id="dbdoclet.50438207_pgfId-1292804" xreflabel=""/> mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-OSTffff  -I 256 -q -O dir_index -F\
+ /dev/ volgroup/OST0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292805" xreflabel=""/> Writing CONFIGS/mountdata
+<anchor xml:id="dbdoclet.50438207_pgfId-1292806" xreflabel=""/>cfs21:~# mount -t lustre /dev/volgroup/MDT /mnt/mdt
+<anchor xml:id="dbdoclet.50438207_pgfId-1292807" xreflabel=""/>cfs21:~# mount -t lustre /dev/volgroup/OST0 /mnt/ost
+<anchor xml:id="dbdoclet.50438207_pgfId-1292808" xreflabel=""/>cfs21:~# mount -t lustre cfs21:/main /mnt/main
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1292809" xreflabel=""/>17.5.2 Backing up New/Changed Files to the Backup File System</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292810" xreflabel=""/>At periodic intervals e.g., nightly, back up new and changed files to the LVM-based backup file system.</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292811" xreflabel=""/>cfs21:~# cp /etc/passwd /mnt/main 
+<anchor xml:id="dbdoclet.50438207_pgfId-1292812" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438207_pgfId-1292813" xreflabel=""/>cfs21:~# cp /etc/fstab /mnt/main 
+<anchor xml:id="dbdoclet.50438207_pgfId-1292814" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438207_pgfId-1292815" xreflabel=""/>cfs21:~# ls /mnt/main 
+<anchor xml:id="dbdoclet.50438207_pgfId-1292816" xreflabel=""/>fstab  passwd
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1292817" xreflabel=""/>17.5.3 Creating Snapshot Volumes</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292818" xreflabel=""/>Whenever you want to make a &quot;checkpoint&quot; of the main Lustre file system, create LVM snapshots of all target MDT and OSTs in the LVM-based backup file system. You must decide the maximum size of a snapshot ahead of time, although you can dynamically change this later. The size of a daily snapshot is dependent on the amount of data changed daily in the main Lustre file system. It is likely that a two-day old snapshot will be twice as big as a one-day old snapshot.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292819" xreflabel=""/>You can create as many snapshots as you have room for in the volume group. If necessary, you can dynamically add disks to the volume group.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292820" xreflabel=""/>The snapshots of the target MDT and OSTs should be taken at the same point in time. Make sure that the cronjob updating the backup file system is not running, since that is the only thing writing to the disks. Here is an example:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292821" xreflabel=""/>cfs21:~# modprobe dm-snapshot
+<anchor xml:id="dbdoclet.50438207_pgfId-1292822" xreflabel=""/>cfs21:~# lvcreate -L50M -s -n MDTb1 /dev/volgroup/MDT
+<anchor xml:id="dbdoclet.50438207_pgfId-1292823" xreflabel=""/>   Rounding up size to full physical extent 52.00 MB
+<anchor xml:id="dbdoclet.50438207_pgfId-1292824" xreflabel=""/>   Logical volume &quot;MDTb1&quot; created
+<anchor xml:id="dbdoclet.50438207_pgfId-1292825" xreflabel=""/>cfs21:~# lvcreate -L50M -s -n OSTb1 /dev/volgroup/OST0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292826" xreflabel=""/>   Rounding up size to full physical extent 52.00 MB
+<anchor xml:id="dbdoclet.50438207_pgfId-1292827" xreflabel=""/>   Logical volume &quot;OSTb1&quot; created
+</screen>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292828" xreflabel=""/>After the snapshots are taken, you can continue to back up new/changed files to &quot;main&quot;. The snapshots will not contain the new files.</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292829" xreflabel=""/>cfs21:~# cp /etc/termcap /mnt/main
+<anchor xml:id="dbdoclet.50438207_pgfId-1292830" xreflabel=""/>cfs21:~# ls /mnt/main
+<anchor xml:id="dbdoclet.50438207_pgfId-1292831" xreflabel=""/>fstab  passwd  termcap
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1292832" xreflabel=""/>17.5.4 Restoring the File System From a Snapshot</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292833" xreflabel=""/>Use this procedure to restore the file system from an LVM snapshot.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292834" xreflabel=""/> 1. Rename the LVM snapshot.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292835" xreflabel=""/>Rename the file system snapshot from &quot;main&quot; to &quot;back&quot; so you can mount it without unmounting &quot;main&quot;. This is recommended, but not required. Use the --reformat flag to tunefs.lustre to force the name change. For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292836" xreflabel=""/>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/M\
+DTb1
+<anchor xml:id="dbdoclet.50438207_pgfId-1292837" xreflabel=""/> checking for existing Lustre data
+<anchor xml:id="dbdoclet.50438207_pgfId-1292838" xreflabel=""/> found Lustre data
+<anchor xml:id="dbdoclet.50438207_pgfId-1292839" xreflabel=""/> Reading CONFIGS/mountdata
+<anchor xml:id="dbdoclet.50438207_pgfId-1292840" xreflabel=""/>Read previous values:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292841" xreflabel=""/> Target:     main-MDT0000
+<anchor xml:id="dbdoclet.50438207_pgfId-1292842" xreflabel=""/> Index:      0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292843" xreflabel=""/> Lustre FS:  main
+<anchor xml:id="dbdoclet.50438207_pgfId-1292844" xreflabel=""/> Mount type: ldiskfs
+<anchor xml:id="dbdoclet.50438207_pgfId-1292845" xreflabel=""/> Flags:      0x5
+<anchor xml:id="dbdoclet.50438207_pgfId-1292846" xreflabel=""/>              (MDT MGS )
+<anchor xml:id="dbdoclet.50438207_pgfId-1292847" xreflabel=""/> Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
+<anchor xml:id="dbdoclet.50438207_pgfId-1292848" xreflabel=""/> Parameters:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292849" xreflabel=""/>Permanent disk data:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292850" xreflabel=""/> Target:     back-MDT0000
+<anchor xml:id="dbdoclet.50438207_pgfId-1292851" xreflabel=""/> Index:      0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292852" xreflabel=""/> Lustre FS:  back
+<anchor xml:id="dbdoclet.50438207_pgfId-1292853" xreflabel=""/> Mount type: ldiskfs
+<anchor xml:id="dbdoclet.50438207_pgfId-1292854" xreflabel=""/> Flags:      0x105
+<anchor xml:id="dbdoclet.50438207_pgfId-1292855" xreflabel=""/>              (MDT MGS writeconf )
+<anchor xml:id="dbdoclet.50438207_pgfId-1292856" xreflabel=""/> Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
+<anchor xml:id="dbdoclet.50438207_pgfId-1292857" xreflabel=""/> Parameters:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292858" xreflabel=""/>Writing CONFIGS/mountdata
+<anchor xml:id="dbdoclet.50438207_pgfId-1292859" xreflabel=""/>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/O\
+STb1
+<anchor xml:id="dbdoclet.50438207_pgfId-1292860" xreflabel=""/> checking for existing Lustre data
+<anchor xml:id="dbdoclet.50438207_pgfId-1292861" xreflabel=""/> found Lustre data
+<anchor xml:id="dbdoclet.50438207_pgfId-1292862" xreflabel=""/> Reading CONFIGS/mountdata
+<anchor xml:id="dbdoclet.50438207_pgfId-1292863" xreflabel=""/>Read previous values:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292864" xreflabel=""/> Target:     main-OST0000
+<anchor xml:id="dbdoclet.50438207_pgfId-1292865" xreflabel=""/> Index:      0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292866" xreflabel=""/> Lustre FS:  main
+<anchor xml:id="dbdoclet.50438207_pgfId-1292867" xreflabel=""/> Mount type: ldiskfs
+<anchor xml:id="dbdoclet.50438207_pgfId-1292868" xreflabel=""/> Flags:      0x2
+<anchor xml:id="dbdoclet.50438207_pgfId-1292869" xreflabel=""/>              (OST )
+<anchor xml:id="dbdoclet.50438207_pgfId-1292870" xreflabel=""/> Persistent mount opts: errors=remount-ro,extents,mballoc
+<anchor xml:id="dbdoclet.50438207_pgfId-1292871" xreflabel=""/> Parameters: mgsnode=192.168.0.21@tcp
+<anchor xml:id="dbdoclet.50438207_pgfId-1292872" xreflabel=""/>Permanent disk data:
+<anchor xml:id="dbdoclet.50438207_pgfId-1292873" xreflabel=""/> Target:     back-OST0000
+<anchor xml:id="dbdoclet.50438207_pgfId-1292874" xreflabel=""/> Index:      0
+<anchor xml:id="dbdoclet.50438207_pgfId-1292875" xreflabel=""/> Lustre FS:  back
+<anchor xml:id="dbdoclet.50438207_pgfId-1292876" xreflabel=""/> Mount type: ldiskfs
+<anchor xml:id="dbdoclet.50438207_pgfId-1292877" xreflabel=""/> Flags:      0x102
+<anchor xml:id="dbdoclet.50438207_pgfId-1292878" xreflabel=""/>              (OST writeconf )
+<anchor xml:id="dbdoclet.50438207_pgfId-1292879" xreflabel=""/> Persistent mount opts: errors=remount-ro,extents,mballoc
+<anchor xml:id="dbdoclet.50438207_pgfId-1292880" xreflabel=""/> Parameters: mgsnode=192.168.0.21@tcp
+<anchor xml:id="dbdoclet.50438207_pgfId-1292881" xreflabel=""/>Writing CONFIGS/mountdata
+<anchor xml:id="dbdoclet.50438207_pgfId-1292882" xreflabel=""/>When renaming an FS, we must also erase the last_rcvd file from the snapsho\
+ts
+<anchor xml:id="dbdoclet.50438207_pgfId-1292883" xreflabel=""/>cfs21:~# mount -t ldiskfs /dev/volgroup/MDTb1 /mnt/mdtback
+<anchor xml:id="dbdoclet.50438207_pgfId-1292884" xreflabel=""/>cfs21:~# rm /mnt/mdtback/last_rcvd
+<anchor xml:id="dbdoclet.50438207_pgfId-1292885" xreflabel=""/>cfs21:~# umount /mnt/mdtback
+<anchor xml:id="dbdoclet.50438207_pgfId-1292886" xreflabel=""/>cfs21:~# mount -t ldiskfs /dev/volgroup/OSTb1 /mnt/ostback
+<anchor xml:id="dbdoclet.50438207_pgfId-1292887" xreflabel=""/>cfs21:~# rm /mnt/ostback/last_rcvd
+<anchor xml:id="dbdoclet.50438207_pgfId-1292888" xreflabel=""/>cfs21:~# umount /mnt/ostback
+</screen>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292889" xreflabel=""/> 2. Mount the file system from the LVM snapshot.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292890" xreflabel=""/>For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292891" xreflabel=""/>cfs21:~# mount -t lustre /dev/volgroup/MDTb1 /mnt/mdtback                  \
+                                                            
+<anchor xml:id="dbdoclet.50438207_pgfId-1292892" xreflabel=""/>cfs21:~# mount -t lustre /dev/volgroup/OSTb1 /mnt/ostback
+<anchor xml:id="dbdoclet.50438207_pgfId-1292893" xreflabel=""/>cfs21:~# mount -t lustre cfs21:/back /mnt/back
+</screen>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292894" xreflabel=""/> 3. Note the old directory contents, as of the snapshot time.</para>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292895" xreflabel=""/>For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292896" xreflabel=""/>cfs21:~/cfs/b1_5/lustre/utils# ls /mnt/back
+<anchor xml:id="dbdoclet.50438207_pgfId-1292897" xreflabel=""/>fstab  passwds
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1292898" xreflabel=""/>17.5.5 Deleting Old Snapshots</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292899" xreflabel=""/>To reclaim disk space, you can erase old snapshots as your backup policy dictates. Run:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292900" xreflabel=""/>lvremove /dev/volgroup/MDTb1
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438207_pgfId-1292901" xreflabel=""/>17.5.6 Changing Snapshot Volume Size</title>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292902" xreflabel=""/>You can also extend or shrink snapshot volumes if you find your daily deltas are smaller or larger than expected. Run:</para>
+        <screen><anchor xml:id="dbdoclet.50438207_pgfId-1292903" xreflabel=""/>lvextend -L10G /dev/volgroup/MDTb1
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438207_pgfId-1292904" xreflabel=""/> Extending snapshots seems to be broken in older LVM. It is working in LVM v2.02.01.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438207_pgfId-1292905" xreflabel=""/> </para>
+        <!--
+Begin SiteCatalyst code version: G.5.
+-->
+        <!--
+End SiteCatalyst code version: G.5.
+-->
+          <informaltable frame="none">
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="33*"/>
+            <colspec colname="c2" colwidth="33*"/>
+            <colspec colname="c3" colwidth="33*"/>
+            <tbody>
+              <row>
+                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                <entry align="right"><para>821-2076-10</para></entry>
+                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="UpgradingLustre.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingStripingFreeSpace.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link></para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><link xl:href=""/></para>
+        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+      </section>
+    </section>
+  </section>
+</article>

@@ -1,0 +1,917 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Index</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="Glossary.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><inlinemediaobject><imageobject role="html">
+                  <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next02.gif" scalefit="1"/>
+                </imageobject>
+<imageobject role="fo">
+                  <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next02.gif" scalefit="1" width="100%"/>
+                </imageobject>
+</inlinemediaobject><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438146_pgfId-3940" xreflabel=""/>Index</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <section remap="h3">
+    <title><anchor xml:id="dbdoclet.50438146_pgfId-24675" xreflabel=""/>A<anchor xml:id="dbdoclet.50438146_Symbols" xreflabel=""/><anchor xml:id="dbdoclet.50438146_Numerics" xreflabel=""/><anchor xml:id="dbdoclet.50438146_A" xreflabel=""/></title>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24679" xreflabel=""/></para>
+    <para>access control list (ACL), <link xl:href="ManagingSecurity.html#50438221_marker-1292306">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24681" xreflabel=""/></para>
+    <para>ACL, using, <link xl:href="ManagingSecurity.html#50438221_marker-1292306">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24683" xreflabel=""/>ACLs</para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24684" xreflabel=""/></para>
+    <para>examples, <link xl:href="ManagingSecurity.html#50438221_marker-1292325">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24686" xreflabel=""/></para>
+    <para>Lustre support, <link xl:href="ManagingSecurity.html#50438221_marker-1292314">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24688" xreflabel=""/>adaptive timeouts</para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24689" xreflabel=""/></para>
+    <para>configuring, <link xl:href="LustreProc.html#50438271_marker-1293381">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24691" xreflabel=""/></para>
+    <para>interpreting, <link xl:href="LustreProc.html#50438271_marker-1293383">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24693" xreflabel=""/></para>
+    <para>introduction, <link xl:href="LustreProc.html#50438271_marker-1293380">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24695" xreflabel=""/>adding</para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24696" xreflabel=""/></para>
+    <para>clients, <link xl:href="ConfiguringLustre.html#50438267_marker-1292440">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24698" xreflabel=""/></para>
+    <para>OSTs, <link xl:href="ConfiguringLustre.html#50438267_marker-1292440">1</link></para>
+    <para><anchor xml:id="dbdoclet.50438146_pgfId-24700" xreflabel=""/></para>
+    <para>allocating quotas, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290226">1</link></para>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24702" xreflabel=""/>B<anchor xml:id="dbdoclet.50438146_B" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24704" xreflabel=""/></para>
+      <para>bonding, <link xl:href="SettingUpBonding.html#50438258_marker-1301678">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24706" xreflabel=""/></para>
+      <para>configuring Lustre, <link xl:href="SettingUpBonding.html#50438258_marker-1301911">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24708" xreflabel=""/></para>
+      <para>module parameters, <link xl:href="SettingUpBonding.html#50438258_marker-1301747">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24710" xreflabel=""/></para>
+      <para>references, <link xl:href="SettingUpBonding.html#50438258_marker-1301915">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24712" xreflabel=""/></para>
+      <para>requirements, <link xl:href="SettingUpBonding.html#50438258_marker-1301684">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24714" xreflabel=""/></para>
+      <para>setting up, <link xl:href="SettingUpBonding.html#50438258_marker-1301757">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24716" xreflabel=""/>C<anchor xml:id="dbdoclet.50438146_C" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24718" xreflabel=""/>calculating</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24719" xreflabel=""/></para>
+      <para>OSS memory requirements, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1292245">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24721" xreflabel=""/></para>
+      <para>changelogs, <link xl:href="LustreMonitoring.html#50438273_marker-1297383">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24723" xreflabel=""/></para>
+      <para>checksums, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1291974">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24725" xreflabel=""/>client</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24726" xreflabel=""/></para>
+      <para>eviction, <link xl:href="LustreRecovery.html#50438268_marker-1292164">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24728" xreflabel=""/>client read/write</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24729" xreflabel=""/></para>
+      <para>extents survey, <link xl:href="LustreProc.html#50438271_marker-1290612">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24731" xreflabel=""/></para>
+      <para>offset survey, <link xl:href="LustreProc.html#50438271_marker-1290564">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24733" xreflabel=""/>clients</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24734" xreflabel=""/></para>
+      <para>adding, <link xl:href="ConfiguringLustre.html#50438267_marker-1292440">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24736" xreflabel=""/></para>
+      <para>CollectL, <link xl:href="LustreMonitoring.html#50438273_marker-1297391">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24738" xreflabel=""/>command</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24739" xreflabel=""/></para>
+      <para>filefrag, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305920">1</link>, <link xl:href="LustreProgrammingInterfaces.html#50438291_marker-1294565">2</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24742" xreflabel=""/></para>
+      <para>lfs, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305209">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24744" xreflabel=""/></para>
+      <para>lfsck, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305843">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24746" xreflabel=""/></para>
+      <para>mount, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305992">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24748" xreflabel=""/></para>
+      <para>Commit on Share (COS), <link xl:href="LustreRecovery.html#50438268_marker-1292182">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24750" xreflabel=""/></para>
+      <para>components, Lustre, <link xl:href="UnderstandingLustre.html#50438250_marker-1293887">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24752" xreflabel=""/></para>
+      <para>configuration example, Lustre, <link xl:href="ConfiguringLustre.html#50438267_marker-1290955">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24754" xreflabel=""/></para>
+      <para>configuration, logs, regenerating, <link xl:href="LustreMaintenance.html#50438199_marker-1305736">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24756" xreflabel=""/>configuration, more complex</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24757" xreflabel=""/></para>
+      <para>failover, <link xl:href="LustreOperations.html#50438194_marker-1306313">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24759" xreflabel=""/>configuring</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24760" xreflabel=""/></para>
+      <para>adaptive timeouts, <link xl:href="LustreProc.html#50438271_marker-1293381">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24762" xreflabel=""/></para>
+      <para>root squash, <link xl:href="ManagingSecurity.html#50438221_marker-1294610">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24764" xreflabel=""/>D<anchor xml:id="dbdoclet.50438146_D" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24766" xreflabel=""/></para>
+      <para>debug_mb, <link xl:href="LustreDebugging.html#50438274_marker-1295885">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24768" xreflabel=""/>debugging</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24769" xreflabel=""/></para>
+      <para>adding debugging to source code, <link xl:href="LustreDebugging.html#50438274_marker-1296026">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24771" xreflabel=""/></para>
+      <para>buffer, <link xl:href="LustreDebugging.html#50438274_marker-1295885">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24773" xreflabel=""/></para>
+      <para>controlling the kernel debug log, <link xl:href="LustreDebugging.html#50438274_marker-1295955">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24775" xreflabel=""/></para>
+      <para>finding Lustre UUID of an OST, <link xl:href="LustreDebugging.html#50438274_marker-1296007">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24777" xreflabel=""/></para>
+      <para>finding memory leaks, <link xl:href="LustreDebugging.html#50438274_marker-1296153">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24779" xreflabel=""/></para>
+      <para>looking at disk content, <link xl:href="LustreDebugging.html#50438274_marker-1295982">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24781" xreflabel=""/></para>
+      <para>messages, <link xl:href="LustreDebugging.html#50438274_marker-1295746">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24783" xreflabel=""/></para>
+      <para>Ptlrpc request history, <link xl:href="LustreDebugging.html#50438274_marker-1296099">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24785" xreflabel=""/></para>
+      <para>sample lctl run, <link xl:href="LustreDebugging.html#50438274_marker-1295914">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24787" xreflabel=""/></para>
+      <para>tracing lock traffic, <link xl:href="LustreDebugging.html#50438274_marker-1296017">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24789" xreflabel=""/></para>
+      <para>troubleshooting with strace, <link xl:href="LustreDebugging.html#50438274_marker-1295969">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24791" xreflabel=""/></para>
+      <para>directory statahead, using, <link xl:href="LustreProc.html#50438271_marker-1294292">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24793" xreflabel=""/></para>
+      <para>downed routers, <link xl:href="ManagingLNET.html#50438203_marker-1288828">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24795" xreflabel=""/>E<anchor xml:id="dbdoclet.50438146_E" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24797" xreflabel=""/></para>
+      <para>e2fsprogs, <link xl:href="InstallingLustre.html#50438261_marker-1292893">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24799" xreflabel=""/></para>
+      <para>e2scan, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317398">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24801" xreflabel=""/></para>
+      <para>Elan (Quadrics Elan), <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289889">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24803" xreflabel=""/></para>
+      <para>environmental requirements, <link xl:href="InstallingLustre.html#50438261_marker-1292914">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24805" xreflabel=""/></para>
+      <para>error messages, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291323">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24807" xreflabel=""/></para>
+      <para>error numbers, <link xl:href="LustreTroubleshooting.html#50438198_marker-1296744">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24809" xreflabel=""/></para>
+      <para>external journal, creating, <link xl:href="ConfiguringStorage.html#50438208_marker-1289927">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24811" xreflabel=""/>F<anchor xml:id="dbdoclet.50438146_F" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24813" xreflabel=""/></para>
+      <para>failover, <link xl:href="UnderstandingFailover.html#50438253_marker-1304330">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24815" xreflabel=""/></para>
+      <para>capabilities, <link xl:href="UnderstandingFailover.html#50438253_marker-1304336">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24817" xreflabel=""/></para>
+      <para>configuration types, <link xl:href="UnderstandingFailover.html#50438253_marker-1304346">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24819" xreflabel=""/></para>
+      <para>configuring, <link xl:href="LustreOperations.html#50438194_marker-1306313">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24821" xreflabel=""/></para>
+      <para>failover and MMP, <link xl:href="ManagingFailover.html#50438213_marker-1301522">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24823" xreflabel=""/></para>
+      <para>MDT (active/passive), <link xl:href="UnderstandingFailover.html#50438253_marker-1304373">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24825" xreflabel=""/></para>
+      <para>OST (active/active), <link xl:href="UnderstandingFailover.html#50438253_marker-1304382">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24827" xreflabel=""/></para>
+      <para>file formats, quotas, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290326">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24829" xreflabel=""/></para>
+      <para>file readahead, using, <link xl:href="LustreProc.html#50438271_marker-1294292">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24831" xreflabel=""/></para>
+      <para>file size, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290761">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24833" xreflabel=""/></para>
+      <para>file striping, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1291832">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24835" xreflabel=""/></para>
+      <para>file system size, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290753">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24837" xreflabel=""/></para>
+      <para>filefrag command, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305920">1</link>, <link xl:href="LustreProgrammingInterfaces.html#50438291_marker-1294565">2</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24840" xreflabel=""/></para>
+      <para>filename length, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290791">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24842" xreflabel=""/></para>
+      <para>flock utility, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1295910">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24844" xreflabel=""/>free space management</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24845" xreflabel=""/></para>
+      <para>adjusting weighting between free space and location, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1294033">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24847" xreflabel=""/></para>
+      <para>round-robin allocator, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1293988">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24849" xreflabel=""/></para>
+      <para>weighted allocator, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1294020">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24851" xreflabel=""/></para>
+      <para>free space, managing, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1295520">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24853" xreflabel=""/>H<anchor xml:id="dbdoclet.50438146_G" xreflabel=""/><anchor xml:id="dbdoclet.50438146_H" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24856" xreflabel=""/></para>
+      <para>HA software, <link xl:href="InstallingLustre.html#50438261_marker-1292902">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24858" xreflabel=""/></para>
+      <para>handling full OSTs, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1295529">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24860" xreflabel=""/></para>
+      <para>handling timeouts, <link xl:href="UserUtilities_HTML.html#50438206_marker-1306030">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24862" xreflabel=""/>I<anchor xml:id="dbdoclet.50438146_I" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24864" xreflabel=""/>I/O options</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24865" xreflabel=""/></para>
+      <para>checksums, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1291974">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24867" xreflabel=""/></para>
+      <para>I/O tunables, <link xl:href="LustreProc.html#50438271_marker-1290508">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24869" xreflabel=""/></para>
+      <para>I/O, direct, performing, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1291962">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24871" xreflabel=""/></para>
+      <para>inode number, OST, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1293235">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24873" xreflabel=""/></para>
+      <para>inode size, MDT, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1293231">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24875" xreflabel=""/></para>
+      <para>installing Lustre, environmental requirements, <link xl:href="InstallingLustre.html#50438261_marker-1292914">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24877" xreflabel=""/></para>
+      <para>installing Lustre, HA software, <link xl:href="InstallingLustre.html#50438261_marker-1292902">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24879" xreflabel=""/></para>
+      <para>installing Lustre, memory requirements, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1292212">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24881" xreflabel=""/></para>
+      <para>installing Lustre, required tools / utilities, <link xl:href="InstallingLustre.html#50438261_marker-1292890">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24883" xreflabel=""/></para>
+      <para>interoperability, <link xl:href="UpgradingLustre.html#50438205_marker-1293321">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24885" xreflabel=""/>interpreting</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24886" xreflabel=""/></para>
+      <para>adaptive timeouts, <link xl:href="LustreProc.html#50438271_marker-1293383">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24888" xreflabel=""/>K<anchor xml:id="dbdoclet.50438146_J" xreflabel=""/><anchor xml:id="dbdoclet.50438146_K" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24891" xreflabel=""/></para>
+      <para>key features, <link xl:href="UnderstandingLustre.html#50438250_marker-1293792">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-24893" xreflabel=""/>L<anchor xml:id="dbdoclet.50438146_L" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24895" xreflabel=""/></para>
+      <para>l_getidentity, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1318227">1</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317750">2</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317690">3</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24899" xreflabel=""/></para>
+      <para>lctl, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1302539">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24901" xreflabel=""/></para>
+      <para>setting parameters, <link xl:href="LustreOperations.html#50438194_marker-1305718">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24903" xreflabel=""/></para>
+      <para>lfs command, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305209">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24905" xreflabel=""/></para>
+      <para>lfsck command, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305843">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24907" xreflabel=""/></para>
+      <para>ll_recover_lost_found_objs, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317865">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24909" xreflabel=""/></para>
+      <para>llapi, <link xl:href="SettingLustreProperties_HTML.html#50438215_marker-1297700">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24911" xreflabel=""/></para>
+      <para>llstat, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1318052">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24913" xreflabel=""/>LNET</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24914" xreflabel=""/></para>
+      <para>starting, <link xl:href="ManagingLNET.html#50438203_marker-1287400">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24916" xreflabel=""/></para>
+      <para>stopping, <link xl:href="ManagingLNET.html#50438203_marker-1288543">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24918" xreflabel=""/>LNET self-test</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24919" xreflabel=""/></para>
+      <para>commands, <link xl:href="LNETSelfTest.html#50438223_marker-1298562">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24921" xreflabel=""/>Load balancing with InfiniBand</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24922" xreflabel=""/></para>
+      <para>modprobe.conf, <link xl:href="ManagingLNET.html#50438203_marker-1290316">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24924" xreflabel=""/></para>
+      <para>locking proc entries, <link xl:href="LustreProc.html#50438271_marker-1290874">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24926" xreflabel=""/></para>
+      <para>lst, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1318121">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24928" xreflabel=""/>Lustre</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24929" xreflabel=""/></para>
+      <para>administration, aborting recovery, <link xl:href="LustreMaintenance.html#50438199_marker-1299023">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24931" xreflabel=""/></para>
+      <para>administration, changing a server NID, <link xl:href="LustreMaintenance.html#50438199_marker-1305737">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24933" xreflabel=""/></para>
+      <para>administration, determining which machine is serving an OST, <link xl:href="LustreMaintenance.html#50438199_marker-1305741">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24935" xreflabel=""/></para>
+      <para>administration, failout / failover mode for OSTs, <link xl:href="LustreOperations.html#50438194_marker-1298926">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24937" xreflabel=""/></para>
+      <para>administration, finding nodes in the file system, <link xl:href="LustreMaintenance.html#50438199_marker-1298897">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24939" xreflabel=""/></para>
+      <para>administration, mounting a server, <link xl:href="LustreOperations.html#50438194_marker-1298863">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24941" xreflabel=""/></para>
+      <para>administration, mounting a server without Lustre service, <link xl:href="LustreMaintenance.html#50438199_marker-1298918">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24943" xreflabel=""/></para>
+      <para>administration, regenerating Lustre configuration logs, <link xl:href="LustreMaintenance.html#50438199_marker-1305736">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24945" xreflabel=""/></para>
+      <para>administration, removing and restoring OSTs, <link xl:href="LustreMaintenance.html#50438199_marker-1298976">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24947" xreflabel=""/></para>
+      <para>administration, running multiple Lustre file systems, <link xl:href="LustreOperations.html#50438194_marker-1298939">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24949" xreflabel=""/></para>
+      <para>administration, setting and retrieving Lustre parameters, <link xl:href="LustreOperations.html#50438194_marker-1302467">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24951" xreflabel=""/></para>
+      <para>administration, starting Lustre, <link xl:href="LustreOperations.html#50438194_marker-1305696">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24953" xreflabel=""/></para>
+      <para>administration, working with inactive OSTs, <link xl:href="LustreMaintenance.html#50438199_marker-1298888">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24955" xreflabel=""/></para>
+      <para>adminstration, unmounting a server, <link xl:href="LustreOperations.html#50438194_marker-1298879">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24957" xreflabel=""/></para>
+      <para>components, <link xl:href="UnderstandingLustre.html#50438250_marker-1293887">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24959" xreflabel=""/></para>
+      <para>configuration example, <link xl:href="ConfiguringLustre.html#50438267_marker-1290955">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24961" xreflabel=""/></para>
+      <para>COS, <link xl:href="LustreRecovery.html#50438268_marker-1292182">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24963" xreflabel=""/></para>
+      <para>failover, <link xl:href="UnderstandingFailover.html#50438253_marker-1304330">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24965" xreflabel=""/></para>
+      <para>installing, environmental requirements, <link xl:href="InstallingLustre.html#50438261_marker-1292914">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24967" xreflabel=""/></para>
+      <para>installing, HA software, <link xl:href="InstallingLustre.html#50438261_marker-1292902">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24969" xreflabel=""/></para>
+      <para>installing, memory requirements, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1292212">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24971" xreflabel=""/></para>
+      <para>installing, required tools / utilities, <link xl:href="InstallingLustre.html#50438261_marker-1292890">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24973" xreflabel=""/></para>
+      <para>interoperability, <link xl:href="UpgradingLustre.html#50438205_marker-1293321">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24975" xreflabel=""/></para>
+      <para>key features, <link xl:href="UnderstandingLustre.html#50438250_marker-1293792">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24977" xreflabel=""/></para>
+      <para>metadata replay, <link xl:href="LustreRecovery.html#50438268_marker-1292175">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24979" xreflabel=""/></para>
+      <para>orphaned objects, <link xl:href="TroubleShootingRecovery.html#50438225_marker-1292187">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24981" xreflabel=""/></para>
+      <para>parameters, reporting current, <link xl:href="LustreOperations.html#50438194_marker-1302474">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24983" xreflabel=""/></para>
+      <para>parameters, setting and retrieving, <link xl:href="LustreOperations.html#50438194_marker-1302467">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24985" xreflabel=""/></para>
+      <para>parameters, setting with lctl, <link xl:href="LustreOperations.html#50438194_marker-1305718">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24987" xreflabel=""/></para>
+      <para>parameters, setting with mkfs.lustre, <link xl:href="LustreOperations.html#50438194_marker-1305722">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24989" xreflabel=""/></para>
+      <para>parameters, setting with tunefs.lustre, <link xl:href="LustreOperations.html#50438194_marker-1305720">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24991" xreflabel=""/></para>
+      <para>recovering from corruption in Lustre file system, <link xl:href="TroubleShootingRecovery.html#50438225_marker-1292186">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24993" xreflabel=""/></para>
+      <para>recovering from errors on backing file system, <link xl:href="TroubleShootingRecovery.html#50438225_marker-1292184">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24995" xreflabel=""/></para>
+      <para>recovery, client eviction, <link xl:href="LustreRecovery.html#50438268_marker-1292164">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24997" xreflabel=""/></para>
+      <para>reply reconstruction, <link xl:href="LustreRecovery.html#50438268_marker-1292176">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-24999" xreflabel=""/></para>
+      <para>scaling, <link xl:href="ConfiguringLustre.html#50438267_marker-1292440">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25001" xreflabel=""/></para>
+      <para>starting, <link xl:href="LustreOperations.html#50438194_marker-1305696">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25003" xreflabel=""/></para>
+      <para>upgrading, 1.6.x to 1.8.x, <link xl:href="UpgradingLustre.html#50438205_marker-1294652">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25005" xreflabel=""/></para>
+      <para>VBR, introduction, <link xl:href="LustreRecovery.html#50438268_marker-1288580">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25007" xreflabel=""/></para>
+      <para>VBR, tips, <link xl:href="LustreRecovery.html#50438268_marker-1288584">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25009" xreflabel=""/></para>
+      <para>VBR, working with, <link xl:href="LustreRecovery.html#50438268_marker-1288583">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25011" xreflabel=""/>Lustre I/O kit</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25012" xreflabel=""/></para>
+      <para>downloading, <link xl:href="BenchmarkingTests.html#50438212_marker-1289913">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25014" xreflabel=""/></para>
+      <para>obdfilter_survey tool, <link xl:href="BenchmarkingTests.html#50438212_marker-1289957">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25016" xreflabel=""/></para>
+      <para>ost_survey tool, <link xl:href="BenchmarkingTests.html#50438212_marker-1290067">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25018" xreflabel=""/></para>
+      <para>sgpdd_survey tool, <link xl:href="BenchmarkingTests.html#50438212_marker-1302844">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25020" xreflabel=""/></para>
+      <para>Lustre Monitoring Tool (LMT), <link xl:href="LustreMonitoring.html#50438273_marker-1297386">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25022" xreflabel=""/></para>
+      <para>lustre_rmmod.sh, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317379">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25024" xreflabel=""/></para>
+      <para>lustre_rsync, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317224">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25026" xreflabel=""/>M<anchor xml:id="dbdoclet.50438146_M" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25028" xreflabel=""/>man1</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25029" xreflabel=""/></para>
+      <para>filefrag, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305920">1</link>, <link xl:href="LustreProgrammingInterfaces.html#50438291_marker-1294565">2</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25032" xreflabel=""/></para>
+      <para>lfs, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305209">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25034" xreflabel=""/></para>
+      <para>lfsck, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305843">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25036" xreflabel=""/></para>
+      <para>mount, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305992">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25038" xreflabel=""/>man2</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25039" xreflabel=""/></para>
+      <para>user/group cache upcall, <link xl:href="LustreProgrammingInterfaces.html#50438291_marker-1293215">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25041" xreflabel=""/>man5</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25042" xreflabel=""/></para>
+      <para>LNET options, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1293320">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25044" xreflabel=""/></para>
+      <para>module options, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1293311">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25046" xreflabel=""/></para>
+      <para>MX LND, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1295997">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25048" xreflabel=""/></para>
+      <para>Portals LND (Linux), <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1293719">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25050" xreflabel=""/></para>
+      <para>SOCKLND kernel TCP/IP LND, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1293448">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25052" xreflabel=""/>man8</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25053" xreflabel=""/></para>
+      <para>application profiling utilties, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1313051">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25055" xreflabel=""/></para>
+      <para>l_getidentity, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1318227">1</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317750">2</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317690">3</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25059" xreflabel=""/></para>
+      <para>lctl, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1302539">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25061" xreflabel=""/></para>
+      <para>ll_recover_lost_found_objs, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317865">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25063" xreflabel=""/></para>
+      <para>llstat, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1318052">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25065" xreflabel=""/></para>
+      <para>lst, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1318121">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25067" xreflabel=""/></para>
+      <para>lustre_rsync, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317224">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25069" xreflabel=""/></para>
+      <para>mkfs.lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1316695">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25071" xreflabel=""/></para>
+      <para>mount.lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1310637">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25073" xreflabel=""/></para>
+      <para>plot-llstat, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317989">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25075" xreflabel=""/></para>
+      <para>proc statistics, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1313052">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25077" xreflabel=""/></para>
+      <para>routerstat, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317921">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25079" xreflabel=""/></para>
+      <para>system configuration utilities, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1313048">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25081" xreflabel=""/></para>
+      <para>test/debug utilities, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1313053">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25083" xreflabel=""/></para>
+      <para>tunefs.lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317076">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25085" xreflabel=""/></para>
+      <para>managing free space, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1295520">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25087" xreflabel=""/>maximum</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25088" xreflabel=""/></para>
+      <para>file size, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290761">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25090" xreflabel=""/></para>
+      <para>file system size, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290753">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25092" xreflabel=""/></para>
+      <para>filename/pathname length, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290791">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25094" xreflabel=""/></para>
+      <para>number of clients, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290746">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25096" xreflabel=""/></para>
+      <para>number of files in a directory, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290770">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25098" xreflabel=""/></para>
+      <para>number of open files, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290800">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25100" xreflabel=""/></para>
+      <para>number of OSTs and MDTs, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290738">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25102" xreflabel=""/></para>
+      <para>stripe count, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290714">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25104" xreflabel=""/></para>
+      <para>stripe size, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290722">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25106" xreflabel=""/>mballoc</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25107" xreflabel=""/></para>
+      <para>history, <link xl:href="LustreProc.html#50438271_marker-1297045">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25109" xreflabel=""/>mballoc3</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25110" xreflabel=""/></para>
+      <para>tunables, <link xl:href="LustreProc.html#50438271_marker-1290795">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25112" xreflabel=""/>MDS</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25113" xreflabel=""/></para>
+      <para>service thread count, <link xl:href="LustreTuning.html#50438272_marker-1293755">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25115" xreflabel=""/>MDT</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25116" xreflabel=""/></para>
+      <para>failover, <link xl:href="UnderstandingFailover.html#50438253_marker-1304373">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25118" xreflabel=""/></para>
+      <para>inode size, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1293231">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25120" xreflabel=""/></para>
+      <para>memory requirements, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1292212">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25122" xreflabel=""/></para>
+      <para>metadata replay, <link xl:href="LustreRecovery.html#50438268_marker-1292175">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25124" xreflabel=""/>minimum</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25125" xreflabel=""/></para>
+      <para>stripe size, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290730">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25127" xreflabel=""/></para>
+      <para>mkfs.lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1316695">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25129" xreflabel=""/></para>
+      <para>setting parameters, <link xl:href="LustreOperations.html#50438194_marker-1305722">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25131" xreflabel=""/>MMP</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25132" xreflabel=""/></para>
+      <para>MMP and failover, <link xl:href="ManagingFailover.html#50438213_marker-1301522">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25134" xreflabel=""/></para>
+      <para>modprobe.conf, <link xl:href="ManagingLNET.html#50438203_marker-1290316">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25136" xreflabel=""/>monitoring</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25137" xreflabel=""/></para>
+      <para>changelogs, <link xl:href="LustreMonitoring.html#50438273_marker-1297383">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25139" xreflabel=""/></para>
+      <para>CollectL, <link xl:href="LustreMonitoring.html#50438273_marker-1297391">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25141" xreflabel=""/></para>
+      <para>Lustre Monitoring Tool, <link xl:href="LustreMonitoring.html#50438273_marker-1297386">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25143" xreflabel=""/></para>
+      <para>mount command, <link xl:href="UserUtilities_HTML.html#50438206_marker-1305992">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25145" xreflabel=""/></para>
+      <para>mount.lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1310637">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25147" xreflabel=""/></para>
+      <para>MX LND, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1295997">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25149" xreflabel=""/>N<anchor xml:id="dbdoclet.50438146_N" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25151" xreflabel=""/>network</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25152" xreflabel=""/></para>
+      <para>bonding, <link xl:href="SettingUpBonding.html#50438258_marker-1301678">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25154" xreflabel=""/>networks, supported</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25155" xreflabel=""/></para>
+      <para>Elan (Quadrics Elan), <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289889">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25157" xreflabel=""/></para>
+      <para>ra (RapidArray), <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289887">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25159" xreflabel=""/></para>
+      <para>NID, server, changing, <link xl:href="LustreMaintenance.html#50438199_marker-1305737">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25161" xreflabel=""/></para>
+      <para>number of clients, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290746">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25163" xreflabel=""/></para>
+      <para>number of files in a directory, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290770">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25165" xreflabel=""/></para>
+      <para>number of open files, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290800">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25167" xreflabel=""/>O<anchor xml:id="dbdoclet.50438146_O" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25169" xreflabel=""/></para>
+      <para>obdfilter_survey tool, <link xl:href="BenchmarkingTests.html#50438212_marker-1289957">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25171" xreflabel=""/></para>
+      <para>orphaned objects, working with, <link xl:href="TroubleShootingRecovery.html#50438225_marker-1292187">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25173" xreflabel=""/>OSS</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25174" xreflabel=""/></para>
+      <para>memory, determining, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1292245">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25176" xreflabel=""/></para>
+      <para>service thread count, <link xl:href="LustreTuning.html#50438272_marker-1294858">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25178" xreflabel=""/></para>
+      <para>OSS read cache, <link xl:href="LustreProc.html#50438271_marker-1296183">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25180" xreflabel=""/>OST</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25181" xreflabel=""/></para>
+      <para>failover, <link xl:href="UnderstandingFailover.html#50438253_marker-1304382">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25183" xreflabel=""/></para>
+      <para>number of inodes, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1293235">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25185" xreflabel=""/></para>
+      <para>removing and restoring, <link xl:href="LustreMaintenance.html#50438199_marker-1298976">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25187" xreflabel=""/></para>
+      <para>OST block I/O stream, watching, <link xl:href="LustreProc.html#50438271_marker-1290631">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25189" xreflabel=""/></para>
+      <para>OST pools, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1295531">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25191" xreflabel=""/></para>
+      <para>OST, adding, <link xl:href="LustreMaintenance.html#50438199_marker-1306353">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25193" xreflabel=""/></para>
+      <para>OST, determining which machine is serving, <link xl:href="LustreMaintenance.html#50438199_marker-1305741">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25195" xreflabel=""/></para>
+      <para>ost_survey tool, <link xl:href="BenchmarkingTests.html#50438212_marker-1290067">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25197" xreflabel=""/>OSTs</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25198" xreflabel=""/></para>
+      <para>adding, <link xl:href="ConfiguringLustre.html#50438267_marker-1292440">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25200" xreflabel=""/></para>
+      <para>OSTs and MDTs, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290738">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25202" xreflabel=""/></para>
+      <para>OSTs, full, handling, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1295529">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25204" xreflabel=""/>P<anchor xml:id="dbdoclet.50438146_P" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25206" xreflabel=""/></para>
+      <para>parameters, setting with lctl, <link xl:href="LustreOperations.html#50438194_marker-1305718">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25208" xreflabel=""/></para>
+      <para>parameters, setting with mkfs.lustre, <link xl:href="LustreOperations.html#50438194_marker-1305722">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25210" xreflabel=""/></para>
+      <para>parameters, setting with tunefs.lustre, <link xl:href="LustreOperations.html#50438194_marker-1305720">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25212" xreflabel=""/></para>
+      <para>pathname length, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290791">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25214" xreflabel=""/></para>
+      <para>performing direct I/O, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1291962">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25216" xreflabel=""/></para>
+      <para>Perl, <link xl:href="InstallingLustre.html#50438261_marker-1292899">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25218" xreflabel=""/></para>
+      <para>plot-llstat, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317989">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25220" xreflabel=""/></para>
+      <para>pools, OST, <link xl:href="ManagingFileSystemIO.html#50438211_marker-1295531">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25222" xreflabel=""/>Portals LND</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25223" xreflabel=""/></para>
+      <para>Linux, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1293719">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25225" xreflabel=""/>proc entries</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25226" xreflabel=""/></para>
+      <para>free space distribution, <link xl:href="LustreProc.html#50438271_marker-1296165">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25228" xreflabel=""/></para>
+      <para>LNET information, <link xl:href="LustreProc.html#50438271_marker-1296164">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25230" xreflabel=""/></para>
+      <para>locating file systems and servers, <link xl:href="LustreProc.html#50438271_marker-1296151">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25232" xreflabel=""/></para>
+      <para>locking, <link xl:href="LustreProc.html#50438271_marker-1290874">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25234" xreflabel=""/></para>
+      <para>timeouts, <link xl:href="LustreProc.html#50438271_marker-1296153">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25236" xreflabel=""/>Q<anchor xml:id="dbdoclet.50438146_Q" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25238" xreflabel=""/></para>
+      <para>Quadrics Elan, <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289889">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25240" xreflabel=""/></para>
+      <para>quota limits, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290282">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25242" xreflabel=""/></para>
+      <para>quota statistics, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290343">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25244" xreflabel=""/>quotas</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25245" xreflabel=""/></para>
+      <para>administering, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290170">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25247" xreflabel=""/></para>
+      <para>allocating, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290226">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25249" xreflabel=""/></para>
+      <para>creating files, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290170">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25251" xreflabel=""/></para>
+      <para>enabling, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290128">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25253" xreflabel=""/></para>
+      <para>file formats, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290326">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25255" xreflabel=""/></para>
+      <para>granted cache, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290272">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25257" xreflabel=""/></para>
+      <para>known issues, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290269">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25259" xreflabel=""/></para>
+      <para>limits, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290282">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25261" xreflabel=""/></para>
+      <para>statistics, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290343">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25263" xreflabel=""/></para>
+      <para>working with, <link xl:href="ConfiguringQuotas.html#50438217_marker-1290118">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25265" xreflabel=""/>R<anchor xml:id="dbdoclet.50438146_R" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25267" xreflabel=""/></para>
+      <para>ra (RapidArray), <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289887">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25269" xreflabel=""/>RAID</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25270" xreflabel=""/></para>
+      <para>creating an external journal, <link xl:href="ConfiguringStorage.html#50438208_marker-1289927">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25272" xreflabel=""/></para>
+      <para>formatting options, <link xl:href="ConfiguringStorage.html#50438208_marker-1291599">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25274" xreflabel=""/></para>
+      <para>handling degraded arrays, <link xl:href="LustreOperations.html#50438194_marker-1307136">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25276" xreflabel=""/></para>
+      <para>performance tradeoffs, <link xl:href="ConfiguringStorage.html#50438208_marker-1291593">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25278" xreflabel=""/></para>
+      <para>reliability best practices, <link xl:href="ConfiguringStorage.html#50438208_marker-1291581">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25280" xreflabel=""/></para>
+      <para>selecting storage for MDS or OSTs, <link xl:href="ConfiguringStorage.html#50438208_marker-1291567">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25282" xreflabel=""/></para>
+      <para>RapidArray, <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289887">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25284" xreflabel=""/></para>
+      <para>readahead, tuning, <link xl:href="LustreProc.html#50438271_marker-1295183">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25286" xreflabel=""/>recovery mode, failure types</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25287" xreflabel=""/></para>
+      <para>client failure, <link xl:href="LustreRecovery.html#50438268_marker-1287394">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25289" xreflabel=""/></para>
+      <para>MDS failure/failover, <link xl:href="LustreRecovery.html#50438268_marker-1287397">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25291" xreflabel=""/></para>
+      <para>network partition, <link xl:href="LustreRecovery.html#50438268_marker-1289388">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25293" xreflabel=""/></para>
+      <para>OST failure, <link xl:href="LustreRecovery.html#50438268_marker-1289240">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25295" xreflabel=""/></para>
+      <para>recovery, aborting, <link xl:href="LustreMaintenance.html#50438199_marker-1299023">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25297" xreflabel=""/></para>
+      <para>regenerating configuration logs, <link xl:href="LustreMaintenance.html#50438199_marker-1305736">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25299" xreflabel=""/></para>
+      <para>reply reconstruction, <link xl:href="LustreRecovery.html#50438268_marker-1292176">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25301" xreflabel=""/></para>
+      <para>reporting current Lustre parameters, <link xl:href="LustreOperations.html#50438194_marker-1302474">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25303" xreflabel=""/></para>
+      <para>required tools / utilities, <link xl:href="InstallingLustre.html#50438261_marker-1292890">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25305" xreflabel=""/>root squash</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25306" xreflabel=""/></para>
+      <para>configuring, <link xl:href="ManagingSecurity.html#50438221_marker-1294610">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25308" xreflabel=""/></para>
+      <para>tips, <link xl:href="ManagingSecurity.html#50438221_marker-1296366">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25310" xreflabel=""/></para>
+      <para>tuning, <link xl:href="ManagingSecurity.html#50438221_marker-1294611">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25312" xreflabel=""/></para>
+      <para>root squash, using, <link xl:href="ManagingSecurity.html#50438221_marker-1294644">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25314" xreflabel=""/></para>
+      <para>round-robin allocator, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1293988">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25316" xreflabel=""/></para>
+      <para>routers, downed, <link xl:href="ManagingLNET.html#50438203_marker-1288828">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25318" xreflabel=""/></para>
+      <para>routerstat, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317921">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25320" xreflabel=""/></para>
+      <para>RPC stream tunables, <link xl:href="LustreProc.html#50438271_marker-1290514">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25322" xreflabel=""/></para>
+      <para>RPC stream, watching, <link xl:href="LustreProc.html#50438271_marker-1290535">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25324" xreflabel=""/>S<anchor xml:id="dbdoclet.50438146_S" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25326" xreflabel=""/></para>
+      <para>scaling Lustre, <link xl:href="ConfiguringLustre.html#50438267_marker-1292440">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25328" xreflabel=""/>server</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25329" xreflabel=""/></para>
+      <para>mounting, <link xl:href="LustreOperations.html#50438194_marker-1298863">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25331" xreflabel=""/></para>
+      <para>unmounting, <link xl:href="LustreOperations.html#50438194_marker-1298879">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25333" xreflabel=""/></para>
+      <para>server NID, changing, <link xl:href="LustreMaintenance.html#50438199_marker-1305737">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25335" xreflabel=""/>service threads</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25336" xreflabel=""/></para>
+      <para>MDS, <link xl:href="LustreTuning.html#50438272_marker-1293755">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25338" xreflabel=""/></para>
+      <para>OSS, <link xl:href="LustreTuning.html#50438272_marker-1294858">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25340" xreflabel=""/>setting</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25341" xreflabel=""/></para>
+      <para>SCSI I/O sizes, <link xl:href="LustreTroubleshooting.html#50438198_marker-1294800">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25343" xreflabel=""/></para>
+      <para>setting and retrieving Lustre parameters, <link xl:href="LustreOperations.html#50438194_marker-1302467">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25345" xreflabel=""/></para>
+      <para>sgpdd_survey tool, <link xl:href="BenchmarkingTests.html#50438212_marker-1302844">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25347" xreflabel=""/></para>
+      <para>SOCKLND kernel TCP/IP LND, <link xl:href="ConfigurationFilesModuleParameters.html#50438293_marker-1293448">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25349" xreflabel=""/>starting</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25350" xreflabel=""/></para>
+      <para>LNET, <link xl:href="ManagingLNET.html#50438203_marker-1287400">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25352" xreflabel=""/></para>
+      <para>statahead, tuning, <link xl:href="LustreProc.html#50438271_marker-1295184">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25354" xreflabel=""/>stopping</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25355" xreflabel=""/></para>
+      <para>LNET, <link xl:href="ManagingLNET.html#50438203_marker-1288543">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25357" xreflabel=""/></para>
+      <para>strace, <link xl:href="LustreDebugging.html#50438274_marker-1295969">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25359" xreflabel=""/></para>
+      <para>stripe count, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290714">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25361" xreflabel=""/></para>
+      <para>stripe size, maximum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290722">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25363" xreflabel=""/></para>
+      <para>stripe size, minimum, <link xl:href="SettingUpLustreSystem.html#50438256_marker-1290730">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25365" xreflabel=""/>striping</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25366" xreflabel=""/></para>
+      <para>managing free space, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1295520">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25368" xreflabel=""/></para>
+      <para>size, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1291859">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25370" xreflabel=""/></para>
+      <para>striping using llapi, <link xl:href="SettingLustreProperties_HTML.html#50438215_marker-1297700">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25372" xreflabel=""/>supported networks</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25373" xreflabel=""/></para>
+      <para>Elan (Quadrics Elan), <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289889">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25375" xreflabel=""/></para>
+      <para>ra (RapidArray), <link xl:href="UnderstandingLustreNetworking.html#50438191_marker-1289887">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25377" xreflabel=""/>T<anchor xml:id="dbdoclet.50438146_T" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25379" xreflabel=""/></para>
+      <para>timeouts, handling, <link xl:href="UserUtilities_HTML.html#50438206_marker-1306030">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25381" xreflabel=""/>troubleshooting</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25382" xreflabel=""/></para>
+      <para>drawbacks in doing multi-client O_APPEND writes, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291520">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25384" xreflabel=""/></para>
+      <para>erasing a file system, <link xl:href="LustreOperations.html#50438194_marker-1307237">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25386" xreflabel=""/></para>
+      <para>error messages, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291323">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25388" xreflabel=""/></para>
+      <para>error numbers, <link xl:href="LustreTroubleshooting.html#50438198_marker-1296744">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25390" xreflabel=""/></para>
+      <para>handling timeouts on initial Lustre setup, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291503">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25392" xreflabel=""/>handling/debugging &quot;bind</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25393" xreflabel=""/></para>
+      <para>address already in use&quot; error, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291446">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25395" xreflabel=""/>handling/debugging &quot;Lustre Error</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25396" xreflabel=""/></para>
+      <para>xxx went back in time&quot;, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291509">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25398" xreflabel=""/></para>
+      <para>handling/debugging error &quot;28&quot;, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291470">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25400" xreflabel=""/></para>
+      <para>identifying a missing OST, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291366">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25402" xreflabel=""/></para>
+      <para>improving Lustre performance when working with small files, <link xl:href="LustreTuning.html#50438272_marker-1295851">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25404" xreflabel=""/></para>
+      <para>log message â€™out of memoryâ€™ on OST, <link xl:href="LustreTroubleshooting.html#50438198_marker-1292113">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25406" xreflabel=""/>Lustre Error</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25407" xreflabel=""/></para>
+      <para>&quot;slow start_page_write&quot;, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291517">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25409" xreflabel=""/></para>
+      <para>OST object missing or damaged, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291349">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25411" xreflabel=""/></para>
+      <para>OSTs become read-only, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291361">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25413" xreflabel=""/></para>
+      <para>reclaiming reserved disk space, <link xl:href="LustreOperations.html#50438194_marker-1307251">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25415" xreflabel=""/></para>
+      <para>recovering from an unavailable OST, <link xl:href="TroubleShootingRecovery.html#50438225_marker-1292768">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25417" xreflabel=""/></para>
+      <para>replacing an existing OST or MDS, <link xl:href="LustreOperations.html#50438194_marker-1307278">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25419" xreflabel=""/></para>
+      <para>reporting a Lustre bug, <link xl:href="LustreTroubleshooting.html#50438198_marker-1296753">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25421" xreflabel=""/></para>
+      <para>setting SCSI I/O sizes, <link xl:href="LustreTroubleshooting.html#50438198_marker-1294800">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25423" xreflabel=""/></para>
+      <para>slowdown occurs during Lustre startup, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291921">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25425" xreflabel=""/></para>
+      <para>triggering watchdog for PID NNN, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291480">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25427" xreflabel=""/>tunables</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25428" xreflabel=""/></para>
+      <para>RPC stream, <link xl:href="LustreProc.html#50438271_marker-1290514">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25430" xreflabel=""/></para>
+      <para>tunables, lockless, <link xl:href="LustreTuning.html#50438272_marker-1291703">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25432" xreflabel=""/></para>
+      <para>tunefs.lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_marker-1317076">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25434" xreflabel=""/></para>
+      <para>setting parameters, <link xl:href="LustreOperations.html#50438194_marker-1305720">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25436" xreflabel=""/>tuning</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25437" xreflabel=""/></para>
+      <para>directory statahead, <link xl:href="LustreProc.html#50438271_marker-1295184">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25439" xreflabel=""/></para>
+      <para>file readahead, <link xl:href="LustreProc.html#50438271_marker-1295183">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25441" xreflabel=""/></para>
+      <para>lockless tunables, <link xl:href="LustreTuning.html#50438272_marker-1291703">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25443" xreflabel=""/></para>
+      <para>MDS threads, <link xl:href="LustreTuning.html#50438272_marker-1293755">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25445" xreflabel=""/></para>
+      <para>OSS threads, <link xl:href="LustreTuning.html#50438272_marker-1294858">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25447" xreflabel=""/></para>
+      <para>root squash, <link xl:href="ManagingSecurity.html#50438221_marker-1294611">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25449" xreflabel=""/>U<anchor xml:id="dbdoclet.50438146_U" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25451" xreflabel=""/>upgrade</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25452" xreflabel=""/></para>
+      <para>1.6.x to 1.8.x, <link xl:href="UpgradingLustre.html#50438205_marker-1294652">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25454" xreflabel=""/></para>
+      <para>complete file system, <link xl:href="UpgradingLustre.html#50438205_marker-1293327">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25456" xreflabel=""/>utilities, third-party</para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25457" xreflabel=""/></para>
+      <para>e2fsprogs, <link xl:href="InstallingLustre.html#50438261_marker-1292893">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25459" xreflabel=""/></para>
+      <para>Perl, <link xl:href="InstallingLustre.html#50438261_marker-1292899">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25461" xreflabel=""/>V<anchor xml:id="dbdoclet.50438146_V" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25463" xreflabel=""/></para>
+      <para>VBR, introduction, <link xl:href="LustreRecovery.html#50438268_marker-1288580">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25465" xreflabel=""/></para>
+      <para>VBR, tips, <link xl:href="LustreRecovery.html#50438268_marker-1288584">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25467" xreflabel=""/></para>
+      <para>VBR, working with, <link xl:href="LustreRecovery.html#50438268_marker-1288583">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25469" xreflabel=""/></para>
+      <para>Version-based recovery (VBR), <link xl:href="LustreRecovery.html#50438268_marker-1288580">1</link></para>
+    </section>
+    <section remap="h3">
+      <title><anchor xml:id="dbdoclet.50438146_pgfId-25471" xreflabel=""/>W<anchor xml:id="dbdoclet.50438146_W" xreflabel=""/></title>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25473" xreflabel=""/></para>
+      <para>weighted allocator, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1294020">1</link></para>
+      <para><anchor xml:id="dbdoclet.50438146_pgfId-25475" xreflabel=""/></para>
+      <para>weighting, adjusting between free space and location, <link xl:href="ManagingStripingFreeSpace.html#50438209_marker-1294033">1</link></para>
+      <!--
+Begin SiteCatalyst code version: G.5.
+-->
+      <!--
+End SiteCatalyst code version: G.5.
+-->
+        <informaltable frame="none">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          
+          
+          
+          <tbody>
+            <row>
+              <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+              <entry align="right"><para>821-2076-10</para></entry>
+              <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="Glossary.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><inlinemediaobject><imageobject role="html">
+                      <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next02.gif" scalefit="1"/>
+                    </imageobject>
+<imageobject role="fo">
+                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next02.gif" scalefit="1" width="100%"/>
+                    </imageobject>
+</inlinemediaobject><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><link xl:href=""/></para>
+      <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+    </section>
+  </section>
+</article>

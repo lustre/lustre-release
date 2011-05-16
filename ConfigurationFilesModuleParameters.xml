@@ -1,0 +1,594 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Configuration Files and Module Parameters</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="SettingLustreProperties_HTML.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="SystemConfigurationUtilities_HTML.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438293_pgfId-874" xreflabel=""/>C H A P T E R  35<anchor xml:id="dbdoclet.50438293_72504" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438293_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438293_66186" xreflabel=""/>Configuration Files and Module Parameters</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438293_pgfId-1293284" xreflabel=""/>This section describes configuration files and module parameters and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293288" xreflabel=""/><link xl:href="ConfigurationFilesModuleParameters.html#50438293_15350">Introduction</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293292" xreflabel=""/><link xl:href="ConfigurationFilesModuleParameters.html#50438293_78010">Module Options</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438293_pgfId-1293294" xreflabel=""/></title>
+    <section remap="h2">
+      <title>35.1 <anchor xml:id="dbdoclet.50438293_15350" xreflabel=""/>Introduction</title>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293295" xreflabel=""/>LNET network hardware and routing are now configured via module parameters. Parameters should be specified in the /etc/modprobe.conf file, for example:</para>
+      <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293296" xreflabel=""/>alias lustre llite
+<anchor xml:id="dbdoclet.50438293_pgfId-1293297" xreflabel=""/>options lnet networks=tcp0,elan0
+</screen>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293298" xreflabel=""/>The above option specifies that this node should use all the available TCP and Elan interfaces.</para>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293299" xreflabel=""/>Module parameters are read when the module is first loaded. Type-specific LND modules (for instance, ksocklnd) are loaded automatically by the LNET module when LNET starts (typically upon modprobe ptlrpc).</para>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293300" xreflabel=""/>Under Linux 2.6, LNET configuration parameters can be viewed under /sys/module/; generic and acceptor parameters under LNET, and LND-specific parameters under the name of the corresponding LND.</para>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293301" xreflabel=""/>Under Linux 2.4, sysfs is not available, but the LND-specific parameters are accessible via equivalent paths under /proc.</para>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293302" xreflabel=""/>Important: All old (pre v.1.4.6) Lustre configuration lines should be removed from the module configuration files and replaced with the following. Make sure that CONFIG_KMOD is set in your linux.config so LNET can load the following modules it needs. The basic module files are:</para>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293303" xreflabel=""/>modprobe.conf (for Linux 2.6)</para>
+      <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293304" xreflabel=""/>alias lustre llite
+<anchor xml:id="dbdoclet.50438293_pgfId-1293305" xreflabel=""/>options lnet networks=tcp0,elan0
+</screen>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293306" xreflabel=""/>modules.conf (for Linux 2.4)</para>
+      <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293307" xreflabel=""/>alias lustre llite
+<anchor xml:id="dbdoclet.50438293_pgfId-1293308" xreflabel=""/>options lnet networks=tcp0,elan0
+</screen>
+      <para><anchor xml:id="dbdoclet.50438293_pgfId-1293309" xreflabel=""/>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. (Unmarked parameters can only be set when LNET loads for the first time.) Changes to parameters marked with Wc only have effect when connections are established (existing connections are not affected by these changes.)</para>
+    </section>
+    <section remap="h2">
+      <title>35.2 <anchor xml:id="dbdoclet.50438293_78010" xreflabel=""/>Module <anchor xml:id="dbdoclet.50438293_marker-1293311" xreflabel=""/>Options</title>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293313" xreflabel=""/> With routed or other multi-network configurations, use ip2nets rather than networks, so all nodes can use the same configuration.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293314" xreflabel=""/> For a routed network, use the same â€œroutesâ€ configuration everywhere. Nodes specified as routers automatically enable forwarding and any routes that are not relevant to a particular node are ignored. Keep a common configuration to guarantee that all nodes have consistent routing tables.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293315" xreflabel=""/> A separate modprobe.conf.lnet included from modprobe.conf makes distributing the configuration much easier.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293316" xreflabel=""/> If you set config_on_load=1, LNET starts at modprobe time rather than waiting for Lustre to start. This ensures routers start working at module load time.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293317" xreflabel=""/># lctl 
+<anchor xml:id="dbdoclet.50438293_pgfId-1293318" xreflabel=""/># lctl&gt; net down
+</screen>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293319" xreflabel=""/> Remember the lctl ping {nid} command - it is a handy way to check your LNET configuration.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438293_pgfId-1293321" xreflabel=""/>35.2.1 <anchor xml:id="dbdoclet.50438293_94707" xreflabel=""/>LNET <anchor xml:id="dbdoclet.50438293_marker-1293320" xreflabel=""/>Options</title>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293322" xreflabel=""/>This section describes LNET options.</para>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438293_pgfId-1293323" xreflabel=""/>35.2.1.1 Network Topology</title>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293324" xreflabel=""/>Network topology module parameters determine which networks a node should join, whether it should route between these networks, and how it communicates with non-local networks.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293362" xreflabel=""/>Here is a list of various networks and the supported software stacks:</para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1293327" xreflabel=""/>Network</emphasis></para></entry>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1293329" xreflabel=""/>Software Stack</emphasis></para></entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1293343" xreflabel=""/>o2ib</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1293345" xreflabel=""/>OFED Version 2</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1293351" xreflabel=""/>mx</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1293353" xreflabel=""/>Myrinet MX</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1293355" xreflabel=""/>gm</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1293357" xreflabel=""/>Myrinet GM-2</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          <informaltable frame="none">
+            <tgroup cols="1">
+              <colspec colname="c1" colwidth="100*"/>
+              <tbody>
+                <row>
+                  <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438293_pgfId-1293363" xreflabel=""/>Lustre ignores the loopback interface (lo0), but Lustre use any IP addresses aliased to the loopback (by default). When in doubt, explicitly specify networks.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293364" xreflabel=""/><emphasis role="bold">ip2nets</emphasis> (&quot;&quot;) is a string that lists globally-available networks, each with a set of IP address ranges. LNET determines the locally-available networks from this list by matching the IP address ranges with the local IPs of a node. The purpose of this option is to be able to use the same modules.conf file across a variety of nodes on different networks. The string has the following syntax.</para>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293365" xreflabel=""/>&lt;ip2nets&gt; :== &lt;net-match&gt; [ &lt;comment&gt; ] { &lt;net-sep&gt; &lt;net-match&gt; }
+<anchor xml:id="dbdoclet.50438293_pgfId-1293366" xreflabel=""/>&lt;net-match&gt; :== [ &lt;w&gt; ] &lt;net-spec&gt; &lt;w&gt; &lt;ip-range&gt; { &lt;w&gt; &lt;ip-range&gt; }
+<anchor xml:id="dbdoclet.50438293_pgfId-1293367" xreflabel=""/>[ &lt;w&gt; ]
+<anchor xml:id="dbdoclet.50438293_pgfId-1293368" xreflabel=""/>&lt;net-spec&gt; :== &lt;network&gt; [ &quot;(&quot; &lt;interface-list&gt; &quot;)&quot; ]
+<anchor xml:id="dbdoclet.50438293_pgfId-1293369" xreflabel=""/>&lt;network&gt; :== &lt;nettype&gt; [ &lt;number&gt; ]
+<anchor xml:id="dbdoclet.50438293_pgfId-1293370" xreflabel=""/>&lt;nettype&gt; :== &quot;tcp&quot; | &quot;elan&quot; | &quot;openib&quot; | ...
+<anchor xml:id="dbdoclet.50438293_pgfId-1293371" xreflabel=""/>&lt;iface-list&gt; :== &lt;interface&gt; [ &quot;,&quot; &lt;iface-list&gt; ]
+<anchor xml:id="dbdoclet.50438293_pgfId-1293372" xreflabel=""/>&lt;ip-range&gt; :== &lt;r-expr&gt; &quot;.&quot; &lt;r-expr&gt; &quot;.&quot; &lt;r-expr&gt; &quot;.&quot; &lt;r-expr&gt;
+<anchor xml:id="dbdoclet.50438293_pgfId-1293373" xreflabel=""/>&lt;r-expr&gt; :== &lt;number&gt; | &quot;*&quot; | &quot;[&quot; &lt;r-list&gt; &quot;]&quot;
+<anchor xml:id="dbdoclet.50438293_pgfId-1293374" xreflabel=""/>&lt;r-list&gt; :== &lt;range&gt; [ &quot;,&quot; &lt;r-list&gt; ]
+<anchor xml:id="dbdoclet.50438293_pgfId-1293375" xreflabel=""/>&lt;range&gt; :== &lt;number&gt; [ &quot;-&quot; &lt;number&gt; [ &quot;/&quot; &lt;number&gt; ] ]
+<anchor xml:id="dbdoclet.50438293_pgfId-1293376" xreflabel=""/>&lt;comment :== &quot;#&quot; { &lt;non-net-sep-chars&gt; }
+<anchor xml:id="dbdoclet.50438293_pgfId-1293377" xreflabel=""/>&lt;net-sep&gt; :== &quot;;&quot; | &quot;\n&quot;
+<anchor xml:id="dbdoclet.50438293_pgfId-1293378" xreflabel=""/>&lt;w&gt; :== &lt;whitespace-chars&gt; { &lt;whitespace-chars&gt; }
+</screen>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293379" xreflabel=""/>&lt;<emphasis role="bold">net-spec</emphasis>&gt; contains enough information to uniquely identify the network and load an appropriate LND. The LND determines the missing &quot;address-within-network&quot; part of the NID based on the interfaces it can use.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293380" xreflabel=""/>&lt;<emphasis role="bold">iface-list</emphasis>&gt; specifies which hardware interface the network can use. If omitted, all interfaces are used. LNDs that do not support the &lt;iface-list&gt; syntax cannot be configured to use particular interfaces and just use what is there. Only a single instance of these LNDs can exist on a node at any time, and &lt;iface-list&gt; must be omitted.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293381" xreflabel=""/>&lt;<emphasis role="bold">net-match</emphasis>&gt; entries are scanned in the order declared to see if one of the node&apos;s IP addresses matches one of the &lt;ip-range&gt; expressions. If there is a match, &lt;net-spec&gt; specifies the network to instantiate. Note that it is the first match for a particular network that counts. This can be used to simplify the match expression for the general case by placing it after the special cases. For example:</para>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293382" xreflabel=""/>ip2nets=&quot;tcp(eth1,eth2) 134.32.1.[4-10/2]; tcp(eth1) *.*.*.*&quot;
+</screen>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293383" xreflabel=""/>4 nodes on the 134.32.1.* network have 2 interfaces (134.32.1.{4,6,8,10}) but all the rest have 1.</para>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293384" xreflabel=""/>ip2nets=&quot;<emphasis role="bold">vib</emphasis> 192.168.0.*; tcp(eth2) 192.168.0.[1,7,4,12]&quot; 
+</screen>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293385" xreflabel=""/>This describes an IB cluster on 192.168.0.*. Four of these nodes also have IP interfaces; these four could be used as routers.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293386" xreflabel=""/>Note that match-all expressions (For instance, *.*.*.*) effectively mask all other</para>
+          <para> &lt;net-match&gt; entries specified after them. They should be used with caution.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293387" xreflabel=""/>Here is a more complicated situation, the route parameter is explained below. We have:</para>
+          <itemizedlist><listitem>
+              <para><anchor xml:id="dbdoclet.50438293_pgfId-1293388" xreflabel=""/> Two TCP subnets</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+<listitem>
+              <para><anchor xml:id="dbdoclet.50438293_pgfId-1293389" xreflabel=""/> One Elan subnet</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+<listitem>
+              <para><anchor xml:id="dbdoclet.50438293_pgfId-1293390" xreflabel=""/> One machine set up as a router, with both TCP and Elan interfaces</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+<listitem>
+              <para><anchor xml:id="dbdoclet.50438293_pgfId-1293391" xreflabel=""/> IP over Elan configured, but only IP will be used to label the nodes.</para>
+            </listitem>
+<listitem>
+              <para> </para>
+            </listitem>
+</itemizedlist>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293392" xreflabel=""/>options lnet ip2nets=â€tcp 198.129.135.* 192.128.88.98; \
+        elan 198.128.88.98 198.129.135.3; \ 
+        routes=â€tcp 1022@elan # Elan NID of router; \
+        elan  198.128.88.98@tcp # TCP NID of router  â€œ
+</screen>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438293_pgfId-1293393" xreflabel=""/>35.2.1.2 networks (&quot;tcp&quot;)</title>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293394" xreflabel=""/>This is an alternative to &quot;ip2nets&quot; which can be used to specify the networks to be instantiated explicitly. The syntax is a simple comma separated list of &lt;net-spec&gt;s (see above). The default is only used if neither â€œip2netsâ€ nor â€œnetworksâ€ is specified.</para>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438293_pgfId-1293395" xreflabel=""/>35.2.1.3 routes (â€œâ€)</title>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293396" xreflabel=""/>This is a string that lists networks and the NIDs of routers that forward to them.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293397" xreflabel=""/>It has the following syntax (&lt;w&gt; is one or more whitespace characters):</para>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293398" xreflabel=""/>&lt;routes&gt; :== &lt;route&gt;{ ; &lt;route&gt; }
+<anchor xml:id="dbdoclet.50438293_pgfId-1293399" xreflabel=""/>&lt;route&gt; :== [&lt;net&gt;[&lt;w&gt;&lt;hopcount&gt;]&lt;w&gt;&lt;nid&gt;{&lt;w&gt;&lt;nid&gt;}
+</screen>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293400" xreflabel=""/>So a node on the network tcp1 that needs to go through a router to get to the Elan network:</para>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293401" xreflabel=""/>options lnet networks=tcp1 routes=&quot;elan 1 192.168.2.2@tcp1â€
+</screen>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293402" xreflabel=""/>The hopcount is used to help choose the best path between multiply-routed configurations.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293403" xreflabel=""/>A simple but powerful expansion syntax is provided, both for target networks and router NIDs as follows.</para>
+          <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293404" xreflabel=""/>&lt;expansion&gt; :== &quot;[&quot; &lt;entry&gt; { &quot;,&quot; &lt;entry&gt; } &quot;]&quot;
+<anchor xml:id="dbdoclet.50438293_pgfId-1293405" xreflabel=""/>&lt;entry&gt; :== &lt;numeric range&gt; | &lt;non-numeric item&gt;
+<anchor xml:id="dbdoclet.50438293_pgfId-1293406" xreflabel=""/>&lt;numeric range&gt; :== &lt;number&gt; [ &quot;-&quot; &lt;number&gt; [ &quot;/&quot; &lt;number&gt; ] ]
+</screen>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293407" xreflabel=""/>The expansion is a list enclosed in square brackets. Numeric items in the list may be a single number, a contiguous range of numbers, or a strided range of numbers. For example, routes=&quot;elan 192.168.1.[22-24]@tcp&quot; says that network elan0 is adjacent (hopcount defaults to 1); and is accessible via 3 routers on the tcp0 network (192.168.1.22@tcp, 192.168.1.23@tcp and 192.168.1.24@tcp).</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293408" xreflabel=""/>routes=&quot;[tcp,<emphasis role="bold">vib</emphasis>] 2 [8-14/2]@elan&quot; says that 2 networks (tcp0 and vib0) are accessible through 4 routers (8@elan, 10@elan, 12@elan and 14@elan). The hopcount of 2 means that traffic to both these networks will be traversed 2 routers - first one of the routers specified in this entry, then one more.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293409" xreflabel=""/>Duplicate entries, entries that route to a local network, and entries that specify routers on a non-local network are ignored.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293410" xreflabel=""/>Equivalent entries are resolved in favor of the route with the shorter hopcount. The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293411" xreflabel=""/>It is an error to specify routes to the same destination with routers on different local networks.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293412" xreflabel=""/>If the target network string contains no expansions, then the hopcount defaults to 1 and may be omitted (that is, the remote network is adjacent). In practice, this is true for most multi-network configurations. It is an error to specify an inconsistent hop count for a given target network. This is why an explicit hopcount is required if the target network string specifies more than one network.</para>
+        </section>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438293_pgfId-1293413" xreflabel=""/>35.2.1.4 forwarding (&quot;&quot;)</title>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293414" xreflabel=""/>This is a string that can be set either to &quot;enabled&quot; or &quot;disabled&quot; for explicit control of whether this node should act as a router, forwarding communications between all local networks.</para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293415" xreflabel=""/>A standalone router can be started by simply starting LNET (â€œmodprobe ptlrpcâ€) with appropriate network topology options.</para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1294462" xreflabel=""/>Variable</emphasis></para></entry>
+                  <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1294464" xreflabel=""/>Description</emphasis></para></entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294507" xreflabel=""/>acceptor</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294509" xreflabel=""/> The acceptor is a TCP/IP service that some LNDs use to establish communications. If a local network requires it and it has not been disabled, the acceptor listens on a single port for connection requests that it redirects to the appropriate local network. The acceptor is part of the LNET module and configured by the following options:</para><itemizedlist><listitem>
+                        <para><anchor xml:id="dbdoclet.50438293_pgfId-1294510" xreflabel=""/><emphasis role="bold">secure</emphasis>  - Accept connections only from reserved TCP ports (&lt; 1023).</para>
+                      </listitem>
+<listitem>
+                        <para><anchor xml:id="dbdoclet.50438293_pgfId-1294511" xreflabel=""/><emphasis role="bold">all</emphasis>  - Accept connections from any TCP port. NOTE: this is required for liblustre clients to allow connections on non-privileged ports.</para>
+                      </listitem>
+<listitem>
+                        <para><anchor xml:id="dbdoclet.50438293_pgfId-1294512" xreflabel=""/><emphasis role="bold">none</emphasis>  - Do not run the acceptor.</para>
+                      </listitem>
+</itemizedlist></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294514" xreflabel=""/>accept_port</para><para> (988)</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294516" xreflabel=""/> Port number on which the acceptor should listen for connection requests. All nodes in a site configuration that require an acceptor must use the same port.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294522" xreflabel=""/>accept_backlog</para><para> (127)</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294524" xreflabel=""/>Maximum length that the queue of pending connections may grow to (see listen(2)).</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294526" xreflabel=""/>accept_timeout</para><para> (5, W)</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294528" xreflabel=""/>Maximum time in seconds the acceptor is allowed to block while communicating with a peer.</para></entry>
+                </row>
+                <row>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294530" xreflabel=""/>accept_proto_version</para></entry>
+                  <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294532" xreflabel=""/> Version of the acceptor protocol that should be used by outgoing connection requests. It defaults to the most recent acceptor protocol version, but it may be set to the previous version to allow the node to initiate connections with nodes that only understand that version of the acceptor protocol. The acceptor can, with some restrictions, handle either version (that is, it can accept connections from both &apos;old&apos; and &apos;new&apos; peers). For the current version of the acceptor protocol (version 1), the acceptor is compatible with old peers if it is only required by a single local network.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293446" xreflabel=""/></para>
+          <para><anchor xml:id="dbdoclet.50438293_pgfId-1293447" xreflabel=""/></para>
+        </section>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438293_pgfId-1293449" xreflabel=""/>35.2.2 SOCKLND <anchor xml:id="dbdoclet.50438293_marker-1293448" xreflabel=""/>Kernel TCP/IP LND</title>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293450" xreflabel=""/>The SOCKLND kernel TCP/IP LND (socklnd) is connection-based and uses the acceptor to establish communications via sockets with its peers.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293451" xreflabel=""/>It supports multiple instances and load balances dynamically over multiple interfaces. If no interfaces are specified by the ip2nets or networks module parameter, all non-loopback IP interfaces are used. The address-within-network is determined by the address of the first IP interface an instance of the socklnd encounters.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293452" xreflabel=""/>Consider a node on the â€œedgeâ€ of an InfiniBand network, with a low-bandwidth management Ethernet (eth0), IP over IB configured (ipoib0), and a pair of GigE NICs (eth1,eth2) providing off-cluster connectivity. This node should be configured with &quot;networks=<emphasis role="bold">vib</emphasis>,tcp(eth1,eth2)â€ to ensure that the socklnd ignores the management Ethernet and IPoIB.</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="50*"/>
+            <colspec colname="c2" colwidth="50*"/>
+            <thead>
+              <row>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1294541" xreflabel=""/>Variable</emphasis></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1294543" xreflabel=""/>Description</emphasis></para></entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294621" xreflabel=""/>timeout</para><para> (50,W)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294623" xreflabel=""/> Time (in seconds) that communications may be stalled before the LND completes them with failure.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294625" xreflabel=""/>nconnds</para><para> (4)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294627" xreflabel=""/>Sets the number of connection daemons.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294629" xreflabel=""/>min_reconnectms</para><para> (1000,W)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294631" xreflabel=""/>Minimum connection retry interval (in milliseconds). After a failed connection attempt, this is the time that must elapse before the first retry. As connections attempts fail, this time is doubled on each successive retry up to a maximum of &apos;max_reconnectms&apos;.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294633" xreflabel=""/>max_reconnectms</para><para> (6000,W)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294635" xreflabel=""/>Maximum connection retry interval (in milliseconds).</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294637" xreflabel=""/>eager_ack</para><para> (0 on linux,</para><para> 1 on darwin,W)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294639" xreflabel=""/>Boolean that determines whether the socklnd should attempt to flush sends on message boundaries.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294641" xreflabel=""/>typed_conns</para><para> (1,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294643" xreflabel=""/>Boolean that determines whether the socklnd should use different sockets for different types of messages. When clear, all communication with a particular peer takes place on the same socket. Otherwise, separate sockets are used for bulk sends, bulk receives and everything else.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294645" xreflabel=""/>min_bulk</para><para> (1024,W)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294647" xreflabel=""/>Determines when a message is considered &quot;bulk&quot;.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294649" xreflabel=""/>tx_buffer_size, rx_buffer_size</para><para> (8388608,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294651" xreflabel=""/> Socket buffer sizes. Setting this option to zero (0), allows the system to auto-tune buffer sizes. WARNING: Be very careful changing this value as improper sizing can harm performance.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294653" xreflabel=""/>nagle</para><para> (0,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294655" xreflabel=""/>Boolean that determines if nagle should be enabled. It should never be set in production systems.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294657" xreflabel=""/>keepalive_idle</para><para> (30,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294659" xreflabel=""/>Time (in seconds) that a socket can remain idle before a keepalive probe is sent. Setting this value to zero (0) disables keepalives.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294661" xreflabel=""/>keepalive_intvl</para><para> (2,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294663" xreflabel=""/>Time (in seconds) to repeat unanswered keepalive probes. Setting this value to zero (0) disables keepalives.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294665" xreflabel=""/>keepalive_count</para><para> (10,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294667" xreflabel=""/>Number of unanswered keepalive probes before pronouncing socket (hence peer) death.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294669" xreflabel=""/>enable_irq_affinity</para><para> (0,Wc)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294671" xreflabel=""/>Boolean that determines whether to enable IRQ affinity. The default is zero (0).</para><para><anchor xml:id="dbdoclet.50438293_pgfId-1296138" xreflabel=""/>When set, socklnd attempts to maximize performance by handling device interrupts and data movement for particular (hardware) interfaces on particular CPUs. This option is not available on all platforms. This option requires an SMP system to exist and produces best performance with multiple NICs. Systems with multiple CPUs and a single NIC may see increase in the performance with this parameter disabled.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294673" xreflabel=""/>zc_min_frag</para><para> (2048,W)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1294675" xreflabel=""/>Determines the minimum message fragment that should be considered for zero-copy sends. Increasing it above the platform&apos;s PAGE_SIZE disables all zero copy sends. This option is not available on all platforms.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438293_pgfId-1293720" xreflabel=""/>35.2.3 Portals <anchor xml:id="dbdoclet.50438293_marker-1293719" xreflabel=""/>LND (Linux)</title>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293721" xreflabel=""/>The Portals LND Linux (ptllnd) can be used as a interface layer to communicate with Sandia Portals networking devices. This version is intended to work on Cray XT3 Linux nodes that use Cray Portals as a network transport.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293722" xreflabel=""/><emphasis role="bold">Message Buffers</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293723" xreflabel=""/>When ptllnd starts up, it allocates and posts sufficient message buffers to allow all expected peers (set by concurrent_peers) to send one unsolicited message. The first message that a peer actually sends is a</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293724" xreflabel=""/>(so-called) &quot;HELLO&quot; message, used to negotiate how much additional buffering to setup (typically 8 messages). If 10000 peers actually exist, then enough buffers are posted for 80000 messages.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293725" xreflabel=""/>The maximum message size is set by the max_msg_size module parameter (default value is 512). This parameter sets the bulk transfer breakpoint. Below this breakpoint, payload data is sent in the message itself. Above this breakpoint, a buffer descriptor is sent and the receiver gets the actual payload.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293726" xreflabel=""/>The buffer size is set by the rxb_npages module parameter (default value is 1). The default conservatively avoids allocation problems due to kernel memory fragmentation. However, increasing this value to 2 is probably not risky.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293727" xreflabel=""/>The ptllnd also keeps an additional rxb_nspare buffers (default value is 8) posted to account for full buffers being handled.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293728" xreflabel=""/>Assuming a 4K page size with 10000 peers, 1258 buffers can be expected to be posted at startup, increasing to a maximum of 10008 as peers that are actually connected. By doubling rxb_npages halving max_msg_size, this number can be reduced by a factor of 4.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293729" xreflabel=""/><emphasis role="bold">ME/MD Queue Length</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293730" xreflabel=""/>The ptllnd uses a single portal set by the portal module parameter (default value of 9) for both message and bulk buffers. Message buffers are always attached with PTL_INS_AFTER and match anything sent with &quot;message&quot; matchbits. Bulk buffers are always attached with PTL_INS_BEFORE and match only specific matchbits for that particular bulk transfer.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293731" xreflabel=""/>This scheme assumes that the majority of ME / MDs posted are for &quot;message&quot; buffers, and that the overhead of searching through the preceding &quot;bulk&quot; buffers is acceptable. Since the number of &quot;bulk&quot; buffers posted at any time is also dependent on the bulk transfer breakpoint set by max_msg_size, this seems like an issue worth measuring at scale.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293732" xreflabel=""/><emphasis role="bold">TX Descriptors</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293733" xreflabel=""/>The ptllnd has a pool of so-called &quot;tx descriptors&quot;, which it uses not only for outgoing messages, but also to hold state for bulk transfers requested by incoming messages. This pool should scale with the total number of peers.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293734" xreflabel=""/>To enable the building of the Portals LND (ptllnd.ko) configure with this option:</para>
+        <screen><anchor xml:id="dbdoclet.50438293_pgfId-1297547" xreflabel=""/>./configure --with-portals=&lt;path-to-portals-headers&gt;</screen>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="50*"/>
+            <colspec colname="c2" colwidth="50*"/>
+            <thead>
+              <row>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1297504" xreflabel=""/>Variable</emphasis></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1297506" xreflabel=""/>Description</emphasis></para></entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297508" xreflabel=""/>ntx</para><para> (256)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297510" xreflabel=""/>Total number of messaging descriptors.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297512" xreflabel=""/>concurrent_peers</para><para> (1152)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297514" xreflabel=""/>Maximum number of concurrent peers. Peers that attempt to connect beyond the maximum are not allowed.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297516" xreflabel=""/>peer_hash_table_size</para><para> (101)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297518" xreflabel=""/>Number of hash table slots for the peers. This number should scale with concurrent_peers. The size of the peer hash table is set by the module parameter peer_hash_table_size which defaults to a value of 101. This number should be prime to ensure the peer hash table is populated evenly. It is advisable to increase this value to 1001 for ~10000 peers.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297520" xreflabel=""/>cksum</para><para> (0)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297522" xreflabel=""/>Set to non-zero to enable message (not RDMA) checksums for outgoing packets. Incoming packets are always check-summed if necessary, independent of this value.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297524" xreflabel=""/>timeout</para><para> (50)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297526" xreflabel=""/>Amount of time (in seconds) that a request can linger in a peers-active queue before the peer is considered dead.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297528" xreflabel=""/>portal</para><para> (9)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297530" xreflabel=""/>Portal ID to use for the ptllnd traffic.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297532" xreflabel=""/>rxb_npages</para><para> (64 * #cpus)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297534" xreflabel=""/>Number of pages in an RX buffer.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297536" xreflabel=""/>credits</para><para> (128)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297538" xreflabel=""/>Maximum total number of concurrent sends that are outstanding to a single peer at a given time.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297540" xreflabel=""/>peercredits</para><para> (8)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297542" xreflabel=""/>Maximum number of concurrent sends that are outstanding to a single peer at a given time.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297544" xreflabel=""/>max_msg_size</para><para> (512)</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1297546" xreflabel=""/> Maximum immediate message size. This MUST be the same on all nodes in a cluster. A peer that connects with a different max_msg_size value will be rejected.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438293_pgfId-1295998" xreflabel=""/>35.2.4 MX <anchor xml:id="dbdoclet.50438293_marker-1295997" xreflabel=""/>LND</title>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293864" xreflabel=""/>MXLND supports a number of load-time parameters using Linux&apos;s module parameter system. The following variables are available:</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="50*"/>
+            <colspec colname="c2" colwidth="50*"/>
+            <thead>
+              <row>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1296048" xreflabel=""/>Variable</emphasis></para></entry>
+                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438293_pgfId-1296050" xreflabel=""/>Description</emphasis></para></entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296093" xreflabel=""/>n_waitd</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296095" xreflabel=""/>Number of completion daemons.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296097" xreflabel=""/>max_peers</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296099" xreflabel=""/>Maximum number of peers that may connect.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296101" xreflabel=""/>cksum</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296103" xreflabel=""/>Enables small message (&lt; 4 KB) checksums if set to a non-zero value.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296105" xreflabel=""/>ntx</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296107" xreflabel=""/>Number of total tx message descriptors.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296109" xreflabel=""/>credits</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296111" xreflabel=""/>Number of concurrent sends to a single peer.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296113" xreflabel=""/>board</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296115" xreflabel=""/>Index value of the Myrinet board (NIC).</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296117" xreflabel=""/>ep_id</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296119" xreflabel=""/>MX endpoint ID.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296121" xreflabel=""/>polling</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296123" xreflabel=""/>Use zero (0) to block (wait). A value &gt; 0 will poll that many times before blocking.</para></entry>
+              </row>
+              <row>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296129" xreflabel=""/>hosts</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438293_pgfId-1296131" xreflabel=""/>IP-to-hostname resolution file.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293906" xreflabel=""/>Of the described variables, only hosts is required. It must be the absolute path to the MXLND hosts file.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293907" xreflabel=""/>For example:</para>
+        <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293908" xreflabel=""/>options kmxlnd hosts=/etc/hosts.mxlnd
+</screen>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293909" xreflabel=""/>The file format for the hosts file is:</para>
+        <screen><anchor xml:id="dbdoclet.50438293_pgfId-1293910" xreflabel=""/>IP  HOST  BOARD   EP_ID
+</screen>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293911" xreflabel=""/>The values must be space and/or tab separated where:</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293912" xreflabel=""/>IP is a valid IPv4 address</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293913" xreflabel=""/>HOST is the name returned by `hostname` on that machine</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293914" xreflabel=""/>BOARD is the index of the Myricom NIC (0 for the first card, etc.)</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293915" xreflabel=""/>EP_ID is the MX endpoint ID</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293916" xreflabel=""/>To obtain the optimal performance for your platform, you may want to vary the remaining options.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293917" xreflabel=""/>n_waitd (1) sets the number of threads that process completed MX requests (sends and receives).</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293918" xreflabel=""/>max_peers (1024) tells MXLND the upper limit of machines that it will need to communicate with. This affects how many receives it will pre-post and each receive will use one page of memory. Ideally, on clients, this value will be equal to the total number of Lustre servers (MDS and OSS). On servers, it needs to equal the total number of machines in the storage system. cksum (0) turns on small message checksums. It can be used to aid in troubleshooting. MX also provides an optional checksumming feature which can check all messages (large and small). For details, see the MX README.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293919" xreflabel=""/>ntx (256) is the number of total sends in flight from this machine. In actuality, MXLND reserves half of them for connect messages so make this value twice as large as you want for the total number of sends in flight.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293920" xreflabel=""/>credits (8) is the number of in-flight messages for a specific peer. This is part of the flow-control system in Lustre. Increasing this value may improve performance but it requires more memory because each message requires at least one page.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293921" xreflabel=""/>board (0) is the index of the Myricom NIC. Hosts can have multiple Myricom NICs and this identifies which one MXLND should use. This value must match the board value in your MXLND hosts file for this host.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293922" xreflabel=""/>ep_id (3) is the MX endpoint ID. Each process that uses MX is required to have at least one MX endpoint to access the MX library and NIC. The ID is a simple index starting at zero (0). This value must match the endpoint ID value in your MXLND hosts file for this host.</para>
+        <para><anchor xml:id="dbdoclet.50438293_pgfId-1293923" xreflabel=""/>polling (0) determines whether this host will poll or block for MX request completions. A value of 0 blocks and any positive value will poll that many times before blocking. Since polling increases CPU usage, we suggest that you set this to zero (0) on the client and experiment with different values for servers.</para>
+        <!--
+Begin SiteCatalyst code version: G.5.
+-->
+        <!--
+End SiteCatalyst code version: G.5.
+-->
+          <informaltable frame="none">
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="33*"/>
+            <colspec colname="c2" colwidth="33*"/>
+            <colspec colname="c3" colwidth="33*"/>
+            
+            
+            
+            <tbody>
+              <row>
+                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                <entry align="right"><para>821-2076-10</para></entry>
+                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="SettingLustreProperties_HTML.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="SystemConfigurationUtilities_HTML.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link></para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><link xl:href=""/></para>
+        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+      </section>
+    </section>
+  </section>
+</article>

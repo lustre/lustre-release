@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Glossary</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="SystemConfigurationUtilities_HTML.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438338_pgfId-1006990" xreflabel=""/>Glossary</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438338_pgfId-1006991" xreflabel=""/></title>
+    <section remap="h2">
+      <title>A</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-998682" xreflabel=""/>ACL</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-998686" xreflabel=""/>Access Control List - An extended attribute associated with a file which contains authorization directives.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-998687" xreflabel=""/>Administrative</para>
+      <para> OST failure</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-996783" xreflabel=""/>A configuration directive given to a cluster to declare that an OST has failed, so errors can be immediately returned.</para>
+    </section>
+    <section remap="h2">
+      <title>C</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000465" xreflabel=""/> CMD</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000466" xreflabel=""/>Clustered metadata, a collection of metadata targets implementing a single file system namespace.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000489" xreflabel=""/>Completion Callback</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000490" xreflabel=""/>An RPC made by an OST or MDT to another system, usually a client, to indicate that the lock request is now granted.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000494" xreflabel=""/>Configlog</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000495" xreflabel=""/>An llog file used in a node, or retrieved from a management server over the network with configuration instructions for Lustre systems at startup time.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000499" xreflabel=""/>Configuration Lock</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000500" xreflabel=""/>A lock held by every node in the cluster to control configuration changes. When callbacks are received, the nodes quiesce their traffic, cancel the lock and await configuration changes after which they reacquire the lock before resuming normal operation.</para>
+    </section>
+    <section remap="h2">
+      <title>D</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000504" xreflabel=""/>Default stripe pattern</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000505" xreflabel=""/>Information in the LOV descriptor that describes the default stripe count used for new files in a file system. This can be amended by using a directory stripe descriptor or a per-file stripe descriptor.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000733" xreflabel=""/>Direct I/O</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000739" xreflabel=""/>A mechanism which can be used during read and write system calls. It bypasses the kernel. I/O cache to memory copy of data between kernel and application memory address spaces.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000735" xreflabel=""/>Directory stripe descriptor</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000515" xreflabel=""/>An extended attribute that describes the default stripe pattern for files underneath that directory.</para>
+    </section>
+    <section remap="h2">
+      <title>E</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000519" xreflabel=""/>EA</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000520" xreflabel=""/>Extended Attribute. A small amount of data which can be retrieved through a name associated with a particular inode. Lustre uses EAa to store striping information (location of file data on OSTs). Examples of extended attributes are ACLs, striping information, and crypto keys.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000524" xreflabel=""/>Eviction</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000525" xreflabel=""/>The process of eliminating server state for a client that is not returning to the cluster after a timeout or if server failures have occurred.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000611" xreflabel=""/>Export</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000612" xreflabel=""/>The state held by a server for a client that is sufficient to transparently recover all in-flight operations when a single failure occurs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000625" xreflabel=""/>Extent Lock</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000793" xreflabel=""/>A lock used by the OSC to protect an extent in a storage object for concurrent control of read/write, file size acquisition and truncation operations.</para>
+    </section>
+    <section remap="h2">
+      <title>F</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000630" xreflabel=""/>Failback</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000631" xreflabel=""/>The failover process in which the default active server regains control over the service.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000635" xreflabel=""/>Failout OST</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000636" xreflabel=""/>An OST which is not expected to recover if it fails to answer client requests. A failout OST can be administratively failed, thereby enabling clients to return errors when accessing data on the failed OST without making additional network requests.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000640" xreflabel=""/>Failover</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000641" xreflabel=""/>The process by which a standby computer server system takes over for an active computer server after a failure of the active node. Typically, the standby computer server gains exclusive access to a shared storage device between the two servers.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000645" xreflabel=""/>FID</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000646" xreflabel=""/>Lustre File Identifier. A collection of integers which uniquely identify a file or object. The FID structure contains a sequence, identity and version number.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000650" xreflabel=""/>Fileset</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000651" xreflabel=""/>A group of files that are defined through a directory that represents a file systemâ€™s start point.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000655" xreflabel=""/>FLDB</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000656" xreflabel=""/>FID Location Database. This database maps a sequence of FIDs to a server which is managing the objects in the sequence.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000660" xreflabel=""/>Flight Group</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000661" xreflabel=""/>Group or I/O transfer operations initiated in the OSC, which is simultaneously going between two endpoints. Tuning the flight group size correctly leads to a full pipe.</para>
+    </section>
+    <section remap="h2">
+      <title>G</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000665" xreflabel=""/>Glimpse callback</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002313" xreflabel=""/>An RPC made by an OST or MDT to another system, usually a client, to indicate to tthat an extent lock it is holding should be surrendered if it is not in use. If the system is using the lock, then the system should report the object size in the reply to the glimpse callback. Glimpses are introduced to optimize the acquisition of file sizes.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002316" xreflabel=""/>Group Lock</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000676" xreflabel=""/> </para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000680" xreflabel=""/>Group upcall</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000681" xreflabel=""/> </para>
+    </section>
+    <section remap="h2">
+      <title>I</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000690" xreflabel=""/>Import</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000691" xreflabel=""/>The state held by a client to fully recover a transaction sequence after a server failure and restart.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000695" xreflabel=""/>Intent Lock</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000696" xreflabel=""/>A special locking operation introduced by Lustre into the Linux kernel. An intent lock combines a request for a lock, with the full information to perform the operation(s) for which the lock was requested. This offers the server the option of granting the lock or performing the operation and informing the client of the operation result without granting a lock. The use of intent locks enables metadata operations (even complicated ones), to be implemented with a single RPC from the client to the server.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000700" xreflabel=""/>IOV</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000701" xreflabel=""/>I/O vector. A buffer destined for transport across the network which contains a collection (a/k/a as a vector) of blocks with data.</para>
+    </section>
+    <section remap="h2">
+      <title>K</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000975" xreflabel=""/>Kerberos</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000976" xreflabel=""/>An authentication mechanism, optionally available in an upcoming Lustre version as a GSS backend.</para>
+    </section>
+    <section remap="h2">
+      <title>L</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000710" xreflabel=""/>LBUG</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000711" xreflabel=""/>A bug that Lustre writes into a log indicating a serious system failure.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1000433" xreflabel=""/>LDLM</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-996800" xreflabel=""/>Lustre Distributed Lock Manager.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001024" xreflabel=""/>lfs</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002332" xreflabel=""/>The Lustre File System configuration tool for end users to set/check file striping, etc. See <link xl:href="UserUtilities.html#50438206_94597">Section 32.1, lfs</link>.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001033" xreflabel=""/>lfsck</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001034" xreflabel=""/>Lustre File System Check. A distributed version of a disk file system checker. Normally, lfsck does not need to be run, except when file systems are damaged through multiple disk failures and other means that cannot be recovered using file system journal recovery.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001036" xreflabel=""/>liblustre</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001037" xreflabel=""/>Lustre library. A user-mode Lustre client linked into a user program for Lustre fs access. liblustre clients cache no data, do not need to give back locks on time, and can recover safely from an eviction. They should not participate in recovery.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001077" xreflabel=""/>Llite</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001078" xreflabel=""/>Lustre lite. This term is in use inside the code and module names to indicate that code elements are related to the Lustre file system.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001086" xreflabel=""/>Llog</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001087" xreflabel=""/>Lustre log. A log of entries used internally by Lustre. An llog is suitable for rapid transactional appends of records and cheap cancellation of records through a bitmap.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001091" xreflabel=""/>Llog Catalog</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001127" xreflabel=""/>Lustre log catalog. An llog with records that each point at an llog. Catalogs were introduced to give llogs almost infinite size. llogs have an originator which writes records and a replicator which cancels record (usually through an RPC), when the records are not needed.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001159" xreflabel=""/>LMV</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001186" xreflabel=""/>Logical Metadata Volume. A driver to abstract in the Lustre client that it is working with a metadata cluster instead of a single metadata server.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001197" xreflabel=""/>LND</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001198" xreflabel=""/>Lustre Network Driver. A code module that enables LNET support over a particular transport, such as TCP and various kinds of InfiniBand.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001202" xreflabel=""/>LNET</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001203" xreflabel=""/>Lustre Networking. A message passing network protocol capable of running and routing through various physical layers. LNET forms the underpinning of LNETrpc.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001212" xreflabel=""/>Load-balancing MDSs</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001213" xreflabel=""/>A cluster of MDSs that perform load balancing of on system requests.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001217" xreflabel=""/>Lock Client</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001218" xreflabel=""/>A module that makes lock RPCs to a lock server and handles revocations from the server.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001274" xreflabel=""/>Lock Server</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001275" xreflabel=""/>A system that manages locks on certain objects. It also issues lock callback requests, calls while servicing or, for objects that are already locked, completes lock requests.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001283" xreflabel=""/>LOV</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001284" xreflabel=""/>Logical Object Volume. The object storage analog of a logical volume in a block device volume management system, such as LVM or EVMS. The LOV is primarily used to present a collection of OSTs as a single device to the MDT and client file system drivers.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001288" xreflabel=""/>LOV descriptor</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001289" xreflabel=""/>A set of configuration directives which describes which nodes are OSS systems in the Lustre cluster, providing names for their OSTs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001293" xreflabel=""/>Lustre</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001294" xreflabel=""/>The name of the project chosen by Peter Braam in 1999 for an object-based storage architecture. Now the name is commonly associated with the Lustre file system.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001298" xreflabel=""/>Lustre client</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001299" xreflabel=""/>An operating instance with a mounted Lustre file system.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001303" xreflabel=""/>Lustre file</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001304" xreflabel=""/>A file in the Lustre file system. The implementation of a Lustre file is through an inode on a metadata server which contains references to a storage object on OSSs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001308" xreflabel=""/>Lustre lite</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001309" xreflabel=""/>A preliminary version of Lustre developed for LLNL in 2002. With the release of Lustre 1.0 in late 2003, Lustre Lite became obsolete.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001313" xreflabel=""/>Lvfs</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001314" xreflabel=""/>A library that provides an interface between Lustre OSD and MDD drivers and file systems; this avoids introducing file system-specific abstractions into the OSD and MDD drivers.</para>
+    </section>
+    <section remap="h2">
+      <title>M</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001403" xreflabel=""/>Mballoc</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002369" xreflabel=""/>Multi-Block-Allocate. Lustre functionality that enables the ldiskfs file system to allocate multiple blocks with a single request to the block allocator. Normally, an ldiskfs file system only allocates only one block per request.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001408" xreflabel=""/>MDC</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001417" xreflabel=""/>MetaData Client - Lustre client component that sends metadata requests via RPC over LNET to the Metadata Target (MDT).</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001426" xreflabel=""/>MDD</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002412" xreflabel=""/>MetaData Disk Device - Lustre server component that interfaces with the underlying Object Storage Device to manage the Lustre file system namespace (directories, file ownership, attributes).</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001431" xreflabel=""/>MDS</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002444" xreflabel=""/>MetaData Server - Server node that is hosting the Metadata Target (MDT).</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001545" xreflabel=""/>MDT</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001546" xreflabel=""/>Metadata Target. A metadata device made available through the Lustre meta-data network protocol.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001547" xreflabel=""/>Metadata Write-back Cache</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001447" xreflabel=""/>A cache of metadata updates (mkdir, create, setattr, other operations) which an application has performed, but have not yet been flushed to a storage device or server.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001451" xreflabel=""/>MGS</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001452" xreflabel=""/>Management Service. A software module that manages the startup configuration and changes to the configuration. Also, the server node on which this system runs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001505" xreflabel=""/>Mountconf</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001582" xreflabel=""/>The Lustre configuration protocol (introduced in version 1.6) which formats disk file systems on servers with the mkfs.lustre program, and prepares them for automatic incorporation into a Lustre cluster.</para>
+    </section>
+    <section remap="h2">
+      <title>N</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001602" xreflabel=""/>NAL</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001603" xreflabel=""/>An older, obsolete term for LND.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001607" xreflabel=""/>NID</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001608" xreflabel=""/>Network Identifier. Encodes the type, network number and network address of a network interface on a node for use by Lustre.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001612" xreflabel=""/>NIO API</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001657" xreflabel=""/>A subset of the LNET RPC module that implements a library for sending large network requests, moving buffers with RDMA.</para>
+    </section>
+    <section remap="h2">
+      <title>O</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001668" xreflabel=""/>OBD</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001742" xreflabel=""/>Object Device. The base class of layering software constructs that provides Lustre functionality.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001673" xreflabel=""/>OBD API</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001674" xreflabel=""/>See Storage Object API.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001678" xreflabel=""/>OBD type</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001753" xreflabel=""/>Module that can implement the Lustre object or metadata APIs. Examples of OBD types include the LOV, OSC and OSD.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001683" xreflabel=""/>Obdfilter</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001759" xreflabel=""/>An older name for the OSD device driver.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001693" xreflabel=""/>Object device</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001694" xreflabel=""/>An instance of an object that exports the OBD API.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001698" xreflabel=""/>Object storage</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001699" xreflabel=""/>Refers to a storage-device API or protocol involving storage objects. The two most well known instances of object storage are the T10 iSCSI storage object protocol and the Lustre object storage protocol (a network implementation of the Lustre object API). The principal difference between the Lustre and T10 protocols is that Lustre includes locking and recovery control in the protocol and is not tied to a SCSI transport layer.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001703" xreflabel=""/>opencache</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001704" xreflabel=""/>A cache of open file handles. This is a performance enhancement for NFS.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001708" xreflabel=""/>Orphan objects</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001709" xreflabel=""/>Storage objects for which there is no Lustre file pointing at them. Orphan objects can arise from crashes and are automatically removed by an llog recovery. When a client deletes a file, the MDT gives back a cookie for each stripe. The client then sends the cookie and directs the OST to delete the stripe. Finally, the OST sends the cookie back to the MDT to cancel it.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001802" xreflabel=""/>Orphan handling</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001803" xreflabel=""/>A component of the metadata service which allows for recovery of open, unlinked files after a server crash. The implementation of this feature retains open, unlinked files as orphan objects until it is determined that no clients are using them.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001713" xreflabel=""/>OSC</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001714" xreflabel=""/>Object Storage Client. The client unit talking to an OST (via an OSS).</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001818" xreflabel=""/>OSD</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001819" xreflabel=""/>Object Storage Device. A generic, industry term for storage devices with more extended interface than block-oriented devices, such as disks. Lustre uses this name to describe to a software module that implements an object storage API in the kernel. Lustre also uses this name to refer to an instance of an object storage device created by that driver. The OSD device is layered on a file system, with methods that mimic create, destroy and I/O operations on file inodes.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001834" xreflabel=""/>OSS</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001835" xreflabel=""/>Object Storage Server. A server OBD that provides access to local OSTs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001879" xreflabel=""/>OST</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001880" xreflabel=""/>Object Storage Target. An OSD made accessible through a network protocol. Typically, an OST is associated with a unique OSD which, in turn is associated with a formatted disk file system on the server containing the storage objects.</para>
+    </section>
+    <section remap="h2">
+      <title>P</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001911" xreflabel=""/> </para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001912" xreflabel=""/>Pdirops</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001889" xreflabel=""/>A locking protocol introduced in the VFS by CFS to allow for concurrent operations on a single directory inode.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001893" xreflabel=""/>pool</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001894" xreflabel=""/>OST pools allows the administrator to associate a name with an arbitrary subset of OSTs in a Lustre cluster. A group of OSTs can be combined into a named pool with unique access permissions and stripe characteristics.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001943" xreflabel=""/>Portal</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002017" xreflabel=""/>A concept used by LNET. LNET messages are sent to a portal on a NID. Portals can receive packets when a memory descriptor is attached to the portal. Portals are implemented as integers.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001944" xreflabel=""/>Examples of portals are the portals on which certain groups of object, metadata, configuration and locking requests and replies are received.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002360" xreflabel=""/>PTLRPC</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002361" xreflabel=""/>An RPC protocol layered on LNET. This protocol deals with stateful servers and has exactly-once semantics and built in support for recovery.</para>
+    </section>
+    <section remap="h2">
+      <title>R</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001962" xreflabel=""/>Recovery</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001963" xreflabel=""/>The process that re-establishes the connection state when a client that was previously connected to a server reconnects after the server restarts.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001967" xreflabel=""/>Reply</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001968" xreflabel=""/>The concept of re-executing a server request after the server lost information in its memory caches and shut down. The replay requests are retained by clients until the server(s) have confirmed that the data is persistent on disk. Only requests for which a client has received a reply are replayed.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001972" xreflabel=""/>Re-sent request</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001973" xreflabel=""/>A request that has seen no reply can be re-sent after a server reboot.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001977" xreflabel=""/>Revocation Callback</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001978" xreflabel=""/>An RPC made by an OST or MDT to another system, usually a client, to revoke a granted lock.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001982" xreflabel=""/>Rollback</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001983" xreflabel=""/>The concept that server state is in a crash lost because it was cached in memory and not yet persistent on disk.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001987" xreflabel=""/>Root squash</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001988" xreflabel=""/>A mechanism whereby the identity of a root user on a client system is mapped to a different identity on the server to avoid root users on clients gaining broad permissions on servers. Typically, for management purposes, at least one client system should not be subject to root squash.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001992" xreflabel=""/>routing</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001993" xreflabel=""/>LNET routing between different networks and LNDs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001997" xreflabel=""/>RPC</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001998" xreflabel=""/>Remote Procedure Call. A network encoding of a request.</para>
+    </section>
+    <section remap="h2">
+      <title>S</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002002" xreflabel=""/>Storage Object API</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002003" xreflabel=""/>The API that manipulates storage objects. This API is richer than that of block devices and includes the create/delete of storage objects, read/write of buffers from and to certain offsets, set attributes and other storage object metadata.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002153" xreflabel=""/>Storage Objects</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002154" xreflabel=""/>A generic concept referring to data containers, similar/identical to file inodes.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002162" xreflabel=""/>Stride</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002163" xreflabel=""/>A contiguous, logical extent of a Lustre file written to a single OST.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002167" xreflabel=""/>Stride size</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002168" xreflabel=""/>The maximum size of a stride, typically 4 MB.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002172" xreflabel=""/>Stripe count</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002173" xreflabel=""/>The number of OSTs holding objects for a RAID0-striped Lustre file.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002177" xreflabel=""/>Striping metadata</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002178" xreflabel=""/>The extended attribute associated with a file that describes how its data is distributed over storage objects. See also default stripe pattern.</para>
+    </section>
+    <section remap="h2">
+      <title>T</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002214" xreflabel=""/>T10 object protocol</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002215" xreflabel=""/>An object storage protocol tied to the SCSI transport layer. Lustre does not use T10.</para>
+    </section>
+    <section remap="h2">
+      <title>W</title>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002229" xreflabel=""/>Wide striping</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002230" xreflabel=""/>Strategy of using many OSTs to store stripes of a single file. This obtains maximum bandwidth to a single file through parallel utilization of many OSTs.</para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1002226" xreflabel=""/> </para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001941" xreflabel=""/> </para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001877" xreflabel=""/> </para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001816" xreflabel=""/> </para>
+      <para><anchor xml:id="dbdoclet.50438338_pgfId-1001662" xreflabel=""/> </para>
+      <!--
+Begin SiteCatalyst code version: G.5.
+-->
+      <!--
+End SiteCatalyst code version: G.5.
+-->
+        <informaltable frame="none">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          
+          
+          
+          <tbody>
+            <row>
+              <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+              <entry align="right"><para>821-2076-10</para></entry>
+              <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="SystemConfigurationUtilities_HTML.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><link xl:href=""/></para>
+      <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+    </section>
+  </section>
+</article>

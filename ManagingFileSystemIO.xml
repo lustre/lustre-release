@@ -1,0 +1,617 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Managing the File System and I/O</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingStripingFreeSpace.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingFailover.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438211_pgfId-874" xreflabel=""/>C H A P T E R  19</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438211_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438211_66186" xreflabel=""/>Managing the File System and I/O</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438211_pgfId-1291802" xreflabel=""/>This chapter describes file striping and I/O options, and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1291818" xreflabel=""/><link xl:href="ManagingFileSystemIO.html#50438211_17536">Handling Full OSTs</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296062" xreflabel=""/><link xl:href="ManagingFileSystemIO.html#50438211_75549">Creating and Managing OST Pools</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296473" xreflabel=""/><link xl:href="ManagingFileSystemIO.html#50438211_11204">Adding an OST to a Lustre File System</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1291822" xreflabel=""/><link xl:href="ManagingFileSystemIO.html#50438211_80295">Performing Direct I/O</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1291826" xreflabel=""/><link xl:href="ManagingFileSystemIO.html#50438211_61024">Other I/O Options</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438211_pgfId-1294597" xreflabel=""/></title>
+    <section remap="h2">
+      <title>19.1 <anchor xml:id="dbdoclet.50438211_17536" xreflabel=""/>Handling <anchor xml:id="dbdoclet.50438211_marker-1295529" xreflabel=""/>Full OSTs</title>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296599" xreflabel=""/>Sometimes a Lustre file system becomes unbalanced, often due to incorrectly-specified stripe settings, or when very large files are created that are not striped over all of the OSTs. If an OST is full and an attempt is made to write more information to the file system, an error occurs. The procedures below describe how to handle a full OST.</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296601" xreflabel=""/>The MDS will normally handle space balancing automatically at file creation time, and this procedure is normally not needed, but may be desirable in certain circumstances (e.g. when creating very large files that would consume more than the total free space of the full OSTs).</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1294599" xreflabel=""/>19.1.1 <anchor xml:id="dbdoclet.50438211_54434" xreflabel=""/>Checking OST Space Usage</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294600" xreflabel=""/>The example below shows an unbalanced file system:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294601" xreflabel=""/>root@LustreClient01 ~]# lfs df -h
+<anchor xml:id="dbdoclet.50438211_pgfId-1294602" xreflabel=""/>UUID                       bytes           Used            Available       \
+Use%            Mounted on
+<anchor xml:id="dbdoclet.50438211_pgfId-1294603" xreflabel=""/>lustre-MDT0000_UUID        4.4G            214.5M          3.9G            \
+4%              /mnt/lustre[MDT:0]
+<anchor xml:id="dbdoclet.50438211_pgfId-1294604" xreflabel=""/>lustre-OST0000_UUID        2.0G            751.3M          1.1G            \
+37%             /mnt/lustre[OST:0]
+<anchor xml:id="dbdoclet.50438211_pgfId-1294605" xreflabel=""/>lustre-OST0001_UUID        2.0G            755.3M          1.1G            \
+37%             /mnt/lustre[OST:1]
+<anchor xml:id="dbdoclet.50438211_pgfId-1294606" xreflabel=""/>lustre-OST0002_UUID        2.0G            1.7G            155.1M          \
+86%             /mnt/lustre[OST:2] &lt;-
+<anchor xml:id="dbdoclet.50438211_pgfId-1294607" xreflabel=""/>lustre-OST0003_UUID        2.0G            751.3M          1.1G            \
+37%             /mnt/lustre[OST:3]
+<anchor xml:id="dbdoclet.50438211_pgfId-1294608" xreflabel=""/>lustre-OST0004_UUID        2.0G            747.3M          1.1G            \
+37%             /mnt/lustre[OST:4]
+<anchor xml:id="dbdoclet.50438211_pgfId-1294609" xreflabel=""/>lustre-OST0005_UUID        2.0G            743.3M          1.1G            \
+36%             /mnt/lustre[OST:5]
+<anchor xml:id="dbdoclet.50438211_pgfId-1294610" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438211_pgfId-1294611" xreflabel=""/>filesystem summary:        11.8G           5.4G            5.8G            \
+45%             /mnt/lustre
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294626" xreflabel=""/>In this case, OST:2 is almost full and when an attempt is made to write additional information to the file system (even with uniform striping over all the OSTs), the write command fails as follows:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294627" xreflabel=""/>[root@LustreClient01 ~]# lfs setstripe /mnt/lustre 4M 0 -1
+<anchor xml:id="dbdoclet.50438211_pgfId-1294628" xreflabel=""/>[root@LustreClient01 ~]# dd if=/dev/zero of=/mnt/lustre/test_3 \ bs=10M cou\
+nt=100
+<anchor xml:id="dbdoclet.50438211_pgfId-1294629" xreflabel=""/>dd: writing `/mnt/lustre/test_3&apos;: No space left on device
+<anchor xml:id="dbdoclet.50438211_pgfId-1294630" xreflabel=""/>98+0 records in
+<anchor xml:id="dbdoclet.50438211_pgfId-1294631" xreflabel=""/>97+0 records out
+<anchor xml:id="dbdoclet.50438211_pgfId-1294632" xreflabel=""/>1017192448 bytes (1.0 GB) copied, 23.2411 seconds, 43.8 MB/s
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1294633" xreflabel=""/>19.1.2 Taking a Full OST Offline</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296618" xreflabel=""/>To avoid running out of space in the file system, if the OST usage is imbalanced and one or more OSTs are close to being full while there are others that have a lot of space, the full OSTs may optionally be deactivated at the MDS to prevent the MDS from allocating new objects there.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294635" xreflabel=""/> 1. Log into the MDS server:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294636" xreflabel=""/>[root@LustreClient01 ~]# ssh root@192.168.0.10 
+<anchor xml:id="dbdoclet.50438211_pgfId-1294637" xreflabel=""/>root@192.168.0.10&apos;s password: 
+<anchor xml:id="dbdoclet.50438211_pgfId-1294638" xreflabel=""/>Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294639" xreflabel=""/> 2. Use the lctl dl command to show the status of all file system components:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294640" xreflabel=""/>[root@mds ~]# lctl dl 
+<anchor xml:id="dbdoclet.50438211_pgfId-1294641" xreflabel=""/>0 UP mgs MGS MGS 9 
+<anchor xml:id="dbdoclet.50438211_pgfId-1294642" xreflabel=""/>1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294643" xreflabel=""/>2 UP mdt MDS MDS_uuid 3
+<anchor xml:id="dbdoclet.50438211_pgfId-1294644" xreflabel=""/>3 UP lov lustre-mdtlov lustre-mdtlov_UUID 4
+<anchor xml:id="dbdoclet.50438211_pgfId-1294645" xreflabel=""/>4 UP mds lustre-MDT0000 lustre-MDT0000_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294646" xreflabel=""/>5 UP osc lustre-OST0000-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294647" xreflabel=""/>6 UP osc lustre-OST0001-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294648" xreflabel=""/>7 UP osc lustre-OST0002-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294649" xreflabel=""/>8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294650" xreflabel=""/>9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294651" xreflabel=""/>10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294652" xreflabel=""/> 3. Use lctl deactivate to take the full OST offline:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294653" xreflabel=""/>[root@mds ~]# lctl --device 7 deactivate
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294664" xreflabel=""/> 4. Display the status of the file system components:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294665" xreflabel=""/>[root@mds ~]# lctl dl 
+<anchor xml:id="dbdoclet.50438211_pgfId-1294666" xreflabel=""/>0 UP mgs MGS MGS 9
+<anchor xml:id="dbdoclet.50438211_pgfId-1294667" xreflabel=""/>1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294668" xreflabel=""/>2 UP mdt MDS MDS_uuid 3
+<anchor xml:id="dbdoclet.50438211_pgfId-1294669" xreflabel=""/>3 UP lov lustre-mdtlov lustre-mdtlov_UUID 4
+<anchor xml:id="dbdoclet.50438211_pgfId-1294670" xreflabel=""/>4 UP mds lustre-MDT0000 lustre-MDT0000_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294671" xreflabel=""/>5 UP osc lustre-OST0000-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294672" xreflabel=""/>6 UP osc lustre-OST0001-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294673" xreflabel=""/>7 IN osc lustre-OST0002-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294674" xreflabel=""/>8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294675" xreflabel=""/>9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294676" xreflabel=""/>10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296630" xreflabel=""/>The device list shows that OST0002 is now inactive. When new files are created in the file system, they will only use the remaining active OSTs. Either manual space rebalancing can be done by migrating data to other OSTs, as shown in the next section, or normal file deletion and creation can be allowed to passively rebalance the space usage.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1294681" xreflabel=""/>19.1.3 Migrating Data within a File System</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296644" xreflabel=""/>As stripes cannot be moved within the file system, data must be migrated manually by copying and renaming the file, removing the original file, and renaming the new file with the original file name. The simplest way to do this is to use the lfs_migrate command (see <link xl:href="UserUtilities.html#50438206_42260">lfs_migrate</link>). However, the steps for migrating a file by hand are also shown here for reference.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294683" xreflabel=""/> 1. Identify the file(s) to be moved.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296660" xreflabel=""/>In the example below, output from the getstripe command indicates that the file test_2 is located entirely on OST2:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1296668" xreflabel=""/>[client]# lfs getstripe /mnt/lustre/test_2
+<anchor xml:id="dbdoclet.50438211_pgfId-1296669" xreflabel=""/>/mnt/lustre/test_2
+<anchor xml:id="dbdoclet.50438211_pgfId-1296670" xreflabel=""/>obdidx     objid   objid   group
+<anchor xml:id="dbdoclet.50438211_pgfId-1296671" xreflabel=""/>     2      8     0x8       0
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296685" xreflabel=""/> 2. To move single object(s), create a new copy and remove the original. Enter:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1296698" xreflabel=""/>[client]# cp -a /mnt/lustre/test_2 /mnt/lustre/test_2.tmp
+<anchor xml:id="dbdoclet.50438211_pgfId-1296699" xreflabel=""/>[client]# mv /mnt/lustre/test_2.tmp /mnt/lustre/test_2
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296711" xreflabel=""/> 3. To migrate large files from one or more OSTs, enter:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1296718" xreflabel=""/>[client]# lfs find --ost {OST_UUID} -size +1G | lfs_migrate -y
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296709" xreflabel=""/> 4. Check the file system balance.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296435" xreflabel=""/>The df output in the example below shows a more balanced system compared to the df output in the example in <link xl:href="ManagingFileSystemIO.html#50438211_54434">Checking OST Space Usage</link>.</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1296729" xreflabel=""/>[client]# lfs df -h
+<anchor xml:id="dbdoclet.50438211_pgfId-1296730" xreflabel=""/>UUID                 bytes         Used            Available       Use%    \
+        Mounted on
+<anchor xml:id="dbdoclet.50438211_pgfId-1296731" xreflabel=""/>lustre-MDT0000_UUID   4.4G         214.5M          3.9G            4%      \
+        /mnt/lustre[MDT:0]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296732" xreflabel=""/>lustre-OST0000_UUID   2.0G         1.3G            598.1M          65%     \
+        /mnt/lustre[OST:0]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296733" xreflabel=""/>lustre-OST0001_UUID   2.0G         1.3G            594.1M          65%     \
+        /mnt/lustre[OST:1]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296734" xreflabel=""/>lustre-OST0002_UUID   2.0G         913.4M          1000.0M         45%     \
+        /mnt/lustre[OST:2]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296735" xreflabel=""/>lustre-OST0003_UUID   2.0G         1.3G            602.1M          65%     \
+        /mnt/lustre[OST:3]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296736" xreflabel=""/>lustre-OST0004_UUID   2.0G         1.3G            606.1M          64%     \
+        /mnt/lustre[OST:4]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296737" xreflabel=""/>lustre-OST0005_UUID   2.0G         1.3G            610.1M          64%     \
+        /mnt/lustre[OST:5]
+<anchor xml:id="dbdoclet.50438211_pgfId-1296738" xreflabel=""/> 
+<anchor xml:id="dbdoclet.50438211_pgfId-1296739" xreflabel=""/>filesystem summary:  11.8G 7.3G            3.9G    61%                     \
+/mnt/lustre
+</screen>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1296756" xreflabel=""/>19.1.4 Returning an Inactive OST Back Online</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1296764" xreflabel=""/>Once the deactivated OST(s) no longer are severely imbalanced, due to either active or passive data redistribution, they should be reactivated so they will again have new files allocated on them.</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1294729" xreflabel=""/>[mds]# lctl --device 7 activate
+<anchor xml:id="dbdoclet.50438211_pgfId-1294730" xreflabel=""/>[mds]# lctl dl
+<anchor xml:id="dbdoclet.50438211_pgfId-1294731" xreflabel=""/>  0 UP mgs MGS MGS 9
+<anchor xml:id="dbdoclet.50438211_pgfId-1294732" xreflabel=""/>  1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-816dd1e813 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294733" xreflabel=""/>  2 UP mdt MDS MDS_uuid 3
+<anchor xml:id="dbdoclet.50438211_pgfId-1294734" xreflabel=""/>  3 UP lov lustre-mdtlov lustre-mdtlov_UUID 4
+<anchor xml:id="dbdoclet.50438211_pgfId-1294735" xreflabel=""/>  4 UP mds lustre-MDT0000 lustre-MDT0000_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294736" xreflabel=""/>  5 UP osc lustre-OST0000-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294737" xreflabel=""/>  6 UP osc lustre-OST0001-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294738" xreflabel=""/>  7 UP osc lustre-OST0002-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294739" xreflabel=""/>  8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294740" xreflabel=""/>  9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
+<anchor xml:id="dbdoclet.50438211_pgfId-1294741" xreflabel=""/> 10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID
+</screen>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>19.2 <anchor xml:id="dbdoclet.50438211_75549" xreflabel=""/>Creating and Managing <anchor xml:id="dbdoclet.50438211_marker-1295531" xreflabel=""/>OST Pools</title>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1293507" xreflabel=""/><anchor xml:id="dbdoclet.50438211_81568" xreflabel=""/>The OST pools feature enables users to group OSTs together to make object placement more flexible. A &apos;pool&apos; is the name associated with an arbitrary subset of OSTs in a Lustre cluster.</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1293508" xreflabel=""/>OST pools follow these rules:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293509" xreflabel=""/> An OST can be a member of multiple pools.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293510" xreflabel=""/> No ordering of OSTs in a pool is defined or implied.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1294572" xreflabel=""/> Stripe allocation within a pool follows the same rules as the normal stripe allocator.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293511" xreflabel=""/> OST membership in a pool is flexible, and can change over time.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1293512" xreflabel=""/>When an OST pool is defined, it can be used to allocate files. When file or directory striping is set to a pool, only OSTs in the pool are candidates for striping. If a stripe_index is specified which refers to an OST that is not a member of the pool, an error is returned.</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1293513" xreflabel=""/>OST pools are used only at file creation. If the definition of a pool changes (an OST is added or removed or the pool is destroyed), already-created files are not affected.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1293514" xreflabel=""/>An error (EINVAL) results if you create a file using an empty pool.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+       <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1295063" xreflabel=""/>If a directory has pool striping set and the pool is subsequently removed, the new files created in this directory have the (non-pool) default striping pattern for that directory applied and no error is returned.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1293517" xreflabel=""/>19.2.1 <anchor xml:id="dbdoclet.50438211_71392" xreflabel=""/>Working with OST Pools</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293518" xreflabel=""/>OST pools are defined in the configuration log on the MGS. Use the lctl command to:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1293519" xreflabel=""/> Create/destroy a pool</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1293520" xreflabel=""/> Add/remove OSTs in a pool</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1295826" xreflabel=""/> List pools and OSTs in a specific pool</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1295827" xreflabel=""/>The lctl command MUST be run on the MGS. Another requirement for managing OST pools is to either have the MDT and MGS on the same node or have a Lustre client mounted on the MGS node, if it is separate from the MDS. This is needed to validate the pool commands being run are correct.</para>
+        <informaltable frame="none">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="5*"/>
+            <colspec colname="c2" colwidth="95*"/>
+            
+            
+            <tbody>
+              <row>
+                <entry><para><inlinemediaobject><imageobject role="html">
+                        <imagedata fileref="./shared/caution.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></para></entry>
+                <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1295828" xreflabel=""/>Running the writeconf command on the MDS erases all pools information (as well as any other parameters set using lctl conf_param). We recommend that the pools definitions (and conf_param settings) be executed using a script, so they can be reproduced easily after a writeconf is performed.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293524" xreflabel=""/>To create a new pool, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293525" xreflabel=""/>lctl pool_new &lt;fsname&gt;.&lt;poolname&gt;
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1293526" xreflabel=""/>The pool name is an ASCII string up to 16 characters.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293527" xreflabel=""/>To add the named OST to a pool, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293528" xreflabel=""/>lctl pool_add &lt;fsname&gt;.&lt;poolname&gt; &lt;ost_list&gt;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293529" xreflabel=""/>Where:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1295844" xreflabel=""/>&lt;ost_list&gt;  is &lt;fsname-&gt;OST&lt;index_range&gt;[_UUID]</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1295845" xreflabel=""/>&lt;index_range&gt;  is &lt;ost_index_start&gt;-&lt;ost_index_end&gt;[,&lt;index_range&gt;] or &lt;ost_index_start&gt;-&lt;ost_index_end&gt;/&lt;step&gt;</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1294344" xreflabel=""/>If the leading &lt;fsname&gt; and/or ending _UUID are missing, they are automatically added.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293531" xreflabel=""/> For example, to add even-numbered OSTs to pool1 on file system lustre, run a single command (add) to add many OSTs to the pool at one time:</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293532" xreflabel=""/>lctl pool_add lustre.pool1 OST[0-10/2]</para>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1293533" xreflabel=""/>Each time an OST is added to a pool, a new llog configuration record is created. For convenience, you can run a single command.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293534" xreflabel=""/>To remove a named OST from a pool, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293535" xreflabel=""/>lctl pool_remove &lt;fsname&gt;.&lt;poolname&gt; &lt;ost_list&gt;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293536" xreflabel=""/>To destroy a pool, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293537" xreflabel=""/>lctl pool_destroy &lt;fsname&gt;.&lt;poolname&gt;
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1293538" xreflabel=""/>All OSTs must be removed from a pool before it can be destroyed.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293539" xreflabel=""/>To list pools in the named file system, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293540" xreflabel=""/>lctl pool_list &lt;fsname&gt; | &lt;pathname&gt;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293541" xreflabel=""/>To list OSTs in a named pool, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293542" xreflabel=""/>lctl pool_list &lt;fsname&gt;.&lt;poolname&gt;
+</screen>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438211_pgfId-1293543" xreflabel=""/>19.2.1.1 Using the lfs Command with OST Pools</title>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293544" xreflabel=""/>Several lfs commands can be run with OST pools. Use the lfs setstripe command to associate a directory with an OST pool. This causes all new regular files and directories in the directory to be created in the pool. The lfs command can be used to list pools in a file system and OSTs in a named pool.</para>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293545" xreflabel=""/>To associate a directory with a pool, so all new files and directories will be created in the pool, run:</para>
+          <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293546" xreflabel=""/>lfs setstripe --pool|-p pool_name &lt;filename|dirname&gt; 
+</screen>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293547" xreflabel=""/>To set striping patterns, run:</para>
+          <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293548" xreflabel=""/>lfs setstripe        [--size|-s stripe_size] [--offset|-o start_ost]
+<anchor xml:id="dbdoclet.50438211_pgfId-1293549" xreflabel=""/>           [--count|-c stripe_count] [--pool|-p pool_name]
+<anchor xml:id="dbdoclet.50438211_pgfId-1293550" xreflabel=""/>           &lt;dir|filename&gt;
+</screen>
+          <informaltable frame="none">
+            <tgroup cols="1">
+              <colspec colname="c1" colwidth="100*"/>
+              <tbody>
+                <row>
+                  <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1294372" xreflabel=""/>If you specify striping with an invalid pool name, because the pool does not exist or the pool name was mistyped, lfs setstripe returns an error. Run lfs pool_list to make sure the pool exists and the pool name is entered correctly.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+           <informaltable frame="none">
+            <tgroup cols="1">
+              <colspec colname="c1" colwidth="100*"/>
+              <tbody>
+                <row>
+                  <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1293551" xreflabel=""/>The --pool option for lfs setstripe is compatible with other modifiers. For example, you can set striping on a directory to use an explicit starting index.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1293557" xreflabel=""/>19.2.2 <anchor xml:id="dbdoclet.50438211_62780" xreflabel=""/>Tips for Using OST Pools</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293558" xreflabel=""/>Here are several suggestions for using OST pools.</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1293559" xreflabel=""/> A directory or file can be given an extended attribute (EA), that restricts striping to a pool.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1293560" xreflabel=""/> Pools can be used to group OSTs with the same technology or performance (slower or faster), or that are preferred for certain jobs. Examples are SATA OSTs versus SAS OSTs or remote OSTs versus local OSTs.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438211_pgfId-1293561" xreflabel=""/> A file created in an OST pool tracks the pool by keeping the pool name in the file LOV EA.</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>19.3 <anchor xml:id="dbdoclet.50438211_11204" xreflabel=""/>Adding an OST to a Lustre File System</title>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296450" xreflabel=""/>To add an OST to existing Lustre file system:</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296451" xreflabel=""/> 1. Add a new OST by passing on the following commands, run:</para>
+      <screen><anchor xml:id="dbdoclet.50438211_pgfId-1296452" xreflabel=""/>$ mkfs.lustre --fsname=spfs --ost --mgsnode=mds16@tcp0 /dev/sda
+<anchor xml:id="dbdoclet.50438211_pgfId-1296453" xreflabel=""/>$ mkdir -p /mnt/test/ost0
+<anchor xml:id="dbdoclet.50438211_pgfId-1296454" xreflabel=""/>$ mount -t lustre /dev/sda /mnt/test/ost0
+</screen>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296455" xreflabel=""/> 2. Migrate the data (possibly).</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296456" xreflabel=""/>The file system is quite unbalanced when new empty OSTs are added. New file creations are automatically balanced. If this is a scratch file system or files are pruned at a regular interval, then no further work may be needed. Files existing prior to the expansion can be rebalanced with an in-place copy, which can be done with a simple script.</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296457" xreflabel=""/>The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296458" xreflabel=""/>A very clever migration script would do the following:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1296459" xreflabel=""/> Examine the current distribution of data.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1296460" xreflabel=""/> Calculate how much data should move from each full OST to the empty ones.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1296461" xreflabel=""/> Search for files on a given full OST (using lfs getstripe).</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1296462" xreflabel=""/> Force the new destination OST (using lfs setstripe).</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1296463" xreflabel=""/> Copy only enough files to address the imbalance.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1296464" xreflabel=""/>If a Lustre administrator wants to explore this approach further, per-OST disk-usage statistics can be found under /proc/fs/lustre/osc/*/rpc_stats</para>
+    </section>
+    <section remap="h2">
+      <title>19.4 <anchor xml:id="dbdoclet.50438211_80295" xreflabel=""/>Performing <anchor xml:id="dbdoclet.50438211_marker-1291962" xreflabel=""/>Direct I/O</title>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1291964" xreflabel=""/>Lustre supports the O_DIRECT flag to open.</para>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1291965" xreflabel=""/>Applications using the read() and write() calls must supply buffers aligned on a page boundary (usually 4 K). If the alignment is not correct, the call returns -EINVAL. Direct I/O may help performance in cases where the client is doing a large amount of I/O and is CPU-bound (CPU utilization 100%).</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1291967" xreflabel=""/>19.4.1 Making File System Objects Immutable</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1291968" xreflabel=""/>An immutable file or directory is one that cannot be modified, renamed or removed. To do this:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1291969" xreflabel=""/>chattr +i &lt;file&gt;
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1291970" xreflabel=""/>To remove this flag, use chattr -i</para>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>19.5 <anchor xml:id="dbdoclet.50438211_61024" xreflabel=""/>Other I/O Options</title>
+      <para><anchor xml:id="dbdoclet.50438211_pgfId-1291973" xreflabel=""/>This section describes other I/O options, including checksums.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438211_pgfId-1291975" xreflabel=""/>19.5.1 Lustre <anchor xml:id="dbdoclet.50438211_marker-1291974" xreflabel=""/>Checksums</title>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293844" xreflabel=""/>To guard against network data corruption, a Lustre client can perform two types of data checksums: in-memory (for data in client memory) and wire (for data sent over the network). For each checksum type, a 32-bit checksum of the data read or written on both the client and server is computed, to ensure that the data has not been corrupted in transit over the network. The ldiskfs backing file system does NOT do any persistent checksumming, so it does not detect corruption of data in the OST file system.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1292598" xreflabel=""/>The checksumming feature is enabled, by default, on individual client nodes. If the client or OST detects a checksum mismatch, then an error is logged in the syslog of the form:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1292603" xreflabel=""/>LustreError: BAD WRITE CHECKSUM: changed in transit before arrival at OST: \
+from 192.168.1.1@tcp inum 8991479/2386814769 object 1127239/0 extent [10240\
+0-106495]
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1292616" xreflabel=""/>If this happens, the client will re-read or re-write the affected data up to five times to get a good copy of the data over the network. If it is still not possible, then an I/O error is returned to the application.</para>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293793" xreflabel=""/>To enable both types of checksums (in-memory and wire), run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293794" xreflabel=""/>echo 1 &gt; /proc/fs/lustre/llite/<emphasis>&lt;fsname&gt;</emphasis>/checksum_pages
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293795" xreflabel=""/>To disable both types of checksums (in-memory and wire), run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293796" xreflabel=""/>echo 0 &gt; /proc/fs/lustre/llite/<emphasis>&lt;fsname&gt;</emphasis>/checksum_pages
+</screen>
+        <para><anchor xml:id="dbdoclet.50438211_pgfId-1293797" xreflabel=""/>To check the status of a wire checksum, run:</para>
+        <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293798" xreflabel=""/>lctl get_param osc.*.checksums
+</screen>
+        <section remap="h4">
+          <title><anchor xml:id="dbdoclet.50438211_pgfId-1293158" xreflabel=""/>19.5.1.1 Changing Checksum Algorithms</title>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293209" xreflabel=""/>By default, Lustre uses the adler32 checksum algorithm, because it is robust and has a lower impact on performance than crc32. The Lustre administrator can change the checksum algorithm via /proc, depending on what is supported in the kernel.</para>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293218" xreflabel=""/>To check which checksum algorithm is being used by Lustre, run:</para>
+          <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293229" xreflabel=""/>$ cat /proc/fs/lustre/osc/&lt;fsname&gt;-OST&lt;index&gt;-osc-*/checksum_type
+</screen>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293260" xreflabel=""/>To change the wire checksum algorithm used by Lustre, run:</para>
+          <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293261" xreflabel=""/>$ echo &lt;algorithm name&gt; /proc/fs/lustre/osc/&lt;fsname&gt;-OST&lt;index&gt;- \osc-*/checksum_\
+type
+</screen>
+          <informaltable frame="none">
+            <tgroup cols="1">
+              <colspec colname="c1" colwidth="100*"/>
+              <tbody>
+                <row>
+                  <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438211_pgfId-1293881" xreflabel=""/>The in-memory checksum always uses the adler32 algorithm, if available, and only falls back to crc32 if adler32 cannot be used.</para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          <para><anchor xml:id="dbdoclet.50438211_pgfId-1293876" xreflabel=""/>In the following example, the cat command is used to determine that Lustre is using the adler32 checksum algorithm. Then the echo command is used to change the checksum algorithm to crc32. A second cat command confirms that the crc32 checksum algorithm is now in use.</para>
+          <screen><anchor xml:id="dbdoclet.50438211_pgfId-1293284" xreflabel=""/>$ cat /proc/fs/lustre/osc/lustre-OST0000-osc- \ffff81012b2c48e0/checksum_ty\
+pe
+<anchor xml:id="dbdoclet.50438211_pgfId-1293295" xreflabel=""/>crc32 [adler]
+<anchor xml:id="dbdoclet.50438211_pgfId-1293296" xreflabel=""/>$ echo crc32 &gt; /proc/fs/lustre/osc/lustre-OST0000-osc- \ffff81012b2c48e0/che\
+cksum_type
+<anchor xml:id="dbdoclet.50438211_pgfId-1293320" xreflabel=""/>$ cat /proc/fs/lustre/osc/lustre-OST0000-osc- \ffff81012b2c48e0/checksum_ty\
+pe
+<anchor xml:id="dbdoclet.50438211_pgfId-1293321" xreflabel=""/>[crc32] adler
+</screen>
+          <!--
+Begin SiteCatalyst code version: G.5.
+-->
+          <!--
+End SiteCatalyst code version: G.5.
+-->
+            <informaltable frame="none">
+            <tgroup cols="3">
+              <colspec colname="c1" colwidth="33*"/>
+              <colspec colname="c2" colwidth="33*"/>
+              <colspec colname="c3" colwidth="33*"/>
+              
+              
+              
+              <tbody>
+                <row>
+                  <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                  <entry align="right"><para>821-2076-10</para></entry>
+                  <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                            <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                          </imageobject>
+<imageobject role="fo">
+                            <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                          </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingStripingFreeSpace.html"><inlinemediaobject><imageobject role="html">
+                            <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                          </imageobject>
+<imageobject role="fo">
+                            <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                          </imageobject>
+</inlinemediaobject></link><link xl:href="ManagingFailover.html"><inlinemediaobject><imageobject role="html">
+                            <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                          </imageobject>
+<imageobject role="fo">
+                            <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                          </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                            <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                          </imageobject>
+<imageobject role="fo">
+                            <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                          </imageobject>
+</inlinemediaobject></link></para></entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          <para><link xl:href=""/></para>
+          <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+        </section>
+      </section>
+    </section>
+  </section>
+</article>

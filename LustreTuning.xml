@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Lustre Tuning</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="BenchmarkingTests.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="V_LustreTroubleshooting.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438272_pgfId-874" xreflabel=""/>C H A P T E R  25<anchor xml:id="dbdoclet.50438272_56727" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438272_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438272_66186" xreflabel=""/>Lustre Tuning</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438272_pgfId-1291087" xreflabel=""/>This chapter contains information about tuning Lustre for better performance and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1291091" xreflabel=""/><link xl:href="LustreTuning.html#50438272_55226">Optimizing the Number of Service Threads</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1294213" xreflabel=""/><link xl:href="LustreTuning.html#50438272_73839">Tuning LNET Parameters</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1294288" xreflabel=""/><link xl:href="LustreTuning.html#50438272_25884">Lockless I/O Tunables</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295922" xreflabel=""/><link xl:href="LustreTuning.html#50438272_80545">Improving Lustre Performance When Working with Small Files</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295927" xreflabel=""/><link xl:href="LustreTuning.html#50438272_45406">Understanding Why Write Performance Is Better Than Read Performance</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438272_pgfId-1295636" xreflabel=""/>Many options in Lustre are set by means of kernel module parameters. These parameters are contained in the modprobe.conf file.</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438272_pgfId-1291114" xreflabel=""/></title>
+    <section remap="h2">
+      <title>25.1 <anchor xml:id="dbdoclet.50438272_55226" xreflabel=""/>Optimizing the Number of Service Threads</title>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295659" xreflabel=""/>An OSS can have a minimum of 2 service threads and a maximum of 512 service threads. The number of service threads is a function of how much RAM and how many CPUs are on each OSS node (1 thread / 128MB * num_cpus). If the load on the OSS node is high, new service threads will be started in order to process more requests concurrently, up to 4x the initial number of threads (subject to the maximum of 512). For a 2GB 2-CPU system, the default thread count is 32 and the maximum thread count is 128.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295660" xreflabel=""/>Increasing the size of the thread pool may help when:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295661" xreflabel=""/> Several OSTs are exported from a single OSS</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295662" xreflabel=""/> Back-end storage is running synchronously</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295663" xreflabel=""/> I/O completions take excessive time due to slow storage</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295664" xreflabel=""/>Decreasing the size of the thread pool may help if:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295665" xreflabel=""/> Clients are overwhelming the storage capacity</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295666" xreflabel=""/> There are lots of &quot;slow I/O&quot; or similar messages</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295667" xreflabel=""/>Increasing the number of I/O threads allows the kernel and storage to aggregate many writes together for more efficient disk I/O. The OSS thread pool is shared--each thread allocates approximately 1.5 MB (maximum RPC size + 0.5 MB) for internal I/O buffers.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295668" xreflabel=""/>It is very important to consider memory consumption when increasing the thread pool size. Drives are only able to sustain a certain amount of parallel I/O activity before performance is degraded, due to the high number of seeks and the OST threads just waiting for I/O. In this situation, it may be advisable to decrease the load by decreasing the number of OST threads.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295669" xreflabel=""/>Determining the optimum number of OST threads is a process of trial and error, and varies for each particular configuration. Variables include the number of OSTs on each OSS, number and speed of disks, RAID configuration, and available RAM. You may want to start with a number of OST threads equal to the number of actual disk spindles on the node. If you use RAID, subtract any dead spindles not used for actual data (e.g., 1 of N of spindles for RAID5, 2 of N spindles for RAID6), and monitor the performance of clients during usual workloads. If performance is degraded, increase the thread count and see how that works until performance is degraded again or you reach satisfactory performance.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438272_pgfId-1295670" xreflabel=""/>If there are too many threads, the latency for individual I/O requests can become very high and should be avoided. Set the desired maximum thread count permanently using the method described above.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438272_pgfId-1295614" xreflabel=""/>25.1.1 <anchor xml:id="dbdoclet.50438272_60005" xreflabel=""/>Specifying the OSS Service <anchor xml:id="dbdoclet.50438272_marker-1294858" xreflabel=""/>Thread Count</title>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1291118" xreflabel=""/>The oss_num_threads parameter enables the number of OST service threads to be specified at module load time on the OSS nodes:</para>
+        <screen><anchor xml:id="dbdoclet.50438272_pgfId-1291119" xreflabel=""/>options ost oss_num_threads={N}</screen>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1292633" xreflabel=""/>After startup, the minimum and maximum number of OSS thread counts can be set via the {service}.thread_{min,max,started} tunable. To change the tunable at runtime, run:</para>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1293688" xreflabel=""/>lctl {get,set}_param {service}.thread_{min,max,started}</para>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1293692" xreflabel=""/>For details, see <link xl:href="LustreProc.html#50438271_87260">Setting MDS and OSS Thread Counts</link>.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438272_pgfId-1293756" xreflabel=""/>25.1.2 Specifying the MDS Service <anchor xml:id="dbdoclet.50438272_marker-1293755" xreflabel=""/>Thread Count</title>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1293828" xreflabel=""/>The mds_num_threads parameter enables the number of MDS service threads to be specified at module load time on the MDS node:</para>
+        <screen><anchor xml:id="dbdoclet.50438272_pgfId-1291131" xreflabel=""/>options mds mds_num_threads={N}</screen>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1293699" xreflabel=""/>After startup, the minimum and maximum number of MDS thread counts can be set via the {service}.thread_{min,max,started} tunable. To change the tunable at runtime, run:</para>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1293700" xreflabel=""/>lctl {get,set}_param {service}.thread_{min,max,started}</para>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1293704" xreflabel=""/>For details, see <link xl:href="LustreProc.html#50438271_87260">Setting MDS and OSS Thread Counts</link>.</para>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1294918" xreflabel=""/>At this time, no testing has been done to determine the optimal number of MDS threads. The default value varies, based on server size, up to a maximum of 32. The maximum number of threads (MDS_MAX_THREADS) is 512.</para>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438272_pgfId-1294919" xreflabel=""/>The OSS and MDS automatically start new service threads dynamically, in response to server load within a factor of 4. The default value is calculated the same way as before. Setting the _mu_threads module parameter disables automatic thread creation behavior.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>25.2 <anchor xml:id="dbdoclet.50438272_73839" xreflabel=""/>Tuning LNET Parameters</title>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295625" xreflabel=""/>This section describes LNET tunables. that may be necessary on some systems to improve performance. To test the performance of your Lustre network, see <link xl:href="LNETSelfTest.html#50438223_71556">Chapter 23</link>: <link xl:href="LNETSelfTest.html#50438223_21832">Testing Lustre Network Performance (LNET Self-Test)</link>.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438272_pgfId-1291141" xreflabel=""/>25.2.1 Transmit and Receive Buffer Size</title>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1291142" xreflabel=""/>The kernel allocates buffers for sending and receiving messages on a network.</para>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1295680" xreflabel=""/>ksocklnd has separate parameters for the transmit and receive buffers.</para>
+        <screen><anchor xml:id="dbdoclet.50438272_pgfId-1291143" xreflabel=""/>options ksocklnd tx_buffer_size=0 rx_buffer_size=0
+</screen>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1291144" xreflabel=""/>If these parameters are left at the default value (0), the system automatically tunes the transmit and receive buffer size. In almost every case, this default produces the best performance. Do not attempt to tune these parameters unless you are a network expert.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438272_pgfId-1291145" xreflabel=""/>25.2.2 Hardware Interrupts (enable_irq_affinity)</title>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1295715" xreflabel=""/>The hardware interrupts that are generated by network adapters may be handled by any CPU in the system. In some cases, we would like network traffic to remain local to a single CPU to help keep the processor cache warm and minimize the impact of context switches. This is helpful when an SMP system has more than one network interface and ideal when the number of interfaces equals the number of CPUs. To enable the enable_irq_affinity parameter, enter:</para>
+        <screen><anchor xml:id="dbdoclet.50438272_pgfId-1295742" xreflabel=""/>options ksocklnd enable_irq_affinity=1
+</screen>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1295711" xreflabel=""/>In other cases, if you have an SMP platform with a single fast interface such as 10Gb Ethernet and more than two CPUs, you may see performance improve by turning this parameter off.</para>
+        <screen><anchor xml:id="dbdoclet.50438272_pgfId-1295736" xreflabel=""/>options ksocklnd enable_irq_affinity=0
+</screen>
+        <para><anchor xml:id="dbdoclet.50438272_pgfId-1295685" xreflabel=""/>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>25.3 <anchor xml:id="dbdoclet.50438272_25884" xreflabel=""/>Lockless <anchor xml:id="dbdoclet.50438272_marker-1291703" xreflabel=""/>I/O Tunables</title>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1291569" xreflabel=""/>The lockless I/O tunable feature allows servers to ask clients to do lockless I/O (liblustre-style where the server does the locking) on contended files.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1291570" xreflabel=""/>The lockless I/O patch introduces these tunables:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1291571" xreflabel=""/> OST-side:</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <screen><anchor xml:id="dbdoclet.50438272_pgfId-1292156" xreflabel=""/>/proc/fs/lustre/ldlm/namespaces/filter-lustre-*
+</screen>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1292119" xreflabel=""/>contended_locks - If the number of lock conflicts in the scan of granted and waiting queues at contended_locks is exceeded, the resource is considered to be contended.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1292125" xreflabel=""/>contention_seconds - The resource keeps itself in a contended state as set in the parameter.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1292131" xreflabel=""/>max_nolock_bytes - Server-side locking set only for requests less than the blocks set in the max_nolock_bytes parameter. If this tunable is set to zero (0), it disables server-side locking for read/write requests.</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1291576" xreflabel=""/> Client-side:</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <screen><anchor xml:id="dbdoclet.50438272_pgfId-1291577" xreflabel=""/>/proc/fs/lustre/llite/lustre-*
+</screen>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1292113" xreflabel=""/>contention_seconds - llite inode remembers its contended state for the time specified in this parameter.</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1291579" xreflabel=""/> Client-side statistics:</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1291580" xreflabel=""/>The /proc/fs/lustre/llite/lustre-*/stats file has new rows for lockless I/O statistics.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1291566" xreflabel=""/>lockless_read_bytes and lockless_write_bytes - To count the total bytes read or written, the client makes its own decisions based on the request size. The client does not communicate with the server if the request size is smaller than the min_nolock_size, without acquiring locks by the client.</para>
+    </section>
+    <section remap="h2">
+      <title>25.4 <anchor xml:id="dbdoclet.50438272_80545" xreflabel=""/>Improving Lustre <anchor xml:id="dbdoclet.50438272_marker-1295851" xreflabel=""/>Performance When Working with Small Files</title>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295854" xreflabel=""/>A Lustre environment where an application writes small file chunks from many clients to a single file will result in bad I/O performance. To improve Lustreâ€™s performance with small files:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295855" xreflabel=""/> Have the application aggregate writes some amount before submitting them to Lustre. By default, Lustre enforces POSIX coherency semantics, so it results in lock ping-pong between client nodes if they are all writing to the same file at one time.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295856" xreflabel=""/> Have the application do 4kB O_DIRECT sized I/O to the file and disable locking on the output file. This avoids partial-page IO submissions and, by disabling locking, you avoid contention between clients.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295857" xreflabel=""/> Have the application write contiguous data.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295858" xreflabel=""/> Add more disks or use SSD disks for the OSTs. This dramatically improves the IOPS rate. Consider creating larger OSTs rather than many smaller OSTs due to less overhead (journal, connections, etc).</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438272_pgfId-1295859" xreflabel=""/> Use RAID-1+0 OSTs instead of RAID-5/6. There is RAID parity overhead for writing small chunks of data to disk.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+    </section>
+    <section remap="h2">
+      <title>25.5 <anchor xml:id="dbdoclet.50438272_45406" xreflabel=""/>Understanding Why Write Performance Is Better Than Read Performance</title>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295894" xreflabel=""/>Typically, the performance of write operations on a Lustre cluster is better than read operations. When doing writes, all clients are sending write RPCs asynchronously. The RPCs are allocated, and written to disk in the order they arrive. In many cases, this allows the back-end storage to aggregate writes efficiently.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295895" xreflabel=""/>In the case of read operations, the reads from clients may come in a different order and need a lot of seeking to get read from the disk. This noticeably hampers the read throughput.</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295896" xreflabel=""/>Currently, there is no readahead on the OSTs themselves, though the clients do readahead. If there are lots of clients doing reads it would not be possible to do any readahead in any case because of memory consumption (consider that even a single RPC (1 MB) readahead for 1000 clients would consume 1 GB of RAM).</para>
+      <para><anchor xml:id="dbdoclet.50438272_pgfId-1295897" xreflabel=""/>For file systems that use socklnd (TCP, Ethernet) as interconnect, there is also additional CPU overhead because the client cannot receive data without copying it from the network buffers. In the write case, the client CAN send data without the additional data copy. This means that the client is more likely to become CPU-bound during reads than writes.</para>
+      <!--
+Begin SiteCatalyst code version: G.5.
+-->
+      <!--
+End SiteCatalyst code version: G.5.
+-->
+        <informaltable frame="none">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          
+          
+          
+          <tbody>
+            <row>
+              <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+              <entry align="right"><para>821-2076-10</para></entry>
+              <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="BenchmarkingTests.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="V_LustreTroubleshooting.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                      </imageobject>
+<imageobject role="fo">
+                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                      </imageobject>
+</inlinemediaobject></link></para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><link xl:href=""/></para>
+      <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+    </section>
+  </section>
+</article>

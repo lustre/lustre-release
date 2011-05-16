@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>P A R T II - Installing and Configuring Lustre</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="UnderstandingFailover.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="InstallOverview.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438252_pgfId-369952" xreflabel=""/>P A R T  II</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para> Installing and Configuring Lustre</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-1804" xreflabel=""/>Part II describes how to install and configure a Lustre file system. You will find information in this section about:</para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369616" xreflabel=""/><link xl:href="InstallOverview.html#50438192_66186">Installation Overview</link></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369620" xreflabel=""/><link xl:href="SettingUpLustreSystem.html#50438256_66186">Setting Up a Lustre File System</link></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369624" xreflabel=""/><link xl:href="ConfiguringStorage.html#50438208_70525">Configuring Storage on a Lustre File System</link><emphasis>(optional)</emphasis></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369669" xreflabel=""/><link xl:href="SettingUpBonding.html#50438258_99571">Setting Up Network Interface Bonding</link><emphasis>(optional)</emphasis></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369643" xreflabel=""/><link xl:href="InstallingLustre.html#50438261_62973">Installing the Lustre Software</link></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369691" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_29256">Configuring Lustre Networking (LNET)</link><emphasis>(optional)</emphasis></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369651" xreflabel=""/><link xl:href="ConfiguringLustre.html#50438267_66186">Configuring Lustre</link></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369697" xreflabel=""/><link xl:href="ConfiguringFailover.html#50438188_50628">Configuring Lustre Failover</link><emphasis>(optional)</emphasis></para>
+  <para><anchor xml:id="dbdoclet.50438252_pgfId-369702" xreflabel=""/>For more information about required and optional steps to installing and configuring Lustre, proceed to <link xl:href="InstallOverview.html#50438192_70895">Chapter 4</link>: <link xl:href="InstallOverview.html#50438192_66186">Installation Overview</link>.</para>
+  <!--
+Begin SiteCatalyst code version: G.5.
+-->
+  <!--
+End SiteCatalyst code version: G.5.
+-->
+    <informaltable frame="none">
+    <tgroup cols="3">
+      <colspec colname="c1" colwidth="33*"/>
+      <colspec colname="c2" colwidth="33*"/>
+      <colspec colname="c3" colwidth="33*"/>
+      
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right"><para>821-2076-10</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="UnderstandingFailover.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="InstallOverview.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+</article>

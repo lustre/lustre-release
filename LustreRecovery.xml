@@ -1,0 +1,532 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Lustre Recovery</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="InstallingLustrefrSourceCode.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="LustreProc.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438268_pgfId-874" xreflabel=""/>C H A P T E R  30<anchor xml:id="dbdoclet.50438268_71884" xreflabel=""/></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      
+      <tbody>
+        <row>
+          <entry align="right"><para><anchor xml:id="dbdoclet.50438268_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438268_93053" xreflabel=""/>Lustre Recovery</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><anchor xml:id="dbdoclet.50438268_pgfId-1292351" xreflabel=""/>This chapter describes how recovery is implemented in Lustre and includes the following sections:</para>
+  <itemizedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287370" xreflabel=""/><link xl:href="LustreRecovery.html#50438268_58047">Recovery Overview</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1289682" xreflabel=""/><link xl:href="LustreRecovery.html#50438268_65824">Metadata Replay</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1291218" xreflabel=""/><link xl:href="LustreRecovery.html#50438268_23736">Reply Reconstruction</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1288133" xreflabel=""/><link xl:href="LustreRecovery.html#50438268_80068">Version-based Recovery</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+<listitem>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1290063" xreflabel=""/><link xl:href="LustreRecovery.html#50438268_83826">Commit on Share</link></para>
+    </listitem>
+<listitem>
+      <para> </para>
+    </listitem>
+</itemizedlist>
+   <informaltable frame="none">
+    <tgroup cols="1">
+      <colspec colname="c1" colwidth="100*"/>
+      <tbody>
+        <row>
+          <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438268_pgfId-1292744" xreflabel=""/>Usually the Lustre recovery process is transparent. For information about troubleshooting recovery when something goes wrong, see <link xl:href="TroubleShootingRecovery.html#50438225_33059">Chapter 27</link>: <link xl:href="LustreRecovery.html#50438268_93053">Lustre Recovery</link>.</para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <section remap="h2">
+    <title><anchor xml:id="dbdoclet.50438268_pgfId-1289094" xreflabel=""/></title>
+    <section remap="h2">
+      <title>30.1 <anchor xml:id="dbdoclet.50438268_58047" xreflabel=""/>Recovery Overview</title>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1291584" xreflabel=""/>Lustre&apos;s recovery feature is responsible for dealing with node or network failure and returning the cluster to a consistent, performant state. Because Lustre allows servers to perform asynchronous update operations to the on-disk file system (i.e., the server can reply without waiting for the update to synchronously commit to disk), the clients may have state in memory that is newer than what the server can recover from disk after a crash.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1291585" xreflabel=""/>A handful of different types of failures can cause recovery to occur:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1291586" xreflabel=""/> Client (compute node) failure</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1291587" xreflabel=""/> MDS failure (and failover)</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1291588" xreflabel=""/> OST failure (and failover)</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1291589" xreflabel=""/> Transient network partition</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1291597" xreflabel=""/>Currently, all Lustre failure and recovery operations are based on the concept of connection failure; all imports or exports associated with a given connection are considered to fail if any of them fail.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1290652" xreflabel=""/>For information on Lustre recovery, see <link xl:href="LustreRecovery.html#50438268_65824">Metadata Replay</link>. For information on recovering from a corrupt file system, see <link xl:href="LustreRecovery.html#50438268_83826">Commit on Share</link>. For information on resolving orphaned objects, a common issue after recovery, see <link xl:href="TroubleShootingRecovery.html#50438225_13916">Working with Orphaned Objects</link>.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1287395" xreflabel=""/>30.1.1 <anchor xml:id="dbdoclet.50438268_96839" xreflabel=""/>Client <anchor xml:id="dbdoclet.50438268_marker-1287394" xreflabel=""/>Failure</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1287396" xreflabel=""/>Recovery from client failure in Lustre is based on lock revocation and other resources, so surviving clients can continue their work uninterrupted. If a client fails to timely respond to a blocking lock callback from the Distributed Lock Manager (DLM) or fails to communicate with the server in a long period of time (i.e., no pings), the client is forcibly removed from the cluster (evicted). This enables other clients to acquire locks blocked by the dead client&apos;s locks, and also frees resources (file handles, export data) associated with that client. Note that this scenario can be caused by a network partition, as well as an actual client node system failure. <link xl:href="LustreRecovery.html#50438268_96876">Network Partition</link> describes this case in more detail.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1290714" xreflabel=""/>30.1.2 <anchor xml:id="dbdoclet.50438268_43796" xreflabel=""/>Client <anchor xml:id="dbdoclet.50438268_marker-1292164" xreflabel=""/>Eviction</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291609" xreflabel=""/>If a client is not behaving properly from the server&apos;s point of view, it will be evicted. This ensures that the whole file system can continue to function in the presence of failed or misbehaving clients. An evicted client must invalidate all locks, which in turn, results in all cached inodes becoming invalidated and all cached data being flushed.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291610" xreflabel=""/>Reasons why a client might be evicted:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1291611" xreflabel=""/> Failure to respond to a server request in a timely manner</para>
+          </listitem>
+<listitem>
+            <itemizedlist><listitem>
+                <para><anchor xml:id="dbdoclet.50438268_pgfId-1291612" xreflabel=""/> Blocking lock callback (i.e., client holds lock that another client/server wants)</para>
+              </listitem>
+<listitem>
+                <para> </para>
+              </listitem>
+<listitem>
+                <para><anchor xml:id="dbdoclet.50438268_pgfId-1291613" xreflabel=""/> Lock completion callback (i.e., client is granted lock previously held by another client)</para>
+              </listitem>
+<listitem>
+                <para> </para>
+              </listitem>
+<listitem>
+                <para><anchor xml:id="dbdoclet.50438268_pgfId-1291614" xreflabel=""/> Lock glimpse callback (i.e., client is asked for size of object by another client)</para>
+              </listitem>
+<listitem>
+                <para> </para>
+              </listitem>
+<listitem>
+                <para><anchor xml:id="dbdoclet.50438268_pgfId-1291615" xreflabel=""/> Server shutdown notification (with simplified interoperability)</para>
+              </listitem>
+<listitem>
+                <para> </para>
+              </listitem>
+</itemizedlist>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1291616" xreflabel=""/> Failure to ping the server in a timely manner, unless the server is receiving no RPC traffic at all (which may indicate a network partition).</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1287398" xreflabel=""/>30.1.3 <anchor xml:id="dbdoclet.50438268_37508" xreflabel=""/>MDS Failure <anchor xml:id="dbdoclet.50438268_marker-1287397" xreflabel=""/>(Failover)</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291624" xreflabel=""/>Highly-available (HA) Lustre operation requires that the metadata server have a peer configured for failover, including the use of a shared storage device for the MDT backing file system. The actual mechanism for detecting peer failure, power off (STONITH) of the failed peer (to prevent it from continuing to modify the shared disk), and takeover of the Lustre MDS service on the backup node depends on external HA software such as Heartbeat. It is also possible to have MDS recovery with a single MDS node. In this case, recovery will take as long as is needed for the single MDS to be restarted.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291625" xreflabel=""/>When clients detect an MDS failure (either by timeouts of in-flight requests or idle-time ping messages), they connect to the new backup MDS and use the Metadata Replay protocol. Metadata Replay is responsible for ensuring that the backup MDS re-acquires state resulting from transactions whose effects were made visible to clients, but which were not committed to the disk.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290890" xreflabel=""/>The reconnection to a new (or restarted) MDS is managed by the file system configuration loaded by the client when the file system is first mounted. If a failover MDS has been configured (using the --failnode= option to mkfs.lustre or tunefs.lustre), the client tries to reconnect to both the primary and backup MDS until one of them responds that the failed MDT is again available. At that point, the client begins recovery. For more information, see <link xl:href="LustreRecovery.html#50438268_65824">Metadata Replay</link>.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290891" xreflabel=""/>Transaction numbers are used to ensure that operations are replayed in the order they were originally performed, so that they are guaranteed to succeed and present the same filesystem state as before the failure. In addition, clients inform the new server of their existing lock state (including locks that have not yet been granted). All metadata and lock replay must complete before new, non-recovery operations are permitted. In addition, only clients that were connected at the time of MDS failure are permitted to reconnect during the recovery window, to avoid the introduction of state changes that might conflict with what is being replayed by previously-connected clients.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1289241" xreflabel=""/>30.1.4 <anchor xml:id="dbdoclet.50438268_28881" xreflabel=""/>OST <anchor xml:id="dbdoclet.50438268_marker-1289240" xreflabel=""/>Failure (Failover)</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291633" xreflabel=""/>When an OST fails or has communication problems with the client, the default action is that the corresponding OSC enters recovery, and I/O requests going to that OST are blocked waiting for OST recovery or failover. It is possible to administratively mark the OSC as <emphasis>inactive</emphasis> on the client, in which case file operations that involve the failed OST will return an IO error (-EIO). Otherwise, the application waits until the OST has recovered or the client process is interrupted (e.g. ,with <emphasis>CTRL-C</emphasis>).</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290917" xreflabel=""/>The MDS (via the LOV) detects that an OST is unavailable and skips it when assigning objects to new files. When the OST is restarted or re-establishes communication with the MDS, the MDS and OST automatically perform orphan recovery to destroy any objects that belong to files that were deleted while the OST was unavailable. For more information, see <link xl:href="TroubleShootingRecovery.html#50438225_13916">Working with Orphaned Objects</link>.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290921" xreflabel=""/>While the OSC to OST operation recovery protocol is the same as that between the MDC and MDT using the Metadata Replay protocol, typically the OST commits bulk write operations to disk synchronously and each reply indicates that the request is already committed and the data does not need to be saved for recovery. In some cases, the OST replies to the client before the operation is committed to disk (e.g. truncate, destroy, setattr, and I/O operations in very new versions of Lustre), and normal replay and resend handling is done, including resending of the bulk writes. In this case, the client keeps a copy of the data available in memory until the server indicates that the write has committed to disk.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290922" xreflabel=""/>To force an OST recovery, unmount the OST and then mount it again. If the OST was connected to clients before it failed, then a recovery process starts after the remount, enabling clients to reconnect to the OST and replay transactions in their queue. When the OST is in recovery mode, all new client connections are refused until the recovery finishes. The recovery is complete when either all previously-connected clients reconnect and their transactions are replayed or a client connection attempt times out. If a connection attempt times out, then all clients waiting to reconnect (and their transactions) are lost.</para>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438268_pgfId-1289423" xreflabel=""/>If you know an OST will not recover a previously-connected client (if, for example, the client has crashed), you can manually abort the recovery using this command:</para><para>lctl --device &lt;OST device number&gt; abort_recovery To determine an OSTâ€™s device number and device name, run the lctl dl command. Sample lctl dl command output is shown below:</para><para>7 UP obdfilter ddn_data-OST0009 ddn_data-OST0009_UUID 1159 In this example, 7 is the OST device number. The device name is ddn_data-OST0009. In most instances, the device name can be used in place of the device number.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1289389" xreflabel=""/>30.1.5 <anchor xml:id="dbdoclet.50438268_96876" xreflabel=""/>Network <anchor xml:id="dbdoclet.50438268_marker-1289388" xreflabel=""/>Partition</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291641" xreflabel=""/>Network failures may be transient. To avoid invoking recovery, the client tries, initially, to re-send any timed out request to the server. If the resend also fails, the client tries to re-establish a connection to the server. Clients can detect harmless partition upon reconnect if the server has not had any reason to evict the client.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291642" xreflabel=""/>If a request was processed by the server, but the reply was dropped (i.e., did not arrive back at the client), the server must reconstruct the reply when the client resends the request, rather than performing the same request twice.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1289291" xreflabel=""/>30.1.6 Failed Recovery</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290945" xreflabel=""/>In the case of failed recovery, a client is evicted by the server and must reconnect after having flushed its saved state related to that server, as described in <link xl:href="LustreRecovery.html#50438268_43796">Client Eviction</link>, above. Failed recovery might occur for a number of reasons, including:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1290949" xreflabel=""/> Failure of recovery</para>
+          </listitem>
+<listitem>
+            <itemizedlist><listitem>
+                <para><anchor xml:id="dbdoclet.50438268_pgfId-1290951" xreflabel=""/> Recovery fails if the operations of one client directly depend on the operations of another client that failed to participate in recovery. Otherwise, Version Based Recovery (VBR) allows recovery to proceed for all of the connected clients, and only missing clients are evicted.</para>
+              </listitem>
+<listitem>
+                <para> </para>
+              </listitem>
+<listitem>
+                <para><anchor xml:id="dbdoclet.50438268_pgfId-1290965" xreflabel=""/> Manual abort of recovery</para>
+              </listitem>
+<listitem>
+                <para> </para>
+              </listitem>
+</itemizedlist>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1290953" xreflabel=""/> Manual eviction by the administrator</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>30.2 <anchor xml:id="dbdoclet.50438268_65824" xreflabel=""/>Metadata <anchor xml:id="dbdoclet.50438268_marker-1292175" xreflabel=""/>Replay</title>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287399" xreflabel=""/>Highly available Lustre operation requires that the MDS have a peer configured for failover, including the use of a shared storage device for the MDS backing file system. When a client detects an MDS failure, it connects to the new MDS and uses the metadata replay protocol to replay its requests.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1288905" xreflabel=""/>Metadata replay ensures that the failover MDS re-accumulates state resulting from transactions whose effects were made visible to clients, but which were not committed to the disk.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1290989" xreflabel=""/>30.2.1 XID Numbers</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1290993" xreflabel=""/>Each request sent by the client contains an XID number, which is a client-unique, monotonically increasing 64-bit integer. The initial value of the XID is chosen so that it is highly unlikely that the same client node reconnecting to the same server after a reboot would have the same XID sequence. The XID is used by the client to order all of the requests that it sends, until such a time that the request is assigned a transaction number. The XID is also used in Reply Reconstruction to uniquely identify per-client requests at the server.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1288625" xreflabel=""/>30.2.2 Transaction Numbers</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291008" xreflabel=""/>Each client request processed by the server that involves any state change (metadata update, file open, write, etc., depending on server type) is assigned a transaction number by the server that is a target-unique, monontonically increasing, server-wide 64-bit integer. The transaction number for each file system-modifying request is sent back to the client along with the reply to that client request. The transaction numbers allow the client and server to unambiguously order every modification to the file system in case recovery is needed.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291005" xreflabel=""/>Each reply sent to a client (regardless of request type) also contains the last committed transaction number that indicates the highest transaction number committed to the file system. The ldiskfs backing file system that Lustre uses enforces the requirement that any earlier disk operation will always be committed to disk before a later disk operation, so the last committed transaction number also reports that any requests with a lower transaction number have been committed to disk.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1288774" xreflabel=""/>30.2.3 Replay and Resend</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1288780" xreflabel=""/>Lustre recovery can be separated into two distinct types of operations: <emphasis>replay</emphasis> and <emphasis>resend</emphasis>.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291023" xreflabel=""/><emphasis>Replay</emphasis> operations are those for which the client received a reply from the server that the operation had been successfully completed. These operations need to be redone in exactly the same manner after a server restart as had been reported before the server failed. Replay can only happen if the server failed; otherwise it will not have lost any state in memory.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291021" xreflabel=""/><emphasis>Resend</emphasis> operations are those for which the client never received a reply, so their final state is unknown to the client. The client sends unanswered requests to the server again in XID order, and again awaits a reply for each one. In some cases, resent requests have been handled and committed to disk by the server (possibly also having dependent operations committed), in which case, the server performs reply reconstruction for the lost reply. In other cases, the server did not receive the lost request at all and processing proceeds as with any normal request. These are what happen in the case of a network interruption. It is also possible that the server received the request, but was unable to reply or commit it to disk before failure.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1288655" xreflabel=""/>30.2.4 Client Replay List</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291046" xreflabel=""/>All file system-modifying requests have the potential to be required for server state recovery (replay) in case of a server failure. Replies that have an assigned transaction number that is higher than the last committed transaction number received in any reply from each server are preserved for later replay in a per-server replay list. As each reply is received from the server, it is checked to see if it has a higher last committed transaction number than the previous highest last committed number. Most requests that now have a lower transaction number can safely be removed from the replay list. One exception to this rule is for open requests, which need to be saved for replay until the file is closed so that the MDS can properly reference count open-unlinked files.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1291084" xreflabel=""/>30.2.5 Server Recovery</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291095" xreflabel=""/>A server enters recovery if it was not shut down cleanly. If, upon startup, if any client entries are in the last_rcvd file for any previously connected clients, the server enters recovery mode and waits for these previously-connected clients to reconnect and begin replaying or resending their requests. This allows the server to recreate state that was exposed to clients (a request that completed successfully) but was not committed to disk before failure.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291096" xreflabel=""/>In the absence of any client connection attempts, the server waits indefinitely for the clients to reconnect. This is intended to handle the case where the server has a network problem and clients are unable to reconnect and/or if the server needs to be restarted repeatedly to resolve some problem with hardware or software. Once the server detects client connection attempts - either new clients or previously-connected clients - a recovery timer starts and forces recovery to finish in a finite time regardless of whether the previously-connected clients are available or not.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291097" xreflabel=""/>If no client entries are present in the last_rcvd file, or if the administrator manually aborts recovery, the server does not wait for client reconnection and proceeds to allow all clients to connect.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291098" xreflabel=""/>As clients connect, the server gathers information from each one to determine how long the recovery needs to take. Each client reports its connection UUID, and the server does a lookup for this UUID in the last_rcvd file to determine if this client was previously connected. If not, the client is refused connection and it will retry until recovery is completed. Each client reports its last seen transaction, so the server knows when all transactions have been replayed. The client also reports the amount of time that it was previously waiting for request completion so that the server can estimate how long some clients might need to detect the server failure and reconnect.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291093" xreflabel=""/>If the client times out during replay, it attempts to reconnect. If the client is unable to reconnect, REPLAY fails and it returns to DISCON state. It is possible that clients will timeout frequently during REPLAY, so reconnection should not delay an already slow process more than necessary. We can mitigate this by increasing the timeout during replay.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1291090" xreflabel=""/>30.2.6 Request Replay</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291116" xreflabel=""/>If a client was previously connected, it gets a response from the server telling it that the server is in recovery and what the last committed transaction number on disk is. The client can then iterate through its replay list and use this last committed transaction number to prune any previously-committed requests. It replays any newer requests to the server in transaction number order, one at a time, waiting for a reply from the server before replaying the next request.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291114" xreflabel=""/>Open requests that are on the replay list may have a transaction number lower than the server&apos;s last committed transaction number. The server processes those open requests immediately. The server then processes replayed requests from all of the clients in transaction number order, starting at the last committed transaction number to ensure that the state is updated on disk in exactly the same manner as it was before the crash. As each replayed request is processed, the last committed transaction is incremented. If the server receives a replay request from a client that is higher than the current last committed transaction, that request is put aside until other clients provide the intervening transactions. In this manner, the server replays requests in the same sequence as they were previously executed on the server until either all clients are out of requests to replay or there is a gap in a sequence.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1288925" xreflabel=""/>30.2.7 Gaps in the Replay Sequence</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291145" xreflabel=""/>In some cases, a gap may occur in the reply sequence. This might be caused by lost replies, where the request was processed and committed to disk but the reply was not received by the client. It can also be caused by clients missing from recovery due to partial network failure or client death.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291146" xreflabel=""/>In the case where all clients have reconnected, but there is a gap in the replay sequence the only possibility is that some requests were processed by the server but the reply was lost. Since the client must still have these requests in its resend list, they are processed after recovery is finished.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1288931" xreflabel=""/>In the case where all clients have not reconnected, it is likely that the failed clients had requests that will no longer be replayed. The VBR feature is used to determine if a request following a transaction gap is safe to be replayed. Each item in the file system (MDS inode or OST object) stores on disk the number of the last transaction in which it was modified. Each reply from the server contains the previous version number of the objects that it affects. During VBR replay, the server matches the previous version numbers in the resend request against the current version number. If the versions match, the request is the next one that affects the object and can be safely replayed. For more information, see <link xl:href="LustreRecovery.html#50438268_80068">Version-based Recovery</link>.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1288935" xreflabel=""/>30.2.8 Lock Recovery</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291167" xreflabel=""/>If all requests were replayed successfully and all clients reconnected, clients then do lock replay locks -- that is, every client sends information about every lock it holds from this server and its state (whenever it was granted or not, what mode, what properties and so on), and then recovery completes successfully. Currently, Lustre does not do lock verification and just trusts clients to present an accurate lock state. This does not impart any security concerns since Lustre 1.x clients are trusted for other information (e.g. user ID) during normal operation also.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1291165" xreflabel=""/>After all of the saved requests and locks have been replayed, the client sends an MDS_GETSTATUS request with last-replay flag set. The reply to that request is held back until all clients have completed replay (sent the same flagged getstatus request), so that clients don&apos;t send non-recovery requests before recovery is complete.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1288940" xreflabel=""/>30.2.9 Request Resend</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1288653" xreflabel=""/>Once all of the previously-shared state has been recovered on the server (the target file system is up-to-date with client cache and the server has recreated locks representing the locks held by the client), the client can resend any requests that did not receive an earlier reply. This processing is done like normal request processing, and, in some cases, the server may do reply reconstruction.</para>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>30.3 <anchor xml:id="dbdoclet.50438268_23736" xreflabel=""/>Reply <anchor xml:id="dbdoclet.50438268_marker-1292176" xreflabel=""/>Reconstruction</title>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1289740" xreflabel=""/>When a reply is dropped, the MDS needs to be able to reconstruct the reply when the original request is re-sent. This must be done without repeating any non-idempotent operations, while preserving the integrity of the locking system. In the event of MDS failover, the information used to reconstruct the reply must be serialized on the disk in transactions that are joined or nested with those operating on the disk.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1289741" xreflabel=""/>30.3.1 Required State</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1289743" xreflabel=""/>For the majority of requests, it is sufficient for the server to store three pieces of data in the last_rcvd file:</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1289808" xreflabel=""/> XID of the request</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1289814" xreflabel=""/> Resulting transno (if any)</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1289821" xreflabel=""/> Result code (req-&gt;rq_status)</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1289749" xreflabel=""/>For open requests, the &quot;disposition&quot; of the open must also be stored.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1289826" xreflabel=""/>30.3.2 Reconstruction of Open Replies</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1289752" xreflabel=""/>An open reply consists of up to three pieces of information (in addition to the contents of the &quot;request log&quot;):</para>
+        <itemizedlist><listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1289840" xreflabel=""/> File handle</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1289874" xreflabel=""/> Lock handle</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+<listitem>
+            <para><anchor xml:id="dbdoclet.50438268_pgfId-1289850" xreflabel=""/> mds_body with information about the file created (for O_CREAT)</para>
+          </listitem>
+<listitem>
+            <para> </para>
+          </listitem>
+</itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1289738" xreflabel=""/>The disposition, status and request data (re-sent intact by the client) are sufficient to determine which type of lock handle was granted, whether an open file handle was created, and which resource should be described in the mds_body.</para>
+        <section remap="h5">
+          <title><anchor xml:id="dbdoclet.50438268_pgfId-1289767" xreflabel=""/>Finding the File Handle</title>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1289769" xreflabel=""/>The file handle can be found in the XID of the request and the list of per-export open file handles. The file handle contains the resource/FID.</para>
+        </section>
+        <section remap="h5">
+          <title><anchor xml:id="dbdoclet.50438268_pgfId-1291192" xreflabel=""/>Finding the Resource/fid</title>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1291193" xreflabel=""/>The file handle contains the resource/fid.</para>
+        </section>
+        <section remap="h5">
+          <title><anchor xml:id="dbdoclet.50438268_pgfId-1289773" xreflabel=""/>Finding the Lock Handle</title>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1289765" xreflabel=""/>The lock handle can be found by walking the list of granted locks for the resource looking for one with the appropriate remote file handle (present in the re-sent request). Verify that the lock has the right mode (determined by performing the disposition/request/status analysis above) and is granted to the proper client.</para>
+        </section>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>30.4 <anchor xml:id="dbdoclet.50438268_80068" xreflabel=""/>Version-based <anchor xml:id="dbdoclet.50438268_marker-1288580" xreflabel=""/>Recovery</title>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287888" xreflabel=""/>The Version-based Recovery (VBR) feature improves Lustre reliability in cases where client requests (RPCs) fail to replay during recovery
+          <footnote><para><anchor xml:id="dbdoclet.50438268_pgfId-1288438" xreflabel=""/>There are two scenarios under which client RPCs are not replayed:   (1) Non-functioning or isolated clients do not reconnect, and they cannot replay their RPCs, causing a gap in the replay sequence. These clients get errors and are evicted.   (2) Functioning clients connect, but they cannot replay some or all of their RPCs that occurred after the gap caused by the non-functioning/isolated clients. These clients get errors (caused by the failed clients). With VBR, these requests have a better chance to replay because the &quot;gaps&quot; are only related to specific files that the missing client(s) changed.</para></footnote>.
+          .</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287894" xreflabel=""/>In pre-VBR versions of Lustre, if the MGS or an OST went down and then recovered, a recovery process was triggered in which clients attempted to replay their requests. Clients were only allowed to replay RPCs in serial order. If a particular client could not replay its requests, then those requests were lost as well as the requests of clients later in the sequence. The &apos;&apos;downstream&apos;&apos; clients never got to replay their requests because of the wait on the earlier clientâ€™s RPCs. Eventually, the recovery period would time out (so the component could accept new requests), leaving some number of clients evicted and their requests and data lost.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287896" xreflabel=""/>With VBR, the recovery mechanism does not result in the loss of clients or their data, because changes in inode versions are tracked, and more clients are able to reintegrate into the cluster. With VBR, inode tracking looks like this:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1288169" xreflabel=""/> Each inode<anchor xml:id="fnote2" xreflabel=""/><link linkend="dbdoclet.50438268_pgfId-1288489"><superscript>[2]</superscript></link> stores a version, that is, the number of the last transaction (transno) in which the inode was changed.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1288212" xreflabel=""/> When an inode is about to be changed, a pre-operation version of the inode is saved in the clientâ€™s data.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1288241" xreflabel=""/> The client keeps the pre-operation inode version and the post-operation version (transaction number) for replay, and sends them in the event of a server failure.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1288505" xreflabel=""/> If the pre-operation version matches, then the request is replayed. The post-operation version is assigned on all inodes modified in the request.</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438268_pgfId-1288473" xreflabel=""/>An RPC can contain up to four pre-operation versions, because several inodes can be involved in an operation. In the case of a &apos;&apos;rename&apos;&apos; operation, four different inodes can be modified.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287777" xreflabel=""/>During normal operation, the server:</para>
+      <itemizedlist><listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1287779" xreflabel=""/> Updates the versions of all inodes involved in a given operation</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+<listitem>
+          <para><anchor xml:id="dbdoclet.50438268_pgfId-1287952" xreflabel=""/> Returns the old and new inode versions to the client with the reply</para>
+        </listitem>
+<listitem>
+          <para> </para>
+        </listitem>
+</itemizedlist>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287979" xreflabel=""/>When the recovery mechanism is underway, VBR follows these steps:</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287980" xreflabel=""/>1. VBR only allows clients to replay transactions if the affected inodes have the same version as during the original execution of the transactions, even if there is gap in transactions due to a missed client.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1287992" xreflabel=""/> 2. The server attempts to execute every transaction that the client offers, even if it encounters a re-integration failure.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1288004" xreflabel=""/> 3. When the replay is complete, the client and server check if a replay failed on any transaction because of inode version mismatch. If the versions match, the client gets a successful re-integration message. If the versions do not match, then the client is evicted.</para>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1288023" xreflabel=""/>VBR recovery is fully transparent to users. It may lead to slightly longer recovery times if the cluster loses several clients during server recovery.</para>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1287803" xreflabel=""/>30.4.1 <anchor xml:id="dbdoclet.50438268_marker-1288583" xreflabel=""/>VBR Messages</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1287805" xreflabel=""/>The VBR feature is built into the Lustre recovery functionality. It cannot be disabled. These are some VBR messages that may be displayed:</para>
+        <screen><anchor xml:id="dbdoclet.50438268_pgfId-1287821" xreflabel=""/>DEBUG_REQ(D_WARNING, req, &quot;Version mismatch during replay\n&quot;);
+</screen>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1287823" xreflabel=""/>This message indicates why the client was evicted. No action is needed.</para>
+        <screen><anchor xml:id="dbdoclet.50438268_pgfId-1287825" xreflabel=""/>CWARN(&quot;%s: version recovery fails, reconnecting\n&quot;);
+</screen>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1287827" xreflabel=""/>This message indicates why the recovery failed. No action is needed.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1287839" xreflabel=""/>30.4.2 Tips for <anchor xml:id="dbdoclet.50438268_marker-1288584" xreflabel=""/>Using VBR</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1287767" xreflabel=""/>VBR will be successful for clients which do not share data with other client. Therefore, the strategy for reliable use of VBR is to store a clientâ€™s data in its own directory, where possible. VBR can recover these clients, even if other clients are lost.</para>
+      </section>
+    </section>
+    <section remap="h2">
+      <title>30.5 <anchor xml:id="dbdoclet.50438268_83826" xreflabel=""/>Commit on <anchor xml:id="dbdoclet.50438268_marker-1292182" xreflabel=""/>Share</title>
+      <para><anchor xml:id="dbdoclet.50438268_pgfId-1292074" xreflabel=""/>The commit-on-share (COS) feature makes Lustre recovery more reliable by preventing missing clients from causing cascading evictions of other clients. With COS enabled, if some Lustre clients miss the recovery window after a reboot or a server failure, the remaining clients are not evicted.</para>
+      <informaltable frame="none">
+        <tgroup cols="1">
+          <colspec colname="c1" colwidth="100*"/>
+          <tbody>
+            <row>
+              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438268_pgfId-1292117" xreflabel=""/>The commit-on-share feature is enabled, by default.</para></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1292075" xreflabel=""/>30.5.1 Working with Commit on Share</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1292076" xreflabel=""/>To illustrate how COS works, let&apos;s first look at the old recovery scenario. After a service restart, the MDS would boot and enter recovery mode. Clients began reconnecting and replaying their uncommitted transactions. Clients could replay transactions independently as long as their transactions did not depend on each other (one client&apos;s transactions did not depend on a different client&apos;s transactions). The MDS is able to determine whether one transaction is dependent on another transaction via the <link xl:href="LustreRecovery.html#50438268_80068">Version-based Recovery</link> feature.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1292080" xreflabel=""/>If there was a dependency between client transactions (for example, creating and deleting the same file), and one or more clients did not reconnect in time, then some clients may have been evicted because their transactions depended on transactions from the missing clients. Evictions of those clients caused more clients to be evicted and so on, resulting in &quot;cascading&quot; client evictions.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1292081" xreflabel=""/>COS addresses the problem of cascading evictions by eliminating dependent transactions between clients. It ensures that one transaction is committed to disk if another client performs a transaction dependent on the first one. With no dependent, uncommitted transactions to apply, the clients replay their requests independently without the risk of being evicted.</para>
+      </section>
+      <section remap="h3">
+        <title><anchor xml:id="dbdoclet.50438268_pgfId-1292099" xreflabel=""/>30.5.2 Tuning Commit On Share</title>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1292100" xreflabel=""/>Commit on Share can be enabled or disabled using the mdt.commit_on_sharing tunable (0/1). This tunable can be set when the MDS is created (mkfs.lustre) or when the Lustre file system is active, using the lctl set/get_param or lctl conf_param commands.</para>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1292101" xreflabel=""/>To set a default value for COS (disable/enable) when the file system is created, use:</para>
+        <screen><anchor xml:id="dbdoclet.50438268_pgfId-1292102" xreflabel=""/>--param mdt.commit_on_sharing=0/1
+</screen>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1292103" xreflabel=""/>To disable or enable COS when the file system is running, use:</para>
+        <screen><anchor xml:id="dbdoclet.50438268_pgfId-1292104" xreflabel=""/>lctl set_param mdt.*.commit_on_sharing=0/1
+</screen>
+        <informaltable frame="none">
+          <tgroup cols="1">
+            <colspec colname="c1" colwidth="100*"/>
+            <tbody>
+              <row>
+                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438268_pgfId-1292105" xreflabel=""/>Enabling COS may cause the MDS to do a large number of synchronous disk operations, hurting performance. Placing the ldiskfs journal on a low-latency external device may improve file system performance.</para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><anchor xml:id="dbdoclet.50438268_pgfId-1289916" xreflabel=""/> </para>
+        <!--para><emphasis role="bold"><superscript>1<link linkend="fnote1">(Footnote)</link><anchor xml:id="dbdoclet.50438268_pgfId-1288438" xreflabel=""/>There are two scenarios under which client RPCs are not replayed:   (1) Non-functioning or isolated clients do not reconnect, and they cannot replay their RPCs, causing a gap in the replay sequence. These clients get errors and are evicted.   (2) Functioning clients connect, but they cannot replay some or all of their RPCs that occurred after the gap caused by the non-functioning/isolated clients. These clients get errors (caused by the failed clients). With VBR, these requests have a better chance to replay because the &quot;gaps&quot; are only related to specific files that the missing client(s) changed.</superscript></emphasis></para-->
+        <para><emphasis role="bold"><superscript>2<link linkend="fnote2">(Footnote)</link><anchor xml:id="dbdoclet.50438268_pgfId-1288489" xreflabel=""/>Usually, there are two inodes, a parent and a child.</superscript></emphasis></para>
+        <!--
+Begin SiteCatalyst code version: G.5.
+-->
+        <!--
+End SiteCatalyst code version: G.5.
+-->
+          <informaltable frame="none">
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="33*"/>
+            <colspec colname="c2" colwidth="33*"/>
+            <colspec colname="c3" colwidth="33*"/>
+            
+            
+            
+            <tbody>
+              <row>
+                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+                <entry align="right"><para>821-2076-10</para></entry>
+                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="InstallingLustrefrSourceCode.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="LustreProc.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                        </imageobject>
+<imageobject role="fo">
+                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                        </imageobject>
+</inlinemediaobject></link></para></entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <para><link xl:href=""/></para>
+        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+      </section>
+    </section>
+  </section>
+</article>

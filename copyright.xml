@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+  <info>
+    <title>Copyright</title>
+  </info>
+  <informaltable frame="none">
+    <tgroup cols="2">
+      <colspec colname="c1" colwidth="50*"/>
+      <colspec colname="c2" colwidth="50*"/>
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><inlinemediaobject><imageobject role="html">
+                  <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev02.gif" scalefit="1"/>
+                </imageobject>
+<imageobject role="fo">
+                  <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev02.gif" scalefit="1" width="100%"/>
+                </imageobject>
+</inlinemediaobject><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-998558" xreflabel=""/>Copyright © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-998559" xreflabel=""/> </para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999159" xreflabel=""/>This software and related documentation are provided under a license agreement containing restrictions on use and disclosure and are protected by intellectual property laws. Except as expressly permitted in your license agreement or allowed by law, you may not use, copy, reproduce, translate, broadcast, modify, license, transmit, distribute, exhibit, perform, publish, or display any part, in any form, or by any means. Reverse engineering, disassembly, or decompilation of this software, unless required by law for interoperability, is prohibited.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999160" xreflabel=""/>The information contained herein is subject to change without notice and is not warranted to be error-free. If you find any errors, please report them to us in writing.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999161" xreflabel=""/>If this is software or related software documentation that is delivered to the U.S. Government or anyone licensing it on behalf of the U.S. Government, the following notice is applicable:</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999162" xreflabel=""/>U.S. GOVERNMENT RIGHTS. Programs, software, databases, and related documentation and technical data delivered to U.S. Government customers are &quot;commercial computer software&quot; or &quot;commercial technical data&quot; pursuant to the applicable Federal Acquisition Regulation and agency-specific supplemental regulations. As such, the use, duplication, disclosure, modification, and adaptation shall be subject to the restrictions and license terms set forth in the applicable Government contract, and, to the extent applicable by the terms of the Government contract, the additional rights set forth in FAR 52.227-19, Commercial Computer Software License (December 2007). Oracle America, Inc., 500 Oracle Parkway, Redwood City, CA 94065.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999163" xreflabel=""/>This software or hardware is developed for general use in a variety of information management applications. It is not developed or intended for use in any inherently dangerous applications, including applications which may create a risk of personal injury. If you use this software or hardware in dangerous applications, then you shall be responsible to take all appropriate fail-safe, backup, redundancy, and other measures to ensure its safe use. Oracle Corporation and its affiliates disclaim any liability for any damages caused by use of this software or hardware in dangerous applications.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999164" xreflabel=""/>Oracle and Java are registered trademarks of Oracle and/or its affiliates. Other names may be trademarks of their respective owners.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999165" xreflabel=""/>AMD, Opteron, the AMD logo, and the AMD Opteron logo are trademarks or registered trademarks of Advanced Micro Devices. Intel and Intel Xeon are trademarks or registered trademarks of Intel Corporation. All SPARC trademarks are used under license and are trademarks or registered trademarks of SPARC International, Inc. UNIX is a registered trademark licensed through X/Open Company, Ltd.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999166" xreflabel=""/>This software or hardware and documentation may provide access to or information on content, products, and services from third parties. Oracle Corporation and its affiliates are not responsible for and expressly disclaim all warranties of any kind with respect to third-party content, products, and services. Oracle Corporation and its affiliates will not be responsible for any loss, costs, or damages incurred due to your access to or use of third-party content, products, or services.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999171" xreflabel=""/>Copyright © 2011, Oracle et/ou ses affiliÃ©s. Tous droits rÃ©servÃ©s.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999172" xreflabel=""/>Ce logiciel et la documentation qui lâ€™accompagne sont protÃ©gÃ©s par les lois sur la propriÃ©tÃ© intellectuelle. Ils sont concÃ©dÃ©s sous licence et soumis Ã  des restrictions dâ€™utilisation et de divulgation. Sauf disposition de votre contrat de licence ou de la loi, vous ne pouvez pas copier, reproduire, traduire, diffuser, modifier, breveter, transmettre, distribuer, exposer, exÃ©cuter, publier ou afficher le logiciel, mÃªme partiellement, sous quelque forme et par quelque procÃ©dÃ© que ce soit. Par ailleurs, il est interdit de procÃ©der Ã  toute ingÃ©nierie inverse du logiciel, de le dÃ©sassembler ou de le dÃ©compiler, exceptÃ© Ã  des fins dâ€™interopÃ©rabilitÃ© avec des logiciels tiers ou tel que prescrit par la loi.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999173" xreflabel=""/>Les informations fournies dans ce document sont susceptibles de modification sans prÃ©avis. Par ailleurs, Oracle Corporation ne garantit pas quâ€™elles soient exemptes dâ€™erreurs et vous invite, le cas Ã©chÃ©ant, Ã  lui en faire part par Ã©crit.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999174" xreflabel=""/>Si ce logiciel, ou la documentation qui lâ€™accompagne, est concÃ©dÃ© sous licence au Gouvernement des Etats-Unis, ou Ã  toute entitÃ© qui dÃ©livre la licence de ce logiciel ou lâ€™utilise pour le compte du Gouvernement des Etats-Unis, la notice suivante sâ€™applique :</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999175" xreflabel=""/>U.S. GOVERNMENT RIGHTS. Programs, software, databases, and related documentation and technical data delivered to U.S. Government customers are &quot;commercial computer software&quot; or &quot;commercial technical data&quot; pursuant to the applicable Federal Acquisition Regulation and agency-specific supplemental regulations. As such, the use, duplication, disclosure, modification, and adaptation shall be subject to the restrictions and license terms set forth in the applicable Government contract, and, to the extent applicable by the terms of the Government contract, the additional rights set forth in FAR 52.227-19, Commercial Computer Software License (December 2007). Oracle America, Inc., 500 Oracle Parkway, Redwood City, CA 94065.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999176" xreflabel=""/>Ce logiciel ou matÃ©riel a Ã©tÃ© dÃ©veloppÃ© pour un usage gÃ©nÃ©ral dans le cadre dâ€™applications de gestion des informations. Ce logiciel ou matÃ©riel nâ€™est pas conÃ§u ni nâ€™est destinÃ© Ã  Ãªtre utilisÃ© dans des applications Ã  risque, notamment dans des applications pouvant causer des dommages corporels. Si vous utilisez ce logiciel ou matÃ©riel dans le cadre dâ€™applications dangereuses, il est de votre responsabilitÃ© de prendre toutes les mesures de secours, de sauvegarde, de redondance et autres mesures nÃ©cessaires Ã  son utilisation dans des conditions optimales de sÃ©curitÃ©. Oracle Corporation et ses affiliÃ©s dÃ©clinent toute responsabilitÃ© quant aux dommages causÃ©s par lâ€™utilisation de ce logiciel ou matÃ©riel pour ce type dâ€™applications.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999177" xreflabel=""/>Oracle et Java sont des marques dÃ©posÃ©es dâ€™Oracle Corporation et/ou de ses affiliÃ©s.Tout autre nom mentionnÃ© peut correspondre Ã  des marques appartenant Ã  dâ€™autres propriÃ©taires quâ€™Oracle.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-999178" xreflabel=""/>AMD, Opteron, le logo AMD et le logo AMD Opteron sont des marques ou des marques dÃ©posÃ©es dâ€™Advanced Micro Devices. Intel et Intel Xeon sont des marques ou des marques dÃ©posÃ©es dâ€™Intel Corporation. Toutes les marques SPARC sont utilisÃ©es sous licence et sont des marques ou des marques dÃ©posÃ©es de SPARC International, Inc. UNIX est une marque dÃ©posÃ©e concÃ©dÃ©e sous licence par X/Open Company, Ltd.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-998880" xreflabel=""/>Ce logiciel ou matÃ©riel et la documentation qui lâ€™accompagne peuvent fournir des informations ou des liens donnant accÃ¨s Ã  des contenus, des produits et des services Ã©manant de tiers. Oracle Corporation et ses affiliÃ©s dÃ©clinent toute responsabilitÃ© ou garantie expresse quant aux contenus, produits ou services Ã©manant de tiers. En aucun cas, Oracle Corporation et ses affiliÃ©s ne sauraient Ãªtre tenus pour responsables des pertes subies, des coÃ»ts occasionnÃ©s ou des dommages causÃ©s par lâ€™accÃ¨s Ã  des contenus, produits ou services tiers, ou Ã  leur utilisation.</para>
+  <para><anchor xml:id="dbdoclet.50438245_pgfId-998576" xreflabel=""/>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit <emphasis><link xl:href="http://creativecommons.org/licenses/by-sa/3.0/us">Creative Commons Attribution-Share Alike 3.0 United States</link></emphasis> or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>
+  <!--
+Begin SiteCatalyst code version: G.5.
+-->
+  <!--
+End SiteCatalyst code version: G.5.
+-->
+    <informaltable frame="none">
+    <tgroup cols="3">
+      <colspec colname="c1" colwidth="33*"/>
+      <colspec colname="c2" colwidth="33*"/>
+      <colspec colname="c3" colwidth="33*"/>
+      
+      
+      
+      <tbody>
+        <row>
+          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
+          <entry align="right"><para>821-2076-10</para></entry>
+          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><inlinemediaobject><imageobject role="html">
+                  <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev02.gif" scalefit="1"/>
+                </imageobject>
+<imageobject role="fo">
+                  <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev02.gif" scalefit="1" width="100%"/>
+                </imageobject>
+</inlinemediaobject><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
+                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
+                  </imageobject>
+<imageobject role="fo">
+                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
+                  </imageobject>
+</inlinemediaobject></link></para></entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </informaltable>
+  <para><link xl:href=""/></para>
+</article>
