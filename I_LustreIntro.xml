@@ -2,67 +2,6 @@
 <part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
     <title>Introducing Lustre</title>
     <partintro>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="Revision.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="UnderstandingLustre.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438249_pgfId-369082" xreflabel=""/>P A R T  I</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438249_81629" xreflabel=""/>Introducing Lustre</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438249_pgfId-369630" xreflabel=""/>Part I provides background information to help you understand the Lustre architecture and how the major components fit together. You will find information in this section about:</para>
   <para><anchor xml:id="dbdoclet.50438249_pgfId-369631" xreflabel=""/><link xl:href="UnderstandingLustre.html#50438250_60900">Understanding Lustre</link></para>
   <para><anchor xml:id="dbdoclet.50438249_pgfId-369632" xreflabel=""/><link xl:href="UnderstandingLustreNetworking.html#50438191_40026">Understanding Lustre Networking (LNET)</link></para>
