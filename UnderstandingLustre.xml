@@ -1,69 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
     <title>Understanding Lustre</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="I_LustreIntro.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="UnderstandingLustreNetworking.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438250_pgfId-874" xreflabel=""/>C H A P T E R  1</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438250_pgfId-1294039" xreflabel=""/><anchor xml:id="dbdoclet.50438250_60900" xreflabel=""/>Understanding Lustre</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438250_pgfId-1294042" xreflabel=""/>This chapter describes the Lustre architecture and features of Lustre. It includes the following sections:</para>
   <itemizedlist><listitem>
       <para><anchor xml:id="dbdoclet.50438250_pgfId-1294066" xreflabel=""/><link xl:href="UnderstandingLustre.html#50438250_92658">What Lustre Is (and What It Isnâ€™t)</link></para>
@@ -453,56 +392,7 @@
         <para><anchor xml:id="dbdoclet.50438250_pgfId-1297211" xreflabel=""/>The maximum file size is not limited by the size of a single target. Lustre can stripe files across multiple objects (up to 160), and each object can be up to 2 TB in size. This leads to a maximum file size of 320 TB. (Note that Lustre itself can support files up to 2^64 bytes depending on the backing storage used by OSTs.)</para>
         <para><anchor xml:id="dbdoclet.50438250_pgfId-1293994" xreflabel=""/>Athough a single file can only be striped over 160 objects, Lustre file systems can have thousands of OSTs. The I/O bandwidth to access a single file is the aggregated I/O bandwidth to the objects in a file, which can be as much as a bandwidth of up to 160 servers. On systems with more than 160 OSTs, clients can do I/O using multiple files to utilize the full file system bandwidth.</para>
         <para><anchor xml:id="dbdoclet.50438250_pgfId-1293996" xreflabel=""/>For more information about striping, see <link xl:href="ManagingStripingFreeSpace.html#50438209_21279">Chapter 18</link>: <link xl:href="ManagingStripingFreeSpace.html#50438209_66186">Managing File Striping and Free Space</link>.</para>
-        <!--
-Begin SiteCatalyst code version: G.5.
--->
-        <!--
-End SiteCatalyst code version: G.5.
--->
-          <informaltable frame="none">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            
-            
-            
-            <tbody>
-              <row>
-                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-                <entry align="right"><para>821-2076-10</para></entry>
-                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="I_LustreIntro.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="UnderstandingLustreNetworking.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link></para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><link xl:href=""/></para>
-        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
-      </section>
+    </section>
     </section>
   </section>
-</article>
+</chapter>
