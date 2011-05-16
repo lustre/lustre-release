@@ -3,67 +3,6 @@
   <info>
     <title>Benchmarking Lustre Performance (Lustre I/O Kit)</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="LNETSelfTest.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="LustreTuning.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438212_pgfId-874" xreflabel=""/>C H A P T E R  24<anchor xml:id="dbdoclet.50438212_37215" xreflabel=""/></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438212_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438212_66186" xreflabel=""/>Benchmarking Lustre Performance (Lustre I/O Kit)</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438212_pgfId-1289895" xreflabel=""/>This chapter describes the Lustre I/O kit, a collection of I/O benchmarking tools for a Lustre cluster, and PIOS, a parallel I/O simulator for Linux and Solaris. It includes:</para>
   <itemizedlist><listitem>
       <para><anchor xml:id="dbdoclet.50438212_pgfId-1289899" xreflabel=""/><link xl:href="BenchmarkingTests.html#50438212_44437">Using Lustre I/O Kit Tools</link></para>
@@ -770,55 +709,6 @@ r-survey
         <screen><anchor xml:id="dbdoclet.50438212_pgfId-1302059" xreflabel=""/>sh gather_stats_everywhere.sh config.sh analyse log_tarball.tgz csv
 </screen>
         <para><anchor xml:id="dbdoclet.50438212_pgfId-1302020" xreflabel=""/> </para>
-        <!--
-Begin SiteCatalyst code version: G.5.
--->
-        <!--
-End SiteCatalyst code version: G.5.
--->
-          <informaltable frame="none">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            
-            
-            
-            <tbody>
-              <row>
-                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-                <entry align="right"><para>821-2076-10</para></entry>
-                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="LNETSelfTest.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="LustreTuning.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link></para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><link xl:href=""/></para>
-        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
       </section>
     </section>
   </section>
