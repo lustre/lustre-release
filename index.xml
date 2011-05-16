@@ -16,9 +16,7 @@
   <xi:include href="III_LustreAdministration.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
   <xi:include href="IV_LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="LNETSelfTest.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="BenchmarkingTests.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-      <xi:include href="LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
   <xi:include href="V_LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
       <xi:include href="LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
       <xi:include href="TroubleShootingRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
