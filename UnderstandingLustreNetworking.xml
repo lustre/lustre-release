@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
     <title>Understanding Lustre Networking (LNET)</title>
   </info>
@@ -107,4 +107,4 @@
 </itemizedlist>
     </section>
   </section>
-</article>
+</chapter>
