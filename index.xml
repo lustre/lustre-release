@@ -4,13 +4,8 @@
    
   <title><anchor xml:id="dbdoclet.50438145_pgfId-108319" xreflabel=""/>Lustre 2.x Filesystem</title>
     <subtitle>Operations Manual</subtitle>
-  <copyright>
-      <year>2011</year>
-      <holder>Oracle and/or its affiliates.</holder>
-      <holder>Whamcloud, Inc.</holder>
-  </copyright>
+    <xi:include href="copyright.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   </info>
-  <xi:include href="copyright.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
   <xi:include href="I_LustreIntro.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
