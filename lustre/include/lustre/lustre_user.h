@@ -797,8 +797,6 @@ static inline char *hai_dump_data_field(struct hsm_action_item *hai,
         int i, sz, data_len;
         char *ptr;
 
-        LASSERT(len > 0);
-
         ptr = buffer;
         sz = len;
         data_len = hai->hai_len - sizeof(*hai);
@@ -857,7 +855,6 @@ static inline int hal_size(struct hsm_action_list *hal)
         int i, sz;
         struct hsm_action_item *hai;
 
-        LASSERT(hal->hal_version == HAL_VERSION);
         sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname));
         hai = hai_zero(hal);
         for (i = 0 ; i < hal->hal_count ; i++) {
