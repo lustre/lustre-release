@@ -1,69 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
     <title>Managing Lustre Networking (LNET)</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="LustreMaintenance.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="UpgradingLustre.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438203_pgfId-874" xreflabel=""/>C H A P T E R  15</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438203_pgfId-5529" xreflabel=""/><anchor xml:id="dbdoclet.50438203_73376" xreflabel=""/>Managing Lustre Networking (LNET)</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438203_pgfId-999824" xreflabel=""/>This chapter describes some tools for managing Lustre Networking (LNET) and includes the following sections:</para>
   <itemizedlist><listitem>
       <para><anchor xml:id="dbdoclet.50438203_pgfId-1286381" xreflabel=""/><link xl:href="ManagingLNET.html#50438203_51732">Updating the Health Status of a Peer or Router</link></para>
@@ -341,58 +280,7 @@ ents&quot;
 #odd clients&quot;
 </screen>
         <para><anchor xml:id="dbdoclet.50438203_pgfId-1289959" xreflabel=""/>This configuration includes two additional proxy o2ib networks to work around Lustre&apos;s simplistic NID selection algorithm. It connects &quot;even&quot; clients to &quot;even&quot; servers with o2ib0 on rail0, and &quot;odd&quot; servers with o2ib3 on rail1. Similarly, it connects &quot;odd&quot; clients to &quot;odd&quot; servers with o2ib1 on rail0, and &quot;even&quot; servers with o2ib2 on rail1.</para>
-        <para><anchor xml:id="dbdoclet.50438203_pgfId-1289960" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438203_pgfId-1288341" xreflabel=""/> </para>
-        <!--
-Begin SiteCatalyst code version: G.5.
--->
-        <!--
-End SiteCatalyst code version: G.5.
--->
-          <informaltable frame="none">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            
-            
-            
-            <tbody>
-              <row>
-                <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-                <entry align="right"><para>821-2076-10</para></entry>
-                <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="LustreMaintenance.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="UpgradingLustre.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                          <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></link></para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><link xl:href=""/></para>
-        <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
       </section>
     </section>
   </section>
-</article>
+</chapter>
