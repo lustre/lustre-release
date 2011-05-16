@@ -1,69 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
     <title>Configuring Lustre Networking (LNET)</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="InstallingLustre.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ConfiguringLustre.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438216_pgfId-1300394" xreflabel=""/>C H A P T E R  9<anchor xml:id="dbdoclet.50438216_64580" xreflabel=""/></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438216_pgfId-1304687" xreflabel=""/><anchor xml:id="dbdoclet.50438216_29256" xreflabel=""/>Configuring Lustre Networking (LNET)</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
   <para><anchor xml:id="dbdoclet.50438216_pgfId-1304688" xreflabel=""/>This chapter describes how to configure Lustre Networking (LNET). It includes the following sections:</para>
   <itemizedlist><listitem>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304692" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_33148">Overview of LNET Module Parameters</link></para>
@@ -449,4 +388,4 @@
       </section>
     </section>
   </section>
-</article>
+</chapter>
