@@ -387,7 +387,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         struct obdo           *oa;
         struct lov_stripe_md  *lsm = NULL;
         const void            *eadata = spec->u.sp_ea.eadata;
-        __u32                  create_flags = spec->sp_cr_flags;
+        __u64                  create_flags = spec->sp_cr_flags;
         struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
         int                    rc = 0;
         ENTRY;

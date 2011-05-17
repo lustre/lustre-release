@@ -126,7 +126,8 @@ enum ma_valid {
         MA_LOV_DEF   = (1 << 6),
 /* (Layout lock will used #7 here) */
         MA_HSM       = (1 << 8),
-        MA_SOM       = (1 << 9)
+        MA_SOM       = (1 << 9),
+        MA_PFID      = (1 << 10)
 };
 
 typedef enum {
@@ -177,6 +178,7 @@ struct md_attr {
         struct lustre_capa     *ma_capa;
         struct md_hsm           ma_hsm;
         struct md_som_data     *ma_som;
+        struct lu_fid           ma_pfid;
 };
 
 /** Additional parameters for create */

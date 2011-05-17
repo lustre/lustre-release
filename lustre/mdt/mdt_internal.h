@@ -185,7 +185,9 @@ struct mdt_object {
         int                     mot_ioepoch_count;
         int                     mot_writecount;
         /* Lock to protect object's IO epoch. */
-        cfs_semaphore_t        mot_ioepoch_sem;
+        cfs_semaphore_t         mot_ioepoch_sem;
+        /* Lock to protect create_data */
+        cfs_semaphore_t         mot_lov_sem;
 };
 
 enum mdt_object_flags {
@@ -204,6 +206,8 @@ enum mdt_object_flags {
         MOF_SOM_RECOV   = (1 << 1),
         /** File has been just created. */
         MOF_SOM_CREATED = (1 << 2),
+        /** lov object has been created. */
+        MOF_LOV_CREATED = (1 << 3),
 };
 
 struct mdt_lock_handle {

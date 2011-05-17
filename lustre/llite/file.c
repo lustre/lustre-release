@@ -346,6 +346,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         const int len = file->f_dentry->d_name.len;
         struct md_op_data *op_data;
         struct ptlrpc_request *req;
+        __u32 opc = LUSTRE_OPC_ANY;
         int rc;
         ENTRY;
 
@@ -361,12 +362,15 @@ static int ll_intent_file_open(struct file *file, void *lmm,
          * makes a good candidate for using OPEN lock */
         /* If lmmsize & lmm are not 0, we are just setting stripe info
          * parameters. No need for the open lock */
-        if (!lmm && !lmmsize)
+        if (lmm == NULL && lmmsize == 0) {
                 itp->it_flags |= MDS_OPEN_LOCK;
+                if (itp->it_flags & FMODE_WRITE)
+                        opc = LUSTRE_OPC_CREATE;
+        }
 
         op_data  = ll_prep_md_op_data(NULL, parent->d_inode,
                                       file->f_dentry->d_inode, name, len,
-                                      O_RDWR, LUSTRE_OPC_ANY, NULL);
+                                      O_RDWR, opc, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
@@ -1460,12 +1464,13 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        int rc = -ENODATA;
+        ENTRY;
 
-        if (!lsm)
-                RETURN(-ENODATA);
-
-        return obd_iocontrol(LL_IOC_LOV_GETSTRIPE, ll_i2dtexp(inode), 0, lsm,
-                            (void *)arg);
+        if (lsm != NULL)
+                rc = obd_iocontrol(LL_IOC_LOV_GETSTRIPE, ll_i2dtexp(inode), 0,
+                                   lsm, (void *)arg);
+        RETURN(rc);
 }
 
 int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)

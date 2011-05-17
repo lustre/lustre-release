@@ -107,8 +107,8 @@ static int mdt_create_data(struct mdt_thread_info *info,
                            struct mdt_object *p, struct mdt_object *o)
 {
         struct md_op_spec     *spec = &info->mti_spec;
-        struct md_attr        *ma = &info->mti_attr;
-        int rc;
+        struct md_attr        *ma   = &info->mti_attr;
+        int                    rc   = 0;
         ENTRY;
 
         if (!md_should_create(spec->sp_cr_flags))
@@ -116,9 +116,15 @@ static int mdt_create_data(struct mdt_thread_info *info,
 
         ma->ma_need = MA_INODE | MA_LOV;
         ma->ma_valid = 0;
-        rc = mdo_create_data(info->mti_env,
-                             p ? mdt_object_child(p) : NULL,
-                             mdt_object_child(o), spec, ma);
+        cfs_down(&o->mot_lov_sem);
+        if (!(o->mot_flags & MOF_LOV_CREATED)) {
+                rc = mdo_create_data(info->mti_env,
+                                     p ? mdt_object_child(p) : NULL,
+                                     mdt_object_child(o), spec, ma);
+                if (rc == 0 && ma->ma_valid & MA_LOV)
+                        o->mot_flags |= MOF_LOV_CREATED;
+        }
+        cfs_up(&o->mot_lov_sem);
         RETURN(rc);
 }
 
@@ -551,10 +557,8 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
 
         ENTRY;
         /* transaction has occurred already */
-        if (lustre_msg_get_transno(req->rq_repmsg) != 0) {
-                EXIT;
-                return;
-        }
+        if (lustre_msg_get_transno(req->rq_repmsg) != 0)
+                RETURN_EXIT;
 
         cfs_spin_lock(&mdt->mdt_lut.lut_translock);
         if (info->mti_transno == 0) {
@@ -930,12 +934,11 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                         rc = PTR_ERR(parent);
                         LCONSOLE_WARN("Parent "DFID" lookup error %d."
                                       " Evicting client %s with export %s.\n",
-                                      PFID(mdt_object_fid(parent)), rc,
+                                      PFID(rr->rr_fid1), rc,
                                       obd_uuid2str(&exp->exp_client_uuid),
                                       obd_export_nid2str(exp));
                         mdt_export_evict(exp);
-                        EXIT;
-                        return;
+                        RETURN_EXIT;
                 }
                 child = mdt_object_find(env, mdt, rr->rr_fid2);
                 if (IS_ERR(child)) {
@@ -947,8 +950,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                                       obd_export_nid2str(exp));
                         mdt_object_put(env, parent);
                         mdt_export_evict(exp);
-                        EXIT;
-                        return;
+                        RETURN_EXIT;
                 }
                 rc = mdt_object_exists(child);
                 if (rc > 0) {
@@ -1026,19 +1028,37 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         RETURN(rc);
 }
 
-static int mdt_open_anon_by_fid(struct mdt_thread_info* info,
+static int mdt_open_anon_by_fid(struct mdt_thread_info *info,
                                 struct ldlm_reply *rep, 
                                 struct mdt_lock_handle *lhc)
 {
+        const struct lu_env     *env   = info->mti_env;
+        struct mdt_device       *mdt   = info->mti_mdt;
         __u32                    flags = info->mti_spec.sp_cr_flags;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct md_attr          *ma = &info->mti_attr;
+        struct mdt_reint_record *rr    = &info->mti_rr;
+        struct md_attr          *ma    = &info->mti_attr;
+        struct mdt_object       *parent= NULL;
         struct mdt_object       *o;
         int                      rc;
         ldlm_mode_t              lm;
         ENTRY;
 
-        o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
+        if (md_should_create(flags)) {
+                if (!lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
+                        parent = mdt_object_find(env, mdt, rr->rr_fid1);
+                        if (IS_ERR(parent)) {
+                                CDEBUG(D_INODE, "Fail to find parent "DFID
+                                       " for anonymous created %ld, try to"
+                                       " use server-side parent.\n",
+                                       PFID(rr->rr_fid1), PTR_ERR(parent));
+                                parent = NULL;
+                        }
+                }
+                if (parent == NULL)
+                        ma->ma_need |= MA_PFID;
+        }
+
+        o = mdt_object_find(env, mdt, rr->rr_fid2);
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
@@ -1051,7 +1071,6 @@ static int mdt_open_anon_by_fid(struct mdt_thread_info* info,
                 CERROR("NFS remote open shouldn't happen.\n");
                 GOTO(out, rc);
         }
-
         mdt_set_disposition(info, rep, (DISP_IT_EXECD |
                                         DISP_LOOKUP_EXECD |
                                         DISP_LOOKUP_POS));
@@ -1071,20 +1090,33 @@ static int mdt_open_anon_by_fid(struct mdt_thread_info* info,
         if (rc)
                 GOTO(out, rc);
 
-        rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma);
+        rc = mo_attr_get(env, mdt_object_child(o), ma);
         if (rc)
                 GOTO(out, rc);
 
+        if (ma->ma_valid & MA_PFID) {
+                parent = mdt_object_find(env, mdt, &ma->ma_pfid);
+                if (IS_ERR(parent)) {
+                        CDEBUG(D_INODE, "Fail to find parent "DFID
+                               " for anonymous created %ld, try to"
+                               " use system default.\n",
+                               PFID(&ma->ma_pfid), PTR_ERR(parent));
+                        parent = NULL;
+                }
+        }
+
         if (flags & MDS_OPEN_LOCK)
                 mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
-        rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
+        rc = mdt_finish_open(info, parent, o, flags, 0, rep);
 
         if (!(flags & MDS_OPEN_LOCK) || rc)
                 mdt_object_unlock(info, o, lhc, 1);
 
         GOTO(out, rc);
 out:
-        mdt_object_put(info->mti_env, o);
+        mdt_object_put(env, o);
+        if (parent != NULL)
+                mdt_object_put(env, parent);
         return rc;
 }
 

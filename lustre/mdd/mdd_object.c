@@ -638,6 +638,34 @@ static int __mdd_lmm_get(const struct lu_env *env,
         RETURN(rc);
 }
 
+/* get the first parent fid from link EA */
+static int mdd_pfid_get(const struct lu_env *env,
+                        struct mdd_object *mdd_obj, struct md_attr *ma)
+{
+        struct lu_buf *buf;
+        struct link_ea_header *leh;
+        struct link_ea_entry *lee;
+        struct lu_fid *pfid = &ma->ma_pfid;
+        ENTRY;
+
+        if (ma->ma_valid & MA_PFID)
+                RETURN(0);
+
+        buf = mdd_links_get(env, mdd_obj);
+        if (IS_ERR(buf))
+                RETURN(PTR_ERR(buf));
+
+        leh = buf->lb_buf;
+        lee = (struct link_ea_entry *)(leh + 1);
+        memcpy(pfid, &lee->lee_parent_fid, sizeof(*pfid));
+        fid_be_to_cpu(pfid, pfid);
+        ma->ma_valid |= MA_PFID;
+        if (buf->lb_len > OBD_ALLOC_BIG)
+                /* if we vmalloced a large buffer drop it */
+                mdd_buf_put(buf);
+        RETURN(0);
+}
+
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma)
 {
@@ -734,6 +762,10 @@ int mdd_attr_get_internal(const struct lu_env *env, struct mdd_object *mdd_obj,
                     S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmm_get(env, mdd_obj, ma);
         }
+        if (rc == 0 && ma->ma_need & MA_PFID && !(ma->ma_valid & MA_LOV)) {
+                if (S_ISREG(mdd_object_type(mdd_obj)))
+                        rc = mdd_pfid_get(env, mdd_obj, ma);
+        }
         if (rc == 0 && ma->ma_need & MA_LMV) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmv_get(env, mdd_obj, ma);
@@ -758,7 +790,7 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
 {
         int rc;
         int needlock = ma->ma_need &
-                       (MA_LOV | MA_LMV | MA_ACL_DEF | MA_HSM | MA_SOM);
+                       (MA_LOV | MA_LMV | MA_ACL_DEF | MA_HSM | MA_SOM | MA_PFID);
 
         if (needlock)
                 mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);

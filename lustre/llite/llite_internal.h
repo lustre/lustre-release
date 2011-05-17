@@ -167,6 +167,9 @@ struct ll_inode_info {
 
         /* identifying fields for both metadata and data stacks. */
         struct lu_fid           lli_fid;
+        /* Parent fid for accessing default stripe data on parent directory
+         * for allocating OST objects after a mknod() and later open-by-FID. */
+        struct lu_fid           lli_pfid;
         struct lov_stripe_md   *lli_smd;
 
         /* fid capability */

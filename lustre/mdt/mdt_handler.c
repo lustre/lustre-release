@@ -4812,6 +4812,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
                 lu_object_add_top(h, o);
                 o->lo_ops = &mdt_obj_ops;
                 cfs_sema_init(&mo->mot_ioepoch_sem, 1);
+                cfs_sema_init(&mo->mot_lov_sem, 1);
                 RETURN(o);
         } else
                 RETURN(NULL);
