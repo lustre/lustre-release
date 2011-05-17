@@ -1,123 +1,105 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='upgradinglustre'>
   <info>
-    <title>Upgrading Lustre</title>
+    <title xml:id='upgradinglustre.title'>Upgrading Lustre</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438205_pgfId-1289198" xreflabel=""/>This chapter describes Lustre interoperability and how to upgrade to Lustre 2.0, and includes the following sections:</para>
+
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438205_pgfId-1293309" xreflabel=""/><link xl:href="UpgradingLustre.html#50438205_82079">Lustre Interoperability</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438205_pgfId-1289206" xreflabel=""/><link xl:href="UpgradingLustre.html#50438205_51369">Upgrading Lustre 1.8.x to 2.0</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-</itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438205_pgfId-1293204" xreflabel=""/></title>
-    <section remap="h2">
-      <title>16.1 <anchor xml:id="dbdoclet.50438205_82079" xreflabel=""/>Lustre <anchor xml:id="dbdoclet.50438205_marker-1293321" xreflabel=""/>Interoperability</title>
+          <para><xref linkend="dbdoclet.50438205_82079"/>Lustre Interoperability</para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438205_51369"/>Upgrading Lustre 1.8.x to 2.0</para>
+      </listitem>
+  </itemizedlist>
+
+    <section xml:id="dbdoclet.50438205_82079">
+      <title>16.1 Lustre <anchor xml:id="dbdoclet.50438205_marker-1293321" xreflabel=""/>Interoperability</title>
       <para><anchor xml:id="dbdoclet.50438205_pgfId-1294233" xreflabel=""/>Lustre 2.0 is built on a new architectural code base, which is different than the one used with Lustre 1.8. These architectural changes require existing Lustre 1.8.x users to follow a slightly different procedure to upgrade to Lustre 2.0 - requiring clients to be unmounted and the file system be shut down. Once the servers are upgraded and restarted, then the clients can be remounted. After the upgrade, Lustre 2.0 servers can interoperate with compatible 1.8 clients and servers. Lustre 2.0 does <emphasis>not</emphasis> support 2.0 clients interoperating with 1.8 servers.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438205_pgfId-1294673" xreflabel=""/>Lustre 1.8 clients support a mix of 1.8 and 2.0 OSTs, not all OSSs need to be upgraded at the same time.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438205_pgfId-1294671" xreflabel=""/>Lustre 2.0 is compatible with version 1.8.4 and above. If you are planning a heterogeneous environment (mixed 1.8 and 2.0 servers), make sure that version 1.8.4 is installed on the client and server nodes that are not upgraded to 2.0.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+
+              <note><para>Lustre 1.8 clients support a mix of 1.8 and 2.0 OSTs, not all OSSs need to be upgraded at the same time.</para></note>
+              <note><para>Lustre 2.0 is compatible with version 1.8.4 and above. If you are planning a heterogeneous environment (mixed 1.8 and 2.0 servers), make sure that version 1.8.4 is installed on the client and server nodes that are not upgraded to 2.0.</para></note>
+
     </section>
-    <section remap="h2">
-      <title>16.2 <anchor xml:id="dbdoclet.50438205_51369" xreflabel=""/>Upgrading <anchor xml:id="dbdoclet.50438205_marker-1294652" xreflabel=""/>Lustre 1.8.x to 2.0</title>
+    <section xml:id="dbdoclet.50438205_51369">
+      <title>16.2 Upgrading <anchor xml:id="dbdoclet.50438205_marker-1294652" xreflabel=""/>Lustre 1.8.x to 2.0</title>
       <para><anchor xml:id="dbdoclet.50438205_pgfId-1294654" xreflabel=""/>Upgrading to Lustre 2.0 involves shutting down the file system and upgrading servers, and optionally clients, all at the same time. Lustre 2.0 does not support a rolling upgrade in which the file system operates continuously while individual servers (or their failover partners) and clients are upgraded one at a time.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438205_pgfId-1294870" xreflabel=""/>Although the Lustre 1.8 to 2.0 upgrade path has been tested, for best results we recommend performing a fresh Lustre 2.0 installation, rather than upgrading from 1.8 to 2.0.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+
+      <note><para>Although the Lustre 1.8 to 2.0 upgrade path has been tested, for best results we recommend performing a fresh Lustre 2.0 installation, rather than upgrading from 1.8 to 2.0.</para></note>
+
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438205_pgfId-1291181" xreflabel=""/>16.2.1 <anchor xml:id="dbdoclet.50438205_80840" xreflabel=""/>Performing a <anchor xml:id="dbdoclet.50438205_marker-1293327" xreflabel=""/>File System Upgrade</title>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1291188" xreflabel=""/>This procedure describes a file system upgrade in which Lustre 2.0 packages are installed on multiple 1.8.x servers and, optionally, clients, requiring a file system shut down. You can choose to upgrade the entire Lustre file system to 2.0 or just upgrade the Lustre servers to 2.0 and leave the clients at 1.8.x. Lustre 2.0 servers can interoperate with compatible 1.8 clients and servers.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Tip -</emphasis><anchor xml:id="dbdoclet.50438205_pgfId-1291272" xreflabel=""/>In a Lustre upgrade, the package install and file system unmount steps are reversible; you can do either step first. To minimize downtime, this procedure first performs the 2.0 package installation, and then unmounts the file system.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-         <para><anchor xml:id="dbdoclet.50438205_pgfId-1291279" xreflabel=""/> 1. Make a complete, restorable file system backup before upgrading Lustre.</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1294770" xreflabel=""/> 2. If any Lustre nodes will not be upgraded to 2.0, make sure that these client and server nodes are at version 1.8.4.</para>
+                <tip><para>In a Lustre upgrade, the package install and file system unmount steps are reversible; you can do either step first. To minimize downtime, this procedure first performs the 2.0 package installation, and then unmounts the file system.</para></tip>
+
+                <orderedlist><listitem>
+         <para><anchor xml:id="dbdoclet.50438205_pgfId-1291279" xreflabel=""/>Make a complete, restorable file system backup before upgrading Lustre.</para>
+
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1294770" xreflabel=""/>If any Lustre nodes will not be upgraded to 2.0, make sure that these client and server nodes are at version 1.8.4.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1294786" xreflabel=""/>Lustre 2.0 is compatible with version 1.8.4 and above. If you are planning a heterogeneous environment (mixed 1.8 and 2.0 clients and servers), make sure that version 1.8.4 is installed on nodes that are not upgraded to 2.0.</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290500" xreflabel=""/> 3. Install the 2.0 packages on the Lustre servers and, optionally, the clients.</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290500" xreflabel=""/>Install the 2.0 packages on the Lustre servers and, optionally, the clients.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1291180" xreflabel=""/>Some or all servers can be upgraded. Some or all clients can be upgraded.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1290700" xreflabel=""/>For help determining where to install a specific package, see <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> (Lustre packages, descriptions and installation guidance).</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290965" xreflabel=""/>a. Install the kernel, modules and ldiskfs packages. For example:</para>
+                <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290965" xreflabel=""/>Install the kernel, modules and ldiskfs packages. For example:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290527" xreflabel=""/>$ rpm -ivh
 <anchor xml:id="dbdoclet.50438205_pgfId-1292146" xreflabel=""/>kernel-lustre-smp-&lt;ver&gt; \
 <anchor xml:id="dbdoclet.50438205_pgfId-1290528" xreflabel=""/>kernel-ib-&lt;ver&gt; \
 <anchor xml:id="dbdoclet.50438205_pgfId-1290529" xreflabel=""/>lustre-modules-&lt;ver&gt; \
 <anchor xml:id="dbdoclet.50438205_pgfId-1290530" xreflabel=""/>lustre-ldiskfs-&lt;ver&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290595" xreflabel=""/>b. Upgrade the utilities/userspace packages. For example:</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290595" xreflabel=""/>Upgrade the utilities/userspace packages. For example:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290597" xreflabel=""/>$ rpm -Uvh lustre-&lt;ver&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291701" xreflabel=""/>c. If a new e2fsprogs package is available, upgrade it. For example:</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291701" xreflabel=""/>If a new e2fsprogs package is available, upgrade it. For example:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1291702" xreflabel=""/>$ rpm -Uvh e2fsprogs-&lt;ver&gt;
 </screen>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1294595" xreflabel=""/>Use e2fsprogs-1.41-10 or later, available at:</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1294597" xreflabel=""/><link xl:href="http://downloads.lustre.org/public/tools/e2fsprogs/">http://downloads.lustre.org/public/tools/e2fsprogs/</link></para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291712" xreflabel=""/>d. (Optional) If you want to add optional packages to your Lustre system, install them now.</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290496" xreflabel=""/> 4. Shut down the file system.</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291712" xreflabel=""/>(Optional) If you want to add optional packages to your Lustre system, install them now.</para>
+    </listitem></orderedlist>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290496" xreflabel=""/>Shut down the file system.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1290712" xreflabel=""/>Shut down the components in this order: clients, then the MDT, then OSTs. Unmounting a block device causes Lustre to be shut down on that node.</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290276" xreflabel=""/>a. Unmount the clients. On each client node, run:</para>
+                <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290276" xreflabel=""/>Unmount the clients. On each client node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290492" xreflabel=""/>umount &lt;mount point&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291085" xreflabel=""/>b. Unmount the MDT. On the MDS node, run:</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291085" xreflabel=""/>Unmount the MDT. On the MDS node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1291086" xreflabel=""/>umount &lt;mount point&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291083" xreflabel=""/>c. Unmount the OSTs (be sure to unmount all OSTs). On each OSS node, run:</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1291083" xreflabel=""/>Unmount the OSTs (be sure to unmount all OSTs). On each OSS node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290318" xreflabel=""/>umount &lt;mount point&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292164" xreflabel=""/> 5. Unload the old Lustre modules by rebooting the node or manually removing the Lustre modules.</para>
+    </listitem></orderedlist>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292164" xreflabel=""/>Unload the old Lustre modules by rebooting the node or manually removing the Lustre modules.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1294825" xreflabel=""/>Run lustre_rmmod several times and use lsmod to check the currently loaded modules.</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292162" xreflabel=""/> 6. Start the upgraded file system.</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292162" xreflabel=""/>Start the upgraded file system.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1290713" xreflabel=""/>Start the components in this order: OSTs, then the MDT, then clients.</para>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292183" xreflabel=""/>a. Mount the OSTs (be sure to mount all OSTs). On each OSS node, run:</para>
+                <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292183" xreflabel=""/>Mount the OSTs (be sure to mount all OSTs). On each OSS node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290430" xreflabel=""/>mount -t lustre &lt;block device name&gt; &lt;mount point&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292179" xreflabel=""/>b. Mount the MDT. On the MDS node, run:</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1292179" xreflabel=""/>Mount the MDT. On the MDS node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290431" xreflabel=""/>mount -t lustre &lt;block device name&gt; &lt;mount point&gt; 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290404" xreflabel=""/>c. Mount the file system on the clients. On each client node, run:</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1290404" xreflabel=""/>Mount the file system on the clients. On each client node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438205_pgfId-1290467" xreflabel=""/>mount -t lustre &lt;MGS node&gt;:/&lt;fsname&gt; &lt;mount point&gt; 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438205_pgfId-1294471" xreflabel=""/>If you have a problem upgrading Lustre, contact us via the <link xl:href="https://bugzilla.lustre.org">Bugzilla</link> bug tracker.</para>
+    </listitem></orderedlist></listitem></orderedlist>
+        <para><anchor xml:id="dbdoclet.50438205_pgfId-1294471" xreflabel=""/>If you have a problem upgrading Lustre, contact us via the <link xl:href="https://jira.whamcloud.com">Whamcloud Jira</link> bug tracker.</para>
         <para><anchor xml:id="dbdoclet.50438205_pgfId-1292981" xreflabel=""/> </para>
       </section>
-    </section>
   </section>
 </chapter>
