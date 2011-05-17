@@ -2,26 +2,26 @@
 <part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='part.intro'>
     <title>Introducing Lustre</title>
     <partintro>
-  <para><anchor xml:id="dbdoclet.50438249_pgfId-369630" xreflabel=""/>Part I provides background information to help you understand the Lustre architecture and how the major components fit together. You will find information in this section about:
-
-      <itemizedlist>
-          <listitem>
-              <para>
-  <link linkend='understandinglustre' endterm='understandinglustre.title'/>
-              </para>
-          </listitem>
-          <listitem>
-              <para>
-  <link linkend='understandinglustrenetworking' endterm='understandinglustrenetworking.title'/>
-              </para>
-          </listitem>
-          <listitem>
-              <para>
-  <link linkend='understandingfailover' endterm='understandingfailover.title'/>
-              </para>
-          </listitem>
-      </itemizedlist>
+        <para><anchor xml:id="dbdoclet.50438249_pgfId-369630" xreflabel=""/>Part I provides background information to help you understand the Lustre architecture and how the major components fit together. You will find information in this section about:
   </para>
+
+  <itemizedlist>
+      <listitem>
+          <para>
+              <link linkend='understandinglustre' endterm='understandinglustre.title'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+              <link linkend='understandinglustrenetworking' endterm='understandinglustrenetworking.title'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+              <link linkend='understandingfailover' endterm='understandingfailover.title'/>
+          </para>
+      </listitem>
+  </itemizedlist>
 
   </partintro>
 
