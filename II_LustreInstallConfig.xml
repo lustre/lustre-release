@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='part.installconfig'>
     <title>Installing and Configuring Lustre</title>
     <partintro>
   <para><anchor xml:id="dbdoclet.50438252_pgfId-1804" xreflabel=""/>Part II describes how to install and configure a Lustre file system. You will find information in this section about:</para>
