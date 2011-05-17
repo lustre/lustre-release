@@ -3,15 +3,52 @@
     <title>Installing and Configuring Lustre</title>
     <partintro>
   <para><anchor xml:id="dbdoclet.50438252_pgfId-1804" xreflabel=""/>Part II describes how to install and configure a Lustre file system. You will find information in this section about:</para>
+
+      <itemizedlist>
+          <listitem>
+              <para>
+                  <link linkend='installoverview' endterm='installoverview.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='settinguplustresystem' endterm='settinguplustresystem.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='configuringstorage' endterm='configuringstorage.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='settingupbonding' endterm='settingupbonding.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='installinglustre' endterm='installinglustre.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='configuringlnet' endterm='configuringlnet.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='configuringlustre' endterm='configuringlustre.title'/>
+              </para>
+          </listitem>
+          <listitem>
+              <para>
+                  <link linkend='configuringfailover' endterm='configuringfailover.title'/>
+              </para>
+          </listitem>
+      </itemizedlist>
+
+
   </partintro>
 
-  <xi:include href="InstallOverview.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingUpLustreSystem.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringStorage.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingUpBonding.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="InstallingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfiguringFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>
