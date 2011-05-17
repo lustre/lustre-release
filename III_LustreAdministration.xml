@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='part3'>
     <title xml:id='adminlustrepart3'>Administering Lustre</title>
     <partintro>
         <para><anchor xml:id="dbdoclet.50438269_pgfId-1804" xreflabel=""/>Part III provides information about tools and procedures to use to administer a Lustre file system. You will find information in this section about:</para>
@@ -11,19 +11,62 @@
         <para> - Use the logging resources provided by Linux.</para>
     </tip>
 
+
+    <itemizedlist>
+        <listitem>
+            <para>
+                <link linkend='lustremonitoring' endterm='lustremonitoring.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='lustremaintenance' endterm='lustremaintenance.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='managinglnet' endterm='managinglnet.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='upgradinglustre' endterm='upgradinglustre.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='backupandrestore' endterm='backupandrestore.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='managingstripingfreespace' endterm='managingstripingfreespace.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='managingfilesystemio' endterm='managingfilesystemio.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='managingfailover' endterm='managingfailover.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='configuringquotas' endterm='configuringquotas.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+                <link linkend='managingsecurity' endterm='managingsecurity.title'/>
+
+            </para>
+        </listitem>
+    </itemizedlist>
+
+
+
     </partintro>
-
-    <xi:include href="LustreMonitoring.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreMaintenance.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="UpgradingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="BackupAndRestore.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingStripingFreeSpace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingFileSystemIO.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
-
 </part>
