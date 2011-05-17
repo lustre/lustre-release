@@ -2236,6 +2236,94 @@ test_89() {
 
 run_test 89 "no disk space leak on late ost connection"
 
+cleanup_90 () {
+    local facet=$1
+    trap 0
+    reboot_facet $facet
+    change_active $facet
+    wait_for_facet $facet
+    mount_facet $facet || error "Restart of $facet failed"
+    clients_up
+}
+
+test_90() { # bug 19494
+    local dir=$DIR/$tdir
+    local ostfail=$(get_random_entry $(get_facets OST))
+
+    if [[ $FAILURE_MODE = HARD ]]; then
+        local affected=$(affected_facets $ostfail);
+        if [[ "$affected" != $ostfail ]]; then
+            skip not functional with FAILURE_MODE=$FAILURE_MODE, affected: $affected
+            return 0
+        fi
+    fi
+
+    mkdir -p $dir
+
+    echo "Create the files"
+
+    # file "f${index}" striped over 1 OST
+    # file "all" striped over all OSTs
+
+    $LFS setstripe -c $OSTCOUNT $dir/all || error "setstripe failed to create $dir/all"
+
+    for (( i=0; i<$OSTCOUNT; i++ )); do
+        local f=$dir/f$i
+        $LFS setstripe -i $i -c 1 $f || error "setstripe failed to create $f"
+
+        # confirm that setstripe actually created the stripe on the requested OST
+        local uuid=$(ostuuid_from_index $i)
+        for file in f$i all; do
+            if [[ $dir/$file != $($LFS find --obd $uuid --name $file $dir) ]]; then
+                $LFS getstripe $dir/file
+                error wrong stripe: $file, uuid: $uuid
+            fi
+        done
+    done
+
+    # Before failing an OST, get its obd name and index
+    local varsvc=${ostfail}_svc
+    local obd=$(do_facet $ostfail lctl get_param -n obdfilter.${!varsvc}.uuid)
+    local index=${obd:(-6):1}
+
+    echo "Fail $ostfail $obd, display the list of affected files"
+    shutdown_facet $ostfail || return 2
+
+    trap "cleanup_90 $ostfail" EXIT INT
+    echo "General Query: lfs find $dir"
+    local list=$($LFS find $dir)
+    echo "$list"
+    for (( i=0; i<$OSTCOUNT; i++ )); do
+        list_member "$list" $dir/f$i || error_noexit "lfs find $dir: no file f$i"
+    done
+    list_member "$list" $dir/all || error_noexit "lfs find $dir: no file all"
+
+    # focus on the missing OST,
+    # we expect to see only two files affected: "f$(index)" and "all"
+
+    echo "Querying files on shutdown $ostfail: lfs find --obd $obd"
+    list=$($LFS find --obd $obd $dir)
+    echo "$list"
+    for file in all f$index; do
+        list_member "$list" $dir/$file ||
+            error_noexit "lfs find does not report the affected $obd for $file"
+    done
+
+    [[ $(echo $list | wc -w) -eq 2 ]] ||
+        error_noexit "lfs find reports the wrong list of affected files ${#list[@]}"
+
+    echo "Check getstripe: lfs getstripe -r --obd $obd"
+    list=$($LFS getstripe -r --obd $obd $dir)
+    echo "$list"
+    for file in all f$index; do
+        echo "$list" | grep $dir/$file ||
+            error_noexit "lfs getsripe does not report the affected $obd for $file"
+    done
+
+    cleanup_90 $ostfail
+}
+run_test 90 "lfs find identifies the missing striped file segments"
+
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 exit_status
