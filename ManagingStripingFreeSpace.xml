@@ -1,88 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='managingstripingfreespace'>
   <info>
-    <title>Managing File Striping and Free Space</title>
+    <title xml:id='managingstripingfreespace.title'>Managing File Striping and Free Space</title>
   </info>
+
   <para><anchor xml:id="dbdoclet.50438209_pgfId-1291802" xreflabel=""/>This chapter describes file striping and I/O options, and includes the following sections:</para>
+
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438209_pgfId-1291806" xreflabel=""/><link xl:href="ManagingStripingFreeSpace.html#50438209_79324">How Lustre Striping Works</link></para>
+      <para><xref linkend="dbdoclet.50438209_79324"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438209_48033"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438209_pgfId-1296869" xreflabel=""/><link xl:href="ManagingStripingFreeSpace.html#50438209_48033">Lustre File Striping Considerations</link></para>
+      <para><xref linkend="dbdoclet.50438209_78664"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438209_44776"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438209_pgfId-1291810" xreflabel=""/><link xl:href="ManagingStripingFreeSpace.html#50438209_78664">Setting the File Layout/Striping Configuration (lfs setstripe)</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438209_pgfId-1297090" xreflabel=""/><link xl:href="ManagingStripingFreeSpace.html#50438209_44776">Retrieving File Layout/Striping Information (getstripe)</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438209_pgfId-1293633" xreflabel=""/><link xl:href="ManagingStripingFreeSpace.html#50438209_10424">Managing Free Space</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438209_10424"/></para>
     </listitem>
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438209_pgfId-1291833" xreflabel=""/></title>
-    <section remap="h2">
-      <title>18.1 <anchor xml:id="dbdoclet.50438209_79324" xreflabel=""/>How Lustre Striping Works</title>
+
+    <section xml:id="dbdoclet.50438209_79324">
+      <title>18.1 How Lustre Striping Works</title>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1296776" xreflabel=""/>Lustre uses a round-robin algorithm for selecting the next OST to which a stripe is to be written. Normally the usage of OSTs is well balanced. However, if users create a small number of exceptionally large files or incorrectly specify striping parameters, imbalanced OST usage may result.</para>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1296839" xreflabel=""/>The MDS allocates objects on seqential OSTs. Periodically, it will adjust the striping layout to eliminate some degenerated cases where applications that create very regular file layouts (striping patterns) would preferentially use a particular OST in the sequence.</para>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1297552" xreflabel=""/>Stripes are written to sequential OSTs until free space across the OSTs differs by more than 20%. The MDS will then use weighted random allocations with a preference for allocating objects on OSTs with more free space. This can reduce I/O performance until space usage is rebalanced to within 20% again.</para>
-      <para><anchor xml:id="dbdoclet.50438209_pgfId-1296783" xreflabel=""/>For a more detailed description of stripe assignments, see <link xl:href="ManagingStripingFreeSpace.html#50438209_10424">Managing Free Space</link>.</para>
+      <para><anchor xml:id="dbdoclet.50438209_pgfId-1296783" xreflabel=""/>For a more detailed description of stripe assignments, see <xref linkend='dbdoclet.50438209_10424'/>.</para>
     </section>
-    <section remap="h2">
-      <title>18.2 Lustre <anchor xml:id="dbdoclet.50438209_48033" xreflabel=""/>File <anchor xml:id="dbdoclet.50438209_marker-1291832" xreflabel=""/>Striping Considerations</title>
+    <section xml:id="dbdoclet.50438209_48033">
+      <title>18.2 Lustre File <anchor xml:id="dbdoclet.50438209_marker-1291832" xreflabel=""/>Striping Considerations</title>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1296641" xreflabel=""/>Whether you should set up file striping and what parameter values you select depends on your need. A good rule of thumb is to stripe over as few objects as will meet those needs and no more.</para>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1296653" xreflabel=""/>Some reasons for using striping include:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438209_pgfId-1296634" xreflabel=""/><emphasis role="bold">Providing high-bandwidth access</emphasis>  - Many applications require high-bandwidth access to a single file - more bandwidth than can be provided by a single OSS. For example, scientific applications that write to a single file from hundreds of nodes, or a binary executable that is loaded by many nodes when an application starts.</para>
-        </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
-</itemizedlist>
+
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1294264" xreflabel=""/>In cases like these, a file can be striped over as many OSSs as it takes to achieve the required peak aggregate bandwidth for that file. Striping across a larger number of OSSs should only be used when the file size is very large and/or is accessed by many nodes at a time. Currently, Lustre files can be striped across up to 160 OSSs, the maximum stripe count for an ldiskfs file system.</para>
-      <itemizedlist><listitem>
+  </listitem><listitem>
           <para><anchor xml:id="dbdoclet.50438209_pgfId-1294265" xreflabel=""/><emphasis role="bold">Improving performance when OSS bandwidth is exceeded</emphasis>  - Striping across many OSSs can improve performance if the aggregate client bandwidth exceeds the server bandwidth and the application reads and writes data fast enough to take advantage of the additional OSS bandwidth. The largest useful stripe count is bounded by the I/O rate of the clients/jobs divided by the performance per OSS.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438209_pgfId-1294262" xreflabel=""/><emphasis role="bold">Providing space for very large files.</emphasis>  Striping is also useful when a single OST does not have enough free space to hold the entire file.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1296431" xreflabel=""/>Some reasons to minimize or avoid striping:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438209_pgfId-1296706" xreflabel=""/><emphasis role="bold">Increased overhead</emphasis>  - Striping results in more locks and extra network operations during common operations such as stat and unlink. Even when these operations are performed in parallel, one network operation takes less time than 100 operations.</para>
-        </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
-</itemizedlist>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1291856" xreflabel=""/>Increased overhead also results from server contention. Consider a cluster with 100 clients and 100 OSSs, each with one OST. If each file has exactly one object and the load is distributed evenly, there is no contention and the disks on each server can manage sequential I/O. If each file has 100 objects, then the clients all compete with one another for the attention of the servers, and the disks on each node seek in 100 different directions. In this case, there is needless contention.</para>
-      <itemizedlist><listitem>
+  </listitem><listitem>
           <para><anchor xml:id="dbdoclet.50438209_pgfId-1291857" xreflabel=""/><emphasis role="bold">Increased risk</emphasis>  - When a file is striped across all servers and one of the servers breaks down, a small part of each striped file is lost. By comparison, if each file has exactly one stripe, you lose fewer files, but you lose them in their entirety. Many users would prefer to lose some of their files entirely than all of their files partially.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <section remap="h3">
@@ -92,43 +60,25 @@
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1296443" xreflabel=""/><emphasis role="bold">The stripe size must be a multiple of the page size.</emphasis>  Lustreâ€™s tools enforce a multiple of 64 KB (the maximum page size on ia64 and PPC64 nodes) so that users on platforms with smaller pages do not accidentally create files that might cause problems for ia64 clients.</para>
           </listitem>
 <listitem>
-            <para> </para>
-          </listitem>
-<listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1291862" xreflabel=""/><emphasis role="bold">The smallest recommended stripe size is 512 KB.</emphasis>  Although you can create files with a stripe size of 64 KB, the smallest practical stripe size is 512 KB because Lustre sends 1MB chunks over the network. Choosing a smaller stripe size may result in inefficient I/O to the disks and reduced performance.</para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 <listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1291864" xreflabel=""/><emphasis role="bold">A good stripe size for sequential I/O using high-speed networks is between 1 MB and 4 MB.</emphasis>  In most situations, stripe sizes larger than 4 MB may result in longer lock hold times and contention on shared file access.</para>
           </listitem>
 <listitem>
-            <para> </para>
-          </listitem>
-<listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1297206" xreflabel=""/><emphasis role="bold">The maximum stripe size is 4GB.</emphasis>  Using a large stripe size can improve performance when accessing very large files. It allows each client to have exclusive access to its own part of a file. However, it can be counterproductive in some cases if it does not match your I/O pattern.</para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 <listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1291865" xreflabel=""/><emphasis role="bold">Choose a stripe pattern that takes into account your applicationâ€™s write patterns.</emphasis>  Writes that cross an object boundary are slightly less efficient than writes that go entirely to one server. If the file is written in a very consistent and aligned way, make the stripe size a multiple of the write() size.</para>
           </listitem>
 <listitem>
-            <para> </para>
-          </listitem>
-<listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1291866" xreflabel=""/><emphasis role="bold">The choice of stripe size has no effect on a single-stripe file.</emphasis></para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 </itemizedlist>
       </section>
     </section>
-    <section remap="h2">
-      <title>18.3 <anchor xml:id="dbdoclet.50438209_78664" xreflabel=""/>Setting the File Layout/Striping Configuration (lfs setstripe)</title>
+    <section xml:id="dbdoclet.50438209_78664">
+      <title>18.3 Setting the File Layout/Striping Configuration (lfs setstripe)</title>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1297878" xreflabel=""/>Use the lfs setstripe command to create new files with a specific file layout (stripe pattern) configuration.</para>
       <screen><anchor xml:id="dbdoclet.50438209_pgfId-1297879" xreflabel=""/>lfs setstripe [--size|-s stripe_size] [--count|-c stripe_count] 
 <anchor xml:id="dbdoclet.50438209_pgfId-1297880" xreflabel=""/>[--index|-i start_ost] [--pool|-p pool_name] &lt;filename|dirname&gt; 
@@ -139,16 +89,7 @@
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1297884" xreflabel=""/>The stripe count indicates how many OSTs to use. The default stripe_count value is 1. Setting stripe_count to 0 causes the default stripe count to be used. Setting stripe_count to -1 means stripe over all available OSTs (full OSTs are skipped).</para>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1297885" xreflabel=""/><emphasis role="bold">start_ost</emphasis></para>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1298131" xreflabel=""/>The start OST is the first OST to which files are written. The default value for start_ost is -1 , which allows the MDS to choose the starting index. This setting is strongly recommended, as it allows space and load balancing to be done by the MDS as needed. Otherwise, the file starts on the specified OST index. The numbering of the OSTs starts at 0.</para>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438209_pgfId-1297890" xreflabel=""/>If you pass a start_ost value of 0 and a stripe_count value of <emphasis>1</emphasis>, all files are written to OST 0, until space is exhausted. This is probably not what you meant to do. If you only want to adjust the stripe count and keep the other parameters at their default settings, do not specify any of the other parameters:</para><para>lfs setstripe -c &lt;stripe_count&gt; &lt;file&gt;</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>If you pass a start_ost value of 0 and a stripe_count value of <emphasis>1</emphasis>, all files are written to OST 0, until space is exhausted. This is probably not what you meant to do. If you only want to adjust the stripe count and keep the other parameters at their default settings, do not specify any of the other parameters:</para><para>lfs setstripe -c &lt;stripe_count&gt; &lt;file&gt;</para></note>
        <para><anchor xml:id="dbdoclet.50438209_pgfId-1297973" xreflabel=""/><emphasis role="bold">pool_name</emphasis></para>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1297976" xreflabel=""/>Specify the OST pool on which the file will be written. This allows limiting the OSTs used to a subset of all OSTs in the file system. For more details about using OST pools, see <link xl:href="ManagingFileSystemIO.html#50438211_75549">Creating and Managing OST Pools</link>.</para>
       <section remap="h3">
@@ -228,8 +169,8 @@
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>18.4 <anchor xml:id="dbdoclet.50438209_44776" xreflabel=""/>Retrieving File Layout/Striping Information (getstripe)</title>
+    <section xml:id="dbdoclet.50438209_44776">
+      <title>18.4 Retrieving File Layout/Striping Information (getstripe)</title>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1297836" xreflabel=""/>The lfsgetstripe command is used to display information that shows over which OSTs a file is distributed. For each OST, the index and UUID is displayed, along with the OST index and object ID for each stripe in the file. For directories, the default settings for files created in that directory are printed.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438209_pgfId-1297837" xreflabel=""/>18.4.1 Displaying the Current Stripe Size</title>
@@ -264,8 +205,8 @@ group
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>18.5 <anchor xml:id="dbdoclet.50438209_10424" xreflabel=""/>Managing Free <anchor xml:id="dbdoclet.50438209_marker-1295520" xreflabel=""/>Space</title>
+    <section xml:id="dbdoclet.50438209_10424">
+      <title>18.5 Managing Free <anchor xml:id="dbdoclet.50438209_marker-1295520" xreflabel=""/>Space</title>
       <para><anchor xml:id="dbdoclet.50438209_pgfId-1293927" xreflabel=""/>The MDT assigns file stripes to OSTs based on location (which OSS) and size considerations (free space) to optimize file system performance. Emptier OSTs are preferentially selected for stripes, and stripes are preferentially spread out between OSSs to increase network bandwidth utilization. The weighting factor between these two optimizations can be adjusted by the user.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438209_pgfId-1293929" xreflabel=""/>18.5.1 <anchor xml:id="dbdoclet.50438209_35838" xreflabel=""/>Checking File System Free Space</title>
@@ -351,8 +292,6 @@ IFree                   IUse%           Mounted on
         <para><anchor xml:id="dbdoclet.50438209_pgfId-1295862" xreflabel=""/>Two stripe allocation methods are provided: <emphasis>round-robin</emphasis> and <emphasis>weighted</emphasis>. By default, the allocation method is determined by the amount of free-space imbalance on the OSTs. The weighted allocator is used when any two OSTs are imbalanced by more than 20%. Otherwise, the faster round-robin allocator is used. (The round-robin order maximizes network balancing.)</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1293989" xreflabel=""/><emphasis role="bold">Round-robin allocator</emphasis><anchor xml:id="dbdoclet.50438209_marker-1293988" xreflabel=""/>  - When OSTs have approximately the same amount of free space (within 20%), an efficient round-robin allocator is used. The round-robin allocator alternates stripes between OSTs on different OSSs, so the OST used for stripe 0 of each file is evenly distributed among OSTs, regardless of the stripe count. Here are several sample round-robin stripe orders (each letter represents a different OST on a single OSS):</para>
-          </listitem>
-<listitem>
              <informaltable frame="none">
               <tgroup cols="2">
                 <colspec colname="c1" colwidth="50*"/>
@@ -385,9 +324,6 @@ IFree                   IUse%           Mounted on
 <listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1294021" xreflabel=""/><emphasis role="bold">Weighted allocator</emphasis><anchor xml:id="dbdoclet.50438209_marker-1294020" xreflabel=""/>  - When the free space difference between the OSTs is significant (by default, 20% of the free space), then a weighting algorithm is used to influence OST ordering based on size and location. Note that these are weightings for a random algorithm, so the OST with the most free space is not necessarily chosen each time. On average, the weighted allocator fills the emptier OSTs faster.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
 </itemizedlist>
       </section>
       <section remap="h3">
@@ -396,17 +332,7 @@ IFree                   IUse%           Mounted on
         <screen><anchor xml:id="dbdoclet.50438209_pgfId-1295879" xreflabel=""/>lctl conf_param &lt;fsname&gt;-MDT0000.lov.qos_prio_free=90
 </screen>
         <para><anchor xml:id="dbdoclet.50438209_pgfId-1295880" xreflabel=""/>Increasing this value puts more weighting on free space. When the free space priority is set to 100%, then location is no longer used in stripe-ordering calculations and weighting is based entirely on free space.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438209_pgfId-1295881" xreflabel=""/>Setting the priority to 100% means that OSS distribution does not count in the weighting, but the stripe assignment is still done via a weighting. For example, if OST2 has twice as much free space as OST1, then OST2 is twice as likely to be used, but it is not guaranteed to be used.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>Setting the priority to 100% means that OSS distribution does not count in the weighting, but the stripe assignment is still done via a weighting. For example, if OST2 has twice as much free space as OST1, then OST2 is twice as likely to be used, but it is not guaranteed to be used.</para></note>
       </section>
     </section>
-  </section>
 </chapter>
