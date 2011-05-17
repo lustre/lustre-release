@@ -275,13 +275,13 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
                 capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
                 if (capa == NULL) {
                         CERROR("Missing capability for OST GETATTR");
-                        RETURN (-EFAULT);
+                        GOTO(unlock, rc = -EFAULT);
                 }
         }
 
         OBD_ALLOC_PTR(oinfo);
         if (!oinfo)
-                RETURN(-ENOMEM);
+                GOTO(unlock, rc = -ENOMEM);
         oinfo->oi_oa = &body->oa;
         oinfo->oi_capa = capa;
 
@@ -291,10 +291,11 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         repbody->oa = body->oa;
+        ost_drop_id(exp, &repbody->oa);
 
+unlock:
         ost_lock_put(exp, &lh, LCK_PR);
 
-        ost_drop_id(exp, &repbody->oa);
         RETURN(0);
 }
 
@@ -399,13 +400,13 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                                                       &RMF_CAPA1);
                         if (capa == NULL) {
                                 CERROR("Missing capability for OST PUNCH");
-                                RETURN (-EFAULT);
+                                GOTO(unlock, rc = -EFAULT);
                         }
                 }
 
                 OBD_ALLOC_PTR(oinfo);
                 if (!oinfo)
-                        RETURN(-ENOMEM);
+                        GOTO(unlock, rc = -ENOMEM);
                 oinfo->oi_oa = &body->oa;
                 oinfo->oi_policy.l_extent.start = oinfo->oi_oa->o_size;
                 oinfo->oi_policy.l_extent.end = oinfo->oi_oa->o_blocks;
@@ -413,6 +414,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 
                 req->rq_status = obd_punch(exp, oinfo, oti, NULL);
                 OBD_FREE_PTR(oinfo);
+unlock:
                 ost_lock_put(exp, &lh, LCK_PW);
         }
 
@@ -1787,7 +1789,7 @@ int ost_blocking_ast(struct ldlm_lock *lock,
                         RETURN(-ENOMEM);
                 OBDO_ALLOC(oa);
                 if (!oa) {
-                        OBD_FREE_PTR(oa);
+                        OBD_FREE_PTR(oinfo);
                         RETURN(-ENOMEM);
                 }
                 oa->o_id = lock->l_resource->lr_name.name[0];
