@@ -105,7 +105,7 @@
         <para><anchor xml:id="dbdoclet.50540653_pgfId-1304384" xreflabel=""/>OSTs are usually configured in a load-balanced, active/active failover configuration. A failover cluster is built from two OSSs as shown in <xref linkend='understandingfailover.fig.configost'/>.</para>
 
         <note>
-<para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50540653_pgfId-1304714" xreflabel=""/>OSSs configured as a failover pair must have shared disks/RAID.</para>
+<para>OSSs configured as a failover pair must have shared disks/RAID.</para>
 </note>
 
 <figure>
