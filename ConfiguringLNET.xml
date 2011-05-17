@@ -1,66 +1,48 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='configuringlnet'>
   <info>
     <title xml:id='configuringlnet.title'>Configuring Lustre Networking (LNET)</title>
   </info>
+
   <para><anchor xml:id="dbdoclet.50438216_pgfId-1304688" xreflabel=""/>This chapter describes how to configure Lustre Networking (LNET). It includes the following sections:</para>
+  <toc/>
+
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304692" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_33148">Overview of LNET Module Parameters</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304696" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_46279">Setting the LNET Module networks Parameter</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304700" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_31414">Setting the LNET Module ip2nets Parameter</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304704" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_71227">Setting the LNET Module routes Parameter</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304708" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_10523">Testing the LNET Configuration</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304712" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_35668">Configuring the Router Checker</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304716" xreflabel=""/><link xl:href="ConfiguringLNET.html#50438216_15200">Best Practices for LNET Options</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-</itemizedlist>
-   <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      <tbody>
-        <row>
-          <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438216_pgfId-1305877" xreflabel=""/>Configuring LNET is optional.</para><para> LNET will, by default, use the first TCP/IP interface it discovers on a system (eth0). If this network configuration is sufficient, you do not need to configure LNET. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438216_pgfId-1304719" xreflabel=""/></title>
-    <section remap="h2">
-      <title>9.1 <anchor xml:id="dbdoclet.50438216_33148" xreflabel=""/>Overview of LNET Module Parameters</title>
+          <para><xref linkend='dbdoclet.50438216_33148'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para><xref linkend='dbdoclet.50438216_46279'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438216_31414"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438216_71227"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438216_10523"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438216_35668"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438216_15200"/>
+          </para>
+      </listitem>
+  </itemizedlist>
+
+    <note>
+<para>Configuring LNET is optional.</para><para> LNET will, by default, use the first TCP/IP interface it discovers on a system (eth0). If this network configuration is sufficient, you do not need to configure LNET. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
+</note>
+
+    <section xml:id="dbdoclet.50438216_33148" >
+      <title>9.1 Overview of LNET Module Parameters</title>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304720" xreflabel=""/>LNET kernel module (lnet) parameters specify how LNET is to be configured to work with Lustre, including which NICs will be configured to work with Lustre and the routing to be used with Lustre.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304721" xreflabel=""/>Parameters for lnet are specified in the modprobe.conf or modules.conf file (depending on your Linux distribution) in one or more entries with the syntax:</para>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304722" xreflabel=""/>options lnet &lt;<emphasis>parameter</emphasis>&gt;=&lt;<emphasis>parameter value</emphasis>&gt;
@@ -70,37 +52,23 @@
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304724" xreflabel=""/>networks  - Specifies the networks to be used.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304725" xreflabel=""/>ip2nets  - Lists globally-available networks, each with a range of IP addresses. LNET then identifies locally-available networks through address list-matching lookup.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304731" xreflabel=""/>See <link xl:href="ConfiguringLNET.html#50438216_46279">Setting the LNET Module networks Parameter</link> and <link xl:href="ConfiguringLNET.html#50438216_31414">Setting the LNET Module ip2nets Parameter</link> for more details.</para>
+<para><anchor xml:id="dbdoclet.50438216_pgfId-1304731" xreflabel=""/>See <xref linkend='dbdoclet.50438216_46279'/> and <xref linkend="dbdoclet.50438216_31414"/>Setting the LNET Module ip2nets Parameter for more details.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304733" xreflabel=""/>To set up routing between networks, use:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304734" xreflabel=""/>routes  - Lists networks and the NIDs of routers that forward to them.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304738" xreflabel=""/>See <link xl:href="ConfiguringLNET.html#50438216_71227">Setting the LNET Module routes Parameter</link> for more details.</para>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304739" xreflabel=""/>A router checker can be configured to enable Lustre nodes to detect router health status, avoid routers that appear dead, and reuse those that restore service after failures. See <link xl:href="ConfiguringLNET.html#50438216_35668">Configuring the Router Checker</link> for more details.</para>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304743" xreflabel=""/>For a complete reference to the LNET module parameters, see <emphasis><link xl:href="ConfigurationFilesModuleParameters.html#50438293_94707">LNET Options</link></emphasis>.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438216_pgfId-1304744" xreflabel=""/>We recommend that you use â€œdotted-quadâ€ notation for IP addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+<para><anchor xml:id="dbdoclet.50438216_pgfId-1304738" xreflabel=""/>See <xref linkend="dbdoclet.50438216_71227"/> for more details.</para>
+      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304739" xreflabel=""/>A router checker can be configured to enable Lustre nodes to detect router health status, avoid routers that appear dead, and reuse those that restore service after failures. See <xref linkend="dbdoclet.50438216_35668"/> for more details.</para>
+      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304743" xreflabel=""/>For a complete reference to the LNET module parameters, see <emphasis><xref linkend="configurationfilesmoduleparameters"/>LNET Options</emphasis>.</para>
+
+      <note>
+<para>We recommend that you use 'dotted-quad' notation for IP addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para>
+</note>
+
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438216_pgfId-1304745" xreflabel=""/>9.1.1 Using a Lustre Network Identifier (NID) to Identify a Node</title>
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304746" xreflabel=""/>A Lustre network identifier (NID) is used to uniquely identify a Lustre network endpoint by node ID and network type. The format of the NID is:</para>
@@ -116,9 +84,9 @@
         <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304757" xreflabel=""/>lctl which_nid &lt;<emphasis>MDS NID</emphasis>&gt;<anchor xml:id="dbdoclet.50438216_14112" xreflabel=""/></screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>9.2 <anchor xml:id="dbdoclet.50438216_46279" xreflabel=""/>Setting the LNET Module networks Parameter</title>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304760" xreflabel=""/>If a node has more than one network interface, youâ€™ll typically want to dedicate a specific interface to Lustre. You can do this by including an entry in the modprobe.conf file on the node that sets the LNET module networks parameter:</para>
+    <section xml:id="dbdoclet.50438216_46279">
+      <title>9.2 Setting the LNET Module networks Parameter</title>
+      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304760" xreflabel=""/>If a node has more than one network interface, you'll typically want to dedicate a specific interface to Lustre. You can do this by including an entry in the modprobe.conf file on the node that sets the LNET module networks parameter:</para>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304761" xreflabel=""/>options lnet networks=&lt;<emphasis>comma-separated list of networks</emphasis>&gt;
 </screen>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304762" xreflabel=""/>This example specifies that a Lustre node will use a TCP/IP interface and an InfiniBand interface:</para>
@@ -131,16 +99,11 @@
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304767" xreflabel=""/>options lnet networks=tcp0(eth2),tcp1(eth3)
 </screen>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304768" xreflabel=""/>When more than one interface is available during the network setup, Lustre chooses the best route based on the hop count. Once the network connection is established, Lustre expects the network to stay connected. In a Lustre network, connections do not fail over to another interface, even if multiple interfaces are available on the same node.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438216_pgfId-1304769" xreflabel=""/>LNET lines in modprobe.conf are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+
+      <note>
+<para>LNET lines in modprobe.conf are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para>
+</note>
+
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438216_pgfId-1304771" xreflabel=""/>9.2.1 <anchor xml:id="dbdoclet.50438216_74334" xreflabel=""/>Multihome Server Example</title>
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304772" xreflabel=""/>If a server with multiple IP addresses (multihome server) is connected to a Lustre network, certain configuration setting are required. An example illustrating these setting consists of a network with the following nodes:</para>
@@ -148,33 +111,18 @@
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304773" xreflabel=""/> Server svr1 with three TCP NICs (eth0, eth1, and eth2) and an InfiniBand NIC.</para>
           </listitem>
 <listitem>
-            <para> </para>
-          </listitem>
-<listitem>
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304774" xreflabel=""/> Server svr2 with three TCP NICs (eth0, eth1, and eth2) and an InfiniBand NIC. Interface eth2 will not be used for Lustre networking.</para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 <listitem>
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304775" xreflabel=""/> TCP clients, each with a single TCP interface.</para>
           </listitem>
 <listitem>
-            <para> </para>
-          </listitem>
-<listitem>
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304776" xreflabel=""/> InfiniBand clients, each with a single Infiniband interface and a TCP/IP interface for administration.</para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304777" xreflabel=""/>To set the networks option for this example:</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304778" xreflabel=""/> On each server, svr1 and svr2, include the following line in the modprobe.conf file:</para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304779" xreflabel=""/>options lnet networks=tcp0(eth0),tcp1(eth1),o2ib
@@ -183,41 +131,23 @@
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304780" xreflabel=""/> For TCP-only clients, the first available non-loopback IP interface is used for tcp0. Thus, TCP clients with only one interface do not need to have options defined in the modprobe.conf file.</para>
           </listitem>
 <listitem>
-            <para> </para>
-          </listitem>
-<listitem>
             <para><anchor xml:id="dbdoclet.50438216_pgfId-1304781" xreflabel=""/> On the InfiniBand clients, include the following line in the modprobe.conf file:</para>
-          </listitem>
-<listitem>
-            <para> </para>
           </listitem>
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304782" xreflabel=""/>options lnet networks=o2ib
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438216_pgfId-1304783" xreflabel=""/>By default, Lustre ignores the loopback (lo0) interface. Lustre does not ignore IP addresses aliased to the loopback. If you alias IP addresses to the loopback interface, you must specify all Lustre networks using the LNET networks parameter.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-         <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438216_pgfId-1305767" xreflabel=""/>If the server has multiple interfaces on the same subnet, the Linux kernel will send all traffic using the first configured interface. This is a limitation of Linux, not Lustre. In this case, network interface bonding should be used. For more information about network interface bonding, see <link xl:href="SettingUpBonding.html#50438258_72593">Chapter 7</link>: <link xl:href="SettingUpBonding.html#50438258_99571">Setting Up Network Interface Bonding</link>.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+
+<note>
+    <para>By default, Lustre ignores the loopback (lo0) interface. Lustre does not ignore IP addresses aliased to the loopback. If you alias IP addresses to the loopback interface, you must specify all Lustre networks using the LNET networks parameter.</para></note>
+
+<note>
+    <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send all traffic using the first configured interface. This is a limitation of Linux, not Lustre. In this case, network interface bonding should be used. For more information about network interface bonding, see <xref linkend='settinglupbonding'/>.</para>
+</note>
+
       </section>
     </section>
-    <section remap="h2">
-      <title>9.3 <anchor xml:id="dbdoclet.50438216_31414" xreflabel=""/>Setting the LNET Module ip2nets Parameter</title>
+    <section xml:id="dbdoclet.50438216_31414">
+      <title>9.3 Setting the LNET Module ip2nets Parameter</title>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304786" xreflabel=""/>The ip2nets option is typically used when a single, universal modprobe.conf file is run on all servers and clients. Each node identifies the locally available networks based on the listed IP address patterns that match the node&apos;s local IP addresses.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304787" xreflabel=""/>Note that the IP address patterns listed in the ip2nets option are <emphasis>only</emphasis> used to identify the networks that an individual node should instantiate. They are <emphasis>not</emphasis> used by LNET for any other communications purpose.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304788" xreflabel=""/>For the example below, the nodes in the network have these IP addresses:</para>
@@ -225,38 +155,26 @@
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304789" xreflabel=""/> Server svr1: eth0 IP address 192.168.0.2, IP over Infiniband (o2ib) address 132.6.1.2.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304790" xreflabel=""/> Server svr2: eth0 IP address 192.168.0.4, IP over Infiniband (o2ib) address 132.6.1.4.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 <listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304791" xreflabel=""/> TCP clients have IP addresses 192.168.0.5-255.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304792" xreflabel=""/> Infiniband clients have IP over Infiniband (o2ib) addresses 132.6.[2-3].2, .4, .6, .8.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304793" xreflabel=""/>The following entry is placed in the modprobe.conf file on each server and client:</para>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304794" xreflabel=""/>options lnet &apos;ip2nets=&quot;tcp0(eth0) 192.168.0.[2,4]; \
 <anchor xml:id="dbdoclet.50438216_pgfId-1304795" xreflabel=""/>tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;
 </screen>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304796" xreflabel=""/>Each entry in ip2nets is referred to as a â€œruleâ€.</para>
+      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304796" xreflabel=""/>Each entry in ip2nets is referred to as a 'rule'.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304797" xreflabel=""/>The order of LNET entries is important when configuring servers. If a server node can be reached using more than one network, the first network specified in modprobe.conf will be used.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304798" xreflabel=""/>Because svr1 and svr2 match the first rule, LNET uses eth0 for tcp0 on those machines. (Although svr1 and svr2 also match the second rule, the first matching rule for a particular network is used).</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304799" xreflabel=""/>The [2-8/2] format indicates a range of 2-8 stepped by 2; that is 2,4,6,8. Thus, the clients at 132.6.3.5 will not find a matching o2ib network.</para>
     </section>
-    <section remap="h2">
-      <title>9.4 <anchor xml:id="dbdoclet.50438216_71227" xreflabel=""/>Setting the LNET Module routes Parameter</title>
+    <section xml:id="dbdoclet.50438216_71227">
+      <title>9.4 Setting the LNET Module routes Parameter</title>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304802" xreflabel=""/>The LNET module routes parameter is used to identify routers in a Lustre configuration. These parameters are set in modprob.conf on each Lustre node.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304803" xreflabel=""/>The LNET routes parameter specifies a colon-separated list of router definitions. Each route is defined as a network number, followed by a list of routers:</para>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304804" xreflabel=""/>routes=&lt;<emphasis>net type</emphasis>&gt; &lt;<emphasis>router NID(s)</emphasis>&gt;
@@ -285,12 +203,12 @@
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>9.5 <anchor xml:id="dbdoclet.50438216_10523" xreflabel=""/>Testing the LNET Configuration</title>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304852" xreflabel=""/>After configuring Lustre Networking, it is highly recommended that you test your LNET configuration using the LNET Self-Test provided with the Lustre software. For more information about using LNET Self-Test, see <link xl:href="LNETSelfTest.html#50438223_71556">Chapter 23</link>: <link xl:href="LNETSelfTest.html#50438223_21832">Testing Lustre Network Performance (LNET Self-Test)</link>.</para>
+    <section xml:id="dbdoclet.50438216_10523">
+      <title>9.5 Testing the LNET Configuration</title>
+      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304852" xreflabel=""/>After configuring Lustre Networking, it is highly recommended that you test your LNET configuration using the LNET Self-Test provided with the Lustre software. For more information about using LNET Self-Test, see <xref linkend='lnetselftest'/>.</para>
     </section>
-    <section remap="h2">
-      <title>9.6 <anchor xml:id="dbdoclet.50438216_35668" xreflabel=""/>Configuring the Router Checker</title>
+    <section xml:id="dbdoclet.50438216_35668">
+      <title>9.6 Configuring the Router Checker</title>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304858" xreflabel=""/>In a Lustre configuration in which different types of networks, such as a TCP/IP network and an Infiniband network, are connected by routers, a router checker can be run on the clients and servers in the routed configuration to monitor the status of the routers. In a multi-hop routing configuration, router checkers can be configured on routers to monitor the health of their next-hop routers.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1305791" xreflabel=""/>A router checker is configured by setting lnet parameters in modprobe.conf by including an entry in this form:</para>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304861" xreflabel=""/>options lnet &lt;<emphasis>router checker parameter</emphasis>&gt;=&lt;<emphasis>parameter value</emphasis>&gt;
@@ -299,17 +217,11 @@
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304865" xreflabel=""/>live_router_check_interval  - Specifies a time interval in seconds after which the router checker will ping the live routers. The default value is 0, meaning no checking is done. To set the value to 60, enter:</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304866" xreflabel=""/>options lnet live_router_check_interval=60
 </screen>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304867" xreflabel=""/>dead_router_check_interval  - Specifies a time interval in seconds after which the router checker will check for dead routers. The default value is 0, meaning no checking is done. To set the value to 60, enter:</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304868" xreflabel=""/>options lnet dead_router_check_interval=60
@@ -317,36 +229,23 @@
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1305950" xreflabel=""/>auto_down  - Enables/disables (1/0) the automatic marking of router state as up or down. The default value is 1. To disable router marking, enter:</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1305951" xreflabel=""/>options lnet auto_down=0
 </screen>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304869" xreflabel=""/>router_ping_timeout  - Specifies a timeout for the router checker when it checks live or dead routers. The router checker sends a ping message to each dead or live router once every dead_router_check_interval or live_router_check_interval respectively. The default value is 50. To set the value to 60, enter:</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1306120" xreflabel=""/>options lnet router_ping_timeout=60
 </screen>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438216_pgfId-1306116" xreflabel=""/>The router_ping_timeout is consistent with the default LND timeouts. You may have to increase it on very large clusters if the LND timeout is also increased. For larger clusters, we suggest increasing the check interval.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+
+<note>
+<para>The router_ping_timeout is consistent with the default LND timeouts. You may have to increase it on very large clusters if the LND timeout is also increased. For larger clusters, we suggest increasing the check interval.</para>
+</note>
+
+
        <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1306117" xreflabel=""/>check_routers_before_use  - Specifies that routers are to be checked before use. Set to off by default. If this parameter is set to on, the dead_router_check_interval parameter must be given a positive integer value.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304872" xreflabel=""/>options lnet check_routers_before_use=on
@@ -356,29 +255,23 @@
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304874" xreflabel=""/> Time the router was disabled</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438216_pgfId-1304875" xreflabel=""/> Elapsed disable time</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304876" xreflabel=""/>If the router checker does not get a reply message from the router within router_ping_timeout seconds, it considers the router to be down.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304878" xreflabel=""/>If a router is marked â€œupâ€ and responds to a ping, the timeout is reset.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304881" xreflabel=""/>If 100 packets have been sent successfully through a router, the sent-packets counter for that router will have a value of 100.</para>
     </section>
-    <section remap="h2">
-      <title>9.7 <anchor xml:id="dbdoclet.50438216_15200" xreflabel=""/>Best Practices for LNET Options</title>
+    <section xml:id="dbdoclet.50438216_15200">
+      <title>9.7 Best Practices for LNET Options</title>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304887" xreflabel=""/>For the networks, ip2nets, and routes options, follow these best practices to avoid configuration errors.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438216_pgfId-1304888" xreflabel=""/>Escaping commas with quotes</title>
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304889" xreflabel=""/>Depending on the Linux distribution, commas may need to be escaped using single or double quotes. In the extreme case, the options entry would look like this:</para>
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304890" xreflabel=""/>options lnet&apos;networks=&quot;tcp0,elan0&quot;&apos; &apos;routes=&quot;tcp [2,10]@elan0&quot;&apos;</para>
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304891" xreflabel=""/>Added quotes may confuse some distributions. Messages such as the following may indicate an issue related to added quotes:</para>
-        <para><anchor xml:id="dbdoclet.50438216_pgfId-1304892" xreflabel=""/>lnet: Unknown parameter â€˜&apos;networks&apos;</para>
-        <para><anchor xml:id="dbdoclet.50438216_pgfId-1304893" xreflabel=""/>A â€œRefusing connection - no matching NIDâ€ message generally points to an error in the LNET module configuration.</para>
+        <para><anchor xml:id="dbdoclet.50438216_pgfId-1304892" xreflabel=""/>lnet: Unknown parameter &apos;networks&apos;</para>
+        <para><anchor xml:id="dbdoclet.50438216_pgfId-1304893" xreflabel=""/>A 'Refusing connection - no matching NID' message generally points to an error in the LNET module configuration.</para>
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438216_pgfId-1304894" xreflabel=""/>Including comments</title>
@@ -386,6 +279,5 @@
         <para><anchor xml:id="dbdoclet.50438216_pgfId-1304896" xreflabel=""/>In this <emphasis>incorrect</emphasis> example, LNET silently ignores pt11 192.168.0.[92,96], resulting in these nodes not being properly initialized. No error message is generated.</para>
         <screen><anchor xml:id="dbdoclet.50438216_pgfId-1304897" xreflabel=""/>options lnet ip2nets=</screen>
       </section>
-    </section>
   </section>
 </chapter>
