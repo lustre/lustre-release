@@ -9,27 +9,27 @@
   <itemizedlist>
   <listitem>
       <para>
-          <link linkend='dbdoclet.50438256_49017'/>
+          <xref linkend='dbdoclet.50438256_49017'/>
       </para>
   </listitem>
   <listitem>
       <para>
-          <link linkend='dbdoclet.50438256_31079'/>
+          <xref linkend='dbdoclet.50438256_31079'/>
       </para>
   </listitem>
   <listitem>
       <para>
-          <link linkend='dbdoclet.50438256_84701'/>
+          <xref linkend='dbdoclet.50438256_84701'/>
       </para>
   </listitem>
   <listitem>
       <para>
-          <link linkend='dbdoclet.50438256_26456'/>
+          <xref linkend='dbdoclet.50438256_26456'/>
       </para>
   </listitem>
   <listitem>
       <para>
-          <link linkend='dbdoclet.50438256_78272'/>
+          <xref linkend='dbdoclet.50438256_78272'/>
       </para>
   </listitem>
   </itemizedlist>
@@ -355,7 +355,7 @@
       </orderedlist>
 
       <note>
-      <para><anchor xml:id="dbdoclet.50438256_pgfId-1291030" xreflabel=""/>We recommend that you use â€œdotted-quadâ€ notation for IP addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para>
+      <para><anchor xml:id="dbdoclet.50438256_pgfId-1291030" xreflabel=""/>We recommend that you use 'dotted-quad' notation for IP addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para>
   </note>
       
     </section>
