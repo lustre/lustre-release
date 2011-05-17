@@ -1,62 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustremonitoring'>
   <info>
-    <title>Lustre Monitoring</title>
+    <title xml:id='lustremonitoring.title'>Lustre Monitoring</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438273_pgfId-1291311" xreflabel=""/>This chapter provides information on monitoring Lustre and includes the following sections:</para>
+
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438273_pgfId-1296776" xreflabel=""/><link xl:href="LustreMonitoring.html#50438273_18711">Lustre Changelogs</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438273_pgfId-1296883" xreflabel=""/><link xl:href="LustreMonitoring.html#50438273_81684">Lustre Monitoring Tool</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438273_pgfId-1292576" xreflabel=""/><link xl:href="LustreMonitoring.html#50438273_80593">CollectL</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438273_pgfId-1298535" xreflabel=""/><link xl:href="LustreMonitoring.html#50438273_44185">Other Monitoring Options</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-</itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438273_pgfId-1296751" xreflabel=""/></title>
-    <section remap="h2">
-      <title>12.1 <anchor xml:id="dbdoclet.50438273_18711" xreflabel=""/>Lustre <anchor xml:id="dbdoclet.50438273_marker-1297383" xreflabel=""/>Changelogs</title>
+          <para><xref linkend='dbdoclet.50438273_18711'/>Lustre Changelogs</para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438273_81684"/>Lustre Monitoring Tool</para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438273_80593"/>CollectL</para>
+      </listitem>
+      <listitem>
+          <para><xref linkend="dbdoclet.50438273_44185"/>Other Monitoring Options</para>
+          </listitem>
+      </itemizedlist>
+
+    <section xml:id="dbdoclet.50438273_18711">
+      <title>12.1 Lustre <anchor xml:id="dbdoclet.50438273_marker-1297383" xreflabel=""/>Changelogs</title>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1296794" xreflabel=""/>The changelogs feature records events that change the file system namespace or file metadata. Changes such as file creation, deletion, renaming, attribute changes, etc. are recorded with the target and parent file identifiers (FIDs), the name of the target, and a timestamp. These records can be used for a variety of purposes:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438273_pgfId-1296795" xreflabel=""/> Capture recent changes to feed into an archiving system.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438273_pgfId-1296796" xreflabel=""/> Use changelog entries to exactly replicate changes in a file system mirror.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 <listitem>
           <para><anchor xml:id="dbdoclet.50438273_pgfId-1296797" xreflabel=""/> Set up &quot;watch scripts&quot; that take action on certain events or directories.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438273_pgfId-1296798" xreflabel=""/> Maintain a rough audit trail (file/directory changes with timestamps, but no user information).</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1296879" xreflabel=""/>Changelogs record types are:</para>
@@ -289,26 +265,25 @@ p=parent_FID target_name
         </section>
       </section>
     </section>
-    <section remap="h2">
-      <title>12.2 <anchor xml:id="dbdoclet.50438273_81684" xreflabel=""/>Lustre <anchor xml:id="dbdoclet.50438273_marker-1297386" xreflabel=""/>Monitoring Tool</title>
+    <section xml:id="dbdoclet.50438273_81684">
+      <title>12.2 Lustre <anchor xml:id="dbdoclet.50438273_marker-1297386" xreflabel=""/>Monitoring Tool</title>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1298196" xreflabel=""/>The Lustre Monitoring Tool (LMT) is a Python-based, distributed system developed and maintained by Lawrence Livermore National Lab (LLNL)). It provides a &apos;&apos;top&apos;&apos; like display of activity on server-side nodes (MDS, OSS and portals routers) on one or more Lustre file systems. It does not provide support for monitoring clients. For more information on LMT, including the setup procedure, see:</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1296057" xreflabel=""/><link xl:href="http://code.google.com/p/lmt/">http://code.google.com/p/lmt/</link></para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1296102" xreflabel=""/>LMT questions can be directed to:</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1296120" xreflabel=""/><link xl:href="mailto:lmt-discuss@googlegroups.com">lmt-discuss@googlegroups.com</link></para>
     </section>
-    <section remap="h2">
-      <title>12.3 <anchor xml:id="dbdoclet.50438273_80593" xreflabel=""/>Collect<anchor xml:id="dbdoclet.50438273_marker-1297391" xreflabel=""/>L</title>
+    <section xml:id="dbdoclet.50438273_80593">
+      <title>12.3 Collect<anchor xml:id="dbdoclet.50438273_marker-1297391" xreflabel=""/>L</title>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1293325" xreflabel=""/>CollectL is another tool that can be used to monitor Lustre. You can run CollectL on a Lustre system that has any combination of MDSs, OSTs and clients. The collected data can be written to a file for continuous logging and played back at a later time. It can also be converted to a format suitable for plotting.</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1293329" xreflabel=""/>For more information about CollectL, see:</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1294650" xreflabel=""/><link xl:href="http://collectl.sourceforge.net">http://collectl.sourceforge.net</link></para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1294692" xreflabel=""/>Lustre-specific documentation is also available. See:</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1294696" xreflabel=""/><link xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">http://collectl.sourceforge.net/Tutorial-Lustre.html</link></para>
     </section>
-    <section remap="h2">
-      <title>12.4 <anchor xml:id="dbdoclet.50438273_44185" xreflabel=""/>Other Monitoring Options</title>
+    <section xml:id="dbdoclet.50438273_44185">
+      <title>12.4 Other Monitoring Options</title>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1295490" xreflabel=""/>A variety of standard tools are available publically.</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1298235" xreflabel=""/>Another option is to script a simple monitoring solution that looks at various reports from ipconfig, as well as the procfs files generated by Lustre.</para>
       <para><anchor xml:id="dbdoclet.50438273_pgfId-1296750" xreflabel=""/><anchor xml:id="dbdoclet.50438273_67514" xreflabel=""/> </para>
     </section>
-  </section>
 </chapter>
