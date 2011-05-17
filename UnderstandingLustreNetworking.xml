@@ -4,107 +4,73 @@
     <title xml:id='understandinglustrenetworking.title'>Understanding Lustre Networking (LNET)</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438191_pgfId-1289855" xreflabel=""/>This chapter introduces Lustre Networking (LNET) and includes the following sections:</para>
-  <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289859" xreflabel=""/><link xl:href="UnderstandingLustreNetworking.html#50438191_22878">Introducing LNET</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289949" xreflabel=""/><link xl:href="UnderstandingLustreNetworking.html#50438191_19625">Key Features of LNET</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289863" xreflabel=""/><link xl:href="UnderstandingLustreNetworking.html#50438191_20721">Supported Network Types</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-</itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438191_pgfId-1289865" xreflabel=""/></title>
-    <section remap="h2">
-      <title>2.1 <anchor xml:id="dbdoclet.50438191_22878" xreflabel=""/>Introducing LNET</title>
+    <itemizedlist>
+        <listitem>
+            <para>
+                <xref linkend='dbdoclet.50438191_22878'/>
+            </para>                          
+        </listitem>                          
+        <listitem>             
+            <para>                           
+                <xref linkend='dbdoclet.50438191_19625'/>
+            </para>            
+        </listitem>
+        <listitem>
+            <para>
+                <xref linkend='dbdoclet.50438191_20721'/>
+            </para>
+        </listitem>
+    </itemizedlist>
+
+
+    <section xml:id="dbdoclet.50438191_22878">
+      <title>2.1 Introducing LNET</title>
       <para><anchor xml:id="dbdoclet.50438191_pgfId-1289866" xreflabel=""/>In a cluster with a Lustre file system, the system network connecting the servers and the clients is implemented using Lustre Networking (LNET), which provides the communication infrastructure required by the Lustre file system.</para>
       <para><anchor xml:id="dbdoclet.50438191_pgfId-1289867" xreflabel=""/>LNET supports many commonly-used network types, such as InfiniBand and IP networks, and allows simultaneous availability across multiple network types with routing between them. Remote Direct Memory Access (RDMA) is permitted when supported by underlying networks using the appropriate Lustre network driver (LND). High availability and recovery features enable transparent recovery in conjunction with failover servers.</para>
       <para><anchor xml:id="dbdoclet.50438191_pgfId-1289868" xreflabel=""/>An LND is a pluggable driver that provides support for a particular network type. LNDs are loaded into the driver stack, with one LND for each network type in use.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290033" xreflabel=""/>For information about configuring LNET, see <link xl:href="ConfiguringLNET.html#50438216_64580">Chapter 9</link>: <link xl:href="ConfiguringLNET.html#50438216_29256">Configuring Lustre Networking (LNET)</link>.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290034" xreflabel=""/>For information about administering LNET, see <link xl:href="III_LustreAdministration.html#50438269_15166">PART III - Administering Lustre</link>.</para>
+      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290033" xreflabel=""/>For information about configuring LNET, see <xref linkend='configuringlnet.title'/>.</para>
+      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290034" xreflabel=""/>For information about administering LNET, see <xref linkend='adminlustrepart3'/>.</para>
     </section>
-    <section remap="h2">
-      <title>2.2 <anchor xml:id="dbdoclet.50438191_19625" xreflabel=""/>Key Features of LNET</title>
+    <section xml:id="dbdoclet.50438191_19625">
+      <title>2.2 Key Features of LNET</title>
       <para><anchor xml:id="dbdoclet.50438191_pgfId-1289918" xreflabel=""/>Key features of LNET include:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289871" xreflabel=""/><anchor xml:id="dbdoclet.50438191_57931" xreflabel=""/> RDMA, when supported by underlying networks such as InfiniBand or</para>
-          <para> Myrinet MX</para>
-        </listitem>
-<listitem>
-          <para> </para>
+          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289871" xreflabel=""/><anchor xml:id="dbdoclet.50438191_57931" xreflabel=""/> RDMA, when supported by underlying networks such as InfiniBand or Myrinet MX</para>
         </listitem>
 <listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289872" xreflabel=""/> Support for many commonly-used network types such as InfiniBand and TCP/IP</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289873" xreflabel=""/> High availability and recovery features enabling transparent recovery in conjunction with failover servers</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 <listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289874" xreflabel=""/> Simultaneous availability of multiple network types with routing between them.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438191_pgfId-1290430" xreflabel=""/>LNET provides end-to-end throughput over Gigabit Ethernet (GigE) networks in excess of 100 MB/s, throughput up to 1.5 GB/s over InfiniBand double data rate (DDR) links, and throughput over 1 GB/s across 10GigE interfaces.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290434" xreflabel=""/>Lustre can use bonded networks, such as bonded Ethernet networks, when the underlying network technology supports bonding. For more information, see <link xl:href="SettingUpBonding.html#50438258_72593">Chapter 7</link>: <link xl:href="UnderstandingLustreNetworking.html#50438191_40026">Understanding Lustre Networking (LNET)</link>.</para>
+      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290434" xreflabel=""/>Lustre can use bonded networks, such as bonded Ethernet networks, when the underlying network technology supports bonding. For more information, see <xref linkend='settingupbonding.title'/>.</para>
     </section>
-    <section remap="h2">
-      <title>2.3 <anchor xml:id="dbdoclet.50438191_20721" xreflabel=""/>Supported Network Types</title>
+    <section xml:id="dbdoclet.50438191_20721">
+      <title>2.3 Supported Network Types</title>
       <para><anchor xml:id="dbdoclet.50438191_pgfId-1289882" xreflabel=""/>LNET includes LNDs to support many network types including:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289883" xreflabel=""/> InfiniBand: OpenFabrics OFED (o2ib)</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289884" xreflabel=""/> TCP (any network carrying TCP traffic, including GigE, 10GigE, and IPoIB)</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 <listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289885" xreflabel=""/> Cray: Seastar</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289886" xreflabel=""/> Myrinet: MX</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 <listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289888" xreflabel=""/><anchor xml:id="dbdoclet.50438191_marker-1289887" xreflabel=""/> RapidArray: ra</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438191_pgfId-1289890" xreflabel=""/><anchor xml:id="dbdoclet.50438191_marker-1289889" xreflabel=""/> Quadrics: Elan</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
     </section>
-  </section>
 </chapter>

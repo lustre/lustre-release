@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
-    <title>Configuring Lustre Networking (LNET)</title>
+    <title xml:id='configuringlnet.title'>Configuring Lustre Networking (LNET)</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438216_pgfId-1304688" xreflabel=""/>This chapter describes how to configure Lustre Networking (LNET). It includes the following sections:</para>
   <itemizedlist><listitem>

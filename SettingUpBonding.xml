@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
-    <title>Setting Up Network Interface Bonding</title>
+    <title xml:id='settingupbonding.title'>Setting Up Network Interface Bonding</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438258_pgfId-1301676" xreflabel=""/>This chapter describes how to use multiple network interfaces in parallel to increase bandwidth and/or redundancy. Topics include:</para>
   <itemizedlist><listitem>
