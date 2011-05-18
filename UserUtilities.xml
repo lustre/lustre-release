@@ -1,50 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='userutilities'>
   <info>
-    <title>User Utilities</title>
+    <title xml:id='userutilities.title'>User Utilities</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438206_pgfId-1305183" xreflabel=""/>This chapter describes user utilities and includes the following sections:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438206_pgfId-1305187" xreflabel=""/><link xl:href="UserUtilities.html#50438206_94597">lfs</link></para>
+      <para><xref linkend="dbdoclet.50438206_94597"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438206_42260"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438206_pgfId-1305191" xreflabel=""/><link xl:href="UserUtilities.html#50438206_42260">lfs_migrate</link></para>
+      <para><xref linkend="dbdoclet.50438206_91700"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438206_75125"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438206_pgfId-1305195" xreflabel=""/><link xl:href="UserUtilities.html#50438206_91700">lfsck</link></para>
+      <para><xref linkend="dbdoclet.50438206_86244"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438206_56217"/></para>
     </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438206_pgfId-1305199" xreflabel=""/><link xl:href="UserUtilities.html#50438206_75125">Filefrag</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438206_pgfId-1305203" xreflabel=""/><link xl:href="UserUtilities.html#50438206_86244">Mount</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438206_pgfId-1305207" xreflabel=""/><link xl:href="UserUtilities.html#50438206_56217">Handling Timeouts</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
+
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438206_pgfId-1305210" xreflabel=""/></title>
-    <section remap="h2">
-      <title>32.1 <anchor xml:id="dbdoclet.50438206_94597" xreflabel=""/>l<anchor xml:id="dbdoclet.50438206_marker-1305209" xreflabel=""/>fs</title>
+    <section xml:id="dbdoclet.50438206_94597" >
+      <title>32.1 <anchor xreflabel=""/>l<anchor xml:id="dbdoclet.50438206_marker-1305209" xreflabel=""/>fs</title>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1305211" xreflabel=""/>The lfs utility can be used for user configuration routines and monitoring.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305212" xreflabel=""/>Synopsis</title>
@@ -98,26 +84,8 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
 <anchor xml:id="dbdoclet.50438206_pgfId-1305258" xreflabel=""/>           &lt;filesystem&gt;
 <anchor xml:id="dbdoclet.50438206_pgfId-1305259" xreflabel=""/>lfs help
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438206_pgfId-1305260" xreflabel=""/>In the above example, the &lt;filesystem&gt; parameter refers to the mount point of the Lustre file system. The default mount point is /mnt/lustre</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-         <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438206_pgfId-1305261" xreflabel=""/>The old lfs quota output was very detailed and contained cluster-wide quota statistics (including cluster-wide limits for a user/group and cluster-wide usage for a user/group), as well as statistics for each MDS/OST. Now, lfs quota has been updated to provide only cluster-wide statistics, by default. To obtain the full report of cluster-wide limits, usage and statistics, use the -v option with lfs quota.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>In the above example, the &lt;filesystem&gt; parameter refers to the mount point of the Lustre file system. The default mount point is /mnt/lustre</para></note>
+                <note><para>The old lfs quota output was very detailed and contained cluster-wide quota statistics (including cluster-wide limits for a user/group and cluster-wide usage for a user/group), as well as statistics for each MDS/OST. Now, lfs quota has been updated to provide only cluster-wide statistics, by default. To obtain the full report of cluster-wide limits, usage and statistics, use the -v option with lfs quota.</para></note>
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305262" xreflabel=""/>Description</title>
@@ -234,7 +202,7 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305440" xreflabel=""/> </para></entry>
                 <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305442" xreflabel=""/><emphasis role="bold">--quiet</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305444" xreflabel=""/>Lists details about the fileâ€™s object ID information.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305444" xreflabel=""/>Lists details about the file's object ID information.</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305448" xreflabel=""/> </para></entry>
@@ -288,7 +256,7 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305523" xreflabel=""/> </para></entry>
                 <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305528" xreflabel=""/><emphasis role="bold">--size stripe_size</emphasis><footnote><para><anchor xml:id="dbdoclet.50438206_pgfId-1305527" xreflabel=""/>The default stripe-size is 0. The default start-ost is -1. Do NOT confuse them! If you set start-ost to 0, all new file creations occur on OST 0 (seldom a good idea).</para></footnote> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305531" xreflabel=""/> Number of bytes to store on an OST before moving to the next OST. A <emphasis role="bold">stripe_size</emphasis> of 0 uses the file systemâ€™s default stripe size, (default is 1 MB). Can be specified with <emphasis role="bold">k</emphasis> (KB), <emphasis role="bold">m</emphasis> (MB), or <emphasis role="bold">g</emphasis> (GB), respectively.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305531" xreflabel=""/> Number of bytes to store on an OST before moving to the next OST. A <emphasis role="bold">stripe_size</emphasis> of 0 uses the file system's default stripe size, (default is 1 MB). Can be specified with <emphasis role="bold">k</emphasis> (KB), <emphasis role="bold">m</emphasis> (MB), or <emphasis role="bold">g</emphasis> (GB), respectively.</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305543" xreflabel=""/> </para></entry>
@@ -306,7 +274,7 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1306343" xreflabel=""/><emphasis role="bold">poollist {filesystem} [.poolname]|{pathname}</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305582" xreflabel=""/>Lists pools in the file system or pathname, or OSTs in the file systemâ€™s pool.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305582" xreflabel=""/>Lists pools in the file system or pathname, or OSTs in the file system's pool.</para></entry>
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305586" xreflabel=""/><emphasis role="bold">quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g &lt;uname&gt;|&lt;uid&gt;|&lt;gname&gt;|&lt;gid&gt;] &lt;filesystem&gt;</emphasis></para><para><anchor xml:id="dbdoclet.50438206_pgfId-1305587" xreflabel=""/> </para></entry>
@@ -318,7 +286,7 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305603" xreflabel=""/><emphasis role="bold">quotachown</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305607" xreflabel=""/>Changes the fileâ€™s owner and group on OSTs of the specified file system.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305607" xreflabel=""/>Changes the file's owner and group on OSTs of the specified file system.</para></entry>
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305611" xreflabel=""/><emphasis role="bold">quotacheck [-ugf] &lt;filesystem&gt;</emphasis></para><para><anchor xml:id="dbdoclet.50438206_pgfId-1305612" xreflabel=""/> </para></entry>
@@ -338,11 +306,11 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305645" xreflabel=""/><emphasis role="bold">setquota &lt;-u|-g&gt; &lt;uname&gt;|&lt;uid&gt;|&lt;gname&gt;|&lt;gid&gt; [--block-softlimit &lt;block-softlimit&gt;] [--block-hardlimit &lt;block-hardlimit&gt;] [--inode-softlimit &lt;inode-softlimit&gt;] [--inode-hardlimit &lt;inode-hardlimit&gt;] &lt;filesystem&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305649" xreflabel=""/>Sets file system quotas for users or groups. Limits can be specified with --{block|inode}-{softlimit|hardlimit} or their short equivalents -b, -B, -i, -I. Users can set 1, 2, 3 or 4 limits.<footnote><para><anchor xml:id="dbdoclet.50438206_pgfId-1305652" xreflabel=""/>The old setquota interface is supported, but it may be removed in a future Lustre release.</para></footnote> Also, limits can be specified with special suffixes, -b, -k, -m, -g, -t, and -p to indicate units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50, respectively. By default, the block limits unit is 1 kilobyte (1,024), and block limits are always kilobyte-grained (even if specified in bytes). See <link xl:href="UserUtilities.html#50438206_11903">Examples</link>.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305649" xreflabel=""/>Sets file system quotas for users or groups. Limits can be specified with --{block|inode}-{softlimit|hardlimit} or their short equivalents -b, -B, -i, -I. Users can set 1, 2, 3 or 4 limits.<footnote><para><anchor xml:id="dbdoclet.50438206_pgfId-1305652" xreflabel=""/>The old setquota interface is supported, but it may be removed in a future Lustre release.</para></footnote> Also, limits can be specified with special suffixes, -b, -k, -m, -g, -t, and -p to indicate units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50, respectively. By default, the block limits unit is 1 kilobyte (1,024), and block limits are always kilobyte-grained (even if specified in bytes). See <xref linkend="dbdoclet.50438206_11903"/>.</para></entry>
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305659" xreflabel=""/><emphasis role="bold">setquota -t &lt;-u|-g&gt;</emphasis></para><para><anchor xml:id="dbdoclet.50438206_pgfId-1305660" xreflabel=""/><emphasis role="bold">[--block-grace &lt;block-grace&gt;]</emphasis></para><para><anchor xml:id="dbdoclet.50438206_pgfId-1305661" xreflabel=""/><emphasis role="bold">[--inode-grace &lt;inode-grace&gt;] &lt;filesystem&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305665" xreflabel=""/>Sets the file system quota grace times for users or groups. Grace time is specified in â€œXXwXXdXXhXXmXXsâ€ format or as an integer seconds value. See <link xl:href="UserUtilities.html#50438206_11903">Examples</link>.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305665" xreflabel=""/>Sets the file system quota grace times for users or groups. Grace time is specified in 'XXwXXdXXhXXmXXsâ€ format or as an integer seconds value. See <xref linkend="dbdoclet.50438206_11903"/>.</para></entry>
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438206_pgfId-1305672" xreflabel=""/><emphasis role="bold">help</emphasis></para></entry>
@@ -388,7 +356,7 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
          <para><anchor xml:id="dbdoclet.50438206_pgfId-1306393" xreflabel=""/>List space or inode usage for a specific OST pool.</para>
         <screen><anchor xml:id="dbdoclet.50438206_pgfId-1306394" xreflabel=""/>$ lfs df --pool &lt;filesystem&gt;[.&lt;pool&gt;] | &lt;pathname&gt;
 </screen>
-         <para><anchor xml:id="dbdoclet.50438206_pgfId-1306396" xreflabel=""/>List quotas of user â€˜bobâ€™.</para>
+         <para><anchor xml:id="dbdoclet.50438206_pgfId-1306396" xreflabel=""/>List quotas of user 'bob'.</para>
         <screen><anchor xml:id="dbdoclet.50438206_pgfId-1306397" xreflabel=""/>$ lfs quota -u bob /mnt/lustre
 </screen>
          <para><anchor xml:id="dbdoclet.50438206_pgfId-1306399" xreflabel=""/>Show grace times for user quotas on /mnt/lustre.</para>
@@ -406,7 +374,7 @@ g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
          <para><anchor xml:id="dbdoclet.50438206_pgfId-1306411" xreflabel=""/>Turns off quotas of user and group.</para>
         <screen><anchor xml:id="dbdoclet.50438206_pgfId-1306412" xreflabel=""/>$ lfs quotaoff -ug /mnt/lustre
 </screen>
-         <para><anchor xml:id="dbdoclet.50438206_pgfId-1306414" xreflabel=""/>Sets quotas of user â€˜bobâ€™, with a 1 GB block quota hardlimit and a 2 GB block quota softlimit.</para>
+         <para><anchor xml:id="dbdoclet.50438206_pgfId-1306414" xreflabel=""/>Sets quotas of user 'bob', with a 1 GB block quota hardlimit and a 2 GB block quota softlimit.</para>
         <screen><anchor xml:id="dbdoclet.50438206_pgfId-1306415" xreflabel=""/>$ lfs setquota -u bob --block-softlimit 2000000 --block-hardlimit 1000000 /\
 mnt/lustre
 </screen>
@@ -443,8 +411,8 @@ mnt/lustre
         <para><anchor xml:id="dbdoclet.50438206_pgfId-1305769" xreflabel=""/><link xl:href="SystemConfigurationUtilities.html#50438219_38274">lctl</link></para>
       </section>
     </section>
-    <section remap="h2">
-      <title>32.2 <anchor xml:id="dbdoclet.50438206_42260" xreflabel=""/>lfs_migrate</title>
+    <section xml:id="dbdoclet.50438206_42260">
+      <title>32.2 lfs_migrate</title>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1305772" xreflabel=""/>The lfs_migrate utility is a simple tool to migrate files between Lustre OSTs.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305773" xreflabel=""/>Synopsis</title>
@@ -516,11 +484,11 @@ mnt/lustre
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305837" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438206_pgfId-1305841" xreflabel=""/><link xl:href="UserUtilities.html#50438206_94597">lfs</link></para>
+        <para><anchor xml:id="dbdoclet.50438206_pgfId-1305841" xreflabel=""/><xref linkend="dbdoclet.50438206_94597"/></para>
       </section>
     </section>
-    <section remap="h2">
-      <title>32.3 <anchor xml:id="dbdoclet.50438206_91700" xreflabel=""/>lf<anchor xml:id="dbdoclet.50438206_marker-1305843" xreflabel=""/>sck</title>
+    <section xml:id="dbdoclet.50438206_91700">
+      <title>32.3 lf<anchor xml:id="dbdoclet.50438206_marker-1305843" xreflabel=""/>sck</title>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1305845" xreflabel=""/>Lfsck ensures that objects are not referenced by multiple MDS files, that there are no orphan objects on the OSTs (objects that do not have any file on the MDS which references them), and that all of the objects referenced by the MDS exist. Under normal circumstances, Lustre maintains such coherency by distributed logging mechanisms, but under exceptional circumstances that may fail (e.g. disk failure, file system corruption leading to e2fsck repair). To avoid lengthy downtime, you can also run lfsck once Lustre is already started.</para>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1305846" xreflabel=""/>The e2fsck utility is run on each of the local MDS and OST device file systems and verifies that the underlying ldiskfs is consistent. After e2fsck is run, lfsck does distributed coherency checking for the Lustre file system. In most cases, e2fsck is sufficient to repair any file system issues and lfsck is not required.</para>
       <section remap="h5">
@@ -529,26 +497,8 @@ mnt/lustre
  [-n|--nofix] [-v|--verbose] --mdsdb mds_database_file --ostdb ost1_databas\
 e_file [ost2_database_file...] &lt;filesystem&gt;
 </screen>
-         <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438206_pgfId-1305849" xreflabel=""/>As shown, the &lt;filesystem&gt; parameter refers to the Lustre file system mount point. The default mount point is /mnt/lustre.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-         <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438206_pgfId-1305850" xreflabel=""/>For lfsck, database filenames must be provided as absolute pathnames. Relative paths do not work, the databases cannot be properly opened.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>As shown, the &lt;filesystem&gt; parameter refers to the Lustre file system mount point. The default mount point is /mnt/lustre.</para></note>
+                <note><para>For lfsck, database filenames must be provided as absolute pathnames. Relative paths do not work, the databases cannot be properly opened.</para></note>
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305851" xreflabel=""/>Options</title>
@@ -603,11 +553,11 @@ e_file [ost2_database_file...] &lt;filesystem&gt;
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305910" xreflabel=""/>Description</title>
         <para><anchor xml:id="dbdoclet.50438206_pgfId-1305911" xreflabel=""/>The lfsck utility is used to check and repair the distributed coherency of a Lustre file system. If an MDS or an OST becomes corrupt, run a distributed check on the file system to determine what sort of problems exist. Use lfsck to correct any defects found.</para>
-        <para><anchor xml:id="dbdoclet.50438206_pgfId-1305914" xreflabel=""/>For more information on using e2fsck and lfsck, including examples, see <link xl:href="LustreRecovery.html#50438268_83826">Commit on Share</link>. For information on resolving orphaned objects, see <link xl:href="TroubleShootingRecovery.html#50438225_13916">Working with Orphaned Objects</link>.</para>
+        <para><anchor xml:id="dbdoclet.50438206_pgfId-1305914" xreflabel=""/>For more information on using e2fsck and lfsck, including examples, see <xref linkend="dbdoclet.50438268_83826"/> (Commit on Share). For information on resolving orphaned objects, see <xref linkend="dbdoclet.50438225_13916"/> (Working with Orphaned Objects).</para>
       </section>
     </section>
-    <section remap="h2">
-      <title>32.4 <anchor xml:id="dbdoclet.50438206_75125" xreflabel=""/>File<anchor xml:id="dbdoclet.50438206_marker-1305920" xreflabel=""/>frag</title>
+    <section xml:id="dbdoclet.50438206_75125">
+      <title>32.4 File<anchor xml:id="dbdoclet.50438206_marker-1305920" xreflabel=""/>frag</title>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1305922" xreflabel=""/>The e2fsprogs package contains the filefrag tool which reports the extent of file fragmentation.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305923" xreflabel=""/>Synopsis</title>
@@ -617,16 +567,7 @@ e_file [ost2_database_file...] &lt;filesystem&gt;
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438206_pgfId-1305925" xreflabel=""/>Description</title>
         <para><anchor xml:id="dbdoclet.50438206_pgfId-1305926" xreflabel=""/>The filefrag utility reports the extent of fragmentation in a given file. Initially, filefrag attempts to obtain extent information using FIEMAP ioctl, which is efficient and fast. If FIEMAP is not supported, then filefrag uses FIBMAP.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438206_pgfId-1305927" xreflabel=""/>Lustre only supports FIEMAP ioctl. FIBMAP ioctl is not supported.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>Lustre only supports FIEMAP ioctl. FIBMAP ioctl is not supported.</para></note>
         <para><anchor xml:id="dbdoclet.50438206_pgfId-1305931" xreflabel=""/>In default mode <footnote><para><anchor xml:id="dbdoclet.50438206_pgfId-1305930" xreflabel=""/>The default mode is faster than the verbose/extent mode.</para></footnote>, filefrag returns the number of physically discontiguous extents in the file. In extent or verbose mode, each extent is printed with details. For Lustre, the extents are printed in device offset order, not logical offset order.</para>
       </section>
       <section remap="h5">
@@ -697,8 +638,8 @@ e_file [ost2_database_file...] &lt;filesystem&gt;
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>32.5 <anchor xml:id="dbdoclet.50438206_86244" xreflabel=""/>Mou<anchor xml:id="dbdoclet.50438206_marker-1305992" xreflabel=""/>nt</title>
+    <section xml:id="dbdoclet.50438206_86244">
+      <title>32.5 Mou<anchor xml:id="dbdoclet.50438206_marker-1305992" xreflabel=""/>nt</title>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1305994" xreflabel=""/>Lustre uses the standard mount(8) Linux command. When mounting a Lustre file system, mount(8) executes the /sbin/mount.lustre command to complete the mount. The mount command supports these Lustre-specific options:</para>
       <informaltable frame="all">
         <tgroup cols="2">
@@ -753,8 +694,8 @@ e_file [ost2_database_file...] &lt;filesystem&gt;
         </tgroup>
       </informaltable>
     </section>
-    <section remap="h2">
-      <title>32.6 <anchor xml:id="dbdoclet.50438206_56217" xreflabel=""/>Handling <anchor xml:id="dbdoclet.50438206_marker-1306030" xreflabel=""/>Timeouts</title>
+    <section xml:id="dbdoclet.50438206_56217">
+      <title>32.6 Handling <anchor xml:id="dbdoclet.50438206_marker-1306030" xreflabel=""/>Timeouts</title>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1306032" xreflabel=""/>Timeouts are the most common cause of hung applications. After a timeout involving an MDS or failover OST, applications attempting to access the disconnected resource wait until the connection gets established.</para>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1306033" xreflabel=""/>When a client performs any remote operation, it gives the server a reasonable amount of time to respond. If a server does not reply either due to a down network, hung server, or any other reason, a timeout occurs which requires a recovery.</para>
       <para><anchor xml:id="dbdoclet.50438206_pgfId-1306034" xreflabel=""/>If a timeout occurs, a message (similar to this one), appears on the console of the client, and in /var/log/messages:</para>
@@ -766,5 +707,4 @@ e_file [ost2_database_file...] &lt;filesystem&gt;
 <anchor xml:id="dbdoclet.50438206_pgfId-1293091" xreflabel=""/> 
 </screen>
     </section>
-  </section>
 </chapter>
