@@ -1,128 +1,89 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='systemconfigurationutilities'>
   <info>
-    <title>System Configuration Utilities</title>
+    <title xml:id='systemconfigurationutilities.title'>System Configuration Utilities</title>
   </info>
+
   <para><anchor xml:id="dbdoclet.50438219_pgfId-1294056" xreflabel=""/>This chapter includes system configuration utilities and includes the following sections:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1294068" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_55923">e2scan</link></para>
+      <para><xref linkend="dbdoclet.50438219_55923"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_76969"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317533" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_76969">l_getidentity</link></para>
+      <para><xref linkend="dbdoclet.50438219_38274"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_58217"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317537" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_38274">lctl</link></para>
+      <para><xref linkend="dbdoclet.50438219_44971"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_84890"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1318294" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_58217">ll_decode_filter_fid</link></para>
+      <para><xref linkend="dbdoclet.50438219_90386"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_23232"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317857" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_44971">ll_recover_lost_found_objs</link></para>
+      <para><xref linkend="dbdoclet.50438219_23648"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_64286"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1316517" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_84890">llobdstat</link></para>
+      <para><xref linkend="dbdoclet.50438219_90218"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_54734"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1316684" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_90386">llog_reader</link></para>
+      <para><xref linkend="dbdoclet.50438219_63667"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_75432"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317852" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_23232">llstat</link></para>
+      <para><xref linkend="dbdoclet.50438219_12635"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_82679"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1318288" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_23648">llverdev</link></para>
+      <para><xref linkend="dbdoclet.50438219_51496"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438219_39574"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317682" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_64286">lshowmount</link></para>
+      <para><xref linkend="dbdoclet.50438219_99928"/></para>
     </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1318180" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_90218">lst</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317477" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_54734">lustre_rmmod.sh</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317370" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_63667">lustre_rsync</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1316689" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_75432">mkfs.lustre</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1294072" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_12635">mount.lustre</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317985" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_82679">plot-llstat</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317979" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_51496">routerstat</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1317358" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_39574">tunefs.lustre</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1294076" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_99928">Additional System Configuration Utilities</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
+
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438219_pgfId-1317399" xreflabel=""/></title>
-    <section remap="h2">
-      <title>36.1 <anchor xml:id="dbdoclet.50438219_55923" xreflabel=""/>e2<anchor xml:id="dbdoclet.50438219_marker-1317398" xreflabel=""/>scan</title>
+    <section xml:id="dbdoclet.50438219_55923">
+      <title>36.1 e2<anchor xml:id="dbdoclet.50438219_marker-1317398" xreflabel=""/>scan</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317400" xreflabel=""/>The e2scan utility is an ext2 file system-modified inode scan program. The e2scan program uses libext2fs to find inodes with ctime or mtime newer than a given time and prints out their pathname. Use e2scan to efficiently generate lists of files that have been modified. The e2scan tool is included in the e2fsprogs package, located at:</para>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317402" xreflabel=""/><link xl:href="http://downloads.lustre.org/public/tools/e2fsprogs/">http://downloads.lustre.org/public/tools/e2fsprogs/</link></para>
       <section remap="h5">
@@ -168,8 +129,8 @@
         </informaltable>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.2 <anchor xml:id="dbdoclet.50438219_76969" xreflabel=""/>l_<anchor xml:id="dbdoclet.50438219_marker-1318227" xreflabel=""/>getidentity</title>
+    <section xml:id="dbdoclet.50438219_76969">
+      <title>36.2 l_<anchor xml:id="dbdoclet.50438219_marker-1318227" xreflabel=""/>getidentity</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1318229" xreflabel=""/>The l_getidentity utility handles Lustre user / group cache upcall.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318230" xreflabel=""/>Synopsis</title>
@@ -213,8 +174,8 @@
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.3 <anchor xml:id="dbdoclet.50438219_38274" xreflabel=""/>lc<anchor xml:id="dbdoclet.50438219_marker-1302539" xreflabel=""/>tl</title>
+    <section xml:id="dbdoclet.50438219_38274">
+      <title>36.3 lc<anchor xml:id="dbdoclet.50438219_marker-1302539" xreflabel=""/>tl</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1302541" xreflabel=""/>The lctl utility is used for root control and configuration. With lctl you can directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1294259" xreflabel=""/>Synopsis</title>
@@ -284,7 +245,7 @@
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1311098" xreflabel=""/>For example:</para>
         <screen><anchor xml:id="dbdoclet.50438219_pgfId-1314652" xreflabel=""/>$ lctl list_param obdfilter.lustre-OST0000
 </screen>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1314653" xreflabel=""/>For more information on using lctl to set temporary and permanent parameters, see <link xl:href="LustreOperations.html#50438194_51490">Setting Parameters with lctl</link>.</para>
+<para><anchor xml:id="dbdoclet.50438219_pgfId-1314653" xreflabel=""/>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="dbdoclet.50438194_51490"/> (Setting Parameters with lctl).</para>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1302704" xreflabel=""/><emphasis role="bold">Network Configuration</emphasis></para>
         <informaltable frame="all">
           <tgroup cols="2">
@@ -420,7 +381,7 @@
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314801" xreflabel=""/><emphasis role="bold">conf_param</emphasis><emphasis>[-d] &lt;device|fsname&gt;.&lt;parameter&gt;=&lt;value&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314805" xreflabel=""/>Sets a permanent configuration parameter for any device via the MGS. This command must be run on the MGS node.</para><para><anchor xml:id="dbdoclet.50438219_pgfId-1314806" xreflabel=""/>All writeable parameters under <emphasis role="bold">lctl list_param</emphasis> (e.g. <emphasis>lctl list_param -F osc.*.* | grep</emphasis> =) can be permanently set using <emphasis role="bold">lctl conf_param</emphasis>, but the format is slightly different. For <emphasis role="bold">conf_param</emphasis>, the device is specified first, then the obdtype. Wildcards are not supported. Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout). For system-wide parameters, &lt;device&gt; is ignored.</para><para><anchor xml:id="dbdoclet.50438219_pgfId-1314807" xreflabel=""/>For more information on setting permanent parameters and <emphasis role="bold">lctl conf_param</emphasis> command examples, see <link xl:href="LustreOperations.html#50438194_64195">Setting Permanent Parameters</link>.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314805" xreflabel=""/>Sets a permanent configuration parameter for any device via the MGS. This command must be run on the MGS node.</para><para><anchor xml:id="dbdoclet.50438219_pgfId-1314806" xreflabel=""/>All writeable parameters under <emphasis role="bold">lctl list_param</emphasis> (e.g. <emphasis>lctl list_param -F osc.*.* | grep</emphasis> =) can be permanently set using <emphasis role="bold">lctl conf_param</emphasis>, but the format is slightly different. For <emphasis role="bold">conf_param</emphasis>, the device is specified first, then the obdtype. Wildcards are not supported. Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout). For system-wide parameters, &lt;device&gt; is ignored.</para><para><anchor xml:id="dbdoclet.50438219_pgfId-1314807" xreflabel=""/>For more information on setting permanent parameters and <emphasis role="bold">lctl conf_param</emphasis> command examples, see <xref linkend="dbdoclet.50438194_64195"/> (Setting Permanent Parameters).</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314848" xreflabel=""/> </para></entry>
@@ -442,16 +403,7 @@
             </tbody>
           </tgroup>
         </informaltable>
-         <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438219_pgfId-1312857" xreflabel=""/>Lustre tunables are not always accessible using the procfs interface, as it is platform-specific. As a solution, lctl {get,set,list}_param has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to /proc/{fs,sys}/{lustre,lnet}. For future portability, use lctl {get,set,list}_param instead.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>Lustre tunables are not always accessible using the procfs interface, as it is platform-specific. As a solution, lctl {get,set,list}_param has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to /proc/{fs,sys}/{lustre,lnet}. For future portability, use lctl {get,set,list}_param instead.</para></note>
          <para><anchor xml:id="dbdoclet.50438219_pgfId-1312745" xreflabel=""/><emphasis role="bold">Virtual Block Device Operations</emphasis></para>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1302906" xreflabel=""/>Lustre can emulate a virtual block device upon a regular file. This emulation is needed when you are trying to set up a swap space via the file.</para>
         <informaltable frame="all">
@@ -494,11 +446,11 @@
             <tbody>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314995" xreflabel=""/><emphasis role="bold">changelog_register</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314999" xreflabel=""/>Registers a new changelog user for a particular device. Changelog entries are not purged beyond a registered userâ€™s set point (see <emphasis role="bold">lfs changelog_clear</emphasis>).</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1314999" xreflabel=""/>Registers a new changelog user for a particular device. Changelog entries are not purged beyond a registered user's set point (see <emphasis role="bold">lfs changelog_clear</emphasis>).</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1315001" xreflabel=""/><emphasis role="bold">changelog_deregister</emphasis><emphasis>&lt;id&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1315005" xreflabel=""/>Unregisters an existing changelog user. If the userâ€™s &quot;clear&quot; record number is the minimum for the device, changelog records are purged until the next minimum.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1315005" xreflabel=""/>Unregisters an existing changelog user. If the user's &quot;clear&quot; record number is the minimum for the device, changelog records are purged until the next minimum.</para></entry>
               </row>
             </tbody>
           </tgroup>
@@ -595,11 +547,21 @@
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1315077" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1315090" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_75432">mkfs.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_12635">mount.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_38274">lctl</link>, <link xl:href="UserUtilities_HTML.html#50438206_94597">lfs</link></para>
+        <itemizedlist>
+            <listitem>
+            <para> <xref linkend="dbdoclet.50438219_75432"/> </para>
+            </listitem> <listitem>
+            <para> <xref linkend="dbdoclet.50438219_12635"/> </para>
+            </listitem> <listitem>
+            <para> <xref linkend="dbdoclet.50438219_38274"/> </para>
+            </listitem> <listitem>
+            <para> <xref linkend="dbdoclet.50438206_94597"/> </para>
+            </listitem> 
+        </itemizedlist>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.4 <anchor xml:id="dbdoclet.50438219_58217" xreflabel=""/>ll_decode_filter_fid</title>
+    <section xml:id="dbdoclet.50438219_58217">
+      <title>36.4 ll_decode_filter_fid</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1318305" xreflabel=""/>The ll_decode_filter_fid utility displays the Lustre object ID and MDT parent FID.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318306" xreflabel=""/>Synopsis</title>
@@ -626,22 +588,13 @@
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318322" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1318326" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_44971">ll_recover_lost_found_objs</link></para>
+        <para><anchor xml:id="dbdoclet.50438219_pgfId-1318326" xreflabel=""/><xref linkend="dbdoclet.50438219_44971"/></para>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.5 <anchor xml:id="dbdoclet.50438219_44971" xreflabel=""/>ll_recover_lost_<anchor xml:id="dbdoclet.50438219_marker-1317865" xreflabel=""/>found_objs</title>
+    <section xml:id="dbdoclet.50438219_44971">
+      <title>36.5 ll_recover_lost_<anchor xml:id="dbdoclet.50438219_marker-1317865" xreflabel=""/>found_objs</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317867" xreflabel=""/>The ll_recover_lost_found_objs utility helps recover Lustre OST objects (file data) from a lost and found directory and return them to their correct locations.</para>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438219_pgfId-1317868" xreflabel=""/>Running the ll_recover_lost_found_objs tool is not strictly necessary to bring an OST back online, it just avoids losing access to objects that were moved to the lost and found directory due to directory corruption.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>Running the ll_recover_lost_found_objs tool is not strictly necessary to bring an OST back online, it just avoids losing access to objects that were moved to the lost and found directory due to directory corruption.</para></note>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317869" xreflabel=""/>Synopsis</title>
         <screen><anchor xml:id="dbdoclet.50438219_pgfId-1317870" xreflabel=""/>$ ll_recover_lost_found_objs [-hv] -d directory
@@ -687,8 +640,8 @@
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.6 <anchor xml:id="dbdoclet.50438219_84890" xreflabel=""/>llobdstat</title>
+    <section xml:id="dbdoclet.50438219_84890">
+      <title>36.6 llobdstat</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1316535" xreflabel=""/>The llobdstat utility displays OST statistics.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1316536" xreflabel=""/>Synopsis</title>
@@ -724,9 +677,9 @@ unch: 18
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.7 <anchor xml:id="dbdoclet.50438219_90386" xreflabel=""/>llog_reader</title>
-      <para><anchor xml:id="dbdoclet.50438219_pgfId-1318200" xreflabel=""/>The llog_reader utility parses Lustreâ€™s on-disk configuration logs.</para>
+    <section xml:id="dbdoclet.50438219_90386">
+      <title>36.7 llog_reader</title>
+      <para><anchor xml:id="dbdoclet.50438219_pgfId-1318200" xreflabel=""/>The llog_reader utility parses Lustre's on-disk configuration logs.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318201" xreflabel=""/>Synopsis</title>
         <screen><anchor xml:id="dbdoclet.50438219_pgfId-1318202" xreflabel=""/>llog_reader filename
@@ -766,11 +719,11 @@ unch: 18
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318212" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1318213" xreflabel=""/>Section 21.1, Troubleshooting Lustre, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_39574">tunefs.lustre</link></para>
+        <para><xref linkend="troubleshootinglustre"/></para>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.8 <anchor xml:id="dbdoclet.50438219_23232" xreflabel=""/>ll<anchor xml:id="dbdoclet.50438219_marker-1318052" xreflabel=""/>stat</title>
+    <section xml:id="dbdoclet.50438219_23232">
+      <title>36.8 ll<anchor xml:id="dbdoclet.50438219_marker-1318052" xreflabel=""/>stat</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1318054" xreflabel=""/>The llstat utility displays Lustre statistics.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318055" xreflabel=""/>Synopsis</title>
@@ -841,8 +794,8 @@ unch: 18
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.9 <anchor xml:id="dbdoclet.50438219_23648" xreflabel=""/>llverdev<anchor xml:id="dbdoclet.50438219_marker-1317750" xreflabel=""/></title>
+    <section xml:id="dbdoclet.50438219_23648">
+      <title>36.9 llverdev<anchor xml:id="dbdoclet.50438219_marker-1317750" xreflabel=""/></title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317752" xreflabel=""/>The llverdev verifies a block device is functioning properly over its full size.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317753" xreflabel=""/>Synopsis</title>
@@ -932,8 +885,8 @@ unch: 18
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.10 <anchor xml:id="dbdoclet.50438219_64286" xreflabel=""/>lshowmount<anchor xml:id="dbdoclet.50438219_marker-1317690" xreflabel=""/></title>
+    <section xml:id="dbdoclet.50438219_64286">
+      <title>36.10 lshowmount<anchor xml:id="dbdoclet.50438219_marker-1317690" xreflabel=""/></title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317692" xreflabel=""/>The lshowmount utility shows Lustre exports.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317693" xreflabel=""/>Synopsis</title>
@@ -984,8 +937,8 @@ rts/&lt;uuid&gt;/nid /proc/fs/lustre/obdfilter/&lt;server&gt;/exports/&lt;uuid&g
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.11 <anchor xml:id="dbdoclet.50438219_90218" xreflabel=""/>l<anchor xml:id="dbdoclet.50438219_marker-1318121" xreflabel=""/><anchor xml:id="dbdoclet.50438219_marker-1318122" xreflabel=""/>st</title>
+    <section xml:id="dbdoclet.50438219_90218">
+      <title>36.11 l<anchor xml:id="dbdoclet.50438219_marker-1318121" xreflabel=""/><anchor xml:id="dbdoclet.50438219_marker-1318122" xreflabel=""/>st</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1318124" xreflabel=""/>The lst utility starts LNET self-test.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318125" xreflabel=""/>Synopsis</title>
@@ -1036,22 +989,13 @@ k=full size=4K
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.12 <anchor xml:id="dbdoclet.50438219_54734" xreflabel=""/>lustre_<anchor xml:id="dbdoclet.50438219_marker-1317379" xreflabel=""/>rmmod.sh</title>
+    <section xml:id="dbdoclet.50438219_54734">
+      <title>36.12 lustre_<anchor xml:id="dbdoclet.50438219_marker-1317379" xreflabel=""/>rmmod.sh</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317381" xreflabel=""/>The lustre_rmmod.sh utility removes all Lustre and LNET modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438219_pgfId-1317382" xreflabel=""/>The lustre_rmmod.sh utility does not work if Lustre modules are being used or if you have manually run the lctl network up command.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>The lustre_rmmod.sh utility does not work if Lustre modules are being used or if you have manually run the lctl network up command.</para></note>
     </section>
-    <section remap="h2">
-      <title>36.13 <anchor xml:id="dbdoclet.50438219_63667" xreflabel=""/>lustre_<anchor xml:id="dbdoclet.50438219_marker-1317224" xreflabel=""/>rsync</title>
+    <section xml:id="dbdoclet.50438219_63667">
+      <title>36.13 lustre_<anchor xml:id="dbdoclet.50438219_marker-1317224" xreflabel=""/>rsync</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317226" xreflabel=""/>The lustre_rsync utility synchronizes (replicates) a Lustre file system to a target file system.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317227" xreflabel=""/>Synopsis</title>
@@ -1073,17 +1017,13 @@ k=full size=4K
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438219_pgfId-1317240" xreflabel=""/> A changelog user must be registered (see lctl (8) changelog_register)</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1317241" xreflabel=""/>- AND -</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438219_pgfId-1317242" xreflabel=""/> Verify that the Lustre file system (source) and the replica file system (target) are identical before the changelog user is registered. If the file systems are discrepant, use a utility, e.g. regular rsync (not lustre_rsync) to make them identical.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
       </section>
       <section remap="h5">
@@ -1187,11 +1127,11 @@ k=full size=4K
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317346" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1317353" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_38274">lctl</link>, <link xl:href="UserUtilities_HTML.html#50438206_94597">lfs</link></para>
+        <para><anchor xml:id="dbdoclet.50438219_pgfId-1317353" xreflabel=""/><xref linkend="dbdoclet.50438206_94597"/></para>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.14 <anchor xml:id="dbdoclet.50438219_75432" xreflabel=""/>mkfs.<anchor xml:id="dbdoclet.50438219_marker-1316695" xreflabel=""/>lustre</title>
+    <section xml:id="dbdoclet.50438219_75432">
+      <title>36.14 mkfs.<anchor xml:id="dbdoclet.50438219_marker-1316695" xreflabel=""/>lustre</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1316697" xreflabel=""/>The mkfs.lustre utility formats a disk for a Lustre service.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1316927" xreflabel=""/>Synopsis</title>
@@ -1232,7 +1172,7 @@ k=full size=4K
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1316744" xreflabel=""/>Description</title>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1316745" xreflabel=""/>mkfs.lustre is used to format a disk device for use as part of a Lustre file system. After formatting, a disk can be mounted to start the Lustre service defined by this command.</para>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1316746" xreflabel=""/>When the file system is created, parameters can simply be added as a --param option to the mkfs.lustre command. See <link xl:href="LustreOperations.html#50438194_17237">Setting Parameters with mkfs.lustre</link>.</para>
+        <para><anchor xml:id="dbdoclet.50438219_pgfId-1316746" xreflabel=""/>When the file system is created, parameters can simply be added as a --param option to the mkfs.lustre command. See <xref linkend="dbdoclet.50438194_17237"/>.</para>
         <informaltable frame="all">
           <tgroup cols="3">
             <colspec colname="c1" colwidth="33*"/>
@@ -1267,7 +1207,7 @@ k=full size=4K
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316785" xreflabel=""/><emphasis role="bold">--fsname</emphasis>=<emphasis>filesystem_name</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316789" xreflabel=""/>The Lustre file system of which this service/node will be a part. The default file system name is â€œlustreâ€.</para><para><anchor xml:id="dbdoclet.50438219_pgfId-1316790" xreflabel=""/> </para><para><anchor xml:id="dbdoclet.50438219_pgfId-1316791" xreflabel=""/><emphasis role="bold">NOTE</emphasis>: The file system name is limited to 8 characters.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316789" xreflabel=""/>The Lustre file system of which this service/node will be a part. The default file system name is 'lustreâ€.</para><para><anchor xml:id="dbdoclet.50438219_pgfId-1316790" xreflabel=""/> </para><note><para>The file system name is limited to 8 characters.</para></note></entry>
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316793" xreflabel=""/><emphasis role="bold">--index</emphasis>=<emphasis>index</emphasis></para></entry>
@@ -1323,7 +1263,7 @@ k=full size=4K
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316871" xreflabel=""/><emphasis role="bold">--stripe-count-hint=stripes</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316875" xreflabel=""/>Used to optimize the MDTâ€™s inode size.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316875" xreflabel=""/>Used to optimize the MDT's inode size.</para></entry>
               </row>
               <row>
                 <entry nameend="c2" namest="c1"><para> <anchor xml:id="dbdoclet.50438219_pgfId-1316877" xreflabel=""/><emphasis role="bold">--verbose</emphasis></para></entry>
@@ -1350,11 +1290,19 @@ k=full size=4K
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1316899" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1316909" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_75432">mkfs.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_12635">mount.lustre</link>, <link xl:href="UserUtilities_HTML.html#50438206_94597">lfs</link></para>
+        <itemizedlist>
+            <listitem>
+            <para><xref linkend="dbdoclet.50438219_75432"/>mkfs.lustre, </para>
+            </listitem> <listitem>
+            <para><xref linkend="dbdoclet.50438219_12635"/>mount.lustre, </para>
+            </listitem> <listitem>
+            <para><xref linkend="dbdoclet.50438206_94597"/>lfs</para>
+            </listitem>
+    </itemizedlist>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.15 <anchor xml:id="dbdoclet.50438219_12635" xreflabel=""/>mount.<anchor xml:id="dbdoclet.50438219_marker-1310637" xreflabel=""/>lustre</title>
+    <section xml:id="dbdoclet.50438219_12635">
+      <title>36.15 mount.<anchor xml:id="dbdoclet.50438219_marker-1310637" xreflabel=""/>lustre</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1310639" xreflabel=""/>The mount.lustre utility starts a Lustre client or target service.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1310640" xreflabel=""/>Synopsis</title>
@@ -1525,11 +1473,21 @@ k=full size=4K
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1315248" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1315261" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_75432">mkfs.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_39574">tunefs.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_38274">lctl</link>, <link xl:href="UserUtilities_HTML.html#50438206_94597">lfs</link></para>
+
+        <itemizedlist><listitem>
+            <para>  <xref linkend="dbdoclet.50438219_75432"/></para>
+            </listitem> <listitem>
+            <para>  <xref linkend="dbdoclet.50438219_39574"/></para>
+            </listitem> <listitem>
+            <para>  <xref linkend="dbdoclet.50438219_38274"/></para>
+            </listitem> <listitem>
+            <para>  <xref linkend="dbdoclet.50438206_94597"/></para>
+            </listitem>
+        </itemizedlist>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.16 <anchor xml:id="dbdoclet.50438219_82679" xreflabel=""/>plot-<anchor xml:id="dbdoclet.50438219_marker-1317989" xreflabel=""/>llstat</title>
+    <section xml:id="dbdoclet.50438219_82679">
+      <title>36.16 plot-<anchor xml:id="dbdoclet.50438219_marker-1317989" xreflabel=""/>llstat</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317991" xreflabel=""/>The plot-llstat utility plots Lustre statistics.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317992" xreflabel=""/>Synopsis</title>
@@ -1574,8 +1532,8 @@ k=full size=4K
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.17 <anchor xml:id="dbdoclet.50438219_51496" xreflabel=""/>router<anchor xml:id="dbdoclet.50438219_marker-1317921" xreflabel=""/>stat</title>
+    <section xml:id="dbdoclet.50438219_51496">
+      <title>36.17 router<anchor xml:id="dbdoclet.50438219_marker-1317921" xreflabel=""/>stat</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317923" xreflabel=""/>The routerstat utility prints Lustre router statistics.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317924" xreflabel=""/>Synopsis</title>
@@ -1635,8 +1593,8 @@ k=full size=4K
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.18 <anchor xml:id="dbdoclet.50438219_39574" xreflabel=""/>tunefs.<anchor xml:id="dbdoclet.50438219_marker-1317076" xreflabel=""/>lustre</title>
+    <section xml:id="dbdoclet.50438219_39574">
+      <title>36.18 tunefs.<anchor xml:id="dbdoclet.50438219_marker-1317076" xreflabel=""/>lustre</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1317078" xreflabel=""/>The tunefs.lustre utility modifies configuration information on a Lustre target disk.</para>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317079" xreflabel=""/>Synopsis</title>
@@ -1704,7 +1662,7 @@ k=full size=4K
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1317122" xreflabel=""/><emphasis role="bold">--fsname</emphasis>=<emphasis>filesystem_name</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1317126" xreflabel=""/>The Lustre file system of which this service will be a part. The default file system name is â€œlustreâ€.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1317126" xreflabel=""/>The Lustre file system of which this service will be a part. The default file system name is 'lustreâ€.</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1317128" xreflabel=""/><emphasis role="bold">--index</emphasis>=index</para></entry>
@@ -1748,7 +1706,7 @@ k=full size=4K
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317194" xreflabel=""/>Examples</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1317195" xreflabel=""/>Change the MGSâ€™s NID address. (This should be done on each target disk, since they should all contact the same MGS.)</para>
+        <para><anchor xml:id="dbdoclet.50438219_pgfId-1317195" xreflabel=""/>Change the MGS's NID address. (This should be done on each target disk, since they should all contact the same MGS.)</para>
         <screen><anchor xml:id="dbdoclet.50438219_pgfId-1317196" xreflabel=""/>tunefs.lustre --erase-param --mgsnode=&lt;new_nid&gt; --writeconf /dev/sda
 </screen>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1317197" xreflabel=""/>Add a failover NID location for this target.</para>
@@ -1757,11 +1715,21 @@ k=full size=4K
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1317199" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1317209" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_75432">mkfs.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_12635">mount.lustre</link>, <link xl:href="SystemConfigurationUtilities_HTML.html#50438219_38274">lctl</link>, <link xl:href="UserUtilities_HTML.html#50438206_94597">lfs</link></para>
+        <itemizedlist>
+            <listitem>
+        <para><xref linkend="dbdoclet.50438219_75432"/></para>
+        </listitem> <listitem>
+            <para><xref linkend="dbdoclet.50438219_12635"/></para>
+        </listitem> <listitem>
+            <para><xref linkend="dbdoclet.50438219_38274"/></para>
+        </listitem> <listitem>
+            <para><xref linkend="dbdoclet.50438206_94597"/></para>
+        </listitem>
+        </itemizedlist>
       </section>
     </section>
-    <section remap="h2">
-      <title>36.19 <anchor xml:id="dbdoclet.50438219_99928" xreflabel=""/>Additional System <anchor xml:id="dbdoclet.50438219_marker-1313048" xreflabel=""/>Configuration Utilities</title>
+    <section xml:id="dbdoclet.50438219_99928">
+      <title>36.19 Additional System <anchor xml:id="dbdoclet.50438219_marker-1313048" xreflabel=""/>Configuration Utilities</title>
       <para><anchor xml:id="dbdoclet.50438219_pgfId-1294808" xreflabel=""/>This section describes additional system configuration utilities for Lustre.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1294829" xreflabel=""/>36.19.1 Application <anchor xml:id="dbdoclet.50438219_marker-1313051" xreflabel=""/>Profiling Utilities</title>
@@ -1793,9 +1761,7 @@ k=full size=4K
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438219_pgfId-1294856" xreflabel=""/> Per-client statistics tracked on the servers</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1294857" xreflabel=""/>Each MDT and OST now tracks LDLM and operations statistics for every connected client, for comparisons and simpler collection of distributed job statistics.</para>
         <screen><anchor xml:id="dbdoclet.50438219_pgfId-1294858" xreflabel=""/>/proc/fs/lustre/mds|obdfilter/*/exports/
@@ -1803,9 +1769,7 @@ k=full size=4K
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438219_pgfId-1294859" xreflabel=""/> Improved MDT statistics</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1294860" xreflabel=""/>More detailed MDT operations statistics are collected for better profiling.</para>
         <screen><anchor xml:id="dbdoclet.50438219_pgfId-1294861" xreflabel=""/>/proc/fs/lustre/mds/*/stats
@@ -1922,15 +1886,11 @@ tests 5 times each
               <itemizedlist><listitem>
                   <para><anchor xml:id="dbdoclet.50438219_pgfId-1311917" xreflabel=""/> Many (echo) clients cache locks for the specified resource at the same time.</para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 <listitem>
                   <para><anchor xml:id="dbdoclet.50438219_pgfId-1311927" xreflabel=""/> Many (echo) clients enqueue locks for the specified resource simultaneously.</para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 </itemizedlist>
             </listitem>
 <listitem>
@@ -1938,11 +1898,9 @@ tests 5 times each
             </listitem>
 <listitem>
               <itemizedlist><listitem>
-                  <para><anchor xml:id="dbdoclet.50438219_pgfId-1311941" xreflabel=""/> Fold the Lustre I/O kitâ€™s obdsurvey script functionality into loadgen</para>
+                  <para><anchor xml:id="dbdoclet.50438219_pgfId-1311941" xreflabel=""/> Fold the Lustre I/O kit's obdsurvey script functionality into loadgen</para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 </itemizedlist>
             </listitem>
 </itemizedlist>
@@ -1958,13 +1916,13 @@ tests 5 times each
         </section>
         <section remap="h5">
           <title><anchor xml:id="dbdoclet.50438219_pgfId-1315458" xreflabel=""/>Description</title>
-          <para>llog_reader parses the binary format of Lustreâ€™s on-disk configuration logs. It can only read the logs. Use tunefs.lustre to write to them.</para>
-          <para><anchor xml:id="dbdoclet.50438219_pgfId-1315459" xreflabel=""/>To examine a log file on a stopped Lustre server, mount its backing file system as ldiskfs, then use llog_reader to dump the log fileâ€™s contents. For example:</para>
+          <para>llog_reader parses the binary format of Lustre's on-disk configuration logs. It can only read the logs. Use tunefs.lustre to write to them.</para>
+          <para><anchor xml:id="dbdoclet.50438219_pgfId-1315459" xreflabel=""/>To examine a log file on a stopped Lustre server, mount its backing file system as ldiskfs, then use llog_reader to dump the log file's contents. For example:</para>
           <screen><anchor xml:id="dbdoclet.50438219_pgfId-1315460" xreflabel=""/>mount -t ldiskfs /dev/sda /mnt/mgs 
 <anchor xml:id="dbdoclet.50438219_pgfId-1315461" xreflabel=""/>llog_reader /mnt/mgs/CONFIGS/tfs-client
 </screen>
           <para><anchor xml:id="dbdoclet.50438219_pgfId-1315462" xreflabel=""/>To examine the same log file on a running Lustre server, use the ldiskfs-enabled debugfs utility (called debug.ldiskfs on some distributions) to extract the file. For example:</para>
-          <screen><anchor xml:id="dbdoclet.50438219_pgfId-1315463" xreflabel=""/>debugfs -c -R â€™dump CONFIGS/tfs-client /tmp/tfs-clientâ€™ /dev/sda 
+          <screen><anchor xml:id="dbdoclet.50438219_pgfId-1315463" xreflabel=""/>debugfs -c -R 'dump CONFIGS/tfs-client /tmp/tfs-client' /dev/sda 
 <anchor xml:id="dbdoclet.50438219_pgfId-1315464" xreflabel=""/>llog_reader /tmp/tfs-client
 </screen>
           <informaltable frame="none">
@@ -1988,12 +1946,12 @@ tests 5 times each
             </tgroup>
           </informaltable>
            <para><anchor xml:id="dbdoclet.50438219_pgfId-1315477" xreflabel=""/><emphasis role="bold">See Also</emphasis></para>
-          <para><anchor xml:id="dbdoclet.50438219_pgfId-1315478" xreflabel=""/><link xl:href="SystemConfigurationUtilities_HTML.html#50438219_39574">tunefs.lustre</link></para>
+           <para><anchor xml:id="dbdoclet.50438219_pgfId-1315478" xreflabel=""/><xref linkend="dbdoclet.50438219_39574"/></para>
         </section>
         <section remap="h5">
           <title><anchor xml:id="dbdoclet.50438219_pgfId-1294873" xreflabel=""/>lr_reader</title>
           <para><anchor xml:id="dbdoclet.50438219_pgfId-1294874" xreflabel=""/>The lr_reader utility translates a last received (last_rcvd) file into human-readable form.</para>
-          <para><anchor xml:id="dbdoclet.50438219_pgfId-1318389" xreflabel=""/>The following utilites are part of the Lustre I/O kit. For more information, see <link xl:href="BenchmarkingTests.html#50438212_37215">Chapter 24</link><emphasis>:</emphasis><link xl:href="BenchmarkingTests.html#50438212_66186">Benchmarking Lustre Performance (Lustre I/O Kit)</link>.</para>
+          <para><anchor xml:id="dbdoclet.50438219_pgfId-1318389" xreflabel=""/>The following utilites are part of the Lustre I/O kit. For more information, see <xref linkend='benchmarkinglustreperformance'/>.</para>
         </section>
         <section remap="h5">
           <title><anchor xml:id="dbdoclet.50438219_pgfId-1318396" xreflabel=""/>sgpdd_survey</title>
@@ -2038,7 +1996,7 @@ tests 5 times each
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1295755" xreflabel=""/>36.19.4 Flock <anchor xml:id="dbdoclet.50438219_marker-1295910" xreflabel=""/>Feature</title>
-        <para><anchor xml:id="dbdoclet.50438219_pgfId-1295756" xreflabel=""/>Lustre now includes the flock feature, which provides file locking support. Flock describes classes of file locks known as â€˜flocksâ€™. Flock can apply or remove a lock on an open file as specified by the user. However, a single file may not, simultaneously, have both shared and exclusive locks.</para>
+        <para><anchor xml:id="dbdoclet.50438219_pgfId-1295756" xreflabel=""/>Lustre now includes the flock feature, which provides file locking support. Flock describes classes of file locks known as 'flocks'. Flock can apply or remove a lock on an open file as specified by the user. However, a single file may not, simultaneously, have both shared and exclusive locks.</para>
         <para><anchor xml:id="dbdoclet.50438219_pgfId-1295757" xreflabel=""/>By default, the flock utility is disabled on Lustre. Two modes are available.</para>
          <informaltable frame="none">
           <tgroup cols="2">
@@ -2047,7 +2005,7 @@ tests 5 times each
             <tbody>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1295805" xreflabel=""/><emphasis role="bold">local mode</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1295807" xreflabel=""/> In this mode, locks are coherent on one node (a single-node flock), but not across all clients. To enable it, use -o localflock. This is a client-mount option.</para><para><emphasis role="bold">NOTE</emphasis>: This mode does not impact performance and is appropriate for single-node databases.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1295807" xreflabel=""/> In this mode, locks are coherent on one node (a single-node flock), but not across all clients. To enable it, use -o localflock. This is a client-mount option.</para><note><para>This mode does not impact performance and is appropriate for single-node databases.</para></note></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438219_pgfId-1295809" xreflabel=""/><emphasis role="bold">consistent mode</emphasis></para></entry>
@@ -2067,5 +2025,4 @@ tests 5 times each
         </section>
       </section>
     </section>
-  </section>
 </chapter>
