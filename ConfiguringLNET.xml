@@ -141,7 +141,7 @@
     <para>By default, Lustre ignores the loopback (lo0) interface. Lustre does not ignore IP addresses aliased to the loopback. If you alias IP addresses to the loopback interface, you must specify all Lustre networks using the LNET networks parameter.</para></note>
 
 <note>
-    <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send all traffic using the first configured interface. This is a limitation of Linux, not Lustre. In this case, network interface bonding should be used. For more information about network interface bonding, see <xref linkend='settinglupbonding'/>.</para>
+    <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send all traffic using the first configured interface. This is a limitation of Linux, not Lustre. In this case, network interface bonding should be used. For more information about network interface bonding, see <xref linkend='settingupbonding'/>.</para>
 </note>
 
       </section>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='installinglustre'>
   <info>
-    <title>Installing the Lustre Software</title>
+    <title xml:id='installinglustre.title'>Installing the Lustre Software</title>
   </info>
 
   <para><anchor xml:id="dbdoclet.50438261_pgfId-1292576" xreflabel=""/>This chapter describes how to install the Lustre software. It includes:</para>

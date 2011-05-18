@@ -26,8 +26,6 @@
 
 </itemizedlist>
 
-<note><para>Usually the Lustre recovery process is transparent. For information about troubleshooting recovery when something goes wrong, see <xref linkend="dbdoclet.50438268_93053"/>.</para></note>
-
     <section xml:id="dbdoclet.50438268_58047">
       <title>30.1 Recovery Overview</title>
       <para><anchor xml:id="dbdoclet.50438268_pgfId-1291584" xreflabel=""/>Lustre&apos;s recovery feature is responsible for dealing with node or network failure and returning the cluster to a consistent, performant state. Because Lustre allows servers to perform asynchronous update operations to the on-disk file system (i.e., the server can reply without waiting for the update to synchronously commit to disk), the clients may have state in memory that is newer than what the server can recover from disk after a crash.</para>

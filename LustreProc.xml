@@ -1230,7 +1230,7 @@ daa0/stats
 </screen>
         <section remap="h4">
           <title><anchor xml:id="dbdoclet.50438271_pgfId-1290921" xreflabel=""/>31.3.1.1 Interpreting OST Statistics</title>
-          <note><para>See also <xref linkend="dbdoclet.50438219_84890"/> (llobdstat) and <xref linend="dbdoclet.50438273_80593"/> (CollectL).</para></note>
+          <note><para>See also <xref linkend="dbdoclet.50438219_84890"/> (llobdstat) and <xref linkend="dbdoclet.50438273_80593"/> (CollectL).</para></note>
 
           <para><anchor xml:id="dbdoclet.50438271_pgfId-1301139" xreflabel=""/>The OST .../stats files can be used to track client statistics (client activity) for each OST. It is possible to get a periodic dump of values from these file (for example, every 10 seconds), that show the RPC rates (similar to iostat) by using the llstat.pl tool:</para>
           <screen><anchor xml:id="dbdoclet.50438271_pgfId-1290922" xreflabel=""/># llstat /proc/fs/lustre/osc/lustre-OST0000-osc/stats 

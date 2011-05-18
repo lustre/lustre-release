@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='configurationfilesmodulesparamters'>
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='configurationfilesmoduleparameters'>
   <info>
-    <title xml:id='configurationfilesmodulesparamters.title'>Configuration Files and Module Parameters</title>
+    <title xml:id='configurationfilesmoduleparameters.title'>Configuration Files and Module Parameters</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438293_pgfId-1293284" xreflabel=""/>This section describes configuration files and module parameters and includes the following sections:</para>
   <itemizedlist><listitem>

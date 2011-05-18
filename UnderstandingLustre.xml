@@ -220,15 +220,15 @@
             </tbody>
           </tgroup>
         </table>
-        <para><anchor xml:id="dbdoclet.50438250_pgfId-1293938" xreflabel=""/>For additional hardware requirements and considerations, see <xref linkend='settinguplustre.title'/> .</para>
+        <para><anchor xml:id="dbdoclet.50438250_pgfId-1293938" xreflabel=""/>For additional hardware requirements and considerations, see <xref linkend='settinguplustresystem.title'/> .</para>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438250_pgfId-1295546" xreflabel=""/>1.2.3 Lustre Networking (LNET)</title>
-        <para><anchor xml:id="dbdoclet.50438250_pgfId-1293939" xreflabel=""/>Lustre Networking (LNET) is a custom networking API that provides the communication infrastructure that handles metadata and file I/O data for the Lustre file system servers and clients. For more information about LNET, see <xref linked='understandinglustrenetworking.title'/>.</para>
+        <para><anchor xml:id="dbdoclet.50438250_pgfId-1293939" xreflabel=""/>Lustre Networking (LNET) is a custom networking API that provides the communication infrastructure that handles metadata and file I/O data for the Lustre file system servers and clients. For more information about LNET, see <xref linkend='understandinglustrenetworking.title'/>.</para>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438250_pgfId-1293940" xreflabel=""/>1.2.4 Lustre Cluster</title>
-        <para><anchor xml:id="dbdoclet.50438250_pgfId-1293941" xreflabel=""/>At scale, the Lustre cluster can include hundreds of OSSs and thousands of clients (see <xref linkend='understandinglustre.fig.lustrescale/'/>). More than one type of network can be used in a Lustre cluster. Shared storage between OSSs enables failover capability. For more details about OSS failover, see <xref linkend='understandingfailover.title'/>.</para>
+        <para><anchor xml:id="dbdoclet.50438250_pgfId-1293941" xreflabel=""/>At scale, the Lustre cluster can include hundreds of OSSs and thousands of clients (see <xref linkend='understandinglustre.fig.lustrescale'/>). More than one type of network can be used in a Lustre cluster. Shared storage between OSSs enables failover capability. For more details about OSS failover, see <xref linkend='understandingfailover.title'/>.</para>
             <figure>
                 <title xml:id='understandinglustre.fig.lustrescale'>Lustre cluster at scale</title>
                 <mediaobject>

@@ -719,7 +719,7 @@ unch: 18
       </section>
       <section remap="h5">
         <title><anchor xml:id="dbdoclet.50438219_pgfId-1318212" xreflabel=""/>See Also</title>
-        <para><xref linkend="troubleshootinglustre"/></para>
+        <para><xref linkend="dbdoclet.50438219_39574"/></para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438219_23232">
@@ -1951,7 +1951,7 @@ tests 5 times each
         <section remap="h5">
           <title><anchor xml:id="dbdoclet.50438219_pgfId-1294873" xreflabel=""/>lr_reader</title>
           <para><anchor xml:id="dbdoclet.50438219_pgfId-1294874" xreflabel=""/>The lr_reader utility translates a last received (last_rcvd) file into human-readable form.</para>
-          <para><anchor xml:id="dbdoclet.50438219_pgfId-1318389" xreflabel=""/>The following utilites are part of the Lustre I/O kit. For more information, see <xref linkend='benchmarkinglustreperformance'/>.</para>
+          <para><anchor xml:id="dbdoclet.50438219_pgfId-1318389" xreflabel=""/>The following utilites are part of the Lustre I/O kit. For more information, see <xref linkend='benchmarkingtests'/>.</para>
         </section>
         <section remap="h5">
           <title><anchor xml:id="dbdoclet.50438219_pgfId-1318396" xreflabel=""/>sgpdd_survey</title>

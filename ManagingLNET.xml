@@ -6,16 +6,16 @@
 
   <para><anchor xml:id="dbdoclet.50438203_pgfId-999824" xreflabel=""/>This chapter describes some tools for managing Lustre Networking (LNET) and includes the following sections:</para>
   <itemizedlist><listitem>
-          <para><xref linkend="50438203_51732"/>Updating the Health Status of a Peer or Router</para>
+          <para><xref linkend="dbdoclet.50438203_51732"/>Updating the Health Status of a Peer or Router</para>
       </listitem>
       <listitem>
-          <para><xref linkend="50438203_48703"/>Starting and Stopping LNET</para>
+          <para><xref linkend="dbdoclet.50438203_48703"/>Starting and Stopping LNET</para>
       </listitem>
       <listitem>
-          <para><xref linkend="50438203_82542"/>Multi-Rail Configurations with LNET</para>
+          <para><xref linkend="dbdoclet.50438203_82542"/>Multi-Rail Configurations with LNET</para>
       </listitem>
       <listitem>
-          <para><xref linkend="50438203_78227"/>Load Balancing with InfiniBand</para>
+          <para><xref linkend="dbdoclet.50438203_78227"/>Load Balancing with InfiniBand</para>
       </listitem>
   </itemizedlist>
 

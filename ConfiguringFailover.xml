@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='configuringfailover'>
   <info>
-    <title>Configuring Lustre Failover</title>
+    <title xml:id='configuringfailover.title'>Configuring Lustre Failover</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438188_pgfId-1292189" xreflabel=""/>This chapter describes how to configure Lustre failover using the Heartbeat cluster infrastructure daemon. It includes:</para>
 

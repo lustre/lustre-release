@@ -40,7 +40,7 @@
             <para><anchor xml:id="dbdoclet.50540653_pgfId-1304341" xreflabel=""/><emphasis role="bold">Health monitoring</emphasis>  - Verifies the availability of hardware and network resources and responds to health indications provided by Lustre.</para>
           </listitem>
 </itemizedlist>
-<para><anchor xml:id="dbdoclet.50540653_pgfId-1305091" xreflabel=""/>These capabilities can be provided by a variety of software and/or hardware solutions. For more information about using power management software or hardware and high availability (HA) software with Lustre, see <xref linkend="configuringlustrefailover.title"/>.</para>
+<para><anchor xml:id="dbdoclet.50540653_pgfId-1305091" xreflabel=""/>These capabilities can be provided by a variety of software and/or hardware solutions. For more information about using power management software or hardware and high availability (HA) software with Lustre, see <xref linkend="configuringfailover.title"/>.</para>
         <para><anchor xml:id="dbdoclet.50540653_pgfId-1305272" xreflabel=""/>HA software is responsible for detecting failure of the primary Lustre server node and controlling the failover. Lustre works with any HA software that includes resource (I/O) fencing. For proper resource fencing, the HA software must be able to completely power off the failed server or disconnect it from the shared storage device. If two active nodes have access to the same storage device, data may be severely corrupted.</para>
       </section>
       <section remap="h3">

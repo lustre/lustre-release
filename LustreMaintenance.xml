@@ -357,17 +357,17 @@ The list of files that need to be restored from backup is stored in /tmp/files_t
 
 </listitem></orderedlist>
 </listitem><listitem>
-4. Deactivate the OST.
+Deactivate the OST.
 
 <orderedlist><listitem>
-a. To temporarily disable the deactivated OST, enter:
+To temporarily disable the deactivated OST, enter:
 
 <screen>
 [client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0
 </screen>
 
 If there is expected to be a replacement OST in some short time (a few days), the OST can temporarily be deactivated on the clients:
-Note - This setting is only temporary and will be reset if the clients or MDS are rebooted. It needs to be run on all clients.
+<note><para> This setting is only temporary and will be reset if the clients or MDS are rebooted. It needs to be run on all clients.</para></note>
 
 </listitem><listitem>
 b. To permanently disable the deactivated OST, enter:
@@ -378,8 +378,12 @@ b. To permanently disable the deactivated OST, enter:
 </listitem></orderedlist>
 
 If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS:
-Note - A removed OST still appears in the file system; do not create a new OST with the same name.
-14.7.2 Backing Up OST Configuration Files
+<note><para>A removed OST still appears in the file system; do not create a new OST with the same name.</para></note>
+</listitem></orderedlist>
+
+</section>
+<section remap="h3">
+    <title>14.7.2 Backing Up OST Configuration Files</title>
 
 If the OST device is still accessible, then the Lustre configuration files on the OST should be backed up and saved for future use in order to avoid difficulties when a replacement OST is returned to service. These files rarely change, so they can and should be backed up while the OST is functional and accessible. If the deactivated OST is still available to mount (i.e. has not permanently failed or is unmountable due to severe corruption), an effort should be made to preserve these files.
 
@@ -407,7 +411,9 @@ CONFIGS/ O/0/LAST_ID
 </screen>
 </listitem></orderedlist>
 
-14.7.3 Restoring OST Configuration Files
+</section>
+<section>
+    <title>14.7.3 Restoring OST Configuration Files</title>
 
 If the original OST is still available, it is best to follow the OST backup and restore procedure given in either Backing Up and Restoring an MDS or OST (Device Level), or Making a File-Level Backup of an OST File System and Restoring a File-Level Backup.
 
@@ -461,7 +467,9 @@ seek=5 skip=5
 </screen>
 </listitem></orderedlist>
 
-14.7.4 Returning a Deactivated OST to Service
+</section>
+<section>
+    <title>14.7.4 Returning a Deactivated OST to Service</title>
 
 If the OST was permanently deactivated, it needs to be reactivated in the MGS configuration.
 
@@ -476,7 +484,10 @@ If the OST was temporarily deactivated, it needs to be reactivated on the MDS an
 [client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0
 </screen>
 
-14.8 Aborting Recovery
+</section>
+</section>
+    <section xml:id="dbdoclet.50438199_77819">
+        <title>14.8 Aborting Recovery</title>
 
 You can abort recovery with either the lctl utility or by mounting the target with the abort_recov option (mount -o abort_recov). When starting a target, run:
 
@@ -485,7 +496,10 @@ $ mount -t lustre -L &lt;MDT name&gt; -o abort_recov &lt;mount_point&gt;
 </screen>
 
 Note - The recovery process is blocked until all OSTs are available.
-14.9 Determining Which Machine is Serving an OST
+
+</section>
+    <section xml:id="dbdoclet.50438199_12607">
+        <title>14.9 Determining Which Machine is Serving an OST </title>
 
 In the course of administering a Lustre file system, you may need to determine which machine is serving a specific OST. It is not as simple as identifying the machine’s IP address, as IP is only one of several networking protocols that Lustre uses and, as such, LNET does not use IP addresses as node identifiers, but NIDs instead.
 
@@ -513,7 +527,9 @@ osc.lustre-OST0003-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.lustre-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 </screen>
 
-14.10 Changing the Address of a Failover Node
+</section>
+    <section xml:id="dbdoclet.50438199_62333">
+        <title>14.10 Changing the Address of a Failover Node</title>
 
 To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition:
 
@@ -521,11 +537,9 @@ To change the address of a failover node (e.g, to use node X instead of node Y),
 tunefs.lustre --erase-params --failnode=&lt;NID&gt; &lt;device&gt; 
 </screen>
 
-</listitem></orderedlist>
 
 
 
-                    </section>
-                </section>
-            </section>
-        </chapter>
+    </section>
+    </section>
+</chapter>

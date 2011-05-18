@@ -19,8 +19,6 @@
 
 </itemizedlist>
 
-<note><para>For a description of how recovery is implemented in Lustre, see <xref linkend="dbdoclet.50438225_28147"/>.</para></note>
-
     <section xml:id="dbdoclet.50438225_71141">
       <title>27.1 Recovering from Errors or <anchor xml:id="dbdoclet.50438225_marker-1292184" xreflabel=""/>Corruption on a Backing File System</title>
       <para><anchor xml:id="dbdoclet.50438225_pgfId-1291241" xreflabel=""/>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the file system. ldiskfs journaling ensures that the file system remains coherent. The backing file systems are never accessed directly from the client, so client crashes are not relevant.</para>

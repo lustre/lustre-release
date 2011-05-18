@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='confirugrelustre'>
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='configuringlustre'>
   <info>
-    <title>Configuring Lustre</title>
+    <title xml:id='configuringlustre.title'>Configuring Lustre</title>
   </info>
 
 
@@ -41,7 +41,7 @@
 </itemizedlist>
 <para><anchor xml:id="dbdoclet.50438267_pgfId-1294840" xreflabel=""/>For information about configuring LNET, see <xref linkend='configuringlnet'/>. For information about testing LNET, see <xref linkend='lnetselftest'/>.</para>
       <itemizedlist><listitem>
-              <para><anchor xml:id="dbdoclet.50438267_pgfId-1294602" xreflabel=""/><emphasis>Run the benchmark script sgpdd_survey to determine baseline performance of your hardware.</emphasis>  Benchmarking your hardware will simplify debugging performance issues that are unrelated to Lustre and ensure you are getting the best possible performance with your installation. For information about running sgpdd_survey, see <xref linkend='benchmarkingtets'/>.</para>
+              <para><anchor xml:id="dbdoclet.50438267_pgfId-1294602" xreflabel=""/><emphasis>Run the benchmark script sgpdd_survey to determine baseline performance of your hardware.</emphasis>  Benchmarking your hardware will simplify debugging performance issues that are unrelated to Lustre and ensure you are getting the best possible performance with your installation. For information about running sgpdd_survey, see <xref linkend='benchmarkingtests'/>.</para>
         </listitem>
 </itemizedlist>
 
@@ -380,10 +380,10 @@ oup upcall set to /usr/sbin/l_getgroups
         </orderedlist>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293656" xreflabel=""/> 4. Create and mount ost2.</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293656" xreflabel=""/>Create and mount ost2.</para>
             <orderedlist>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293645" xreflabel=""/>a. Create ost2. On oss2 node, run:</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293645" xreflabel=""/>Create ost2. On oss2 node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291196" xreflabel=""/>[root@oss2 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev\
 /sdd
 </screen>
@@ -411,7 +411,7 @@ oup upcall set to /usr/sbin/l_getgroups
 </screen>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291233" xreflabel=""/>b. Mount ost2 on the OSS on which it was created. On oss2 node, run:</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291233" xreflabel=""/>Mount ost2 on the OSS on which it was created. On oss2 node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291234" xreflabel=""/>root@oss2 /] mount -t lustre /dev/sdd /mnt/ost2 
 </screen>
         <para><anchor xml:id="dbdoclet.50438267_pgfId-1291235" xreflabel=""/>The command generates this output:</para>
@@ -428,7 +428,7 @@ oup upcall set to /usr/sbin/l_getgroups
     </orderedlist>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291243" xreflabel=""/> 5. Mount the Lustre file system on the client. On the client node, run:</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291243" xreflabel=""/>Mount the Lustre file system on the client. On the client node, run:</para>
         <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291244" xreflabel=""/>root@client1 /] mount -t lustre 10.2.0.1@tcp0:/temp /lustre 
 </screen>
         <para><anchor xml:id="dbdoclet.50438267_pgfId-1291245" xreflabel=""/>This command generates this output:</para>
@@ -436,10 +436,10 @@ oup upcall set to /usr/sbin/l_getgroups
 </screen>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291247" xreflabel=""/> 6. Verify that the file system started and is working by running the df, dd and ls commands on the client node.</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291247" xreflabel=""/>Verify that the file system started and is working by running the df, dd and ls commands on the client node.</para>
 <orderedlist>
 <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291248" xreflabel=""/>a. Run the lfsdf -h command:</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291248" xreflabel=""/>Run the lfsdf -h command:</para>
         <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291249" xreflabel=""/>[root@client1 /] lfs df -h 
 </screen>
         <para><anchor xml:id="dbdoclet.50438267_pgfId-1293698" xreflabel=""/>The lfsdf-h command lists space usage per OST and the MDT in human-readable format. This command generates output similar to this:</para>
@@ -457,7 +457,7 @@ oup upcall set to /usr/sbin/l_getgroups
 </screen>
 </listitem>
 <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293715" xreflabel=""/>b. Run the lfsdf-ih command.</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293715" xreflabel=""/>Run the lfsdf-ih command.</para>
         <screen><anchor xml:id="dbdoclet.50438267_pgfId-1293716" xreflabel=""/>[root@client1 /] lfs df -ih
 </screen>
         <para><anchor xml:id="dbdoclet.50438267_pgfId-1293717" xreflabel=""/>The lfsdf-ih command lists inode usage per OST and the MDT. This command generates output similar to this:</para>
@@ -506,7 +506,7 @@ oup upcall set to /usr/sbin/l_getgroups
       <para><anchor xml:id="dbdoclet.50438267_pgfId-1292458" xreflabel=""/>This section describes how to scale the Lustre file system or make configuration changes using the Lustre configuration utilities.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438267_pgfId-1292441" xreflabel=""/>10.2.1 Scaling the <anchor xml:id="dbdoclet.50438267_marker-1292440" xreflabel=""/>Lustre File System</title>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292442" xreflabel=""/>A Lustre file system can be scaled by adding OSTs or clients. For instructions on creating additional OSTs repeat <xref linkend="dbdoclet.50438267_81555"/>Step 3 and <xref linkend="dbdoclet.50438267_24062"/>Step 4 above. For mounting additional clients, repeat <xref linkend="dbdoclet.50438267_43365"/>Step 5 for each client.</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292442" xreflabel=""/>A Lustre file system can be scaled by adding OSTs or clients. For instructions on creating additional OSTs repeat <xref linkend="dbdoclet.50438267_pgfId-1291170"/>Step 3 and <xref linkend="dbdoclet.50438267_pgfId-1293955"/>Step 4 above. For mounting additional clients, repeat <xref linkend="dbdoclet.50438267_pgfId-1290934"/>Step 5 for each client.</para>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438267_pgfId-1292798" xreflabel=""/>10.2.2 <anchor xml:id="dbdoclet.50438267_50212" xreflabel=""/>Changing Striping Defaults</title>
@@ -541,7 +541,7 @@ oup upcall set to /usr/sbin/l_getgroups
             </tbody>
           </tgroup>
         </table>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292907" xreflabel=""/>Use the lfs setstripe command described in <xref linkend='managiningstripingfreespace'/> to change the file layout configuration.</para>
+        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292907" xreflabel=""/>Use the lfs setstripe command described in <xref linkend='managingstripingfreespace'/> to change the file layout configuration.</para>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438267_pgfId-1292908" xreflabel=""/>10.2.3 Using the Lustre Configuration Utilities</title>
