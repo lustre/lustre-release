@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustredebugging'>
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustredebugging'>
   <info>
     <title xml:id='lustredebugging.title'>Lustre Debugging</title>
   </info>
@@ -719,4 +719,4 @@ line 241)
 </screen>
       </section>
   </section>
-</article>
+</chapter>
