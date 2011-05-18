@@ -1,76 +1,77 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='understandinglustrenetworking'>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
   <info>
-    <title xml:id='understandinglustrenetworking.title'>Understanding Lustre Networking (LNET)</title>
+    <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNET)</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438191_pgfId-1289855" xreflabel=""/>This chapter introduces Lustre Networking (LNET) and includes the following sections:</para>
-    <itemizedlist>
-        <listitem>
-            <para>
-                <xref linkend='dbdoclet.50438191_22878'/>
-            </para>                          
-        </listitem>                          
-        <listitem>             
-            <para>                           
-                <xref linkend='dbdoclet.50438191_19625'/>
-            </para>            
-        </listitem>
-        <listitem>
-            <para>
-                <xref linkend='dbdoclet.50438191_20721'/>
+  <itemizedlist>
+    <listitem>
+      <para>
+                <xref linkend="dbdoclet.50438191_22878"/>
             </para>
-        </listitem>
+    </listitem>
+    <listitem>
+      <para>                           
+                <xref linkend="dbdoclet.50438191_19625"/>
+            </para>
+    </listitem>
+    <listitem>
+      <para>
+                <xref linkend="dbdoclet.50438191_20721"/>
+            </para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="dbdoclet.50438191_22878">
+    <title>2.1 Introducing LNET</title>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1289866" xreflabel=""/>In a cluster with a Lustre file system, the system network connecting the servers and the clients is implemented using Lustre Networking (LNET), which provides the communication infrastructure required by the Lustre file system.</para>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1289867" xreflabel=""/>LNET supports many commonly-used network types, such as InfiniBand and IP networks, and allows simultaneous availability across multiple network types with routing between them. Remote Direct Memory Access (RDMA) is permitted when supported by underlying networks using the appropriate Lustre network driver (LND). High availability and recovery features enable transparent recovery in conjunction with failover servers.</para>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1289868" xreflabel=""/>An LND is a pluggable driver that provides support for a particular network type. LNDs are loaded into the driver stack, with one LND for each network type in use.</para>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1290033" xreflabel=""/>For information about configuring LNET, see <xref linkend="configuringlnet"/>.</para>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1290034" xreflabel=""/>For information about administering LNET, see <xref linkend="adminlustrepart3"/>.</para>
+  </section>
+  <section xml:id="dbdoclet.50438191_19625">
+    <title>2.2 Key Features of LNET</title>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1289918" xreflabel=""/>Key features of LNET include:</para>
+    <itemizedlist>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289871" xreflabel=""/><anchor xml:id="dbdoclet.50438191_57931" xreflabel=""/>RDMA, when supported by underlying networks such as InfiniBand or Myrinet MX</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289872" xreflabel=""/>Support for many commonly-used network types such as InfiniBand and TCP/IP</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289873" xreflabel=""/>High availability and recovery features enabling transparent recovery in conjunction with failover servers</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289874" xreflabel=""/>Simultaneous availability of multiple network types with routing between them.</para>
+      </listitem>
     </itemizedlist>
-
-
-    <section xml:id="dbdoclet.50438191_22878">
-      <title>2.1 Introducing LNET</title>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289866" xreflabel=""/>In a cluster with a Lustre file system, the system network connecting the servers and the clients is implemented using Lustre Networking (LNET), which provides the communication infrastructure required by the Lustre file system.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289867" xreflabel=""/>LNET supports many commonly-used network types, such as InfiniBand and IP networks, and allows simultaneous availability across multiple network types with routing between them. Remote Direct Memory Access (RDMA) is permitted when supported by underlying networks using the appropriate Lustre network driver (LND). High availability and recovery features enable transparent recovery in conjunction with failover servers.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289868" xreflabel=""/>An LND is a pluggable driver that provides support for a particular network type. LNDs are loaded into the driver stack, with one LND for each network type in use.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290033" xreflabel=""/>For information about configuring LNET, see <xref linkend='configuringlnet.title'/>.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290034" xreflabel=""/>For information about administering LNET, see <xref linkend='adminlustrepart3'/>.</para>
-    </section>
-    <section xml:id="dbdoclet.50438191_19625">
-      <title>2.2 Key Features of LNET</title>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289918" xreflabel=""/>Key features of LNET include:</para>
-      <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289871" xreflabel=""/><anchor xml:id="dbdoclet.50438191_57931" xreflabel=""/> RDMA, when supported by underlying networks such as InfiniBand or Myrinet MX</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289872" xreflabel=""/> Support for many commonly-used network types such as InfiniBand and TCP/IP</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289873" xreflabel=""/> High availability and recovery features enabling transparent recovery in conjunction with failover servers</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289874" xreflabel=""/> Simultaneous availability of multiple network types with routing between them.</para>
-        </listitem>
-</itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290430" xreflabel=""/>LNET provides end-to-end throughput over Gigabit Ethernet (GigE) networks in excess of 100 MB/s, throughput up to 1.5 GB/s over InfiniBand double data rate (DDR) links, and throughput over 1 GB/s across 10GigE interfaces.</para>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1290434" xreflabel=""/>Lustre can use bonded networks, such as bonded Ethernet networks, when the underlying network technology supports bonding. For more information, see <xref linkend='settingupbonding.title'/>.</para>
-    </section>
-    <section xml:id="dbdoclet.50438191_20721">
-      <title>2.3 Supported Network Types</title>
-      <para><anchor xml:id="dbdoclet.50438191_pgfId-1289882" xreflabel=""/>LNET includes LNDs to support many network types including:</para>
-      <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289883" xreflabel=""/> InfiniBand: OpenFabrics OFED (o2ib)</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289884" xreflabel=""/> TCP (any network carrying TCP traffic, including GigE, 10GigE, and IPoIB)</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289885" xreflabel=""/> Cray: Seastar</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289886" xreflabel=""/> Myrinet: MX</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289888" xreflabel=""/><anchor xml:id="dbdoclet.50438191_marker-1289887" xreflabel=""/> RapidArray: ra</para>
-        </listitem>
-<listitem>
-          <para><anchor xml:id="dbdoclet.50438191_pgfId-1289890" xreflabel=""/><anchor xml:id="dbdoclet.50438191_marker-1289889" xreflabel=""/> Quadrics: Elan</para>
-        </listitem>
-</itemizedlist>
-    </section>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1290430" xreflabel=""/>LNET provides end-to-end throughput over Gigabit Ethernet (GigE) networks in excess of 100 MB/s, throughput up to 1.5 GB/s over InfiniBand double data rate (DDR) links, and throughput over 1 GB/s across 10GigE interfaces.</para>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1290434" xreflabel=""/>Lustre can use bonded networks, such as bonded Ethernet networks, when the underlying network technology supports bonding. For more information, see <xref linkend="settingupbonding"/>.</para>
+  </section>
+  <section xml:id="dbdoclet.50438191_20721">
+    <title>2.3 Supported Network Types</title>
+    <para><anchor xml:id="dbdoclet.50438191_pgfId-1289882" xreflabel=""/>LNET includes LNDs to support many network types including:</para>
+    <itemizedlist>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289883" xreflabel=""/> InfiniBand: OpenFabrics OFED (o2ib)</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289884" xreflabel=""/> TCP (any network carrying TCP traffic, including GigE, 10GigE, and IPoIB)</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289885" xreflabel=""/> Cray: Seastar</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289886" xreflabel=""/> Myrinet: MX</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289888" xreflabel=""/><anchor xml:id="dbdoclet.50438191_marker-1289887" xreflabel=""/> RapidArray: ra</para>
+      </listitem>
+      <listitem>
+        <para><anchor xml:id="dbdoclet.50438191_pgfId-1289890" xreflabel=""/><anchor xml:id="dbdoclet.50438191_marker-1289889" xreflabel=""/> Quadrics: Elan</para>
+      </listitem>
+    </itemizedlist>
+  </section>
 </chapter>
