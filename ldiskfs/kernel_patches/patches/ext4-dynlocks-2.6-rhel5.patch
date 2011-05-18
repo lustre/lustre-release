@@ -1,20 +1,21 @@
-diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/Makefile linux-2.6.27.21-0.1_2//fs/ext4/Makefile
---- linux-2.6.27.21-0.1_1//fs/ext4/Makefile	2009-08-21 15:12:51.000000000 +0530
-+++ linux-2.6.27.21-0.1_2//fs/ext4/Makefile	2009-08-21 15:13:23.000000000 +0530
-@@ -6,7 +6,8 @@ obj-$(CONFIG_EXT4DEV_FS) += ext4dev.o
- 
+Index: linux-stage/fs/ext4/Makefile
+===================================================================
+--- linux-stage.orig/fs/ext4/Makefile
++++ linux-stage/fs/ext4/Makefile
+@@ -7,7 +7,7 @@ obj-$(CONFIG_EXT4_FS) += ext4.o
  ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
-		ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
--		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o
-+		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o \
-+		dynlocks.o
-
+ 		ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
+ 		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o \
+-		mmp.o
++		mmp.o dynlocks.o
+ 
  ext4-$(CONFIG_EXT4_FS_XATTR)		+= xattr.o xattr_user.o xattr_trusted.o
  ext4-$(CONFIG_EXT4_FS_POSIX_ACL)	+= acl.o
-diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/super.c linux-2.6.27.21-0.1_2//fs/ext4/super.c
---- linux-2.6.27.21-0.1_1//fs/ext4/super.c	2009-08-21 15:12:51.000000000 +0530
-+++ linux-2.6.27.21-0.1_2//fs/ext4/super.c	2009-08-21 15:18:18.000000000 +0530
-@@ -4126,6 +4126,7 @@ static int __init init_ext4_fs(void)
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -4166,6 +4166,7 @@ static int __init init_ext4_fs(void)
  	err = init_inodecache();
  	if (err)
  		goto out1;
@@ -22,12 +23,11 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/super.c linux-2.6.27.21-0.1_2//fs/ext4
  	err = register_filesystem(&ext4_fs_type);
  	if (err)
  		goto out;
-@@ -4149,6 +4150,7 @@ static void __exit exit_ext4_fs(void)
- 	unregister_filesystem(&ext4_fs_type);
+@@ -4202,6 +4203,7 @@ static void __exit exit_ext4_fs(void)
  	unregister_filesystem(&ext4dev_fs_type);
+ #endif
  	destroy_inodecache();
 +	dynlock_cache_exit();
  	exit_ext4_xattr();
  	exit_ext4_mballoc();
- 	remove_proc_entry("fs/ext4", NULL);
-
+ 	__free_page(ext4_zero_page);
