@@ -1,92 +1,63 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='installinglustrefromsourcecode'>
   <info>
-    <title>Installing Lustre from Source Code</title>
+    <title xml:id='installinglustrefromsourcecode.title'>Installing Lustre from Source Code</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438210_pgfId-1304664" xreflabel=""/>If you need to build a customized Lustre server kernel or are using a Linux kernel that has not been tested with the version of Lustre you are installing, you may need to build and install Lustre from source code. This chapter describes:</para>
+
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1305083" xreflabel=""/><link xl:href="InstallingLustrefrSourceCode.html#50438210_69313">Overview and Prerequisites</link></para>
+      <para><xref linkend="dbdoclet.50438210_69313"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438210_65411"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1305088" xreflabel=""/><link xl:href="InstallingLustrefrSourceCode.html#50438210_65411">Patching the Kernel</link></para>
+      <para><xref linkend="dbdoclet.50438210_47529"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438210_27248"/></para>
     </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1305093" xreflabel=""/><link xl:href="InstallingLustrefrSourceCode.html#50438210_47529">Creating and Installing the Lustre Packages</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1305098" xreflabel=""/><link xl:href="InstallingLustrefrSourceCode.html#50438210_27248">Installing Lustre with a Third-Party Network Stack</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
+
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438210_pgfId-1297212" xreflabel=""/></title>
-    <section remap="h2">
-      <title>29.1 <emphasis role="bold">Overview and Prerequisites</emphasis><anchor xml:id="dbdoclet.50438210_69313" xreflabel=""/></title>
+
+    <section xml:id="dbdoclet.50438210_69313">
+      <title>29.1 Overview and Prerequisites</title>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1305142" xreflabel=""/>Lustre can be installed from either pre-built binary packages (RPMs) or freely-available source code. Installing from the package release is recommended unless you need to customize the Lustre server kernel or will be using an Linux kernel that has not been tested with Lustre. For a list of supported Linux distributions and architectures, see the topic <link xl:href="http://wiki.lustre.org/index.php/Lustre_2.0">Lustre_2.0</link> on the Lustre wiki. The procedure for installing Lustre from RPMs is describe in <link xl:href="InstallingLustre.html#50438261_81829">Chapter 8</link>: <link xl:href="InstallingLustre.html#50438261_62973">Installing the Lustre Software</link>.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297213" xreflabel=""/>To install Lustre from source code, the following are required:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438210_pgfId-1297214" xreflabel=""/> Linux kernel patched with Lustre-specific patches</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438210_pgfId-1297215" xreflabel=""/> Lustre modules compiled for the Linux kernel</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438210_pgfId-1297216" xreflabel=""/> Lustre utilities required for Lustre configuration</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1304577" xreflabel=""/>The installation procedure involves several steps:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438210_pgfId-1302403" xreflabel=""/> Patching the core kernel</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438210_pgfId-1302413" xreflabel=""/> Configuring the kernel to work with Lustre</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438210_pgfId-1302420" xreflabel=""/> Creating Lustre and kernel RPMs from source code.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 </itemizedlist>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1299593" xreflabel=""/>When using third-party network hardware with Lustre, the third-party modules (typically, the drivers) must be linked against the Linux kernel. The LNET modules in Lustre also need these references. To meet these requirements, a specific process must be followed to install and recompile Lustre. See <link xl:href="InstallingLustrefrSourceCode.html#50438210_27248">Installing Lustre with a Third-Party Network Stack</link>, for an example showing how to install Lustre 1.6.6 using the Myricom MX 1.2.7 driver. The same process can be used for other third-party network stacks.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>When using third-party network hardware with Lustre, the third-party modules (typically, the drivers) must be linked against the Linux kernel. The LNET modules in Lustre also need these references. To meet these requirements, a specific process must be followed to install and recompile Lustre. See <link xl:href="InstallingLustrefrSourceCode.html#50438210_27248">Installing Lustre with a Third-Party Network Stack</link>, for an example showing how to install Lustre 1.6.6 using the Myricom MX 1.2.7 driver. The same process can be used for other third-party network stacks.</para></note>
     </section>
-    <section remap="h2">
-      <title>29.2 <anchor xml:id="dbdoclet.50438210_65411" xreflabel=""/>Patching the Kernel</title>
+    <section xml:id="dbdoclet.50438210_65411">
+      <title>29.2 Patching the Kernel</title>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1296830" xreflabel=""/>If you are using non-standard hardware, plan to apply a Lustre patch, or have another reason not to use packaged Lustre binaries, you have to apply several Lustre patches to the core kernel and run the Lustre configure script against the kernel.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438210_pgfId-1296831" xreflabel=""/>29.2.1 Introducing the Quilt Utility</title>
@@ -95,27 +66,19 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438210_pgfId-1302485" xreflabel=""/> Apply patches from the stack (quilt push)</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438210_pgfId-1302495" xreflabel=""/> Remove patches from the stack (quilt pop)</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438210_pgfId-1302502" xreflabel=""/> Query the contents of the series file (quilt series), the contents of the stack (quilt applied, quilt previous, quilt top), and the patches that are not applied at a particular moment (quilt next, quilt unapplied).</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438210_pgfId-1302509" xreflabel=""/> Edit and refresh (update) patches with Quilt, as well as revert inadvertent changes, and fork or clone patches and show the diffs before and after work.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1302510" xreflabel=""/>A variety of Quilt packages (RPMs, SRPMs and tarballs) are available from various sources. Use the most recent version you can find. Quilt depends on several other utilities, e.g., the coreutils RPM that is only available in RedHat 9. For other RedHat kernels, you have to get the required packages to successfully install Quilt. If you cannot locate a Quilt package or fulfill its dependencies, you can build Quilt from a tarball, available at the Quilt project website:</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296837" xreflabel=""/><link xl:href="http://savannah.nongnu.org/projects/quilt">http://savannah.nongnu.org/projects/quilt</link></para>
@@ -124,71 +87,52 @@
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438210_pgfId-1296842" xreflabel=""/>29.2.2 <anchor xml:id="dbdoclet.50438210_44148" xreflabel=""/>Get the Lustre Source and Unpatched Kernel</title>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1302564" xreflabel=""/>The Lustre Engineering Team has targeted several Linux kernels for use with Lustre servers (MDS/OSS) and provides a series of patches for each one. The Lustre patches are maintained in the kernel_patch directory bundled with the Lustre source code.</para>
-        <informaltable frame="none">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="5*"/>
-            <colspec colname="c2" colwidth="95*"/>
-            
-            
-            <tbody>
-              <row>
-                <entry><para><inlinemediaobject><imageobject role="html">
-                        <imagedata fileref="./shared/caution.gif" scalefit="1"/>
-                      </imageobject>
-<imageobject role="fo">
-                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
-                      </imageobject>
-</inlinemediaobject></para></entry>
-                <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1305236" xreflabel=""/>Lustre contains kernel modifications which interact with storage devices and may introduce security issues and data loss if not installed, configured and administered correctly. Before installing Lustre, be cautious and back up ALL data.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-         <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis> Each patch series has been tailored to a specific kernel version, and may or may not apply cleanly to other versions of the kernel.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+
+                <caution><para>Lustre contains kernel modifications which interact with storage devices and may introduce security issues and data loss if not installed, configured and administered correctly. Before installing Lustre, be cautious and back up ALL data.</para></caution>
+                <note><para>Each patch series has been tailored to a specific kernel version, and may or may not apply cleanly to other versions of the kernel.</para></note>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1305199" xreflabel=""/>To obtain the Lustre source and unpatched kernel:</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305200" xreflabel=""/> 1. Verify that all of the Lustre installation requirements have been met.</para>
+        <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305200" xreflabel=""/>Verify that all of the Lustre installation requirements have been met.</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1305210" xreflabel=""/>For more information on these prerequisites, see:</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438210_pgfId-1305217" xreflabel=""/> Hardware requirements in <link xl:href="SettingUpLustreSystem.html#50438256_38751">Chapter 5</link>: <link xl:href="SettingUpLustreSystem.html#50438256_66186">Setting Up a Lustre File System</link></para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438210_pgfId-1305220" xreflabel=""/> Software and environmental requirements in <link xl:href="InstallingLustre.html#50438261_99193">Preparing to Install the Lustre Software</link></para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305206" xreflabel=""/> 2. Download the Lustre source code.</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305253" xreflabel=""/>On the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>, select a version of Lustre to download and then select â€œSourceâ€ as the platform.</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296849" xreflabel=""/> 3. Download the unpatched kernel.</para>
+
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305206" xreflabel=""/>Download the Lustre source code.</para>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305253" xreflabel=""/>On the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>, select a version of Lustre to download and then select 'Source' as the platform.</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296849" xreflabel=""/>Download the unpatched kernel.</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296857" xreflabel=""/>For convenience, Oracle maintains an archive of unpatched kernel sources at:</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1305277" xreflabel=""/><link xl:href="http://downloads.lustre.org/public/kernels/">http://downloads.lustre.org/public/kernels/</link><anchor xml:id="dbdoclet.50438210_28487" xreflabel=""/></para>
+</listitem></orderedlist>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438210_pgfId-1305280" xreflabel=""/>29.2.3 Patch the Kernel</title>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1305429" xreflabel=""/>This procedure describes how to use Quilt to apply the Lustre patches to the kernel. To illustrate the steps in this procedure, a RHEL 5 kernel is patched for Lustre 1.6.5.1.</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305430" xreflabel=""/> 1. Unpack the Lustre source and kernel to separate source trees.</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296865" xreflabel=""/>a. Unpack the Lustre source.</para>
+        <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1305430" xreflabel=""/>Unpack the Lustre source and kernel to separate source trees.</para>
+        <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296865" xreflabel=""/>Unpack the Lustre source.</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296866" xreflabel=""/>For this procedure, we assume that the resulting source tree is in /tmp/lustre-1.6.5.1</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296867" xreflabel=""/>b. Unpack the kernel.</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296867" xreflabel=""/>Unpack the kernel.</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296868" xreflabel=""/>For this procedure, we assume that the resulting source tree (also known as the destination tree) is in /tmp/kernels/linux-2.6.18</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296869" xreflabel=""/> 2. Select a config file for your kernel, located in the kernel_configs directory (lustre/kernel_patches/kernel_config).</para>
+        </listitem></orderedlist>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296869" xreflabel=""/>Select a config file for your kernel, located in the kernel_configs directory (lustre/kernel_patches/kernel_config).</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296870" xreflabel=""/>The kernel_config directory contains the .config files, which are named to indicate the kernel and architecture with which they are associated. For example, the configuration file for the 2.6.18 kernel shipped with RHEL 5 (suitable for i686 SMP systems) is kernel-2.6.18-2.6-rhel5-i686-smp.config.</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296871" xreflabel=""/> 3. Select the series file for your kernel, located in the series directory (lustre/kernel_patches/series).</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296871" xreflabel=""/>Select the series file for your kernel, located in the series directory (lustre/kernel_patches/series).</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296872" xreflabel=""/>The series file contains the patches that need to be applied to the kernel.</para>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296873" xreflabel=""/> 4. Set up the necessary symlinks between the kernel patches and the Lustre source.</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296873" xreflabel=""/>Set up the necessary symlinks between the kernel patches and the Lustre source.</para>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296874" xreflabel=""/>This example assumes that the Lustre source files are unpacked under /tmp/lustre-1.6.5.1 and you have chosen the 2.6-rhel5.series file). Run:</para>
         <screen><anchor xml:id="dbdoclet.50438210_pgfId-1296875" xreflabel=""/>$ cd /tmp/kernels/linux-2.6.18
 <anchor xml:id="dbdoclet.50438210_pgfId-1296876" xreflabel=""/>$ rm -f patches series
@@ -196,41 +140,37 @@
  ./series
 <anchor xml:id="dbdoclet.50438210_pgfId-1296878" xreflabel=""/>$ ln -s /tmp/lustre-1.6.5.1/lustre/kernel_patches/patches .
 </screen>
-        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296879" xreflabel=""/> 5. Use Quilt to apply the patches in the selected series file to the unpatched kernel. Run:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438210_pgfId-1296879" xreflabel=""/>Use Quilt to apply the patches in the selected series file to the unpatched kernel. Run:</para>
         <screen><anchor xml:id="dbdoclet.50438210_pgfId-1296880" xreflabel=""/>$ cd /tmp/kernels/linux-2.6.18
 <anchor xml:id="dbdoclet.50438210_pgfId-1296881" xreflabel=""/>$ quilt push -av
 </screen>
         <para><anchor xml:id="dbdoclet.50438210_pgfId-1296882" xreflabel=""/>The patched destination tree acts as a base Linux source tree for Lustre.</para>
+        </listitem></orderedlist>
       </section>
     </section>
-    <section remap="h2">
-      <title>29.3 <anchor xml:id="dbdoclet.50438210_47529" xreflabel=""/>Creating and Installing the Lustre Packages</title>
+    <section xml:id="dbdoclet.50438210_47529">
+      <title>29.3 Creating and Installing the Lustre Packages</title>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1296886" xreflabel=""/>After patching the kernel, configure it to work with Lustre, create the Lustre packages (RPMs) and install them.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297162" xreflabel=""/> 1. Configure the patched kernel to run with Lustre. Run:</para>
+
+        <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297162" xreflabel=""/>Configure the patched kernel to run with Lustre. Run:</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297163" xreflabel=""/>$ cd &lt;path to kernel tree&gt;
-<anchor xml:id="dbdoclet.50438210_pgfId-1297079" xreflabel=""/>$ cp /boot/config-â€˜uname -râ€˜ .config
+<anchor xml:id="dbdoclet.50438210_pgfId-1297079" xreflabel=""/>$ cp /boot/config-`uname -r` .config
 <anchor xml:id="dbdoclet.50438210_pgfId-1297080" xreflabel=""/>$ make oldconfig || make menuconfig
 <anchor xml:id="dbdoclet.50438210_pgfId-1297083" xreflabel=""/>$ make include/asm
 <anchor xml:id="dbdoclet.50438210_pgfId-1297084" xreflabel=""/>$ make include/linux/version.h
 <anchor xml:id="dbdoclet.50438210_pgfId-1297085" xreflabel=""/>$ make SUBDIRS=scripts
 <anchor xml:id="dbdoclet.50438210_pgfId-1297086" xreflabel=""/>$ make include/linux/utsrelease.h
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297087" xreflabel=""/> 2. Run the Lustre configure script against the patched kernel and create the Lustre packages.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297087" xreflabel=""/>Run the Lustre configure script against the patched kernel and create the Lustre packages.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297088" xreflabel=""/>$ cd &lt;path to lustre source tree&gt;
 <anchor xml:id="dbdoclet.50438210_pgfId-1297089" xreflabel=""/>$ ./configure --with-linux=&lt;path to kernel tree&gt;
 <anchor xml:id="dbdoclet.50438210_pgfId-1297090" xreflabel=""/>$ make rpms
 </screen>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297091" xreflabel=""/>This creates a set of .rpms in /usr/src/redhat/RPMS/&lt;arch&gt; with an appended date-stamp. The SuSE path is /usr/src/packages.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1298281" xreflabel=""/>You do not need to run the Lustre configure script against an unpatched kernel.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>You do not need to run the Lustre configure script against an unpatched kernel.</para></note>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297092" xreflabel=""/><emphasis role="bold">Example set of RPMs:</emphasis></para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297093" xreflabel=""/>lustre-1.6.5.1-\2.6.18_53.xx.xx.el5_lustre.1.6.5.1.custom_20081021.i686.rpm
 <anchor xml:id="dbdoclet.50438210_pgfId-1297094" xreflabel=""/> 
@@ -243,94 +183,75 @@
 <anchor xml:id="dbdoclet.50438210_pgfId-1297099" xreflabel=""/>lustre-source-1.6.5.1-\2.6.18_53.xx.xx.el5_lustre.1.6.5.1.custom_20081021.i\
 686.rpm
 </screen>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1297101" xreflabel=""/>If the steps to create the RPMs fail, contact Lustre Support by reporting a bug. See <link xl:href="LustreTroubleshooting.html#50438198_30989">Reporting a Lustre Bug</link>.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1297102" xreflabel=""/>Several features and packages are available that extend the core functionality of Lustre. These features/packages can be enabled at the build time by issuing appropriate arguments to the configure command. For a list of these features and packages, run ./configure -help in the Lustre source tree. The configs/ directory of the kernel source contains the config files matching each the kernel version. Copy one to .config at the root of the kernel tree.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297103" xreflabel=""/> 3. <anchor xml:id="dbdoclet.50438210_41207" xreflabel=""/>Create the kernel package. Navigate to the kernel source directory and run:</para>
+              <note><para>If the steps to create the RPMs fail, contact Lustre Support by reporting a bug. See <link xl:href="LustreTroubleshooting.html#50438198_30989">Reporting a Lustre Bug</link>.</para></note>
+              <note><para>Several features and packages are available that extend the core functionality of Lustre. These features/packages can be enabled at the build time by issuing appropriate arguments to the configure command. For a list of these features and packages, run ./configure -help in the Lustre source tree. The configs/ directory of the kernel source contains the config files matching each the kernel version. Copy one to .config at the root of the kernel tree.</para></note>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297103" xreflabel=""/><anchor xml:id="dbdoclet.50438210_41207" xreflabel=""/>Create the kernel package. Navigate to the kernel source directory and run:</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297104" xreflabel=""/>$ make rpm
 </screen>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297106" xreflabel=""/>Example result:</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297107" xreflabel=""/>kernel-2.6.95.0.3.EL_lustre.1.6.5.1custom-1.i686.rpm
 </screen>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1297108" xreflabel=""/><link xl:href="InstallingLustrefrSourceCode.html#50438210_41207">Step 3</link> is only valid for RedHat and SuSE kernels. If you are using a stock Linux kernel, you need to get a script to create the kernel RPM.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297755" xreflabel=""/> 4. Install the Lustre packages.</para>
+              <note><para><link xl:href="InstallingLustrefrSourceCode.html#50438210_41207">Step 3</link> is only valid for RedHat and SuSE kernels. If you are using a stock Linux kernel, you need to get a script to create the kernel RPM.</para></note>
+        </listitem><listitem>
+       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297755" xreflabel=""/>Install the Lustre packages.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1302732" xreflabel=""/>Some Lustre packages are installed on servers (MDS and OSSs), and others are installed on Lustre clients. For guidance on where to install specific packages, see <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> in <link xl:href="InstallingLustre.html#50438261_99193">Preparing to Install the Lustre Software</link>. which lists required packages and for each package, where to install it. Depending on the selected platform, not all of the packages listed in <link xl:href="InstallingLustre.html#50438261_21654">TABLE 8-1</link> need to be installed.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438210_pgfId-1302707" xreflabel=""/>Running the patched server kernel on the clients is optional. It is not necessary unless the clients will be used for multiple purposes, for example, to run as a client and an OST.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>Running the patched server kernel on the clients is optional. It is not necessary unless the clients will be used for multiple purposes, for example, to run as a client and an OST.</para></note>
        <para><anchor xml:id="dbdoclet.50438210_pgfId-1302716" xreflabel=""/>Lustre packages should be installed in this order:</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297644" xreflabel=""/>a. Install the kernel, modules and ldiskfs packages.</para>
+        <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297644" xreflabel=""/>Install the kernel, modules and ldiskfs packages.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297645" xreflabel=""/>Navigate to the directory where the RPMs are stored, and use the rpm -ivh command to install the kernel, module and ldiskfs packages.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299031" xreflabel=""/>$ rpm -ivh kernel-lustre-smp-&lt;ver&gt; \
 <anchor xml:id="dbdoclet.50438210_pgfId-1299032" xreflabel=""/>kernel-ib-&lt;ver&gt; \
 <anchor xml:id="dbdoclet.50438210_pgfId-1299033" xreflabel=""/>lustre-modules-&lt;ver&gt; \
 <anchor xml:id="dbdoclet.50438210_pgfId-1299034" xreflabel=""/>lustre-ldiskfs-&lt;ver&gt;
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297650" xreflabel=""/>b. Install the utilities/userspace packages.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297650" xreflabel=""/>Install the utilities/userspace packages.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297651" xreflabel=""/>Use the rpm -ivh command to install the utilities packages. For example:</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297652" xreflabel=""/>$ rpm -ivh lustre-&lt;ver&gt;
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297653" xreflabel=""/>c. Install the e2fsprogs package.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297653" xreflabel=""/>Install the e2fsprogs package.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1297654" xreflabel=""/>Make sure the e2fsprogs package is unpacked, and use the rpm -i command to install it. For example:</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1297655" xreflabel=""/>$ rpm -i e2fsprogs-&lt;ver&gt;
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297656" xreflabel=""/>d. (Optional) If you want to add optional packages to your Lustre system, install them now.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298263" xreflabel=""/> 5. Verify that the boot loader (grub.conf or lilo.conf) has been updated to load the patched kernel.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298264" xreflabel=""/> 6. Reboot the patched clients and the servers.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298265" xreflabel=""/>a. If you applied the patched kernel to any clients, reboot them.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1297656" xreflabel=""/>(Optional) If you want to add optional packages to your Lustre system, install them now.</para>
+        </listitem></orderedlist>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298263" xreflabel=""/>Verify that the boot loader (grub.conf or lilo.conf) has been updated to load the patched kernel.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298264" xreflabel=""/>Reboot the patched clients and the servers.</para>
+        <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298265" xreflabel=""/>If you applied the patched kernel to any clients, reboot them.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1298266" xreflabel=""/>Unpatched clients do not need to be rebooted.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298267" xreflabel=""/>b. Reboot the servers.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1298267" xreflabel=""/>Reboot the servers.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1298268" xreflabel=""/>Once all the machines have rebooted, the next steps are to configure Lustre Networking (LNET) and the Lustre file system. See <link xl:href="ConfiguringLustre.html#50438267_88428">Chapter 10</link>: <link xl:href="ConfiguringLustre.html#50438267_66186">Configuring Lustre</link>.</para>
+        </listitem></orderedlist>
+        </listitem></orderedlist>
     </section>
-    <section remap="h2">
-      <title>29.4 <anchor xml:id="dbdoclet.50438210_27248" xreflabel=""/>Installing Lustre with a Third-Party Network Stack</title>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299781" xreflabel=""/>When using third-party network hardware, you must follow a specific process to install and recompile Lustre. This section provides an installation example, describing how to install Lustre 1.6.6 while using the Myricom MX 1.2.7 driver. The same process is used for other third-party network stacks, by replacing MX-specific references in <link xl:href="InstallingLustrefrSourceCode.html#50438210_12366">Step 2</link> with the stack-specific build and using the proper --with option when configuring the Lustre source code.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299638" xreflabel=""/> 1. Compile and install the Lustre kernel.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299642" xreflabel=""/>a. Install the necessary build tools.</para>
+    <section xml:id="dbdoclet.50438210_27248">
+      <title>29.4 Installing Lustre with a Third-Party Network Stack</title>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299781" xreflabel=""/>When using third-party network hardware, you must follow a specific process to install and recompile Lustre. This section provides an installation example, describing how to install Lustre 1.6.6 while using the Myricom MX 1.2.7 driver. The same process is used for other third-party network stacks, by replacing MX-specific references in <xref linkend="dbdoclet.50438210_12366"/> (Step 2) with the stack-specific build and using the proper --with option when configuring the Lustre source code.</para>
+        <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299638" xreflabel=""/>Compile and install the Lustre kernel.</para>
+        <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299642" xreflabel=""/>Install the necessary build tools.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1305395" xreflabel=""/>GCC and related tools must be installed. For more information, see <link xl:href="InstallingLustre.html#50438261_37079">Required Software</link>.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299645" xreflabel=""/>$ yum install rpm-build redhat-rpm-config
 <anchor xml:id="dbdoclet.50438210_pgfId-1300055" xreflabel=""/>$ mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 <anchor xml:id="dbdoclet.50438210_pgfId-1300058" xreflabel=""/>$ echo &apos;%_topdir %(echo $HOME)/rpmbuild&apos; &gt; .rpmmacros
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299650" xreflabel=""/>b. Install the patched Lustre source code.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299650" xreflabel=""/>Install the patched Lustre source code.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1300116" xreflabel=""/>This RPM is available at the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1300294" xreflabel=""/>$ rpm -ivh \
 <anchor xml:id="dbdoclet.50438210_pgfId-1305349" xreflabel=""/>kernel-lustre-source-2.6.18-92.1.10.el5_lustre.1.6.6.x86_64.rpm
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1300117" xreflabel=""/>a. Build the Linux kernel RPM.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1300117" xreflabel=""/>Build the Linux kernel RPM.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299659" xreflabel=""/>$ cd /usr/src/linux-2.6.18-92.1.10.el5_lustre.1.6.6
 <anchor xml:id="dbdoclet.50438210_pgfId-1300080" xreflabel=""/>$ make distclean
 <anchor xml:id="dbdoclet.50438210_pgfId-1300083" xreflabel=""/>$ make oldconfig dep bzImage modules
@@ -341,16 +262,20 @@
 <anchor xml:id="dbdoclet.50438210_pgfId-1300098" xreflabel=""/>$ make SUBDIRS=scripts
 <anchor xml:id="dbdoclet.50438210_pgfId-1300101" xreflabel=""/>$ make rpm
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299670" xreflabel=""/>b. Install the Linux kernel RPM.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299670" xreflabel=""/>Install the Linux kernel RPM.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1300130" xreflabel=""/>If you are building a set of RPMs for a cluster installation, this step is not necessary. Source RPMs are only needed on the build machine.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299674" xreflabel=""/>$ rpm -ivh \
 <anchor xml:id="dbdoclet.50438210_pgfId-1305534" xreflabel=""/>~/rpmbuild/kernel-lustre-2.6.18-92.1.10.el5_\lustre.1.6.6.x86_64.rpm
 <anchor xml:id="dbdoclet.50438210_pgfId-1300142" xreflabel=""/>$ mkinitrd /boot/2.6.18-92.1.10.el5_lustre.1.6.6
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299677" xreflabel=""/>c. Update the boot loader (/etc/grub.conf) with the new kernel boot information.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299677" xreflabel=""/>Update the boot loader (/etc/grub.conf) with the new kernel boot information.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299679" xreflabel=""/>$ /sbin/shutdown 0 -r
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299681" xreflabel=""/> 2. <anchor xml:id="dbdoclet.50438210_12366" xreflabel=""/>Compile and install the MX stack.</para>
+        </listitem></orderedlist>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299681" xreflabel=""/><anchor xml:id="dbdoclet.50438210_12366" xreflabel=""/>Compile and install the MX stack.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299686" xreflabel=""/>$ cd /usr/src/
 <anchor xml:id="dbdoclet.50438210_pgfId-1299907" xreflabel=""/>$ gunzip mx_1.2.7.tar.gz (can be obtained from www.myri.com/scs/)
 <anchor xml:id="dbdoclet.50438210_pgfId-1299910" xreflabel=""/>$ tar -xvf mx_1.2.7.tar
@@ -360,13 +285,16 @@
 <anchor xml:id="dbdoclet.50438210_pgfId-1299922" xreflabel=""/>$ make
 <anchor xml:id="dbdoclet.50438210_pgfId-1299925" xreflabel=""/>$ make install
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299696" xreflabel=""/> 3. Compile and install the Lustre source code.</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299698" xreflabel=""/>a. Install the Lustre source (this can be done via RPM or tarball). The source file is available at the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>. This example shows installation via the tarball.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299696" xreflabel=""/>Compile and install the Lustre source code.</para>
+        <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299698" xreflabel=""/>Install the Lustre source (this can be done via RPM or tarball). The source file is available at the <link xl:href="http://www.oracle.com/technetwork/indexes/downloads/sun-az-index-095901.html#L">Lustre download site</link>. This example shows installation via the tarball.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299700" xreflabel=""/>$ cd /usr/src/
 <anchor xml:id="dbdoclet.50438210_pgfId-1300181" xreflabel=""/>$ gunzip lustre-1.6.6.tar.gz
 <anchor xml:id="dbdoclet.50438210_pgfId-1300184" xreflabel=""/>$ tar -xvf lustre-1.6.6.tar
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299706" xreflabel=""/>b. Configure and build the Lustre source code.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299706" xreflabel=""/>Configure and build the Lustre source code.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1300191" xreflabel=""/>The ./configure --help command shows a list of all of the --with options. All third-party network stacks are built in this manner.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299711" xreflabel=""/>$ cd lustre-1.6.6
 <anchor xml:id="dbdoclet.50438210_pgfId-1300366" xreflabel=""/>$ ./configure --with-linux=/usr/src/linux \
@@ -375,7 +303,9 @@
 <anchor xml:id="dbdoclet.50438210_pgfId-1300372" xreflabel=""/>$ make rpms
 </screen>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1299716" xreflabel=""/>The make rpms command output shows the location of the generated RPMs</para>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299718" xreflabel=""/> 4. Use the rpm -ivh command to install the RPMS.</para>
+        </listitem></orderedlist>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299718" xreflabel=""/>Use the rpm -ivh command to install the RPMS.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299720" xreflabel=""/>$ rpm -ivh \
 <anchor xml:id="dbdoclet.50438210_pgfId-1305550" xreflabel=""/>lustre-1.6.6-2.6.18_92.1.10.el5_lustre.1.6.6smp.x86_64.rpm
 <anchor xml:id="dbdoclet.50438210_pgfId-1300246" xreflabel=""/>$ rpm -ivh \
@@ -385,18 +315,22 @@
 <anchor xml:id="dbdoclet.50438210_pgfId-1305568" xreflabel=""/>lustre-ldiskfs-3.0.6-2.6.18_92.1.10.el5_lustre.1.6.6\
 <anchor xml:id="dbdoclet.50438210_pgfId-1305572" xreflabel=""/>smp.x86_64.rpm
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299726" xreflabel=""/> 5. Add the following lines to the /etc/modprobe.conf file.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299726" xreflabel=""/>Add the following lines to the /etc/modprobe.conf file.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299727" xreflabel=""/>options kmxlnd hosts=/etc/hosts.mxlnd
 <anchor xml:id="dbdoclet.50438210_pgfId-1300264" xreflabel=""/>options lnet networks=mx0(myri0),tcp0(eth0)
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299730" xreflabel=""/> 6. Populate the myri0 configuration with the proper IP addresses.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299730" xreflabel=""/>Populate the myri0 configuration with the proper IP addresses.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299731" xreflabel=""/>vim /etc/sysconfig/network-scripts/myri0
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299733" xreflabel=""/> 7. Add the following line to the /etc/hosts.mxlnd file.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299733" xreflabel=""/>Add the following line to the /etc/hosts.mxlnd file.</para>
       <screen><anchor xml:id="dbdoclet.50438210_pgfId-1299734" xreflabel=""/>$ IP HOST BOARD EP_ID
 </screen>
-      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299736" xreflabel=""/> 8. Start Lustre.</para>
+        </listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438210_pgfId-1299736" xreflabel=""/>Start Lustre.</para>
       <para><anchor xml:id="dbdoclet.50438210_pgfId-1300394" xreflabel=""/>Once all the machines have rebooted, the next steps are to configure Lustre Networking (LNET) and the Lustre file system. See <link xl:href="ConfiguringLustre.html#50438267_88428">Chapter 10</link>: <link xl:href="InstallingLustrefrSourceCode.html#50438210_67391">Installing Lustre from Source Code</link>.</para>
+        </listitem></orderedlist>
     </section>
-  </section>
 </chapter>
