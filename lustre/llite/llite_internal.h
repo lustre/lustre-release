@@ -565,6 +565,11 @@ struct ll_readahead_state {
         unsigned long ras_consecutive_stride_requests;
 };
 
+struct ll_file_dir {
+        __u64 lfd_pos;
+        __u64 lfd_next;
+};
+
 extern cfs_mem_cache_t *ll_file_data_slab;
 extern struct rw_semaphore ll_sb_sem;
 struct lustre_handle;
@@ -573,6 +578,7 @@ struct ll_file_data {
         int fd_omode;
         struct lustre_handle fd_cwlockh;
         unsigned long fd_gid;
+        struct ll_file_dir fd_dir;
         __u32 fd_flags;
 };
 
@@ -1138,7 +1144,7 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         return do_statahead_enter(dir, dentryp, lookup);
 }
 
-static void inline ll_dops_init(struct dentry *de, int block)
+static void inline ll_dops_init(struct dentry *de, int block, int init_sa)
 {
         struct ll_dentry_data *lld = ll_d2d(de);
 
@@ -1147,7 +1153,7 @@ static void inline ll_dops_init(struct dentry *de, int block)
                 lld = ll_d2d(de);
         }
 
-        if (lld != NULL)
+        if (lld != NULL && init_sa != 0)
                 lld->lld_sa_generation = 0;
 
         de->d_op = &ll_d_ops;
