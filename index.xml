@@ -31,6 +31,7 @@
 
   <xi:include href="III_LustreAdministration.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="LustreMonitoring.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LustreOperations.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="LustreMaintenance.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="ManagingLNET.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="UpgradingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />

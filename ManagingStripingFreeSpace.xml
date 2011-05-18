@@ -129,7 +129,7 @@
 <anchor xml:id="dbdoclet.50438209_pgfId-1298036" xreflabel=""/>4  4       0x4             0
 <anchor xml:id="dbdoclet.50438209_pgfId-1298037" xreflabel=""/>5  2       0x2             0
 </screen>
-          <para><anchor xml:id="dbdoclet.50438209_pgfId-1298040" xreflabel=""/> This is in contrast to the output in <link xl:href="ManagingStripingFreeSpace.html#50438209_60155">Setting the Stripe Size</link> which shows only a single object for the file.</para>
+<para><anchor xml:id="dbdoclet.50438209_pgfId-1298040" xreflabel=""/> This is in contrast to the output in <xref linkend='dbdoclet.50438209_60155'/> that shows only a single object for the file.</para>
         </section>
       </section>
       <section remap="h3">

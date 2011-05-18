@@ -1,153 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustreoperations'>
   <info>
-    <title>Lustre Operations</title>
+    <title xml:id='lustreoperations.title'>Lustre Operations</title>
   </info>
-  <informaltable frame="none">
-    <tgroup cols="2">
-      <colspec colname="c1" colwidth="50*"/>
-      <colspec colname="c2" colwidth="50*"/>
-      
-      
-      <tbody>
-        <row>
-          <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-          <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="LustreMonitoring.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="LustreMaintenance.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                    <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                  </imageobject>
-<imageobject role="fo">
-                    <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                  </imageobject>
-</inlinemediaobject></link></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <para><link xl:href=""/></para>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438194_pgfId-1306288" xreflabel=""/>C H A P T E R  13<anchor xml:id="dbdoclet.50438194_30183" xreflabel=""/></para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
-  <informaltable frame="none">
-    <tgroup cols="1">
-      <colspec colname="c1" colwidth="100*"/>
-      
-      <tbody>
-        <row>
-          <entry align="right"><para><anchor xml:id="dbdoclet.50438194_pgfId-1289959" xreflabel=""/><anchor xml:id="dbdoclet.50438194_31337" xreflabel=""/>Lustre Operations</para></entry>
-        </row>
-      </tbody>
-    </tgroup>
-  </informaltable>
+
+
   <para><anchor xml:id="dbdoclet.50438194_pgfId-1298785" xreflabel=""/>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre administration tasks:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1298789" xreflabel=""/><link xl:href="LustreOperations.html#50438194_42877">Mounting by Label</link></para>
+      <para><xref linkend="dbdoclet.50438194_42877"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438194_24122"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1298793" xreflabel=""/><link xl:href="LustreOperations.html#50438194_24122">Starting Lustre</link></para>
+      <para><xref linkend="dbdoclet.50438194_84876"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438194_69255"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1304363" xreflabel=""/><link xl:href="LustreOperations.html#50438194_84876">Mounting a Server</link></para>
+      <para><xref linkend="dbdoclet.50438194_57420"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438194_54138"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1298797" xreflabel=""/><link xl:href="LustreOperations.html#50438194_69255">Unmounting a Server</link></para>
+      <para><xref linkend="dbdoclet.50438194_88063"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438194_88980"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1298813" xreflabel=""/><link xl:href="LustreOperations.html#50438194_57420">Specifying Failout/Failover Mode for OSTs</link></para>
+      <para><xref linkend="dbdoclet.50438194_41817"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438194_70905"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307165" xreflabel=""/><link xl:href="LustreOperations.html#50438194_54138">Handling Degraded OST RAID Arrays</link></para>
+      <para><xref linkend="dbdoclet.50438194_16954"/></para>
     </listitem>
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438194_69998"/></para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1298817" xreflabel=""/><link xl:href="LustreOperations.html#50438194_88063">Running Multiple Lustre File Systems</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1302148" xreflabel=""/><link xl:href="LustreOperations.html#50438194_88980">Setting and Retrieving Lustre Parameters</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307324" xreflabel=""/><link xl:href="LustreOperations.html#50438194_41817">Specifying NIDs and Failover</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307328" xreflabel=""/><link xl:href="LustreOperations.html#50438194_70905">Erasing a File System</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307333" xreflabel=""/><link xl:href="LustreOperations.html#50438194_16954">Reclaiming Reserved Disk Space</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307338" xreflabel=""/><link xl:href="LustreOperations.html#50438194_69998">Replacing an Existing OST or MDS</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307421" xreflabel=""/><link xl:href="LustreOperations.html#50438194_30872">Identifying To Which Lustre File an OST Object Belongs</link></para>
+      <para><xref linkend="dbdoclet.50438194_30872"/></para>
     </listitem>
 <listitem>
       <para> </para>
     </listitem>
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438194_pgfId-1298852" xreflabel=""/></title>
-    <section remap="h2">
-      <title>13.1 <anchor xml:id="dbdoclet.50438194_42877" xreflabel=""/>Mounting by Label</title>
+    <section xml:id="dbdoclet.50438194_42877">
+      <title>13.1 Mounting by Label</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298853" xreflabel=""/>The file system name is limited to 8 characters. We have encoded the file system and target information in the disk label, so you can mount by label. This allows system administrators to move disks around without worrying about issues such as SCSI disk reordering or getting the /dev/device wrong for a shared target. Soon, file system naming will be made as fail-safe as possible. Currently, Linux disk labels are limited to 16 characters. To identify the target within the file system, 8 characters are reserved, leaving 8 characters for the file system name:</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298854" xreflabel=""/>&lt;fsname&gt;-MDT0000 or &lt;fsname&gt;-OST0a19</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298855" xreflabel=""/>To mount by label, use this command:</para>
@@ -156,32 +59,14 @@
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298857" xreflabel=""/>This is an example of mount-by-label:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298858" xreflabel=""/>$ mount -t lustre -L testfs-MDT0000 /mnt/mdt
 </screen>
-       <informaltable frame="none">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="5*"/>
-          <colspec colname="c2" colwidth="95*"/>
-          
-          
-          <tbody>
-            <row>
-              <entry><para><inlinemediaobject><imageobject role="html">
-                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
-                    </imageobject>
-<imageobject role="fo">
-                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
-                    </imageobject>
-</inlinemediaobject></para></entry>
-              <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1298859" xreflabel=""/>Mount-by-label should NOT be used in a multi-path environment.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <caution><para>Mount-by-label should NOT be used in a multi-path environment.</para></caution>
+
        <para><anchor xml:id="dbdoclet.50438194_pgfId-1298860" xreflabel=""/>Although the file system name is internally limited to 8 characters, you can mount the clients at any mount point, so file system users are not subjected to short names. Here is an example:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298861" xreflabel=""/>mount -t lustre uml1@tcp0:/shortfs /mnt/&lt;long-file_system-name&gt;
 </screen>
     </section>
-    <section remap="h2">
-      <title>13.2 <anchor xml:id="dbdoclet.50438194_24122" xreflabel=""/>Starting <anchor xml:id="dbdoclet.50438194_marker-1305696" xreflabel=""/>Lustre</title>
+    <section xml:id="dbdoclet.50438194_24122">
+      <title>13.2 Starting <anchor xml:id="dbdoclet.50438194_marker-1305696" xreflabel=""/>Lustre</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1304353" xreflabel=""/>The startup order of Lustre components depends on whether you have a combined MGS/MDT or these components are separate.</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1304354" xreflabel=""/> If you have a combined MGS/MDT, the recommended startup order is OSTs, then the MGS/MDT, and then clients.</para>
@@ -196,19 +81,10 @@
           <para> </para>
         </listitem>
 </itemizedlist>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1304356" xreflabel=""/>If an OST is added to a Lustre file system with a combined MGS/MDT, then the startup order changes slightly; the MGS must be started first because the OST needs to write its configuration data to it. In this scenario, the startup order is MGS/MDT, then OSTs, then the clients.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>If an OST is added to a Lustre file system with a combined MGS/MDT, then the startup order changes slightly; the MGS must be started first because the OST needs to write its configuration data to it. In this scenario, the startup order is MGS/MDT, then OSTs, then the clients.</para></note>
     </section>
-    <section remap="h2">
-      <title>13.3 <anchor xml:id="dbdoclet.50438194_84876" xreflabel=""/>Mounting a <anchor xml:id="dbdoclet.50438194_marker-1298863" xreflabel=""/>Server</title>
+    <section xml:id="dbdoclet.50438194_84876">
+      <title>13.3 Mounting a <anchor xml:id="dbdoclet.50438194_marker-1298863" xreflabel=""/>Server</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298865" xreflabel=""/>Starting a Lustre server is straightforward and only involves the mount command. Lustre servers can be added to /etc/fstab:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298866" xreflabel=""/>mount -t lustre
 </screen>
@@ -223,69 +99,26 @@
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298874" xreflabel=""/>In general, it is wise to specify noauto and let your high-availability (HA) package manage when to mount the device. If you are not using failover, make sure that networking has been started before mounting a Lustre server. RedHat, SuSE, Debian (and perhaps others) use the _netdev flag to ensure that these disks are mounted after the network is up.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298875" xreflabel=""/>We are mounting by disk label here--the label of a device can be read with e2label. The label of a newly-formatted Lustre server ends in FFFF, meaning that it has yet to be assigned. The assignment takes place when the server is first started, and the disk label is updated.</para>
-      <informaltable frame="none">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="5*"/>
-          <colspec colname="c2" colwidth="95*"/>
+
+              <caution><para>Do not do this when the client and OSS are on the same node, as memory pressure between the client and OSS can lead to deadlocks.</para></caution>
           
-          
-          <tbody>
-            <row>
-              <entry><para><inlinemediaobject><imageobject role="html">
-                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
-                    </imageobject>
-<imageobject role="fo">
-                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
-                    </imageobject>
-</inlinemediaobject></para></entry>
-              <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1298876" xreflabel=""/>Do not do this when the client and OSS are on the same node, as memory pressure between the client and OSS can lead to deadlocks.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="5*"/>
-          <colspec colname="c2" colwidth="95*"/>
-          
-          
-          <tbody>
-            <row>
-              <entry><para><inlinemediaobject><imageobject role="html">
-                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
-                    </imageobject>
-<imageobject role="fo">
-                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
-                    </imageobject>
-</inlinemediaobject></para></entry>
-              <entry><para><emphasis role="bold">Caution -</emphasis> Mount-by-label should NOT be used in a multi-path environment.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1298877" xreflabel=""/></para>
+              <caution><para>Mount-by-label should NOT be used in a multi-path environment.</para></caution>
+
     </section>
-    <section remap="h2">
-      <title>13.4 <anchor xml:id="dbdoclet.50438194_69255" xreflabel=""/>Unmounting a<anchor xml:id="dbdoclet.50438194_marker-1298879" xreflabel=""/> Server</title>
+    <section xml:id="dbdoclet.50438194_69255">
+      <title>13.4 Unmounting a<anchor xml:id="dbdoclet.50438194_marker-1298879" xreflabel=""/> Server</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298881" xreflabel=""/>To stop a Lustre server, use the umount &lt;mount point&gt; command.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298882" xreflabel=""/>For example, to stop ost0 on mount point /mnt/test, run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298883" xreflabel=""/>$ umount /mnt/test
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298884" xreflabel=""/>Gracefully stopping a server with the umount command preserves the state of the connected clients. The next time the server is started, it waits for clients to reconnect, and then goes through the recovery procedure.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298885" xreflabel=""/>If the force (-f) flag is used, then the server evicts all clients and stops WITHOUT recovery. Upon restart, the server does not wait for recovery. Any currently connected clients receive I/O errors until they reconnect.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1298886" xreflabel=""/>If you are using loopback devices, use the -d flag. This flag cleans up loop devices and can always be safely specified.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+
+              <note><para>If you are using loopback devices, use the -d flag. This flag cleans up loop devices and can always be safely specified.</para></note>
+
     </section>
-    <section remap="h2">
-      <title>13.5 <anchor xml:id="dbdoclet.50438194_57420" xreflabel=""/>Specifying Fail<anchor xml:id="dbdoclet.50438194_marker-1298926" xreflabel=""/>out/Failover Mode for OSTs</title>
+    <section xml:id="dbdoclet.50438194_57420">
+      <title>13.5 Specifying Fail<anchor xml:id="dbdoclet.50438194_marker-1298926" xreflabel=""/>out/Failover Mode for OSTs</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298928" xreflabel=""/>Lustre uses two modes, failout and failover, to handle an OST that has become unreachable because it fails, is taken off the network, is unmounted, etc.</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1298929" xreflabel=""/> In <emphasis>failout</emphasis> mode, Lustre clients immediately receive errors (EIOs) after a timeout, instead of waiting for the OST to recover.</para>
@@ -308,39 +141,13 @@
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298935" xreflabel=""/>$ mkfs.lustre --fsname=testfs --ost --mgsnode=uml1 --param=&quot;failover.mode=fa\
 ilout&quot; /dev/sdb 
 </screen>
-       <informaltable frame="none">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="5*"/>
-          <colspec colname="c2" colwidth="95*"/>
-          
-          
-          <tbody>
-            <row>
-              <entry><para><inlinemediaobject><imageobject role="html">
-                      <imagedata fileref="./shared/caution.gif" scalefit="1"/>
-                    </imageobject>
-<imageobject role="fo">
-                      <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
-                    </imageobject>
-</inlinemediaobject></para></entry>
-              <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1306159" xreflabel=""/>Before running this command, unmount all OSTs that will be affected by the change in the failover/failout mode.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1301609" xreflabel=""/>After initial file system configuration, use the tunefs.lustre utility to change the failover/failout mode. For example, to set the failout mode, run:</para><para>$ tunefs.lustre --param failover.mode=failout &lt;OST partition&gt;</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+
+              <caution><para>Before running this command, unmount all OSTs that will be affected by the change in the failover/failout mode.</para></caution>
+              <note><para>After initial file system configuration, use the tunefs.lustre utility to change the failover/failout mode. For example, to set the failout mode, run:</para><para>$ tunefs.lustre --param failover.mode=failout &lt;OST partition&gt;</para></note>
+
     </section>
-    <section remap="h2">
-      <title>13.6 <anchor xml:id="dbdoclet.50438194_54138" xreflabel=""/>Handling <anchor xml:id="dbdoclet.50438194_marker-1307136" xreflabel=""/>Degraded OST RAID Arrays</title>
+    <section xml:id="dbdoclet.50438194_54138">
+      <title>13.6 Handling <anchor xml:id="dbdoclet.50438194_marker-1307136" xreflabel=""/>Degraded OST RAID Arrays</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307138" xreflabel=""/>Lustre includes functionality that notifies Lustre if an external RAID array has degraded performance (resulting in reduced overall file system performance), either because a disk has failed and not been replaced, or because a disk was replaced and is undergoing a rebuild. To avoid a global performance slowdown due to a degraded OST, the MDS can avoid the OST for new object allocation if it is notified of the degraded state.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307139" xreflabel=""/>A parameter for each OST, called degraded, specifies whether the OST is running in degraded mode or not.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307140" xreflabel=""/>To mark the OST as degraded, use:</para>
@@ -354,57 +161,23 @@ ilout&quot; /dev/sdb
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307146" xreflabel=""/>If the OST is remounted due to a reboot or other condition, the flag resets to 0.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307147" xreflabel=""/>It is recommended that this be implemented by an automated script that monitors the status of individual RAID devices.</para>
     </section>
-    <section remap="h2">
-      <title>13.7 <anchor xml:id="dbdoclet.50438194_88063" xreflabel=""/>Running Multiple<anchor xml:id="dbdoclet.50438194_marker-1298939" xreflabel=""/> Lustre File Systems</title>
+    <section xml:id="dbdoclet.50438194_88063">
+      <title>13.7 Running Multiple<anchor xml:id="dbdoclet.50438194_marker-1298939" xreflabel=""/> Lustre File Systems</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298941" xreflabel=""/>There may be situations in which you want to run multiple file systems. This is doable, as long as you follow specific naming conventions.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298942" xreflabel=""/>By default, the mkfs.lustre command creates a file system named lustre. To specify a different file system name (limited to 8 characters), run this command:</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298943" xreflabel=""/>mkfs.lustre --fsname=&lt;new file system name&gt;</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1298944" xreflabel=""/>The MDT, OSTs and clients in the new file system must share the same name (prepended to the device name). For example, for a new file system named foo, the MDT and two OSTs would be named foo-MDT0000, foo-OST0000, and foo-OST0001.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>The MDT, OSTs and clients in the new file system must share the same name (prepended to the device name). For example, for a new file system named foo, the MDT and two OSTs would be named foo-MDT0000, foo-OST0000, and foo-OST0001.</para></note>
+              
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298945" xreflabel=""/>To mount a client on the file system, run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298946" xreflabel=""/>mount -t lustre mgsnode:/&lt;new fsname&gt; &lt;mountpoint&gt;
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298947" xreflabel=""/>For example, to mount a client on file system foo at mount point /mnt/lustre1, run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298948" xreflabel=""/>mount -t lustre mgsnode:/foo /mnt/lustre1
 </screen>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis> If a client(s) will be mounted on several file systems, add the following line to /etc/xattr.conf file to avoid problems when files are moved between the file systems: lustre.* skip</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1301607" xreflabel=""/>The MGS is universal; there is only one MGS per Lustre installation, not per file system.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1298950" xreflabel=""/>There is only one file system per MDT. Therefore, specify --mdt --mgs on one file system and --mdt --mgsnode=&lt;MGS node NID&gt; on the other file systems.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>If a client(s) will be mounted on several file systems, add the following line to /etc/xattr.conf file to avoid problems when files are moved between the file systems: lustre.* skip</para></note>
+              <note><para>The MGS is universal; there is only one MGS per Lustre installation, not per file system.</para></note>
+              <note><para>There is only one file system per MDT. Therefore, specify --mdt --mgs on one file system and --mdt --mgsnode=&lt;MGS node NID&gt; on the other file systems.</para></note>
+
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1298951" xreflabel=""/>A Lustre installation with two file systems (foo and bar) could look like this, where the MGS node is mgsnode@tcp0 and the mount points are /mnt/lustre1 and /mnt/lustre2.</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307225" xreflabel=""/>mgsnode# mkfs.lustre --mgs /mnt/lustre1
 <anchor xml:id="dbdoclet.50438194_pgfId-1298953" xreflabel=""/>mdtfoonode# mkfs.lustre --fsname=foo --mdt --mgsnode=mgsnode@tcp0 /mnt/lust\
@@ -427,26 +200,17 @@ re2
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1298962" xreflabel=""/>mount -t lustre mgsnode@tcp0:/bar /mnt/lustre2
 </screen>
     </section>
-    <section remap="h2">
-      <title>13.8 <anchor xml:id="dbdoclet.50438194_88980" xreflabel=""/>Setting <anchor xml:id="dbdoclet.50438194_marker-1302467" xreflabel=""/>and Retrieving Lustre Parameters</title>
+    <section xml:id="dbdoclet.50438194_88980">
+      <title>13.8 Setting <anchor xml:id="dbdoclet.50438194_marker-1302467" xreflabel=""/>and Retrieving Lustre Parameters</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1301646" xreflabel=""/>Several options are available for setting parameters in Lustre:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1301703" xreflabel=""/> When creating a file system, use mkfs.lustre. See <link xl:href="LustreOperations.html#50438194_17237">Setting Parameters with mkfs.lustre</link> below.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1301745" xreflabel=""/> When a server is stopped, use tunefs.lustre. See <link xl:href="LustreOperations.html#50438194_55253">Setting Parameters with tunefs.lustre</link> below.</para>
         </listitem>
 <listitem>
-          <para> </para>
-        </listitem>
-<listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1301707" xreflabel=""/> When the file system is running, use lctl to set or retrieve Lustre parameters. See <link xl:href="LustreOperations.html#50438194_51490">Setting Parameters with lctl</link> and <link xl:href="LustreOperations.html#50438194_63247">Reporting Current Parameter Values</link> below.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <section remap="h3">
@@ -471,17 +235,8 @@ re2
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438194_pgfId-1301773" xreflabel=""/>13.8.3 <anchor xml:id="dbdoclet.50438194_51490" xreflabel=""/>Setting Parameters <anchor xml:id="dbdoclet.50438194_marker-1305718" xreflabel=""/>with lctl</title>
         <para><anchor xml:id="dbdoclet.50438194_pgfId-1304759" xreflabel=""/>When the file system is running, the lctl command can be used to set parameters (temporary or permanent) and report current parameter values. Temporary parameters are active as long as the server or client is not shut down. Permanent parameters live through server and client reboots.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1305652" xreflabel=""/>The lctl list_param command enables users to list all parameters that can be set. See <link xl:href="LustreOperations.html#50438194_88217">Listing Parameters</link>.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><anchor xml:id="dbdoclet.50438194_pgfId-1307027" xreflabel=""/>For more details about the lctl command, see the examples in the sections below and <link xl:href="SystemConfigurationUtilities.html#50438219_66186">Chapter 36: System Configuration Utilities</link>.</para>
+                  <note><para>The lctl list_param command enables users to list all parameters that can be set. See <xref linkend='dbdoclet.50438194_88217'/>.</para></note>
+        <para><anchor xml:id="dbdoclet.50438194_pgfId-1307027" xreflabel=""/>For more details about the lctl command, see the examples in the sections below and <xref linkend='systemconfigurationutilities'/>.</para>
         <section remap="h4">
           <title><anchor xml:id="dbdoclet.50438194_pgfId-1307025" xreflabel=""/>13.8.3.1 Setting Temporary Parameters</title>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1303290" xreflabel=""/>Use lctl set_param to set temporary parameters on the node where it is run. These parameters map to items in /proc/{fs,sys}/{lnet,lustre}. The lctl set_param command uses this syntax:</para>
@@ -510,26 +265,7 @@ re2
 <anchor xml:id="dbdoclet.50438194_pgfId-1302355" xreflabel=""/>$ lctl conf_param testfs-OST0000.ost.client_cache_seconds=15 
 <anchor xml:id="dbdoclet.50438194_pgfId-1302356" xreflabel=""/>$ lctl conf_param testfs.sys.timeout=40 
 </screen>
-          <informaltable frame="none">
-            <tgroup cols="2">
-              <colspec colname="c1" colwidth="5*"/>
-              <colspec colname="c2" colwidth="95*"/>
-              
-              
-              <tbody>
-                <row>
-                  <entry><para><inlinemediaobject><imageobject role="html">
-                          <imagedata fileref="./shared/caution.gif" scalefit="1"/>
-                        </imageobject>
-<imageobject role="fo">
-                          <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/caution.gif" scalefit="1" width="100%"/>
-                        </imageobject>
-</inlinemediaobject></para></entry>
-                  <entry><para><emphasis role="bold">Caution -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1302357" xreflabel=""/>Parameters specified with the lctlconf_param command are set permanently in the file systemâ€™s configuration file on the MGS.</para></entry>
-                </row>
-              </tbody>
-            </tgroup>
-          </informaltable>
+                  <caution><para>Parameters specified with the lctlconf_param command are set permanently in the file systemâ€™s configuration file on the MGS.</para></caution>
         </section>
         <section remap="h4">
           <title><anchor xml:id="dbdoclet.50438194_pgfId-1305661" xreflabel=""/>13.8.3.3 <anchor xml:id="dbdoclet.50438194_88217" xreflabel=""/>Listing Parameters</title>
@@ -562,8 +298,8 @@ re2
         </section>
       </section>
     </section>
-    <section remap="h2">
-      <title>13.9 <anchor xml:id="dbdoclet.50438194_41817" xreflabel=""/><anchor xml:id="dbdoclet.50438194_42379" xreflabel=""/><anchor xml:id="dbdoclet.50438194_50129" xreflabel=""/>Specifying NIDs and Fail<anchor xml:id="dbdoclet.50438194_marker-1306313" xreflabel=""/>over</title>
+    <section xml:id="dbdoclet.50438194_41817">
+      <title>13.9 <anchor xml:id="dbdoclet.50438194_42379" xreflabel=""/><anchor xml:id="dbdoclet.50438194_50129" xreflabel=""/>Specifying NIDs and Fail<anchor xml:id="dbdoclet.50438194_marker-1306313" xreflabel=""/>over</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1306315" xreflabel=""/>If a node has multiple network interfaces, it may have multiple NIDs. When a node is specified, all of its NIDs must be listed, delimited by commas (,) so other nodes can choose the NID that is appropriate for their network interfaces. When failover nodes are specified, they are delimited by a colon (:) or by repeating a keyword (--mgsnode= or --failnode=). To obtain all NIDs from a node (while LNET is running), run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1306316" xreflabel=""/>lctl list_nids
 </screen>
@@ -580,59 +316,42 @@ n --mgsnode=uml2,2@elan /dev/sdb
 <anchor xml:id="dbdoclet.50438194_pgfId-1306329" xreflabel=""/>uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1306330" xreflabel=""/>Where multiple NIDs are specified, comma-separation (for example, uml2,2@elan) means that the two NIDs refer to the same host, and that Lustre needs to choose the &quot;best&quot; one for communication. Colon-separation (for example, uml1:uml2) means that the two NIDs refer to two different hosts, and should be treated as failover locations (Lustre tries the first one, and if that fails, it tries the second one.)</para>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1306331" xreflabel=""/>If you have an MGS or MDT configured for failover, perform these steps:</para><para> 1. On the OST, list the NIDs of all MGS nodes at mkfs time.</para><para>OST# mkfs.lustre --fsname sunfs --ost --mgsnode=10.0.0.1</para><para> --mgsnode=10.0.0.2 /dev/{device}</para><para> 2. On the client, mount the file system.</para><para>client# mount -t lustre 10.0.0.1:10.0.0.2:/sunfs /cfs/client/</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>If you have an MGS or MDT configured for failover, perform these steps:</para><para> 1. On the OST, list the NIDs of all MGS nodes at mkfs time.</para><para>OST# mkfs.lustre --fsname sunfs --ost --mgsnode=10.0.0.1</para><para> --mgsnode=10.0.0.2 /dev/{device}</para><para> 2. On the client, mount the file system.</para><para>client# mount -t lustre 10.0.0.1:10.0.0.2:/sunfs /cfs/client/</para></note>
      </section>
-    <section remap="h2">
-      <title>13.10 <anchor xml:id="dbdoclet.50438194_70905" xreflabel=""/>Erasing a <anchor xml:id="dbdoclet.50438194_marker-1307237" xreflabel=""/>File System</title>
+    <section xml:id="dbdoclet.50438194_70905">
+      <title>13.10 Erasing a <anchor xml:id="dbdoclet.50438194_marker-1307237" xreflabel=""/>File System</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307240" xreflabel=""/>If you want to erase a file system, run this command on your targets:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307241" xreflabel=""/>$ &quot;mkfs.lustre -reformat&quot;
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307242" xreflabel=""/>If you are using a separate MGS and want to keep other file systems defined on that MGS, then set the writeconf flag on the MDT for that file system. The writeconf flag causes the configuration logs to be erased; they are regenerated the next time the servers start.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307243" xreflabel=""/>To set the writeconf flag on the MDT:</para>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307244" xreflabel=""/> 1. Unmount all clients/servers using this file system, run:</para>
+      <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307244" xreflabel=""/>Unmount all clients/servers using this file system, run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307245" xreflabel=""/>$ umount /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307246" xreflabel=""/> 2. Erase the file system and, presumably, replace it with another file system, run:</para>
+</listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307246" xreflabel=""/>Erase the file system and, presumably, replace it with another file system, run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307247" xreflabel=""/>$ mkfs.lustre -reformat --fsname spfs --mdt --mgs /dev/sda
 </screen>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307248" xreflabel=""/> 3. If you have a separate MGS (that you do not want to reformat), then add the &quot;writeconf&quot; flag to mkfs.lustre on the MDT, run:</para>
+</listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307248" xreflabel=""/>If you have a separate MGS (that you do not want to reformat), then add the &quot;writeconf&quot; flag to mkfs.lustre on the MDT, run:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307249" xreflabel=""/>$ mkfs.lustre --reformat --writeconf -fsname spfs --mdt \ --mgs /dev/sda
 </screen>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1307250" xreflabel=""/>If you have a combined MGS/MDT, reformatting the MDT reformats the MGS as well, causing all configuration information to be lost; you can start building your new file system. Nothing needs to be done with old disks that will not be part of the new file system, just do not mount them.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+</listitem></orderedlist>
+              <note><para>If you have a combined MGS/MDT, reformatting the MDT reformats the MGS as well, causing all configuration information to be lost; you can start building your new file system. Nothing needs to be done with old disks that will not be part of the new file system, just do not mount them.</para></note>
     </section>
-    <section remap="h2">
-      <title>13.11 <anchor xml:id="dbdoclet.50438194_16954" xreflabel=""/>Reclaiming <anchor xml:id="dbdoclet.50438194_marker-1307251" xreflabel=""/>Reserved Disk Space</title>
+    <section xml:id="dbdoclet.50438194_16954">
+      <title>13.11 Reclaiming <anchor xml:id="dbdoclet.50438194_marker-1307251" xreflabel=""/>Reserved Disk Space</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307254" xreflabel=""/>All current Lustre installations run the ldiskfs file system internally on service nodes. By default, ldiskfs reserves 5% of the disk space for the root user. In order to reclaim this space, run the following command on your OSSs:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307255" xreflabel=""/>tune2fs [-m reserved_blocks_percent] [device]
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307256" xreflabel=""/>You do not need to shut down Lustre before running this command or restart it afterwards.</para>
     </section>
-    <section remap="h2">
-      <title>13.12 <anchor xml:id="dbdoclet.50438194_69998" xreflabel=""/>Replacing an Existing <anchor xml:id="dbdoclet.50438194_marker-1307278" xreflabel=""/>OST or MDS</title>
+    <section xml:id="dbdoclet.50438194_69998">
+      <title>13.12 Replacing an Existing <anchor xml:id="dbdoclet.50438194_marker-1307278" xreflabel=""/>OST or MDS</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307281" xreflabel=""/>To copy the contents of an existing OST to a new OST (or an old MDS to a new MDS), use one of these methods:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1307282" xreflabel=""/> Connect the old OST disk and new OST disk to a single machine, mount both, and use rsync to copy all data between the OST file systems.</para>
-        </listitem>
-<listitem>
-          <para> </para>
         </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307283" xreflabel=""/>For example:</para>
@@ -644,27 +363,22 @@ n --mgsnode=uml2,2@elan /dev/sdb
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1307288" xreflabel=""/> If you are unable to connect both sets of disk to the same computer, use rsync to copy over the network using rsh (or ssh with -e ssh):</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307289" xreflabel=""/>rsync -aSvz /mnt/ost_old/ new_ost_node:/mnt/ost_new
 </screen>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438194_pgfId-1307290" xreflabel=""/>  Use the same procedure for the MDS, with one additional step:</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
 </itemizedlist>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307291" xreflabel=""/>cd /mnt/mds_old; getfattr -R -e base64 -d . &gt; /tmp/mdsea; \&lt;copy all MDS file\
 s as above&gt;; cd /mnt/mds_new; setfattr \--restore=/tmp/mdsea
 </screen>
     </section>
-    <section remap="h2">
-      <title>13.13 <anchor xml:id="dbdoclet.50438194_30872" xreflabel=""/>Identifying To Which Lustre File an OST Object Belongs</title>
+    <section xml:id="dbdoclet.50438194_30872">
+      <title>13.13 Identifying To Which Lustre File an OST Object Belongs</title>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307353" xreflabel=""/>Use this procedure to identify the file containing a given object on a given OST.</para>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307357" xreflabel=""/> 1. On the OST (as root), run debugfs to display the file identifier (FID) of the file associated with the object.</para>
+      <orderedlist><listitem>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307357" xreflabel=""/>On the OST (as root), run debugfs to display the file identifier (FID) of the file associated with the object.</para>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307358" xreflabel=""/>For example, if the object is 34976 on /dev/lustre/ost_test2, the debug command is:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307359" xreflabel=""/># debugfs -c -R &quot;stat /O/0/d$((34976 %32))/34976&quot; /dev/lustre/ost_test2 
 </screen>
@@ -690,8 +404,9 @@ ps
 <anchor xml:id="dbdoclet.50438194_pgfId-1307377" xreflabel=""/>(0-63):47968-48031
 <anchor xml:id="dbdoclet.50438194_pgfId-1307378" xreflabel=""/>TOTAL: 64
 </screen>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307379" xreflabel=""/> 2. Note the FIDâ€™s EA and apply it to the osd_inode_id mapping.</para>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307380" xreflabel=""/>In this example, the FIDâ€™s EA is:</para>
+</listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307379" xreflabel=""/>Note the FID's EA and apply it to the osd_inode_id mapping.</para>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307380" xreflabel=""/>In this example, the FID's EA is:</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307381" xreflabel=""/>e2001100000000002543c18700000000a0880000000000000000000000000000
 <anchor xml:id="dbdoclet.50438194_pgfId-1307382" xreflabel=""/>struct osd_inode_id { 
 <anchor xml:id="dbdoclet.50438194_pgfId-1307383" xreflabel=""/>__u64 oii_ino; /* inode number */ 
@@ -700,7 +415,8 @@ ps
 <anchor xml:id="dbdoclet.50438194_pgfId-1307386" xreflabel=""/>};
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307387" xreflabel=""/>After swapping, you get an inode number of 0x001100e2 and generation of 0.</para>
-      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307388" xreflabel=""/> 3. On the MDT (as root), use debugfs to find the file associated with the inode.</para>
+</listitem><listitem>
+      <para><anchor xml:id="dbdoclet.50438194_pgfId-1307388" xreflabel=""/>On the MDT (as root), use debugfs to find the file associated with the inode.</para>
       <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307389" xreflabel=""/># debugfs -c -R &quot;ncheck 0x001100e2&quot; /dev/lustre/mdt_test 
 </screen>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307390" xreflabel=""/>Here is the command output:</para>
@@ -710,78 +426,10 @@ s
 <anchor xml:id="dbdoclet.50438194_pgfId-1307393" xreflabel=""/>Inode      Pathname
 <anchor xml:id="dbdoclet.50438194_pgfId-1307394" xreflabel=""/>1114338    /ROOT/brian-laptop-guest/clients/client11/~dmtmp/PWRPNT/ZD16.BMP
 </screen>
+</listitem></orderedlist>
       <para><anchor xml:id="dbdoclet.50438194_pgfId-1307395" xreflabel=""/>The command lists the inode and pathname associated with the object.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1307396" xreflabel=""/>Debugfs&apos; &apos;&apos;ncheck&apos;&apos; is a brute-force search that may take a long time to complete.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-       <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438194_pgfId-1307397" xreflabel=""/>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <emphasis>http://smartmontools.sourceforge.net/badblockhowto.html. </emphasis> Then, follow the steps above to resolve the Lustre filename.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <screen><anchor xml:id="dbdoclet.50438194_pgfId-1307350" xreflabel=""/> 
-</screen>
-      <!--
-Begin SiteCatalyst code version: G.5.
--->
-      <!--
-End SiteCatalyst code version: G.5.
--->
-        <informaltable frame="none">
-        <tgroup cols="3">
-          <colspec colname="c1" colwidth="33*"/>
-          <colspec colname="c2" colwidth="33*"/>
-          <colspec colname="c3" colwidth="33*"/>
-          
-          
-          
-          <tbody>
-            <row>
-              <entry align="left"><para>Lustre 2.0 Operations Manual</para></entry>
-              <entry align="right"><para>821-2076-10</para></entry>
-              <entry align="right" valign="top"><para><link xl:href="index.html"><inlinemediaobject><imageobject role="html">
-                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/toc01.gif" scalefit="1"/>
-                      </imageobject>
-<imageobject role="fo">
-                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/toc01.gif" scalefit="1" width="100%"/>
-                      </imageobject>
-</inlinemediaobject></link><link xl:href="LustreMonitoring.html"><inlinemediaobject><imageobject role="html">
-                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/prev01.gif" scalefit="1"/>
-                      </imageobject>
-<imageobject role="fo">
-                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/prev01.gif" scalefit="1" width="100%"/>
-                      </imageobject>
-</inlinemediaobject></link><link xl:href="LustreMaintenance.html"><inlinemediaobject><imageobject role="html">
-                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/next01.gif" scalefit="1"/>
-                      </imageobject>
-<imageobject role="fo">
-                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/next01.gif" scalefit="1" width="100%"/>
-                      </imageobject>
-</inlinemediaobject></link><link xl:href="ix.html"><inlinemediaobject><imageobject role="html">
-                        <imagedata contentdepth="26" contentwidth="30" fileref="./shared/index01.gif" scalefit="1"/>
-                      </imageobject>
-<imageobject role="fo">
-                        <imagedata contentdepth="100%" contentwidth="" depth="" fileref="./shared/index01.gif" scalefit="1" width="100%"/>
-                      </imageobject>
-</inlinemediaobject></link></para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para><link xl:href=""/></para>
-      <para><link xl:href="copyright.html">Copyright</link> © 2011, Oracle and/or its affiliates. All rights reserved.</para>
-    </section>
+      <note><para>Debugfs&apos; &apos;&apos;ncheck&apos;&apos; is a brute-force search that may take a long time to complete.</para></note>
+      <note><para>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <emphasis>http://smartmontools.sourceforge.net/badblockhowto.html. </emphasis> Then, follow the steps above to resolve the Lustre filename.</para></note>
+      
   </section>
-</article>
+</chapter>
