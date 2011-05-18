@@ -1,32 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<article version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustredebugging'>
   <info>
-    <title>Lustre Debugging</title>
+    <title xml:id='lustredebugging.title'>Lustre Debugging</title>
   </info>
+
   <para><anchor xml:id="dbdoclet.50438274_pgfId-1295651" xreflabel=""/>This chapter describes tips and information to debug Lustre, and includes the following sections:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438274_pgfId-1295655" xreflabel=""/><link xl:href="LustreDebugging.html#50438274_15874">Diagnostic and Debugging Tools</link></para>
+      <para><xref linkend="dbdoclet.50438274_15874"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438274_23607"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438274_pgfId-1295659" xreflabel=""/><link xl:href="LustreDebugging.html#50438274_23607">Lustre Debugging Procedures</link></para>
+      <para><xref linkend="dbdoclet.50438274_80443"/></para>
     </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438274_pgfId-1295663" xreflabel=""/><link xl:href="LustreDebugging.html#50438274_80443">Lustre Debugging for Developers</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
+
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438274_pgfId-1295665" xreflabel=""/></title>
-    <section remap="h2">
-      <title>28.1 <anchor xml:id="dbdoclet.50438274_15874" xreflabel=""/>Diagnostic and Debugging Tools</title>
+
+    <section xml:id="dbdoclet.50438274_15874">
+      <title>28.1 Diagnostic and Debugging Tools</title>
       <para><anchor xml:id="dbdoclet.50438274_pgfId-1295666" xreflabel=""/>A variety of diagnostic and analysis tools are available to debug issues with the Lustre software. Some of these are provided in Linux distributions, while others have been developed and are made available by the Lustre project.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438274_pgfId-1295667" xreflabel=""/>28.1.1 Lustre Debugging Tools</title>
@@ -34,41 +28,29 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295669" xreflabel=""/><emphasis role="bold">Debug logs</emphasis>  - A circular debug buffer to which Lustre internal debug messages are written (in contrast to error messages, which are printed to the syslog or console). Entries to the Lustre debug log are controlled by the mask set by /proc/sys/lnet/debug. The log size defaults to 5 MB per CPU but can be increased as a busy system will quickly overwrite 5 MB. When the buffer fills, the oldest information is discarded.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295670" xreflabel=""/><emphasis role="bold">Debug daemon</emphasis>  - The debug daemon controls logging of debug messages.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295671" xreflabel=""/><emphasis role="bold">/proc/sys/lnet/debug</emphasis>  - This file contains a mask that can be used to delimit the debugging information written out to the kernel debug logs.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1295672" xreflabel=""/>The following tools are also provided with the Lustre software:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438274_pgfId-1295673" xreflabel=""/><emphasis role="bold">lctl</emphasis>  - This tool is used with the debug_kernel option to manually dump the Lustre debugging log or post-process debugging logs that are dumped automatically. For more information about the lctl tool, see <link xl:href="LustreDebugging.html#50438274_62472">Using the lctl Tool to View Debug Messages</link> and <link xl:href="SystemConfigurationUtilities.html#50438219_38274">lctl</link>.</para>
+                <para><anchor xml:id="dbdoclet.50438274_pgfId-1295673" xreflabel=""/><emphasis role="bold">lctl</emphasis>  - This tool is used with the debug_kernel option to manually dump the Lustre debugging log or post-process debugging logs that are dumped automatically. For more information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref linkend="systemconfigurationutilities"/>(lctl).</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295680" xreflabel=""/><emphasis role="bold">Lustre subsystem asserts</emphasis>  - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file /tmp/lustre-log.<emphasis>&lt;timestamp&gt;</emphasis> where it can be retrieved after a reboot. For more information, see <link xl:href="LustreTroubleshooting.html#50438198_40669">Viewing Error Messages</link>.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295684" xreflabel=""/><emphasis role="bold">lfs</emphasis>  - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more inforamtion about lfs, see <link xl:href="UserUtilities.html#50438206_94597">lfs</link>.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
       </section>
       <section remap="h3">
@@ -80,47 +62,33 @@
           <itemizedlist><listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295698" xreflabel=""/><emphasis role="bold">strace</emphasis> . This tool allows a system call to be traced.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295699" xreflabel=""/><emphasis role="bold">/var/log/messages</emphasis> . syslogd prints fatal or serious messages at this log.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295700" xreflabel=""/><emphasis role="bold">Crash dumps</emphasis> . On crash-dump enabled kernels, sysrq c produces a crash dump. Lustre enhances this crash dump with a log dump (the last 64 KB of the log) to the console.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295701" xreflabel=""/><emphasis role="bold">debugfs</emphasis> . Interactive file system debugger.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 </itemizedlist>
           <para><anchor xml:id="dbdoclet.50438274_pgfId-1295702" xreflabel=""/>The following logging and data collection tools can be used to collect information for debugging Lustre kernel issues:</para>
           <itemizedlist><listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295703" xreflabel=""/><emphasis role="bold">kdump</emphasis> . A Linux kernel crash utility useful for debugging a system running Red Hat Enterprise Linux. For more information about kdump, see the Red Hat knowledge base article <link xl:href="http://kbase.redhat.com/faq/docs/DOC-6039">How do I configure kexec/kdump on Red Hat Enterprise Linux 5?</link>. To download kdump, go to the <link xl:href="http://fedoraproject.org/wiki/SystemConfig/kdump#Download">Fedora Project Download</link> site.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295706" xreflabel=""/><emphasis role="bold">netconsole</emphasis> . Enables kernel-level network logging over UDP. A system requires (SysRq) allows users to collect relevant data through netconsole.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295707" xreflabel=""/><emphasis role="bold">netdump</emphasis> . A crash dump utility from Red Hat that allows memory images to be dumped over a network to a central server for analysis. The netdump utility was replaced by kdump in RHEL 5. For more information about netdump, see <link xl:href="http://www.redhat.com/support/wpapers/redhat/netdump/">Red Hat, Inc.&apos;s Network Console and Crash Dump Facility</link>.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 </itemizedlist>
         </section>
         <section remap="h4">
@@ -130,97 +98,66 @@
           <itemizedlist><listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295712" xreflabel=""/><emphasis role="bold">leak_finder.pl</emphasis> . This program provided with Lustre is useful for finding memory leaks in the code.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 </itemizedlist>
           <para><anchor xml:id="dbdoclet.50438274_pgfId-1295713" xreflabel=""/>A virtual machine is often used to create an isolated development and test environment. Some commonly-used virtual machines are:</para>
           <itemizedlist><listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295714" xreflabel=""/><emphasis role="bold">VirtualBox Open Source Edition</emphasis> . Provides enterprise-class virtualization capability for all major platforms and is available free at <link xl:href="http://www.sun.com/software/products/virtualbox/get.jsp?intcmp=2945">Get Sun VirtualBox</link>.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295716" xreflabel=""/><emphasis role="bold">VMware Server</emphasis> . Virtualization platform available as free introductory software at <link xl:href="http://downloads.vmware.com/d/info/datacenter_downloads/vmware_server/2_0">Download VMware Server</link>.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295718" xreflabel=""/><emphasis role="bold">Xen</emphasis> . A para-virtualized environment with virtualization capabilities similar to VMware Server and Virtual Box. However, Xen allows the use of modified kernels to provide near-native performance and the ability to emulate shared storage. For more information, go to <link xl:href="http://xen.org/">xen.org</link>.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 </itemizedlist>
           <para><anchor xml:id="dbdoclet.50438274_pgfId-1295720" xreflabel=""/>A variety of debuggers and analysis tools are available including:</para>
           <itemizedlist><listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295721" xreflabel=""/><emphasis role="bold">kgdb</emphasis> . The Linux Kernel Source Level Debugger kgdb is used in conjunction with the GNU Debugger gdb for debugging the Linux kernel. For more information about using kgdb with gdb, see <link xl:href="http://www.linuxtopia.org/online_books/redhat_linux_debugging_with_gdb/running.html">Chapter 6. Running Programs Under gdb</link> in the <emphasis>Red Hat Linux 4 Debugging with GDB</emphasis> guide.</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 <listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295723" xreflabel=""/><emphasis role="bold">crash</emphasis> . Used to analyze saved crash dump data when a system had panicked or locked up or appears unresponsive. For more information about using crash to analyze a crash dump, see:</para>
-            </listitem>
-<listitem>
               <itemizedlist><listitem>
                   <para><anchor xml:id="dbdoclet.50438274_pgfId-1295725" xreflabel=""/> Red Hat Magazine article: <link xl:href="http://magazine.redhat.com/2007/08/15/a-quick-overview-of-linux-kernel-crash-dump-analysis/">A quick overview of Linux kernel crash dump analysis</link></para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 <listitem>
                   <para><anchor xml:id="dbdoclet.50438274_pgfId-1295727" xreflabel=""/><link xl:href="http://people.redhat.com/anderson/crash_whitepaper/#EXAMPLES">Crash Usage: A Case Study</link>  from the white paper <emphasis>Red Hat Crash Utility</emphasis> by David Anderson</para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 <listitem>
                   <para><anchor xml:id="dbdoclet.50438274_pgfId-1295729" xreflabel=""/> Kernel Trap forum entry: <link xl:href="http://kerneltrap.org/node/5758">Linux: Kernel Crash Dumps</link></para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 <listitem>
                   <para><anchor xml:id="dbdoclet.50438274_pgfId-1295731" xreflabel=""/> White paper: <link xl:href="http://www.google.com/url?sa=t&amp;source=web&amp;ct=res&amp;cd=8&amp;ved=0CCUQFjAH&amp;url=http%3A%2F%2Fwww.kernel.sg%2Fpapers%2Fcrash-dump-analysis.pdf&amp;rct=j&amp;q=redhat+crash+dump&amp;ei=6aQBS-ifK4T8tAPcjdiHCw&amp;usg=AFQjCNEk03E3GDtAsawG3gfpwc1gGNELAg">A Quick Overview of Linux Kernel Crash Dump Analysis</link></para>
                 </listitem>
-<listitem>
-                  <para> </para>
-                </listitem>
+
 </itemizedlist>
             </listitem>
 </itemizedlist>
         </section>
       </section>
     </section>
-    <section remap="h2">
-      <title>28.2 <anchor xml:id="dbdoclet.50438274_23607" xreflabel=""/>Lustre Debugging Procedures</title>
+    <section xml:id="dbdoclet.50438274_23607">
+      <title>28.2 Lustre Debugging Procedures</title>
       <para><anchor xml:id="dbdoclet.50438274_pgfId-1295734" xreflabel=""/>The procedures below may be useful to administrators or developers debugging a Lustre files system.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438274_pgfId-1295735" xreflabel=""/>28.2.1 Understanding the Lustre Debug Messaging Format</title>
-        <para><anchor xml:id="dbdoclet.50438274_pgfId-1295736" xreflabel=""/>Lustre debug messages are categorized by originating sybsystem, message type, and locaton in the source code. For a list of subsystems and message types, see <link xl:href="LustreDebugging.html#50438274_57603">Lustre Debug Messages</link>.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438274_pgfId-1295740" xreflabel=""/>For a current list of subsystems and debug message types, see lnet/include/libcfs/libcfs.h in the Lustre tree</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><anchor xml:id="dbdoclet.50438274_pgfId-1295743" xreflabel=""/>The elements of a Lustre debug message are described in <link xl:href="LustreDebugging.html#50438274_57177">Format of Lustre Debug Messages</link>.</para>
+        <para><anchor xml:id="dbdoclet.50438274_pgfId-1295736" xreflabel=""/>Lustre debug messages are categorized by originating sybsystem, message type, and locaton in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
+                <note><para>For a current list of subsystems and debug message types, see lnet/include/libcfs/libcfs.h in the Lustre tree</para></note>
+                <para><anchor xml:id="dbdoclet.50438274_pgfId-1295743" xreflabel=""/>The elements of a Lustre debug message are described in <xref linkend="dbdoclet.50438274_57177"/>Format of Lustre Debug Messages.</para>
         <section remap="h4">
           <title><anchor xml:id="dbdoclet.50438274_pgfId-1295747" xreflabel=""/>28.2.1.1 <anchor xml:id="dbdoclet.50438274_57603" xreflabel=""/>Lustre <anchor xml:id="dbdoclet.50438274_marker-1295746" xreflabel=""/>Debug Messages</title>
           <para><anchor xml:id="dbdoclet.50438274_pgfId-1295748" xreflabel=""/>Each Lustre debug message has the tag of the subsystem it originated in, the message type, and the location in the source code. The subsystems and debug types used in Lustre are as follows:</para>
           <itemizedlist><listitem>
               <para><anchor xml:id="dbdoclet.50438274_pgfId-1295749" xreflabel=""/>  Standard Subsystems:</para>
             </listitem>
-<listitem>
-              <para> </para>
-            </listitem>
+
 </itemizedlist>
           <para><anchor xml:id="dbdoclet.50438274_pgfId-1295750" xreflabel=""/> mdc, mds, osc, ost, obdclass, obdfilter, llite, ptlrpc, portals, lnd, ldlm, lov</para>
           <itemizedlist><listitem>
@@ -395,35 +332,21 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295895" xreflabel=""/> Obtain a list of all the types and subsystems:</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1295896" xreflabel=""/>lctl &gt; debug_list <emphasis>&lt;subs | types&gt;</emphasis></screen>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295897" xreflabel=""/> Filter the debug log:</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1295898" xreflabel=""/>lctl &gt; filter <emphasis>&lt;subsystem name | debug type&gt;</emphasis></screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438274_pgfId-1295899" xreflabel=""/>When lctl filters, it removes unwanted lines from the displayed output. This does not affect the contents of the debug log in the kernel&apos;s memory. As a result, you can print the log many times with different filtering levels without worrying about losing data.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>When lctl filters, it removes unwanted lines from the displayed output. This does not affect the contents of the debug log in the kernel&apos;s memory. As a result, you can print the log many times with different filtering levels without worrying about losing data.</para></note>
+
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295900" xreflabel=""/> Show debug messages belonging to certain subsystem or type:</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1295901" xreflabel=""/>lctl &gt; show <emphasis>&lt;subsystem name | debug type&gt;</emphasis></screen>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1295902" xreflabel=""/>debug_kernel pulls the data from the kernel logs, filters it appropriately, and displays or saves it as per the specified options</para>
@@ -433,9 +356,7 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295905" xreflabel=""/> Filter a log on disk, if you already have a debug log saved to disk (likely from a crash):</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1295906" xreflabel=""/>lctl &gt; debug_file <emphasis>&lt;input filename&gt;</emphasis> [<emphasis>output filename</emphasis>] 
 </screen>
@@ -448,22 +369,11 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1295911" xreflabel=""/> Completely flush the kernel debug buffer:</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1295912" xreflabel=""/>lctl &gt; clear
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438274_pgfId-1295913" xreflabel=""/>Debug messages displayed with lctl are also subject to the kernel debug masks; the filters are additive.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>Debug messages displayed with lctl are also subject to the kernel debug masks; the filters are additive.</para></note>
         <section remap="h4">
           <title><anchor xml:id="dbdoclet.50438274_pgfId-1295915" xreflabel=""/>28.2.2.1 Sample lctl<anchor xml:id="dbdoclet.50438274_marker-1295914" xreflabel=""/>Run</title>
           <para><anchor xml:id="dbdoclet.50438274_pgfId-1295916" xreflabel=""/>Below is a sample run using the lctl command.</para>
@@ -611,8 +521,8 @@
 </screen>
       </section>
     </section>
-    <section remap="h2">
-      <title>28.3 <anchor xml:id="dbdoclet.50438274_80443" xreflabel=""/>Lustre Debugging for Developers</title>
+    <section xml:id="dbdoclet.50438274_80443">
+      <title>28.3 Lustre Debugging for Developers</title>
       <para><anchor xml:id="dbdoclet.50438274_pgfId-1296025" xreflabel=""/>The procedures in this section may be useful to developers debugging Lustre code.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438274_pgfId-1296027" xreflabel=""/>28.3.1 Adding Debugging to the <anchor xml:id="dbdoclet.50438274_marker-1296026" xreflabel=""/>Lustre Source Code</title>
@@ -701,33 +611,31 @@
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296101" xreflabel=""/>Each service maintains a request history, which can be useful for first occurrence troubleshooting.</para>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296102" xreflabel=""/>Ptlrpc is an RPC protocol layered on LNET that deals with stateful servers and has semantics and built-in support for recovery.</para>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296103" xreflabel=""/>A prlrpc request history works as follows:</para>
-        <para><anchor xml:id="dbdoclet.50438274_pgfId-1296104" xreflabel=""/>1. Request_in_callback() adds the new request to the service&apos;s request history.</para>
-        <para><anchor xml:id="dbdoclet.50438274_pgfId-1296105" xreflabel=""/> 2. When a request buffer becomes idle, it is added to the service&apos;s request buffer history list.</para>
-        <para><anchor xml:id="dbdoclet.50438274_pgfId-1296106" xreflabel=""/> 3. Buffers are culled from the service&apos;s request buffer history if it has grown above</para>
+        <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438274_pgfId-1296104" xreflabel=""/>Request_in_callback() adds the new request to the service&apos;s request history.</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438274_pgfId-1296105" xreflabel=""/>When a request buffer becomes idle, it is added to the service&apos;s request buffer history list.</para>
+    </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438274_pgfId-1296106" xreflabel=""/>Buffers are culled from the service&apos;s request buffer history if it has grown above</para>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296107" xreflabel=""/>req_buffer_history_max and its reqs are removed from the service&apos;s request history.</para>
+    </listitem></orderedlist>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296108" xreflabel=""/>Request history is accessed and controlled using the following /proc files under the service directory:</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1296109" xreflabel=""/>req_buffer_history_len</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296110" xreflabel=""/>Number of request buffers currently in the history</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1296111" xreflabel=""/>req_buffer_history_max</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296112" xreflabel=""/>Maximum number of request buffers to keep</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438274_pgfId-1296113" xreflabel=""/>req_history</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296114" xreflabel=""/>The request history</para>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296115" xreflabel=""/>Requests in the history include &quot;live&quot; requests that are currently being handled. Each line in req_history looks like:</para>
@@ -792,10 +700,13 @@
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1296157" xreflabel=""/>sysctl -w lnet.debug=+malloc 
 </screen>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296158" xreflabel=""/>Then complete the following steps:</para>
+        <orderedlist><listitem> 
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296161" xreflabel=""/> 1. Dump the log into a user-specified log file using lctl (see <link xl:href="LustreDebugging.html#50438274_62472">Using the lctl Tool to View Debug Messages</link>).</para>
+        </listitem><listitem>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296163" xreflabel=""/> 2. Run the leak finder on the newly-created log dump:</para>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1296164" xreflabel=""/>perl leak_finder.pl &lt;ascii-logname&gt;
 </screen>
+        </listitem></orderedlist>
         <para><anchor xml:id="dbdoclet.50438274_pgfId-1296165" xreflabel=""/>The output is:</para>
         <screen><anchor xml:id="dbdoclet.50438274_pgfId-1296166" xreflabel=""/>malloced 8bytes at a3116744 (called pathcopy) 
 <anchor xml:id="dbdoclet.50438274_pgfId-1296167" xreflabel=""/>(lprocfs_status.c:lprocfs_add_vars:80) 
@@ -807,6 +718,5 @@
 line 241)
 </screen>
       </section>
-    </section>
   </section>
 </article>
