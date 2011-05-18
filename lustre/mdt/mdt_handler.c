@@ -2052,7 +2052,7 @@ static int mdt_sec_ctx_handle(struct mdt_thread_info *info)
                         sptlrpc_svc_ctx_invalidate(req);
         }
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, obd_fail_val);
+        CFS_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, cfs_fail_val);
 
         return rc;
 }

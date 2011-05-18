@@ -1104,9 +1104,9 @@ int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *cancels,
         LASSERT(exp != NULL);
         LASSERT(count > 0);
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL, obd_fail_val);
+        CFS_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL, cfs_fail_val);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_RACE))
+        if (CFS_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_RACE))
                 RETURN(count);
 
         free = ldlm_format_handles_avail(class_exp2cliimp(exp),

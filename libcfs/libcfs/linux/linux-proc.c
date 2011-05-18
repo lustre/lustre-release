@@ -107,6 +107,8 @@ enum {
         PSDEV_LNET_DEBUG_LOG_UPCALL, /* debug log upcall script */
         PSDEV_LNET_WATCHDOG_RATELIMIT,  /* ratelimit watchdog messages  */
         PSDEV_LNET_FORCE_LBUG,    /* hook to force an LBUG */
+        PSDEV_LNET_FAIL_LOC,      /* control test failures instrumentation */
+        PSDEV_LNET_FAIL_VAL,      /* userdata for fail loc */
 };
 #else
 #define CTL_LNET                        CTL_UNNUMBERED
@@ -129,8 +131,9 @@ enum {
 #define PSDEV_LNET_DEBUG_LOG_UPCALL     CTL_UNNUMBERED
 #define PSDEV_LNET_WATCHDOG_RATELIMIT   CTL_UNNUMBERED
 #define PSDEV_LNET_FORCE_LBUG           CTL_UNNUMBERED
+#define PSDEV_LNET_FAIL_LOC             CTL_UNNUMBERED
+#define PSDEV_LNET_FAIL_VAL             CTL_UNNUMBERED
 #endif
-
 
 int
 proc_call_handler(void *data, int write,
@@ -342,6 +345,17 @@ int LL_PROC_PROTO(libcfs_force_lbug)
         return 0;
 }
 
+int LL_PROC_PROTO(proc_fail_loc)
+{
+        int rc;
+        long old_fail_loc = cfs_fail_loc;
+
+        rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
+        if (old_fail_loc != cfs_fail_loc)
+                cfs_waitq_signal(&cfs_race_waitq);
+        return rc;
+}
+
 static cfs_sysctl_table_t lnet_table[] = {
         /*
          * NB No .strategy entries have been provided since sysctl(8) prefers
@@ -489,6 +503,22 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .maxlen   = 0,
                 .mode     = 0200,
                 .proc_handler = &libcfs_force_lbug
+        },
+        {
+                .ctl_name = PSDEV_LNET_FAIL_LOC,
+                .procname = "fail_loc",
+                .data     = &cfs_fail_loc,
+                .maxlen   = sizeof(cfs_fail_loc),
+                .mode     = 0644,
+                .proc_handler = &proc_fail_loc
+        },
+        {
+                .ctl_name = PSDEV_LNET_FAIL_VAL,
+                .procname = "fail_val",
+                .data     = &cfs_fail_val,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
         },
         {0}
 };

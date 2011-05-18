@@ -61,7 +61,6 @@
 # include <linux/types.h>
 # include <linux/blkdev.h>
 # include <lvfs.h>
-# define OBD_SLEEP_ON(wq, state)  wait_event_interruptible(wq, state)
 #else /* !__KERNEL__ */
 # define LTIME_S(time) (time)
 /* for obd_class.h */

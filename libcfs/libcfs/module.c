@@ -386,6 +386,7 @@ static int init_libcfs_module(void)
         cfs_init_mutex(&cfs_trace_thread_sem);
         cfs_init_rwsem(&ioctl_list_sem);
         CFS_INIT_LIST_HEAD(&ioctl_list);
+        cfs_waitq_init(&cfs_race_waitq);
 
         rc = libcfs_debug_init(5 * 1024 * 1024);
         if (rc < 0) {

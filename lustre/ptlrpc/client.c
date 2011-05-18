@@ -1246,7 +1246,7 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         if (lustre_msg_get_opc(req->rq_reqmsg) != OBD_PING)
-                OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
+                CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, cfs_fail_val);
         ptlrpc_at_adj_service(req, lustre_msg_get_timeout(req->rq_repmsg));
         ptlrpc_at_adj_net_latency(req,
                                   lustre_msg_get_service_time(req->rq_repmsg));

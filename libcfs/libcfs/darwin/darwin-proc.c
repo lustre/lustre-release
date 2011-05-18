@@ -144,6 +144,25 @@ static int sysctl_debug_mb SYSCTL_HANDLER_ARGS
 	return error;
 }
 
+static int proc_fail_loc SYSCTL_HANDLER_ARGS
+{
+        int error = 0;
+        long old_fail_loc = cfs_fail_loc;
+
+        error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req);
+        if (!error && req->newptr != USER_ADDR_NULL) {
+                if (old_fail_loc != cfs_fail_loc)
+                        cfs_waitq_signal(&cfs_race_waitq);
+        } else  if (req->newptr != USER_ADDR_NULL) {
+                /* Something was wrong with the write request */
+                printf ("sysctl fail loc fault: %d.\n", error);
+        } else {
+                /* Read request */
+                error = SYSCTL_OUT(req, &cfs_fail_loc, sizeof cfs_fail_loc);
+        }
+        return error;
+}
+
 /*
  * sysctl table for lnet
  */
@@ -183,7 +202,9 @@ SYSCTL_PROC(_lnet,		        OID_AUTO,	daemon_file,
 SYSCTL_PROC(_lnet,		        OID_AUTO,	debug_mb,
 	     CTLTYPE_INT | CTLFLAG_RW,		        0,
 	     0,		&sysctl_debug_mb,	        "L",	"debug_mb");
-
+SYSCTL_PROC(_lnet,                      OID_AUTO,       fail_loc, 
+             CTLTYPE_INT | CTLFLAG_RW ,                 &cfs_fail_loc,
+             0,         &proc_fail_loc,                 "I",    "cfs_fail_loc");
 
 static cfs_sysctl_table_t	top_table[] = {
 	&sysctl__lnet,
@@ -197,6 +218,7 @@ static cfs_sysctl_table_t	top_table[] = {
 	&sysctl__lnet_debug_kernel,
 	&sysctl__lnet_daemon_file,
 	&sysctl__lnet_debug_mb,
+        &sysctl__lnet_cfs_fail_loc
 	NULL
 };
 

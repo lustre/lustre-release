@@ -331,7 +331,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 
         rc = ll_md_close(sbi->ll_md_exp, inode, file);
 
-        if (OBD_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_DUMP_LOG, obd_fail_val))
+        if (CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_DUMP_LOG, cfs_fail_val))
                 libcfs_debug_dumplog();
 
         RETURN(rc);

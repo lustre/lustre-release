@@ -1707,7 +1707,7 @@ run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
 test_40() { # bug 15759
 	start_ost
 	#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
-	do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000706"
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x80000706"
 	start_mds
 	cleanup
 }

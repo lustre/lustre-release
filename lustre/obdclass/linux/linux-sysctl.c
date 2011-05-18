@@ -63,9 +63,7 @@ cfs_sysctl_table_header_t *obd_table_header = NULL;
 #define OBD_SYSCTL 300
 
 enum {
-        OBD_FAIL_LOC = 1,       /* control test failures instrumentation */
-        OBD_FAIL_VAL,           /* userdata for fail loc */
-        OBD_TIMEOUT,            /* RPC timeout before recovery/intr */
+        OBD_TIMEOUT = 3,        /* RPC timeout before recovery/intr */
         OBD_DUMP_ON_TIMEOUT,    /* dump kernel debug log upon eviction */
         OBD_MEMUSED,            /* bytes currently OBD_ALLOCated */
         OBD_PAGESUSED,          /* pages currently OBD_PAGE_ALLOCated */
@@ -109,18 +107,6 @@ enum {
 #define OBD_AT_HISTORY          CTL_UNNUMBERED
 
 #endif
-
-
-int LL_PROC_PROTO(proc_fail_loc)
-{
-        int rc;
-        long old_fail_loc = obd_fail_loc;
-
-        rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
-        if (old_fail_loc != obd_fail_loc)
-                cfs_waitq_signal(&obd_race_waitq);
-        return rc;
-}
 
 int LL_PROC_PROTO(proc_set_timeout)
 {
@@ -326,22 +312,6 @@ int LL_PROC_PROTO(proc_at_history)
 
 #ifdef CONFIG_SYSCTL
 static cfs_sysctl_table_t obd_table[] = {
-        {
-                .ctl_name = OBD_FAIL_LOC,
-                .procname = "fail_loc",
-                .data     = &obd_fail_loc,
-                .maxlen   = sizeof(obd_fail_loc),
-                .mode     = 0644,
-                .proc_handler = &proc_fail_loc
-        },
-        {
-                .ctl_name = OBD_FAIL_VAL,
-                .procname = "fail_val",
-                .data     = &obd_fail_val,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
         {
                 .ctl_name = OBD_TIMEOUT,
                 .procname = "timeout",

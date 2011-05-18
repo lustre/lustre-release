@@ -716,8 +716,8 @@ int cb_create_update(void *cookie, int rc)
 
         lovreq = container_of(oinfo, struct lov_request, rq_oi);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL))
-                if (lovreq->rq_idx == obd_fail_val)
+        if (CFS_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL))
+                if (lovreq->rq_idx == cfs_fail_val)
                         rc = -ENOTCONN;
 
         rc= lov_update_create_set(lovreq->rq_rqset, lovreq, rc);

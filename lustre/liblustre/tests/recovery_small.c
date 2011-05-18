@@ -148,7 +148,7 @@ void cleanup_dir(const char *path)
         if (drop_arr[drop_index].name) {                                   \
             printf("server drops next %s\n", drop_arr[drop_index].name);   \
             sprintf(cmd,                                                   \
-                    "%s %s \"echo %lu > /proc/sys/lustre/fail_loc\"",      \
+                    "%s %s \"lctl set_param fail_loc=%lu\"",               \
                     ssh_cmd, mds_server, drop_arr[drop_index].code);       \
             if ((rc = system(cmd)) != 0) {                                 \
                 rc = WEXITSTATUS(rc);                                      \
@@ -163,7 +163,7 @@ void cleanup_dir(const char *path)
         char cmd[1024];                                                    \
                                                                            \
         if (drop_arr[drop_index].name) {                                   \
-            sprintf(cmd, "%s %s \"echo 0 > /proc/sys/lustre/fail_loc\"",   \
+            sprintf(cmd, "%s %s \"lctl set_param fail_loc=0\"",            \
                     ssh_cmd, mds_server);                                  \
             if (!system(cmd)) {}                                           \
         }                                                                  \

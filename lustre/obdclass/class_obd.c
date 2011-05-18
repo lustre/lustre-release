@@ -86,17 +86,6 @@ int at_extra = 30;
 cfs_atomic_t obd_dirty_pages;
 cfs_atomic_t obd_dirty_transit_pages;
 
-cfs_waitq_t obd_race_waitq;
-int obd_race_state;
-
-#ifdef __KERNEL__
-unsigned long obd_print_fail_loc(void)
-{
-        CWARN("obd_fail_loc = %lx\n", obd_fail_loc);
-        return obd_fail_loc;
-}
-#endif
-
 static inline void obd_data2conn(struct lustre_handle *conn,
                                  struct obd_ioctl_data *data)
 {
@@ -357,9 +346,6 @@ void *obd_psdev = NULL;
 #endif
 
 EXPORT_SYMBOL(obd_devs);
-EXPORT_SYMBOL(obd_print_fail_loc);
-EXPORT_SYMBOL(obd_race_waitq);
-EXPORT_SYMBOL(obd_race_state);
 EXPORT_SYMBOL(obd_debug_peer_on_timeout);
 EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_dump_on_eviction);
@@ -524,7 +510,6 @@ int init_obdclass(void)
 #endif
 
         cfs_spin_lock_init(&obd_types_lock);
-        cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
 #ifdef LPROCFS
         obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,

@@ -1472,7 +1472,7 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
             obd->u.filter.fo_destroys_in_progress == 0) {
                 /* don't fail lookups for orphan recovery, it causes
                  * later LBUGs when objects still exist during precreate */
-                CDEBUG(D_INFO, "*** obd_fail_loc=%x ***\n",OBD_FAIL_OST_ENOENT);
+                CDEBUG(D_INFO, "*** cfs_fail_loc=%x ***\n",OBD_FAIL_OST_ENOENT);
                 RETURN(ERR_PTR(-ENOENT));
         }
         if (id == 0) {
@@ -3700,11 +3700,10 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 struct lr_server_data *lsd = class_server_data(obd);
                 int index = le32_to_cpu(lsd->lsd_ost_index);
 
-                if (obd_fail_val == -1 ||
-                    index == obd_fail_val)
+                if (cfs_fail_val == -1 || index == cfs_fail_val)
                         osfs->os_bfree = osfs->os_bavail = 2;
-                else if (obd_fail_loc & OBD_FAIL_ONCE)
-                        obd_fail_loc &= ~OBD_FAILED; /* reset flag */
+                else if (cfs_fail_loc & OBD_FAIL_ONCE)
+                        cfs_fail_loc &= ~OBD_FAILED; /* reset flag */
         }
 
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to

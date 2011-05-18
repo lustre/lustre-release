@@ -1112,7 +1112,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc != 0)
                 GOTO(out, rc);
-        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_PACK, obd_fail_val);
+        CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_PACK, cfs_fail_val);
         rcs = req_capsule_server_get(&req->rq_pill, &RMF_RCS);
 
         tls = ost_tls_get(req);

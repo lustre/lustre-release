@@ -1495,9 +1495,9 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_REQ_OPC) &&
-            lustre_msg_get_opc(req->rq_reqmsg) == obd_fail_val) {
+            lustre_msg_get_opc(req->rq_reqmsg) == cfs_fail_val) {
                 CERROR("drop incoming rpc opc %u, x"LPU64"\n",
-                       obd_fail_val, req->rq_xid);
+                       cfs_fail_val, req->rq_xid);
                 goto err_req;
         }
 
@@ -1705,7 +1705,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                lustre_msg_get_opc(request->rq_reqmsg));
 
         if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
-                OBD_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, obd_fail_val);
+                CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
 
         rc = svc->srv_handler(request);
 

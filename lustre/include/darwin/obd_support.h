@@ -43,8 +43,6 @@
 
 #include <darwin/lustre_compat.h>
 
-#define OBD_SLEEP_ON(wq)        sleep_on(wq)
-
 /* for obd_class.h */
 # ifndef ERR_PTR
 #  define ERR_PTR(a) ((void *)(a))

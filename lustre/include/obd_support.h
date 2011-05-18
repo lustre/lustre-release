@@ -59,14 +59,6 @@ enum {
         OBD_STATS_NUM,
 };
 
-enum {
-        OBD_FAIL_LOC_NOSET      = 0,
-        OBD_FAIL_LOC_ORSET      = 1,
-        OBD_FAIL_LOC_RESET      = 2
-};
-
-extern unsigned long obd_fail_loc;
-extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
@@ -83,12 +75,7 @@ extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern cfs_atomic_t obd_dirty_pages;
 extern cfs_atomic_t obd_dirty_transit_pages;
-extern cfs_waitq_t obd_race_waitq;
-extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
-
-int __obd_fail_check_set(__u32 id, __u32 value, int set);
-int __obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set);
 
 /* lvfs.c */
 int obd_alloc_fail(const void *ptr, const char *name, const char *type,
@@ -426,75 +413,18 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_SYNC_CAPA_SL                   0x1310
 #define OBD_FAIL_SEQ_ALLOC                          0x1311
 
-/* Failure injection control */
-#define OBD_FAIL_MASK_SYS    0x0000FF00
-#define OBD_FAIL_MASK_LOC   (0x000000FF | OBD_FAIL_MASK_SYS)
-
-#define OBD_FAILED_BIT       30
-/* OBD_FAILED is 0x40000000 */
-#define OBD_FAILED          (1 << OBD_FAILED_BIT)
-
-#define OBD_FAIL_ONCE_BIT    31
-/* OBD_FAIL_ONCE is 0x80000000 */
-#define OBD_FAIL_ONCE       (1 << OBD_FAIL_ONCE_BIT)
-
-/* The following flags aren't made to be combined */
-#define OBD_FAIL_SKIP        0x20000000 /* skip N times then fail */
-#define OBD_FAIL_SOME        0x10000000 /* only fail N times */
-#define OBD_FAIL_RAND        0x08000000 /* fail 1/N of the times */
-#define OBD_FAIL_USR1        0x04000000 /* user flag */
-
-#define OBD_FAIL_PRECHECK(id) (obd_fail_loc &&                                \
-                              (obd_fail_loc & OBD_FAIL_MASK_LOC) ==           \
-                              ((id) & OBD_FAIL_MASK_LOC))
-
-static inline int obd_fail_check_set(__u32 id, __u32 value, int set)
-{
-        int ret = 0;
-        if (unlikely(OBD_FAIL_PRECHECK(id) &&
-            (ret = __obd_fail_check_set(id, value, set)))) {
-                CERROR("*** obd_fail_loc=%x ***\n", id);
-        }
-        return ret;
-}
-
-/* If id hit obd_fail_loc, return 1, otherwise return 0 */
-#define OBD_FAIL_CHECK(id) \
-        obd_fail_check_set(id, 0, OBD_FAIL_LOC_NOSET)
-
-/* If id hit obd_fail_loc, obd_fail_loc |= value and return 1,
- * otherwise return 0 */
-#define OBD_FAIL_CHECK_ORSET(id, value) \
-        obd_fail_check_set(id, value, OBD_FAIL_LOC_ORSET)
-
-/* If id hit obd_fail_loc, obd_fail_loc = value and return 1,
- * otherwise return 0 */
-#define OBD_FAIL_CHECK_RESET(id, value) \
-        obd_fail_check_set(id, value, OBD_FAIL_LOC_RESET)
-
-
-static inline int obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
-{
-        if (unlikely(OBD_FAIL_PRECHECK(id)))
-                return __obd_fail_timeout_set(id, value, ms, set);
-        else
-                return 0;
-}
-
-/* If id hit obd_fail_loc, sleep for seconds or milliseconds */
-#define OBD_FAIL_TIMEOUT(id, secs) \
-        obd_fail_timeout_set(id, 0, secs * 1000, OBD_FAIL_LOC_NOSET)
-
-#define OBD_FAIL_TIMEOUT_MS(id, ms) \
-        obd_fail_timeout_set(id, 0, ms, OBD_FAIL_LOC_NOSET)
-
-/* If id hit obd_fail_loc, obd_fail_loc |= value and
- * sleep seconds or milliseconds */
-#define OBD_FAIL_TIMEOUT_ORSET(id, value, secs) \
-        obd_fail_timeout_set(id, value, secs * 1000, OBD_FAIL_LOC_ORSET)
-
-#define OBD_FAIL_TIMEOUT_MS_ORSET(id, value, ms) \
-        obd_fail_timeout_set(id, value, ms, OBD_FAIL_LOC_ORSET)
+/* Assign references to moved code to reduce code changes */
+#define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
+#define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)
+#define OBD_FAIL_CHECK_ORSET(id, value)         CFS_FAIL_CHECK_ORSET(id, value)
+#define OBD_FAIL_CHECK_RESET(id, value)         CFS_FAIL_CHECK_RESET(id, value)
+#define OBD_FAIL_RETURN(id, ret)                CFS_FAIL_RETURN(id, ret)
+#define OBD_FAIL_TIMEOUT(id, secs)              CFS_FAIL_TIMEOUT(id, secs)
+#define OBD_FAIL_TIMEOUT_MS(id, ms)             CFS_FAIL_TIMEOUT_MS(id, ms)
+#define OBD_FAIL_TIMEOUT_ORSET(id, value, secs) CFS_FAIL_TIMEOUT_ORSET(id, value, secs)
+#define OBD_RACE(id)                            CFS_RACE(id)
+#define OBD_FAIL_ONCE                           CFS_FAIL_ONCE
+#define OBD_FAILED                              CFS_FAILED
 
 #ifdef __KERNEL__
 static inline void obd_fail_write(int id, struct super_block *sb)
@@ -503,7 +433,7 @@ static inline void obd_fail_write(int id, struct super_block *sb)
         if (OBD_FAIL_CHECK_ORSET(id & ~OBD_FAIL_ONCE, OBD_FAIL_ONCE)) {
 #ifdef LIBCFS_DEBUG
                 BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("obd_fail_loc=%x, fail write operation on %s\n",
+                CERROR("cfs_fail_loc=%x, fail write operation on %s\n",
                        id, ll_bdevname(sb, tmp));
 #endif
                 /* TODO-CMD: fix getting jdev */
@@ -511,30 +441,6 @@ static inline void obd_fail_write(int id, struct super_block *sb)
         }
 }
 #define OBD_FAIL_WRITE(id, sb) obd_fail_write(id, sb)
-
-/* The idea here is to synchronise two threads to force a race. The
- * first thread that calls this with a matching fail_loc is put to
- * sleep. The next thread that calls with the same fail_loc wakes up
- * the first and continues. */
-static inline void obd_race(__u32 id)
-{
-        if (OBD_FAIL_PRECHECK(id)) {
-                if (unlikely(__obd_fail_check_set(id, 0, OBD_FAIL_LOC_NOSET))) {
-                        obd_race_state = 0;
-                        CERROR("obd_race id %x sleeping\n", id);
-                        OBD_SLEEP_ON(obd_race_waitq, obd_race_state != 0);
-                        CERROR("obd_fail_race id %x awake\n", id);
-                } else {
-                        CERROR("obd_fail_race id %x waking\n", id);
-                        obd_race_state = 1;
-                        cfs_waitq_signal(&obd_race_waitq);
-                }
-        }
-}
-#define OBD_RACE(id) obd_race(id)
-#else
-/* sigh.  an expedient fix until OBD_RACE is fixed up */
-#define OBD_RACE(foo) do {} while(0)
 #endif
 
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");

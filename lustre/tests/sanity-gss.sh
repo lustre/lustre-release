@@ -421,7 +421,7 @@ test_8()
     TOUCHPID=$!
     echo "waiting for touch (pid $TOUCHPID) to finish..."
     sleep 2 # give it a chance to really trigger context init rpc
-    do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0
+    do_facet $SINGLEMDS $LCTL set_param fail_loc=0
     wait $TOUCHPID || error "touch should have succeeded"
 
     $LCTL dk | grep "Early reply #" || error "No early reply"
