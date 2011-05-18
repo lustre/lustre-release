@@ -1,132 +1,89 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lnetselftest'>
   <info>
-    <title>Testing Lustre Network Performance (LNET Self-Test)</title>
+    <title xml:id='lnetselftest.title'>Testing Lustre Network Performance (LNET Self-Test)</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438223_pgfId-1290818" xreflabel=""/><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET self-test, which is used by site administrators to confirm that Lustre Networking (LNET) has been properly installed and configured, and that underlying network software and hardware are performing according to expectations. The chapter includes:</para>
-  <para><anchor xml:id="dbdoclet.50438223_pgfId-1300593" xreflabel=""/><link xl:href="LNETSelfTest.html#50438223_91742">LNET Self-Test Overview</link></para>
-  <para><anchor xml:id="dbdoclet.50438223_pgfId-1300598" xreflabel=""/><link xl:href="LNETSelfTest.html#50438223_48138">Using LNET Self-Test</link></para>
-  <para><anchor xml:id="dbdoclet.50438223_pgfId-1303094" xreflabel=""/><link xl:href="LNETSelfTest.html#50438223_27277">LNET Self-Test Command Reference</link></para>
-  <para><anchor xml:id="dbdoclet.50438223_pgfId-1300529" xreflabel=""/> </para>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438223_pgfId-1295792" xreflabel=""/></title>
-    <section remap="h2">
-      <title>23.1 <anchor xml:id="dbdoclet.50438223_91742" xreflabel=""/>LNET Self-Test Overview</title>
+
+    <itemizedlist><listitem>
+  <para><xref linkend="dbdoclet.50438223_91742"/></para>
+    </listitem><listitem>
+  <para><xref linkend="dbdoclet.50438223_48138"/></para>
+    </listitem><listitem>
+  <para><xref linkend="dbdoclet.50438223_27277"/></para>
+    </listitem></itemizedlist>
+
+    <section xml:id="dbdoclet.50438223_91742">
+      <title>23.1 LNET Self-Test Overview</title>
       <para><anchor xml:id="dbdoclet.50438223_pgfId-1300619" xreflabel=""/>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs. It is designed to:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1300620" xreflabel=""/> Test the connection ability of the Lustre network</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1300621" xreflabel=""/> Run regression tests of the Lustre network</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1300622" xreflabel=""/> Test performance of the Lustre network</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438223_pgfId-1304396" xreflabel=""/>After you have obtained performance results for your Lustre network, refer to <link xl:href="LustreTuning.html#50438272_56727">Chapter 25</link>: <link xl:href="LustreTuning.html#50438272_66186">Lustre Tuning</link> for information about parameters that can be used to tune LNET for optimum performance.</para>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438223_pgfId-1300623" xreflabel=""/>Apart from the performance impact, LNET self-test is invisible to Lustre.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+<para><anchor xml:id="dbdoclet.50438223_pgfId-1304396" xreflabel=""/>After you have obtained performance results for your Lustre network, refer to <xref linkend='lustretuning'/> for information about parameters that can be used to tune LNET for optimum performance.</para>
+              <note><para>Apart from the performance impact, LNET self-test is invisible to Lustre.</para></note>
+
       <para><anchor xml:id="dbdoclet.50438223_pgfId-1293959" xreflabel=""/>An LNET self-test cluster includes two types of nodes:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1300652" xreflabel=""/><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNET self-test cluster. The console node serves as the user interface of the LNET self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNET self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1296586" xreflabel=""/><emphasis role="bold">Test nodes</emphasis>  - The nodes on which the tests are run. Test nodes are controlled by the user from the console node; the user does not need to log into them directly.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438223_pgfId-1300734" xreflabel=""/>LNET self-test has two user utilities:</para>
       <itemizedlist><listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1290849" xreflabel=""/><emphasis role="bold">lst</emphasis>  - The user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, including commands to create a session, create test groups, etc.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 <listitem>
           <para><anchor xml:id="dbdoclet.50438223_pgfId-1291488" xreflabel=""/><emphasis role="bold">lstclient</emphasis>  - The userspace LNET self-test program (run on a test node). The lstclient utility is linked with userspace LNDs and LNET. This utility is not needed if only kernel space LNET and LNDs are used.</para>
         </listitem>
-<listitem>
-          <para> </para>
-        </listitem>
+
 </itemizedlist>
-      <informaltable frame="none">
-        <tgroup cols="1">
-          <colspec colname="c1" colwidth="100*"/>
-          <tbody>
-            <row>
-              <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438223_pgfId-1300786" xreflabel=""/>Test nodes can be in either kernel or userspace. A console user can invite a kernel test node to join the test session by running lstadd_groupNID, but the console user cannot actively add a userspace test node to the test-session. However, the console user can passively accept a test node to the test session while the test node is running lstclient to connect to the console.</para></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
+              <note><para>Test nodes can be in either kernel or userspace. A console user can invite a kernel test node to join the test session by running lstadd_groupNID, but the console user cannot actively add a userspace test node to the test-session. However, the console user can passively accept a test node to the test session while the test node is running lstclient to connect to the console.</para></note>
+
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438223_pgfId-1300634" xreflabel=""/>23.1.1 Prerequisites</title>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1300640" xreflabel=""/>To run LNET self-test, these modules must be loaded:</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1300832" xreflabel=""/>libcfs</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1300836" xreflabel=""/>net</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1300837" xreflabel=""/>lnet_selftest</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1300838" xreflabel=""/> One of the klnds (i.e, ksocklnd, ko2iblnd...) as needed by your network configuration</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1300839" xreflabel=""/>To load the required modules, run:</para>
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1300871" xreflabel=""/>modprobe lnet_selftest 
 </screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1300873" xreflabel=""/>This command recursively loads the modules on which LNET self-test depends.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438223_pgfId-1300818" xreflabel=""/>While the console and test nodes require all the prerequisite modules to be loaded, userspace test nodes do not require these modules.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>While the console and test nodes require all the prerequisite modules to be loaded, userspace test nodes do not require these modules.</para></note>
+
       </section>
     </section>
-    <section remap="h2">
-      <title>23.2 <anchor xml:id="dbdoclet.50438223_48138" xreflabel=""/>Using LNET Self-Test</title>
+    <section xml:id="dbdoclet.50438223_48138">
+      <title>23.2 Using LNET Self-Test</title>
       <para><anchor xml:id="dbdoclet.50438223_pgfId-1300891" xreflabel=""/>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438223_pgfId-1300917" xreflabel=""/>23.2.1 Creating a Session</title>
@@ -149,34 +106,19 @@
 </screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1301147" xreflabel=""/>These three groups include:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301153" xreflabel=""/> Nodes that will function as â€œserversâ€ to be accessed by â€œclientsâ€ during the LNET self-test session</para>
+            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301153" xreflabel=""/> Nodes that will function as 'servers' to be accessed by 'clients' during the LNET self-test session</para>
           </listitem>
+
 <listitem>
-            <para> </para>
+            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301154" xreflabel=""/> Nodes that will function as 'clients' that will simulate <emphasis>reading</emphasis> data from the 'servers'</para>
           </listitem>
+
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301154" xreflabel=""/> Nodes that will function as â€œclientsâ€ that will simulate <emphasis>reading</emphasis> data from the â€œserversâ€</para>
+            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301155" xreflabel=""/> Nodes that will function as 'clients' that will simulate <emphasis>writing</emphasis> data to the 'servers'</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
-<listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301155" xreflabel=""/> Nodes that will function as â€œclientsâ€ that will simulate <emphasis>writing</emphasis> data to the â€œserversâ€</para>
-          </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438223_pgfId-1296767" xreflabel=""/>A console user can associate kernel space test nodes with the session by running lst add_group NIDs, but a userspace test node cannot be actively added to the session. However, the console user can passively &quot;accept&quot; a test node to associate with a test session while the test node running lstclient connects to the console node, i.e: lstclient --sesid CONSOLE_NID --group NAME).</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>A console user can associate kernel space test nodes with the session by running lst add_group NIDs, but a userspace test node cannot be actively added to the session. However, the console user can passively &quot;accept&quot; a test node to associate with a test session while the test node running lstclient connects to the console node, i.e: lstclient --sesid CONSOLE_NID --group NAME).</para></note>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438223_pgfId-1296646" xreflabel=""/>23.2.3 <anchor xml:id="dbdoclet.50438223_42848" xreflabel=""/>Defining and Running the Tests</title>
@@ -188,15 +130,11 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1301338" xreflabel=""/><emphasis role="bold">ping -</emphasis>  A ping generates a short request message, which results in a short response. Pings are useful to determine latency and small message overhead and to simulate Lustre metadata traffic.</para>
           </listitem>
+
 <listitem>
-            <para> </para>
+            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301407" xreflabel=""/><emphasis role="bold">brw -</emphasis>  In a brw ('bulk read write') test, data is transferred from the target to the source (brwread) or data is transferred from the source to the target (brwwrite). The size of the bulk transfer is set using the size parameter. A brw test is useful to determine network bandwidth and to simulate Lustre I/O traffic.</para>
           </listitem>
-<listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301407" xreflabel=""/><emphasis role="bold">brw -</emphasis>  In a brw (â€œbulk read writeâ€) test, data is transferred from the target to the source (brwread) or data is transferred from the source to the target (brwwrite). The size of the bulk transfer is set using the size parameter. A brw test is useful to determine network bandwidth and to simulate Lustre I/O traffic.</para>
-          </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1301257" xreflabel=""/>In the example below, a batch is created called bulk_rw. Then two brw tests are added. In the first test, 1M of data is sent from the servers to the clients as a simulated read operation with a simple data validation check. In the second test, 4K of data is sent from the clients to the servers as a simulated write operation with a full data validation check.</para>
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301178" xreflabel=""/>lst add_batch bulk_rw
@@ -205,7 +143,7 @@
 <anchor xml:id="dbdoclet.50438223_pgfId-1303588" xreflabel=""/>lst add_test --batch bulk_rw --from writers --to servers \
 <anchor xml:id="dbdoclet.50438223_pgfId-1303589" xreflabel=""/>brw write check=full size=4K
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303590" xreflabel=""/>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <link xl:href="LNETSelfTest.html#50438223_36860">Batch and Test Commands</link>.</para>
+<para><anchor xml:id="dbdoclet.50438223_pgfId-1303590" xreflabel=""/>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <xref linkend='dbdoclet.50438223_36860'/>.</para>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438223_pgfId-1290855" xreflabel=""/>23.2.4 Sample Script</title>
@@ -229,20 +167,12 @@
 <anchor xml:id="dbdoclet.50438223_pgfId-1290878" xreflabel=""/># tear down
 <anchor xml:id="dbdoclet.50438223_pgfId-1290879" xreflabel=""/>lst end_session
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438223_pgfId-1290880" xreflabel=""/>This script can be easily adapted to pass the group NIDs by shell variables or command line arguments (making it good for general-purpose use).</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>This script can be easily adapted to pass the group NIDs by shell variables or command line arguments (making it good for general-purpose use).</para></note>
+
       </section>
     </section>
-    <section remap="h2">
-      <title>23.3 <anchor xml:id="dbdoclet.50438223_27277" xreflabel=""/>LNET Self-Test <anchor xml:id="dbdoclet.50438223_marker-1298562" xreflabel=""/>Command Reference</title>
+    <section xml:id="dbdoclet.50438223_27277">
+      <title>23.3 LNET Self-Test <anchor xml:id="dbdoclet.50438223_marker-1298562" xreflabel=""/>Command Reference</title>
       <para><anchor xml:id="dbdoclet.50438223_pgfId-1296018" xreflabel=""/>The LNET self-test (lst) utility is used to issue LNET self-test commands. The lst utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438223_pgfId-1290916" xreflabel=""/>23.3.1 <anchor xml:id="dbdoclet.50438223_91247" xreflabel=""/>Session Commands</title>
@@ -271,7 +201,7 @@
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301525" xreflabel=""/>--force</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301527" xreflabel=""/>Ends conflicting sessions. This determines who â€œwinsâ€ when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already â€œownedâ€ by another session, the -force flag allows this session to â€œstealâ€ the node.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301527" xreflabel=""/>Ends conflicting sessions. This determines who 'wins' when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already 'owned' by another session, the -force flag allows this session to 'steal' the node.</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301529" xreflabel=""/><emphasis>&lt;name&gt;</emphasis></para></entry>
@@ -284,7 +214,7 @@
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301576" xreflabel=""/>$ lst new_session --force read_write
 </screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1303652" xreflabel=""/><emphasis role="bold">end_session</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291942" xreflabel=""/>Stops all operations and tests in the current session and clears the sessionâ€™s status.</para>
+        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291942" xreflabel=""/>Stops all operations and tests in the current session and clears the session'™s status.</para>
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303653" xreflabel=""/>$ lst end_session
 </screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1303656" xreflabel=""/><emphasis role="bold">show_session</emphasis></para>
@@ -323,7 +253,7 @@
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303383" xreflabel=""/>$ lst add_group servers 192.168.10.[35,40-45]@tcp<anchor xml:id="dbdoclet.50438223_pgfId-1303381" xreflabel=""/>$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\<anchor xml:id="dbdoclet.50438223_pgfId-1303393" xreflabel=""/>[10-20]@tcp</screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1303378" xreflabel=""/> </para>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1290954" xreflabel=""/><emphasis role="bold">update_group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--refresh] [--clean</emphasis><emphasis>&lt;status&gt;</emphasis><emphasis role="bold">] [--remove</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290955" xreflabel=""/>Updates the state of nodes in a group or adjusts a groupâ€™s membership. This command is useful if some nodes have crashed and should be excluded from the group.</para>
+        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290955" xreflabel=""/>Updates the state of nodes in a group or adjusts a group'™s membership. This command is useful if some nodes have crashed and should be excluded from the group.</para>
         <informaltable frame="all">
           <tgroup cols="3">
             <colspec colname="c1" colwidth="33*"/>
@@ -362,7 +292,7 @@
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294724" xreflabel=""/> </para></entry>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294780" xreflabel=""/>unknown</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294794" xreflabel=""/>The nodeâ€™s status has yet to be determined.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294794" xreflabel=""/>The node'™s status has yet to be determined.</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294720" xreflabel=""/> </para></entry>
@@ -442,7 +372,7 @@
             <tbody>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301787" xreflabel=""/>--sesid<emphasis>&lt;NID&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301789" xreflabel=""/>The first consoleâ€™s NID.</para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301789" xreflabel=""/>The first console'™s NID.</para></entry>
               </row>
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301791" xreflabel=""/>--group<emphasis>&lt;name&gt;</emphasis></para></entry>
@@ -456,7 +386,8 @@
           </tgroup>
         </informaltable>
          <para><anchor xml:id="dbdoclet.50438223_pgfId-1304734" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301816" xreflabel=""/>Console $ lst new_session testsession<anchor xml:id="dbdoclet.50438223_pgfId-1301817" xreflabel=""/>Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
+         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301816" xreflabel=""/>Console $ lst new_session testsession
+Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1296196" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1296197" xreflabel=""/>Client1 $ lstclient --sesid 192.168.1.52@tcp |--group clients --server_mode
 </screen>
@@ -535,26 +466,35 @@
           </tgroup>
         </informaltable>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1302599" xreflabel=""/><emphasis role="bold">Examples showing use of the distribute parameter:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302605" xreflabel=""/>Clients: (C1, C2, C3, C4, C5, C6)<anchor xml:id="dbdoclet.50438223_pgfId-1302606" xreflabel=""/>Server: (S1, S2, S3)<anchor xml:id="dbdoclet.50438223_pgfId-1302607" xreflabel=""/>--distribute 1:1 (C1-&gt;S1), (C2-&gt;S2), (C3-&gt;S3), (C4-&gt;S1), (C5-&gt;S2),<anchor xml:id="dbdoclet.50438223_pgfId-1303605" xreflabel=""/>\(C6-&gt;S3) /* -&gt; means test conversation */ --distribute 2:1 (C1,C2-&gt;S1), (C3,C\
-4-&gt;S2), (C5,C6-&gt;S3)<anchor xml:id="dbdoclet.50438223_pgfId-1302610" xreflabel=""/>--distribute 3:1 (C1,C2,C3-&gt;S1), (C4,C5,C6-&gt;S2), (NULL-&gt;S3)<anchor xml:id="dbdoclet.50438223_pgfId-1302612" xreflabel=""/>--distribute 3:2 (C1,C2,C3-&gt;S1,S2), (C4,C5,C6-&gt;S3,S1)<anchor xml:id="dbdoclet.50438223_pgfId-1302614" xreflabel=""/>--distribute 4:1 (C1,C2,C3,C4-&gt;S1), (C5,C6-&gt;S2), (NULL-&gt;S3)<anchor xml:id="dbdoclet.50438223_pgfId-1302616" xreflabel=""/>--distribute 4:2 (C1,C2,C3,C4-&gt;S1,S2), (C5, C6-&gt;S3, S1)<anchor xml:id="dbdoclet.50438223_pgfId-1302618" xreflabel=""/>--distribute 6:3 (C1,C2,C3,C4,C5,C6-&gt;S1,S2,S3)</screen>
+        <screen>
+Clients: (C1, C2, C3, C4, C5, C6)
+Server: (S1, S2, S3)
+--distribute 1:1 (C1-&gt;S1), (C2-&gt;S2), (C3-&gt;S3), (C4-&gt;S1), (C5-&gt;S2),
+\(C6-&gt;S3) /* -&gt; means test conversation */ --distribute 2:1 (C1,C2-&gt;S1), (C3,C4-&gt;S2), (C5,C6-&gt;S3)
+--distribute 3:1 (C1,C2,C3-&gt;S1), (C4,C5,C6-&gt;S2), (NULL-&gt;S3)
+--distribute 3:2 (C1,C2,C3-&gt;S1,S2), (C4,C5,C6-&gt;S3,S1)
+--distribute 4:1 (C1,C2,C3,C4-&gt;S1), (C5,C6-&gt;S2), (NULL-&gt;S3)
+--distribute 4:2 (C1,C2,C3,C4-&gt;S1,S2), (C5, C6-&gt;S3, S1)
+--distribute 6:3 (C1,C2,C3,C4,C5,C6-&gt;S1,S2,S3)</screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1303015" xreflabel=""/>The setting --distribute 1:1 is the default setting where each source node communicates with one target node.</para>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1303016" xreflabel=""/>When the setting --distribute 1:<emphasis>&lt;n&gt;</emphasis> (where <emphasis>&lt;n&gt;</emphasis> is the size of the target group) is used, each source node communicates with every node in the target group.</para>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1303017" xreflabel=""/>Note that if there are more source nodes than target nodes, some source nodes may share the same target nodes. Also, if there are more target nodes than source nodes, some higher-ranked target nodes will be idle.</para>
          <para><anchor xml:id="dbdoclet.50438223_pgfId-1304018" xreflabel=""/><emphasis role="bold">Example showing a brw test:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302052" xreflabel=""/>$ lst add_group clients 192.168.1.[10-17]@tcp<anchor xml:id="dbdoclet.50438223_pgfId-1303499" xreflabel=""/>$ lst add_group servers 192.168.10.[100-103]@tcp<anchor xml:id="dbdoclet.50438223_pgfId-1303500" xreflabel=""/>$ lst add_batch bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1303501" xreflabel=""/>$ lst add_test --batch bulkperf --loop 100 --concurrency 4 \<anchor xml:id="dbdoclet.50438223_pgfId-1303502" xreflabel=""/>--distribute 4:2 --from clients brw WRITE size=16K</screen>
+         <screen>
+$ lst add_group clients 192.168.1.[10-17]@tcp
+$ lst add_group servers 192.168.10.[100-103]@tcp
+$ lst add_batch bulkperf
+$ lst add_test --batch bulkperf --loop 100 --concurrency 4 \
+--distribute 4:2 --from clients brw WRITE size=16K</screen>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1304104" xreflabel=""/>In the example above, a batch test called bulkperf that will do a 16 kbyte bulk write request. In this test, two groups of four clients (sources) write to each of four servers (targets) as shown below:</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1302964" xreflabel=""/> 192.168.1.[10-13] will write to 192.168.10.[100,101]</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438223_pgfId-1302048" xreflabel=""/> 192.168.1.[14-17] will write to 192.168.10.[102,103]</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1302046" xreflabel=""/> </para>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1302047" xreflabel=""/><emphasis role="bold">list_batch [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--active] [--invalid]</emphasis> [--server | client<emphasis role="bold">]</emphasis></para>
@@ -647,7 +587,7 @@
         <title><anchor xml:id="dbdoclet.50438223_pgfId-1291130" xreflabel=""/>23.3.4 Other Commands</title>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1293485" xreflabel=""/>This section describes other lst commands.</para>
         <para><anchor xml:id="dbdoclet.50438223_pgfId-1291131" xreflabel=""/><emphasis role="bold">ping [-session] [--group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--nodes</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">] [--batch</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--server] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1295479" xreflabel=""/>Sends a â€œhelloâ€ query to the nodes.</para>
+        <para><anchor xml:id="dbdoclet.50438223_pgfId-1295479" xreflabel=""/>Sends a 'hello' query to the nodes.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
@@ -778,5 +718,4 @@ se options.
         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302379" xreflabel=""/>$ lst show_error clientsclients<anchor xml:id="dbdoclet.50438223_pgfId-1302380" xreflabel=""/>12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors] \<anchor xml:id="dbdoclet.50438223_pgfId-1303569" xreflabel=""/>[RPC: 20 errors, 0 dropped,<anchor xml:id="dbdoclet.50438223_pgfId-1303575" xreflabel=""/>12345-192.168.1.16@tcp: [Session: 0 brw errors, 0 ping errors] \<anchor xml:id="dbdoclet.50438223_pgfId-1303570" xreflabel=""/>[RPC: 1 errors, 0 dropped, Total 2 error nodes in clients<anchor xml:id="dbdoclet.50438223_pgfId-1303571" xreflabel=""/>$ lst show_error --session clients<anchor xml:id="dbdoclet.50438223_pgfId-1302382" xreflabel=""/>clients<anchor xml:id="dbdoclet.50438223_pgfId-1302383" xreflabel=""/>12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors]<anchor xml:id="dbdoclet.50438223_pgfId-1302384" xreflabel=""/>Total 1 error nodes in clients</screen>
       </section>
     </section>
-  </section>
 </chapter>
