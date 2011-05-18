@@ -5,10 +5,24 @@
   </info>
   <partintro>
   <para><anchor xml:id="dbdoclet.50438187_pgfId-369853" xreflabel=""/>Part IV describes tools and procedures used to tune a Lustre file system for optimum performance. You will find information in this section about:</para>
+
+  <itemizedlist>
+      <listitem>
+          <para>
+              <link linkend='lnetselftest' endterm='lnetselftest.title'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+              <link linkend='benchmarkingtests' endterm='benchmarking.title'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+              <link linkend='lustretuning' endterm='lustretuning.title'/>
+          </para>
+      </listitem>
+  </itemizedlist>
+
   </partintro>
-
-  <xi:include href="LNETSelfTest.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="BenchmarkingTests.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
 </part>
