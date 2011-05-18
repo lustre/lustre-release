@@ -49,6 +49,10 @@
 
 
   <xi:include href="V_LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="TroubleShootingRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreDebugging.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
 
   <xi:include href="VI_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 

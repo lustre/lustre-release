@@ -3,12 +3,31 @@
 
     <title>Troubleshooting Lustre</title>
 
-    <partintro>
-        <para><anchor xml:id="dbdoclet.50438190_pgfId-1804" xreflabel=""/>Part V provides information about troubleshooting a Lustre file system. You will find information in this section about:</para>
-    </partintro>
+<partintro>
+    <para><anchor xml:id="dbdoclet.50438190_pgfId-1804" xreflabel=""/>Part V provides information about troubleshooting a Lustre file system. You will find information in this section about:</para>
 
-    <xi:include href="LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="TroubleShootingRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="LustreDebugging.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <itemizedlist>
+        <listitem>
+            <para>
+                <link linkend="lustretroubleshooting" endterm="lustretroubleshooting.title"/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+
+                <link linkend="troubleshootingrecovery" endterm="troubleshootingrecovery.title"/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+
+                <link linkend="lustredebugging" endterm="lustredebugging.title"/>
+            </para>
+        </listitem>
+    </itemizedlist>
+
+
+</partintro>
+
 
 </part>
