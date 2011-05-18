@@ -1,32 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustretroubleshooting'>
   <info>
-    <title>Lustre Troubleshooting</title>
+    <title xml:id='lustretroubleshooting.title'>Lustre Troubleshooting</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438198_pgfId-1291311" xreflabel=""/>This chapter provides information to troubleshoot Lustre, submit a Lustre bug, and Lustre performance tips. It includes the following sections:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1293366" xreflabel=""/><link xl:href="LustreTroubleshooting.html#50438198_11171">Lustre Error Messages</link></para>
+      <para><xref linkend="dbdoclet.50438198_11171"/></para>
     </listitem>
+
 <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438198_30989"/></para>
     </listitem>
+
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1292455" xreflabel=""/><link xl:href="LustreTroubleshooting.html#50438198_30989">Reporting a Lustre Bug</link></para>
+      <para><xref linkend="dbdoclet.50438198_93109"/></para>
     </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
-<listitem>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1292576" xreflabel=""/><link xl:href="LustreTroubleshooting.html#50438198_93109">Common Lustre Problems</link></para>
-    </listitem>
-<listitem>
-      <para> </para>
-    </listitem>
+
 </itemizedlist>
-  <section remap="h2">
-    <title><anchor xml:id="dbdoclet.50438198_pgfId-1293193" xreflabel=""/></title>
-    <section remap="h2">
-      <title>26.1 <anchor xml:id="dbdoclet.50438198_11171" xreflabel=""/>Lustre Error Messages</title>
+
+    <section xml:id="dbdoclet.50438198_11171">
+      <title>26.1 Lustre Error Messages</title>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1291322" xreflabel=""/>Several resources are available to help troubleshoot Lustre. This section describes error numbers, error messages and logs.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1292773" xreflabel=""/>26.1.1 Error <anchor xml:id="dbdoclet.50438198_marker-1296744" xreflabel=""/>Numbers</title>
@@ -110,41 +103,26 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291329" xreflabel=""/> What the problem is</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291330" xreflabel=""/> Which process ID had trouble</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291331" xreflabel=""/> Which server node it was communicating with, and so on.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291332" xreflabel=""/>Lustre logs are dumped to /proc/sys/lnet/debug_path.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296082" xreflabel=""/>Collect the first group of messages related to a problem, and any messages that precede &quot;LBUG&quot; or &quot;assertion failure&quot; errors. Messages that mention server nodes (OST or MDS) are specific to that server; you must collect similar messages from the relevant server console logs.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291333" xreflabel=""/>Another Lustre debug log holds information for Lustre action for a short period of time which, in turn, depends on the processes on the node to use Lustre. Use the following command to extract debug logs on each of the nodes, run</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291334" xreflabel=""/>$ lctl dk &lt;filename&gt;
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438198_pgfId-1292681" xreflabel=""/>LBUG freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>LBUG freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para></note>
       </section>
     </section>
-    <section remap="h2">
-      <title>26.2 <anchor xml:id="dbdoclet.50438198_30989" xreflabel=""/>Reporting a Lustre <anchor xml:id="dbdoclet.50438198_marker-1296753" xreflabel=""/>Bug</title>
+    <section xml:id="dbdoclet.50438198_30989">
+      <title>26.2 Reporting a Lustre <anchor xml:id="dbdoclet.50438198_marker-1296753" xreflabel=""/>Bug</title>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1292557" xreflabel=""/>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1297414" xreflabel=""/>You can also post a question to the <link xl:href="http://wiki.lustre.org/index.php/Lustre_Mailing_Lists">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1297376" xreflabel=""/>A Lustre diagnostics tool is available for downloading at: <link xl:href="http://downloads.lustre.org/public/tools/lustre-diagnostics/">http://downloads.lustre.org/public/tools/lustre-diagnostics/</link></para>
@@ -154,8 +132,8 @@
 </screen>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1292530" xreflabel=""/>Output is sent directly to the terminal. Use normal file redirection to send the output to a file, and then manually attach the file to the bug you are submitting.</para>
     </section>
-    <section remap="h2">
-      <title>26.3 <anchor xml:id="dbdoclet.50438198_93109" xreflabel=""/>Common Lustre Problems</title>
+    <section xml:id="dbdoclet.50438198_93109">
+      <title>26.3 Common Lustre Problems</title>
       <para><anchor xml:id="dbdoclet.50438198_pgfId-1291338" xreflabel=""/>This section describes how to address common issues encountered with Lustre.</para>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1291350" xreflabel=""/>26.3.1 OST Object is <anchor xml:id="dbdoclet.50438198_marker-1291349" xreflabel=""/>Missing or Damaged</title>
@@ -177,27 +155,19 @@
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1293041" xreflabel=""/> Examine the consoles of all servers for any error indications</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1293045" xreflabel=""/> Examine the syslogs of all servers for any LustreErrors or LBUG</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1293046" xreflabel=""/> Check the health of your system hardware and network. (Are the disks working as expected, is the network dropping packets?)</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1293055" xreflabel=""/> Consider what was happening on the cluster at the time. Does this relate to a specific user workload or a system load condition? Is the condition reproducible? Does it happen at a specific time (day, week or month)?</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291365" xreflabel=""/>To recover from this problem, you must restart Lustre services using these file systems. There is no other way to know that the I/O made it to disk, and the state of the cache may be inconsistent with what is on disk.</para>
       </section>
@@ -213,16 +183,8 @@
 </screen>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291373" xreflabel=""/>The OST device number or device name is generated by the lctl dl command.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1293067" xreflabel=""/>The deactivate command prevents clients from creating new objects on the specified OST, although you can still access the OST for reading.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438198_pgfId-1291374" xreflabel=""/>If the OST later becomes available it needs to be reactivated, run:</para><para># lctl --device &lt;OST device name or number&gt; activate</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>If the OST later becomes available it needs to be reactivated, run:</para><para># lctl --device &lt;OST device name or number&gt; activate</para></note>
+
          <para><anchor xml:id="dbdoclet.50438198_pgfId-1291376" xreflabel=""/> 3. Determine all files that are striped over the missing OST, run:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291377" xreflabel=""/># lfs getstripe -r -O {OST_UUID} /mountpoint
 </screen>
@@ -233,16 +195,7 @@
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291381" xreflabel=""/> 5. You can delete these files with the unlink or munlink command.</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291382" xreflabel=""/># unlink|munlink filename {filename ...} 
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438198_pgfId-1291383" xreflabel=""/>There is no functional difference between the unlink and munlink commands. The unlink command is for newer Linux distributions. You can run munlink if unlink is not available.</para><para> When you run the unlink or munlink command, the file on the MDS is permanently removed.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>There is no functional difference between the unlink and munlink commands. The unlink command is for newer Linux distributions. You can run munlink if unlink is not available.</para><para> When you run the unlink or munlink command, the file on the MDS is permanently removed.</para></note>
          <para><anchor xml:id="dbdoclet.50438198_pgfId-1291384" xreflabel=""/> 6. If you need to know, specifically, which parts of the file are missing data, then you first need to determine the file layout (striping pattern), which includes the index of the missing OST). Run:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291385" xreflabel=""/># lfs getstripe -v {filename}
 </screen>
@@ -271,16 +224,8 @@
 <anchor xml:id="dbdoclet.50438198_pgfId-1296789" xreflabel=""/>obdid 3438673 last_id 3478673&quot;
 </screen>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296797" xreflabel=""/>To recover from this situation, determine and set a reasonable LAST_ID value.</para>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438198_pgfId-1296798" xreflabel=""/>The file system must be stopped on all servers before performing this procedure.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>The file system must be stopped on all servers before performing this procedure.</para></note>
+
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296799" xreflabel=""/>For hex &lt; -&gt; decimal translations:</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296800" xreflabel=""/>Use GDB:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296801" xreflabel=""/>(gdb) p /x 15028
@@ -314,33 +259,43 @@ LAST_ID&quot;
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296832" xreflabel=""/>If the OST LAST_ID value matches that for the objects existing on the OST, then it is possible the lov_objid file on the MDS is incorrect. Delete the lov_objid file on the MDS and it will be re-created from the LAST_ID on the OSTs.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296833" xreflabel=""/>If you determine the LAST_ID file on the OST is incorrect (that is, it does not match what objects exist, does not match the MDS lov_objid value), then you have decided on a proper value for LAST_ID.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1296834" xreflabel=""/>Once you have decided on a proper value for LAST_ID, use this repair procedure.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296835" xreflabel=""/> 1. Access:</para>
+        <orderedlist><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296835" xreflabel=""/>Access:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296836" xreflabel=""/>mount -t ldiskfs /dev/{ostdev} /mnt/ost
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296837" xreflabel=""/> 2. Check the current:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296837" xreflabel=""/>Check the current:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296838" xreflabel=""/>od -Ax -td8 /mnt/ost/O/0/LAST_ID
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296839" xreflabel=""/> 3. Be very safe, only work on backups:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296839" xreflabel=""/>Be very safe, only work on backups:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296840" xreflabel=""/>cp /mnt/ost/O/0/LAST_ID /tmp/LAST_ID
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296841" xreflabel=""/> 4. Convert binary to text:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296841" xreflabel=""/>Convert binary to text:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296842" xreflabel=""/>xxd /tmp/LAST_ID /tmp/LAST_ID.asc
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296843" xreflabel=""/> 5. Fix:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296843" xreflabel=""/>Fix:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296844" xreflabel=""/>vi /tmp/LAST_ID.asc
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296845" xreflabel=""/> 6. Convert to binary:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296845" xreflabel=""/>Convert to binary:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296846" xreflabel=""/>xxd -r /tmp/LAST_ID.asc /tmp/LAST_ID.new
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296847" xreflabel=""/> 7. Verify:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296847" xreflabel=""/>Verify:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296848" xreflabel=""/>od -Ax -td8 /tmp/LAST_ID.new
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296849" xreflabel=""/> 8. Replace:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296849" xreflabel=""/>Replace:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296850" xreflabel=""/>cp /tmp/LAST_ID.new /mnt/ost/O/0/LAST_ID
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296851" xreflabel=""/> 9. Clean up:</para>
+        </listitem><listitem>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296851" xreflabel=""/>Clean up:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296852" xreflabel=""/>umount /mnt/ost
 </screen>
+        </listitem></orderedlist>
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1291447" xreflabel=""/>26.3.5 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291446" xreflabel=""/>&quot;Bind: Address already in use&quot; Error</title>
@@ -349,35 +304,21 @@ LAST_ID&quot;
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291450" xreflabel=""/> Start Lustre before starting any service that uses sunrpc.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291451" xreflabel=""/> Use a port other than 988 for Lustre. This is configured in /etc/modprobe.conf as an option to the LNET module. For example:</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291452" xreflabel=""/>options lnet accept_port=988
 </screen>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291453" xreflabel=""/> Add modprobe ptlrpc to your system startup scripts before the service that uses sunrpc. This causes Lustre to bind to port 988 and sunrpc to select a different port.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438198_pgfId-1291454" xreflabel=""/>You can also use the sysctl command to mitigate the NFS client from grabbing the Lustre service port. However, this is a partial workaround as other user-space RPC servers still have the ability to grab the port.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>You can also use the sysctl command to mitigate the NFS client from grabbing the Lustre service port. However, this is a partial workaround as other user-space RPC servers still have the ability to grab the port.</para></note>
+
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1291471" xreflabel=""/>26.3.6 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291470" xreflabel=""/>Error &quot;- 28&quot;</title>
@@ -388,15 +329,11 @@ LAST_ID&quot;
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1297887" xreflabel=""/> Expand the disk space on the OST.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1297888" xreflabel=""/> Copy or stripe the file to a less full OST.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1297889" xreflabel=""/>A Linux error -28 (ENOSPC) that occurs when a new file is being created may indicate that the MDS has run out of inodes and needs to be made larger. Newly created files do not written to full OSTs, while existing files continue to reside on the OST where they were initially created. To view inode information on the MDS, enter:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1297985" xreflabel=""/>lfs df -i
@@ -409,16 +346,8 @@ LAST_ID&quot;
 <anchor xml:id="dbdoclet.50438198_pgfId-1291477" xreflabel=""/>grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/kbytes{free,avail,total}
 <anchor xml:id="dbdoclet.50438198_pgfId-1291478" xreflabel=""/>grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/files{free,total}
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry><para><emphasis role="bold">Note -</emphasis><anchor xml:id="dbdoclet.50438198_pgfId-1291479" xreflabel=""/>You can find other numeric error codes along with a short name and text description in /usr/include/asm/errno.h.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+                <note><para>You can find other numeric error codes along with a short name and text description in /usr/include/asm/errno.h.</para></note>
+
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1291481" xreflabel=""/>26.3.7 Triggering <anchor xml:id="dbdoclet.50438198_marker-1291480" xreflabel=""/>Watchdog for PID NNN</title>
@@ -463,15 +392,11 @@ LAST_ID&quot;
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291513" xreflabel=""/> You are using a disk device that claims to have data written to disk before it actually does, as in case of a device with a large cache. If that disk device crashes or loses power in a way that causes the loss of the cache, there can be a loss of transactions that you believe are committed. This is a very serious event, and you should run e2fsck against that storage before restarting Lustre.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291514" xreflabel=""/> As per the Lustre requirement, the shared storage used for failover is completely cache-coherent. This ensures that if one server takes over for another, it sees the most up-to-date and accurate copy of the data. In case of the failover of the server, if the shared storage does not provide cache coherency between all of its ports, then Lustre can produce an error.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291515" xreflabel=""/>If you know the exact reason for the error, then it is safe to proceed with no further action. If you do not know the reason, then this is a serious issue and you should explore it with your disk vendor.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291516" xreflabel=""/>If the error occurs during failover, examine your disk cache settings. If it occurs after a restart without failover, try to determine how the disk can report that a write succeeded, then lose the Data Device corruption or Disk Errors.</para>
@@ -486,21 +411,15 @@ LAST_ID&quot;
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291523" xreflabel=""/>  Each client needs to take an EOF lock on all the OSTs, as it is difficult to know which OST holds the end of the file until you check all the OSTs. As all the clients are using the same O_APPEND, there is significant locking overhead.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291524" xreflabel=""/> The second client cannot get all locks until the end of the writing of the first client, as the taking serializes all writes from the clients.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291525" xreflabel=""/> To avoid deadlocks, the taking of these locks occurs in a known, consistent order. As a client cannot know which OST holds the next piece of the file until the client has locks on all OSTS, there is a need of these locks in case of a striped file.</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
       </section>
       <section remap="h3">
@@ -515,21 +434,15 @@ LAST_ID&quot;
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291969" xreflabel=""/> kernel &quot;Out of memory&quot; and/or &quot;oom-killer&quot; messages</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1292105" xreflabel=""/> Lustre &quot;kmalloc of &apos;mmm&apos; (NNNN bytes) failed...&quot; messages</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 <listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1292053" xreflabel=""/> Lustre or kernel stack traces showing processes stuck in &quot;try_to_free_pages&quot;</para>
           </listitem>
-<listitem>
-            <para> </para>
-          </listitem>
+
 </itemizedlist>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1292421" xreflabel=""/>For information on determining the MDS memory and OSS memory requirements, see <link xl:href="SettingUpLustreSystem.html#50438256_26456">Determining Memory Requirements</link>.</para>
       </section>
@@ -538,6 +451,5 @@ LAST_ID&quot;
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1294802" xreflabel=""/>Some SCSI drivers default to a maximum I/O size that is too small for good Lustre performance. we have fixed quite a few drivers, but you may still find that some drivers give unsatisfactory performance with Lustre. As the default value is hard-coded, you need to recompile the drivers to change their default. On the other hand, some drivers may have a wrong default set.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1294803" xreflabel=""/>If you suspect bad I/O performance and an analysis of Lustre statistics indicates that I/O is not 1 MB, check /sys/block/&lt;device&gt;/queue/max_sectors_kb. If the max_sectors_kb value is less than 1024, set it to at least 1024 to improve performance. If changing max_sectors_kb does not change the I/O size as reported by Lustre, you may want to examine the SCSI driver code.</para>
       </section>
-    </section>
   </section>
 </chapter>
