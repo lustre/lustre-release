@@ -173,8 +173,8 @@
       </section>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438198_pgfId-1291367" xreflabel=""/>26.3.3 Identifying a <anchor xml:id="dbdoclet.50438198_marker-1291366" xreflabel=""/>Missing OST</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291368" xreflabel=""/>If an OST is missing for any reason, you may need to know what files are affected. Although an OST is missing, the files system should be operational. From any mounted client node, generate a list of files that reside on the affected OST. It is advisable to mark the missing OST as â€™unavailableâ€™ so clients and the MDS do not time out trying to contact it.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291369" xreflabel=""/> 1. Generate a list of devices and determine the OSTâ€™s device number. Run:</para>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291368" xreflabel=""/>If an OST is missing for any reason, you may need to know what files are affected. Although an OST is missing, the files system should be operational. From any mounted client node, generate a list of files that reside on the affected OST. It is advisable to mark the missing OST as 'unavailable' so clients and the MDS do not time out trying to contact it.</para>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291369" xreflabel=""/> 1. Generate a list of devices and determine the OST's device number. Run:</para>
         <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291370" xreflabel=""/>$ lctl dl 
 </screen>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1293115" xreflabel=""/>The lctl dl command output lists the device name and number, along with the device UUID and the number of references on the device.</para>
@@ -428,8 +428,8 @@ LAST_ID&quot;
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291896" xreflabel=""/>After the file system has been running for some time, it contains more data in cache and hence, the variability caused by reading critical metadata from disk is mostly eliminated. The file system now reads data from the cache.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291922" xreflabel=""/>26.3.13 Log Message â€˜Out of <anchor xml:id="dbdoclet.50438198_marker-1292113" xreflabel=""/>Memoryâ€™ on OST</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291934" xreflabel=""/>When planning the hardware for an OSS node, consider the memory usage of several components in the Lustre system. If insufficient memory is available, an â€˜out of memoryâ€™ message can be logged.</para>
+        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291922" xreflabel=""/>26.3.13 Log Message 'Out of <anchor xml:id="dbdoclet.50438198_marker-1292113" xreflabel=""/>Memory' on OST</title>
+        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291934" xreflabel=""/>When planning the hardware for an OSS node, consider the memory usage of several components in the Lustre system. If insufficient memory is available, an 'out of memory' message can be logged.</para>
         <para><anchor xml:id="dbdoclet.50438198_pgfId-1292123" xreflabel=""/>During normal operation, several conditions indicate insufficient RAM on a server node:</para>
         <itemizedlist><listitem>
             <para><anchor xml:id="dbdoclet.50438198_pgfId-1291969" xreflabel=""/> kernel &quot;Out of memory&quot; and/or &quot;oom-killer&quot; messages</para>

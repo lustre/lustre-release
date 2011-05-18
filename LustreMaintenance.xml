@@ -102,7 +102,7 @@
         </section>
         <section xml:id="dbdoclet.50438199_54623">
             <title>14.4 Regenerating Lustre <anchor xml:id="dbdoclet.50438199_marker-1305736" xreflabel=""/>Configuration Logs</title>
-            <para><anchor xml:id="dbdoclet.50438199_pgfId-1304951" xreflabel=""/>If the Lustre systemâ€™s configuration logs are in a state where the file system cannot be started, use the writeconf command to erase them. After the writeconf command is run and the servers restart, the configuration logs are re-generated and stored on the MGS (as in a new file system).</para>
+            <para><anchor xml:id="dbdoclet.50438199_pgfId-1304951" xreflabel=""/>If the Lustre system's configuration logs are in a state where the file system cannot be started, use the writeconf command to erase them. After the writeconf command is run and the servers restart, the configuration logs are re-generated and stored on the MGS (as in a new file system).</para>
             <para><anchor xml:id="dbdoclet.50438199_pgfId-1304970" xreflabel=""/>You should only use the writeconf command if:</para>
             <itemizedlist><listitem>
                     <para><anchor xml:id="dbdoclet.50438199_pgfId-1304971" xreflabel=""/> The configuration logs are in a state where the file system cannot start</para>

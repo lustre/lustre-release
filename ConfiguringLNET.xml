@@ -259,7 +259,7 @@
         </listitem>
 </itemizedlist>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304876" xreflabel=""/>If the router checker does not get a reply message from the router within router_ping_timeout seconds, it considers the router to be down.</para>
-      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304878" xreflabel=""/>If a router is marked â€œupâ€ and responds to a ping, the timeout is reset.</para>
+      <para><anchor xml:id="dbdoclet.50438216_pgfId-1304878" xreflabel=""/>If a router is marked 'up' and responds to a ping, the timeout is reset.</para>
       <para><anchor xml:id="dbdoclet.50438216_pgfId-1304881" xreflabel=""/>If 100 packets have been sent successfully through a router, the sent-packets counter for that router will have a value of 100.</para>
     </section>
     <section xml:id="dbdoclet.50438216_15200">

@@ -98,11 +98,11 @@
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290159" xreflabel=""/>Lustre 1.6.5 introduced the v2 file format for administrative quota files, with continued support for the old file format (v1). The mdt.quota_type parameter also handles â€˜1â€™ and â€˜2â€™ options, to specify the Lustre quota versions that will be used. For example:</para>
+        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290159" xreflabel=""/>Lustre 1.6.5 introduced the v2 file format for administrative quota files, with continued support for the old file format (v1). The mdt.quota_type parameter also handles '1' and '2' options, to specify the Lustre quota versions that will be used. For example:</para>
         <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290160" xreflabel=""/>--param mdt.quota_type=ug1
 <anchor xml:id="dbdoclet.50438217_pgfId-1290161" xreflabel=""/>--param mdt.quota_type=u2
 </screen>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290162" xreflabel=""/>Lustre 1.6.6 introduced the v2 file format for operational quotas, with continued support for the old file format (v1). The ost.quota_type parameter handles â€˜1â€™ and â€˜2â€™ options, to specify the Lustre quota versions that will be used. For example:</para>
+        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290162" xreflabel=""/>Lustre 1.6.6 introduced the v2 file format for operational quotas, with continued support for the old file format (v1). The ost.quota_type parameter handles '1' and '2' options, to specify the Lustre quota versions that will be used. For example:</para>
         <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290163" xreflabel=""/>--param ost.quota_type=ug2
 <anchor xml:id="dbdoclet.50438217_pgfId-1290164" xreflabel=""/>--param ost.quota_type=u1
 </screen>
@@ -269,7 +269,7 @@
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290256" xreflabel=""/>The /proc values are bounded by two other variables quota_btune_sz and quota_itune_sz. By default, the *tune_sz variables are set at 1/2 the *unit_sz variables, and you cannot set *tune_sz larger than *unit_sz. You must set bunit_sz first if it is increasing by more than 2x, and btune_sz first if it is decreasing by more than 2x.</para>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290257" xreflabel=""/><emphasis role="bold">Total number of inodes</emphasis> -- To determine the total number of inodes, use lfsdf-i (and also /proc/fs/lustre/*/*/filestotal). For more information on using the lfsdf-i command and the command output, see <link xl:href="ManagingStripingFreeSpace.html#50438209_35838">Checking File System Free Space</link>.</para>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290261" xreflabel=""/>Unfortunately, the statfs interface does not report the free inode count directly, but instead reports the total inode and used inode counts. The free inode count is calculated for df from (total inodes - used inodes).</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290262" xreflabel=""/>It is not critical to know a file systemâ€™s total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
+        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290262" xreflabel=""/>It is not critical to know a file system's total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290263" xreflabel=""/>The values set for the MDS must match the values set on the OSTs.</para>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290264" xreflabel=""/>The quota_bunit_sz parameter displays bytes, however lfs setquota uses KBs. The quota_bunit_sz parameter must be a multiple of 1024. A proper minimum KB size for lfs setquota can be calculated as:</para>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290265" xreflabel=""/><emphasis role="bold">Size in KBs = minimum_quota_bunit_sz * (number of OSTS + 1) = 1024 * (number of OSTs +1)</emphasis></para>
@@ -287,7 +287,7 @@
         <orderedlist><listitem>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290276" xreflabel=""/>A user writes files to Lustre.</para>
     </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290277" xreflabel=""/>If the Lustre client has enough granted cache, then it returns â€˜successâ€™ to users and arranges the writes to the OSTs.</para>
+        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290277" xreflabel=""/>If the Lustre client has enough granted cache, then it returns 'success' to users and arranges the writes to the OSTs.</para>
     </listitem><listitem>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290278" xreflabel=""/>Because Lustre clients have delivered success to users, the OSTs cannot fail these writes.</para>
     </listitem></orderedlist>
@@ -471,7 +471,7 @@
       </informaltable>
       <section remap="h3">
         <title><anchor xml:id="dbdoclet.50438217_pgfId-1290408" xreflabel=""/>21.6.1 Interpreting Quota Statistics</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290409" xreflabel=""/>Quota statistics are an important measure of a Lustre file systemâ€™s performance. Interpreting these statistics correctly can help you diagnose problems with quotas, and may indicate adjustments to improve system performance.</para>
+        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290409" xreflabel=""/>Quota statistics are an important measure of a Lustre file system's performance. Interpreting these statistics correctly can help you diagnose problems with quotas, and may indicate adjustments to improve system performance.</para>
         <para><anchor xml:id="dbdoclet.50438217_pgfId-1290410" xreflabel=""/>For example, if you run this command on the OSTs:</para>
         <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290411" xreflabel=""/>cat /proc/fs/lustre/lquota/lustre-OST0000/stats
 </screen>

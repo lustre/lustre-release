@@ -57,7 +57,7 @@
         <title><anchor xml:id="dbdoclet.50438209_pgfId-1291860" xreflabel=""/>18.2.1 Choosing a Stripe <anchor xml:id="dbdoclet.50438209_marker-1291859" xreflabel=""/>Size</title>
         <para><anchor xml:id="dbdoclet.50438209_pgfId-1296612" xreflabel=""/>Choosing a stripe size is a small balancing act, but there are reasonable defaults.</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438209_pgfId-1296443" xreflabel=""/><emphasis role="bold">The stripe size must be a multiple of the page size.</emphasis>  Lustreâ€™s tools enforce a multiple of 64 KB (the maximum page size on ia64 and PPC64 nodes) so that users on platforms with smaller pages do not accidentally create files that might cause problems for ia64 clients.</para>
+            <para><anchor xml:id="dbdoclet.50438209_pgfId-1296443" xreflabel=""/><emphasis role="bold">The stripe size must be a multiple of the page size.</emphasis>  Lustre's tools enforce a multiple of 64 KB (the maximum page size on ia64 and PPC64 nodes) so that users on platforms with smaller pages do not accidentally create files that might cause problems for ia64 clients.</para>
           </listitem>
 <listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1291862" xreflabel=""/><emphasis role="bold">The smallest recommended stripe size is 512 KB.</emphasis>  Although you can create files with a stripe size of 64 KB, the smallest practical stripe size is 512 KB because Lustre sends 1MB chunks over the network. Choosing a smaller stripe size may result in inefficient I/O to the disks and reduced performance.</para>
@@ -69,7 +69,7 @@
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1297206" xreflabel=""/><emphasis role="bold">The maximum stripe size is 4GB.</emphasis>  Using a large stripe size can improve performance when accessing very large files. It allows each client to have exclusive access to its own part of a file. However, it can be counterproductive in some cases if it does not match your I/O pattern.</para>
           </listitem>
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438209_pgfId-1291865" xreflabel=""/><emphasis role="bold">Choose a stripe pattern that takes into account your applicationâ€™s write patterns.</emphasis>  Writes that cross an object boundary are slightly less efficient than writes that go entirely to one server. If the file is written in a very consistent and aligned way, make the stripe size a multiple of the write() size.</para>
+            <para><anchor xml:id="dbdoclet.50438209_pgfId-1291865" xreflabel=""/><emphasis role="bold">Choose a stripe pattern that takes into account your application's write patterns.</emphasis>  Writes that cross an object boundary are slightly less efficient than writes that go entirely to one server. If the file is written in a very consistent and aligned way, make the stripe size a multiple of the write() size.</para>
           </listitem>
 <listitem>
             <para><anchor xml:id="dbdoclet.50438209_pgfId-1291866" xreflabel=""/><emphasis role="bold">The choice of stripe size has no effect on a single-stripe file.</emphasis></para>

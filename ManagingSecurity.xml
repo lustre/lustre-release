@@ -54,7 +54,7 @@
         <para><anchor xml:id="dbdoclet.50438221_pgfId-1292593" xreflabel=""/>To mount the client with no ACLs:</para>
         <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292597" xreflabel=""/>$ mount -t lustre -o noacl ibmds2@o2ib:/home /home
 </screen>
-        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292321" xreflabel=""/>ACLs are enabled in Lustre on a system-wide basis; either all clients enable ACLs or none do. Activating ACLs is controlled by MDS mount options acl / noacl (enable/disableACLs). Client-side mount options acl/noacl are ignored. You do not need to change the client configuration, and the â€œaclâ€ string will not appear in the client /etc/mtab. The client acl mount option is no longer needed. If a client is mounted with that option, then this message appears in the MDS syslog:</para>
+        <para><anchor xml:id="dbdoclet.50438221_pgfId-1292321" xreflabel=""/>ACLs are enabled in Lustre on a system-wide basis; either all clients enable ACLs or none do. Activating ACLs is controlled by MDS mount options acl / noacl (enable/disableACLs). Client-side mount options acl/noacl are ignored. You do not need to change the client configuration, and the 'acl' string will not appear in the client /etc/mtab. The client acl mount option is no longer needed. If a client is mounted with that option, then this message appears in the MDS syslog:</para>
         <screen><anchor xml:id="dbdoclet.50438221_pgfId-1292322" xreflabel=""/>...MDS requires ACL support but client does not
 </screen>
         <para><anchor xml:id="dbdoclet.50438221_pgfId-1292323" xreflabel=""/>The message is harmless but indicates a configuration issue, which should be corrected.</para>
@@ -148,7 +148,7 @@
         <title><anchor xml:id="dbdoclet.50438221_pgfId-1293871" xreflabel=""/>22.2.3 Tips on Using <anchor xml:id="dbdoclet.50438221_marker-1296366" xreflabel=""/>Root Squash</title>
         <para><anchor xml:id="dbdoclet.50438221_pgfId-1296298" xreflabel=""/>Lustre configuration management limits root squash in several ways.</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296299" xreflabel=""/> The lctl conf_param value overwrites the parameterâ€™s previous value. If the new value uses an incorrect syntax, then the system continues with the old parameters and the previously-correct value is lost on remount. That is, be careful doing root squash tuning.</para>
+            <para><anchor xml:id="dbdoclet.50438221_pgfId-1296299" xreflabel=""/> The lctl conf_param value overwrites the parameter's previous value. If the new value uses an incorrect syntax, then the system continues with the old parameters and the previously-correct value is lost on remount. That is, be careful doing root squash tuning.</para>
           </listitem>
 
 <listitem>

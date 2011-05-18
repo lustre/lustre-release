@@ -120,7 +120,7 @@
           <para><anchor xml:id="dbdoclet.50438273_pgfId-1297847" xreflabel=""/>To register a new changelog user, run:</para>
           <screen><anchor xml:id="dbdoclet.50438273_pgfId-1297848" xreflabel=""/>lctl --device &lt;mdt_device&gt; changelog_register
 </screen>
-          <para><anchor xml:id="dbdoclet.50438273_pgfId-1297849" xreflabel=""/>Changelog entries are not purged beyond a registered userâ€™s set point (see lfs changelog_clear).</para>
+          <para><anchor xml:id="dbdoclet.50438273_pgfId-1297849" xreflabel=""/>Changelog entries are not purged beyond a registered user's set point (see lfs changelog_clear).</para>
         </section>
         <section remap="h5">
           <title><anchor xml:id="dbdoclet.50438273_pgfId-1297785" xreflabel=""/>lfs changelog</title>

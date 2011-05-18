@@ -536,7 +536,7 @@ oup upcall set to /usr/sbin/l_getgroups
               <row>
                 <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292895" xreflabel=""/>start_ost</para></entry>
                 <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292897" xreflabel=""/>-1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292899" xreflabel=""/>The first OST where objects are created for each file. The default -1 allows the MDS to choose the starting index based on available space and load balancing. <emphasis>Itâ€™s strongly recommended not to change the default for this parameter to a value other than -1.</emphasis></para></entry>
+                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292899" xreflabel=""/>The first OST where objects are created for each file. The default -1 allows the MDS to choose the starting index based on available space and load balancing. <emphasis>It's strongly recommended not to change the default for this parameter to a value other than -1.</emphasis></para></entry>
               </row>
             </tbody>
           </tgroup>

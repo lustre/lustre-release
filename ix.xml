@@ -788,7 +788,7 @@
       <para><anchor xml:id="dbdoclet.50438146_pgfId-25402" xreflabel=""/></para>
       <para>improving Lustre performance when working with small files, <link xl:href="LustreTuning.html#50438272_marker-1295851">1</link></para>
       <para><anchor xml:id="dbdoclet.50438146_pgfId-25404" xreflabel=""/></para>
-      <para>log message â€™out of memoryâ€™ on OST, <link xl:href="LustreTroubleshooting.html#50438198_marker-1292113">1</link></para>
+      <para>log message 'out of memory' on OST, <link xl:href="LustreTroubleshooting.html#50438198_marker-1292113">1</link></para>
       <para><anchor xml:id="dbdoclet.50438146_pgfId-25406" xreflabel=""/>Lustre Error</para>
       <para><anchor xml:id="dbdoclet.50438146_pgfId-25407" xreflabel=""/></para>
       <para>&quot;slow start_page_write&quot;, <link xl:href="LustreTroubleshooting.html#50438198_marker-1291517">1</link></para>

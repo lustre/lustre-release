@@ -135,7 +135,7 @@
       <glossterm><anchor xml:id="dbdoclet.50438338_pgfId-1000650" xreflabel=""/>Fileset
         </glossterm>
       <glossdef>
-        <para><anchor xml:id="dbdoclet.50438338_pgfId-1000651" xreflabel=""/>A group of files that are defined through a directory that represents a file systemâ€™s start point.</para>
+        <para><anchor xml:id="dbdoclet.50438338_pgfId-1000651" xreflabel=""/>A group of files that are defined through a directory that represents a file system's start point.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="fldb">

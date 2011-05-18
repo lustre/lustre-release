@@ -265,7 +265,7 @@ re2
 <anchor xml:id="dbdoclet.50438194_pgfId-1302355" xreflabel=""/>$ lctl conf_param testfs-OST0000.ost.client_cache_seconds=15 
 <anchor xml:id="dbdoclet.50438194_pgfId-1302356" xreflabel=""/>$ lctl conf_param testfs.sys.timeout=40 
 </screen>
-                  <caution><para>Parameters specified with the lctlconf_param command are set permanently in the file systemâ€™s configuration file on the MGS.</para></caution>
+                  <caution><para>Parameters specified with the lctlconf_param command are set permanently in the file system's configuration file on the MGS.</para></caution>
         </section>
         <section remap="h4">
           <title><anchor xml:id="dbdoclet.50438194_pgfId-1305661" xreflabel=""/>13.8.3.3 <anchor xml:id="dbdoclet.50438194_88217" xreflabel=""/>Listing Parameters</title>
