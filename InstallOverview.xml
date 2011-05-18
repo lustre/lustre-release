@@ -1,50 +1,46 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='installoverview'>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installoverview">
   <info>
-    <title xml:id='installoverview.title'>Installation Overview</title>
+    <title xml:id="installoverview.title">Installation Overview</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438192_pgfId-1306234" xreflabel=""/>This chapter provides on overview of the procedures required to set up, install and configure a Lustre file system.</para>
-
-
   <note>
-  <para>
-      If you are new to Lustre, you may find it helpful to refer to <xref linkend='part.intro'/> for a description of the Lustre architecture, file system components and terminology before proceeding with the installation procedure.</para>
-   </note>
-
-    <section remap="h2">
-      <title>4.1 Steps to Installing Lustre</title>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1306237" xreflabel=""/>To set up Lustre file system hardware and install and configure the Lustre software, refer the the chapters below in the order listed:</para>
-
-      <orderedlist>
-          <listitem>
-      <para> <emphasis>(Required)</emphasis> Set up your Lustre file System hardware.</para>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307046" xreflabel=""/>See <xref linkend='settinguplustresystem'/> - Provides guidelines for configuring hardware for a Lustre file system including storage, memory, and networking requirements.</para>
-  </listitem>
-  <listitem>
-      <para> <emphasis>(Optional - Highly Recommended)</emphasis> Configure storage on Lustre storage devices.</para>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307007" xreflabel=""/>See <xref linkend='configuringstorage'/> - Provides instructions for setting up hardware RAID on Lustre storage devices.</para>
-      <para> <emphasis>(Optional)</emphasis> Set up network interface bonding.</para>
-  </listitem>
-  <listitem>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307015" xreflabel=""/>See <xref linkend='settingupbonding'/> - Describes setting up network interface bonding to allow multiple network interfaces to be used in parallel to increase bandwidth or redundancy.</para>
-  </listitem>
-  <listitem>
-      <para><emphasis>(Required)</emphasis> Install Lustre software.</para>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307022" xreflabel=""/>See <xref linkend='installinglustre'/> - Describes preparation steps and a procedure for installing the Lustre software.</para>
-  </listitem>
-  <listitem>
-      <para><emphasis>(Optional)</emphasis> Configure Lustre Networking (LNET).</para>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307025" xreflabel=""/>See <xref linkend='configuringlnet'/> - Describes how to configure LNET if the default configuration is not sufficient. By default, LNET will use the first TCP/IP interface it discovers on a system. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
-  </listitem>
-  <listitem>
-      <para><emphasis>(Required)</emphasis> Configure Lustre.</para>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307120" xreflabel=""/>See <xref linkend='configuringlustre'/> - Provides an example of a simple Lustre configuration procedure and points to tools for completing more complex configurations.</para>
-  </listitem>
-  <listitem>
-      <para><emphasis>(Optional)</emphasis> Configure Lustre Failover.</para>
-      <para><anchor xml:id="dbdoclet.50438192_pgfId-1307031" xreflabel=""/>See <xref linkend='configuringfailover'/> - Describes how to configure Lustre failover using the Heartbeat cluster infrastructure daemon.</para>
-
-  </listitem>
-  </orderedlist>
-    </section>
+    <para>
+      If you are new to Lustre, you may find it helpful to refer to <xref linkend="part.intro"/> for a description of the Lustre architecture, file system components and terminology before proceeding with the installation procedure.</para>
+  </note>
+  <section remap="h2">
+    <title>4.1 Steps to Installing Lustre</title>
+    <para><anchor xml:id="dbdoclet.50438192_pgfId-1306237" xreflabel=""/>To set up Lustre file system hardware and install and configure the Lustre software, refer the the chapters below in the order listed:</para>
+    <orderedlist>
+      <listitem>
+        <para> <emphasis>(Required)</emphasis> <emphasis role="bold">Set up your Lustre file System hardware.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307046" xreflabel=""/>See <xref linkend="settinguplustresystem"/> - Provides guidelines for configuring hardware for a Lustre file system including storage, memory, and networking requirements.</para>
+      </listitem>
+      <listitem>
+        <para> <emphasis>(Optional - Highly Recommended)</emphasis> <emphasis role="bold">Configure storage on Lustre storage devices.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307007" xreflabel=""/>See <xref linkend="configuringstorage"/> - Provides instructions for setting up hardware RAID on Lustre storage devices.</para>
+      </listitem>
+      <listitem>
+        <para> <emphasis>(Optional)</emphasis> <emphasis role="bold">Set up network interface bonding.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307015" xreflabel=""/>See <xref linkend="settingupbonding"/> - Describes setting up network interface bonding to allow multiple network interfaces to be used in parallel to increase bandwidth or redundancy.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis>(Required)</emphasis> <emphasis role="bold">Install Lustre software.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307022" xreflabel=""/>See <xref linkend="installinglustre"/> - Describes preparation steps and a procedure for installing the Lustre software.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis>(Optional)</emphasis> <emphasis role="bold">Configure Lustre Networking (LNET).</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307025" xreflabel=""/>See <xref linkend="configuringlnet"/> - Describes how to configure LNET if the default configuration is not sufficient. By default, LNET will use the first TCP/IP interface it discovers on a system. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis>(Required)</emphasis> <emphasis role="bold">Configure Lustre.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307120" xreflabel=""/>See <xref linkend="configuringlustre"/> - Provides an example of a simple Lustre configuration procedure and points to tools for completing more complex configurations.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis>(Optional)</emphasis> <emphasis role="bold">Configure Lustre Failover.</emphasis></para>
+        <para><anchor xml:id="dbdoclet.50438192_pgfId-1307031" xreflabel=""/>See <xref linkend="configuringfailover"/> - Describes how to configure Lustre failover using the Heartbeat cluster infrastructure daemon.</para>
+      </listitem>
+    </orderedlist>
+  </section>
 </chapter>
