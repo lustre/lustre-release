@@ -3,17 +3,52 @@
     <title>Reference</title>
     <partintro>
   <para><anchor xml:id="dbdoclet.50438280_pgfId-1804" xreflabel=""/>Part VI includes reference information on Lustre user utilities, configuration files and module parameters, programming interfaces, system configuration utilities, and system limits. You will find information in this section about:</para>
+
+  <itemizedlist>
+      <listitem>
+          <para>
+              <link linkend= "installinglustrefromsourcecode" endterm="installinglustrefromsourcecode.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "lustrerecovery" endterm="lustrerecovery.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "lustreproc" endterm="lustreproc.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "userutilities" endterm="userutilities.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "lustreprogramminginterfaces" endterm="lustreprogramminginterfaces.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "settinglustreproperties" endterm="settinglustreproperties.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "configurationfilesmoduleparameters" endterm="configurationfilesmoduleparameters.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "systemconfigurationutilities" endterm="systemconfigurationutilities.title"/>
+             </para>
+         </listitem>
+     </itemizedlist>
+
+
+
   </partintro>
-
-  <xi:include href="InstallingLustreFromSourceCode.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreProc.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="UserUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="LustreProgrammingInterfaces.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SettingLustreProperties.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="ConfigurationFilesModuleParameters.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-  <xi:include href="SystemConfigurationUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
 
 </part>
