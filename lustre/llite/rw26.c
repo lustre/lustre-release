@@ -369,7 +369,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *kiocb,
         return ll_direct_IO(rw, kiocb->ki_filp, iov, file_offset, nr_segs, 1);
 }
 
-#ifdef HAVE_KERNEL_WRITE_BEGIN_END
+#if defined(HAVE_KERNEL_WRITE_BEGIN_END) || defined(MS_HAS_NEW_AOPS)
 static int ll_write_begin(struct file *file, struct address_space *mapping,
                          loff_t pos, unsigned len, unsigned flags,
                          struct page **pagep, void **fsdata)
@@ -385,7 +385,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
                 RETURN(-ENOMEM);
 
         *pagep = page;
- 
+
         rc = ll_prepare_write(file, page, from, from + len);
         if (rc) {
                 unlock_page(page);
@@ -408,6 +408,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 }
 #endif
 
+#ifndef MS_HAS_NEW_AOPS
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
 //        .readpages      = ll_readpages,
@@ -427,3 +428,21 @@ struct address_space_operations ll_aops = {
         .releasepage    = ll_releasepage,
         .bmap           = NULL
 };
+#else
+struct address_space_operations_ext ll_aops = {
+        .orig_aops.readpage       = ll_readpage,
+//        .orig_aops.readpages      = ll_readpages,
+        .orig_aops.direct_IO      = ll_direct_IO_26,
+        .orig_aops.writepage      = ll_writepage_26,
+        .orig_aops.writepages     = generic_writepages,
+        .orig_aops.set_page_dirty = __set_page_dirty_nobuffers,
+        .orig_aops.sync_page      = NULL,
+        .orig_aops.prepare_write  = ll_prepare_write,
+        .orig_aops.commit_write   = ll_commit_write,
+        .orig_aops.invalidatepage = ll_invalidatepage,
+        .orig_aops.releasepage    = ll_releasepage,
+        .orig_aops.bmap           = NULL,
+        .write_begin    = ll_write_begin,
+        .write_end      = ll_write_end
+};
+#endif
