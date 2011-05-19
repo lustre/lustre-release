@@ -1,0 +1,49 @@
+Index: linux-stage/fs/ext4/ext4_extents.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_extents.h
++++ linux-stage/fs/ext4/ext4_extents.h
+@@ -258,7 +258,7 @@ extern int ext4_ext_try_to_merge(struct 
+ extern unsigned int ext4_ext_check_overlap(struct inode *, struct ext4_extent *, struct ext4_ext_path *);
+ extern int ext4_ext_insert_extent(handle_t *, struct inode *, struct ext4_ext_path *, struct ext4_extent *, int);
+ extern int ext4_ext_walk_space(struct inode *, ext4_lblk_t, ext4_lblk_t,
+-							ext_prepare_callback, void *);
++							ext_prepare_callback, void *, int);
+ extern struct ext4_ext_path *ext4_ext_find_extent(struct inode *, ext4_lblk_t,
+ 							struct ext4_ext_path *);
+ extern int ext4_ext_search_left(struct inode *, struct ext4_ext_path *,
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -1851,7 +1851,7 @@ cleanup:
+ 
+ int ext4_ext_walk_space(struct inode *inode, ext4_lblk_t block,
+ 			ext4_lblk_t num, ext_prepare_callback func,
+-			void *cbdata)
++			void *cbdata, int locked)
+ {
+ 	struct ext4_ext_path *path = NULL;
+ 	struct ext4_ext_cache cbex;
+@@ -1866,9 +1866,11 @@ int ext4_ext_walk_space(struct inode *in
+ 	while (block < last && block != EXT_MAX_BLOCK) {
+ 		num = last - block;
+ 		/* find extent for this block */
+-		down_read(&EXT4_I(inode)->i_data_sem);
++		if (!locked)
++			down_read(&EXT4_I(inode)->i_data_sem);
+ 		path = ext4_ext_find_extent(inode, block, path);
+-		up_read(&EXT4_I(inode)->i_data_sem);
++		if (!locked)
++			up_read(&EXT4_I(inode)->i_data_sem);
+ 		if (IS_ERR(path)) {
+ 			err = PTR_ERR(path);
+ 			path = NULL;
+@@ -3987,7 +3989,7 @@ int ext4_fiemap(struct inode *inode, str
+ 		 * ext4_ext_fiemap_cb will push extents back to user.
+ 		 */
+ 		error = ext4_ext_walk_space(inode, start_blk, len_blks,
+-					  ext4_ext_fiemap_cb, fieinfo);
++					  ext4_ext_fiemap_cb, fieinfo, 0);
+ 	}
+ 
+ 	return error;
