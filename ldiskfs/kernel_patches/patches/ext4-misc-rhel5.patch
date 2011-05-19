@@ -1,7 +1,7 @@
 Index: linux-stage/fs/ext4/ext4_jbd2.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_jbd2.h	2011-03-14 17:17:57.962614294 +0800
-+++ linux-stage/fs/ext4/ext4_jbd2.h	2011-03-14 17:26:00.570661921 +0800
+--- linux-stage.orig/fs/ext4/ext4_jbd2.h
++++ linux-stage/fs/ext4/ext4_jbd2.h
 @@ -35,6 +35,8 @@
  	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
  	 ? 27U : 8U)
@@ -13,9 +13,9 @@ Index: linux-stage/fs/ext4/ext4_jbd2.h
   * and the superblock, which are already accounted for. */
 Index: linux-stage/fs/ext4/extents.c
 ===================================================================
---- linux-stage.orig/fs/ext4/extents.c	2011-03-14 17:17:57.491605523 +0800
-+++ linux-stage/fs/ext4/extents.c	2011-03-14 17:25:23.230957562 +0800
-@@ -59,6 +59,17 @@ static ext4_fsblk_t ext_pblock(struct ex
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -59,6 +59,17 @@ ext4_fsblk_t ext_pblock(struct ext4_exte
  }
  
  /*
@@ -51,7 +51,7 @@ Index: linux-stage/fs/ext4/extents.c
   * ext4_idx_store_pblock:
   * stores a large physical block number into an index struct,
   * breaking it into parts
-@@ -1980,6 +1980,56 @@ static int ext4_ext_rm_idx(handle_t *han
+@@ -2097,6 +2097,56 @@ static int ext4_ext_rm_idx(handle_t *han
  }
  
  /*
@@ -108,7 +108,7 @@ Index: linux-stage/fs/ext4/extents.c
   * ext4_ext_calc_credits_for_single_extent:
   * This routine returns max. credits that needed to insert an extent
   * to the extent tree.
-@@ -3731,3 +3781,13 @@ int ext4_fiemap(struct inode *inode, str
+@@ -3941,3 +3991,15 @@ int ext4_fiemap(struct inode *inode, str
  	return error;
  }
  
@@ -121,11 +121,13 @@ Index: linux-stage/fs/ext4/extents.c
 +EXPORT_SYMBOL(ext4_ext_walk_space);
 +EXPORT_SYMBOL(ext4_ext_calc_credits_for_insert);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
++EXPORT_SYMBOL(ext4_ext_find_extent);
++EXPORT_SYMBOL(ext4_ext_drop_refs);
 +
 Index: linux-stage/fs/ext4/ext4_extents.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_extents.h	2011-03-14 17:17:57.928613657 +0800
-+++ linux-stage/fs/ext4/ext4_extents.h	2011-03-14 17:27:23.673232962 +0800
+--- linux-stage.orig/fs/ext4/ext4_extents.h
++++ linux-stage/fs/ext4/ext4_extents.h
 @@ -58,6 +58,12 @@
   */
  #define EXT_STATS_
@@ -139,7 +141,7 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  
  /*
   * ext4_inode has i_block array (60 bytes total).
-@@ -160,6 +166,7 @@ struct ext4_ext_path {
+@@ -160,6 +166,7 @@ typedef int (*ext_prepare_callback)(stru
  #define EXT_INIT_MAX_LEN	(1UL << 15)
  #define EXT_UNINIT_MAX_LEN	(EXT_INIT_MAX_LEN - 1)
  
@@ -147,7 +149,7 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  
  #define EXT_FIRST_EXTENT(__hdr__) \
  	((struct ext4_extent *) (((char *) (__hdr__)) +		\
-@@ -230,6 +237,8 @@
+@@ -231,6 +238,8 @@ extern ext4_fsblk_t ext_pblock(struct ex
  extern ext4_fsblk_t idx_pblock(struct ext4_extent_idx *);
  extern void ext4_ext_store_pblock(struct ext4_extent *, ext4_fsblk_t);
  extern int ext4_extent_tree_init(handle_t *, struct inode *);
@@ -158,17 +160,17 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  						   struct ext4_ext_path *path);
 Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.c	2011-03-14 17:17:59.872649833 +0800
-+++ linux-stage/fs/ext4/mballoc.c	2011-03-14 17:25:20.373903681 +0800
-@@ -4302,6 +4302,7 @@
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -4313,6 +4313,7 @@ repeat:
+ 	if (ac)
  		kmem_cache_free(ext4_ac_cachep, ac);
  }
 +EXPORT_SYMBOL(ext4_discard_preallocations); 
  
  /*
   * finds all preallocated spaces and return blocks being freed to them
-  * if preallocated space becomes full (no block is used from the space)
-@@ -5111,3 +5118,6 @@ error_return:
+@@ -5127,3 +5128,6 @@ error_return:
  		kmem_cache_free(ext4_ac_cachep, ac);
  	return;
  }
@@ -177,8 +179,8 @@ Index: linux-stage/fs/ext4/mballoc.c
 +
 Index: linux-stage/fs/ext4/ext4_jbd2.c
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_jbd2.c	2011-03-14 17:17:57.463605024 +0800
-+++ linux-stage/fs/ext4/ext4_jbd2.c	2011-03-14 17:18:00.157655139 +0800
+--- linux-stage.orig/fs/ext4/ext4_jbd2.c
++++ linux-stage/fs/ext4/ext4_jbd2.c
 @@ -31,6 +31,7 @@ int __ext4_journal_get_write_access(cons
  	}
  	return err;
@@ -187,16 +189,16 @@ Index: linux-stage/fs/ext4/ext4_jbd2.c
  
  int __ext4_journal_forget(const char *where, handle_t *handle,
  				struct buffer_head *bh)
-@@ -107,3 +108,4 @@ int __ext4_journal_dirty_metadata(const
+@@ -107,3 +108,4 @@ int __ext4_handle_dirty_metadata(const c
  	}
  	return err;
  }
 +EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h	2011-03-14 17:17:59.916650654 +0800
-+++ linux-stage/fs/ext4/ext4.h	2011-03-14 17:25:30.236089694 +0800
-@@ -1448,6 +1448,8 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1528,6 +1528,8 @@ extern int ext4_mb_add_groupinfo(struct 
  extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
  extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
  						ext4_group_t, int);
@@ -207,9 +209,9 @@ Index: linux-stage/fs/ext4/ext4.h
  		struct buffer_head *bh, ext4_fsblk_t blocknr);
 Index: linux-stage/fs/ext4/inode.c
 ===================================================================
---- linux-stage.orig/fs/ext4/inode.c	2011-03-14 17:17:59.745647471 +0800
-+++ linux-stage/fs/ext4/inode.c	2011-03-14 17:18:00.219656294 +0800
-@@ -4882,6 +4882,7 @@
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -5078,6 +5078,7 @@ bad_inode:
  	iget_failed(inode);
  	return ERR_PTR(ret);
  }
@@ -219,8 +221,8 @@ Index: linux-stage/fs/ext4/inode.c
  				struct ext4_inode *raw_inode,
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c	2011-03-14 17:17:59.659645870 +0800
-+++ linux-stage/fs/ext4/super.c	2011-03-14 17:25:31.027104616 +0800
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
 @@ -90,6 +90,7 @@ ext4_fsblk_t ext4_inode_bitmap(struct su
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		 (ext4_fsblk_t)le32_to_cpu(bg->bg_inode_bitmap_hi) << 32 : 0);
@@ -229,7 +231,7 @@ Index: linux-stage/fs/ext4/super.c
  
  ext4_fsblk_t ext4_inode_table(struct super_block *sb,
  			      struct ext4_group_desc *bg)
-@@ -114,6 +115,7 @@
+@@ -114,6 +115,7 @@ __u32 ext4_free_inodes_count(struct supe
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		 (__u32)le16_to_cpu(bg->bg_free_inodes_count_hi) << 16 : 0);
  }
@@ -237,7 +239,7 @@ Index: linux-stage/fs/ext4/super.c
  
  __u32 ext4_used_dirs_count(struct super_block *sb,
  			      struct ext4_group_desc *bg)
-@@ -1434,9 +1436,11 @@
+@@ -1489,9 +1491,11 @@ enum {
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
  	Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err, Opt_resize,
  	Opt_usrquota, Opt_grpquota, Opt_i_version,
@@ -250,7 +252,7 @@ Index: linux-stage/fs/ext4/super.c
  };
  
  static match_table_t tokens = {
-@@ -1491,6 +1495,11 @@
+@@ -1547,6 +1551,11 @@ static match_table_t tokens = {
  	{Opt_barrier, "barrier"},
  	{Opt_nobarrier, "nobarrier"},
  	{Opt_i_version, "i_version"},
@@ -262,7 +264,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_stripe, "stripe=%u"},
  	{Opt_resize, "resize"},
  	{Opt_delalloc, "delalloc"},
-@@ -1930,6 +1939,12 @@
+@@ -1993,6 +2002,12 @@ set_qf_format:
  			else
  				set_opt(sbi->s_mount_opt,NO_AUTO_DA_ALLOC);
  			break;
@@ -275,7 +277,7 @@ Index: linux-stage/fs/ext4/super.c
  		default:
  			ext4_msg(sb, KERN_ERR,
  			       "Unrecognized mount option \"%s\" "
-@@ -2480,7 +2495,7 @@
+@@ -2543,7 +2558,7 @@ static ssize_t delayed_allocation_blocks
  					      char *buf)
  {
  	return snprintf(buf, PAGE_SIZE, "%llu\n",
@@ -284,7 +286,7 @@ Index: linux-stage/fs/ext4/super.c
  }
  
  static ssize_t session_write_kbytes_show(struct ext4_attr *a,
-@@ -2501,11 +2516,11 @@
+@@ -2564,11 +2579,11 @@ static ssize_t lifetime_write_kbytes_sho
  	struct super_block *sb = sbi->s_buddy_cache->i_sb;
  
  	return snprintf(buf, PAGE_SIZE, "%llu\n",
@@ -298,7 +300,7 @@ Index: linux-stage/fs/ext4/super.c
  }
  
  static ssize_t inode_readahead_blks_store(struct ext4_attr *a,
-@@ -2972,7 +2987,7 @@
+@@ -3042,7 +3057,7 @@ static int ext4_fill_super(struct super_
  	if (blocks_count && ext4_blocks_count(es) > blocks_count) {
  		ext4_msg(sb, KERN_WARNING, "bad geometry: block count %llu "
  		       "exceeds size of device (%llu blocks)",
@@ -309,9 +311,9 @@ Index: linux-stage/fs/ext4/super.c
  
 Index: linux-stage/fs/ext4/fsync.c
 ===================================================================
---- linux-stage.orig/fs/ext4/fsync.c	2011-03-14 17:17:57.533606303 +0800
-+++ linux-stage/fs/ext4/fsync.c	2011-03-14 17:18:00.266657168 +0800
-@@ -56,7 +56,7 @@
+--- linux-stage.orig/fs/ext4/fsync.c
++++ linux-stage/fs/ext4/fsync.c
+@@ -61,7 +61,7 @@ int ext4_sync_file(struct file *file, st
  
  	trace_mark(ext4_sync_file, "dev %s datasync %d ino %ld parent %ld",
  		   inode->i_sb->s_id, datasync, inode->i_ino,
@@ -322,15 +324,15 @@ Index: linux-stage/fs/ext4/fsync.c
  	if (ret < 0)
 Index: linux-stage/fs/ext4/move_extent.c
 ===================================================================
---- linux-stage.orig/fs/ext4/move_extent.c	2011-03-14 17:17:57.742610199 +0800
-+++ linux-stage/fs/ext4/move_extent.c	2011-03-14 17:18:00.284657501 +0800
-@@ -1388,7 +1388,8 @@
- 				ext4_error(orig_inode->i_sb, __func__,
+--- linux-stage.orig/fs/ext4/move_extent.c
++++ linux-stage/fs/ext4/move_extent.c
+@@ -1358,7 +1358,8 @@ ext4_move_extents(struct file *o_filp, s
+ 				ext4_error(orig_inode->i_sb,
  					"We replaced blocks too much! "
  					"sum of replaced: %llu requested: %llu",
 -					*moved_len, len);
 +					(unsigned long long)(*moved_len),
 +					(unsigned long long)(len));
  				ret1 = -EIO;
- 				goto out;
+ 				break;
  			}

@@ -118,7 +118,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
   * ext4_ext_calc_credits_for_single_extent:
   * This routine returns max. credits that needed to insert an extent
   * to the extent tree.
-@@ -3171,3 +3221,13 @@
+@@ -3171,3 +3221,15 @@
  
  	return error;
  }
@@ -131,6 +131,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
 +EXPORT_SYMBOL(ext4_mb_new_blocks);
 +EXPORT_SYMBOL(ext4_ext_calc_credits_for_insert);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
++EXPORT_SYMBOL(ext4_ext_find_extent);
++EXPORT_SYMBOL(ext4_ext_drop_refs);
 +
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
 ===================================================================
