@@ -2,7 +2,7 @@
 <part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
     <title>Reference</title>
     <partintro>
-  <para><anchor xml:id="dbdoclet.50438280_pgfId-1804" xreflabel=""/>Part VI includes reference information on Lustre user utilities, configuration files and module parameters, programming interfaces, system configuration utilities, and system limits. You will find information in this section about:</para>
+  <para>Part VI includes reference information on Lustre user utilities, configuration files and module parameters, programming interfaces, system configuration utilities, and system limits. You will find information in this section about:</para>
 
   <itemizedlist>
       <listitem>

@@ -4,7 +4,7 @@
     <title>Troubleshooting Lustre</title>
 
 <partintro>
-    <para><anchor xml:id="dbdoclet.50438190_pgfId-1804" xreflabel=""/>Part V provides information about troubleshooting a Lustre file system. You will find information in this section about:</para>
+    <para>Part V provides information about troubleshooting a Lustre file system. You will find information in this section about:</para>
 
     <itemizedlist>
         <listitem>
