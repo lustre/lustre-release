@@ -4,14 +4,6 @@
     <partintro>
         <para>Part III provides information about tools and procedures to use to administer a Lustre file system. You will find information in this section about:</para>
 
-    <tip>
-        <para>The starting point for administering Lustre is to monitor all logs and console logs for system health:</para>
-        <para> - Monitor logs on all servers and all clients.</para>
-        <para> - Invest in tools that allow you to condense logs from multiple systems.</para>
-        <para> - Use the logging resources provided by Linux.</para>
-    </tip>
-
-
     <itemizedlist>
         <listitem>
             <para>
@@ -65,6 +57,14 @@
             </para>
         </listitem>
     </itemizedlist>
+
+    <tip>
+        <para>The starting point for administering Lustre is to monitor all logs and console logs for system health:</para>
+        <para> - Monitor logs on all servers and all clients.</para>
+        <para> - Invest in tools that allow you to condense logs from multiple systems.</para>
+        <para> - Use the logging resources provided by Linux.</para>
+    </tip>
+
 
 
 

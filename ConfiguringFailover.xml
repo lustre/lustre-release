@@ -1,52 +1,52 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='configuringfailover'>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringfailover">
   <info>
-    <title xml:id='configuringfailover.title'>Configuring Lustre Failover</title>
+    <title xml:id="configuringfailover.title">Configuring Lustre Failover</title>
   </info>
   <para>This chapter describes how to configure Lustre failover using the Heartbeat cluster infrastructure daemon. It includes:</para>
-
-  <itemizedlist><listitem>
-          <para><xref linkend='dbdoclet.50438188_82389'/></para>
-      </listitem>
-      <listitem>
-          <para><xref linkend='dbdoclet.50438188_92688'/></para>
-      </listitem>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438188_82389"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438188_92688"/></para>
+    </listitem>
   </itemizedlist>
-
   <note>
-      <para>
+    <para>
           Using Lustre Failover is optional
       </para>
   </note>
-
-    <section xml:id="dbdoclet.50438188_82389">
-      <title>11.1 Creating a Failover Environment</title>
-      <para>Lustre provides failover mechanisms only at the file system level. No failover functionality is provided for system-level components, such as node failure detection or power control, as would typically be provided in a complete failover solution. Additional tools are also needed to provide resource fencing, control and monitoring.</para>
-      <section remap="h3">
-        <title>11.1.1 Power Management Software</title>
-        <para>Lustre failover requires power control and management capability to verify that a failed node is shut down before I/O is directed to the failover node. This avoids double-mounting the two nodes, and the risk of unrecoverable data corruption. A variety of power management tools will work, but two packages that are commonly used with Lustre are STONITH and PowerMan.</para>
-        <para>Shoot The Other Node In The HEAD (STONITH), is a set of power management tools provided with the Linux-HA package. STONITH has native support for many power control devices and is extensible. It uses expect scripts to automate control.</para>
-        <para>PowerMan, available from the Lawrence Livermore National Laboratory (LLNL), is used to control remote power control (RPC) devices from a central location. PowerMan provides native support for several RPC varieties and expect-like configuration simplifies the addition of new devices.</para>
-        <para>The latest versions of PowerMan are available at:</para>
-        <para><link xl:href="http://sourceforge.net/projects/powerman">http://sourceforge.net/projects/powerman</link></para>
-        <para>For more information about PowerMan, go to:</para>
-        <para><link xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</link></para>
-      </section>
-      <section remap="h3">
-        <title>11.1.2 Power Equipment</title>
-        <para>Lustre failover also requires the use of RPC devices, which come in different configurations. Lustre server nodes may be equipped with some kind of service processor that allows remote power control. If a Lustre server node is not equipped with a service processor, then a multi-port, Ethernet-addressable RPC may be used as an alternative. For recommended products, refer to the list of supported RPC devices on the PowerMan website.</para>
-        <para><link xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</link></para>
-      </section>
+  <section xml:id="dbdoclet.50438188_82389">
+    <title>11.1 Creating a Failover Environment</title>
+    <para>Lustre provides failover mechanisms only at the file system level. No failover functionality is provided for system-level components, such as node failure detection or power control, as would typically be provided in a complete failover solution. Additional tools are also needed to provide resource fencing, control and monitoring.</para>
+    <section remap="h3">
+      <title>11.1.1 Power Management Software</title>
+      <para>Lustre failover requires power control and management capability to verify that a failed node is shut down before I/O is directed to the failover node. This avoids double-mounting the two nodes, and the risk of unrecoverable data corruption. A variety of power management tools will work, but two packages that are commonly used with Lustre are STONITH and PowerMan.</para>
+      <para>Shoot The Other Node In The HEAD (STONITH), is a set of power management tools provided with the Linux-HA package. STONITH has native support for many power control devices and is extensible. It uses expect scripts to automate control.</para>
+      <para>PowerMan, available from the Lawrence Livermore National Laboratory (LLNL), is used to control remote power control (RPC) devices from a central location. PowerMan provides native support for several RPC varieties and expect-like configuration simplifies the addition of new devices.</para>
+      <para>The latest versions of PowerMan are available at:</para>
+      <para><ulink xl:href="http://sourceforge.net/projects/powerman">http://sourceforge.net/projects/powerman</ulink></para>
+      <para>For more information about PowerMan, go to:</para>
+      <para><ulink xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</ulink></para>
     </section>
-    <section xml:id="dbdoclet.50438188_92688">
-      <title>11.2 Setting up High-Availability (HA) Software with Lustre</title>
-      <para>Lustre must be combined with high-availability (HA) software to enable a complete Lustre failover solution. Lustre can be used with several HA packages including:</para>
-      <itemizedlist><listitem>
-          <para><emphasis>Red Hat Cluster Manager</emphasis>  - For more information about setting up Lustre failover with Red Hat Cluster Manager, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link>.</para>
-        </listitem>
-<listitem>
-          <para><emphasis>Pacemaker</emphasis>  - For more information about setting up Lustre failover with Pacemaker, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</link>.<anchor xml:id="dbdoclet.50438188_61775" xreflabel=""/></para>
-        </listitem>
-</itemizedlist>
+    <section remap="h3">
+      <title>11.1.2 Power Equipment</title>
+      <para>Lustre failover also requires the use of RPC devices, which come in different configurations. Lustre server nodes may be equipped with some kind of service processor that allows remote power control. If a Lustre server node is not equipped with a service processor, then a multi-port, Ethernet-addressable RPC may be used as an alternative. For recommended products, refer to the list of supported RPC devices on the PowerMan website.</para>
+      <para><ulink xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</ulink></para>
+    </section>
+  </section>
+  <section xml:id="dbdoclet.50438188_92688">
+    <title>11.2 Setting up High-Availability (HA) Software with Lustre</title>
+    <para>Lustre must be combined with high-availability (HA) software to enable a complete Lustre failover solution. Lustre can be used with several HA packages including:</para>
+    <itemizedlist>
+      <listitem>
+        <para><emphasis>Red Hat Cluster Manager</emphasis>  - For more information about setting up Lustre failover with Red Hat Cluster Manager, see the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</ulink>.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis>Pacemaker</emphasis>  - For more information about setting up Lustre failover with Pacemaker, see the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</ulink>.<anchor xml:id="dbdoclet.50438188_61775" xreflabel=""/></para>
+      </listitem>
+    </itemizedlist>
   </section>
 </chapter>
