@@ -4,7 +4,7 @@
     <title>Tuning Lustre for Performance</title>
   </info>
   <partintro>
-  <para><anchor xml:id="dbdoclet.50438187_pgfId-369853" xreflabel=""/>Part IV describes tools and procedures used to tune a Lustre file system for optimum performance. You will find information in this section about:</para>
+  <para>Part IV describes tools and procedures used to tune a Lustre file system for optimum performance. You will find information in this section about:</para>
 
   <itemizedlist>
       <listitem>

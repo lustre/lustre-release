@@ -3,7 +3,7 @@
   <info>
     <title xml:id='lustretroubleshooting.title'>Lustre Troubleshooting</title>
   </info>
-  <para><anchor xml:id="dbdoclet.50438198_pgfId-1291311" xreflabel=""/>This chapter provides information to troubleshoot Lustre, submit a Lustre bug, and Lustre performance tips. It includes the following sections:</para>
+  <para>This chapter provides information to troubleshoot Lustre, submit a Lustre bug, and Lustre performance tips. It includes the following sections:</para>
   <itemizedlist><listitem>
       <para><xref linkend="dbdoclet.50438198_11171"/></para>
     </listitem>
@@ -20,10 +20,10 @@
 
     <section xml:id="dbdoclet.50438198_11171">
       <title>26.1 Lustre Error Messages</title>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1291322" xreflabel=""/>Several resources are available to help troubleshoot Lustre. This section describes error numbers, error messages and logs.</para>
+      <para>Several resources are available to help troubleshoot Lustre. This section describes error numbers, error messages and logs.</para>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1292773" xreflabel=""/>26.1.1 Error <anchor xml:id="dbdoclet.50438198_marker-1296744" xreflabel=""/>Numbers</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1292777" xreflabel=""/>Error numbers for Lustre come from the Linux errno.h, and are located in /usr/include/asm/errno.h. Lustre does not use all of the available Linux error numbers. The exact meaning of an error number depends on where it is used. Here is a summary of the basic errors that Lustre users may encounter.</para>
+        <title>26.1.1 Error <anchor xml:id="dbdoclet.50438198_marker-1296744" xreflabel=""/>Numbers</title>
+        <para>Error numbers for Lustre come from the Linux errno.h, and are located in /usr/include/asm/errno.h. Lustre does not use all of the available Linux error numbers. The exact meaning of an error number depends on where it is used. Here is a summary of the basic errors that Lustre users may encounter.</para>
         <informaltable frame="all">
           <tgroup cols="3">
             <colspec colname="c1" colwidth="33*"/>
@@ -31,289 +31,289 @@
             <colspec colname="c3" colwidth="33*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438198_pgfId-1292782" xreflabel=""/>Error Number</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438198_pgfId-1292850" xreflabel=""/>Error Name</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438198_pgfId-1292784" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Error Number</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Error Name</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292786" xreflabel=""/>-1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292852" xreflabel=""/>-EPERM</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292788" xreflabel=""/>Permission is denied.</para></entry>
+                <entry><para> -1</para></entry>
+                <entry><para> -EPERM</para></entry>
+                <entry><para> Permission is denied.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292790" xreflabel=""/>-2</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292854" xreflabel=""/>-ENOENT</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292797" xreflabel=""/>The requested file or directory does not exist.</para></entry>
+                <entry><para> -2</para></entry>
+                <entry><para> -ENOENT</para></entry>
+                <entry><para> The requested file or directory does not exist.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292799" xreflabel=""/>-4</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292856" xreflabel=""/>-EINTR</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292801" xreflabel=""/>The operation was interrupted (usually CTRL-C or a killing process).</para></entry>
+                <entry><para> -4</para></entry>
+                <entry><para> -EINTR</para></entry>
+                <entry><para> The operation was interrupted (usually CTRL-C or a killing process).</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292803" xreflabel=""/>-5</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292858" xreflabel=""/>-EIO</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292805" xreflabel=""/>The operation failed with a read or write error.</para></entry>
+                <entry><para> -5</para></entry>
+                <entry><para> -EIO</para></entry>
+                <entry><para> The operation failed with a read or write error.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292810" xreflabel=""/>-19</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292860" xreflabel=""/>-ENODEV</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292816" xreflabel=""/>No such device is available. The server stopped or failed over.</para></entry>
+                <entry><para> -19</para></entry>
+                <entry><para> -ENODEV</para></entry>
+                <entry><para> No such device is available. The server stopped or failed over.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292818" xreflabel=""/>-22</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292862" xreflabel=""/>-EINVAL</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292820" xreflabel=""/>The parameter contains an invalid value.</para></entry>
+                <entry><para> -22</para></entry>
+                <entry><para> -EINVAL</para></entry>
+                <entry><para> The parameter contains an invalid value.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292906" xreflabel=""/>-28</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292908" xreflabel=""/>-ENOSPC</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292910" xreflabel=""/>The file system is out-of-space or out of inodes. Use lfs df (query the amount of file system space) or lfs df -i (query the number of inodes).</para></entry>
+                <entry><para> -28</para></entry>
+                <entry><para> -ENOSPC</para></entry>
+                <entry><para> The file system is out-of-space or out of inodes. Use lfs df (query the amount of file system space) or lfs df -i (query the number of inodes).</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292900" xreflabel=""/>-30</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292902" xreflabel=""/>-EROFS</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292904" xreflabel=""/>The file system is read-only, likely due to a detected error.</para></entry>
+                <entry><para> -30</para></entry>
+                <entry><para> -EROFS</para></entry>
+                <entry><para> The file system is read-only, likely due to a detected error.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292894" xreflabel=""/>-43</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292896" xreflabel=""/>-EIDRM</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292898" xreflabel=""/>The UID/GID does not match any known UID/GID on the MDS. Update etc/hosts and etc/group on the MDS to add the missing user or group.</para></entry>
+                <entry><para> -43</para></entry>
+                <entry><para> -EIDRM</para></entry>
+                <entry><para> The UID/GID does not match any known UID/GID on the MDS. Update etc/hosts and etc/group on the MDS to add the missing user or group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292888" xreflabel=""/>-107</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292890" xreflabel=""/>-ENOTCONN</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292892" xreflabel=""/>The client is not connected to this server.</para></entry>
+                <entry><para> -107</para></entry>
+                <entry><para> -ENOTCONN</para></entry>
+                <entry><para> The client is not connected to this server.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292882" xreflabel=""/>-110</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292884" xreflabel=""/>-ETIMEDOUT</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438198_pgfId-1292886" xreflabel=""/>The operation took too long and timed out.</para></entry>
+                <entry><para> -110</para></entry>
+                <entry><para> -ETIMEDOUT</para></entry>
+                <entry><para> The operation took too long and timed out.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291324" xreflabel=""/>26.1.2 <anchor xml:id="dbdoclet.50438198_40669" xreflabel=""/>Viewing Error <anchor xml:id="dbdoclet.50438198_marker-1291323" xreflabel=""/>Messages</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291325" xreflabel=""/>As Lustre code runs on the kernel, single-digit error codes display to the application; these error codes are an indication of the problem. Refer to the kernel console log (dmesg) for all recent kernel messages from that node. On the node, /var/log/messages holds a log of all messages for at least the past day.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291328" xreflabel=""/>The error message initiates with &quot;LustreError&quot; in the console log and provides a short description of:</para>
+        <title>26.1.2 <anchor xml:id="dbdoclet.50438198_40669" xreflabel=""/>Viewing Error <anchor xml:id="dbdoclet.50438198_marker-1291323" xreflabel=""/>Messages</title>
+        <para>As Lustre code runs on the kernel, single-digit error codes display to the application; these error codes are an indication of the problem. Refer to the kernel console log (dmesg) for all recent kernel messages from that node. On the node, /var/log/messages holds a log of all messages for at least the past day.</para>
+        <para>The error message initiates with &quot;LustreError&quot; in the console log and provides a short description of:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291329" xreflabel=""/> What the problem is</para>
+            <para> What the problem is</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291330" xreflabel=""/> Which process ID had trouble</para>
+            <para> Which process ID had trouble</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291331" xreflabel=""/> Which server node it was communicating with, and so on.</para>
+            <para> Which server node it was communicating with, and so on.</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291332" xreflabel=""/>Lustre logs are dumped to /proc/sys/lnet/debug_path.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296082" xreflabel=""/>Collect the first group of messages related to a problem, and any messages that precede &quot;LBUG&quot; or &quot;assertion failure&quot; errors. Messages that mention server nodes (OST or MDS) are specific to that server; you must collect similar messages from the relevant server console logs.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291333" xreflabel=""/>Another Lustre debug log holds information for Lustre action for a short period of time which, in turn, depends on the processes on the node to use Lustre. Use the following command to extract debug logs on each of the nodes, run</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291334" xreflabel=""/>$ lctl dk &lt;filename&gt;
+        <para>Lustre logs are dumped to /proc/sys/lnet/debug_path.</para>
+        <para>Collect the first group of messages related to a problem, and any messages that precede &quot;LBUG&quot; or &quot;assertion failure&quot; errors. Messages that mention server nodes (OST or MDS) are specific to that server; you must collect similar messages from the relevant server console logs.</para>
+        <para>Another Lustre debug log holds information for Lustre action for a short period of time which, in turn, depends on the processes on the node to use Lustre. Use the following command to extract debug logs on each of the nodes, run</para>
+        <screen>$ lctl dk &lt;filename&gt;
 </screen>
                 <note><para>LBUG freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para></note>
       </section>
     </section>
     <section xml:id="dbdoclet.50438198_30989">
       <title>26.2 Reporting a Lustre <anchor xml:id="dbdoclet.50438198_marker-1296753" xreflabel=""/>Bug</title>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1292557" xreflabel=""/>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1297414" xreflabel=""/>You can also post a question to the <link xl:href="http://wiki.lustre.org/index.php/Lustre_Mailing_Lists">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1297376" xreflabel=""/>A Lustre diagnostics tool is available for downloading at: <link xl:href="http://downloads.lustre.org/public/tools/lustre-diagnostics/">http://downloads.lustre.org/public/tools/lustre-diagnostics/</link></para>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1298089" xreflabel=""/>You can run this tool to capture diagnostics output to include in the reported bug. To run this tool, enter one of these commands:</para>
-      <screen><anchor xml:id="dbdoclet.50438198_pgfId-1292528" xreflabel=""/># lustre-diagnostics -t &lt;bugzilla bug #&gt;
-<anchor xml:id="dbdoclet.50438198_pgfId-1292529" xreflabel=""/># lustre-diagnostics.
+      <para>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
+      <para>You can also post a question to the <link xl:href="http://wiki.lustre.org/index.php/Lustre_Mailing_Lists">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
+      <para>A Lustre diagnostics tool is available for downloading at: <link xl:href="http://downloads.lustre.org/public/tools/lustre-diagnostics/">http://downloads.lustre.org/public/tools/lustre-diagnostics/</link></para>
+      <para>You can run this tool to capture diagnostics output to include in the reported bug. To run this tool, enter one of these commands:</para>
+      <screen># lustre-diagnostics -t &lt;bugzilla bug #&gt;
+# lustre-diagnostics.
 </screen>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1292530" xreflabel=""/>Output is sent directly to the terminal. Use normal file redirection to send the output to a file, and then manually attach the file to the bug you are submitting.</para>
+      <para>Output is sent directly to the terminal. Use normal file redirection to send the output to a file, and then manually attach the file to the bug you are submitting.</para>
     </section>
     <section xml:id="dbdoclet.50438198_93109">
       <title>26.3 Common Lustre Problems</title>
-      <para><anchor xml:id="dbdoclet.50438198_pgfId-1291338" xreflabel=""/>This section describes how to address common issues encountered with Lustre.</para>
+      <para>This section describes how to address common issues encountered with Lustre.</para>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291350" xreflabel=""/>26.3.1 OST Object is <anchor xml:id="dbdoclet.50438198_marker-1291349" xreflabel=""/>Missing or Damaged</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291351" xreflabel=""/>If the OSS fails to find an object or finds a damaged object, this message appears:</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291717" xreflabel=""/>OST object missing or damaged (OST &quot;ost1&quot;, object 98148, error -2)</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291352" xreflabel=""/>If the reported error is -2 (-ENOENT, or &quot;No such file or directory&quot;), then the object is missing. This can occur either because the MDS and OST are out of sync, or because an OST object was corrupted and deleted.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291353" xreflabel=""/>If you have recovered the file system from a disk failure by using e2fsck, then unrecoverable objects may have been deleted or moved to /lost+found on the raw OST partition. Because files on the MDS still reference these objects, attempts to access them produce this error.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291354" xreflabel=""/>If you have recovered a backup of the raw MDS or OST partition, then the restored partition is very likely to be out of sync with the rest of your cluster. No matter which server partition you restored from backup, files on the MDS may reference objects which no longer exist (or did not exist when the backup was taken); accessing those files produces this error.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291355" xreflabel=""/>If neither of those descriptions is applicable to your situation, then it is possible that you have discovered a programming error that allowed the servers to get out of sync. Please report this condition to the Lustre group, and we will investigate.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291356" xreflabel=""/>If the reported error is anything else (such as -5, &quot;I/O error&quot;), it likely indicates a storage failure. The low-level file system returns this error if it is unable to read from the storage device.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291358" xreflabel=""/><emphasis role="bold">Suggested Action</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291359" xreflabel=""/>If the reported error is -2, you can consider checking in /lost+found on your raw OST device, to see if the missing object is there. However, it is likely that this object is lost forever, and that the file that references the object is now partially or completely lost. Restore this file from backup, or salvage what you can and delete it.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291360" xreflabel=""/>If the reported error is anything else, then you should immediately inspect this server for storage problems.</para>
+        <title>26.3.1 OST Object is <anchor xml:id="dbdoclet.50438198_marker-1291349" xreflabel=""/>Missing or Damaged</title>
+        <para>If the OSS fails to find an object or finds a damaged object, this message appears:</para>
+        <para>OST object missing or damaged (OST &quot;ost1&quot;, object 98148, error -2)</para>
+        <para>If the reported error is -2 (-ENOENT, or &quot;No such file or directory&quot;), then the object is missing. This can occur either because the MDS and OST are out of sync, or because an OST object was corrupted and deleted.</para>
+        <para>If you have recovered the file system from a disk failure by using e2fsck, then unrecoverable objects may have been deleted or moved to /lost+found on the raw OST partition. Because files on the MDS still reference these objects, attempts to access them produce this error.</para>
+        <para>If you have recovered a backup of the raw MDS or OST partition, then the restored partition is very likely to be out of sync with the rest of your cluster. No matter which server partition you restored from backup, files on the MDS may reference objects which no longer exist (or did not exist when the backup was taken); accessing those files produces this error.</para>
+        <para>If neither of those descriptions is applicable to your situation, then it is possible that you have discovered a programming error that allowed the servers to get out of sync. Please report this condition to the Lustre group, and we will investigate.</para>
+        <para>If the reported error is anything else (such as -5, &quot;I/O error&quot;), it likely indicates a storage failure. The low-level file system returns this error if it is unable to read from the storage device.</para>
+        <para><emphasis role="bold">Suggested Action</emphasis></para>
+        <para>If the reported error is -2, you can consider checking in /lost+found on your raw OST device, to see if the missing object is there. However, it is likely that this object is lost forever, and that the file that references the object is now partially or completely lost. Restore this file from backup, or salvage what you can and delete it.</para>
+        <para>If the reported error is anything else, then you should immediately inspect this server for storage problems.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291362" xreflabel=""/>26.3.2 OSTs <anchor xml:id="dbdoclet.50438198_marker-1291361" xreflabel=""/>Become Read-Only</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291363" xreflabel=""/>If the SCSI devices are inaccessible to Lustre at the block device level, then ldiskfs remounts the device read-only to prevent file system corruption. This is a normal behavior. The status in /proc/fs/lustre/health_check also shows &quot;not healthy&quot; on the affected nodes.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1293032" xreflabel=""/>To determine what caused the &quot;not healthy&quot; condition:</para>
+        <title>26.3.2 OSTs <anchor xml:id="dbdoclet.50438198_marker-1291361" xreflabel=""/>Become Read-Only</title>
+        <para>If the SCSI devices are inaccessible to Lustre at the block device level, then ldiskfs remounts the device read-only to prevent file system corruption. This is a normal behavior. The status in /proc/fs/lustre/health_check also shows &quot;not healthy&quot; on the affected nodes.</para>
+        <para>To determine what caused the &quot;not healthy&quot; condition:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1293041" xreflabel=""/> Examine the consoles of all servers for any error indications</para>
+            <para> Examine the consoles of all servers for any error indications</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1293045" xreflabel=""/> Examine the syslogs of all servers for any LustreErrors or LBUG</para>
+            <para> Examine the syslogs of all servers for any LustreErrors or LBUG</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1293046" xreflabel=""/> Check the health of your system hardware and network. (Are the disks working as expected, is the network dropping packets?)</para>
+            <para> Check the health of your system hardware and network. (Are the disks working as expected, is the network dropping packets?)</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1293055" xreflabel=""/> Consider what was happening on the cluster at the time. Does this relate to a specific user workload or a system load condition? Is the condition reproducible? Does it happen at a specific time (day, week or month)?</para>
+            <para> Consider what was happening on the cluster at the time. Does this relate to a specific user workload or a system load condition? Is the condition reproducible? Does it happen at a specific time (day, week or month)?</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291365" xreflabel=""/>To recover from this problem, you must restart Lustre services using these file systems. There is no other way to know that the I/O made it to disk, and the state of the cache may be inconsistent with what is on disk.</para>
+        <para>To recover from this problem, you must restart Lustre services using these file systems. There is no other way to know that the I/O made it to disk, and the state of the cache may be inconsistent with what is on disk.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291367" xreflabel=""/>26.3.3 Identifying a <anchor xml:id="dbdoclet.50438198_marker-1291366" xreflabel=""/>Missing OST</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291368" xreflabel=""/>If an OST is missing for any reason, you may need to know what files are affected. Although an OST is missing, the files system should be operational. From any mounted client node, generate a list of files that reside on the affected OST. It is advisable to mark the missing OST as 'unavailable' so clients and the MDS do not time out trying to contact it.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291369" xreflabel=""/> 1. Generate a list of devices and determine the OST's device number. Run:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291370" xreflabel=""/>$ lctl dl 
+        <title>26.3.3 Identifying a <anchor xml:id="dbdoclet.50438198_marker-1291366" xreflabel=""/>Missing OST</title>
+        <para>If an OST is missing for any reason, you may need to know what files are affected. Although an OST is missing, the files system should be operational. From any mounted client node, generate a list of files that reside on the affected OST. It is advisable to mark the missing OST as 'unavailable' so clients and the MDS do not time out trying to contact it.</para>
+        <para> 1. Generate a list of devices and determine the OST's device number. Run:</para>
+        <screen>$ lctl dl 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1293115" xreflabel=""/>The lctl dl command output lists the device name and number, along with the device UUID and the number of references on the device.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291371" xreflabel=""/> 2. Deactivate the OST (on the OSS at the MDS). Run:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291372" xreflabel=""/>$ lctl --device &lt;OST device name or number&gt; deactivate 
+        <para>The lctl dl command output lists the device name and number, along with the device UUID and the number of references on the device.</para>
+        <para> 2. Deactivate the OST (on the OSS at the MDS). Run:</para>
+        <screen>$ lctl --device &lt;OST device name or number&gt; deactivate 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291373" xreflabel=""/>The OST device number or device name is generated by the lctl dl command.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1293067" xreflabel=""/>The deactivate command prevents clients from creating new objects on the specified OST, although you can still access the OST for reading.</para>
+        <para>The OST device number or device name is generated by the lctl dl command.</para>
+        <para>The deactivate command prevents clients from creating new objects on the specified OST, although you can still access the OST for reading.</para>
                 <note><para>If the OST later becomes available it needs to be reactivated, run:</para><para># lctl --device &lt;OST device name or number&gt; activate</para></note>
 
-         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291376" xreflabel=""/> 3. Determine all files that are striped over the missing OST, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291377" xreflabel=""/># lfs getstripe -r -O {OST_UUID} /mountpoint
+         <para> 3. Determine all files that are striped over the missing OST, run:</para>
+        <screen># lfs getstripe -r -O {OST_UUID} /mountpoint
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291378" xreflabel=""/>This returns a simple list of filenames from the affected file system.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291379" xreflabel=""/> 4. If necessary, you can read the valid parts of a striped file, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291380" xreflabel=""/># dd if=filename of=new_filename bs=4k conv=sync,noerror
+        <para>This returns a simple list of filenames from the affected file system.</para>
+        <para> 4. If necessary, you can read the valid parts of a striped file, run:</para>
+        <screen># dd if=filename of=new_filename bs=4k conv=sync,noerror
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291381" xreflabel=""/> 5. You can delete these files with the unlink or munlink command.</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291382" xreflabel=""/># unlink|munlink filename {filename ...} 
+        <para> 5. You can delete these files with the unlink or munlink command.</para>
+        <screen># unlink|munlink filename {filename ...} 
 </screen>
                 <note><para>There is no functional difference between the unlink and munlink commands. The unlink command is for newer Linux distributions. You can run munlink if unlink is not available.</para><para> When you run the unlink or munlink command, the file on the MDS is permanently removed.</para></note>
-         <para><anchor xml:id="dbdoclet.50438198_pgfId-1291384" xreflabel=""/> 6. If you need to know, specifically, which parts of the file are missing data, then you first need to determine the file layout (striping pattern), which includes the index of the missing OST). Run:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291385" xreflabel=""/># lfs getstripe -v {filename}
+         <para> 6. If you need to know, specifically, which parts of the file are missing data, then you first need to determine the file layout (striping pattern), which includes the index of the missing OST). Run:</para>
+        <screen># lfs getstripe -v {filename}
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291386" xreflabel=""/> 7. Use this computation is to determine which offsets in the file are affected: [(C*N + X)*S, (C*N + X)*S + S - 1], N = { 0, 1, 2, ...}</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291388" xreflabel=""/>where:</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291389" xreflabel=""/>C = stripe count</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291390" xreflabel=""/>S = stripe size</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291391" xreflabel=""/>X = index of bad OST for this file</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291392" xreflabel=""/>For example, for a 2 stripe file, stripe size = 1M, the bad OST is at index 0, and you have holes in the file at: [(2*N + 0)*1M, (2*N + 0)*1M + 1M - 1], N = { 0, 1, 2, ...}</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291394" xreflabel=""/>If the file system cannot be mounted, currently there is no way that parses metadata directly from an MDS. If the bad OST does not start, options to mount the file system are to provide a loop device OST in its place or replace it with a newly-formatted OST. In that case, the missing objects are created and are read as zero-filled.</para>
+        <para> 7. Use this computation is to determine which offsets in the file are affected: [(C*N + X)*S, (C*N + X)*S + S - 1], N = { 0, 1, 2, ...}</para>
+        <para>where:</para>
+        <para>C = stripe count</para>
+        <para>S = stripe size</para>
+        <para>X = index of bad OST for this file</para>
+        <para>For example, for a 2 stripe file, stripe size = 1M, the bad OST is at index 0, and you have holes in the file at: [(2*N + 0)*1M, (2*N + 0)*1M + 1M - 1], N = { 0, 1, 2, ...}</para>
+        <para>If the file system cannot be mounted, currently there is no way that parses metadata directly from an MDS. If the bad OST does not start, options to mount the file system are to provide a loop device OST in its place or replace it with a newly-formatted OST. In that case, the missing objects are created and are read as zero-filled.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291436" xreflabel=""/>26.3.4 <anchor xml:id="dbdoclet.50438198_69657" xreflabel=""/>Fixing a Bad LAST_ID on an OST</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296775" xreflabel=""/>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote><para><anchor xml:id="dbdoclet.50438198_pgfId-1296778" xreflabel=""/>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para></footnote>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296779" xreflabel=""/>During normal operation, the MDT keeps some pre-created (but unallocated) objects on the OST, and the relationship between LAST_ID and lov_objid should be LAST_ID &lt;= lov_objid. Any difference in the file values results in objects being created on the OST when it next connects to the MDS. These objects are never actually allocated to a file, since they are of 0 length (empty), but they do no harm. Creating empty objects enables the OST to catch up to the MDS, so normal operations resume.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296780" xreflabel=""/>However, in the case where lov_objid &lt; LAST_ID, bad things can happen as the MDS is not aware of objects that have already been allocated on the OST, and it reallocates them to new files, overwriting their existing contents.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296781" xreflabel=""/>Here is the rule to avoid this scenario:</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296782" xreflabel=""/>LAST_ID &gt;= lov_objid and LAST_ID == last_physical_object and lov_objid &gt;= last_used_object</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296783" xreflabel=""/>Although the lov_objid value should be equal to the last_used_object value, the above rule suffices to keep Lustre happy at the expense of a few leaked objects.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296784" xreflabel=""/>In situations where there is on-disk corruption of the OST, for example caused by running with write cache enabled on the disks, the LAST_ID value may become inconsistent and result in a message similar to:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296785" xreflabel=""/>&quot;filter_precreate()) HOME-OST0003: Serious error: 
-<anchor xml:id="dbdoclet.50438198_pgfId-1296786" xreflabel=""/>objid 3478673 already exists; is this filesystem corrupt?&quot;
+        <title>26.3.4 <anchor xml:id="dbdoclet.50438198_69657" xreflabel=""/>Fixing a Bad LAST_ID on an OST</title>
+        <para>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote><para>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para></footnote>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
+        <para>During normal operation, the MDT keeps some pre-created (but unallocated) objects on the OST, and the relationship between LAST_ID and lov_objid should be LAST_ID &lt;= lov_objid. Any difference in the file values results in objects being created on the OST when it next connects to the MDS. These objects are never actually allocated to a file, since they are of 0 length (empty), but they do no harm. Creating empty objects enables the OST to catch up to the MDS, so normal operations resume.</para>
+        <para>However, in the case where lov_objid &lt; LAST_ID, bad things can happen as the MDS is not aware of objects that have already been allocated on the OST, and it reallocates them to new files, overwriting their existing contents.</para>
+        <para>Here is the rule to avoid this scenario:</para>
+        <para>LAST_ID &gt;= lov_objid and LAST_ID == last_physical_object and lov_objid &gt;= last_used_object</para>
+        <para>Although the lov_objid value should be equal to the last_used_object value, the above rule suffices to keep Lustre happy at the expense of a few leaked objects.</para>
+        <para>In situations where there is on-disk corruption of the OST, for example caused by running with write cache enabled on the disks, the LAST_ID value may become inconsistent and result in a message similar to:</para>
+        <screen>&quot;filter_precreate()) HOME-OST0003: Serious error: 
+objid 3478673 already exists; is this filesystem corrupt?&quot;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296787" xreflabel=""/>A related situation may happen if there is a significant discrepancy between the record of previously-created objects on the OST and the previously-allocated objects on the MDS, for example if the MDS has been corrupted, or restored from backup, which may cause significant data loss if left unchecked. This produces a message like:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296788" xreflabel=""/>&quot;HOME-OST0003: ignoring bogus orphan destroy request: 
-<anchor xml:id="dbdoclet.50438198_pgfId-1296789" xreflabel=""/>obdid 3438673 last_id 3478673&quot;
+        <para>A related situation may happen if there is a significant discrepancy between the record of previously-created objects on the OST and the previously-allocated objects on the MDS, for example if the MDS has been corrupted, or restored from backup, which may cause significant data loss if left unchecked. This produces a message like:</para>
+        <screen>&quot;HOME-OST0003: ignoring bogus orphan destroy request: 
+obdid 3438673 last_id 3478673&quot;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296797" xreflabel=""/>To recover from this situation, determine and set a reasonable LAST_ID value.</para>
+        <para>To recover from this situation, determine and set a reasonable LAST_ID value.</para>
                 <note><para>The file system must be stopped on all servers before performing this procedure.</para></note>
 
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296799" xreflabel=""/>For hex &lt; -&gt; decimal translations:</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296800" xreflabel=""/>Use GDB:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296801" xreflabel=""/>(gdb) p /x 15028
-<anchor xml:id="dbdoclet.50438198_pgfId-1296802" xreflabel=""/>$2 = 0x3ab4
+        <para>For hex &lt; -&gt; decimal translations:</para>
+        <para>Use GDB:</para>
+        <screen>(gdb) p /x 15028
+$2 = 0x3ab4
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296803" xreflabel=""/>Or bc:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296804" xreflabel=""/>echo &quot;obase=16; 15028&quot; | bc
+        <para>Or bc:</para>
+        <screen>echo &quot;obase=16; 15028&quot; | bc
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296805" xreflabel=""/> 1. Determine a reasonable value for the LAST_ID file. Check on the MDS:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296806" xreflabel=""/># mount -t ldiskfs /dev/&lt;mdsdev&gt; /mnt/mds
-<anchor xml:id="dbdoclet.50438198_pgfId-1296807" xreflabel=""/># od -Ax -td8 /mnt/mds/lov_objid
+        <para> 1. Determine a reasonable value for the LAST_ID file. Check on the MDS:</para>
+        <screen># mount -t ldiskfs /dev/&lt;mdsdev&gt; /mnt/mds
+# od -Ax -td8 /mnt/mds/lov_objid
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296808" xreflabel=""/>There is one entry for each OST, in OST index order. This is what the MDS thinks is the last in-use object.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296809" xreflabel=""/> 2. Determine the OST index for this OST.</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296810" xreflabel=""/># od -Ax -td4 /mnt/ost/last_rcvd
+        <para>There is one entry for each OST, in OST index order. This is what the MDS thinks is the last in-use object.</para>
+        <para> 2. Determine the OST index for this OST.</para>
+        <screen># od -Ax -td4 /mnt/ost/last_rcvd
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296811" xreflabel=""/>It will have it at offset 0x8c.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296812" xreflabel=""/> 3. Check on the OST. Use debugfs to check the LAST_ID value:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296813" xreflabel=""/>debugfs -c -R &apos;dump /O/0/LAST_ID /tmp/LAST_ID&apos; /dev/XXX ; od -Ax -td8 /tmp/\
+        <para>It will have it at offset 0x8c.</para>
+        <para> 3. Check on the OST. Use debugfs to check the LAST_ID value:</para>
+        <screen>debugfs -c -R &apos;dump /O/0/LAST_ID /tmp/LAST_ID&apos; /dev/XXX ; od -Ax -td8 /tmp/\
 LAST_ID&quot;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296814" xreflabel=""/> 4. Check the objects on the OST:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296815" xreflabel=""/>mount -rt ldiskfs /dev/{ostdev} /mnt/ost
-<anchor xml:id="dbdoclet.50438198_pgfId-1296816" xreflabel=""/># note the ls below is a number one and not a letter L
-<anchor xml:id="dbdoclet.50438198_pgfId-1296817" xreflabel=""/>ls -1s /mnt/ost/O/0/d* | grep -v [a-z] |
-<anchor xml:id="dbdoclet.50438198_pgfId-1296818" xreflabel=""/>sort -k2 -n &gt; /tmp/objects.{diskname}
-<anchor xml:id="dbdoclet.50438198_pgfId-1296819" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438198_pgfId-1296820" xreflabel=""/>tail -30 /tmp/objects.{diskname}
+        <para> 4. Check the objects on the OST:</para>
+        <screen>mount -rt ldiskfs /dev/{ostdev} /mnt/ost
+# note the ls below is a number one and not a letter L
+ls -1s /mnt/ost/O/0/d* | grep -v [a-z] |
+sort -k2 -n &gt; /tmp/objects.{diskname}
+ 
+tail -30 /tmp/objects.{diskname}
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296821" xreflabel=""/>This shows you the OST state. There may be some pre-created orphans. Check for zero-length objects. Any zero-length objects with IDs higher than LAST_ID should be deleted. New objects will be pre-created.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296832" xreflabel=""/>If the OST LAST_ID value matches that for the objects existing on the OST, then it is possible the lov_objid file on the MDS is incorrect. Delete the lov_objid file on the MDS and it will be re-created from the LAST_ID on the OSTs.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296833" xreflabel=""/>If you determine the LAST_ID file on the OST is incorrect (that is, it does not match what objects exist, does not match the MDS lov_objid value), then you have decided on a proper value for LAST_ID.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296834" xreflabel=""/>Once you have decided on a proper value for LAST_ID, use this repair procedure.</para>
+        <para>This shows you the OST state. There may be some pre-created orphans. Check for zero-length objects. Any zero-length objects with IDs higher than LAST_ID should be deleted. New objects will be pre-created.</para>
+        <para>If the OST LAST_ID value matches that for the objects existing on the OST, then it is possible the lov_objid file on the MDS is incorrect. Delete the lov_objid file on the MDS and it will be re-created from the LAST_ID on the OSTs.</para>
+        <para>If you determine the LAST_ID file on the OST is incorrect (that is, it does not match what objects exist, does not match the MDS lov_objid value), then you have decided on a proper value for LAST_ID.</para>
+        <para>Once you have decided on a proper value for LAST_ID, use this repair procedure.</para>
         <orderedlist><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296835" xreflabel=""/>Access:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296836" xreflabel=""/>mount -t ldiskfs /dev/{ostdev} /mnt/ost
+        <para>Access:</para>
+        <screen>mount -t ldiskfs /dev/{ostdev} /mnt/ost
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296837" xreflabel=""/>Check the current:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296838" xreflabel=""/>od -Ax -td8 /mnt/ost/O/0/LAST_ID
+        <para>Check the current:</para>
+        <screen>od -Ax -td8 /mnt/ost/O/0/LAST_ID
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296839" xreflabel=""/>Be very safe, only work on backups:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296840" xreflabel=""/>cp /mnt/ost/O/0/LAST_ID /tmp/LAST_ID
+        <para>Be very safe, only work on backups:</para>
+        <screen>cp /mnt/ost/O/0/LAST_ID /tmp/LAST_ID
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296841" xreflabel=""/>Convert binary to text:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296842" xreflabel=""/>xxd /tmp/LAST_ID /tmp/LAST_ID.asc
+        <para>Convert binary to text:</para>
+        <screen>xxd /tmp/LAST_ID /tmp/LAST_ID.asc
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296843" xreflabel=""/>Fix:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296844" xreflabel=""/>vi /tmp/LAST_ID.asc
+        <para>Fix:</para>
+        <screen>vi /tmp/LAST_ID.asc
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296845" xreflabel=""/>Convert to binary:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296846" xreflabel=""/>xxd -r /tmp/LAST_ID.asc /tmp/LAST_ID.new
+        <para>Convert to binary:</para>
+        <screen>xxd -r /tmp/LAST_ID.asc /tmp/LAST_ID.new
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296847" xreflabel=""/>Verify:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296848" xreflabel=""/>od -Ax -td8 /tmp/LAST_ID.new
+        <para>Verify:</para>
+        <screen>od -Ax -td8 /tmp/LAST_ID.new
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296849" xreflabel=""/>Replace:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296850" xreflabel=""/>cp /tmp/LAST_ID.new /mnt/ost/O/0/LAST_ID
+        <para>Replace:</para>
+        <screen>cp /tmp/LAST_ID.new /mnt/ost/O/0/LAST_ID
 </screen>
         </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1296851" xreflabel=""/>Clean up:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1296852" xreflabel=""/>umount /mnt/ost
+        <para>Clean up:</para>
+        <screen>umount /mnt/ost
 </screen>
         </listitem></orderedlist>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291447" xreflabel=""/>26.3.5 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291446" xreflabel=""/>&quot;Bind: Address already in use&quot; Error</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291448" xreflabel=""/>During startup, Lustre may report a bind: Address already in use error and reject to start the operation. This is caused by a portmap service (often NFS locking) which starts before Lustre and binds to the default port 988. You must have port 988 open from firewall or IP tables for incoming connections on the client, OSS, and MDS nodes. LNET will create three outgoing connections on available, reserved ports to each client-server pair, starting with 1023, 1022 and 1021.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291449" xreflabel=""/>Unfortunately, you cannot set sunprc to avoid port 988. If you receive this error, do the following:</para>
+        <title>26.3.5 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291446" xreflabel=""/>&quot;Bind: Address already in use&quot; Error</title>
+        <para>During startup, Lustre may report a bind: Address already in use error and reject to start the operation. This is caused by a portmap service (often NFS locking) which starts before Lustre and binds to the default port 988. You must have port 988 open from firewall or IP tables for incoming connections on the client, OSS, and MDS nodes. LNET will create three outgoing connections on available, reserved ports to each client-server pair, starting with 1023, 1022 and 1021.</para>
+        <para>Unfortunately, you cannot set sunprc to avoid port 988. If you receive this error, do the following:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291450" xreflabel=""/> Start Lustre before starting any service that uses sunrpc.</para>
+            <para> Start Lustre before starting any service that uses sunrpc.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291451" xreflabel=""/> Use a port other than 988 for Lustre. This is configured in /etc/modprobe.conf as an option to the LNET module. For example:</para>
+            <para> Use a port other than 988 for Lustre. This is configured in /etc/modprobe.conf as an option to the LNET module. For example:</para>
           </listitem>
 
 </itemizedlist>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291452" xreflabel=""/>options lnet accept_port=988
+        <screen>options lnet accept_port=988
 </screen>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291453" xreflabel=""/> Add modprobe ptlrpc to your system startup scripts before the service that uses sunrpc. This causes Lustre to bind to port 988 and sunrpc to select a different port.</para>
+            <para> Add modprobe ptlrpc to your system startup scripts before the service that uses sunrpc. This causes Lustre to bind to port 988 and sunrpc to select a different port.</para>
           </listitem>
 
 </itemizedlist>
@@ -321,135 +321,135 @@ LAST_ID&quot;
 
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291471" xreflabel=""/>26.3.6 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291470" xreflabel=""/>Error &quot;- 28&quot;</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1297002" xreflabel=""/>A Linux error -28 (ENOSPC) that occurs during a write or sync operation indicates that an existing file residing on an OST could not be rewritten or updated because the OST was full, or nearly full. To verify if this is the case, on a client on which the OST is mounted, enter :</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1297980" xreflabel=""/>lfs df -h
+        <title>26.3.6 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291470" xreflabel=""/>Error &quot;- 28&quot;</title>
+        <para>A Linux error -28 (ENOSPC) that occurs during a write or sync operation indicates that an existing file residing on an OST could not be rewritten or updated because the OST was full, or nearly full. To verify if this is the case, on a client on which the OST is mounted, enter :</para>
+        <screen>lfs df -h
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1297979" xreflabel=""/>To address this issue, you can do one of the following:</para>
+        <para>To address this issue, you can do one of the following:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1297887" xreflabel=""/> Expand the disk space on the OST.</para>
+            <para> Expand the disk space on the OST.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1297888" xreflabel=""/> Copy or stripe the file to a less full OST.</para>
+            <para> Copy or stripe the file to a less full OST.</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1297889" xreflabel=""/>A Linux error -28 (ENOSPC) that occurs when a new file is being created may indicate that the MDS has run out of inodes and needs to be made larger. Newly created files do not written to full OSTs, while existing files continue to reside on the OST where they were initially created. To view inode information on the MDS, enter:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1297985" xreflabel=""/>lfs df -i
+        <para>A Linux error -28 (ENOSPC) that occurs when a new file is being created may indicate that the MDS has run out of inodes and needs to be made larger. Newly created files do not written to full OSTs, while existing files continue to reside on the OST where they were initially created. To view inode information on the MDS, enter:</para>
+        <screen>lfs df -i
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1297871" xreflabel=""/>Typically, Lustre reports this error to your application. If the application is checking the return code from its function calls, then it decodes it into a textual error message such as No space left on device. Both versions of the error message also appear in the system log.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1298031" xreflabel=""/>For more information about the lfs df command, see <link xl:href="ManagingStripingFreeSpace.html#50438209_35838">Checking File System Free Space</link>.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1297882" xreflabel=""/>Although it is less efficient, you can also use the grep command to determine which OST or MDS is running out of space. To check the free space and inodes on a client, enter:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291475" xreflabel=""/>grep &apos;[0-9]&apos; /proc/fs/lustre/osc/*/kbytes{free,avail,total}
-<anchor xml:id="dbdoclet.50438198_pgfId-1291476" xreflabel=""/>grep &apos;[0-9]&apos; /proc/fs/lustre/osc/*/files{free,total}
-<anchor xml:id="dbdoclet.50438198_pgfId-1291477" xreflabel=""/>grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/kbytes{free,avail,total}
-<anchor xml:id="dbdoclet.50438198_pgfId-1291478" xreflabel=""/>grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/files{free,total}
+        <para>Typically, Lustre reports this error to your application. If the application is checking the return code from its function calls, then it decodes it into a textual error message such as No space left on device. Both versions of the error message also appear in the system log.</para>
+        <para>For more information about the lfs df command, see <link xl:href="ManagingStripingFreeSpace.html#50438209_35838">Checking File System Free Space</link>.</para>
+        <para>Although it is less efficient, you can also use the grep command to determine which OST or MDS is running out of space. To check the free space and inodes on a client, enter:</para>
+        <screen>grep &apos;[0-9]&apos; /proc/fs/lustre/osc/*/kbytes{free,avail,total}
+grep &apos;[0-9]&apos; /proc/fs/lustre/osc/*/files{free,total}
+grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/kbytes{free,avail,total}
+grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/files{free,total}
 </screen>
                 <note><para>You can find other numeric error codes along with a short name and text description in /usr/include/asm/errno.h.</para></note>
 
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291481" xreflabel=""/>26.3.7 Triggering <anchor xml:id="dbdoclet.50438198_marker-1291480" xreflabel=""/>Watchdog for PID NNN</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291482" xreflabel=""/>In some cases, a server node triggers a watchdog timer and this causes a process stack to be dumped to the console along with a Lustre kernel debug log being dumped into /tmp (by default). The presence of a watchdog timer does NOT mean that the thread OOPSed, but rather that it is taking longer time than expected to complete a given operation. In some cases, this situation is expected.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291483" xreflabel=""/>For example, if a RAID rebuild is really slowing down I/O on an OST, it might trigger watchdog timers to trip. But another message follows shortly thereafter, indicating that the thread in question has completed processing (after some number of seconds). Generally, this indicates a transient problem. In other cases, it may legitimately signal that a thread is stuck because of a software error (lock inversion, for example).</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291876" xreflabel=""/>Lustre: 0:0:(watchdog.c:122:lcw_cb()) 
+        <title>26.3.7 Triggering <anchor xml:id="dbdoclet.50438198_marker-1291480" xreflabel=""/>Watchdog for PID NNN</title>
+        <para>In some cases, a server node triggers a watchdog timer and this causes a process stack to be dumped to the console along with a Lustre kernel debug log being dumped into /tmp (by default). The presence of a watchdog timer does NOT mean that the thread OOPSed, but rather that it is taking longer time than expected to complete a given operation. In some cases, this situation is expected.</para>
+        <para>For example, if a RAID rebuild is really slowing down I/O on an OST, it might trigger watchdog timers to trip. But another message follows shortly thereafter, indicating that the thread in question has completed processing (after some number of seconds). Generally, this indicates a transient problem. In other cases, it may legitimately signal that a thread is stuck because of a software error (lock inversion, for example).</para>
+        <screen>Lustre: 0:0:(watchdog.c:122:lcw_cb()) 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291877" xreflabel=""/>The above message indicates that the watchdog is active for pid 933:</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291878" xreflabel=""/>It was inactive for 100000ms:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291487" xreflabel=""/>Lustre: 0:0:(linux-debug.c:132:portals_debug_dumpstack()) 
+        <para>The above message indicates that the watchdog is active for pid 933:</para>
+        <para>It was inactive for 100000ms:</para>
+        <screen>Lustre: 0:0:(linux-debug.c:132:portals_debug_dumpstack()) 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291488" xreflabel=""/>Showing stack for process:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291489" xreflabel=""/>933 ll_ost_25     D F896071A     0   933      1    934   932 (L-TLB)
-<anchor xml:id="dbdoclet.50438198_pgfId-1291490" xreflabel=""/>f6d87c60 00000046 00000000 f896071a f8def7cc 00002710 00001822 2da48cae
-<anchor xml:id="dbdoclet.50438198_pgfId-1291491" xreflabel=""/>0008cf1a f6d7c220 f6d7c3d0 f6d86000 f3529648 f6d87cc4 f3529640 f8961d3d
-<anchor xml:id="dbdoclet.50438198_pgfId-1291492" xreflabel=""/>00000010 f6d87c9c ca65a13c 00001fff 00000001 00000001 00000000 00000001
+        <para>Showing stack for process:</para>
+        <screen>933 ll_ost_25     D F896071A     0   933      1    934   932 (L-TLB)
+f6d87c60 00000046 00000000 f896071a f8def7cc 00002710 00001822 2da48cae
+0008cf1a f6d7c220 f6d7c3d0 f6d86000 f3529648 f6d87cc4 f3529640 f8961d3d
+00000010 f6d87c9c ca65a13c 00001fff 00000001 00000001 00000000 00000001
 </screen>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291493" xreflabel=""/>Call trace:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291494" xreflabel=""/>filter_do_bio+0x3dd/0xb90 [obdfilter]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291495" xreflabel=""/>default_wake_function+0x0/0x20
-<anchor xml:id="dbdoclet.50438198_pgfId-1291496" xreflabel=""/>filter_direct_io+0x2fb/0x990 [obdfilter]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291497" xreflabel=""/>filter_preprw_read+0x5c5/0xe00 [obdfilter]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291498" xreflabel=""/>lustre_swab_niobuf_remote+0x0/0x30 [ptlrpc]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291499" xreflabel=""/>ost_brw_read+0x18df/0x2400 [ost]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291500" xreflabel=""/>ost_handle+0x14c2/0x42d0 [ost]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291501" xreflabel=""/>ptlrpc_server_handle_request+0x870/0x10b0 [ptlrpc]
-<anchor xml:id="dbdoclet.50438198_pgfId-1291502" xreflabel=""/>ptlrpc_main+0x42e/0x7c0 [ptlrpc]
-</screen>
-      </section>
-      <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291504" xreflabel=""/>26.3.8 Handling <anchor xml:id="dbdoclet.50438198_marker-1291503" xreflabel=""/>Timeouts on Initial Lustre Setup</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291505" xreflabel=""/>If you come across timeouts or hangs on the initial setup of your Lustre system, verify that name resolution for servers and clients is working correctly. Some distributions configure /etc/hosts sts so the name of the local machine (as reported by the &apos;hostname&apos; command) is mapped to local host (127.0.0.1) instead of a proper IP address.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291506" xreflabel=""/>This might produce this error:</para>
-        <screen><anchor xml:id="dbdoclet.50438198_pgfId-1291507" xreflabel=""/>LustreError:(ldlm_handle_cancel()) received cancel for unknown lock cookie
-<anchor xml:id="dbdoclet.50438198_pgfId-1291508" xreflabel=""/>0xe74021a4b41b954e from nid 0x7f000001 (0:127.0.0.1)
+        <para>Call trace:</para>
+        <screen>filter_do_bio+0x3dd/0xb90 [obdfilter]
+default_wake_function+0x0/0x20
+filter_direct_io+0x2fb/0x990 [obdfilter]
+filter_preprw_read+0x5c5/0xe00 [obdfilter]
+lustre_swab_niobuf_remote+0x0/0x30 [ptlrpc]
+ost_brw_read+0x18df/0x2400 [ost]
+ost_handle+0x14c2/0x42d0 [ost]
+ptlrpc_server_handle_request+0x870/0x10b0 [ptlrpc]
+ptlrpc_main+0x42e/0x7c0 [ptlrpc]
 </screen>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291510" xreflabel=""/>26.3.9 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291509" xreflabel=""/>&quot;LustreError: xxx went back in time&quot;</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291511" xreflabel=""/>Each time Lustre changes the state of the disk file system, it records a unique transaction number. Occasionally, when committing these transactions to the disk, the last committed transaction number displays to other nodes in the cluster to assist the recovery. Therefore, the promised transactions remain absolutely safe on the disappeared disk.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291512" xreflabel=""/>This situation arises when:</para>
+        <title>26.3.8 Handling <anchor xml:id="dbdoclet.50438198_marker-1291503" xreflabel=""/>Timeouts on Initial Lustre Setup</title>
+        <para>If you come across timeouts or hangs on the initial setup of your Lustre system, verify that name resolution for servers and clients is working correctly. Some distributions configure /etc/hosts sts so the name of the local machine (as reported by the &apos;hostname&apos; command) is mapped to local host (127.0.0.1) instead of a proper IP address.</para>
+        <para>This might produce this error:</para>
+        <screen>LustreError:(ldlm_handle_cancel()) received cancel for unknown lock cookie
+0xe74021a4b41b954e from nid 0x7f000001 (0:127.0.0.1)
+</screen>
+      </section>
+      <section remap="h3">
+        <title>26.3.9 Handling/Debugging <anchor xml:id="dbdoclet.50438198_marker-1291509" xreflabel=""/>&quot;LustreError: xxx went back in time&quot;</title>
+        <para>Each time Lustre changes the state of the disk file system, it records a unique transaction number. Occasionally, when committing these transactions to the disk, the last committed transaction number displays to other nodes in the cluster to assist the recovery. Therefore, the promised transactions remain absolutely safe on the disappeared disk.</para>
+        <para>This situation arises when:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291513" xreflabel=""/> You are using a disk device that claims to have data written to disk before it actually does, as in case of a device with a large cache. If that disk device crashes or loses power in a way that causes the loss of the cache, there can be a loss of transactions that you believe are committed. This is a very serious event, and you should run e2fsck against that storage before restarting Lustre.</para>
+            <para> You are using a disk device that claims to have data written to disk before it actually does, as in case of a device with a large cache. If that disk device crashes or loses power in a way that causes the loss of the cache, there can be a loss of transactions that you believe are committed. This is a very serious event, and you should run e2fsck against that storage before restarting Lustre.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291514" xreflabel=""/> As per the Lustre requirement, the shared storage used for failover is completely cache-coherent. This ensures that if one server takes over for another, it sees the most up-to-date and accurate copy of the data. In case of the failover of the server, if the shared storage does not provide cache coherency between all of its ports, then Lustre can produce an error.</para>
+            <para> As per the Lustre requirement, the shared storage used for failover is completely cache-coherent. This ensures that if one server takes over for another, it sees the most up-to-date and accurate copy of the data. In case of the failover of the server, if the shared storage does not provide cache coherency between all of its ports, then Lustre can produce an error.</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291515" xreflabel=""/>If you know the exact reason for the error, then it is safe to proceed with no further action. If you do not know the reason, then this is a serious issue and you should explore it with your disk vendor.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291516" xreflabel=""/>If the error occurs during failover, examine your disk cache settings. If it occurs after a restart without failover, try to determine how the disk can report that a write succeeded, then lose the Data Device corruption or Disk Errors.</para>
+        <para>If you know the exact reason for the error, then it is safe to proceed with no further action. If you do not know the reason, then this is a serious issue and you should explore it with your disk vendor.</para>
+        <para>If the error occurs during failover, examine your disk cache settings. If it occurs after a restart without failover, try to determine how the disk can report that a write succeeded, then lose the Data Device corruption or Disk Errors.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291518" xreflabel=""/>26.3.10 Lustre Error: <anchor xml:id="dbdoclet.50438198_marker-1291517" xreflabel=""/>&quot;Slow Start_Page_Write&quot;</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291519" xreflabel=""/>The slow start_page_write message appears when the operation takes an extremely long time to allocate a batch of memory pages. Use these pages to receive network traffic first, and then write to disk.</para>
+        <title>26.3.10 Lustre Error: <anchor xml:id="dbdoclet.50438198_marker-1291517" xreflabel=""/>&quot;Slow Start_Page_Write&quot;</title>
+        <para>The slow start_page_write message appears when the operation takes an extremely long time to allocate a batch of memory pages. Use these pages to receive network traffic first, and then write to disk.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291521" xreflabel=""/>26.3.11 Drawbacks in Doing <anchor xml:id="dbdoclet.50438198_marker-1291520" xreflabel=""/>Multi-client O_APPEND Writes</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291522" xreflabel=""/>It is possible to do multi-client O_APPEND writes to a single file, but there are few drawbacks that may make this a sub-optimal solution. These drawbacks are:</para>
+        <title>26.3.11 Drawbacks in Doing <anchor xml:id="dbdoclet.50438198_marker-1291520" xreflabel=""/>Multi-client O_APPEND Writes</title>
+        <para>It is possible to do multi-client O_APPEND writes to a single file, but there are few drawbacks that may make this a sub-optimal solution. These drawbacks are:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291523" xreflabel=""/>  Each client needs to take an EOF lock on all the OSTs, as it is difficult to know which OST holds the end of the file until you check all the OSTs. As all the clients are using the same O_APPEND, there is significant locking overhead.</para>
+            <para>  Each client needs to take an EOF lock on all the OSTs, as it is difficult to know which OST holds the end of the file until you check all the OSTs. As all the clients are using the same O_APPEND, there is significant locking overhead.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291524" xreflabel=""/> The second client cannot get all locks until the end of the writing of the first client, as the taking serializes all writes from the clients.</para>
+            <para> The second client cannot get all locks until the end of the writing of the first client, as the taking serializes all writes from the clients.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291525" xreflabel=""/> To avoid deadlocks, the taking of these locks occurs in a known, consistent order. As a client cannot know which OST holds the next piece of the file until the client has locks on all OSTS, there is a need of these locks in case of a striped file.</para>
+            <para> To avoid deadlocks, the taking of these locks occurs in a known, consistent order. As a client cannot know which OST holds the next piece of the file until the client has locks on all OSTS, there is a need of these locks in case of a striped file.</para>
           </listitem>
 
 </itemizedlist>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291882" xreflabel=""/>26.3.12 Slowdown Occurs <anchor xml:id="dbdoclet.50438198_marker-1291921" xreflabel=""/>During Lustre Startup</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291894" xreflabel=""/>When Lustre starts, the Lustre file system needs to read in data from the disk. For the very first mdsrate run after the reboot, the MDS needs to wait on all the OSTs for object pre-creation. This causes a slowdown to occur when Lustre starts up.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291896" xreflabel=""/>After the file system has been running for some time, it contains more data in cache and hence, the variability caused by reading critical metadata from disk is mostly eliminated. The file system now reads data from the cache.</para>
+        <title>26.3.12 Slowdown Occurs <anchor xml:id="dbdoclet.50438198_marker-1291921" xreflabel=""/>During Lustre Startup</title>
+        <para>When Lustre starts, the Lustre file system needs to read in data from the disk. For the very first mdsrate run after the reboot, the MDS needs to wait on all the OSTs for object pre-creation. This causes a slowdown to occur when Lustre starts up.</para>
+        <para>After the file system has been running for some time, it contains more data in cache and hence, the variability caused by reading critical metadata from disk is mostly eliminated. The file system now reads data from the cache.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1291922" xreflabel=""/>26.3.13 Log Message 'Out of <anchor xml:id="dbdoclet.50438198_marker-1292113" xreflabel=""/>Memory' on OST</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1291934" xreflabel=""/>When planning the hardware for an OSS node, consider the memory usage of several components in the Lustre system. If insufficient memory is available, an 'out of memory' message can be logged.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1292123" xreflabel=""/>During normal operation, several conditions indicate insufficient RAM on a server node:</para>
+        <title>26.3.13 Log Message 'Out of <anchor xml:id="dbdoclet.50438198_marker-1292113" xreflabel=""/>Memory' on OST</title>
+        <para>When planning the hardware for an OSS node, consider the memory usage of several components in the Lustre system. If insufficient memory is available, an 'out of memory' message can be logged.</para>
+        <para>During normal operation, several conditions indicate insufficient RAM on a server node:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1291969" xreflabel=""/> kernel &quot;Out of memory&quot; and/or &quot;oom-killer&quot; messages</para>
+            <para> kernel &quot;Out of memory&quot; and/or &quot;oom-killer&quot; messages</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1292105" xreflabel=""/> Lustre &quot;kmalloc of &apos;mmm&apos; (NNNN bytes) failed...&quot; messages</para>
+            <para> Lustre &quot;kmalloc of &apos;mmm&apos; (NNNN bytes) failed...&quot; messages</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438198_pgfId-1292053" xreflabel=""/> Lustre or kernel stack traces showing processes stuck in &quot;try_to_free_pages&quot;</para>
+            <para> Lustre or kernel stack traces showing processes stuck in &quot;try_to_free_pages&quot;</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1292421" xreflabel=""/>For information on determining the MDS memory and OSS memory requirements, see <link xl:href="SettingUpLustreSystem.html#50438256_26456">Determining Memory Requirements</link>.</para>
+        <para>For information on determining the MDS memory and OSS memory requirements, see <link xl:href="SettingUpLustreSystem.html#50438256_26456">Determining Memory Requirements</link>.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438198_pgfId-1294801" xreflabel=""/>26.3.14 Setting SCSI <anchor xml:id="dbdoclet.50438198_marker-1294800" xreflabel=""/>I/O Sizes</title>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1294802" xreflabel=""/>Some SCSI drivers default to a maximum I/O size that is too small for good Lustre performance. we have fixed quite a few drivers, but you may still find that some drivers give unsatisfactory performance with Lustre. As the default value is hard-coded, you need to recompile the drivers to change their default. On the other hand, some drivers may have a wrong default set.</para>
-        <para><anchor xml:id="dbdoclet.50438198_pgfId-1294803" xreflabel=""/>If you suspect bad I/O performance and an analysis of Lustre statistics indicates that I/O is not 1 MB, check /sys/block/&lt;device&gt;/queue/max_sectors_kb. If the max_sectors_kb value is less than 1024, set it to at least 1024 to improve performance. If changing max_sectors_kb does not change the I/O size as reported by Lustre, you may want to examine the SCSI driver code.</para>
+        <title>26.3.14 Setting SCSI <anchor xml:id="dbdoclet.50438198_marker-1294800" xreflabel=""/>I/O Sizes</title>
+        <para>Some SCSI drivers default to a maximum I/O size that is too small for good Lustre performance. we have fixed quite a few drivers, but you may still find that some drivers give unsatisfactory performance with Lustre. As the default value is hard-coded, you need to recompile the drivers to change their default. On the other hand, some drivers may have a wrong default set.</para>
+        <para>If you suspect bad I/O performance and an analysis of Lustre statistics indicates that I/O is not 1 MB, check /sys/block/&lt;device&gt;/queue/max_sectors_kb. If the max_sectors_kb value is less than 1024, set it to at least 1024 to improve performance. If changing max_sectors_kb does not change the I/O size as reported by Lustre, you may want to examine the SCSI driver code.</para>
       </section>
   </section>
 </chapter>

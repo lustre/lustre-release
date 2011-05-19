@@ -3,7 +3,7 @@
 <info>
 <title xml:id='configuringstorage.title'>Configuring Storage on a Lustre File System</title>
 </info>
-<para><anchor xml:id="dbdoclet.50438208_pgfId-1291547" xreflabel=""/>This chapter describes best practices for storage selection and file system options to optimize perforance on RAID, and includes the following sections:</para>
+<para>This chapter describes best practices for storage selection and file system options to optimize perforance on RAID, and includes the following sections:</para>
 
 <itemizedlist>
     <listitem>
@@ -38,89 +38,89 @@
 
 <section xml:id='dbdoclet.50438208_60972'>
   <title>6.1 Selecting Storage for the MDT and OSTs</title>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291569" xreflabel=""/>The Lustre architecture allows the use of any kind of block device as backend storage. The characteristics of such devices, particularly in the case of failures, vary significantly and have an impact on configuration choices.</para>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291570" xreflabel=""/>This section describes issues and recommendations regarding backend storage.</para>
+  <para>The Lustre architecture allows the use of any kind of block device as backend storage. The characteristics of such devices, particularly in the case of failures, vary significantly and have an impact on configuration choices.</para>
+  <para>This section describes issues and recommendations regarding backend storage.</para>
   <section remap="h3">
-    <title><anchor xml:id="dbdoclet.50438208_pgfId-1291571" xreflabel=""/>6.1.1 Metadata Target (MDT)</title>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291572" xreflabel=""/>I/O on the MDT is typically mostly reads and writes of small amounts of data. For this reason, we recommend that you use RAID 1 for MDT storage. If you require more capacity for an MDT than one disk provides, we recommend RAID 1 + 0 or RAID 10.</para>
+    <title>6.1.1 Metadata Target (MDT)</title>
+    <para>I/O on the MDT is typically mostly reads and writes of small amounts of data. For this reason, we recommend that you use RAID 1 for MDT storage. If you require more capacity for an MDT than one disk provides, we recommend RAID 1 + 0 or RAID 10.</para>
   </section>
   <section remap="h3">
-    <title><anchor xml:id="dbdoclet.50438208_pgfId-1291573" xreflabel=""/>6.1.2 Object Storage Server (OST)</title>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291574" xreflabel=""/>A quick calculation makes it clear that without further redundancy, RAID 6 is required for large clusters and RAID 5 is not acceptable:</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291575" xreflabel=""/>For a 2 PB file system (2,000 disks of 1 TB capacity) assume the mean time to failure (MTTF) of a disk is about 1,000 days. This means that the expected failure rate is 2000/1000 = 2 disks per day. Repair time at 10% of disk bandwidth is 1000 GB at 10MB/sec = 100,000 sec, or about 1 day.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291576" xreflabel=""/>For a RAID 5 stripe that is 10 disks wide, during 1 day of rebuilding, the chance that a second disk in the same array will fail is about 9/1000 or about 1% per day. After 50 days, you have a 50% chance of a double failure in a RAID 5 array leading to data loss.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291577" xreflabel=""/>Therefore, RAID 6 or another double parity algorithm is needed to provide sufficient redundancy for OST storage.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291578" xreflabel=""/>For better performance, we recommend that you create RAID sets with 4 or 8 data disks plus one or two parity disks. Using larger RAID sets will negatively impact performance compared to having multiple independent RAID sets.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291579" xreflabel=""/>To maximize performance for small I/O request sizes, storage configured as RAID 1+0 can yield much better results but will increase cost or reduce capacity.</para>
+    <title>6.1.2 Object Storage Server (OST)</title>
+    <para>A quick calculation makes it clear that without further redundancy, RAID 6 is required for large clusters and RAID 5 is not acceptable:</para>
+    <para>For a 2 PB file system (2,000 disks of 1 TB capacity) assume the mean time to failure (MTTF) of a disk is about 1,000 days. This means that the expected failure rate is 2000/1000 = 2 disks per day. Repair time at 10% of disk bandwidth is 1000 GB at 10MB/sec = 100,000 sec, or about 1 day.</para>
+    <para>For a RAID 5 stripe that is 10 disks wide, during 1 day of rebuilding, the chance that a second disk in the same array will fail is about 9/1000 or about 1% per day. After 50 days, you have a 50% chance of a double failure in a RAID 5 array leading to data loss.</para>
+    <para>Therefore, RAID 6 or another double parity algorithm is needed to provide sufficient redundancy for OST storage.</para>
+    <para>For better performance, we recommend that you create RAID sets with 4 or 8 data disks plus one or two parity disks. Using larger RAID sets will negatively impact performance compared to having multiple independent RAID sets.</para>
+    <para>To maximize performance for small I/O request sizes, storage configured as RAID 1+0 can yield much better results but will increase cost or reduce capacity.</para>
   </section>
 </section>
 <section xml:id="dbdoclet.50438208_23285">
   <title>6.2 Reliability Best Practices</title>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291583" xreflabel=""/>RAID monitoring software is recommended to quickly detect faulty disks and allow them to be replaced to avoid double failures and data loss. Hot spare disks are recommended so that rebuilds happen without delays.</para>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291587" xreflabel=""/>Backups of the metadata file systems are recommended. For details, see <xref linkend='backupandrestore'/>.</para>
+  <para>RAID monitoring software is recommended to quickly detect faulty disks and allow them to be replaced to avoid double failures and data loss. Hot spare disks are recommended so that rebuilds happen without delays.</para>
+  <para>Backups of the metadata file systems are recommended. For details, see <xref linkend='backupandrestore'/>.</para>
 </section>
 <section xml:id="dbdoclet.50438208_40705">
   <title>6.3 Performance Tradeoffs</title>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291595" xreflabel=""/>A writeback cache can dramatically increase write performance on many types of RAID arrays if the writes are not done at full stripe width. Unfortunately, unless the RAID array has battery-backed cache (a feature only found in some higher-priced hardware RAID arrays), interrupting the power to the array may result in out-of-sequence writes or corruption of RAID parity and future data loss.</para>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291596" xreflabel=""/>If writeback cache is enabled, a file system check is required after the array loses power. Data may also be lost because of this.</para>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291597" xreflabel=""/>Therefore, we recommend against the use of writeback cache when data integrity is critical. You should carefully consider whether the benefits of using writeback cache outweigh the risks.</para>
+  <para>A writeback cache can dramatically increase write performance on many types of RAID arrays if the writes are not done at full stripe width. Unfortunately, unless the RAID array has battery-backed cache (a feature only found in some higher-priced hardware RAID arrays), interrupting the power to the array may result in out-of-sequence writes or corruption of RAID parity and future data loss.</para>
+  <para>If writeback cache is enabled, a file system check is required after the array loses power. Data may also be lost because of this.</para>
+  <para>Therefore, we recommend against the use of writeback cache when data integrity is critical. You should carefully consider whether the benefits of using writeback cache outweigh the risks.</para>
 </section>
 <section xml:id="dbdoclet.50438208_51921">
   <title>6.4 Formatting Options for RAID Devices</title>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1289920" xreflabel=""/>When formatting a file system on a RAID device, it is beneficial to ensure that I/O requests are aligned with the underlying RAID geometry. This ensures that the Lustre RPCs do not generate unnecessary disk operations which may reduce performance dramatically. Use the --mkfsoptions parameter to specify additional parameters when formatting the OST or MDT.</para>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1289921" xreflabel=""/>For RAID 5, RAID 6, or RAID 1+0 storage, specifying the following option to the --mkfsoptions parameter option improves the layout of the file system metadata, ensuring that no single disk contains all of the allocation bitmaps:</para>
-  <screen><anchor xml:id="dbdoclet.50438208_pgfId-1290699" xreflabel=""/>-Estride=&lt;chunk_blocks&gt; 
+  <para>When formatting a file system on a RAID device, it is beneficial to ensure that I/O requests are aligned with the underlying RAID geometry. This ensures that the Lustre RPCs do not generate unnecessary disk operations which may reduce performance dramatically. Use the --mkfsoptions parameter to specify additional parameters when formatting the OST or MDT.</para>
+  <para>For RAID 5, RAID 6, or RAID 1+0 storage, specifying the following option to the --mkfsoptions parameter option improves the layout of the file system metadata, ensuring that no single disk contains all of the allocation bitmaps:</para>
+  <screen>-Estride=&lt;chunk_blocks&gt; 
 </screen>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1290704" xreflabel=""/>The &lt;chunk_blocks&gt; variable is in units of 4096-byte blocks and represents the amount of contiguous data written to a single disk before moving to the next disk. This is alternately referred to as the RAID stripe size. This is applicable to both MDT and OST file systems.</para>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1289922" xreflabel=""/>For more information on how to override the defaults while formatting MDT or OST file systems, see <link xl:href="SettingUpLustreSystem.html#50438256_84701">Setting File System Formatting Options</link>.</para>
+  <para>The &lt;chunk_blocks&gt; variable is in units of 4096-byte blocks and represents the amount of contiguous data written to a single disk before moving to the next disk. This is alternately referred to as the RAID stripe size. This is applicable to both MDT and OST file systems.</para>
+  <para>For more information on how to override the defaults while formatting MDT or OST file systems, see <link xl:href="SettingUpLustreSystem.html#50438256_84701">Setting File System Formatting Options</link>.</para>
   <section remap="h3">
-    <title><anchor xml:id="dbdoclet.50438208_pgfId-1290843" xreflabel=""/>6.4.1 Computing file system parameters for mkfs</title>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291294" xreflabel=""/>For best results, use RAID 5 with 5 or 9 disks or RAID 6 with 6 or 10 disks, each on a different controller. The stripe width is the optimal minimum I/O size. Ideally, the RAID configuration should allow 1 MB Lustre RPCs to fit evenly on a single RAID stripe without an expensive read-modify-write cycle. Use this formula to determine the <emphasis>&lt;stripe_width&gt;</emphasis>, where <emphasis>&lt;number_of_data_disks&gt;</emphasis> does <emphasis>not</emphasis> include the RAID parity disks (1 for RAID 5 and 2 for RAID 6):</para>
-    <screen><anchor xml:id="dbdoclet.50438208_pgfId-1290351" xreflabel=""/><emphasis>&lt;stripe_width_blocks&gt;</emphasis> = <emphasis>&lt;chunk_blocks&gt;</emphasis> * <emphasis>&lt;number_of_data_disks&gt;</emphasis> = 1 MB 
+    <title>6.4.1 Computing file system parameters for mkfs</title>
+    <para>For best results, use RAID 5 with 5 or 9 disks or RAID 6 with 6 or 10 disks, each on a different controller. The stripe width is the optimal minimum I/O size. Ideally, the RAID configuration should allow 1 MB Lustre RPCs to fit evenly on a single RAID stripe without an expensive read-modify-write cycle. Use this formula to determine the <emphasis>&lt;stripe_width&gt;</emphasis>, where <emphasis>&lt;number_of_data_disks&gt;</emphasis> does <emphasis>not</emphasis> include the RAID parity disks (1 for RAID 5 and 2 for RAID 6):</para>
+    <screen><emphasis>&lt;stripe_width_blocks&gt;</emphasis> = <emphasis>&lt;chunk_blocks&gt;</emphasis> * <emphasis>&lt;number_of_data_disks&gt;</emphasis> = 1 MB 
 </screen>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1290352" xreflabel=""/>If the RAID configuration does not allow <emphasis>&lt;chunk_blocks&gt;</emphasis> to fit evenly into 1 MB, select <emphasis>&lt;chunkblocks&gt;</emphasis>, such that <emphasis>&lt;stripe_width_blocks&gt;</emphasis> is close to 1 MB, but not larger.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291369" xreflabel=""/>The <emphasis>&lt;stripe_width_blocks&gt;</emphasis>value must equal <emphasis>&lt;chunk_blocks&gt;</emphasis>*<emphasis>&lt;number_of_data_disks&gt;</emphasis>. Specifying the <emphasis>&lt;stripe_width_blocks&gt;</emphasis> parameter is only relevant for RAID 5 or RAID 6, and is not needed for RAID 1 plus 0.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291443" xreflabel=""/>Run --reformat on the file system device (/dev/sdc), specifying the RAID geometry to the underlying ldiskfs file system, where:</para>
-    <screen><anchor xml:id="dbdoclet.50438208_pgfId-1291453" xreflabel=""/>--mkfsoptions &quot;<emphasis>&lt;other options&gt;</emphasis> -E stride=<emphasis>&lt;chunk_blocks&gt;</emphasis>, <anchor xml:id="dbdoclet.50438208_pgfId-1291454" xreflabel=""/>stripe_width=<emphasis>&lt;stripe_width_blocks&gt;</emphasis>&quot;
+    <para>If the RAID configuration does not allow <emphasis>&lt;chunk_blocks&gt;</emphasis> to fit evenly into 1 MB, select <emphasis>&lt;chunkblocks&gt;</emphasis>, such that <emphasis>&lt;stripe_width_blocks&gt;</emphasis> is close to 1 MB, but not larger.</para>
+    <para>The <emphasis>&lt;stripe_width_blocks&gt;</emphasis>value must equal <emphasis>&lt;chunk_blocks&gt;</emphasis>*<emphasis>&lt;number_of_data_disks&gt;</emphasis>. Specifying the <emphasis>&lt;stripe_width_blocks&gt;</emphasis> parameter is only relevant for RAID 5 or RAID 6, and is not needed for RAID 1 plus 0.</para>
+    <para>Run --reformat on the file system device (/dev/sdc), specifying the RAID geometry to the underlying ldiskfs file system, where:</para>
+    <screen>--mkfsoptions &quot;<emphasis>&lt;other options&gt;</emphasis> -E stride=<emphasis>&lt;chunk_blocks&gt;</emphasis>, stripe_width=<emphasis>&lt;stripe_width_blocks&gt;</emphasis>&quot;
 </screen>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1290353" xreflabel=""/>Example:</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291464" xreflabel=""/>A RAID 6 configuration with 6 disks has 4 data and 2 parity disks. The <emphasis>&lt;chunk_blocks&gt;</emphasis> &lt;= 1024KB/4 = 256KB.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291362" xreflabel=""/>Because the number of data disks is equal to the power of 2, the stripe width is equal to 1 MB.</para>
-    <screen><anchor xml:id="dbdoclet.50438208_pgfId-1291335" xreflabel=""/>--mkfsoptions &quot;<emphasis>&lt;other options&gt;</emphasis> -E stride=<emphasis>&lt;chunk_blocks&gt;</emphasis>, <anchor xml:id="dbdoclet.50438208_pgfId-1291486" xreflabel=""/>stripe_width=<emphasis>&lt;stripe_width_blocks&gt;</emphasis>&quot;...
+    <para>Example:</para>
+    <para>A RAID 6 configuration with 6 disks has 4 data and 2 parity disks. The <emphasis>&lt;chunk_blocks&gt;</emphasis> &lt;= 1024KB/4 = 256KB.</para>
+    <para>Because the number of data disks is equal to the power of 2, the stripe width is equal to 1 MB.</para>
+    <screen>--mkfsoptions &quot;<emphasis>&lt;other options&gt;</emphasis> -E stride=<emphasis>&lt;chunk_blocks&gt;</emphasis>, stripe_width=<emphasis>&lt;stripe_width_blocks&gt;</emphasis>&quot;...
 </screen>
   </section>
   <section remap="h3">
-    <title><anchor xml:id="dbdoclet.50438208_pgfId-1291318" xreflabel=""/>6.4.2 Choosing Parameters for an External <anchor xml:id="dbdoclet.50438208_marker-1289927" xreflabel=""/>Journal</title>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289929" xreflabel=""/>If you have configured a RAID array and use it directly as an OST, it contains both data and metadata. For better performance, we recommend putting the OST journal on a separate device, by creating a small RAID 1 array and using it as an external journal for the OST.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1290391" xreflabel=""/>Lustre&apos;s default journal size is 400 MB. A journal size of up to 1 GB has shown increased performance but diminishing returns are seen for larger journals. Additionally, a copy of the journal is kept in RAM. Therefore, make sure you have enough memory available to hold copies of all the journals.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291643" xreflabel=""/>The file system journal options are specified to mkfs.luster using the --mkfsoptions parameter. For example:</para>
-    <screen><anchor xml:id="dbdoclet.50438208_pgfId-1291786" xreflabel=""/>--mkfsoptions &quot;&lt;other options&gt; -j -J device=/dev/mdJ&quot; 
+    <title>6.4.2 Choosing Parameters for an External <anchor xml:id="dbdoclet.50438208_marker-1289927" xreflabel=""/>Journal</title>
+    <para>If you have configured a RAID array and use it directly as an OST, it contains both data and metadata. For better performance, we recommend putting the OST journal on a separate device, by creating a small RAID 1 array and using it as an external journal for the OST.</para>
+    <para>Lustre&apos;s default journal size is 400 MB. A journal size of up to 1 GB has shown increased performance but diminishing returns are seen for larger journals. Additionally, a copy of the journal is kept in RAM. Therefore, make sure you have enough memory available to hold copies of all the journals.</para>
+    <para>The file system journal options are specified to mkfs.luster using the --mkfsoptions parameter. For example:</para>
+    <screen>--mkfsoptions &quot;&lt;other options&gt; -j -J device=/dev/mdJ&quot; 
 </screen>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289935" xreflabel=""/>To create an external journal, perform these steps for each OST on the OSS:</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289936" xreflabel=""/> 1. Create a 400 MB (or larger) journal partition (RAID 1 is recommended).</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289937" xreflabel=""/>In this example, /dev/sdb is a RAID 1 device.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291721" xreflabel=""/> 2. Create a journal device on the partition. Run:</para>
-    <screen><anchor xml:id="dbdoclet.50438208_pgfId-1289942" xreflabel=""/>[oss#] mke2fs -b 4096 -O journal_dev /dev/sdb <emphasis>&lt;journal_size&gt;</emphasis></screen>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1291739" xreflabel=""/>The value of <emphasis>&lt;journal_size&gt;</emphasis> is specified in units of 4096-byte blocks. For example, 262144 for a 1 GB journal size.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289943" xreflabel=""/> 3. Create the OST.</para>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289944" xreflabel=""/>In this example, /dev/sdc is the RAID 6 device to be used as the OST, run:</para>
-    <screen><anchor xml:id="dbdoclet.50438208_pgfId-1289945" xreflabel=""/>[oss#] mkfs.lustre --ost --mgsnode=mds@osib --mkfsoptions=&quot;-J device=/dev/sd\
+    <para>To create an external journal, perform these steps for each OST on the OSS:</para>
+    <para> 1. Create a 400 MB (or larger) journal partition (RAID 1 is recommended).</para>
+    <para>In this example, /dev/sdb is a RAID 1 device.</para>
+    <para> 2. Create a journal device on the partition. Run:</para>
+    <screen>[oss#] mke2fs -b 4096 -O journal_dev /dev/sdb <emphasis>&lt;journal_size&gt;</emphasis></screen>
+    <para>The value of <emphasis>&lt;journal_size&gt;</emphasis> is specified in units of 4096-byte blocks. For example, 262144 for a 1 GB journal size.</para>
+    <para> 3. Create the OST.</para>
+    <para>In this example, /dev/sdc is the RAID 6 device to be used as the OST, run:</para>
+    <screen>[oss#] mkfs.lustre --ost --mgsnode=mds@osib --mkfsoptions=&quot;-J device=/dev/sd\
 b1&quot; /dev/sdc
 </screen>
-    <para><anchor xml:id="dbdoclet.50438208_pgfId-1289946" xreflabel=""/> 4. Mount the OST as usual.</para>
+    <para> 4. Mount the OST as usual.</para>
   </section>
 </section>
 <section xml:id="dbdoclet.50438208_88516">
   <title>6.5 Connecting a SAN to a Lustre File System</title>
-  <para><anchor xml:id="dbdoclet.50438208_pgfId-1291861" xreflabel=""/>Depending on your cluster size and workload, you may want to connect a SAN to a Lustre file system. Before making this connection, consider the following:</para>
+  <para>Depending on your cluster size and workload, you may want to connect a SAN to a Lustre file system. Before making this connection, consider the following:</para>
   <itemizedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438208_pgfId-1291862" xreflabel=""/> In many SAN file systems without Lustre, clients allocate and lock blocks or inodes individually as they are updated. The Lustre design avoids the high contention that some of these blocks and inodes may have.</para>
+      <para> In many SAN file systems without Lustre, clients allocate and lock blocks or inodes individually as they are updated. The Lustre design avoids the high contention that some of these blocks and inodes may have.</para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438208_pgfId-1291863" xreflabel=""/> Lustre is highly scalable and can have a very large number of clients. SAN switches do not scale to a large number of nodes, and the cost per port of a SAN is generally higher than other networking.</para>
+      <para> Lustre is highly scalable and can have a very large number of clients. SAN switches do not scale to a large number of nodes, and the cost per port of a SAN is generally higher than other networking.</para>
     </listitem>
 <listitem>
-      <para><anchor xml:id="dbdoclet.50438208_pgfId-1291864" xreflabel=""/> File systems that allow direct-to-SAN access from the clients have a security risk because clients can potentially read any data on the SAN disks, and misbehaving clients can corrupt the file system for many reasons like improper file system, network, or other kernel software, bad cabling, bad memory, and so on. The risk increases with increase in the number of clients directly accessing the storage.</para>
+      <para> File systems that allow direct-to-SAN access from the clients have a security risk because clients can potentially read any data on the SAN disks, and misbehaving clients can corrupt the file system for many reasons like improper file system, network, or other kernel software, bad cabling, bad memory, and so on. The risk increases with increase in the number of clients directly accessing the storage.</para>
     </listitem>
 </itemizedlist>
 </section>

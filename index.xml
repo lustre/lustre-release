@@ -2,7 +2,7 @@
 <book version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
 
   <info>
-  <title><anchor xml:id="dbdoclet.50438145_pgfId-108319" xreflabel=""/>Lustre 2.x Filesystem</title>
+  <title>Lustre 2.x Filesystem</title>
     <subtitle>Operations Manual</subtitle>
 
     <xi:include href="copyright.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />

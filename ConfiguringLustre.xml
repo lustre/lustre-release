@@ -6,7 +6,7 @@
 
 
 
-  <para><anchor xml:id="dbdoclet.50438267_pgfId-1290861" xreflabel=""/>This chapter shows how to configure a simple Lustre system comprised of a combined MGS/MDT, an OST and a client. It includes:</para>
+  <para>This chapter shows how to configure a simple Lustre system comprised of a combined MGS/MDT, an OST and a client. It includes:</para>
   <itemizedlist><listitem>
           <para><xref linkend="dbdoclet.50438267_50692"/>
           </para>
@@ -19,29 +19,29 @@
 
     <section xml:id="dbdoclet.50438267_50692">
       <title>10.1 Configuring a Simple Lustre File System</title>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1290876" xreflabel=""/>A Lustre system can be set up in a variety of configurations by using the administrative utilities provided with Lustre. The procedure below shows how to to configure a simple Lustre file system consisting of a combined MGS/MDS, one OSS with two OSTs, and a client. For an overview of the entire Lustre installation procedure, see <xref linkend='installoverview'/>.</para>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1291868" xreflabel=""/>This configuration procedure assumes you have completed the following:</para>
+      <para>A Lustre system can be set up in a variety of configurations by using the administrative utilities provided with Lustre. The procedure below shows how to to configure a simple Lustre file system consisting of a combined MGS/MDS, one OSS with two OSTs, and a client. For an overview of the entire Lustre installation procedure, see <xref linkend='installoverview'/>.</para>
+      <para>This configuration procedure assumes you have completed the following:</para>
       <itemizedlist><listitem>
-              <para><anchor xml:id="dbdoclet.50438267_pgfId-1293115" xreflabel=""/><emphasis>Set up and configured your hardware</emphasis> . For more information about hardware requirements, see <xref linkend='settinguplustresystem'/>.</para>
+              <para><emphasis>Set up and configured your hardware</emphasis> . For more information about hardware requirements, see <xref linkend='settinguplustresystem'/>.</para>
         </listitem>
 <listitem>
-    <para><anchor xml:id="dbdoclet.50438267_pgfId-1293121" xreflabel=""/><emphasis>Downloaded and installed the Lustre software.</emphasis>  For more information about preparing for and installing the Lustre software, see <xref linkend='installinglustre'/>.</para>
+    <para><emphasis>Downloaded and installed the Lustre software.</emphasis>  For more information about preparing for and installing the Lustre software, see <xref linkend='installinglustre'/>.</para>
         </listitem>
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1293288" xreflabel=""/>The following optional steps should also be completed, if needed, before the Lustre software is configured:</para>
+      <para>The following optional steps should also be completed, if needed, before the Lustre software is configured:</para>
       <itemizedlist><listitem>
-              <para><anchor xml:id="dbdoclet.50438267_pgfId-1293289" xreflabel=""/><emphasis>Set up a hardware or software RAID on block devices to be used as OSTs or MDTs.</emphasis>  For information about setting up RAID, see the documentation for your RAID controller or <xref linkend='configuringstorage'/>.</para>
+              <para><emphasis>Set up a hardware or software RAID on block devices to be used as OSTs or MDTs.</emphasis>  For information about setting up RAID, see the documentation for your RAID controller or <xref linkend='configuringstorage'/>.</para>
         </listitem>
 <listitem>
-    <para><anchor xml:id="dbdoclet.50438267_pgfId-1293297" xreflabel=""/><emphasis>Set up network interface bonding on Ethernet interfaces.</emphasis>  For information about setting up network interface bonding, see <xref linkend='settingupbonding'/>.</para>
+    <para><emphasis>Set up network interface bonding on Ethernet interfaces.</emphasis>  For information about setting up network interface bonding, see <xref linkend='settingupbonding'/>.</para>
         </listitem>
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438267_pgfId-1294595" xreflabel=""/><emphasis>Set</emphasis>lnet<emphasis>module parameters to specify how Lustre Networking (LNET) is to be configured to work with Lustre and test the LNET configuration.</emphasis>  LNET will, by default, use the first TCP/IP interface it discovers on a system. If this network configuration is sufficient, you do not need to configure LNET. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
+          <para><emphasis>Set</emphasis>lnet<emphasis>module parameters to specify how Lustre Networking (LNET) is to be configured to work with Lustre and test the LNET configuration.</emphasis>  LNET will, by default, use the first TCP/IP interface it discovers on a system. If this network configuration is sufficient, you do not need to configure LNET. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
         </listitem>
 </itemizedlist>
-<para><anchor xml:id="dbdoclet.50438267_pgfId-1294840" xreflabel=""/>For information about configuring LNET, see <xref linkend='configuringlnet'/>. For information about testing LNET, see <xref linkend='lnetselftest'/>.</para>
+<para>For information about configuring LNET, see <xref linkend='configuringlnet'/>. For information about testing LNET, see <xref linkend='lnetselftest'/>.</para>
       <itemizedlist><listitem>
-              <para><anchor xml:id="dbdoclet.50438267_pgfId-1294602" xreflabel=""/><emphasis>Run the benchmark script sgpdd_survey to determine baseline performance of your hardware.</emphasis>  Benchmarking your hardware will simplify debugging performance issues that are unrelated to Lustre and ensure you are getting the best possible performance with your installation. For information about running sgpdd_survey, see <xref linkend='benchmarkingtests'/>.</para>
+              <para><emphasis>Run the benchmark script sgpdd_survey to determine baseline performance of your hardware.</emphasis>  Benchmarking your hardware will simplify debugging performance issues that are unrelated to Lustre and ensure you are getting the best possible performance with your installation. For information about running sgpdd_survey, see <xref linkend='benchmarkingtests'/>.</para>
         </listitem>
 </itemizedlist>
 
@@ -50,11 +50,11 @@
 The sgpdd_survey script overwrites the device being tested so it must be run before the OSTs are configured.</para>
 </note>
 
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1291941" xreflabel=""/>To configure a simple Lustre file system, complete these steps:</para>
+      <para>To configure a simple Lustre file system, complete these steps:</para>
       <orderedlist>
           <listitem>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1290894" xreflabel=""/><emphasis role="bold">Create</emphasis> a combined MGS/MDT file system on a block device. On the MDS node, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438267_pgfId-1290905" xreflabel=""/>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs --mdt &lt;<emphasis>block device name</emphasis>&gt;
+      <para><emphasis role="bold">Create</emphasis> a combined MGS/MDT file system on a block device. On the MDS node, run:</para>
+      <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs --mdt &lt;<emphasis>block device name</emphasis>&gt;
 </screen>
 
 <note>
@@ -66,8 +66,8 @@ If you plan to generate multiple file systems, the MGS should be created separat
 
   </listitem>
   <listitem>
-       <para><anchor xml:id="dbdoclet.50438267_pgfId-1290909" xreflabel=""/>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438267_pgfId-1290910" xreflabel=""/>mount -t lustre &lt;<emphasis>block device name</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt;
+       <para>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
+      <screen>mount -t lustre &lt;<emphasis>block device name</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt;
 </screen>
 
 <note><para>
@@ -76,14 +76,14 @@ If you have created and MGS and an MDT on separate block devices, mount them bot
 
 
   </listitem>
-  <listitem>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1290915" xreflabel=""/>Create the OST. On the OSS node, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438267_pgfId-1290916" xreflabel=""/>mkfs.lustre --ost --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;<emphasis>NID</emphasis>&gt; &lt;<emphasis>block device name</emphasis>&gt;
+  <listitem xml:id="dbdoclet.50438267_pgfId-1290915">
+      <para>Create the OST. On the OSS node, run:</para>
+      <screen>mkfs.lustre --ost --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;<emphasis>NID</emphasis>&gt; &lt;<emphasis>block device name</emphasis>&gt;
 </screen>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1293526" xreflabel=""/>When you create an OST, you are formatting a ldiskfs file system on a block storage device like you would with any local file system.</para>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1291922" xreflabel=""/>You can have as many OSTs per OSS as the hardware or drivers allow. For more information about storage and memory requirements for a Lustre file system, see <xref linkend='settinguplustresystem'/>.</para>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1290918" xreflabel=""/>You can only configure one OST per block device. You should create an OST that uses the raw block device and does not use partitioning.</para>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1293567" xreflabel=""/>If you are using block devices that are accessible from multiple OSS nodes, ensure that you mount the OSTs from only one OSS node at at time. It is strongly recommended that multiple-mount protection be enabled for such devices to prevent serious data corruption. For more information about multiple-mount protection, see <xref linkend='managingfailover'/>.</para>
+      <para>When you create an OST, you are formatting a ldiskfs file system on a block storage device like you would with any local file system.</para>
+      <para>You can have as many OSTs per OSS as the hardware or drivers allow. For more information about storage and memory requirements for a Lustre file system, see <xref linkend='settinguplustresystem'/>.</para>
+      <para>You can only configure one OST per block device. You should create an OST that uses the raw block device and does not use partitioning.</para>
+      <para>If you are using block devices that are accessible from multiple OSS nodes, ensure that you mount the OSTs from only one OSS node at at time. It is strongly recommended that multiple-mount protection be enabled for such devices to prevent serious data corruption. For more information about multiple-mount protection, see <xref linkend='managingfailover'/>.</para>
 
       <note><para>
 Lustre currently supports block devices up to 16 TB on OEL 5/RHEL 5 (up to 8 TB on other distributions). If the device size is only slightly larger that 16 TB, it is recommended that you limit the file system size to 16 TB at format time. If the size is significantly larger than 16 TB, you should reconfigure the storage into devices smaller than 16 TB. We recommend that you not place partitions on top of RAID 5/6 block devices due to negative impacts on performance.</para>
@@ -91,9 +91,9 @@ Lustre currently supports block devices up to 16 TB on OEL 5/RHEL 5 (up to 8 TB 
 
 
   </listitem>
-  <listitem>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1293955" xreflabel=""/>Mount the OST. On the OSS node where the OST was created, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438267_pgfId-1290925" xreflabel=""/>mount -t lustre <emphasis>&lt;block device name&gt; &lt;mount point&gt;</emphasis></screen>
+  <listitem xml:id="dbdoclet.50438267_pgfId-1293955">
+      <para>Mount the OST. On the OSS node where the OST was created, run:</para>
+      <screen>mount -t lustre <emphasis>&lt;block device name&gt; &lt;mount point&gt;</emphasis></screen>
 
 
       <note><para>
@@ -101,9 +101,9 @@ Lustre currently supports block devices up to 16 TB on OEL 5/RHEL 5 (up to 8 TB 
 </note>
 
   </listitem>
-  <listitem>
-       <para><anchor xml:id="dbdoclet.50438267_pgfId-1290934" xreflabel=""/>Mount the Lustre file system on the client. On the client node, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438267_pgfId-1290935" xreflabel=""/>mount -t lustre &lt;<emphasis>MGS node</emphasis>&gt;:/&lt;<emphasis>fsname</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt; 
+  <listitem xml:id="dbdoclet.50438267_pgfId-1290934">
+       <para>Mount the Lustre file system on the client. On the client node, run:</para>
+      <screen>mount -t lustre &lt;<emphasis>MGS node</emphasis>&gt;:/&lt;<emphasis>fsname</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt; 
 </screen>
 
 <note><para>
@@ -112,7 +112,7 @@ Lustre currently supports block devices up to 16 TB on OEL 5/RHEL 5 (up to 8 TB 
 
   </listitem>
   <listitem>
-       <para><anchor xml:id="dbdoclet.50438267_pgfId-1290940" xreflabel=""/>Verify that the file system started and is working correctly. Do this by running the lfs df, dd and ls commands on the client node.</para>
+       <para>Verify that the file system started and is working correctly. Do this by running the lfs df, dd and ls commands on the client node.</para>
 
        <note><para>
 If you have a problem mounting the file system, check the syslogs on the client and all the servers for errors and also check the network settings. A common issue with newly-installed systems is that hosts.deny or firewall rules may prevent connections on port 988.</para>
@@ -124,18 +124,18 @@ If you have a problem mounting the file system, check the syslogs on the client 
        <para><emphasis>(Optional) Run benchmarking to</emphasis>ols to validate the performance of hardware and software layers in the cluster. Available tools include:</para>
 
       <itemizedlist><listitem>
-              <para><anchor xml:id="dbdoclet.50438267_pgfId-1294743" xreflabel=""/>obdfilter_survey  - Characterizes the storage performance of a Lustre file system. For details, see <xref linkend='benchmarkingtests'/><emphasis><link xl:href="BenchmarkingTests.html#50438212_40624">Testing OST Performance (obdfilter_survey)</link></emphasis>.</para>
+              <para>obdfilter_survey  - Characterizes the storage performance of a Lustre file system. For details, see <xref linkend='benchmarkingtests'/><emphasis><link xl:href="BenchmarkingTests.html#50438212_40624">Testing OST Performance (obdfilter_survey)</link></emphasis>.</para>
         </listitem>
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438267_pgfId-1294744" xreflabel=""/>ost_survey  - Performs I/O against OSTs to detect anomalies between otherwise identical disk subsystems. For details, see <xref linkend='benchmarkingtests'/><emphasis><link xl:href="BenchmarkingTests.html#50438212_85136">Testing OST I/O Performance (ost_survey)</link></emphasis>.</para>
+          <para>ost_survey  - Performs I/O against OSTs to detect anomalies between otherwise identical disk subsystems. For details, see <xref linkend='benchmarkingtests'/><emphasis><link xl:href="BenchmarkingTests.html#50438212_85136">Testing OST I/O Performance (ost_survey)</link></emphasis>.</para>
         </listitem>
 </itemizedlist>
         </listitem>
 </orderedlist>
 
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438267_pgfId-1290956" xreflabel=""/>10.1.1 Simple Lustre <anchor xml:id="dbdoclet.50438267_marker-1290955" xreflabel=""/>Configuration Example</title>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1290959" xreflabel=""/>To see the steps in a simple Lustre configuration, follow this example in which a combined MGS/MDT and two OSTs are created. Three block devices are used, one for the combined MGS/MDS node and one for each OSS node. Common parameters used in the example are listed below, along with individual node parameters.</para>
+        <title>10.1.1 Simple Lustre <anchor xml:id="dbdoclet.50438267_marker-1290955" xreflabel=""/>Configuration Example</title>
+        <para>To see the steps in a simple Lustre configuration, follow this example in which a combined MGS/MDT and two OSTs are created. Three block devices are used, one for the combined MGS/MDS node and one for each OSS node. Common parameters used in the example are listed below, along with individual node parameters.</para>
         <informaltable frame="all">
           <tgroup cols="4">
             <colspec colname="c1" colwidth="2*"/>
@@ -144,29 +144,29 @@ If you have a problem mounting the file system, check the syslogs on the client 
             <colspec colname="c4" colwidth="25*"/>
             <thead>
               <row>
-                <entry nameend="c2" namest="c1"><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1290962" xreflabel=""/>Common Parameters</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1290966" xreflabel=""/>Value</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1290968" xreflabel=""/>Description</emphasis></para></entry>
+                <entry nameend="c2" namest="c1"><para><emphasis role="bold">Common Parameters</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Value</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290970" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290972" xreflabel=""/><emphasis role="bold">MGS node</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290974" xreflabel=""/>10.2.0.1@tcp0</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290976" xreflabel=""/>Node for the combined MGS/MDS</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">MGS node</emphasis></para></entry>
+                <entry><para> 10.2.0.1@tcp0</para></entry>
+                <entry><para> Node for the combined MGS/MDS</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290978" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290980" xreflabel=""/><emphasis role="bold">file system</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290982" xreflabel=""/>temp</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290984" xreflabel=""/>Name of the Lustre file system</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">file system</emphasis></para></entry>
+                <entry><para> temp</para></entry>
+                <entry><para> Name of the Lustre file system</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290986" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290988" xreflabel=""/><emphasis role="bold">network type</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290990" xreflabel=""/>TCP/IP</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1290992" xreflabel=""/>Network type used for Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">network type</emphasis></para></entry>
+                <entry><para> TCP/IP</para></entry>
+                <entry><para> Network type used for Lustre file system temp</para></entry>
               </row>
             </tbody>
           </tgroup>
@@ -179,101 +179,101 @@ If you have a problem mounting the file system, check the syslogs on the client 
             <colspec colname="c4" colwidth="25*"/>
             <thead>
               <row>
-                <entry nameend="c2" namest="c1"><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1290995" xreflabel=""/>Node Parameters</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1290999" xreflabel=""/>Value</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1291001" xreflabel=""/>Description</emphasis></para></entry>
+                <entry nameend="c2" namest="c1"><para><emphasis role="bold">Node Parameters</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Value</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry nameend="c4" namest="c1"><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291003" xreflabel=""/>MGS/MDS node</para></entry>
+                <entry nameend="c4" namest="c1"><para> MGS/MDS node</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291011" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291013" xreflabel=""/><emphasis role="bold">MGS/MDS node</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291015" xreflabel=""/>mdt1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291017" xreflabel=""/>MDS in Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">MGS/MDS node</emphasis></para></entry>
+                <entry><para> mdt1</para></entry>
+                <entry><para> MDS in Lustre file system temp</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291019" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291021" xreflabel=""/><emphasis role="bold">block device</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291023" xreflabel=""/>/dev/sdb</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291025" xreflabel=""/>Block device for the combined MGS/MDS node</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">block device</emphasis></para></entry>
+                <entry><para> /dev/sdb</para></entry>
+                <entry><para> Block device for the combined MGS/MDS node</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291027" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291029" xreflabel=""/><emphasis role="bold">mount point</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291031" xreflabel=""/>/mnt/mdt</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291033" xreflabel=""/>Mount point for the mdt1 block device (/dev/sdb) on the MGS/MDS node</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">mount point</emphasis></para></entry>
+                <entry><para> /mnt/mdt</para></entry>
+                <entry><para> Mount point for the mdt1 block device (/dev/sdb) on the MGS/MDS node</para></entry>
               </row>
               <row>
-                <entry nameend="c4" namest="c1"><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291035" xreflabel=""/>First OSS node</para></entry>
+                <entry nameend="c4" namest="c1"><para> First OSS node</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291043" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291045" xreflabel=""/><emphasis role="bold">OSS node</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291047" xreflabel=""/>oss1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291049" xreflabel=""/>First OSS node in Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">OSS node</emphasis></para></entry>
+                <entry><para> oss1</para></entry>
+                <entry><para> First OSS node in Lustre file system temp</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291051" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291053" xreflabel=""/><emphasis role="bold">OST</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291055" xreflabel=""/>ost1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291057" xreflabel=""/>First OST in Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">OST</emphasis></para></entry>
+                <entry><para> ost1</para></entry>
+                <entry><para> First OST in Lustre file system temp</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291059" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291061" xreflabel=""/><emphasis role="bold">block device</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291063" xreflabel=""/>/dev/sdc</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291065" xreflabel=""/>Block device for the first OSS node (oss1)</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">block device</emphasis></para></entry>
+                <entry><para> /dev/sdc</para></entry>
+                <entry><para> Block device for the first OSS node (oss1)</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291067" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291069" xreflabel=""/><emphasis role="bold">mount point</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291071" xreflabel=""/>/mnt/ost1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291073" xreflabel=""/>Mount point for the ost1 block device (/dev/sdc) on the oss1 node</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">mount point</emphasis></para></entry>
+                <entry><para> /mnt/ost1</para></entry>
+                <entry><para> Mount point for the ost1 block device (/dev/sdc) on the oss1 node</para></entry>
               </row>
               <row>
-                <entry nameend="c4" namest="c1"><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291075" xreflabel=""/>Second OSS node</para></entry>
+                <entry nameend="c4" namest="c1"><para> Second OSS node</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291083" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291085" xreflabel=""/><emphasis role="bold">OSS node</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291087" xreflabel=""/>oss2</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291089" xreflabel=""/>Second OSS node in Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">OSS node</emphasis></para></entry>
+                <entry><para> oss2</para></entry>
+                <entry><para> Second OSS node in Lustre file system temp</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291091" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291093" xreflabel=""/><emphasis role="bold">OST</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291095" xreflabel=""/>ost2</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291097" xreflabel=""/>Second OST in Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">OST</emphasis></para></entry>
+                <entry><para> ost2</para></entry>
+                <entry><para> Second OST in Lustre file system temp</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291099" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291101" xreflabel=""/><emphasis role="bold">block device</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291103" xreflabel=""/>/dev/sdd</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291105" xreflabel=""/>Block device for the second OSS node (oss2)</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">block device</emphasis></para></entry>
+                <entry><para> /dev/sdd</para></entry>
+                <entry><para> Block device for the second OSS node (oss2)</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291107" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291109" xreflabel=""/><emphasis role="bold">mount point</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291111" xreflabel=""/>/mnt/ost2</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291113" xreflabel=""/>Mount point for the ost2 block device (/dev/sdd) on the oss2 node</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">mount point</emphasis></para></entry>
+                <entry><para> /mnt/ost2</para></entry>
+                <entry><para> Mount point for the ost2 block device (/dev/sdd) on the oss2 node</para></entry>
               </row>
               <row>
-                <entry nameend="c4" namest="c1"><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291115" xreflabel=""/>Client node</para></entry>
+                <entry nameend="c4" namest="c1"><para> Client node</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291123" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291125" xreflabel=""/><emphasis role="bold">client node</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291127" xreflabel=""/>client1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291129" xreflabel=""/>Client in Lustre file system temp</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">client node</emphasis></para></entry>
+                <entry><para> client1</para></entry>
+                <entry><para> Client in Lustre file system temp</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291131" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291133" xreflabel=""/><emphasis role="bold">mount point</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291135" xreflabel=""/>/lustre</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1291137" xreflabel=""/>Mount point for Lustre file system temp on the client1 node</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> <emphasis role="bold">mount point</emphasis></para></entry>
+                <entry><para> /lustre</para></entry>
+                <entry><para> Mount point for Lustre file system temp on the client1 node</para></entry>
               </row>
             </tbody>
           </tgroup>
@@ -286,231 +286,231 @@ If you have a problem mounting the file system, check the syslogs on the client 
 We recommend that you use 'dotted-quad' notation for IP addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para>
          </note>
 
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291430" xreflabel=""/>For this example, complete the steps below:</para>
+        <para>For this example, complete the steps below:</para>
 
         <orderedlist>
             <listitem>
 
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291140" xreflabel=""/> 1. Create a combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291141" xreflabel=""/>[root@mds /]# mkfs.lustre --fsname=temp --mgs --mdt /dev/sdb
+        <para>Create a combined MGS/MDT file system on the block device. On the MDS node, run:</para>
+        <screen>[root@mds /]# mkfs.lustre --fsname=temp --mgs --mdt /dev/sdb
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291142" xreflabel=""/>This command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291143" xreflabel=""/>    Permanent disk data:
-<anchor xml:id="dbdoclet.50438267_pgfId-1291144" xreflabel=""/>Target:            temp-MDTffff
-<anchor xml:id="dbdoclet.50438267_pgfId-1291145" xreflabel=""/>Index:             unassigned
-<anchor xml:id="dbdoclet.50438267_pgfId-1291146" xreflabel=""/>Lustre FS: temp
-<anchor xml:id="dbdoclet.50438267_pgfId-1291147" xreflabel=""/>Mount type:        ldiskfs
-<anchor xml:id="dbdoclet.50438267_pgfId-1291148" xreflabel=""/>Flags:             0x75
-<anchor xml:id="dbdoclet.50438267_pgfId-1291149" xreflabel=""/>   (MDT MGS needs_index first_time update )
-<anchor xml:id="dbdoclet.50438267_pgfId-1291150" xreflabel=""/>Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
-<anchor xml:id="dbdoclet.50438267_pgfId-1291151" xreflabel=""/>Parameters: mdt.group_upcall=/usr/sbin/l_getgroups
-<anchor xml:id="dbdoclet.50438267_pgfId-1291152" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438267_pgfId-1291153" xreflabel=""/>checking for existing Lustre data: not found
-<anchor xml:id="dbdoclet.50438267_pgfId-1291154" xreflabel=""/>device size = 16MB
-<anchor xml:id="dbdoclet.50438267_pgfId-1291155" xreflabel=""/>2 6 18
-<anchor xml:id="dbdoclet.50438267_pgfId-1291156" xreflabel=""/>formatting backing filesystem ldiskfs on /dev/sdb
-<anchor xml:id="dbdoclet.50438267_pgfId-1291157" xreflabel=""/>   target name             temp-MDTffff
-<anchor xml:id="dbdoclet.50438267_pgfId-1291158" xreflabel=""/>   4k blocks               0
-<anchor xml:id="dbdoclet.50438267_pgfId-1291159" xreflabel=""/>   options                 -i 4096 -I 512 -q -O dir_index,uninit_groups -F
-<anchor xml:id="dbdoclet.50438267_pgfId-1291160" xreflabel=""/>mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-MDTffff  -i 4096 -I 512 -q -O 
-<anchor xml:id="dbdoclet.50438267_pgfId-1291161" xreflabel=""/>dir_index,uninit_groups -F /dev/sdb
-<anchor xml:id="dbdoclet.50438267_pgfId-1291162" xreflabel=""/>Writing CONFIGS/mountdata 
+        <para>This command generates this output:</para>
+        <screen>    Permanent disk data:
+Target:            temp-MDTffff
+Index:             unassigned
+Lustre FS: temp
+Mount type:        ldiskfs
+Flags:             0x75
+   (MDT MGS needs_index first_time update )
+Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
+Parameters: mdt.group_upcall=/usr/sbin/l_getgroups
+ 
+checking for existing Lustre data: not found
+device size = 16MB
+2 6 18
+formatting backing filesystem ldiskfs on /dev/sdb
+   target name             temp-MDTffff
+   4k blocks               0
+   options                 -i 4096 -I 512 -q -O dir_index,uninit_groups -F
+mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-MDTffff  -i 4096 -I 512 -q -O 
+dir_index,uninit_groups -F /dev/sdb
+Writing CONFIGS/mountdata 
 </screen>
             </listitem>
             <listitem>
 
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291163" xreflabel=""/> 2. Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291164" xreflabel=""/>[root@mds /]# mount -t lustre /dev/sdb /mnt/mdt
+        <para>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
+        <screen>[root@mds /]# mount -t lustre /dev/sdb /mnt/mdt
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291165" xreflabel=""/>This command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291166" xreflabel=""/>Lustre: temp-MDT0000: new disk, initializing 
-<anchor xml:id="dbdoclet.50438267_pgfId-1291167" xreflabel=""/>Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_group_upcall()) temp-MDT0000: gr\
+        <para>This command generates this output:</para>
+        <screen>Lustre: temp-MDT0000: new disk, initializing 
+Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_group_upcall()) temp-MDT0000: gr\
 oup upcall set to /usr/sbin/l_getgroups
-<anchor xml:id="dbdoclet.50438267_pgfId-1291168" xreflabel=""/>Lustre: temp-MDT0000.mdt: set parameter group_upcall=/usr/sbin/l_getgroups
-<anchor xml:id="dbdoclet.50438267_pgfId-1291169" xreflabel=""/>Lustre: Server temp-MDT0000 on device /dev/sdb has started 
+Lustre: temp-MDT0000.mdt: set parameter group_upcall=/usr/sbin/l_getgroups
+Lustre: Server temp-MDT0000 on device /dev/sdb has started 
 </screen>
             </listitem>
-            <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291170" xreflabel=""/> 3. Create and mount ost1.</para>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291171" xreflabel=""/>In this example, the OSTs (ost1 and ost2) are being created on different OSSs (oss1 and oss2 respectively).</para>
+            <listitem xml:id="dbdoclet.50438267_pgfId-1291170">
+        <para>Create and mount ost1.</para>
+        <para>In this example, the OSTs (ost1 and ost2) are being created on different OSSs (oss1 and oss2 respectively).</para>
             <orderedlist>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291172" xreflabel=""/>a. Create ost1. On oss1 node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291173" xreflabel=""/>[root@oss1 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev\
+        <para>a. Create ost1. On oss1 node, run:</para>
+        <screen>[root@oss1 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev\
 /sdc
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291174" xreflabel=""/>The command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291175" xreflabel=""/>    Permanent disk data:
-<anchor xml:id="dbdoclet.50438267_pgfId-1291176" xreflabel=""/>Target:            temp-OSTffff
-<anchor xml:id="dbdoclet.50438267_pgfId-1291177" xreflabel=""/>Index:             unassigned
-<anchor xml:id="dbdoclet.50438267_pgfId-1291178" xreflabel=""/>Lustre FS: temp
-<anchor xml:id="dbdoclet.50438267_pgfId-1291179" xreflabel=""/>Mount type:        ldiskfs
-<anchor xml:id="dbdoclet.50438267_pgfId-1291180" xreflabel=""/>Flags:             0x72
-<anchor xml:id="dbdoclet.50438267_pgfId-1291181" xreflabel=""/>(OST needs_index first_time update)
-<anchor xml:id="dbdoclet.50438267_pgfId-1291182" xreflabel=""/>Persistent mount opts: errors=remount-ro,extents,mballoc
-<anchor xml:id="dbdoclet.50438267_pgfId-1291183" xreflabel=""/>Parameters: mgsnode=10.2.0.1@tcp
-<anchor xml:id="dbdoclet.50438267_pgfId-1291184" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438267_pgfId-1291185" xreflabel=""/>checking for existing Lustre data: not found
-<anchor xml:id="dbdoclet.50438267_pgfId-1291186" xreflabel=""/>device size = 16MB
-<anchor xml:id="dbdoclet.50438267_pgfId-1291187" xreflabel=""/>2 6 18
-<anchor xml:id="dbdoclet.50438267_pgfId-1291188" xreflabel=""/>formatting backing filesystem ldiskfs on /dev/sdc
-<anchor xml:id="dbdoclet.50438267_pgfId-1291189" xreflabel=""/>   target name             temp-OSTffff
-<anchor xml:id="dbdoclet.50438267_pgfId-1291190" xreflabel=""/>   4k blocks               0
-<anchor xml:id="dbdoclet.50438267_pgfId-1291191" xreflabel=""/>   options                 -I 256 -q -O dir_index,uninit_groups -F
-<anchor xml:id="dbdoclet.50438267_pgfId-1291192" xreflabel=""/>mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OSTffff  -I 256 -q -O
-<anchor xml:id="dbdoclet.50438267_pgfId-1291193" xreflabel=""/>dir_index,uninit_groups -F /dev/sdc
-<anchor xml:id="dbdoclet.50438267_pgfId-1291194" xreflabel=""/>Writing CONFIGS/mountdata 
+        <para>The command generates this output:</para>
+        <screen>    Permanent disk data:
+Target:            temp-OSTffff
+Index:             unassigned
+Lustre FS: temp
+Mount type:        ldiskfs
+Flags:             0x72
+(OST needs_index first_time update)
+Persistent mount opts: errors=remount-ro,extents,mballoc
+Parameters: mgsnode=10.2.0.1@tcp
+ 
+checking for existing Lustre data: not found
+device size = 16MB
+2 6 18
+formatting backing filesystem ldiskfs on /dev/sdc
+   target name             temp-OSTffff
+   4k blocks               0
+   options                 -I 256 -q -O dir_index,uninit_groups -F
+mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OSTffff  -I 256 -q -O
+dir_index,uninit_groups -F /dev/sdc
+Writing CONFIGS/mountdata 
 </screen>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293613" xreflabel=""/>b. Mount ost1 on the OSS on which it was created. On oss1 node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1293614" xreflabel=""/>root@oss1 /] mount -t lustre /dev/sdc /mnt/ost1 
+        <para>b. Mount ost1 on the OSS on which it was created. On oss1 node, run:</para>
+        <screen>root@oss1 /] mount -t lustre /dev/sdc /mnt/ost1 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293615" xreflabel=""/>The command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1293616" xreflabel=""/>LDISKFS-fs: file extents enabled 
-<anchor xml:id="dbdoclet.50438267_pgfId-1293617" xreflabel=""/>LDISKFS-fs: mballoc enabled
-<anchor xml:id="dbdoclet.50438267_pgfId-1293618" xreflabel=""/>Lustre: temp-OST0000: new disk, initializing
-<anchor xml:id="dbdoclet.50438267_pgfId-1293619" xreflabel=""/>Lustre: Server temp-OST0000 on device /dev/sdb has started
+        <para>The command generates this output:</para>
+        <screen>LDISKFS-fs: file extents enabled 
+LDISKFS-fs: mballoc enabled
+Lustre: temp-OST0000: new disk, initializing
+Lustre: Server temp-OST0000 on device /dev/sdb has started
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293620" xreflabel=""/>Shortly afterwards, this output appears:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1293621" xreflabel=""/>Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
-<anchor xml:id="dbdoclet.50438267_pgfId-1293643" xreflabel=""/>Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans 
+        <para>Shortly afterwards, this output appears:</para>
+        <screen>Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
+Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans 
 </screen>
             </listitem>
         </orderedlist>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293656" xreflabel=""/>Create and mount ost2.</para>
+        <para>Create and mount ost2.</para>
             <orderedlist>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293645" xreflabel=""/>Create ost2. On oss2 node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291196" xreflabel=""/>[root@oss2 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev\
+        <para>Create ost2. On oss2 node, run:</para>
+        <screen>[root@oss2 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev\
 /sdd
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291197" xreflabel=""/>The command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291198" xreflabel=""/>    Permanent disk data:
-<anchor xml:id="dbdoclet.50438267_pgfId-1291199" xreflabel=""/>Target:            temp-OSTffff
-<anchor xml:id="dbdoclet.50438267_pgfId-1291200" xreflabel=""/>Index:             unassigned
-<anchor xml:id="dbdoclet.50438267_pgfId-1291201" xreflabel=""/>Lustre FS: temp
-<anchor xml:id="dbdoclet.50438267_pgfId-1291202" xreflabel=""/>Mount type:        ldiskfs
-<anchor xml:id="dbdoclet.50438267_pgfId-1291203" xreflabel=""/>Flags:             0x72
-<anchor xml:id="dbdoclet.50438267_pgfId-1291204" xreflabel=""/>(OST needs_index first_time update)
-<anchor xml:id="dbdoclet.50438267_pgfId-1291205" xreflabel=""/>Persistent mount opts: errors=remount-ro,extents,mballoc
-<anchor xml:id="dbdoclet.50438267_pgfId-1291206" xreflabel=""/>Parameters: mgsnode=10.2.0.1@tcp
-<anchor xml:id="dbdoclet.50438267_pgfId-1291209" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438267_pgfId-1291211" xreflabel=""/>checking for existing Lustre data: not found
-<anchor xml:id="dbdoclet.50438267_pgfId-1291212" xreflabel=""/>device size = 16MB
-<anchor xml:id="dbdoclet.50438267_pgfId-1291213" xreflabel=""/>2 6 18
-<anchor xml:id="dbdoclet.50438267_pgfId-1291214" xreflabel=""/>formatting backing filesystem ldiskfs on /dev/sdd
-<anchor xml:id="dbdoclet.50438267_pgfId-1291215" xreflabel=""/>   target name             temp-OSTffff
-<anchor xml:id="dbdoclet.50438267_pgfId-1291216" xreflabel=""/>   4k blocks               0
-<anchor xml:id="dbdoclet.50438267_pgfId-1291217" xreflabel=""/>   options                 -I 256 -q -O dir_index,uninit_groups -F
-<anchor xml:id="dbdoclet.50438267_pgfId-1291218" xreflabel=""/>mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OSTffff  -I 256 -q -O
-<anchor xml:id="dbdoclet.50438267_pgfId-1291219" xreflabel=""/>dir_index,uninit_groups -F /dev/sdc
-<anchor xml:id="dbdoclet.50438267_pgfId-1291220" xreflabel=""/>Writing CONFIGS/mountdata 
+        <para>The command generates this output:</para>
+        <screen>    Permanent disk data:
+Target:            temp-OSTffff
+Index:             unassigned
+Lustre FS: temp
+Mount type:        ldiskfs
+Flags:             0x72
+(OST needs_index first_time update)
+Persistent mount opts: errors=remount-ro,extents,mballoc
+Parameters: mgsnode=10.2.0.1@tcp
+ 
+checking for existing Lustre data: not found
+device size = 16MB
+2 6 18
+formatting backing filesystem ldiskfs on /dev/sdd
+   target name             temp-OSTffff
+   4k blocks               0
+   options                 -I 256 -q -O dir_index,uninit_groups -F
+mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OSTffff  -I 256 -q -O
+dir_index,uninit_groups -F /dev/sdc
+Writing CONFIGS/mountdata 
 </screen>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291233" xreflabel=""/>Mount ost2 on the OSS on which it was created. On oss2 node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291234" xreflabel=""/>root@oss2 /] mount -t lustre /dev/sdd /mnt/ost2 
+        <para>Mount ost2 on the OSS on which it was created. On oss2 node, run:</para>
+        <screen>root@oss2 /] mount -t lustre /dev/sdd /mnt/ost2 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291235" xreflabel=""/>The command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291236" xreflabel=""/>LDISKFS-fs: file extents enabled 
-<anchor xml:id="dbdoclet.50438267_pgfId-1291237" xreflabel=""/>LDISKFS-fs: mballoc enabled
-<anchor xml:id="dbdoclet.50438267_pgfId-1291238" xreflabel=""/>Lustre: temp-OST0000: new disk, initializing
-<anchor xml:id="dbdoclet.50438267_pgfId-1291239" xreflabel=""/>Lustre: Server temp-OST0000 on device /dev/sdb has started
+        <para>The command generates this output:</para>
+        <screen>LDISKFS-fs: file extents enabled 
+LDISKFS-fs: mballoc enabled
+Lustre: temp-OST0000: new disk, initializing
+Lustre: Server temp-OST0000 on device /dev/sdb has started
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291240" xreflabel=""/>Shortly afterwards, this output appears:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291241" xreflabel=""/>Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
-<anchor xml:id="dbdoclet.50438267_pgfId-1291242" xreflabel=""/>Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans 
+        <para>Shortly afterwards, this output appears:</para>
+        <screen>Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
+Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans 
 </screen>
             </listitem>
     </orderedlist>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291243" xreflabel=""/>Mount the Lustre file system on the client. On the client node, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291244" xreflabel=""/>root@client1 /] mount -t lustre 10.2.0.1@tcp0:/temp /lustre 
+        <para>Mount the Lustre file system on the client. On the client node, run:</para>
+        <screen>root@client1 /] mount -t lustre 10.2.0.1@tcp0:/temp /lustre 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291245" xreflabel=""/>This command generates this output:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291246" xreflabel=""/>Lustre: Client temp-client has started
+        <para>This command generates this output:</para>
+        <screen>Lustre: Client temp-client has started
 </screen>
             </listitem>
             <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291247" xreflabel=""/>Verify that the file system started and is working by running the df, dd and ls commands on the client node.</para>
+        <para>Verify that the file system started and is working by running the df, dd and ls commands on the client node.</para>
 <orderedlist>
 <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291248" xreflabel=""/>Run the lfsdf -h command:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291249" xreflabel=""/>[root@client1 /] lfs df -h 
+        <para>Run the lfsdf -h command:</para>
+        <screen>[root@client1 /] lfs df -h 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293698" xreflabel=""/>The lfsdf-h command lists space usage per OST and the MDT in human-readable format. This command generates output similar to this:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1294042" xreflabel=""/>UUID                        bytes           Used            Available      \
+        <para>The lfsdf-h command lists space usage per OST and the MDT in human-readable format. This command generates output similar to this:</para>
+        <screen>UUID                        bytes           Used            Available      \
  Use%    Mounted on
-<anchor xml:id="dbdoclet.50438267_pgfId-1294043" xreflabel=""/>temp-MDT0000_UUID  8.0G            400.0M          7.6G            0%      \
+temp-MDT0000_UUID  8.0G            400.0M          7.6G            0%      \
 /lustre[MDT:0]
-<anchor xml:id="dbdoclet.50438267_pgfId-1294044" xreflabel=""/>temp-OST0000_UUID  800.0G          400.0M          799.6G          0%      \
+temp-OST0000_UUID  800.0G          400.0M          799.6G          0%      \
 /lustre[OST:0]
-<anchor xml:id="dbdoclet.50438267_pgfId-1294045" xreflabel=""/>temp-OST0001_UUID  800.0G          400.0M          799.6G          0%      \
+temp-OST0001_UUID  800.0G          400.0M          799.6G          0%      \
 /lustre[OST:1]
-<anchor xml:id="dbdoclet.50438267_pgfId-1294046" xreflabel=""/>filesystem summary:        1.6T            800.0M          1.6T            \
+filesystem summary:        1.6T            800.0M          1.6T            \
 0%      /lustre
-<anchor xml:id="dbdoclet.50438267_pgfId-1294039" xreflabel=""/> 
+ 
 </screen>
 </listitem>
 <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293715" xreflabel=""/>Run the lfsdf-ih command.</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1293716" xreflabel=""/>[root@client1 /] lfs df -ih
+        <para>Run the lfsdf-ih command.</para>
+        <screen>[root@client1 /] lfs df -ih
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293717" xreflabel=""/>The lfsdf-ih command lists inode usage per OST and the MDT. This command generates output similar to this:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1294079" xreflabel=""/>UUID                        Inodes       IUsed      IFree   IUse%   Mounted\
+        <para>The lfsdf-ih command lists inode usage per OST and the MDT. This command generates output similar to this:</para>
+        <screen>UUID                        Inodes       IUsed      IFree   IUse%   Mounted\
  on
-<anchor xml:id="dbdoclet.50438267_pgfId-1294080" xreflabel=""/>temp-MDT0000_UUID  2.5M         32         2.5M    0%      /lustre[MDT:0]
-<anchor xml:id="dbdoclet.50438267_pgfId-1294081" xreflabel=""/>temp-OST0000_UUID  5.5M         54         5.5M    0%      /lustre[OST:0]
-<anchor xml:id="dbdoclet.50438267_pgfId-1294082" xreflabel=""/>temp-OST0001_UUID  5.5M         54         5.5M    0%      /lustre[OST:1]
-<anchor xml:id="dbdoclet.50438267_pgfId-1294083" xreflabel=""/>filesystem summary:        2.5M         32         2.5M    0%      /lustre
-<anchor xml:id="dbdoclet.50438267_pgfId-1294084" xreflabel=""/> 
+temp-MDT0000_UUID  2.5M         32         2.5M    0%      /lustre[MDT:0]
+temp-OST0000_UUID  5.5M         54         5.5M    0%      /lustre[OST:0]
+temp-OST0001_UUID  5.5M         54         5.5M    0%      /lustre[OST:1]
+filesystem summary:        2.5M         32         2.5M    0%      /lustre
+ 
 </screen>
 </listitem>
 <listitem>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291257" xreflabel=""/>c. Run the dd command:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291258" xreflabel=""/>[root@client1 /] cd /lustre
-<anchor xml:id="dbdoclet.50438267_pgfId-1291259" xreflabel=""/>[root@client1 /lustre] dd if=/dev/zero of=/lustre/zero.dat bs=4M count=2
+        <para>c. Run the dd command:</para>
+        <screen>[root@client1 /] cd /lustre
+[root@client1 /lustre] dd if=/dev/zero of=/lustre/zero.dat bs=4M count=2
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293740" xreflabel=""/>The dd command verifies write functionality by creating a file containing all zeros (0s). In this command, an 8 MB file is created. This command generates output similar to this:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291261" xreflabel=""/>2+0 records in
-<anchor xml:id="dbdoclet.50438267_pgfId-1291262" xreflabel=""/>2+0 records out
-<anchor xml:id="dbdoclet.50438267_pgfId-1291263" xreflabel=""/>8388608 bytes (8.4 MB) copied, 0.159628 seconds, 52.6 MB/s
+        <para>The dd command verifies write functionality by creating a file containing all zeros (0s). In this command, an 8 MB file is created. This command generates output similar to this:</para>
+        <screen>2+0 records in
+2+0 records out
+8388608 bytes (8.4 MB) copied, 0.159628 seconds, 52.6 MB/s
 </screen>
 
 </listitem>
 <listitem>
 
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291264" xreflabel=""/>d. Run the ls command:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291265" xreflabel=""/>[root@client1 /lustre] ls -lsah
+        <para>d. Run the ls command:</para>
+        <screen>[root@client1 /lustre] ls -lsah
 </screen>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1291266" xreflabel=""/>The ls-lsah command lists files and directories in the current working directory. This command generates output similar to this:</para>
-        <screen><anchor xml:id="dbdoclet.50438267_pgfId-1291267" xreflabel=""/>total 8.0M
-<anchor xml:id="dbdoclet.50438267_pgfId-1291268" xreflabel=""/>4.0K drwxr-xr-x  2 root root 4.0K Oct 16 15:27 .
-<anchor xml:id="dbdoclet.50438267_pgfId-1292416" xreflabel=""/>8.0K drwxr-xr-x 25 root root 4.0K Oct 16 15:27 ..
-<anchor xml:id="dbdoclet.50438267_pgfId-1292417" xreflabel=""/>8.0M -rw-r--r--  1 root root 8.0M Oct 16 15:27 zero.dat 
-<anchor xml:id="dbdoclet.50438267_pgfId-1292423" xreflabel=""/> 
+        <para>The ls-lsah command lists files and directories in the current working directory. This command generates output similar to this:</para>
+        <screen>total 8.0M
+4.0K drwxr-xr-x  2 root root 4.0K Oct 16 15:27 .
+8.0K drwxr-xr-x 25 root root 4.0K Oct 16 15:27 ..
+8.0M -rw-r--r--  1 root root 8.0M Oct 16 15:27 zero.dat 
+ 
 </screen>
             </listitem>
         </orderedlist>
             </listitem>
         </orderedlist>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1293200" xreflabel=""/>Once the Lustre file system is configured, it is ready for use.</para>
+        <para>Once the Lustre file system is configured, it is ready for use.</para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438267_76752">
       <title>10.2 Additional Configuration Options</title>
-      <para><anchor xml:id="dbdoclet.50438267_pgfId-1292458" xreflabel=""/>This section describes how to scale the Lustre file system or make configuration changes using the Lustre configuration utilities.</para>
+      <para>This section describes how to scale the Lustre file system or make configuration changes using the Lustre configuration utilities.</para>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438267_pgfId-1292441" xreflabel=""/>10.2.1 Scaling the <anchor xml:id="dbdoclet.50438267_marker-1292440" xreflabel=""/>Lustre File System</title>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292442" xreflabel=""/>A Lustre file system can be scaled by adding OSTs or clients. For instructions on creating additional OSTs repeat <xref linkend="dbdoclet.50438267_pgfId-1291170"/>Step 3 and <xref linkend="dbdoclet.50438267_pgfId-1293955"/>Step 4 above. For mounting additional clients, repeat <xref linkend="dbdoclet.50438267_pgfId-1290934"/>Step 5 for each client.</para>
+        <title>10.2.1 Scaling the <anchor xml:id="dbdoclet.50438267_marker-1292440" xreflabel=""/>Lustre File System</title>
+        <para>A Lustre file system can be scaled by adding OSTs or clients. For instructions on creating additional OSTs repeat <xref linkend="dbdoclet.50438267_pgfId-1291170"/>Step 3 and <xref linkend="dbdoclet.50438267_pgfId-1293955"/>Step 4 above. For mounting additional clients, repeat <xref linkend="dbdoclet.50438267_pgfId-1290934"/>Step 5 for each client.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438267_pgfId-1292798" xreflabel=""/>10.2.2 <anchor xml:id="dbdoclet.50438267_50212" xreflabel=""/>Changing Striping Defaults</title>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292906" xreflabel=""/>The default settings for the file layout stripe pattern are shown in <xref linkend='configuringlustre.tab.stripe'/>.</para>
+        <title>10.2.2 <anchor xml:id="dbdoclet.50438267_50212" xreflabel=""/>Changing Striping Defaults</title>
+        <para>The default settings for the file layout stripe pattern are shown in <xref linkend='configuringlustre.tab.stripe'/>.</para>
         <table frame="none" xml:id='configuringlustre.tab.stripe'>
           <title>Default stripe pattern</title>
           <tgroup cols="3">
@@ -519,48 +519,48 @@ oup upcall set to /usr/sbin/l_getgroups
             <colspec colname="c3" colwidth="13*"/>
             <tbody>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1292877" xreflabel=""/>File Layout Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1292879" xreflabel=""/>Default</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438267_pgfId-1292881" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">File Layout Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Default</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292883" xreflabel=""/>stripe_size</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292885" xreflabel=""/>1 MB</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292887" xreflabel=""/>Amount of data to write to one OST before moving to the next OST.</para></entry>
+                <entry><para> stripe_size</para></entry>
+                <entry><para> 1 MB</para></entry>
+                <entry><para> Amount of data to write to one OST before moving to the next OST.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292889" xreflabel=""/>stripe_count</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292891" xreflabel=""/>1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292893" xreflabel=""/>The number of OSTs to use for a single file.</para></entry>
+                <entry><para> stripe_count</para></entry>
+                <entry><para> 1</para></entry>
+                <entry><para> The number of OSTs to use for a single file.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292895" xreflabel=""/>start_ost</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292897" xreflabel=""/>-1</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438267_pgfId-1292899" xreflabel=""/>The first OST where objects are created for each file. The default -1 allows the MDS to choose the starting index based on available space and load balancing. <emphasis>It's strongly recommended not to change the default for this parameter to a value other than -1.</emphasis></para></entry>
+                <entry><para> start_ost</para></entry>
+                <entry><para> -1</para></entry>
+                <entry><para> The first OST where objects are created for each file. The default -1 allows the MDS to choose the starting index based on available space and load balancing. <emphasis>It's strongly recommended not to change the default for this parameter to a value other than -1.</emphasis></para></entry>
               </row>
             </tbody>
           </tgroup>
         </table>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292907" xreflabel=""/>Use the lfs setstripe command described in <xref linkend='managingstripingfreespace'/> to change the file layout configuration.</para>
+        <para>Use the lfs setstripe command described in <xref linkend='managingstripingfreespace'/> to change the file layout configuration.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438267_pgfId-1292908" xreflabel=""/>10.2.3 Using the Lustre Configuration Utilities</title>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1292436" xreflabel=""/>If additional configuration is necessary, several configuration utilities are available:</para>
+        <title>10.2.3 Using the Lustre Configuration Utilities</title>
+        <para>If additional configuration is necessary, several configuration utilities are available:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438267_pgfId-1292490" xreflabel=""/>mkfs.lustre  - Use to format a disk for a Lustre service.</para>
+            <para>mkfs.lustre  - Use to format a disk for a Lustre service.</para>
           </listitem>
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438267_pgfId-1292492" xreflabel=""/>tunefs.lustre  - Use to modify configuration information on a Lustre target disk.</para>
+            <para>tunefs.lustre  - Use to modify configuration information on a Lustre target disk.</para>
           </listitem>
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438267_pgfId-1292494" xreflabel=""/>lctl  - Use to directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
+            <para>lctl  - Use to directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
           </listitem>
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438267_pgfId-1291315" xreflabel=""/>mount.lustre  - Use to start a Lustre client or target service.</para>
+            <para>mount.lustre  - Use to start a Lustre client or target service.</para>
           </listitem>
 </itemizedlist>
-<para><anchor xml:id="dbdoclet.50438267_pgfId-1295269" xreflabel=""/>For examples using these utilities, see the topic <xref linkend='systemconfigurationutilities'/></para>
-        <para><anchor xml:id="dbdoclet.50438267_pgfId-1295265" xreflabel=""/>The lfs utility is usful for configuring and querying a variety of options related to files. For more information, see <xref linkend='userutilities'/>.</para>
+<para>For examples using these utilities, see the topic <xref linkend='systemconfigurationutilities'/></para>
+        <para>The lfs utility is usful for configuring and querying a variety of options related to files. For more information, see <xref linkend='userutilities'/>.</para>
 
         <note><para>
 Some sample scripts are included in the directory where Lustre is installed. If you have installed the Lustre source code, the scripts are located in the lustre/tests sub-directory. These scripts enable quick setup of some simple standard Lustre configurations.</para>

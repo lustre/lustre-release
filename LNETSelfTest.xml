@@ -3,7 +3,7 @@
   <info>
     <title xml:id='lnetselftest.title'>Testing Lustre Network Performance (LNET Self-Test)</title>
   </info>
-  <para><anchor xml:id="dbdoclet.50438223_pgfId-1290818" xreflabel=""/><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET self-test, which is used by site administrators to confirm that Lustre Networking (LNET) has been properly installed and configured, and that underlying network software and hardware are performing according to expectations. The chapter includes:</para>
+  <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET self-test, which is used by site administrators to confirm that Lustre Networking (LNET) has been properly installed and configured, and that underlying network software and hardware are performing according to expectations. The chapter includes:</para>
 
     <itemizedlist><listitem>
   <para><xref linkend="dbdoclet.50438223_91742"/></para>
@@ -15,157 +15,157 @@
 
     <section xml:id="dbdoclet.50438223_91742">
       <title>23.1 LNET Self-Test Overview</title>
-      <para><anchor xml:id="dbdoclet.50438223_pgfId-1300619" xreflabel=""/>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs. It is designed to:</para>
+      <para>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs. It is designed to:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1300620" xreflabel=""/> Test the connection ability of the Lustre network</para>
+          <para> Test the connection ability of the Lustre network</para>
         </listitem>
 
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1300621" xreflabel=""/> Run regression tests of the Lustre network</para>
+          <para> Run regression tests of the Lustre network</para>
         </listitem>
 
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1300622" xreflabel=""/> Test performance of the Lustre network</para>
+          <para> Test performance of the Lustre network</para>
         </listitem>
 
 </itemizedlist>
-<para><anchor xml:id="dbdoclet.50438223_pgfId-1304396" xreflabel=""/>After you have obtained performance results for your Lustre network, refer to <xref linkend='lustretuning'/> for information about parameters that can be used to tune LNET for optimum performance.</para>
+<para>After you have obtained performance results for your Lustre network, refer to <xref linkend='lustretuning'/> for information about parameters that can be used to tune LNET for optimum performance.</para>
               <note><para>Apart from the performance impact, LNET self-test is invisible to Lustre.</para></note>
 
-      <para><anchor xml:id="dbdoclet.50438223_pgfId-1293959" xreflabel=""/>An LNET self-test cluster includes two types of nodes:</para>
+      <para>An LNET self-test cluster includes two types of nodes:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1300652" xreflabel=""/><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNET self-test cluster. The console node serves as the user interface of the LNET self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNET self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
+          <para><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNET self-test cluster. The console node serves as the user interface of the LNET self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNET self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
         </listitem>
 
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1296586" xreflabel=""/><emphasis role="bold">Test nodes</emphasis>  - The nodes on which the tests are run. Test nodes are controlled by the user from the console node; the user does not need to log into them directly.</para>
+          <para><emphasis role="bold">Test nodes</emphasis>  - The nodes on which the tests are run. Test nodes are controlled by the user from the console node; the user does not need to log into them directly.</para>
         </listitem>
 
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438223_pgfId-1300734" xreflabel=""/>LNET self-test has two user utilities:</para>
+      <para>LNET self-test has two user utilities:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1290849" xreflabel=""/><emphasis role="bold">lst</emphasis>  - The user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, including commands to create a session, create test groups, etc.</para>
+          <para><emphasis role="bold">lst</emphasis>  - The user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, including commands to create a session, create test groups, etc.</para>
         </listitem>
 
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438223_pgfId-1291488" xreflabel=""/><emphasis role="bold">lstclient</emphasis>  - The userspace LNET self-test program (run on a test node). The lstclient utility is linked with userspace LNDs and LNET. This utility is not needed if only kernel space LNET and LNDs are used.</para>
+          <para><emphasis role="bold">lstclient</emphasis>  - The userspace LNET self-test program (run on a test node). The lstclient utility is linked with userspace LNDs and LNET. This utility is not needed if only kernel space LNET and LNDs are used.</para>
         </listitem>
 
 </itemizedlist>
               <note><para>Test nodes can be in either kernel or userspace. A console user can invite a kernel test node to join the test session by running lstadd_groupNID, but the console user cannot actively add a userspace test node to the test-session. However, the console user can passively accept a test node to the test session while the test node is running lstclient to connect to the console.</para></note>
 
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1300634" xreflabel=""/>23.1.1 Prerequisites</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1300640" xreflabel=""/>To run LNET self-test, these modules must be loaded:</para>
+        <title>23.1.1 Prerequisites</title>
+        <para>To run LNET self-test, these modules must be loaded:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1300832" xreflabel=""/>libcfs</para>
+            <para>libcfs</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1300836" xreflabel=""/>net</para>
+            <para>net</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1300837" xreflabel=""/>lnet_selftest</para>
+            <para>lnet_selftest</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1300838" xreflabel=""/> One of the klnds (i.e, ksocklnd, ko2iblnd...) as needed by your network configuration</para>
+            <para> One of the klnds (i.e, ksocklnd, ko2iblnd...) as needed by your network configuration</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1300839" xreflabel=""/>To load the required modules, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1300871" xreflabel=""/>modprobe lnet_selftest 
+        <para>To load the required modules, run:</para>
+        <screen>modprobe lnet_selftest 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1300873" xreflabel=""/>This command recursively loads the modules on which LNET self-test depends.</para>
+        <para>This command recursively loads the modules on which LNET self-test depends.</para>
                 <note><para>While the console and test nodes require all the prerequisite modules to be loaded, userspace test nodes do not require these modules.</para></note>
 
       </section>
     </section>
     <section xml:id="dbdoclet.50438223_48138">
       <title>23.2 Using LNET Self-Test</title>
-      <para><anchor xml:id="dbdoclet.50438223_pgfId-1300891" xreflabel=""/>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
+      <para>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1300917" xreflabel=""/>23.2.1 Creating a Session</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1300889" xreflabel=""/>A <emphasis>session</emphasis> is a set of processes that run on a test node. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (new_session, end_session, show_session). For more about session parameters, see <link xl:href="LNETSelfTest.html#50438223_91247">Session Commands</link>.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1300956" xreflabel=""/>Almost all operations should be performed within the context of a session. From the console node, a user can only operate nodes in his own session. If a session ends, the session context in all test nodes is stopped.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301000" xreflabel=""/>The following commands set the LST_SESSION environment variable to identify the session on the console node and create a session called read_write:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301013" xreflabel=""/>export LST_SESSION=$$
-<anchor xml:id="dbdoclet.50438223_pgfId-1301014" xreflabel=""/>lst new_session read_write
+        <title>23.2.1 Creating a Session</title>
+        <para>A <emphasis>session</emphasis> is a set of processes that run on a test node. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (new_session, end_session, show_session). For more about session parameters, see <link xl:href="LNETSelfTest.html#50438223_91247">Session Commands</link>.</para>
+        <para>Almost all operations should be performed within the context of a session. From the console node, a user can only operate nodes in his own session. If a session ends, the session context in all test nodes is stopped.</para>
+        <para>The following commands set the LST_SESSION environment variable to identify the session on the console node and create a session called read_write:</para>
+        <screen>export LST_SESSION=$$
+lst new_session read_write
 </screen>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1296644" xreflabel=""/>23.2.2 Setting Up Groups</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301055" xreflabel=""/>A <emphasis>group</emphasis> is a named collection of nodes. Any number of groups can exist in a single LNET self-test session. Group membership is not restricted in that a node can be included in any number of groups.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301056" xreflabel=""/>Each node in a group has a rank, determined by the order in which it was added to the group. The rank is used to establish test traffic patterns.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301051" xreflabel=""/>A user can only control nodes in his/her session. To allocate nodes to the session, the user needs to add nodes to a group (of the session). All nodes in a group can be referenced by the group name. A node can be allocated to multiple groups of a session.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301084" xreflabel=""/>In the following example, three groups are established:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301100" xreflabel=""/>lst add_group servers 192.168.10.[8,10,12-16]@tcp
-<anchor xml:id="dbdoclet.50438223_pgfId-1301101" xreflabel=""/>lst add_group readers 192.168.1.[1-253/2]@o2ib
-<anchor xml:id="dbdoclet.50438223_pgfId-1301102" xreflabel=""/>lst add_group writers 192.168.1.[2-254/2]@o2ib
+        <title>23.2.2 Setting Up Groups</title>
+        <para>A <emphasis>group</emphasis> is a named collection of nodes. Any number of groups can exist in a single LNET self-test session. Group membership is not restricted in that a node can be included in any number of groups.</para>
+        <para>Each node in a group has a rank, determined by the order in which it was added to the group. The rank is used to establish test traffic patterns.</para>
+        <para>A user can only control nodes in his/her session. To allocate nodes to the session, the user needs to add nodes to a group (of the session). All nodes in a group can be referenced by the group name. A node can be allocated to multiple groups of a session.</para>
+        <para>In the following example, three groups are established:</para>
+        <screen>lst add_group servers 192.168.10.[8,10,12-16]@tcp
+lst add_group readers 192.168.1.[1-253/2]@o2ib
+lst add_group writers 192.168.1.[2-254/2]@o2ib
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301147" xreflabel=""/>These three groups include:</para>
+        <para>These three groups include:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301153" xreflabel=""/> Nodes that will function as 'servers' to be accessed by 'clients' during the LNET self-test session</para>
+            <para> Nodes that will function as 'servers' to be accessed by 'clients' during the LNET self-test session</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301154" xreflabel=""/> Nodes that will function as 'clients' that will simulate <emphasis>reading</emphasis> data from the 'servers'</para>
+            <para> Nodes that will function as 'clients' that will simulate <emphasis>reading</emphasis> data from the 'servers'</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301155" xreflabel=""/> Nodes that will function as 'clients' that will simulate <emphasis>writing</emphasis> data to the 'servers'</para>
+            <para> Nodes that will function as 'clients' that will simulate <emphasis>writing</emphasis> data to the 'servers'</para>
           </listitem>
 
 </itemizedlist>
                 <note><para>A console user can associate kernel space test nodes with the session by running lst add_group NIDs, but a userspace test node cannot be actively added to the session. However, the console user can passively &quot;accept&quot; a test node to associate with a test session while the test node running lstclient connects to the console node, i.e: lstclient --sesid CONSOLE_NID --group NAME).</para></note>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1296646" xreflabel=""/>23.2.3 <anchor xml:id="dbdoclet.50438223_42848" xreflabel=""/>Defining and Running the Tests</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1298665" xreflabel=""/>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a source group identified using the --from parameter and a target group identified using the --to parameter. When a test is running, each node in the --from<emphasis>&lt;group&gt;</emphasis> simulates a client by sending requests to nodes in the --to<emphasis>&lt;group&gt;</emphasis>, which are simulating a set of servers, and then receives responses in return. This activity is designed to mimic Lustre RPC traffic.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301259" xreflabel=""/>A <emphasis>batch</emphasis> is a collection of tests that are started and stopped together and run in parallel. A test must always be run as part of a batch, even if it is just a single test. Users can only run or stop a test batch, not individual tests.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301286" xreflabel=""/>Tests in a batch are non-destructive to the file system, and can be run in a normal Lustre environment (provided the performance impact is acceptable).</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301260" xreflabel=""/>A simple batch might contain a single test, for example, to determine whether the network bandwidth presents an I/O bottleneck. In this example, the --to<emphasis>&lt;group&gt;</emphasis> could be comprised of Lustre OSSs and --from<emphasis>&lt;group&gt;</emphasis> the compute nodes. A second test could be added to perform pings from a login node to the MDS to see how checkpointing affects the ls -l process.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301333" xreflabel=""/>Two types of tests are available:</para>
+        <title>23.2.3 <anchor xml:id="dbdoclet.50438223_42848" xreflabel=""/>Defining and Running the Tests</title>
+        <para>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a source group identified using the --from parameter and a target group identified using the --to parameter. When a test is running, each node in the --from<emphasis>&lt;group&gt;</emphasis> simulates a client by sending requests to nodes in the --to<emphasis>&lt;group&gt;</emphasis>, which are simulating a set of servers, and then receives responses in return. This activity is designed to mimic Lustre RPC traffic.</para>
+        <para>A <emphasis>batch</emphasis> is a collection of tests that are started and stopped together and run in parallel. A test must always be run as part of a batch, even if it is just a single test. Users can only run or stop a test batch, not individual tests.</para>
+        <para>Tests in a batch are non-destructive to the file system, and can be run in a normal Lustre environment (provided the performance impact is acceptable).</para>
+        <para>A simple batch might contain a single test, for example, to determine whether the network bandwidth presents an I/O bottleneck. In this example, the --to<emphasis>&lt;group&gt;</emphasis> could be comprised of Lustre OSSs and --from<emphasis>&lt;group&gt;</emphasis> the compute nodes. A second test could be added to perform pings from a login node to the MDS to see how checkpointing affects the ls -l process.</para>
+        <para>Two types of tests are available:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301338" xreflabel=""/><emphasis role="bold">ping -</emphasis>  A ping generates a short request message, which results in a short response. Pings are useful to determine latency and small message overhead and to simulate Lustre metadata traffic.</para>
+            <para><emphasis role="bold">ping -</emphasis>  A ping generates a short request message, which results in a short response. Pings are useful to determine latency and small message overhead and to simulate Lustre metadata traffic.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1301407" xreflabel=""/><emphasis role="bold">brw -</emphasis>  In a brw ('bulk read write') test, data is transferred from the target to the source (brwread) or data is transferred from the source to the target (brwwrite). The size of the bulk transfer is set using the size parameter. A brw test is useful to determine network bandwidth and to simulate Lustre I/O traffic.</para>
+            <para><emphasis role="bold">brw -</emphasis>  In a brw ('bulk read write') test, data is transferred from the target to the source (brwread) or data is transferred from the source to the target (brwwrite). The size of the bulk transfer is set using the size parameter. A brw test is useful to determine network bandwidth and to simulate Lustre I/O traffic.</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301257" xreflabel=""/>In the example below, a batch is created called bulk_rw. Then two brw tests are added. In the first test, 1M of data is sent from the servers to the clients as a simulated read operation with a simple data validation check. In the second test, 4K of data is sent from the clients to the servers as a simulated write operation with a full data validation check.</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301178" xreflabel=""/>lst add_batch bulk_rw
-<anchor xml:id="dbdoclet.50438223_pgfId-1301179" xreflabel=""/>lst add_test --batch bulk_rw --from readers --to servers \
-<anchor xml:id="dbdoclet.50438223_pgfId-1303584" xreflabel=""/>brw read check=simple size=1M
-<anchor xml:id="dbdoclet.50438223_pgfId-1303588" xreflabel=""/>lst add_test --batch bulk_rw --from writers --to servers \
-<anchor xml:id="dbdoclet.50438223_pgfId-1303589" xreflabel=""/>brw write check=full size=4K
+        <para>In the example below, a batch is created called bulk_rw. Then two brw tests are added. In the first test, 1M of data is sent from the servers to the clients as a simulated read operation with a simple data validation check. In the second test, 4K of data is sent from the clients to the servers as a simulated write operation with a full data validation check.</para>
+        <screen>lst add_batch bulk_rw
+lst add_test --batch bulk_rw --from readers --to servers \
+brw read check=simple size=1M
+lst add_test --batch bulk_rw --from writers --to servers \
+brw write check=full size=4K
 </screen>
-<para><anchor xml:id="dbdoclet.50438223_pgfId-1303590" xreflabel=""/>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <xref linkend='dbdoclet.50438223_36860'/>.</para>
+<para>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <xref linkend='dbdoclet.50438223_36860'/>.</para>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1290855" xreflabel=""/>23.2.4 Sample Script</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290856" xreflabel=""/>This sample LNET self-test script simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an InfiniBand network (connected via LNET routers). In this example, half the clients are reading and half the clients are writing.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291527" xreflabel=""/>Run this script on the console node:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1290863" xreflabel=""/>#!/bin/bash
-<anchor xml:id="dbdoclet.50438223_pgfId-1290864" xreflabel=""/>export LST_SESSION=$$
-<anchor xml:id="dbdoclet.50438223_pgfId-1290865" xreflabel=""/>lst new_session read/write
-<anchor xml:id="dbdoclet.50438223_pgfId-1290866" xreflabel=""/>lst add_group servers 192.168.10.[8,10,12-16]@tcp
-<anchor xml:id="dbdoclet.50438223_pgfId-1290867" xreflabel=""/>lst add_group readers 192.168.1.[1-253/2]@o2ib
-<anchor xml:id="dbdoclet.50438223_pgfId-1290868" xreflabel=""/>lst add_group writers 192.168.1.[2-254/2]@o2ib
-<anchor xml:id="dbdoclet.50438223_pgfId-1290869" xreflabel=""/>lst add_batch bulk_rw
-<anchor xml:id="dbdoclet.50438223_pgfId-1290870" xreflabel=""/>lst add_test --batch bulk_rw --from readers --to servers \
-<anchor xml:id="dbdoclet.50438223_pgfId-1290871" xreflabel=""/>brw read check=simple size=1M
-<anchor xml:id="dbdoclet.50438223_pgfId-1290872" xreflabel=""/>lst add_test --batch bulk_rw --from writers --to servers \
-<anchor xml:id="dbdoclet.50438223_pgfId-1290873" xreflabel=""/>brw write check=full size=4K
-<anchor xml:id="dbdoclet.50438223_pgfId-1290874" xreflabel=""/># start running
-<anchor xml:id="dbdoclet.50438223_pgfId-1290875" xreflabel=""/>lst run bulk_rw
-<anchor xml:id="dbdoclet.50438223_pgfId-1290876" xreflabel=""/># display server stats for 30 seconds
-<anchor xml:id="dbdoclet.50438223_pgfId-1290877" xreflabel=""/>lst stat servers &amp; sleep 30; kill $!
-<anchor xml:id="dbdoclet.50438223_pgfId-1290878" xreflabel=""/># tear down
-<anchor xml:id="dbdoclet.50438223_pgfId-1290879" xreflabel=""/>lst end_session
+        <title>23.2.4 Sample Script</title>
+        <para>This sample LNET self-test script simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an InfiniBand network (connected via LNET routers). In this example, half the clients are reading and half the clients are writing.</para>
+        <para>Run this script on the console node:</para>
+        <screen>#!/bin/bash
+export LST_SESSION=$$
+lst new_session read/write
+lst add_group servers 192.168.10.[8,10,12-16]@tcp
+lst add_group readers 192.168.1.[1-253/2]@o2ib
+lst add_group writers 192.168.1.[2-254/2]@o2ib
+lst add_batch bulk_rw
+lst add_test --batch bulk_rw --from readers --to servers \
+brw read check=simple size=1M
+lst add_test --batch bulk_rw --from writers --to servers \
+brw write check=full size=4K
+# start running
+lst run bulk_rw
+# display server stats for 30 seconds
+lst stat servers &amp; sleep 30; kill $!
+# tear down
+lst end_session
 </screen>
                 <note><para>This script can be easily adapted to pass the group NIDs by shell variables or command line arguments (making it good for general-purpose use).</para></note>
 
@@ -173,87 +173,87 @@
     </section>
     <section xml:id="dbdoclet.50438223_27277">
       <title>23.3 LNET Self-Test <anchor xml:id="dbdoclet.50438223_marker-1298562" xreflabel=""/>Command Reference</title>
-      <para><anchor xml:id="dbdoclet.50438223_pgfId-1296018" xreflabel=""/>The LNET self-test (lst) utility is used to issue LNET self-test commands. The lst utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
+      <para>The LNET self-test (lst) utility is used to issue LNET self-test commands. The lst utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1290916" xreflabel=""/>23.3.1 <anchor xml:id="dbdoclet.50438223_91247" xreflabel=""/>Session Commands</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1296368" xreflabel=""/>This section describes lst session commands.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290917" xreflabel=""/><emphasis role="bold">LST_SESSION</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1297000" xreflabel=""/>The lst utility uses the LST_SESSION environmental variable to identify the session locally on the self-test console node. This should be a numeric value that uniquely identifies all session processes on the node. It is convenient to set this to the process ID of the shell both for interactive use and in shell scripts. Almost all lst commands require LST_SESSION to be set.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301596" xreflabel=""/>Example:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301601" xreflabel=""/>export LST_SESSION=$$
+        <title>23.3.1 <anchor xml:id="dbdoclet.50438223_91247" xreflabel=""/>Session Commands</title>
+        <para>This section describes lst session commands.</para>
+        <para><emphasis role="bold">LST_SESSION</emphasis></para>
+        <para>The lst utility uses the LST_SESSION environmental variable to identify the session locally on the self-test console node. This should be a numeric value that uniquely identifies all session processes on the node. It is convenient to set this to the process ID of the shell both for interactive use and in shell scripts. Almost all lst commands require LST_SESSION to be set.</para>
+        <para>Example:</para>
+        <screen>export LST_SESSION=$$
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290923" xreflabel=""/><emphasis role="bold">new_session [--timeout SECONDS] [--force] NAME</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290924" xreflabel=""/>Creates a new session.</para>
+        <para><emphasis role="bold">new_session [--timeout SECONDS] [--force] NAME</emphasis></para>
+        <para>Creates a new session.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301517" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301519" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301521" xreflabel=""/>--timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301523" xreflabel=""/>Console timeout value of the session. The session ends automatically if it remains idle (i.e., no commands are issued) for this period.</para></entry>
+                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
+                <entry><para> Console timeout value of the session. The session ends automatically if it remains idle (i.e., no commands are issued) for this period.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301525" xreflabel=""/>--force</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301527" xreflabel=""/>Ends conflicting sessions. This determines who 'wins' when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already 'owned' by another session, the -force flag allows this session to 'steal' the node.</para></entry>
+                <entry><para> --force</para></entry>
+                <entry><para> Ends conflicting sessions. This determines who 'wins' when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already 'owned' by another session, the -force flag allows this session to 'steal' the node.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301529" xreflabel=""/><emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301531" xreflabel=""/>A human-readable string to print when listing sessions or reporting session conflicts.</para></entry>
+                <entry><para> <emphasis>&lt;name&gt;</emphasis></para></entry>
+                <entry><para> A human-readable string to print when listing sessions or reporting session conflicts.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1301575" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301576" xreflabel=""/>$ lst new_session --force read_write
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst new_session --force read_write
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303652" xreflabel=""/><emphasis role="bold">end_session</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291942" xreflabel=""/>Stops all operations and tests in the current session and clears the session'™s status.</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303653" xreflabel=""/>$ lst end_session
+        <para><emphasis role="bold">end_session</emphasis></para>
+        <para>Stops all operations and tests in the current session and clears the session'™s status.</para>
+        <screen>$ lst end_session
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303656" xreflabel=""/><emphasis role="bold">show_session</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290942" xreflabel=""/>Shows the session information. This command prints information about the current session. It does not require LST_SESSION to be defined in the process environment.</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1290945" xreflabel=""/>$ lst show_session
+        <para><emphasis role="bold">show_session</emphasis></para>
+        <para>Shows the session information. This command prints information about the current session. It does not require LST_SESSION to be defined in the process environment.</para>
+        <screen>$ lst show_session
 </screen>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1290947" xreflabel=""/>23.3.2 Group Commands</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1296396" xreflabel=""/>This section describes lst group commands.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290948" xreflabel=""/><emphasis role="bold">add_group</emphasis><emphasis>&lt;name&gt; &lt;NIDS&gt; [&lt;NIDs&gt;...]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290949" xreflabel=""/>Creates the group and adds a list of test nodes to the group.</para>
+        <title>23.3.2 Group Commands</title>
+        <para>This section describes lst group commands.</para>
+        <para><emphasis role="bold">add_group</emphasis><emphasis>&lt;name&gt; &lt;NIDS&gt; [&lt;NIDs&gt;...]</emphasis></para>
+        <para>Creates the group and adds a list of test nodes to the group.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301542" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301544" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294606" xreflabel=""/><emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294608" xreflabel=""/>Name of the group.</para></entry>
+                <entry><para> <emphasis>&lt;name&gt;</emphasis></para></entry>
+                <entry><para> Name of the group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294610" xreflabel=""/><emphasis>&lt;NIDs&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294612" xreflabel=""/>A string that may be expanded to include one or more LNET NIDs.</para></entry>
+                <entry><para> <emphasis>&lt;NIDs&gt;</emphasis></para></entry>
+                <entry><para> A string that may be expanded to include one or more LNET NIDs.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303377" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303383" xreflabel=""/>$ lst add_group servers 192.168.10.[35,40-45]@tcp<anchor xml:id="dbdoclet.50438223_pgfId-1303381" xreflabel=""/>$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\<anchor xml:id="dbdoclet.50438223_pgfId-1303393" xreflabel=""/>[10-20]@tcp</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303378" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290954" xreflabel=""/><emphasis role="bold">update_group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--refresh] [--clean</emphasis><emphasis>&lt;status&gt;</emphasis><emphasis role="bold">] [--remove</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1290955" xreflabel=""/>Updates the state of nodes in a group or adjusts a group'™s membership. This command is useful if some nodes have crashed and should be excluded from the group.</para>
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst add_group servers 192.168.10.[35,40-45]@tcp$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\[10-20]@tcp</screen>
+        <para> </para>
+        <para><emphasis role="bold">update_group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--refresh] [--clean</emphasis><emphasis>&lt;status&gt;</emphasis><emphasis role="bold">] [--remove</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
+        <para>Updates the state of nodes in a group or adjusts a group'™s membership. This command is useful if some nodes have crashed and should be excluded from the group.</para>
         <informaltable frame="all">
           <tgroup cols="3">
             <colspec colname="c1" colwidth="33*"/>
@@ -261,148 +261,148 @@
             <colspec colname="c3" colwidth="33*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301546" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301548" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294758" xreflabel=""/>--refresh</para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294760" xreflabel=""/>Refreshes the state of all inactive nodes in the group.</para></entry>
+                <entry><para> --refresh</para></entry>
+                <entry nameend="c3" namest="c2"><para> Refreshes the state of all inactive nodes in the group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294764" xreflabel=""/>--clean<emphasis>&lt;status&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294766" xreflabel=""/>Removes nodes with a specified status from the group. Status may be:</para></entry>
+                <entry><para> --clean<emphasis>&lt;status&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> Removes nodes with a specified status from the group. Status may be:</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294736" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294774" xreflabel=""/>active</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294788" xreflabel=""/>The node is in the current session.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> active</para></entry>
+                <entry><para> The node is in the current session.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294732" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294776" xreflabel=""/>busy</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294790" xreflabel=""/>The node is now owned by another session.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> busy</para></entry>
+                <entry><para> The node is now owned by another session.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294728" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294778" xreflabel=""/>down</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294792" xreflabel=""/>The node has been marked down.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> down</para></entry>
+                <entry><para> The node has been marked down.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294724" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294780" xreflabel=""/>unknown</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294794" xreflabel=""/>The node'™s status has yet to be determined.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> unknown</para></entry>
+                <entry><para> The node'™s status has yet to be determined.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294720" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294782" xreflabel=""/>invalid</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294796" xreflabel=""/>Any state but active.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> invalid</para></entry>
+                <entry><para> Any state but active.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294802" xreflabel=""/>--remove<emphasis>&lt;NIDs&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294804" xreflabel=""/>Removes specified nodes from the group.</para></entry>
+                <entry><para> --remove<emphasis>&lt;NIDs&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> Removes specified nodes from the group.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303342" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303346" xreflabel=""/>$ lst update_group clients --refresh<anchor xml:id="dbdoclet.50438223_pgfId-1303358" xreflabel=""/>$ lst update_group clients --clean busy<anchor xml:id="dbdoclet.50438223_pgfId-1303359" xreflabel=""/>$ lst update_group clients --clean invalid // \<anchor xml:id="dbdoclet.50438223_pgfId-1303360" xreflabel=""/>invalid == busy || down || unknown<anchor xml:id="dbdoclet.50438223_pgfId-1303361" xreflabel=""/>$ lst update_group clients --remove \192.168.1.[10-20]@tcp</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303343" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1292226" xreflabel=""/><emphasis role="bold">list_group [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--active] [--busy] [--down] [--unknown] [--all]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1294616" xreflabel=""/>Prints information about a group or lists all groups in the current session if no group is specified.</para>
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst update_group clients --refresh$ lst update_group clients --clean busy$ lst update_group clients --clean invalid // \invalid == busy || down || unknown$ lst update_group clients --remove \192.168.1.[10-20]@tcp</screen>
+        <para> </para>
+        <para><emphasis role="bold">list_group [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--active] [--busy] [--down] [--unknown] [--all]</emphasis></para>
+        <para>Prints information about a group or lists all groups in the current session if no group is specified.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301755" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301757" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294824" xreflabel=""/><emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294826" xreflabel=""/>The name of the group.</para></entry>
+                <entry><para> <emphasis>&lt;name&gt;</emphasis></para></entry>
+                <entry><para> The name of the group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294828" xreflabel=""/>--active</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294830" xreflabel=""/>Lists the active nodes.</para></entry>
+                <entry><para> --active</para></entry>
+                <entry><para> Lists the active nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294832" xreflabel=""/>--busy</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294834" xreflabel=""/>Lists the busy nodes.</para></entry>
+                <entry><para> --busy</para></entry>
+                <entry><para> Lists the busy nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294836" xreflabel=""/>--down</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294838" xreflabel=""/>Lists the down nodes.</para></entry>
+                <entry><para> --down</para></entry>
+                <entry><para> Lists the down nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294840" xreflabel=""/>--unknown</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294842" xreflabel=""/>Lists unknown nodes.</para></entry>
+                <entry><para> --unknown</para></entry>
+                <entry><para> Lists unknown nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294844" xreflabel=""/>--all</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1294846" xreflabel=""/>Lists all nodes.</para></entry>
+                <entry><para> --all</para></entry>
+                <entry><para> Lists all nodes.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302415" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304733" xreflabel=""/>Example:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302418" xreflabel=""/>$ lst list_group<anchor xml:id="dbdoclet.50438223_pgfId-1302419" xreflabel=""/>1) clients<anchor xml:id="dbdoclet.50438223_pgfId-1302420" xreflabel=""/>2) servers<anchor xml:id="dbdoclet.50438223_pgfId-1302421" xreflabel=""/>Total 2 groups<anchor xml:id="dbdoclet.50438223_pgfId-1302422" xreflabel=""/>$ lst list_group clients<anchor xml:id="dbdoclet.50438223_pgfId-1302423" xreflabel=""/>ACTIVE BUSY DOWN UNKNOWN TOTAL<anchor xml:id="dbdoclet.50438223_pgfId-1302424" xreflabel=""/>3 1 2 0 6<anchor xml:id="dbdoclet.50438223_pgfId-1302425" xreflabel=""/>$ lst list_group clients --all<anchor xml:id="dbdoclet.50438223_pgfId-1302426" xreflabel=""/>192.168.1.10@tcp Active<anchor xml:id="dbdoclet.50438223_pgfId-1302427" xreflabel=""/>192.168.1.11@tcp Active<anchor xml:id="dbdoclet.50438223_pgfId-1302428" xreflabel=""/>192.168.1.12@tcp Busy<anchor xml:id="dbdoclet.50438223_pgfId-1302429" xreflabel=""/>192.168.1.13@tcp Active<anchor xml:id="dbdoclet.50438223_pgfId-1302430" xreflabel=""/>192.168.1.14@tcp DOWN<anchor xml:id="dbdoclet.50438223_pgfId-1302431" xreflabel=""/>192.168.1.15@tcp DOWN<anchor xml:id="dbdoclet.50438223_pgfId-1302432" xreflabel=""/>Total 6 nodes<anchor xml:id="dbdoclet.50438223_pgfId-1302433" xreflabel=""/>$ lst list_group clients --busy<anchor xml:id="dbdoclet.50438223_pgfId-1302434" xreflabel=""/>192.168.1.12@tcp Busy<anchor xml:id="dbdoclet.50438223_pgfId-1302435" xreflabel=""/>Total 1 node</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1294659" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303729" xreflabel=""/><emphasis role="bold">del_group</emphasis><emphasis>&lt;name&gt;</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291000" xreflabel=""/>Removes a group from the session. If the group is referred to by any test, then the operation fails. If nodes in the group are referred to only by this group, then they are kicked out from the current session; otherwise, they are still in the current session.</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1291003" xreflabel=""/>$ lst del_group clients
+        <para> </para>
+        <para>Example:</para>
+        <screen>$ lst list_group1) clients2) serversTotal 2 groups$ lst list_group clientsACTIVE BUSY DOWN UNKNOWN TOTAL3 1 2 0 6$ lst list_group clients --all192.168.1.10@tcp Active192.168.1.11@tcp Active192.168.1.12@tcp Busy192.168.1.13@tcp Active192.168.1.14@tcp DOWN192.168.1.15@tcp DOWNTotal 6 nodes$ lst list_group clients --busy192.168.1.12@tcp BusyTotal 1 node</screen>
+        <para> </para>
+        <para><emphasis role="bold">del_group</emphasis><emphasis>&lt;name&gt;</emphasis></para>
+        <para>Removes a group from the session. If the group is referred to by any test, then the operation fails. If nodes in the group are referred to only by this group, then they are kicked out from the current session; otherwise, they are still in the current session.</para>
+        <screen>$ lst del_group clients
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291004" xreflabel=""/><emphasis role="bold">lstclient --sesid</emphasis><emphasis>&lt;NID&gt;</emphasis><emphasis role="bold">--group</emphasis><emphasis>&lt;name&gt;</emphasis> [--server_mode]</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291005" xreflabel=""/>Use lstclient to run the userland self-test client. The lstclient command should be executed after creating a session on the console. There are only two mandatory options for lstclient:</para>
+        <para><emphasis role="bold">lstclient --sesid</emphasis><emphasis>&lt;NID&gt;</emphasis><emphasis role="bold">--group</emphasis><emphasis>&lt;name&gt;</emphasis> [--server_mode]</para>
+        <para>Use lstclient to run the userland self-test client. The lstclient command should be executed after creating a session on the console. There are only two mandatory options for lstclient:</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301783" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1301785" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301787" xreflabel=""/>--sesid<emphasis>&lt;NID&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301789" xreflabel=""/>The first console'™s NID.</para></entry>
+                <entry><para> --sesid<emphasis>&lt;NID&gt;</emphasis></para></entry>
+                <entry><para> The first console'™s NID.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301791" xreflabel=""/>--group<emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1301793" xreflabel=""/>The test group to join.</para></entry>
+                <entry><para> --group<emphasis>&lt;name&gt;</emphasis></para></entry>
+                <entry><para> The test group to join.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303207" xreflabel=""/>--server_mode</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303209" xreflabel=""/>When included, forces LNET to behave as a server, such as starting an acceptor if the underlying NID needs it or using privileged ports. Only root is allowed to use the --server_mode option.</para></entry>
+                <entry><para> --server_mode</para></entry>
+                <entry><para> When included, forces LNET to behave as a server, such as starting an acceptor if the underlying NID needs it or using privileged ports. Only root is allowed to use the --server_mode option.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-         <para><anchor xml:id="dbdoclet.50438223_pgfId-1304734" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-         <screen><anchor xml:id="dbdoclet.50438223_pgfId-1301816" xreflabel=""/>Console $ lst new_session testsession
+         <para><emphasis role="bold">Example:</emphasis></para>
+         <screen>Console $ lst new_session testsession
 Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1296196" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1296197" xreflabel=""/>Client1 $ lstclient --sesid 192.168.1.52@tcp |--group clients --server_mode
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>Client1 $ lstclient --sesid 192.168.1.52@tcp |--group clients --server_mode
 </screen>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1291013" xreflabel=""/>23.3.3 <anchor xml:id="dbdoclet.50438223_36860" xreflabel=""/>Batch and Test Commands</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1296409" xreflabel=""/>This section describes lst batch and test commands.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291014" xreflabel=""/><emphasis role="bold">add_batch NAME</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291015" xreflabel=""/>A default batch test set named batch is created when the session is started. You can specify a batch name by using add_batch:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1291018" xreflabel=""/>$ lst add_batch bulkperf
+        <title>23.3.3 <anchor xml:id="dbdoclet.50438223_36860" xreflabel=""/>Batch and Test Commands</title>
+        <para>This section describes lst batch and test commands.</para>
+        <para><emphasis role="bold">add_batch NAME</emphasis></para>
+        <para>A default batch test set named batch is created when the session is started. You can specify a batch name by using add_batch:</para>
+        <screen>$ lst add_batch bulkperf
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291019" xreflabel=""/>Creates a batch test called bulkperf.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303289" xreflabel=""/>add_test --batch<emphasis>&lt;batchname&gt;</emphasis> [--loop <emphasis>&lt;#&gt;]</emphasis><emphasis role="bold">[--concurrency</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--distribute</emphasis><emphasis>&lt;#:#&gt;</emphasis><emphasis role="bold">]</emphasis></para>
+        <para>Creates a batch test called bulkperf.</para>
+        <para>add_test --batch<emphasis>&lt;batchname&gt;</emphasis> [--loop <emphasis>&lt;#&gt;]</emphasis><emphasis role="bold">[--concurrency</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--distribute</emphasis><emphasis>&lt;#:#&gt;</emphasis><emphasis role="bold">]</emphasis></para>
         <para>--from<emphasis>&lt;group&gt;</emphasis> --to <emphasis>&lt;group&gt;</emphasis> {brw|ping} &lt;test options&gt;</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303713" xreflabel=""/>Adds a test to a batch. The parameters are described below.</para>
+        <para>Adds a test to a batch. The parameters are described below.</para>
         <informaltable frame="all">
           <tgroup cols="3">
             <colspec colname="c1" colwidth="33*"/>
@@ -410,62 +410,62 @@ Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
             <colspec colname="c3" colwidth="33*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1303903" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1303905" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303909" xreflabel=""/>--batch<emphasis>&lt;batchname&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303911" xreflabel=""/>Names a group of tests for later execution.</para></entry>
+                <entry><para> --batch<emphasis>&lt;batchname&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> Names a group of tests for later execution.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303915" xreflabel=""/>--loop<emphasis>&lt;#&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303917" xreflabel=""/>Number of times to run the test.</para></entry>
+                <entry><para> --loop<emphasis>&lt;#&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> Number of times to run the test.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303921" xreflabel=""/>--concurrency<emphasis>&lt;#&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303923" xreflabel=""/>The number of requests that are active at one time.</para></entry>
+                <entry><para> --concurrency<emphasis>&lt;#&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> The number of requests that are active at one time.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303981" xreflabel=""/>--distribute<emphasis>&lt;#:#&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303983" xreflabel=""/>Determines the ratio of client nodes to server nodes for the specified test. This allows you to specify a wide range of topologies, including one-to-one and all-to-all. Distribution divides the source group into subsets, which are paired with equivalent subsets from the target group so only nodes in matching subsets communicate.</para></entry>
+                <entry><para> --distribute<emphasis>&lt;#:#&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> Determines the ratio of client nodes to server nodes for the specified test. This allows you to specify a wide range of topologies, including one-to-one and all-to-all. Distribution divides the source group into subsets, which are paired with equivalent subsets from the target group so only nodes in matching subsets communicate.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304062" xreflabel=""/>--from<emphasis>&lt;group&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304064" xreflabel=""/>The source group (test client).</para></entry>
+                <entry><para> --from<emphasis>&lt;group&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> The source group (test client).</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304068" xreflabel=""/>--to<emphasis>&lt;group&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304070" xreflabel=""/>The target group (test server).</para></entry>
+                <entry><para> --to<emphasis>&lt;group&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> The target group (test server).</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303989" xreflabel=""/>ping</para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303991" xreflabel=""/>Sends a small request message, resulting in a small reply message. For more details, see <link xl:href="LNETSelfTest.html#50438223_42848">Defining and Running the Tests</link></para></entry>
+                <entry><para> ping</para></entry>
+                <entry nameend="c3" namest="c2"><para> Sends a small request message, resulting in a small reply message. For more details, see <link xl:href="LNETSelfTest.html#50438223_42848">Defining and Running the Tests</link></para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303995" xreflabel=""/>brw</para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303997" xreflabel=""/>Sends a small request message followed by a bulk data transfer, resulting in a small reply message. <link xl:href="LNETSelfTest.html#50438223_42848">Defining and Running the Tests</link>. Options are:</para></entry>
+                <entry><para> brw</para></entry>
+                <entry nameend="c3" namest="c2"><para> Sends a small request message followed by a bulk data transfer, resulting in a small reply message. <link xl:href="LNETSelfTest.html#50438223_42848">Defining and Running the Tests</link>. Options are:</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303957" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304001" xreflabel=""/>read | write</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304003" xreflabel=""/>Read or write. The default is read.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> read | write</para></entry>
+                <entry><para> Read or write. The default is read.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303963" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304005" xreflabel=""/>size=&lt;#&gt;| &lt;#&gt;K | &lt;#&gt;M</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304007" xreflabel=""/>I/O size in bytes, KB or MB (i.e., size=1024, size=4K, size=1M). The default is 4K bytes.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> size=&lt;#&gt;| &lt;#&gt;K | &lt;#&gt;M</para></entry>
+                <entry><para> I/O size in bytes, KB or MB (i.e., size=1024, size=4K, size=1M). The default is 4K bytes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1303969" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304009" xreflabel=""/>check=full|simple</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304011" xreflabel=""/>A data validation check (checksum of data). The default is that no check is done.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> check=full|simple</para></entry>
+                <entry><para> A data validation check (checksum of data). The default is that no check is done.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302599" xreflabel=""/><emphasis role="bold">Examples showing use of the distribute parameter:</emphasis></para>
+        <para><emphasis role="bold">Examples showing use of the distribute parameter:</emphasis></para>
         <screen>
 Clients: (C1, C2, C3, C4, C5, C6)
 Server: (S1, S2, S3)
@@ -476,29 +476,29 @@ Server: (S1, S2, S3)
 --distribute 4:1 (C1,C2,C3,C4-&gt;S1), (C5,C6-&gt;S2), (NULL-&gt;S3)
 --distribute 4:2 (C1,C2,C3,C4-&gt;S1,S2), (C5, C6-&gt;S3, S1)
 --distribute 6:3 (C1,C2,C3,C4,C5,C6-&gt;S1,S2,S3)</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303015" xreflabel=""/>The setting --distribute 1:1 is the default setting where each source node communicates with one target node.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303016" xreflabel=""/>When the setting --distribute 1:<emphasis>&lt;n&gt;</emphasis> (where <emphasis>&lt;n&gt;</emphasis> is the size of the target group) is used, each source node communicates with every node in the target group.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303017" xreflabel=""/>Note that if there are more source nodes than target nodes, some source nodes may share the same target nodes. Also, if there are more target nodes than source nodes, some higher-ranked target nodes will be idle.</para>
-         <para><anchor xml:id="dbdoclet.50438223_pgfId-1304018" xreflabel=""/><emphasis role="bold">Example showing a brw test:</emphasis></para>
+        <para>The setting --distribute 1:1 is the default setting where each source node communicates with one target node.</para>
+        <para>When the setting --distribute 1:<emphasis>&lt;n&gt;</emphasis> (where <emphasis>&lt;n&gt;</emphasis> is the size of the target group) is used, each source node communicates with every node in the target group.</para>
+        <para>Note that if there are more source nodes than target nodes, some source nodes may share the same target nodes. Also, if there are more target nodes than source nodes, some higher-ranked target nodes will be idle.</para>
+         <para><emphasis role="bold">Example showing a brw test:</emphasis></para>
          <screen>
 $ lst add_group clients 192.168.1.[10-17]@tcp
 $ lst add_group servers 192.168.10.[100-103]@tcp
 $ lst add_batch bulkperf
 $ lst add_test --batch bulkperf --loop 100 --concurrency 4 \
 --distribute 4:2 --from clients brw WRITE size=16K</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304104" xreflabel=""/>In the example above, a batch test called bulkperf that will do a 16 kbyte bulk write request. In this test, two groups of four clients (sources) write to each of four servers (targets) as shown below:</para>
+        <para>In the example above, a batch test called bulkperf that will do a 16 kbyte bulk write request. In this test, two groups of four clients (sources) write to each of four servers (targets) as shown below:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1302964" xreflabel=""/> 192.168.1.[10-13] will write to 192.168.10.[100,101]</para>
+            <para> 192.168.1.[10-13] will write to 192.168.10.[100,101]</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438223_pgfId-1302048" xreflabel=""/> 192.168.1.[14-17] will write to 192.168.10.[102,103]</para>
+            <para> 192.168.1.[14-17] will write to 192.168.10.[102,103]</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302046" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302047" xreflabel=""/><emphasis role="bold">list_batch [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--active] [--invalid]</emphasis> [--server | client<emphasis role="bold">]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304185" xreflabel=""/>Lists batches in the current session or lists client and server nodes in a batch or a test.</para>
+        <para> </para>
+        <para><emphasis role="bold">list_batch [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--active] [--invalid]</emphasis> [--server | client<emphasis role="bold">]</emphasis></para>
+        <para>Lists batches in the current session or lists client and server nodes in a batch or a test.</para>
         <informaltable frame="all">
           <tgroup cols="3">
             <colspec colname="c1" colwidth="33*"/>
@@ -506,216 +506,216 @@ $ lst add_test --batch bulkperf --loop 100 --concurrency 4 \
             <colspec colname="c3" colwidth="33*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1304132" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1304134" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304200" xreflabel=""/>--test<emphasis>&lt;index&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304202" xreflabel=""/>Lists tests in a batch. If no option is used, all tests in the batch are listed. IIf one of these options are used, only specified tests in the batch are listed:</para></entry>
+                <entry><para> --test<emphasis>&lt;index&gt;</emphasis></para></entry>
+                <entry nameend="c3" namest="c2"><para> Lists tests in a batch. If no option is used, all tests in the batch are listed. IIf one of these options are used, only specified tests in the batch are listed:</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304150" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304152" xreflabel=""/>active</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304154" xreflabel=""/>Lists only active batch tests.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> active</para></entry>
+                <entry><para> Lists only active batch tests.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304156" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304158" xreflabel=""/>invalid</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304160" xreflabel=""/>Lists only invalid batch tests.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> invalid</para></entry>
+                <entry><para> Lists only invalid batch tests.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304162" xreflabel=""/> </para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304164" xreflabel=""/>server | client</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1304166" xreflabel=""/>Lists client and server nodes in a batch test.</para></entry>
+                <entry><para>  </para></entry>
+                <entry><para> server | client</para></entry>
+                <entry><para> Lists client and server nodes in a batch test.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291091" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302124" xreflabel=""/>$ lst list_batch<anchor xml:id="dbdoclet.50438223_pgfId-1302125" xreflabel=""/>bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1302126" xreflabel=""/>$ lst list_batch bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1302127" xreflabel=""/>Batch: bulkperf Tests: 1 State: Idle<anchor xml:id="dbdoclet.50438223_pgfId-1302128" xreflabel=""/>ACTIVE BUSY DOWN UNKNOWN TOTAL<anchor xml:id="dbdoclet.50438223_pgfId-1302129" xreflabel=""/>client 8 0 0 0 8<anchor xml:id="dbdoclet.50438223_pgfId-1302130" xreflabel=""/>server 4 0 0 0 4<anchor xml:id="dbdoclet.50438223_pgfId-1302131" xreflabel=""/>Test 1(brw) (loop: 100, concurrency: 4)<anchor xml:id="dbdoclet.50438223_pgfId-1302132" xreflabel=""/>ACTIVE BUSY DOWN UNKNOWN TOTAL<anchor xml:id="dbdoclet.50438223_pgfId-1302133" xreflabel=""/>client 8 0 0 0 8<anchor xml:id="dbdoclet.50438223_pgfId-1302134" xreflabel=""/>server 4 0 0 0 4<anchor xml:id="dbdoclet.50438223_pgfId-1302135" xreflabel=""/>$ lst list_batch bulkperf --server --active<anchor xml:id="dbdoclet.50438223_pgfId-1302136" xreflabel=""/>192.168.10.100@tcp Active<anchor xml:id="dbdoclet.50438223_pgfId-1302137" xreflabel=""/>192.168.10.101@tcp Active<anchor xml:id="dbdoclet.50438223_pgfId-1302138" xreflabel=""/>192.168.10.102@tcp Active<anchor xml:id="dbdoclet.50438223_pgfId-1302139" xreflabel=""/>192.168.10.103@tcp Active</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302115" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304261" xreflabel=""/><emphasis role="bold">run</emphasis><emphasis>&lt;name&gt;</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1292856" xreflabel=""/>Runs the batch.</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1293830" xreflabel=""/>$ lst run bulkperf
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst list_batchbulkperf$ lst list_batch bulkperfBatch: bulkperf Tests: 1 State: IdleACTIVE BUSY DOWN UNKNOWN TOTALclient 8 0 0 0 8server 4 0 0 0 4Test 1(brw) (loop: 100, concurrency: 4)ACTIVE BUSY DOWN UNKNOWN TOTALclient 8 0 0 0 8server 4 0 0 0 4$ lst list_batch bulkperf --server --active192.168.10.100@tcp Active192.168.10.101@tcp Active192.168.10.102@tcp Active192.168.10.103@tcp Active</screen>
+        <para> </para>
+        <para><emphasis role="bold">run</emphasis><emphasis>&lt;name&gt;</emphasis></para>
+        <para>Runs the batch.</para>
+        <screen>$ lst run bulkperf
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304255" xreflabel=""/><emphasis role="bold">stop</emphasis><emphasis>&lt;name&gt;</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1292852" xreflabel=""/>Stops the batch.</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1293837" xreflabel=""/>$ lst stop bulkperf
+        <para><emphasis role="bold">stop</emphasis><emphasis>&lt;name&gt;</emphasis></para>
+        <para>Stops the batch.</para>
+        <screen>$ lst stop bulkperf
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304256" xreflabel=""/><emphasis role="bold">query</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">[--loop</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--delay</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">] [--all]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1292848" xreflabel=""/>Queries the batch status.</para>
+        <para><emphasis role="bold">query</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">[--loop</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--delay</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">] [--all]</emphasis></para>
+        <para>Queries the batch status.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302405" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302407" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295384" xreflabel=""/>--test<emphasis>&lt;index&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295386" xreflabel=""/>Only queries the specified test. The test index starts from 1.</para></entry>
+                <entry><para> --test<emphasis>&lt;index&gt;</emphasis></para></entry>
+                <entry><para> Only queries the specified test. The test index starts from 1.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295388" xreflabel=""/>--timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295390" xreflabel=""/>The timeout value to wait for RPC. The default is 5 seconds.</para></entry>
+                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
+                <entry><para> The timeout value to wait for RPC. The default is 5 seconds.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295392" xreflabel=""/>--loop<emphasis>&lt;#&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295394" xreflabel=""/>The loop count of the query.</para></entry>
+                <entry><para> --loop<emphasis>&lt;#&gt;</emphasis></para></entry>
+                <entry><para> The loop count of the query.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295396" xreflabel=""/>--delay<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295398" xreflabel=""/>The interval of each query. The default is 5 seconds.</para></entry>
+                <entry><para> --delay<emphasis>&lt;seconds&gt;</emphasis></para></entry>
+                <entry><para> The interval of each query. The default is 5 seconds.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295400" xreflabel=""/>--all</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295402" xreflabel=""/>The list status of all nodes in a batch or a test.</para></entry>
+                <entry><para> --all</para></entry>
+                <entry><para> The list status of all nodes in a batch or a test.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302191" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302197" xreflabel=""/>$ lst run bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1303540" xreflabel=""/>$ lst query bulkperf --loop 5 --delay 3<anchor xml:id="dbdoclet.50438223_pgfId-1303541" xreflabel=""/>Batch is running<anchor xml:id="dbdoclet.50438223_pgfId-1303542" xreflabel=""/>Batch is running<anchor xml:id="dbdoclet.50438223_pgfId-1303543" xreflabel=""/>Batch is running<anchor xml:id="dbdoclet.50438223_pgfId-1303544" xreflabel=""/>Batch is running<anchor xml:id="dbdoclet.50438223_pgfId-1303545" xreflabel=""/>Batch is running<anchor xml:id="dbdoclet.50438223_pgfId-1303546" xreflabel=""/>$ lst query bulkperf --all<anchor xml:id="dbdoclet.50438223_pgfId-1303547" xreflabel=""/>192.168.1.10@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303548" xreflabel=""/>192.168.1.11@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303549" xreflabel=""/>192.168.1.12@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303550" xreflabel=""/>192.168.1.13@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303551" xreflabel=""/>192.168.1.14@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303555" xreflabel=""/>192.168.1.15@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303556" xreflabel=""/>192.168.1.16@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303561" xreflabel=""/>192.168.1.17@tcp Running<anchor xml:id="dbdoclet.50438223_pgfId-1303562" xreflabel=""/>$ lst stop bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1303563" xreflabel=""/>$ lst query bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1303565" xreflabel=""/>Batch is idle</screen>
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst run bulkperf$ lst query bulkperf --loop 5 --delay 3Batch is runningBatch is runningBatch is runningBatch is runningBatch is running$ lst query bulkperf --all192.168.1.10@tcp Running192.168.1.11@tcp Running192.168.1.12@tcp Running192.168.1.13@tcp Running192.168.1.14@tcp Running192.168.1.15@tcp Running192.168.1.16@tcp Running192.168.1.17@tcp Running$ lst stop bulkperf$ lst query bulkperfBatch is idle</screen>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438223_pgfId-1291130" xreflabel=""/>23.3.4 Other Commands</title>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1293485" xreflabel=""/>This section describes other lst commands.</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291131" xreflabel=""/><emphasis role="bold">ping [-session] [--group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--nodes</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">] [--batch</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--server] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1295479" xreflabel=""/>Sends a 'hello' query to the nodes.</para>
+        <title>23.3.4 Other Commands</title>
+        <para>This section describes other lst commands.</para>
+        <para><emphasis role="bold">ping [-session] [--group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--nodes</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">] [--batch</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--server] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis></para>
+        <para>Sends a 'hello' query to the nodes.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302286" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302288" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295566" xreflabel=""/>--session</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295568" xreflabel=""/>Pings all nodes in the current session.</para></entry>
+                <entry><para> --session</para></entry>
+                <entry><para> Pings all nodes in the current session.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295570" xreflabel=""/>--group<emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295572" xreflabel=""/>Pings all nodes in a specified group.</para></entry>
+                <entry><para> --group<emphasis>&lt;name&gt;</emphasis></para></entry>
+                <entry><para> Pings all nodes in a specified group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295574" xreflabel=""/>--nodes<emphasis>&lt;NIDs&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295576" xreflabel=""/>Pings all specified nodes.</para></entry>
+                <entry><para> --nodes<emphasis>&lt;NIDs&gt;</emphasis></para></entry>
+                <entry><para> Pings all specified nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295578" xreflabel=""/>--batch<emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295580" xreflabel=""/>Pings all client nodes in a batch.</para></entry>
+                <entry><para> --batch<emphasis>&lt;name&gt;</emphasis></para></entry>
+                <entry><para> Pings all client nodes in a batch.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295582" xreflabel=""/>--server</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295584" xreflabel=""/>Sends RPC to all server nodes instead of client nodes. This option is only used with --batch<emphasis>&lt;name&gt;</emphasis>.</para></entry>
+                <entry><para> --server</para></entry>
+                <entry><para> Sends RPC to all server nodes instead of client nodes. This option is only used with --batch<emphasis>&lt;name&gt;</emphasis>.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295586" xreflabel=""/>--timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295588" xreflabel=""/>The RPC timeout value.</para></entry>
+                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
+                <entry><para> The RPC timeout value.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1295515" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302267" xreflabel=""/>$ lst ping 192.168.10.[15-20]@tcp<anchor xml:id="dbdoclet.50438223_pgfId-1302268" xreflabel=""/>192.168.1.15@tcp Active [session: liang id: 192.168.1.3@tcp]<anchor xml:id="dbdoclet.50438223_pgfId-1302269" xreflabel=""/>192.168.1.16@tcp Active [session: liang id: 192.168.1.3@tcp]<anchor xml:id="dbdoclet.50438223_pgfId-1302270" xreflabel=""/>192.168.1.17@tcp Active [session: liang id: 192.168.1.3@tcp]<anchor xml:id="dbdoclet.50438223_pgfId-1302271" xreflabel=""/>192.168.1.18@tcp Busy [session: Isaac id: 192.168.10.10@tcp]<anchor xml:id="dbdoclet.50438223_pgfId-1302272" xreflabel=""/>192.168.1.19@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]<anchor xml:id="dbdoclet.50438223_pgfId-1302273" xreflabel=""/>192.168.1.20@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302262" xreflabel=""/> </para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291155" xreflabel=""/><emphasis role="bold">stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] &quot; &quot; [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">] [--delay</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis><emphasis>&lt;group&gt;</emphasis><emphasis role="bold">|&lt;</emphasis><emphasis>NIDs&gt;</emphasis><emphasis role="bold">[</emphasis><emphasis>&lt;group&gt;</emphasis><emphasis role="bold">|</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1298213" xreflabel=""/>The collection performance and RPC statistics of one or more nodes.</para>
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst ping 192.168.10.[15-20]@tcp192.168.1.15@tcp Active [session: liang id: 192.168.1.3@tcp]192.168.1.16@tcp Active [session: liang id: 192.168.1.3@tcp]192.168.1.17@tcp Active [session: liang id: 192.168.1.3@tcp]192.168.1.18@tcp Busy [session: Isaac id: 192.168.10.10@tcp]192.168.1.19@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]192.168.1.20@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]</screen>
+        <para> </para>
+        <para><emphasis role="bold">stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] &quot; &quot; [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">] [--delay</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis><emphasis>&lt;group&gt;</emphasis><emphasis role="bold">|&lt;</emphasis><emphasis>NIDs&gt;</emphasis><emphasis role="bold">[</emphasis><emphasis>&lt;group&gt;</emphasis><emphasis role="bold">|</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
+        <para>The collection performance and RPC statistics of one or more nodes.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302370" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302372" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295659" xreflabel=""/>--bw</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295661" xreflabel=""/>Displays the bandwidth of the specified group/nodes.</para></entry>
+                <entry><para> --bw</para></entry>
+                <entry><para> Displays the bandwidth of the specified group/nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295663" xreflabel=""/>--rate</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295665" xreflabel=""/>Displays the rate of RPCs of the specified group/nodes.</para></entry>
+                <entry><para> --rate</para></entry>
+                <entry><para> Displays the rate of RPCs of the specified group/nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295667" xreflabel=""/>--read</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295669" xreflabel=""/>Displays the read statistics of the specified group/nodes.</para></entry>
+                <entry><para> --read</para></entry>
+                <entry><para> Displays the read statistics of the specified group/nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295671" xreflabel=""/>--write</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295673" xreflabel=""/>Displays the write statistics of the specified group/nodes.</para></entry>
+                <entry><para> --write</para></entry>
+                <entry><para> Displays the write statistics of the specified group/nodes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295675" xreflabel=""/>--max</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295677" xreflabel=""/>Displays the maximum value of the statistics.</para></entry>
+                <entry><para> --max</para></entry>
+                <entry><para> Displays the maximum value of the statistics.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295679" xreflabel=""/>--min</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295681" xreflabel=""/>Displays the minimum value of the statistics.</para></entry>
+                <entry><para> --min</para></entry>
+                <entry><para> Displays the minimum value of the statistics.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295683" xreflabel=""/>--avg</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295685" xreflabel=""/>Displays the average of the statistics.</para></entry>
+                <entry><para> --avg</para></entry>
+                <entry><para> Displays the average of the statistics.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295687" xreflabel=""/>--timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295689" xreflabel=""/>The timeout of the statistics RPC. The default is 5 seconds.</para></entry>
+                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
+                <entry><para> The timeout of the statistics RPC. The default is 5 seconds.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295691" xreflabel=""/>--delay<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295693" xreflabel=""/>The interval of the statistics (in seconds).</para></entry>
+                <entry><para> --delay<emphasis>&lt;seconds&gt;</emphasis></para></entry>
+                <entry><para> The interval of the statistics (in seconds).</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302348" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302353" xreflabel=""/>$ lst run bulkperf<anchor xml:id="dbdoclet.50438223_pgfId-1302354" xreflabel=""/>$ lst stat clients<anchor xml:id="dbdoclet.50438223_pgfId-1302355" xreflabel=""/>[LNet Rates of clients]<anchor xml:id="dbdoclet.50438223_pgfId-1302356" xreflabel=""/>[W] Avg: 1108 RPC/s Min: 1060 RPC/s Max: 1155 RPC/s<anchor xml:id="dbdoclet.50438223_pgfId-1302357" xreflabel=""/>[R] Avg: 2215 RPC/s Min: 2121 RPC/s Max: 2310 RPC/s<anchor xml:id="dbdoclet.50438223_pgfId-1302358" xreflabel=""/>[LNet Bandwidth of clients]<anchor xml:id="dbdoclet.50438223_pgfId-1302359" xreflabel=""/>[W] Avg: 16.60 MB/s Min: 16.10 MB/s Max: 17.1 MB/s<anchor xml:id="dbdoclet.50438223_pgfId-1302349" xreflabel=""/>[R] Avg: 40.49 MB/s Min: 40.30 MB/s Max: 40.68 MB/s</screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303074" xreflabel=""/>Specifying a group name (<emphasis>&lt;group&gt;</emphasis>) causes statistics to be gathered for all nodes in a test group. For example:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303075" xreflabel=""/>$ lst stat servers
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst run bulkperf$ lst stat clients[LNet Rates of clients][W] Avg: 1108 RPC/s Min: 1060 RPC/s Max: 1155 RPC/s[R] Avg: 2215 RPC/s Min: 2121 RPC/s Max: 2310 RPC/s[LNet Bandwidth of clients][W] Avg: 16.60 MB/s Min: 16.10 MB/s Max: 17.1 MB/s[R] Avg: 40.49 MB/s Min: 40.30 MB/s Max: 40.68 MB/s</screen>
+        <para>Specifying a group name (<emphasis>&lt;group&gt;</emphasis>) causes statistics to be gathered for all nodes in a test group. For example:</para>
+        <screen>$ lst stat servers
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303076" xreflabel=""/>where servers is the name of a test group created by lst add_group</para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1303077" xreflabel=""/>Specifying a NID range (<emphasis>&lt;NIDs&gt;</emphasis>) causes statistics to be gathered for selected nodes. For example:</para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1303078" xreflabel=""/>$ lst stat 192.168.0.[1-100/2]@tcp
-<anchor xml:id="dbdoclet.50438223_pgfId-1303072" xreflabel=""/>Only LNET performance statistics are available. By default, all statistics \
+        <para>where servers is the name of a test group created by lst add_group</para>
+        <para>Specifying a NID range (<emphasis>&lt;NIDs&gt;</emphasis>) causes statistics to be gathered for selected nodes. For example:</para>
+        <screen>$ lst stat 192.168.0.[1-100/2]@tcp
+Only LNET performance statistics are available. By default, all statistics \
 information is displayed. Users can specify additional information with the\
 se options.
-<anchor xml:id="dbdoclet.50438223_pgfId-1303090" xreflabel=""/> 
+ 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1304374" xreflabel=""/><emphasis role="bold">show_error [--session] [&lt;group&gt;|&lt;NIDs&gt;]...</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1291189" xreflabel=""/>Lists the number of failed RPCs on test nodes.</para>
+        <para><emphasis role="bold">show_error [--session] [&lt;group&gt;|&lt;NIDs&gt;]...</emphasis></para>
+        <para>Lists the number of failed RPCs on test nodes.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302397" xreflabel=""/>Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438223_pgfId-1302399" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295739" xreflabel=""/>--session</para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438223_pgfId-1295741" xreflabel=""/>Lists errors in the current test session. With this option, historical RPC errors are not listed.</para></entry>
+                <entry><para> --session</para></entry>
+                <entry><para> Lists errors in the current test session. With this option, historical RPC errors are not listed.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
-        <para><anchor xml:id="dbdoclet.50438223_pgfId-1302373" xreflabel=""/><emphasis role="bold">Example:</emphasis></para>
-        <screen><anchor xml:id="dbdoclet.50438223_pgfId-1302379" xreflabel=""/>$ lst show_error clientsclients<anchor xml:id="dbdoclet.50438223_pgfId-1302380" xreflabel=""/>12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors] \<anchor xml:id="dbdoclet.50438223_pgfId-1303569" xreflabel=""/>[RPC: 20 errors, 0 dropped,<anchor xml:id="dbdoclet.50438223_pgfId-1303575" xreflabel=""/>12345-192.168.1.16@tcp: [Session: 0 brw errors, 0 ping errors] \<anchor xml:id="dbdoclet.50438223_pgfId-1303570" xreflabel=""/>[RPC: 1 errors, 0 dropped, Total 2 error nodes in clients<anchor xml:id="dbdoclet.50438223_pgfId-1303571" xreflabel=""/>$ lst show_error --session clients<anchor xml:id="dbdoclet.50438223_pgfId-1302382" xreflabel=""/>clients<anchor xml:id="dbdoclet.50438223_pgfId-1302383" xreflabel=""/>12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors]<anchor xml:id="dbdoclet.50438223_pgfId-1302384" xreflabel=""/>Total 1 error nodes in clients</screen>
+        <para><emphasis role="bold">Example:</emphasis></para>
+        <screen>$ lst show_error clientsclients12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors] \[RPC: 20 errors, 0 dropped,12345-192.168.1.16@tcp: [Session: 0 brw errors, 0 ping errors] \[RPC: 1 errors, 0 dropped, Total 2 error nodes in clients$ lst show_error --session clientsclients12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors]Total 1 error nodes in clients</screen>
       </section>
     </section>
 </chapter>

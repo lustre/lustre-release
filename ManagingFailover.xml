@@ -14,39 +14,39 @@
 
     <section xml:id="dbdoclet.50438213_13563">
       <title>20.1 Lustre Failover and <anchor xml:id="dbdoclet.50438213_marker-1301522" xreflabel=""/>Multiple-Mount Protection</title>
-      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292341" xreflabel=""/>The failover functionality in Lustre is implemented with the multiple-mount protection (MMP) feature, which protects the file system from being mounted simultaneously to more than one node. This feature is important in a shared storage environment (for example, when a failover pair of OSTs share a partition).</para>
-      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292342" xreflabel=""/>Lustre&apos;s backend file system, ldiskfs, supports the MMP mechanism. A block in the file system is updated by a kmmpd daemon at one second intervals, and a sequence number is written in this block. If the file system is cleanly unmounted, then a special &quot;clean&quot; sequence is written to this block. When mounting the file system, ldiskfs checks if the MMP block has a clean sequence or not.</para>
-      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292344" xreflabel=""/>Even if the MMP block has a clean sequence, ldiskfs waits for some interval to guard against the following situations:</para>
+      <para>The failover functionality in Lustre is implemented with the multiple-mount protection (MMP) feature, which protects the file system from being mounted simultaneously to more than one node. This feature is important in a shared storage environment (for example, when a failover pair of OSTs share a partition).</para>
+      <para>Lustre&apos;s backend file system, ldiskfs, supports the MMP mechanism. A block in the file system is updated by a kmmpd daemon at one second intervals, and a sequence number is written in this block. If the file system is cleanly unmounted, then a special &quot;clean&quot; sequence is written to this block. When mounting the file system, ldiskfs checks if the MMP block has a clean sequence or not.</para>
+      <para>Even if the MMP block has a clean sequence, ldiskfs waits for some interval to guard against the following situations:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438213_pgfId-1292346" xreflabel=""/> If I/O traffic is heavy, it may take longer for the MMP block to be updated.</para>
+          <para> If I/O traffic is heavy, it may take longer for the MMP block to be updated.</para>
         </listitem>
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438213_pgfId-1292404" xreflabel=""/> If another node is trying to mount the same file system, a &quot;race&quot; condition may occur.</para>
+          <para> If another node is trying to mount the same file system, a &quot;race&quot; condition may occur.</para>
         </listitem>
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438213_pgfId-1292349" xreflabel=""/>With MMP enabled, mounting a clean file system takes at least 10 seconds. If the file system was not cleanly unmounted, then the file system mount may require additional time.</para>
+      <para>With MMP enabled, mounting a clean file system takes at least 10 seconds. If the file system was not cleanly unmounted, then the file system mount may require additional time.</para>
 
               <note><para>The MMP feature is only supported on Linux kernel versions &gt;= 2.6.9.</para></note>
 
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438213_pgfId-1292355" xreflabel=""/>20.1.1 Working with Multiple-Mount Protection</title>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1300904" xreflabel=""/>On a new Lustre file system, MMP is automatically enabled by mkfs.lustre at format time if failover is being used and the kernel and e2fsprogs version support it. On an existing file system, a Lustre administrator can manually enable MMP when the file system is unmounted.</para>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1294096" xreflabel=""/>Use the following commands to determine whether MMP is running in Lustre and to enable or disable the MMP feature.</para>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1294086" xreflabel=""/>To determine if MMP is enabled, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1294100" xreflabel=""/>dumpe2fs -h &lt;device&gt;|grep mmp
+        <title>20.1.1 Working with Multiple-Mount Protection</title>
+        <para>On a new Lustre file system, MMP is automatically enabled by mkfs.lustre at format time if failover is being used and the kernel and e2fsprogs version support it. On an existing file system, a Lustre administrator can manually enable MMP when the file system is unmounted.</para>
+        <para>Use the following commands to determine whether MMP is running in Lustre and to enable or disable the MMP feature.</para>
+        <para>To determine if MMP is enabled, run:</para>
+        <screen>dumpe2fs -h &lt;device&gt;|grep mmp
 </screen>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292415" xreflabel=""/>Here is a sample command:</para>
-        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1292417" xreflabel=""/>dumpe2fs -h /dev/sdc | grep mmp 
-<anchor xml:id="dbdoclet.50438213_pgfId-1294106" xreflabel=""/>Filesystem features: has_journal ext_attr resize_inode dir_index 
-<anchor xml:id="dbdoclet.50438213_pgfId-1294109" xreflabel=""/>filetype extent mmp sparse_super large_file uninit_bg
+        <para>Here is a sample command:</para>
+        <screen>dumpe2fs -h /dev/sdc | grep mmp 
+Filesystem features: has_journal ext_attr resize_inode dir_index 
+filetype extent mmp sparse_super large_file uninit_bg
 </screen>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292423" xreflabel=""/>To manually disable MMP, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1294115" xreflabel=""/>tune2fs -O ^mmp &lt;device&gt; 
+        <para>To manually disable MMP, run:</para>
+        <screen>tune2fs -O ^mmp &lt;device&gt; 
 </screen>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292487" xreflabel=""/>To manually enable MMP, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438213_pgfId-1294119" xreflabel=""/>tune2fs -O mmp &lt;device&gt;
+        <para>To manually enable MMP, run:</para>
+        <screen>tune2fs -O mmp &lt;device&gt;
 </screen>
-        <para><anchor xml:id="dbdoclet.50438213_pgfId-1292426" xreflabel=""/>When MMP is enabled, if ldiskfs detects multiple mount attempts after the file system is mounted, it blocks these later mount attempts and reports the time when the MMP block was last updated, the node name, and the device name of the node where the file system is currently mounted.</para>
+        <para>When MMP is enabled, if ldiskfs detects multiple mount attempts after the file system is mounted, it blocks these later mount attempts and reports the time when the MMP block was last updated, the node name, and the device name of the node where the file system is currently mounted.</para>
       </section>
   </section>
 </chapter>

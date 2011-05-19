@@ -4,7 +4,7 @@
     <title xml:id='configuringquotas.title'>Configuring and Managing Quotas</title>
   </info>
 
-  <para><anchor xml:id="dbdoclet.50438217_pgfId-1290092" xreflabel=""/>This chapter describes how to configure quotas and includes the following sections:</para>
+  <para>This chapter describes how to configure quotas and includes the following sections:</para>
 
   <itemizedlist><listitem>
       <para><xref linkend="dbdoclet.50438217_54945"/></para>
@@ -28,20 +28,20 @@
 
     <section xml:id="dbdoclet.50438217_54945">
       <title>21.1 Working with <anchor xml:id="dbdoclet.50438217_marker-1290118" xreflabel=""/>Quotas</title>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290120" xreflabel=""/>Quotas allow a system administrator to limit the amount of disk space a user or group can use in a directory. Quotas are set by root, and can be specified for individual users and/or groups. Before a file is written to a partition where quotas are set, the quota of the creator&apos;s group is checked. If a quota exists, then the file size counts towards the group&apos;s quota. If no quota exists, then the owner&apos;s user quota is checked before the file is written. Similarly, inode usage for specific functions can be controlled if a user over-uses the allocated space.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290121" xreflabel=""/>Lustre quota enforcement differs from standard Linux quota enforcement in several ways:</para>
+      <para>Quotas allow a system administrator to limit the amount of disk space a user or group can use in a directory. Quotas are set by root, and can be specified for individual users and/or groups. Before a file is written to a partition where quotas are set, the quota of the creator&apos;s group is checked. If a quota exists, then the file size counts towards the group&apos;s quota. If no quota exists, then the owner&apos;s user quota is checked before the file is written. Similarly, inode usage for specific functions can be controlled if a user over-uses the allocated space.</para>
+      <para>Lustre quota enforcement differs from standard Linux quota enforcement in several ways:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438217_pgfId-1290122" xreflabel=""/> Quotas are administered via the lfs command (post-mount).</para>
+          <para> Quotas are administered via the lfs command (post-mount).</para>
         </listitem>
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438217_pgfId-1290123" xreflabel=""/> Quotas are distributed (as Lustre is a distributed file system), which has several ramifications.</para>
+          <para> Quotas are distributed (as Lustre is a distributed file system), which has several ramifications.</para>
         </listitem>
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438217_pgfId-1290124" xreflabel=""/> Quotas are allocated and consumed in a quantized fashion.</para>
+          <para> Quotas are allocated and consumed in a quantized fashion.</para>
         </listitem>
 
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438217_pgfId-1290125" xreflabel=""/> Client does not set the usrquota or grpquota options to mount. When quota is enabled, it is enabled for all clients of the file system; started automatically using quota_type or started manually with lfs quotaon.</para>
+          <para> Client does not set the usrquota or grpquota options to mount. When quota is enabled, it is enabled for all clients of the file system; started automatically using quota_type or started manually with lfs quotaon.</para>
         </listitem>
 
 </itemizedlist>
@@ -50,91 +50,91 @@
     </section>
     <section xml:id="dbdoclet.50438217_31982">
       <title>21.2 Enabling <anchor xml:id="dbdoclet.50438217_marker-1290128" xreflabel=""/>Disk Quotas</title>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290130" xreflabel=""/>Use this procedure to enable (configure) disk quotas in Lustre.</para>
+      <para>Use this procedure to enable (configure) disk quotas in Lustre.</para>
       <orderedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290131" xreflabel=""/> 1. If you have re-complied your Linux kernel, be sure that CONFIG_QUOTA and CONFIG_QUOTACTL are enabled. Also, verify that CONFIG_QFMT_V1 and/or CONFIG_QFMT_V2 are enabled.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290132" xreflabel=""/>Quota is enabled in all Linux 2.6 kernels supplied for Lustre.</para>
+      <para> 1. If you have re-complied your Linux kernel, be sure that CONFIG_QUOTA and CONFIG_QUOTACTL are enabled. Also, verify that CONFIG_QFMT_V1 and/or CONFIG_QFMT_V2 are enabled.</para>
+      <para>Quota is enabled in all Linux 2.6 kernels supplied for Lustre.</para>
 
   </listitem><listitem>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290133" xreflabel=""/> 2. Start the server.</para>
+      <para> 2. Start the server.</para>
   </listitem><listitem>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290134" xreflabel=""/> 3. Mount the Lustre file system on the client and verify that the lquota module has loaded properly by using the lsmod command.</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290135" xreflabel=""/>$ lsmod
-<anchor xml:id="dbdoclet.50438217_pgfId-1290136" xreflabel=""/>[root@oss161 ~]# lsmod
-<anchor xml:id="dbdoclet.50438217_pgfId-1290137" xreflabel=""/>Module                     Size                    Used by
-<anchor xml:id="dbdoclet.50438217_pgfId-1290138" xreflabel=""/>obdfilter          220532                  1
-<anchor xml:id="dbdoclet.50438217_pgfId-1290139" xreflabel=""/>fsfilt_ldiskfs             52228                   1
-<anchor xml:id="dbdoclet.50438217_pgfId-1290140" xreflabel=""/>ost                        96712                   1
-<anchor xml:id="dbdoclet.50438217_pgfId-1290141" xreflabel=""/>mgc                        60384                   1
-<anchor xml:id="dbdoclet.50438217_pgfId-1290142" xreflabel=""/>ldiskfs                    186896                  2 fsfilt_ldiskfs
-<anchor xml:id="dbdoclet.50438217_pgfId-1290143" xreflabel=""/>lustre                     401744                  0
-<anchor xml:id="dbdoclet.50438217_pgfId-1290144" xreflabel=""/>lov                        289064                  1 lustre
-<anchor xml:id="dbdoclet.50438217_pgfId-1290145" xreflabel=""/>lquota                     107048                  4 obdfilter
-<anchor xml:id="dbdoclet.50438217_pgfId-1290146" xreflabel=""/>mdc                        95016                   1 lustre
-<anchor xml:id="dbdoclet.50438217_pgfId-1290147" xreflabel=""/>ksocklnd           111812                  1
+      <para> 3. Mount the Lustre file system on the client and verify that the lquota module has loaded properly by using the lsmod command.</para>
+      <screen>$ lsmod
+[root@oss161 ~]# lsmod
+Module                     Size                    Used by
+obdfilter          220532                  1
+fsfilt_ldiskfs             52228                   1
+ost                        96712                   1
+mgc                        60384                   1
+ldiskfs                    186896                  2 fsfilt_ldiskfs
+lustre                     401744                  0
+lov                        289064                  1 lustre
+lquota                     107048                  4 obdfilter
+mdc                        95016                   1 lustre
+ksocklnd           111812                  1
 </screen>
   </listitem></orderedlist>
 
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290148" xreflabel=""/>The Lustre mount command no longer recognizes the usrquota and grpquota options. If they were previously specified, remove them from /etc/fstab.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290149" xreflabel=""/>When quota is enabled, it is enabled for all file system clients (started automatically using quota_type or manually with lfs quotaon).</para>
+      <para>The Lustre mount command no longer recognizes the usrquota and grpquota options. If they were previously specified, remove them from /etc/fstab.</para>
+      <para>When quota is enabled, it is enabled for all file system clients (started automatically using quota_type or manually with lfs quotaon).</para>
 
               <note><para>Lustre with the Linux kernel 2.4 does <emphasis>not</emphasis> support quotas.</para></note>
 
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290151" xreflabel=""/>To enable quotas automatically when the file system is started, you must set the mdt.quota_type and ost.quota_type parameters, respectively, on the MDT and OSTs. The parameters can be set to the string u (user), g (group) or ug for both users and groups.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290152" xreflabel=""/>You can enable quotas at mkfs time (mkfs.lustre --param mdt.quota_type=ug) or with tunefs.lustre. As an example:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290153" xreflabel=""/>tunefs.lustre --param ost.quota_type=ug $ost_dev
+      <para>To enable quotas automatically when the file system is started, you must set the mdt.quota_type and ost.quota_type parameters, respectively, on the MDT and OSTs. The parameters can be set to the string u (user), g (group) or ug for both users and groups.</para>
+      <para>You can enable quotas at mkfs time (mkfs.lustre --param mdt.quota_type=ug) or with tunefs.lustre. As an example:</para>
+      <screen>tunefs.lustre --param ost.quota_type=ug $ost_dev
 </screen>
               <caution><para>If you are using mkfs.lustre --param mdt.quota_type=ug or tunefs.lustre --param ost.quota_type=ug, be sure to run the command on all OSTs and the MDT. Otherwise, abnormal results may occur.</para></caution>
 
       <section remap="h4">
-        <title><anchor xml:id="dbdoclet.50438217_pgfId-1290155" xreflabel=""/>21.2.0.1 Administrative and Operational Quotas</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290156" xreflabel=""/>Lustre has two kinds of quota files:</para>
+        <title>21.2.0.1 Administrative and Operational Quotas</title>
+        <para>Lustre has two kinds of quota files:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290157" xreflabel=""/> Administrative quotas (for the MDT), which contain limits for users/groups for the entire cluster.</para>
+            <para> Administrative quotas (for the MDT), which contain limits for users/groups for the entire cluster.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290158" xreflabel=""/> Operational quotas (for the MDT and OSTs), which contain quota information dedicated to a cluster node.</para>
+            <para> Operational quotas (for the MDT and OSTs), which contain quota information dedicated to a cluster node.</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290159" xreflabel=""/>Lustre 1.6.5 introduced the v2 file format for administrative quota files, with continued support for the old file format (v1). The mdt.quota_type parameter also handles '1' and '2' options, to specify the Lustre quota versions that will be used. For example:</para>
-        <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290160" xreflabel=""/>--param mdt.quota_type=ug1
-<anchor xml:id="dbdoclet.50438217_pgfId-1290161" xreflabel=""/>--param mdt.quota_type=u2
+        <para>Lustre 1.6.5 introduced the v2 file format for administrative quota files, with continued support for the old file format (v1). The mdt.quota_type parameter also handles '1' and '2' options, to specify the Lustre quota versions that will be used. For example:</para>
+        <screen>--param mdt.quota_type=ug1
+--param mdt.quota_type=u2
 </screen>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290162" xreflabel=""/>Lustre 1.6.6 introduced the v2 file format for operational quotas, with continued support for the old file format (v1). The ost.quota_type parameter handles '1' and '2' options, to specify the Lustre quota versions that will be used. For example:</para>
-        <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290163" xreflabel=""/>--param ost.quota_type=ug2
-<anchor xml:id="dbdoclet.50438217_pgfId-1290164" xreflabel=""/>--param ost.quota_type=u1
+        <para>Lustre 1.6.6 introduced the v2 file format for operational quotas, with continued support for the old file format (v1). The ost.quota_type parameter handles '1' and '2' options, to specify the Lustre quota versions that will be used. For example:</para>
+        <screen>--param ost.quota_type=ug2
+--param ost.quota_type=u1
 </screen>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290168" xreflabel=""/>For more information about the v1 and v2 formats, see <link xl:href="ConfiguringQuotas.html#50438217_66360">Quota File Formats</link>.</para>
+        <para>For more information about the v1 and v2 formats, see <link xl:href="ConfiguringQuotas.html#50438217_66360">Quota File Formats</link>.</para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438217_49939">
       <title>21.3 Creating Quota <anchor xml:id="dbdoclet.50438217_marker-1290170" xreflabel=""/>Files and Quota Administration</title>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290172" xreflabel=""/>Once each quota-enabled file system is remounted, it is capable of working with disk quotas. However, the file system is not yet ready to support quotas. If umount has been done regularly, run the lfs command with the quotaon option. If umount has not been done, perform these steps:</para>
+      <para>Once each quota-enabled file system is remounted, it is capable of working with disk quotas. However, the file system is not yet ready to support quotas. If umount has been done regularly, run the lfs command with the quotaon option. If umount has not been done, perform these steps:</para>
       <orderedlist><listitem>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290173" xreflabel=""/> 1. Take Lustre &apos;&apos;offline&apos;&apos;.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1291329" xreflabel=""/>That is, verify that no write operations (append, write, truncate, create or delete) are being performed (preparing to run lfs quotacheck). Operations that do not change Lustre files (such as read or mount) are okay to run.</para>
+      <para> 1. Take Lustre &apos;&apos;offline&apos;&apos;.</para>
+      <para>That is, verify that no write operations (append, write, truncate, create or delete) are being performed (preparing to run lfs quotacheck). Operations that do not change Lustre files (such as read or mount) are okay to run.</para>
 
               <caution><para>When lfsquotacheck is run, Lustre must NOT be performing any write operations. Failure to follow this caution may cause the statistic information of quota to be inaccurate. For example, the number of blocks used by OSTs for users or groups will be inaccurate, which can cause unexpected quota problems.</para></caution>
 
           </listitem><listitem>
-       <para><anchor xml:id="dbdoclet.50438217_pgfId-1290175" xreflabel=""/> 2. Run the <emphasis role="bold">lfs</emphasis> command with the <emphasis role="bold">quotacheck</emphasis> option:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290176" xreflabel=""/># lfs quotacheck -ug /mnt/lustre
+       <para> 2. Run the <emphasis role="bold">lfs</emphasis> command with the <emphasis role="bold">quotacheck</emphasis> option:</para>
+      <screen># lfs quotacheck -ug /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290177" xreflabel=""/>By default, quota is turned on after quotacheck completes. Available options are:</para>
+      <para>By default, quota is turned on after quotacheck completes. Available options are:</para>
       <itemizedlist><listitem>
-          <para><anchor xml:id="dbdoclet.50438217_pgfId-1290178" xreflabel=""/>u  -- checks the user disk quota information</para>
+          <para>u  -- checks the user disk quota information</para>
         </listitem>
 
 <listitem>
-          <para><anchor xml:id="dbdoclet.50438217_pgfId-1290179" xreflabel=""/>g  -- checks the group disk quota information</para>
+          <para>g  -- checks the group disk quota information</para>
         </listitem>
 
 </itemizedlist>
           </listitem></orderedlist>
 
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290180" xreflabel=""/>The lfsquotacheck command checks all objects on all OSTs and the MDS to sum up for every UID/GID. It reads all Lustre metadata and re-computes the number of blocks/inodes that each UID/GID has used. If there are many files in Lustre, it may take a long time to complete.</para>
+      <para>The lfsquotacheck command checks all objects on all OSTs and the MDS to sum up for every UID/GID. It reads all Lustre metadata and re-computes the number of blocks/inodes that each UID/GID has used. If there are many files in Lustre, it may take a long time to complete.</para>
 
               <note><para>User and group quotas are separate. If either quota limit is reached, a process with the corresponding UID/GID cannot allocate more space on the file system.</para></note>
 
@@ -142,171 +142,171 @@
 
               <note><para>For Lustre 1.6 releases before version 1.6.5, and 1.4 releases before version 1.4.12, if the underlying ldiskfs file system has not unmounted gracefully (due to a crash, for example), re-run quotacheck to obtain accurate quota information. Lustre 1.6.5 and 1.4.12 use journaled quota, so it is not necessary to run quotacheck after an unclean shutdown.</para><para> In certain failure situations (e.g., when a broken Lustre installation or build is used), re-run quotacheck after checking the server kernel logs and fixing the root problem.</para></note>
 
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290184" xreflabel=""/>The lfs command includes several command options to work with quotas:</para>
+      <para>The lfs command includes several command options to work with quotas:</para>
       <itemizedlist><listitem>
-              <para><anchor xml:id="dbdoclet.50438217_pgfId-1290185" xreflabel=""/><varname>quotaon</varname>  -- enables disk quotas on the specified file system. The file system quota files must be present in the root directory of the file system.</para>
+              <para><varname>quotaon</varname>  -- enables disk quotas on the specified file system. The file system quota files must be present in the root directory of the file system.</para>
         </listitem>
 
 <listitem>
-    <para><anchor xml:id="dbdoclet.50438217_pgfId-1290186" xreflabel=""/><varname>quotaoff</varname>  -- disables disk quotas on the specified file system.</para>
+    <para><varname>quotaoff</varname>  -- disables disk quotas on the specified file system.</para>
         </listitem>
 
 <listitem>
-    <para><anchor xml:id="dbdoclet.50438217_pgfId-1290187" xreflabel=""/><varname>quota</varname>  -- displays general quota information (disk usage and limits)</para>
+    <para><varname>quota</varname>  -- displays general quota information (disk usage and limits)</para>
         </listitem>
 
 <listitem>
-    <para><anchor xml:id="dbdoclet.50438217_pgfId-1290188" xreflabel=""/><varname>setquota</varname>  -- specifies quota limits and tunes the grace period. By default, the grace period is one week.</para>
+    <para><varname>setquota</varname>  -- specifies quota limits and tunes the grace period. By default, the grace period is one week.</para>
         </listitem>
 
 </itemizedlist>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290189" xreflabel=""/> Usage:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290190" xreflabel=""/>lfs quotaon [-ugf] &lt;filesystem&gt;
-<anchor xml:id="dbdoclet.50438217_pgfId-1290191" xreflabel=""/>lfs quotaoff [-ug] &lt;filesystem&gt;
-<anchor xml:id="dbdoclet.50438217_pgfId-1290192" xreflabel=""/>lfs quota [-q] [-v] [-o obd_uuid] [-u|-g &lt;uname&gt;|uid|gname|gid&gt;]  &lt;filesystem&gt;
-<anchor xml:id="dbdoclet.50438217_pgfId-1290193" xreflabel=""/>lfs quota -t &lt;-u|-g&gt; &lt;filesystem&gt;
-<anchor xml:id="dbdoclet.50438217_pgfId-1290194" xreflabel=""/>lfs setquota &lt;-u|--user|-g|--group&gt; &lt;username|groupname&gt; [-b &lt;block-softlimit&gt;] [\
+      <para> Usage:</para>
+      <screen>lfs quotaon [-ugf] &lt;filesystem&gt;
+lfs quotaoff [-ug] &lt;filesystem&gt;
+lfs quota [-q] [-v] [-o obd_uuid] [-u|-g &lt;uname&gt;|uid|gname|gid&gt;]  &lt;filesystem&gt;
+lfs quota -t &lt;-u|-g&gt; &lt;filesystem&gt;
+lfs setquota &lt;-u|--user|-g|--group&gt; &lt;username|groupname&gt; [-b &lt;block-softlimit&gt;] [\
 -B &lt;block-hardlimit&gt;] [-i &lt;inode-softlimit&gt;] [-I &lt;inode-hardlimit&gt;] &lt;filesystem&gt;
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290195" xreflabel=""/>Examples:</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290196" xreflabel=""/>In all of the examples below, the file system is /mnt lustre.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290197" xreflabel=""/>To turn on user and group quotas, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290198" xreflabel=""/>$ lfs quotaon -ug /mnt/lustre
+      <para>Examples:</para>
+      <para>In all of the examples below, the file system is /mnt lustre.</para>
+      <para>To turn on user and group quotas, run:</para>
+      <screen>$ lfs quotaon -ug /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290199" xreflabel=""/>To turn off user and group quotas, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290200" xreflabel=""/>$ lfs quotaoff -ug /mnt/lustre
+      <para>To turn off user and group quotas, run:</para>
+      <screen>$ lfs quotaoff -ug /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290201" xreflabel=""/>To display general quota information (disk usage and limits) for the user running the command and his primary group, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290202" xreflabel=""/>$ lfs quota /mnt/lustre 
+      <para>To display general quota information (disk usage and limits) for the user running the command and his primary group, run:</para>
+      <screen>$ lfs quota /mnt/lustre 
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290203" xreflabel=""/>To display general quota information for a specific user (&quot;bob&quot; in this example), run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290204" xreflabel=""/>$ lfs quota -u bob /mnt/lustre
+      <para>To display general quota information for a specific user (&quot;bob&quot; in this example), run:</para>
+      <screen>$ lfs quota -u bob /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290205" xreflabel=""/>To display general quota information for a specific user (&quot;bob&quot; in this example) and detailed quota statistics for each MDT and OST, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290206" xreflabel=""/>$ lfs quota -u bob -v /mnt/lustre
+      <para>To display general quota information for a specific user (&quot;bob&quot; in this example) and detailed quota statistics for each MDT and OST, run:</para>
+      <screen>$ lfs quota -u bob -v /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290207" xreflabel=""/>To display general quota information for a specific group (&quot;eng&quot; in this example), run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290208" xreflabel=""/>$ lfs quota -g eng /mnt/lustre
+      <para>To display general quota information for a specific group (&quot;eng&quot; in this example), run:</para>
+      <screen>$ lfs quota -g eng /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290209" xreflabel=""/>To display block and inode grace times for user quotas, run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290210" xreflabel=""/>$ lfs quota -t -u /mnt/lustre
+      <para>To display block and inode grace times for user quotas, run:</para>
+      <screen>$ lfs quota -t -u /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290211" xreflabel=""/>To set user and group quotas for a specific user (&quot;bob&quot; in this example), run:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290212" xreflabel=""/>$ lfs setquota -u bob 307200 309200 10000 11000 /mnt/lustre
+      <para>To set user and group quotas for a specific user (&quot;bob&quot; in this example), run:</para>
+      <screen>$ lfs setquota -u bob 307200 309200 10000 11000 /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290213" xreflabel=""/>In this example, the quota for user &quot;bob&quot; is set to 300 MB (309200*1024) and the hard limit is 11,000 files. Therefore, the inode hard limit should be 11000.</para>
+      <para>In this example, the quota for user &quot;bob&quot; is set to 300 MB (309200*1024) and the hard limit is 11,000 files. Therefore, the inode hard limit should be 11000.</para>
 
               <note><para>For the Lustre command $lfssetquota/quota ... the qunit for block is KB (1024) and the qunit for inode is 1.</para></note>
 
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290215" xreflabel=""/>The quota command displays the quota allocated and consumed for each Lustre device. Using the previous setquota example, running this lfs quota command:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290216" xreflabel=""/>$ lfs quota -u bob -v /mnt/lustre 
+      <para>The quota command displays the quota allocated and consumed for each Lustre device. Using the previous setquota example, running this lfs quota command:</para>
+      <screen>$ lfs quota -u bob -v /mnt/lustre 
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290217" xreflabel=""/>displays this command output:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290218" xreflabel=""/>Disk quotas for user bob (uid 6000):
-<anchor xml:id="dbdoclet.50438217_pgfId-1290219" xreflabel=""/>Filesystem         kbytes          quota           limit           grace   \
+      <para>displays this command output:</para>
+      <screen>Disk quotas for user bob (uid 6000):
+Filesystem         kbytes          quota           limit           grace   \
         files           quota           limit           grace
-<anchor xml:id="dbdoclet.50438217_pgfId-1290220" xreflabel=""/>/mnt/lustre                0               30720           30920           \
+/mnt/lustre                0               30720           30920           \
 -               0               10000           11000           -
-<anchor xml:id="dbdoclet.50438217_pgfId-1290221" xreflabel=""/>lustre-MDT0000_UUID        0               -               16384           \
+lustre-MDT0000_UUID        0               -               16384           \
 -               0               -               2560            -
-<anchor xml:id="dbdoclet.50438217_pgfId-1290222" xreflabel=""/>lustre-OST0000_UUID        0               -               16384           \
+lustre-OST0000_UUID        0               -               16384           \
 -               0               -               0               -
-<anchor xml:id="dbdoclet.50438217_pgfId-1290223" xreflabel=""/>lustre-OST0001_UUID        0               -               16384           \
+lustre-OST0001_UUID        0               -               16384           \
 -               0               -               0               -
 </screen>
     </section>
     <section xml:id="dbdoclet.50438217_15106">
       <title>21.4 Quota<anchor xml:id="dbdoclet.50438217_marker-1290226" xreflabel=""/> Allocation</title>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290228" xreflabel=""/>In Lustre, quota must be properly allocated or users may experience unnecessary failures. The file system block quota is divided up among the OSTs within the file system. Each OST requests an allocation which is increased up to the quota limit. The quota allocation is then quantized to reduce the number of quota-related request traffic. By default, Lustre supports both user and group quotas to limit disk usage and file counts.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290229" xreflabel=""/>The quota system in Lustre is completely compatible with the quota systems used on other file systems. The Lustre quota system distributes quotas from the quota master. Generally, the MDS is the quota master for both inodes and blocks. All OSTs and the MDS are quota slaves to the OSS nodes. To reduce quota requests and get reasonably accurate quota distribution, the transfer quota unit (qunit) between quota master and quota slaves is changed dynamically by the lquota module. The default minimum value of qunit is 1 MB for blocks and 2 for inodes. The proc entries to set these values are: /proc/fs/lustre/mds/lustre-MDT*/quota_least_bunit and /proc/fs/lustre/mds/lustre-MDT*/quota_least_iunit. The default maximum value of qunit is 128 MB for blocks and 5120 for inodes. The proc entries to set these values are quota_bunit_sz and quota_iunit_sz in the MDT and OSTs.</para>
+      <para>In Lustre, quota must be properly allocated or users may experience unnecessary failures. The file system block quota is divided up among the OSTs within the file system. Each OST requests an allocation which is increased up to the quota limit. The quota allocation is then quantized to reduce the number of quota-related request traffic. By default, Lustre supports both user and group quotas to limit disk usage and file counts.</para>
+      <para>The quota system in Lustre is completely compatible with the quota systems used on other file systems. The Lustre quota system distributes quotas from the quota master. Generally, the MDS is the quota master for both inodes and blocks. All OSTs and the MDS are quota slaves to the OSS nodes. To reduce quota requests and get reasonably accurate quota distribution, the transfer quota unit (qunit) between quota master and quota slaves is changed dynamically by the lquota module. The default minimum value of qunit is 1 MB for blocks and 2 for inodes. The proc entries to set these values are: /proc/fs/lustre/mds/lustre-MDT*/quota_least_bunit and /proc/fs/lustre/mds/lustre-MDT*/quota_least_iunit. The default maximum value of qunit is 128 MB for blocks and 5120 for inodes. The proc entries to set these values are quota_bunit_sz and quota_iunit_sz in the MDT and OSTs.</para>
               <note><para>In general, the quota_bunit_sz value should be larger than 1 MB. For testing purposes, it can be set to 4 KB, if necessary.</para></note>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290231" xreflabel=""/>The file system block quota is divided up among the OSTs and the MDS within the file system. Only the MDS uses the file system inode quota.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290232" xreflabel=""/>This means that the minimum quota for block is 1 MB* (the number of OSTs + the number of MDSs), which is 1 MB* (number of OSTs + 1). If you attempt to assign a smaller quota, users maybe not be able to create files. As noted, the default minimum quota for inodes is 2. The default is established at file system creation time, but can be tuned via /proc values (described below). The inode quota is also allocated in a quantized manner on the MDS.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290233" xreflabel=""/>If we look at the setquota example again, running this lfsquota command:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290234" xreflabel=""/># lfs quota -u bob -v /mnt/lustre
+      <para>The file system block quota is divided up among the OSTs and the MDS within the file system. Only the MDS uses the file system inode quota.</para>
+      <para>This means that the minimum quota for block is 1 MB* (the number of OSTs + the number of MDSs), which is 1 MB* (number of OSTs + 1). If you attempt to assign a smaller quota, users maybe not be able to create files. As noted, the default minimum quota for inodes is 2. The default is established at file system creation time, but can be tuned via /proc values (described below). The inode quota is also allocated in a quantized manner on the MDS.</para>
+      <para>If we look at the setquota example again, running this lfsquota command:</para>
+      <screen># lfs quota -u bob -v /mnt/lustre
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290235" xreflabel=""/>displays this command output:</para>
-      <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290236" xreflabel=""/>Disk quotas for user bob (uid 500):
-<anchor xml:id="dbdoclet.50438217_pgfId-1290237" xreflabel=""/>Filesystem         kbytes          quota           limit           grace   \
+      <para>displays this command output:</para>
+      <screen>Disk quotas for user bob (uid 500):
+Filesystem         kbytes          quota           limit           grace   \
         files           quota           limit           grace
-<anchor xml:id="dbdoclet.50438217_pgfId-1290238" xreflabel=""/>/mnt/lustre                30720*          30720           30920           \
+/mnt/lustre                30720*          30720           30920           \
 6d23h56m44s     10101*          10000           11000           6d23h59m50s
-<anchor xml:id="dbdoclet.50438217_pgfId-1290239" xreflabel=""/>lustre-MDT0000_UUID        0               -               1024            \
+lustre-MDT0000_UUID        0               -               1024            \
 -               10101           -               10240
-<anchor xml:id="dbdoclet.50438217_pgfId-1290240" xreflabel=""/>lustre-OST0000_UUID        0               -               1024            \
+lustre-OST0000_UUID        0               -               1024            \
 -               -               -               -
-<anchor xml:id="dbdoclet.50438217_pgfId-1290241" xreflabel=""/>lustre-OST0001_UUID        30720*          -               28872           \
+lustre-OST0001_UUID        30720*          -               28872           \
 -               -               -               -
 </screen>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290242" xreflabel=""/>The total quota limit of 30,920 is allotted to user bob, which is further distributed to two OSTs and one MDS.</para>
+      <para>The total quota limit of 30,920 is allotted to user bob, which is further distributed to two OSTs and one MDS.</para>
               <note><para>Values appended with '*' show the limit that has been over-used (exceeding the quota), and receives this message Disk quota exceeded. For example:</para><para> \</para><para>$ cp: writing `/mnt/lustre/var/cache/fontconfig/ beeeeb3dfe132a8a0633a017c99ce0-x86.cache': Disk quota exceeded.</para></note>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290244" xreflabel=""/>The requested quota of 300 MB is divided across the OSTs.</para>
+      <para>The requested quota of 300 MB is divided across the OSTs.</para>
               <note><para>It is very important to note that the block quota is consumed per OST and the MDS per block and inode (there is only one MDS for inodes). Therefore, when the quota is consumed on one OST, the client may not be able to create files regardless of the quota available on other OSTs.</para></note>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438217_pgfId-1290246" xreflabel=""/>Additional information:</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290247" xreflabel=""/><emphasis role="bold">Grace period</emphasis> -- The period of time (in seconds) within which users are allowed to exceed their soft limit. There are four types of grace periods:</para>
+        <title>Additional information:</title>
+        <para><emphasis role="bold">Grace period</emphasis> -- The period of time (in seconds) within which users are allowed to exceed their soft limit. There are four types of grace periods:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290248" xreflabel=""/> user block soft limit</para>
+            <para> user block soft limit</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290249" xreflabel=""/> user inode soft limit</para>
+            <para> user inode soft limit</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290250" xreflabel=""/> group block soft limit</para>
+            <para> group block soft limit</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290251" xreflabel=""/> group inode soft limit</para>
+            <para> group inode soft limit</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290252" xreflabel=""/>The grace periods are applied to all users. The user block soft limit is for all users who are using a blocks quota.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290253" xreflabel=""/><emphasis role="bold">Soft limit</emphasis> -- Once you are beyond the soft limit, the quota module begins to time, but you still can write block and inode. When you are always beyond the soft limit and use up your grace time, you get the same result as the hard limit. For inodes and blocks, it is the same. Usually, the soft limit MUST be less than the hard limit; if not, the quota module never triggers the timing. If the soft limit is not needed, leave it as zero (0).</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290254" xreflabel=""/><emphasis role="bold">Hard limit</emphasis> -- When you are beyond the hard limit, you get -EQUOTA and cannot write inode/block any more. The hard limit is the absolute limit. When a grace period is set, you can exceed the soft limit within the grace period if are under the hard limits.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290255" xreflabel=""/>Lustre quota allocation is controlled by two variables, quota_bunit_sz and quota_iunit_sz referring to KBs and inodes, respectively. These values can be accessed on the MDS as /proc/fs/lustre/mds/*/quota_* and on the OST as /proc/fs/lustre/obdfilter/*/quota_*. The quota_bunit_sz and quota_iunit_sz variables are the maximum qunit values for blocks and inodes, respectively. At any time, module lquota chooses a reasonable qunit between the minimum and maximum values.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290256" xreflabel=""/>The /proc values are bounded by two other variables quota_btune_sz and quota_itune_sz. By default, the *tune_sz variables are set at 1/2 the *unit_sz variables, and you cannot set *tune_sz larger than *unit_sz. You must set bunit_sz first if it is increasing by more than 2x, and btune_sz first if it is decreasing by more than 2x.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290257" xreflabel=""/><emphasis role="bold">Total number of inodes</emphasis> -- To determine the total number of inodes, use lfsdf-i (and also /proc/fs/lustre/*/*/filestotal). For more information on using the lfsdf-i command and the command output, see <link xl:href="ManagingStripingFreeSpace.html#50438209_35838">Checking File System Free Space</link>.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290261" xreflabel=""/>Unfortunately, the statfs interface does not report the free inode count directly, but instead reports the total inode and used inode counts. The free inode count is calculated for df from (total inodes - used inodes).</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290262" xreflabel=""/>It is not critical to know a file system's total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290263" xreflabel=""/>The values set for the MDS must match the values set on the OSTs.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290264" xreflabel=""/>The quota_bunit_sz parameter displays bytes, however lfs setquota uses KBs. The quota_bunit_sz parameter must be a multiple of 1024. A proper minimum KB size for lfs setquota can be calculated as:</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290265" xreflabel=""/><emphasis role="bold">Size in KBs = minimum_quota_bunit_sz * (number of OSTS + 1) = 1024 * (number of OSTs +1)</emphasis></para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290266" xreflabel=""/>We add one (1) to the number of OSTs as the MDS also consumes KBs. As inodes are only consumed on the MDS, the minimum inode size for lfs setquota is equal to quota_iunit_sz.</para>
+        <para>The grace periods are applied to all users. The user block soft limit is for all users who are using a blocks quota.</para>
+        <para><emphasis role="bold">Soft limit</emphasis> -- Once you are beyond the soft limit, the quota module begins to time, but you still can write block and inode. When you are always beyond the soft limit and use up your grace time, you get the same result as the hard limit. For inodes and blocks, it is the same. Usually, the soft limit MUST be less than the hard limit; if not, the quota module never triggers the timing. If the soft limit is not needed, leave it as zero (0).</para>
+        <para><emphasis role="bold">Hard limit</emphasis> -- When you are beyond the hard limit, you get -EQUOTA and cannot write inode/block any more. The hard limit is the absolute limit. When a grace period is set, you can exceed the soft limit within the grace period if are under the hard limits.</para>
+        <para>Lustre quota allocation is controlled by two variables, quota_bunit_sz and quota_iunit_sz referring to KBs and inodes, respectively. These values can be accessed on the MDS as /proc/fs/lustre/mds/*/quota_* and on the OST as /proc/fs/lustre/obdfilter/*/quota_*. The quota_bunit_sz and quota_iunit_sz variables are the maximum qunit values for blocks and inodes, respectively. At any time, module lquota chooses a reasonable qunit between the minimum and maximum values.</para>
+        <para>The /proc values are bounded by two other variables quota_btune_sz and quota_itune_sz. By default, the *tune_sz variables are set at 1/2 the *unit_sz variables, and you cannot set *tune_sz larger than *unit_sz. You must set bunit_sz first if it is increasing by more than 2x, and btune_sz first if it is decreasing by more than 2x.</para>
+        <para><emphasis role="bold">Total number of inodes</emphasis> -- To determine the total number of inodes, use lfsdf-i (and also /proc/fs/lustre/*/*/filestotal). For more information on using the lfsdf-i command and the command output, see <link xl:href="ManagingStripingFreeSpace.html#50438209_35838">Checking File System Free Space</link>.</para>
+        <para>Unfortunately, the statfs interface does not report the free inode count directly, but instead reports the total inode and used inode counts. The free inode count is calculated for df from (total inodes - used inodes).</para>
+        <para>It is not critical to know a file system's total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
+        <para>The values set for the MDS must match the values set on the OSTs.</para>
+        <para>The quota_bunit_sz parameter displays bytes, however lfs setquota uses KBs. The quota_bunit_sz parameter must be a multiple of 1024. A proper minimum KB size for lfs setquota can be calculated as:</para>
+        <para><emphasis role="bold">Size in KBs = minimum_quota_bunit_sz * (number of OSTS + 1) = 1024 * (number of OSTs +1)</emphasis></para>
+        <para>We add one (1) to the number of OSTs as the MDS also consumes KBs. As inodes are only consumed on the MDS, the minimum inode size for lfs setquota is equal to quota_iunit_sz.</para>
                 <note><para>Setting the quota below this limit may prevent the user from all file creation.</para></note>
       </section>
     </section>
     <section xml:id="dbdoclet.50438217_27895">
       <title>21.5 Known Issues <anchor xml:id="dbdoclet.50438217_marker-1290269" xreflabel=""/>with Quotas</title>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290271" xreflabel=""/>Using quotas in Lustre can be complex and there are several known issues.</para>
+      <para>Using quotas in Lustre can be complex and there are several known issues.</para>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438217_pgfId-1290273" xreflabel=""/>21.5.1 Granted<anchor xml:id="dbdoclet.50438217_marker-1290272" xreflabel=""/> Cache and Quota Limits</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290274" xreflabel=""/>In Lustre, granted cache does not respect quota limits. In this situation, OSTs grant cache to Lustre client to accelerate I/O. Granting cache causes writes to be successful in OSTs, even if they exceed the quota limits, and will overwrite them.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290275" xreflabel=""/>The sequence is:</para>
+        <title>21.5.1 Granted<anchor xml:id="dbdoclet.50438217_marker-1290272" xreflabel=""/> Cache and Quota Limits</title>
+        <para>In Lustre, granted cache does not respect quota limits. In this situation, OSTs grant cache to Lustre client to accelerate I/O. Granting cache causes writes to be successful in OSTs, even if they exceed the quota limits, and will overwrite them.</para>
+        <para>The sequence is:</para>
         <orderedlist><listitem>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290276" xreflabel=""/>A user writes files to Lustre.</para>
+        <para>A user writes files to Lustre.</para>
     </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290277" xreflabel=""/>If the Lustre client has enough granted cache, then it returns 'success' to users and arranges the writes to the OSTs.</para>
+        <para>If the Lustre client has enough granted cache, then it returns 'success' to users and arranges the writes to the OSTs.</para>
     </listitem><listitem>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290278" xreflabel=""/>Because Lustre clients have delivered success to users, the OSTs cannot fail these writes.</para>
+        <para>Because Lustre clients have delivered success to users, the OSTs cannot fail these writes.</para>
     </listitem></orderedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290279" xreflabel=""/>Because of granted cache, writes always overwrite quota limitations. For example, if you set a 400 GB quota on user A and use IOR to write for user A from a bundle of clients, you will write much more data than 400 GB, and cause an out-of-quota error (-EDQUOT).</para>
+        <para>Because of granted cache, writes always overwrite quota limitations. For example, if you set a 400 GB quota on user A and use IOR to write for user A from a bundle of clients, you will write much more data than 400 GB, and cause an out-of-quota error (-EDQUOT).</para>
                 <note><para>The effect of granted cache on quota limits can be mitigated, but not eradicated. Reduce the max_dirty_buffer in the clients (can be set from 0 to 512). To set max_dirty_buffer to 0:</para><para> * In releases after Lustre 1.6.5, lctl set_param osc.*.max_dirty_mb=0.</para><para> * In releases before Lustre 1.6.5, proc/fs/lustre/osc/*/max_dirty_mb; do echo 512 &gt; $O</para></note>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438217_pgfId-1290283" xreflabel=""/>21.5.2 <anchor xml:id="dbdoclet.50438217_50442" xreflabel=""/>Quota <anchor xml:id="dbdoclet.50438217_marker-1290282" xreflabel=""/>Limits</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290284" xreflabel=""/>Available quota limits depend on the Lustre version you are using.</para>
+        <title>21.5.2 <anchor xml:id="dbdoclet.50438217_50442" xreflabel=""/>Quota <anchor xml:id="dbdoclet.50438217_marker-1290282" xreflabel=""/>Limits</title>
+        <para>Available quota limits depend on the Lustre version you are using.</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290285" xreflabel=""/> Lustre version 1.4.11 and earlier (for 1.4.x releases) and Lustre version 1.6.4 and earlier (for 1.6.x releases) support quota limits less than 4 TB.</para>
+            <para> Lustre version 1.4.11 and earlier (for 1.4.x releases) and Lustre version 1.6.4 and earlier (for 1.6.x releases) support quota limits less than 4 TB.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290286" xreflabel=""/> Lustre versions 1.4.12, 1.6.5 and later support quota limits of 4 TB and greater in Lustre configurations with OST storage limits of 4 TB and less.</para>
+            <para> Lustre versions 1.4.12, 1.6.5 and later support quota limits of 4 TB and greater in Lustre configurations with OST storage limits of 4 TB and less.</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290287" xreflabel=""/> Future Lustre versions are expected to support quota limits of 4 TB and greater with no OST storage limits.</para>
+            <para> Future Lustre versions are expected to support quota limits of 4 TB and greater with no OST storage limits.</para>
           </listitem>
 <listitem>
             <informaltable frame="all">
@@ -316,36 +316,36 @@
                 <colspec colname="c3" colwidth="33*"/>
                 <thead>
                   <row>
-                    <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438217_pgfId-1290290" xreflabel=""/>Lustre Version</emphasis></para></entry>
-                    <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438217_pgfId-1290292" xreflabel=""/>Quota Limit Per User/Per Group</emphasis></para></entry>
-                    <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438217_pgfId-1290294" xreflabel=""/>OST Storage Limit</emphasis></para></entry>
+                    <entry><para><emphasis role="bold">Lustre Version</emphasis></para></entry>
+                    <entry><para><emphasis role="bold">Quota Limit Per User/Per Group</emphasis></para></entry>
+                    <entry><para><emphasis role="bold">OST Storage Limit</emphasis></para></entry>
                   </row>
                 </thead>
                 <tbody>
                   <row>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290296" xreflabel=""/>1.4.11 and earlier</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290298" xreflabel=""/>&lt; 4TB</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290300" xreflabel=""/>n/a</para></entry>
+                    <entry><para> 1.4.11 and earlier</para></entry>
+                    <entry><para> &lt; 4TB</para></entry>
+                    <entry><para> n/a</para></entry>
                   </row>
                   <row>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290302" xreflabel=""/>1.4.12</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290304" xreflabel=""/>=&gt; 4TB</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290306" xreflabel=""/>&lt;= 4TB of storage</para></entry>
+                    <entry><para> 1.4.12</para></entry>
+                    <entry><para> =&gt; 4TB</para></entry>
+                    <entry><para> &lt;= 4TB of storage</para></entry>
                   </row>
                   <row>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290308" xreflabel=""/>1.6.4 and earlier</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290310" xreflabel=""/>&lt; 4TB</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290312" xreflabel=""/>n/a</para></entry>
+                    <entry><para> 1.6.4 and earlier</para></entry>
+                    <entry><para> &lt; 4TB</para></entry>
+                    <entry><para> n/a</para></entry>
                   </row>
                   <row>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290314" xreflabel=""/>1.6.5</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290316" xreflabel=""/>=&gt; 4TB</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290318" xreflabel=""/>&lt;= 4TB of storage</para></entry>
+                    <entry><para> 1.6.5</para></entry>
+                    <entry><para> =&gt; 4TB</para></entry>
+                    <entry><para> &lt;= 4TB of storage</para></entry>
                   </row>
                   <row>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290320" xreflabel=""/>Future Lustre versions</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290322" xreflabel=""/>=&gt; 4TB</para></entry>
-                    <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290324" xreflabel=""/>No storage limit</para></entry>
+                    <entry><para> Future Lustre versions</para></entry>
+                    <entry><para> =&gt; 4TB</para></entry>
+                    <entry><para> No storage limit</para></entry>
                   </row>
                 </tbody>
               </tgroup>
@@ -354,140 +354,140 @@
 </itemizedlist>
       </section>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438217_pgfId-1290327" xreflabel=""/>21.5.3 <anchor xml:id="dbdoclet.50438217_66360" xreflabel=""/>Quota <anchor xml:id="dbdoclet.50438217_marker-1290326" xreflabel=""/>File Formats</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290328" xreflabel=""/>Lustre 1.6.5 introduced the v2 file format for administrative quotas, with 64-bit limits that support large-limits handling. The old quota file format (v1), with 32-bit limits, is also supported. Lustre 1.6.6 introduced the v2 file format for operational quotas. A few notes regarding the current quota file formats:</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290329" xreflabel=""/>Lustre 1.6.5 and later use mdt.quota_type to force a specific administrative quota version (v2 or v1).</para>
+        <title>21.5.3 <anchor xml:id="dbdoclet.50438217_66360" xreflabel=""/>Quota <anchor xml:id="dbdoclet.50438217_marker-1290326" xreflabel=""/>File Formats</title>
+        <para>Lustre 1.6.5 introduced the v2 file format for administrative quotas, with 64-bit limits that support large-limits handling. The old quota file format (v1), with 32-bit limits, is also supported. Lustre 1.6.6 introduced the v2 file format for operational quotas. A few notes regarding the current quota file formats:</para>
+        <para>Lustre 1.6.5 and later use mdt.quota_type to force a specific administrative quota version (v2 or v1).</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290330" xreflabel=""/> For the v2 quota file format, (OBJECTS/admin_quotafile_v2.{usr,grp})</para>
+            <para> For the v2 quota file format, (OBJECTS/admin_quotafile_v2.{usr,grp})</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290331" xreflabel=""/> For the v1 quota file format, (OBJECTS/admin_quotafile.{usr,grp})</para>
+            <para> For the v1 quota file format, (OBJECTS/admin_quotafile.{usr,grp})</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290332" xreflabel=""/>Lustre 1.6.6 and later use ost.quota_type to force a specific operational quota version (v2 or v1).</para>
+        <para>Lustre 1.6.6 and later use ost.quota_type to force a specific operational quota version (v2 or v1).</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290333" xreflabel=""/> For the v2 quota file format, (lquota_v2.{user,group})</para>
+            <para> For the v2 quota file format, (lquota_v2.{user,group})</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290334" xreflabel=""/> For the v1 quota file format, (lquota.{user,group})</para>
+            <para> For the v1 quota file format, (lquota.{user,group})</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290335" xreflabel=""/>The quota_type specifier can be used to set different combinations of administrative/operational quota file versions on a Lustre node:</para>
+        <para>The quota_type specifier can be used to set different combinations of administrative/operational quota file versions on a Lustre node:</para>
         <itemizedlist><listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290336" xreflabel=""/> &quot;1&quot; - v1 (32-bit) administrative quota file, v1 (32-bit) operational quota file (default in releases before Lustre 1.6.5)</para>
+            <para> &quot;1&quot; - v1 (32-bit) administrative quota file, v1 (32-bit) operational quota file (default in releases before Lustre 1.6.5)</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290337" xreflabel=""/> &quot;2&quot; - v2 (64-bit) administrative quota file, v1 (32-bit) operational quota file (default in Lustre 1.6.5)</para>
+            <para> &quot;2&quot; - v2 (64-bit) administrative quota file, v1 (32-bit) operational quota file (default in Lustre 1.6.5)</para>
           </listitem>
 
 <listitem>
-            <para><anchor xml:id="dbdoclet.50438217_pgfId-1290338" xreflabel=""/> &quot;3&quot; - v2 (64-bit) administrative quota file, v2 (64-bit) operational quota file (default in releases after Lustre 1.6.5)</para>
+            <para> &quot;3&quot; - v2 (64-bit) administrative quota file, v2 (64-bit) operational quota file (default in releases after Lustre 1.6.5)</para>
           </listitem>
 
 </itemizedlist>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290339" xreflabel=""/>If quotas do not exist or look broken, then quotacheck creates quota files of a required name and format.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290340" xreflabel=""/>If Lustre is using the v2 quota file format when only v1 quota files exist, then quotacheck converts old v1 quota files to new v2 quota files. This conversion is triggered automatically, and is transparent to users. If an old quota file does not exist or looks broken, then the new v2 quota file will be empty. In case of an error, details can be found in the kernel log of the corresponding MDS/OST. During conversion of a v1 quota file to a v2 quota file, the v2 quota file is marked as broken, to avoid it being used if a crash occurs. The quota module does not use broken quota files (keeping quota off).</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290341" xreflabel=""/>In most situations, Lustre administrators do not need to set specific versioning options. Upgrading Lustre without using quota_type to force specific quota file versions results in quota files being upgraded automatically to the latest version. The option ensures backward compatibility, preventing a quota file upgrade to a version which is not supported by earlier Lustre versions.</para>
+        <para>If quotas do not exist or look broken, then quotacheck creates quota files of a required name and format.</para>
+        <para>If Lustre is using the v2 quota file format when only v1 quota files exist, then quotacheck converts old v1 quota files to new v2 quota files. This conversion is triggered automatically, and is transparent to users. If an old quota file does not exist or looks broken, then the new v2 quota file will be empty. In case of an error, details can be found in the kernel log of the corresponding MDS/OST. During conversion of a v1 quota file to a v2 quota file, the v2 quota file is marked as broken, to avoid it being used if a crash occurs. The quota module does not use broken quota files (keeping quota off).</para>
+        <para>In most situations, Lustre administrators do not need to set specific versioning options. Upgrading Lustre without using quota_type to force specific quota file versions results in quota files being upgraded automatically to the latest version. The option ensures backward compatibility, preventing a quota file upgrade to a version which is not supported by earlier Lustre versions.</para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438217_20772">
       <title>21.6 Lustre <anchor xml:id="dbdoclet.50438217_marker-1290343" xreflabel=""/>Quota Statistics</title>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290345" xreflabel=""/>Lustre includes statistics that monitor quota activity, such as the kinds of quota RPCs sent during a specific period, the average time to complete the RPCs, etc. These statistics are useful to measure performance of a Lustre file system.</para>
-      <para><anchor xml:id="dbdoclet.50438217_pgfId-1290346" xreflabel=""/>Each quota statistic consists of a quota event and min_time, max_time and sum_time values for the event.</para>
+      <para>Lustre includes statistics that monitor quota activity, such as the kinds of quota RPCs sent during a specific period, the average time to complete the RPCs, etc. These statistics are useful to measure performance of a Lustre file system.</para>
+      <para>Each quota statistic consists of a quota event and min_time, max_time and sum_time values for the event.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
           <colspec colname="c2" colwidth="50*"/>
           <thead>
             <row>
-              <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438217_pgfId-1290349" xreflabel=""/>Quota Event</emphasis></para></entry>
-              <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438217_pgfId-1290351" xreflabel=""/>Description</emphasis></para></entry>
+              <entry><para><emphasis role="bold">Quota Event</emphasis></para></entry>
+              <entry><para><emphasis role="bold">Description</emphasis></para></entry>
             </row>
           </thead>
           <tbody>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290353" xreflabel=""/><emphasis role="bold">sync_acq_req</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290355" xreflabel=""/>Quota slaves send a acquiring_quota request and wait for its return.</para></entry>
+              <entry><para> <emphasis role="bold">sync_acq_req</emphasis></para></entry>
+              <entry><para> Quota slaves send a acquiring_quota request and wait for its return.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290357" xreflabel=""/><emphasis role="bold">sync_rel_req</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290359" xreflabel=""/>Quota slaves send a releasing_quota request and wait for its return.</para></entry>
+              <entry><para> <emphasis role="bold">sync_rel_req</emphasis></para></entry>
+              <entry><para> Quota slaves send a releasing_quota request and wait for its return.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290361" xreflabel=""/><emphasis role="bold">async_acq_req</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290363" xreflabel=""/>Quota slaves send an acquiring_quota request and do not wait for its return.</para></entry>
+              <entry><para> <emphasis role="bold">async_acq_req</emphasis></para></entry>
+              <entry><para> Quota slaves send an acquiring_quota request and do not wait for its return.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290365" xreflabel=""/><emphasis role="bold">async_rel_req</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290367" xreflabel=""/>Quota slaves send a releasing_quota request and do not wait for its return.</para></entry>
+              <entry><para> <emphasis role="bold">async_rel_req</emphasis></para></entry>
+              <entry><para> Quota slaves send a releasing_quota request and do not wait for its return.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290369" xreflabel=""/><emphasis role="bold">wait_for_blk_quota (lquota_chkquota)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290371" xreflabel=""/>Before data is written to OSTs, the OSTs check if the remaining block quota is sufficient. This is done in the lquota_chkquota function.</para></entry>
+              <entry><para> <emphasis role="bold">wait_for_blk_quota (lquota_chkquota)</emphasis></para></entry>
+              <entry><para> Before data is written to OSTs, the OSTs check if the remaining block quota is sufficient. This is done in the lquota_chkquota function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290373" xreflabel=""/><emphasis role="bold">wait_for_ino_quota (lquota_chkquota)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290375" xreflabel=""/>Before files are created on the MDS, the MDS checks if the remaining inode quota is sufficient. This is done in the lquota_chkquota function.</para></entry>
+              <entry><para> <emphasis role="bold">wait_for_ino_quota (lquota_chkquota)</emphasis></para></entry>
+              <entry><para> Before files are created on the MDS, the MDS checks if the remaining inode quota is sufficient. This is done in the lquota_chkquota function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290377" xreflabel=""/><emphasis role="bold">wait_for_blk_quota (lquota_pending_commit)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290379" xreflabel=""/>After blocks are written to OSTs, relative quota information is updated. This is done in the lquota_pending_commit function.</para></entry>
+              <entry><para> <emphasis role="bold">wait_for_blk_quota (lquota_pending_commit)</emphasis></para></entry>
+              <entry><para> After blocks are written to OSTs, relative quota information is updated. This is done in the lquota_pending_commit function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290381" xreflabel=""/><emphasis role="bold">wait_for_ino_quota (lquota_pending_commit)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290383" xreflabel=""/>After files are created, relative quota information is updated. This is done in the lquota_pending_commit function.</para></entry>
+              <entry><para> <emphasis role="bold">wait_for_ino_quota (lquota_pending_commit)</emphasis></para></entry>
+              <entry><para> After files are created, relative quota information is updated. This is done in the lquota_pending_commit function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290385" xreflabel=""/><emphasis role="bold">wait_for_pending_blk_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290387" xreflabel=""/>On the MDS or OSTs, there is one thread sending a quota request for a specific UID/GID for block quota at any time. At that time, if other threads need to do this too, they should wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
+              <entry><para> <emphasis role="bold">wait_for_pending_blk_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
+              <entry><para> On the MDS or OSTs, there is one thread sending a quota request for a specific UID/GID for block quota at any time. At that time, if other threads need to do this too, they should wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290389" xreflabel=""/><emphasis role="bold">wait_for_pending_ino_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290391" xreflabel=""/>On the MDS, there is one thread sending a quota request for a specific UID/GID for inode quota at any time. If other threads need to do this too, they should wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
+              <entry><para> <emphasis role="bold">wait_for_pending_ino_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
+              <entry><para> On the MDS, there is one thread sending a quota request for a specific UID/GID for inode quota at any time. If other threads need to do this too, they should wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290393" xreflabel=""/><emphasis role="bold">nowait_for_pending_blk_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290395" xreflabel=""/>On the MDS or OSTs, there is one thread sending a quota request for a specific UID/GID for block quota at any time. When threads enter qctxt_wait_pending_dqacq, they do not need to wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
+              <entry><para> <emphasis role="bold">nowait_for_pending_blk_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
+              <entry><para> On the MDS or OSTs, there is one thread sending a quota request for a specific UID/GID for block quota at any time. When threads enter qctxt_wait_pending_dqacq, they do not need to wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290397" xreflabel=""/><emphasis role="bold">nowait_for_pending_ino_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290399" xreflabel=""/>On the MDS, there is one thread sending a quota request for a specific UID/GID for inode quota at any time. When threads enter qctxt_wait_pending_dqacq, they do not need to wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
+              <entry><para> <emphasis role="bold">nowait_for_pending_ino_quota_req (qctxt_wait_pending_dqacq)</emphasis></para></entry>
+              <entry><para> On the MDS, there is one thread sending a quota request for a specific UID/GID for inode quota at any time. When threads enter qctxt_wait_pending_dqacq, they do not need to wait. This is done in the qctxt_wait_pending_dqacq function.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290401" xreflabel=""/><emphasis role="bold">quota_ctl</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290403" xreflabel=""/>The quota_ctl statistic is generated when lfs setquota, lfs quota and so on, are issued.</para></entry>
+              <entry><para> <emphasis role="bold">quota_ctl</emphasis></para></entry>
+              <entry><para> The quota_ctl statistic is generated when lfs setquota, lfs quota and so on, are issued.</para></entry>
             </row>
             <row>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290405" xreflabel=""/><emphasis role="bold">adjust_qunit</emphasis></para></entry>
-              <entry><para> <anchor xml:id="dbdoclet.50438217_pgfId-1290407" xreflabel=""/>Each time qunit is adjusted, it is counted.</para></entry>
+              <entry><para> <emphasis role="bold">adjust_qunit</emphasis></para></entry>
+              <entry><para> Each time qunit is adjusted, it is counted.</para></entry>
             </row>
           </tbody>
         </tgroup>
       </informaltable>
       <section remap="h3">
-        <title><anchor xml:id="dbdoclet.50438217_pgfId-1290408" xreflabel=""/>21.6.1 Interpreting Quota Statistics</title>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290409" xreflabel=""/>Quota statistics are an important measure of a Lustre file system's performance. Interpreting these statistics correctly can help you diagnose problems with quotas, and may indicate adjustments to improve system performance.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290410" xreflabel=""/>For example, if you run this command on the OSTs:</para>
-        <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290411" xreflabel=""/>cat /proc/fs/lustre/lquota/lustre-OST0000/stats
+        <title>21.6.1 Interpreting Quota Statistics</title>
+        <para>Quota statistics are an important measure of a Lustre file system's performance. Interpreting these statistics correctly can help you diagnose problems with quotas, and may indicate adjustments to improve system performance.</para>
+        <para>For example, if you run this command on the OSTs:</para>
+        <screen>cat /proc/fs/lustre/lquota/lustre-OST0000/stats
 </screen>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290412" xreflabel=""/>You will get a result similar to this:</para>
-        <screen><anchor xml:id="dbdoclet.50438217_pgfId-1290413" xreflabel=""/>snapshot_time                                1219908615.506895 secs.usecs
-<anchor xml:id="dbdoclet.50438217_pgfId-1290414" xreflabel=""/>async_acq_req                              1 samples [us]  32 32 32
-<anchor xml:id="dbdoclet.50438217_pgfId-1290415" xreflabel=""/>async_rel_req                              1 samples [us]  5 5 5
-<anchor xml:id="dbdoclet.50438217_pgfId-1290416" xreflabel=""/>nowait_for_pending_blk_quota_req(qctxt_wait_pending_dqacq) 1 samples [us] 2\
+        <para>You will get a result similar to this:</para>
+        <screen>snapshot_time                                1219908615.506895 secs.usecs
+async_acq_req                              1 samples [us]  32 32 32
+async_rel_req                              1 samples [us]  5 5 5
+nowait_for_pending_blk_quota_req(qctxt_wait_pending_dqacq) 1 samples [us] 2\
  2 2
-<anchor xml:id="dbdoclet.50438217_pgfId-1290417" xreflabel=""/>quota_ctl                          4 samples [us]  80 3470 4293
-<anchor xml:id="dbdoclet.50438217_pgfId-1290418" xreflabel=""/>adjust_qunit                               1 samples [us]  70 70 70
-<anchor xml:id="dbdoclet.50438217_pgfId-1290419" xreflabel=""/>....
+quota_ctl                          4 samples [us]  80 3470 4293
+adjust_qunit                               1 samples [us]  70 70 70
+....
 </screen>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290420" xreflabel=""/>In the first line, snapshot_time indicates when the statistics were taken. The remaining lines list the quota events and their associated data.</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290421" xreflabel=""/>In the second line, the async_acq_req event occurs one time. The min_time, max_time and sum_time statistics for this event are 32, 32 and 32, respectively. The unit is microseconds (s).</para>
-        <para><anchor xml:id="dbdoclet.50438217_pgfId-1290422" xreflabel=""/>In the fifth line, the quota_ctl event occurs four times. The min_time, max_time and sum_time statistics for this event are 80, 3470 and 4293, respectively. The unit is microseconds (s).</para>
+        <para>In the first line, snapshot_time indicates when the statistics were taken. The remaining lines list the quota events and their associated data.</para>
+        <para>In the second line, the async_acq_req event occurs one time. The min_time, max_time and sum_time statistics for this event are 32, 32 and 32, respectively. The unit is microseconds (s).</para>
+        <para>In the fifth line, the quota_ctl event occurs four times. The min_time, max_time and sum_time statistics for this event are 80, 3470 and 4293, respectively. The unit is microseconds (s).</para>
       </section>
     </section>
 </chapter>

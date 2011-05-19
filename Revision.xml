@@ -62,24 +62,24 @@
       <colspec colname="c4" colwidth="25*"/>
       <thead>
         <row>
-          <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438248_pgfId-997745" xreflabel=""/>BookTitle</emphasis></para></entry>
-          <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438248_pgfId-997747" xreflabel=""/>Part Number</emphasis></para></entry>
-          <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438248_pgfId-997749" xreflabel=""/>Date</emphasis></para></entry>
-          <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438248_pgfId-997751" xreflabel=""/>Comments</emphasis></para></entry>
+          <entry><para><emphasis role="bold">BookTitle</emphasis></para></entry>
+          <entry><para><emphasis role="bold">Part Number</emphasis></para></entry>
+          <entry><para><emphasis role="bold">Date</emphasis></para></entry>
+          <entry><para><emphasis role="bold">Comments</emphasis></para></entry>
         </row>
       </thead>
       <tbody>
         <row>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997756" xreflabel=""/>Lustre 2.0 Operations Manual</para></entry>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997758" xreflabel=""/>821-2076-10</para></entry>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997763" xreflabel=""/>July 2010</para></entry>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997765" xreflabel=""/>First release of Lustre 2.0 manual</para></entry>
+          <entry><para> Lustre 2.0 Operations Manual</para></entry>
+          <entry><para> 821-2076-10</para></entry>
+          <entry><para> July 2010</para></entry>
+          <entry><para> First release of Lustre 2.0 manual</para></entry>
         </row>
         <row>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997955" xreflabel=""/>Lustre 2.0 Operations Manual</para></entry>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997957" xreflabel=""/>821-2076-10</para></entry>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997962" xreflabel=""/>January 2011</para></entry>
-          <entry><para> <anchor xml:id="dbdoclet.50438248_pgfId-997964" xreflabel=""/>Second release of Lustre 2.0 manual</para></entry>
+          <entry><para> Lustre 2.0 Operations Manual</para></entry>
+          <entry><para> 821-2076-10</para></entry>
+          <entry><para> January 2011</para></entry>
+          <entry><para> Second release of Lustre 2.0 manual</para></entry>
         </row>
       </tbody>
     </tgroup>

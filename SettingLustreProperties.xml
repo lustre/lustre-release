@@ -3,7 +3,7 @@
   <info>
     <title xml:id='settinglustreproperties.title'>Setting Lustre Properties in a C Program (llapi)</title>
   </info>
-  <para><anchor xml:id="dbdoclet.50438215_pgfId-1297638" xreflabel=""/>This chapter describes the llapi library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
+  <para>This chapter describes the llapi library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
   <itemizedlist><listitem>
       <para><xref linkend="dbdoclet.50438215_30970"/></para>
     </listitem>
@@ -30,47 +30,47 @@
 
     <section xml:id="dbdoclet.50438215_30970">
       <title>34.1 llapi_file_create</title>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1296829" xreflabel=""/>Use llapi_file_create to set Lustre properties for a new file.</para>
+      <para>Use llapi_file_create to set Lustre properties for a new file.</para>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1296830" xreflabel=""/>Synopsis</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296831" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt;#include &lt;lustre/lustre_user.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296832" xreflabel=""/>int llapi_file_create(char *name, long stripe_size, int stripe_offset, int \
+        <title>Synopsis</title>
+        <screen>#include &lt;lustre/liblustreapi.h&gt;#include &lt;lustre/lustre_user.h&gt;
+int llapi_file_create(char *name, long stripe_size, int stripe_offset, int \
 stripe_count, int stripe_pattern);
 </screen>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1296833" xreflabel=""/>Description</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1296834" xreflabel=""/>The llapi_file_create() function sets a file descriptor's Lustre striping information. The file descriptor is then accessed with open ().</para>
+        <title>Description</title>
+        <para>The llapi_file_create() function sets a file descriptor's Lustre striping information. The file descriptor is then accessed with open ().</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1296837" xreflabel=""/>Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1296839" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296841" xreflabel=""/><emphasis role="bold">llapi_file_create()</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296843" xreflabel=""/>If the file already exists, this parameter returns to 'EEXIST'. If the stripe parameters are invalid, this parameter returns to 'EINVAL'.</para></entry>
+                <entry><para> <emphasis role="bold">llapi_file_create()</emphasis></para></entry>
+                <entry><para> If the file already exists, this parameter returns to 'EEXIST'. If the stripe parameters are invalid, this parameter returns to 'EINVAL'.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296845" xreflabel=""/><emphasis role="bold">stripe_size</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296847" xreflabel=""/>This value must be an even multiple of system page size, as shown by getpagesize (). The default Lustre stripe size is 4MB.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_size</emphasis></para></entry>
+                <entry><para> This value must be an even multiple of system page size, as shown by getpagesize (). The default Lustre stripe size is 4MB.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296849" xreflabel=""/><emphasis role="bold">stripe_offset</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296851" xreflabel=""/>Indicates the starting OST for this file.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_offset</emphasis></para></entry>
+                <entry><para> Indicates the starting OST for this file.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296853" xreflabel=""/><emphasis role="bold">stripe_count</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296855" xreflabel=""/>Indicates the number of OSTs that this file will be striped across.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_count</emphasis></para></entry>
+                <entry><para> Indicates the number of OSTs that this file will be striped across.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296857" xreflabel=""/><emphasis role="bold">stripe_pattern</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1296859" xreflabel=""/> Indicates the RAID pattern.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_pattern</emphasis></para></entry>
+                <entry><para>  Indicates the RAID pattern.</para></entry>
               </row>
             </tbody>
           </tgroup>
@@ -78,81 +78,81 @@ stripe_count, int stripe_pattern);
                 <note><para>Currently, only RAID 0 is supported. To use the system defaults, set these values: stripe_size = 0, stripe_offset = -1, stripe_count = 0, stripe_pattern = 0</para></note>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1296861" xreflabel=""/>Examples</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1296862" xreflabel=""/>System default size is 4 MB.</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296863" xreflabel=""/>char *tfile = TESTFILE;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296864" xreflabel=""/>int stripe_size = 65536
+        <title>Examples</title>
+        <para>System default size is 4 MB.</para>
+        <screen>char *tfile = TESTFILE;
+int stripe_size = 65536
 </screen>
-         <para><anchor xml:id="dbdoclet.50438215_pgfId-1296865" xreflabel=""/>To start at default, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296866" xreflabel=""/>int stripe_offset = -1
+         <para>To start at default, run:</para>
+        <screen>int stripe_offset = -1
 </screen>
-         <para><anchor xml:id="dbdoclet.50438215_pgfId-1296867" xreflabel=""/>To start at the default, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296868" xreflabel=""/>int stripe_count = 1
+         <para>To start at the default, run:</para>
+        <screen>int stripe_count = 1
 </screen>
-         <para><anchor xml:id="dbdoclet.50438215_pgfId-1296869" xreflabel=""/>To set a single stripe for this example, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296870" xreflabel=""/>int stripe_pattern = 0
+         <para>To set a single stripe for this example, run:</para>
+        <screen>int stripe_pattern = 0
 </screen>
-         <para><anchor xml:id="dbdoclet.50438215_pgfId-1296871" xreflabel=""/>Currently, only RAID 0 is supported.</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296872" xreflabel=""/>int stripe_pattern = 0; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296873" xreflabel=""/>int rc, fd; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296874" xreflabel=""/>rc = llapi_file_create(tfile, stripe_size,stripe_offset, stripe_count,strip\
+         <para>Currently, only RAID 0 is supported.</para>
+        <screen>int stripe_pattern = 0; 
+int rc, fd; 
+rc = llapi_file_create(tfile, stripe_size,stripe_offset, stripe_count,strip\
 e_pattern);
 </screen>
-         <para><anchor xml:id="dbdoclet.50438215_pgfId-1296875" xreflabel=""/>Result code is inverted, you may return with 'EINVAL' or an ioctl error.</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296876" xreflabel=""/>if (rc) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1296877" xreflabel=""/>fprintf(stderr,&quot;llapi_file_create failed: %d (%s) 0, rc, strerror(-rc));retu\
+         <para>Result code is inverted, you may return with 'EINVAL' or an ioctl error.</para>
+        <screen>if (rc) {
+fprintf(stderr,&quot;llapi_file_create failed: %d (%s) 0, rc, strerror(-rc));retu\
 rn -1; }
 </screen>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1296878" xreflabel=""/>llapi_file_create closes the file descriptor. You must re-open the descriptor. To do this, run:</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296879" xreflabel=""/>fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644); if (fd &lt; 0) \\
+        <para>llapi_file_create closes the file descriptor. You must re-open the descriptor. To do this, run:</para>
+        <screen>fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644); if (fd &lt; 0) \\
  { fprintf(stderr, &quot;Can't open %s file: %s0, tfile,
-<anchor xml:id="dbdoclet.50438215_pgfId-1296880" xreflabel=""/>str-
-<anchor xml:id="dbdoclet.50438215_pgfId-1296881" xreflabel=""/>error(errno));
-<anchor xml:id="dbdoclet.50438215_pgfId-1296882" xreflabel=""/>return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296883" xreflabel=""/>}
+str-
+error(errno));
+return -1;
+}
 </screen>
       </section>
     </section>
     <section xml:id="dbdoclet.50438215_50149">
       <title>34.2 llapi_file_get_stripe</title>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1296886" xreflabel=""/>Use llapi_file_get_stripe to get striping information for a file or directory on a Lustre file system.</para>
+      <para>Use llapi_file_get_stripe to get striping information for a file or directory on a Lustre file system.</para>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1296887" xreflabel=""/>Synopsis</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296888" xreflabel=""/>#include &lt;sys/types.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296889" xreflabel=""/>#include &lt;sys/stat.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296890" xreflabel=""/>#include &lt;fcntl.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296891" xreflabel=""/>#include &lt;liblustre.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296892" xreflabel=""/>#include &lt;lustre/lustre_idl.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296893" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296894" xreflabel=""/>#include &lt;lustre/lustre_user.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296895" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1296896" xreflabel=""/>int llapi_file_get_stripe(const char *<emphasis>path</emphasis>, void *<emphasis>lum</emphasis>);
+        <title>Synopsis</title>
+        <screen>#include &lt;sys/types.h&gt; 
+#include &lt;sys/stat.h&gt; 
+#include &lt;fcntl.h&gt; 
+#include &lt;liblustre.h&gt; 
+#include &lt;lustre/lustre_idl.h&gt; 
+#include &lt;lustre/liblustreapi.h&gt; 
+#include &lt;lustre/lustre_user.h&gt; 
+ 
+int llapi_file_get_stripe(const char *<emphasis>path</emphasis>, void *<emphasis>lum</emphasis>);
 </screen>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1296897" xreflabel=""/>Description</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1296898" xreflabel=""/>The llapi_file_get_stripe() function returns striping information for a file or directory <emphasis>path</emphasis> in <emphasis>lum</emphasis> (which should point to a large enough memory region) in one of the following formats:</para>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1296899" xreflabel=""/>struct lov_user_md_v1 {
-<anchor xml:id="dbdoclet.50438215_pgfId-1296900" xreflabel=""/>__u32 lmm_magic;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296901" xreflabel=""/>__u32 lmm_pattern;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296902" xreflabel=""/>__u64 lmm_object_id;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296903" xreflabel=""/>__u64 lmm_object_seq;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296904" xreflabel=""/>__u32 lmm_stripe_size;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296905" xreflabel=""/>__u16 lmm_stripe_count;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296906" xreflabel=""/>__u16 lmm_stripe_offset;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296907" xreflabel=""/>struct lov_user_ost_data_v1 lmm_objects[0];
-<anchor xml:id="dbdoclet.50438215_pgfId-1296908" xreflabel=""/>} __attribute__((packed));
-<anchor xml:id="dbdoclet.50438215_pgfId-1296909" xreflabel=""/>struct lov_user_md_v3 {
-<anchor xml:id="dbdoclet.50438215_pgfId-1296910" xreflabel=""/>__u32 lmm_magic;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296911" xreflabel=""/>__u32 lmm_pattern;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296912" xreflabel=""/>__u64 lmm_object_id;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296913" xreflabel=""/>__u64 lmm_object_seq;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296914" xreflabel=""/>__u32 lmm_stripe_size;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296915" xreflabel=""/>__u16 lmm_stripe_count;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296916" xreflabel=""/>__u16 lmm_stripe_offset;
-<anchor xml:id="dbdoclet.50438215_pgfId-1296917" xreflabel=""/>char lmm_pool_name[LOV_MAXPOOLNAME];
-<anchor xml:id="dbdoclet.50438215_pgfId-1296918" xreflabel=""/>struct lov_user_ost_data_v1 lmm_objects[0];
-<anchor xml:id="dbdoclet.50438215_pgfId-1297038" xreflabel=""/>} __attribute__((packed));
+        <title>Description</title>
+        <para>The llapi_file_get_stripe() function returns striping information for a file or directory <emphasis>path</emphasis> in <emphasis>lum</emphasis> (which should point to a large enough memory region) in one of the following formats:</para>
+        <screen>struct lov_user_md_v1 {
+__u32 lmm_magic;
+__u32 lmm_pattern;
+__u64 lmm_object_id;
+__u64 lmm_object_seq;
+__u32 lmm_stripe_size;
+__u16 lmm_stripe_count;
+__u16 lmm_stripe_offset;
+struct lov_user_ost_data_v1 lmm_objects[0];
+} __attribute__((packed));
+struct lov_user_md_v3 {
+__u32 lmm_magic;
+__u32 lmm_pattern;
+__u64 lmm_object_id;
+__u64 lmm_object_seq;
+__u32 lmm_stripe_size;
+__u16 lmm_stripe_count;
+__u16 lmm_stripe_offset;
+char lmm_pool_name[LOV_MAXPOOLNAME];
+struct lov_user_ost_data_v1 lmm_objects[0];
+} __attribute__((packed));
 </screen>
         <informaltable frame="all">
           <tgroup cols="2">
@@ -160,431 +160,431 @@ rn -1; }
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1298282" xreflabel=""/>Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1298284" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298286" xreflabel=""/><emphasis role="bold">lmm_magic</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298288" xreflabel=""/>Specifies the format of the returned striping information. <emphasis role="bold">LOV_MAGIC_V1</emphasis> isused for lov_user_md_v1. <emphasis role="bold">LOV_MAGIC_V3</emphasis> is used for lov_user_md_v3.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_magic</emphasis></para></entry>
+                <entry><para> Specifies the format of the returned striping information. <emphasis role="bold">LOV_MAGIC_V1</emphasis> isused for lov_user_md_v1. <emphasis role="bold">LOV_MAGIC_V3</emphasis> is used for lov_user_md_v3.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298290" xreflabel=""/><emphasis role="bold">lmm_pattern</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298292" xreflabel=""/>Holds the striping pattern. Only <emphasis role="bold">LOV_PATTERN_RAID0</emphasis> is possible in this Lustre version.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_pattern</emphasis></para></entry>
+                <entry><para> Holds the striping pattern. Only <emphasis role="bold">LOV_PATTERN_RAID0</emphasis> is possible in this Lustre version.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298294" xreflabel=""/><emphasis role="bold">lmm_object_id</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298296" xreflabel=""/>Holds the MDS object ID.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_object_id</emphasis></para></entry>
+                <entry><para> Holds the MDS object ID.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298298" xreflabel=""/><emphasis role="bold">lmm_object_gr</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298300" xreflabel=""/>Holds the MDS object group.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_object_gr</emphasis></para></entry>
+                <entry><para> Holds the MDS object group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298302" xreflabel=""/><emphasis role="bold">lmm_stripe_size</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298304" xreflabel=""/>Holds the stripe size in bytes.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_stripe_size</emphasis></para></entry>
+                <entry><para> Holds the stripe size in bytes.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298306" xreflabel=""/><emphasis role="bold">lmm_stripe_count</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298308" xreflabel=""/>Holds the number of OSTs over which the file is striped.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_stripe_count</emphasis></para></entry>
+                <entry><para> Holds the number of OSTs over which the file is striped.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298310" xreflabel=""/><emphasis role="bold">lmm_stripe_offset</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298359" xreflabel=""/>Holds the OST index from which the file starts.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_stripe_offset</emphasis></para></entry>
+                <entry><para> Holds the OST index from which the file starts.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298314" xreflabel=""/><emphasis role="bold">lmm_pool_name</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298374" xreflabel=""/>Holds the OST pool name to which the file belongs.</para></entry>
+                <entry><para> <emphasis role="bold">lmm_pool_name</emphasis></para></entry>
+                <entry><para> Holds the OST pool name to which the file belongs.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298318" xreflabel=""/><emphasis role="bold">lmm_objects</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298390" xreflabel=""/>An array of lmm_stripe_count members containing per OST file information in</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298391" xreflabel=""/>the following format:</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298392" xreflabel=""/>struct lov_user_ost_data_v1 {</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298393" xreflabel=""/>__u64 l_object_id;</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298394" xreflabel=""/>__u64 l_object_seq;</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298395" xreflabel=""/>__u32 l_ost_gen;</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298396" xreflabel=""/>__u32 l_ost_idx;</para><para><anchor xml:id="dbdoclet.50438215_pgfId-1298397" xreflabel=""/>} __attribute__((packed));</para></entry>
+                <entry><para> <emphasis role="bold">lmm_objects</emphasis></para></entry>
+                <entry><para> An array of lmm_stripe_count members containing per OST file information in</para><para>the following format:</para><para>struct lov_user_ost_data_v1 {</para><para>__u64 l_object_id;</para><para>__u64 l_object_seq;</para><para>__u32 l_ost_gen;</para><para>__u32 l_ost_idx;</para><para>} __attribute__((packed));</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298322" xreflabel=""/><emphasis role="bold">l_object_id</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298412" xreflabel=""/>Holds the OST's object ID.</para></entry>
+                <entry><para> <emphasis role="bold">l_object_id</emphasis></para></entry>
+                <entry><para> Holds the OST's object ID.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298326" xreflabel=""/><emphasis role="bold">l_object_seq</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298427" xreflabel=""/>Holds the OST's object group.</para></entry>
+                <entry><para> <emphasis role="bold">l_object_seq</emphasis></para></entry>
+                <entry><para> Holds the OST's object group.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298330" xreflabel=""/><emphasis role="bold">l_ost_gen</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298442" xreflabel=""/>Holds the OST's index generation.</para></entry>
+                <entry><para> <emphasis role="bold">l_ost_gen</emphasis></para></entry>
+                <entry><para> Holds the OST's index generation.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298334" xreflabel=""/><emphasis role="bold">l_ost_idx</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298461" xreflabel=""/>Holds the OST's index in LOV.</para></entry>
+                <entry><para> <emphasis role="bold">l_ost_idx</emphasis></para></entry>
+                <entry><para> Holds the OST's index in LOV.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297039" xreflabel=""/>Return Values</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297040" xreflabel=""/>llapi_file_get_stripe() returns:</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297041" xreflabel=""/><emphasis role="bold">0</emphasis> On success</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297042" xreflabel=""/><emphasis role="bold">!= 0</emphasis> On failure, <emphasis>errno</emphasis> is set appropriately</para>
+        <title>Return Values</title>
+        <para>llapi_file_get_stripe() returns:</para>
+        <para><emphasis role="bold">0</emphasis> On success</para>
+        <para><emphasis role="bold">!= 0</emphasis> On failure, <emphasis>errno</emphasis> is set appropriately</para>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297043" xreflabel=""/>Errors</title>
+        <title>Errors</title>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1298797" xreflabel=""/>Errors</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1298799" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Errors</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298801" xreflabel=""/><emphasis role="bold">ENOMEM</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298803" xreflabel=""/><emphasis role="bold">Failed to allocate memory</emphasis></para></entry>
+                <entry><para> <emphasis role="bold">ENOMEM</emphasis></para></entry>
+                <entry><para> <emphasis role="bold">Failed to allocate memory</emphasis></para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298805" xreflabel=""/><emphasis role="bold">ENAMETOOLONG</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298868" xreflabel=""/>Path was too long</para></entry>
+                <entry><para> <emphasis role="bold">ENAMETOOLONG</emphasis></para></entry>
+                <entry><para> Path was too long</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298809" xreflabel=""/><emphasis role="bold">ENOENT</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298870" xreflabel=""/>Path does not point to a file or directory</para></entry>
+                <entry><para> <emphasis role="bold">ENOENT</emphasis></para></entry>
+                <entry><para> Path does not point to a file or directory</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298813" xreflabel=""/><emphasis role="bold">ENOTTY</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298872" xreflabel=""/>Path does not point to a Lustre file system</para></entry>
+                <entry><para> <emphasis role="bold">ENOTTY</emphasis></para></entry>
+                <entry><para> Path does not point to a Lustre file system</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298817" xreflabel=""/><emphasis role="bold">EFAULT</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298819" xreflabel=""/>Memory region pointed by lum is not properly mapped</para></entry>
+                <entry><para> <emphasis role="bold">EFAULT</emphasis></para></entry>
+                <entry><para> Memory region pointed by lum is not properly mapped</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1298829" xreflabel=""/>Examples</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297050" xreflabel=""/>#include &lt;sys/vfs.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297051" xreflabel=""/>#include &lt;liblustre.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297052" xreflabel=""/>#include &lt;lnet/lnetctl.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297053" xreflabel=""/>#include &lt;obd.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297054" xreflabel=""/>#include &lt;lustre_lib.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297055" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297056" xreflabel=""/>#include &lt;obd_lov.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297057" xreflabel=""/>static inline int maxint(int a, int b)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297058" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297059" xreflabel=""/>return a &gt; b ? a : b;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297060" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297061" xreflabel=""/>static void *alloc_lum()
-<anchor xml:id="dbdoclet.50438215_pgfId-1297062" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297063" xreflabel=""/>int v1, v3, join;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297064" xreflabel=""/>v1 = sizeof(struct lov_user_md_v1) +
-<anchor xml:id="dbdoclet.50438215_pgfId-1297065" xreflabel=""/>LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297066" xreflabel=""/>v3 = sizeof(struct lov_user_md_v3) +
-<anchor xml:id="dbdoclet.50438215_pgfId-1297067" xreflabel=""/>LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297068" xreflabel=""/>return malloc(maxint(v1, v3));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297069" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297070" xreflabel=""/>int main(int argc, char** argv)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297071" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297072" xreflabel=""/>struct lov_user_md *lum_file = NULL;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297073" xreflabel=""/>int rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297074" xreflabel=""/>int lum_size;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297075" xreflabel=""/>if (argc != 2) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297076" xreflabel=""/>fprintf(stderr, &quot;Usage: %s &lt;filename&gt;\n&quot;, argv[0]);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297077" xreflabel=""/>return 1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297078" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297079" xreflabel=""/>lum_file = alloc_lum();
-<anchor xml:id="dbdoclet.50438215_pgfId-1297080" xreflabel=""/>if (lum_file == NULL) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297081" xreflabel=""/>rc = ENOMEM;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297082" xreflabel=""/>goto cleanup;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297083" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297084" xreflabel=""/>rc = llapi_file_get_stripe(argv[1], lum_file);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297085" xreflabel=""/>if (rc) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297086" xreflabel=""/>rc = errno;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297087" xreflabel=""/>goto cleanup;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297088" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297089" xreflabel=""/>/* stripe_size stripe_count */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297090" xreflabel=""/>printf(&quot;%d %d\n&quot;,
-<anchor xml:id="dbdoclet.50438215_pgfId-1297091" xreflabel=""/>lum_file-&gt;lmm_stripe_size,
-<anchor xml:id="dbdoclet.50438215_pgfId-1297092" xreflabel=""/>lum_file-&gt;lmm_stripe_count);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297093" xreflabel=""/>cleanup:
-<anchor xml:id="dbdoclet.50438215_pgfId-1297094" xreflabel=""/>if (lum_file != NULL)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297095" xreflabel=""/>free(lum_file);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297096" xreflabel=""/>return rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297097" xreflabel=""/>}
+        <title>Examples</title>
+        <screen>#include &lt;sys/vfs.h&gt;
+#include &lt;liblustre.h&gt;
+#include &lt;lnet/lnetctl.h&gt;
+#include &lt;obd.h&gt;
+#include &lt;lustre_lib.h&gt;
+#include &lt;lustre/liblustreapi.h&gt;
+#include &lt;obd_lov.h&gt;
+static inline int maxint(int a, int b)
+{
+return a &gt; b ? a : b;
+}
+static void *alloc_lum()
+{
+int v1, v3, join;
+v1 = sizeof(struct lov_user_md_v1) +
+LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
+v3 = sizeof(struct lov_user_md_v3) +
+LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
+return malloc(maxint(v1, v3));
+}
+int main(int argc, char** argv)
+{
+struct lov_user_md *lum_file = NULL;
+int rc;
+int lum_size;
+if (argc != 2) {
+fprintf(stderr, &quot;Usage: %s &lt;filename&gt;\n&quot;, argv[0]);
+return 1;
+}
+lum_file = alloc_lum();
+if (lum_file == NULL) {
+rc = ENOMEM;
+goto cleanup;
+}
+rc = llapi_file_get_stripe(argv[1], lum_file);
+if (rc) {
+rc = errno;
+goto cleanup;
+}
+/* stripe_size stripe_count */
+printf(&quot;%d %d\n&quot;,
+lum_file-&gt;lmm_stripe_size,
+lum_file-&gt;lmm_stripe_count);
+cleanup:
+if (lum_file != NULL)
+free(lum_file);
+return rc;
+}
 </screen>
       </section>
     </section>
     <section xml:id="dbdoclet.50438215_86607">
       <title>34.3 llapi_file_open</title>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1298469" xreflabel=""/>The llapi_file_open command opens (or creates) a file or device on a Lustre filesystem.</para>
+      <para>The llapi_file_open command opens (or creates) a file or device on a Lustre filesystem.</para>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297361" xreflabel=""/>Synopsis</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297362" xreflabel=""/>#include &lt;sys/types.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297363" xreflabel=""/>#include &lt;sys/stat.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297364" xreflabel=""/>#include &lt;fcntl.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297365" xreflabel=""/>#include &lt;liblustre.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297366" xreflabel=""/>#include &lt;lustre/lustre_idl.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297367" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt; 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297368" xreflabel=""/>#include &lt;lustre/lustre_user.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297369" xreflabel=""/>int llapi_file_open(const char *<emphasis>name</emphasis>, int <emphasis>flags</emphasis>, int <emphasis>mode</emphasis>, 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297370" xreflabel=""/>   unsigned long long <emphasis>stripe_size</emphasis>, int <emphasis>stripe_offset</emphasis>, 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297371" xreflabel=""/>   int <emphasis>stripe_count</emphasis>, int <emphasis>stripe_pattern</emphasis>);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297372" xreflabel=""/>int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long <emphasis>stripe_size</emphasis>, 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297373" xreflabel=""/>   int <emphasis>stripe_offset</emphasis>, int <emphasis>stripe_count</emphasis>, 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297374" xreflabel=""/>   int <emphasis>stripe_pattern</emphasis>);
+        <title>Synopsis</title>
+        <screen>#include &lt;sys/types.h&gt; 
+#include &lt;sys/stat.h&gt; 
+#include &lt;fcntl.h&gt; 
+#include &lt;liblustre.h&gt; 
+#include &lt;lustre/lustre_idl.h&gt; 
+#include &lt;lustre/liblustreapi.h&gt; 
+#include &lt;lustre/lustre_user.h&gt;
+int llapi_file_open(const char *<emphasis>name</emphasis>, int <emphasis>flags</emphasis>, int <emphasis>mode</emphasis>, 
+   unsigned long long <emphasis>stripe_size</emphasis>, int <emphasis>stripe_offset</emphasis>, 
+   int <emphasis>stripe_count</emphasis>, int <emphasis>stripe_pattern</emphasis>);
+int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long <emphasis>stripe_size</emphasis>, 
+   int <emphasis>stripe_offset</emphasis>, int <emphasis>stripe_count</emphasis>, 
+   int <emphasis>stripe_pattern</emphasis>);
 </screen>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1298000" xreflabel=""/>Description</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1298001" xreflabel=""/>The llapi_file_create() call is equivalent to the llapi_file_open call with <emphasis>flags</emphasis> equal to O_CREAT|O_WRONLY and <emphasis>mode</emphasis> equal to 0644, followed by file close.</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1298510" xreflabel=""/>llapi_file_open() opens a file with a given name on a Lustre filesystem.</para>
+        <title>Description</title>
+        <para>The llapi_file_create() call is equivalent to the llapi_file_open call with <emphasis>flags</emphasis> equal to O_CREAT|O_WRONLY and <emphasis>mode</emphasis> equal to 0644, followed by file close.</para>
+        <para>llapi_file_open() opens a file with a given name on a Lustre filesystem.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1298598" xreflabel=""/>Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1298600" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298602" xreflabel=""/><emphasis role="bold">flags</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298636" xreflabel=""/>Can be a combination of O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_EXCL, O_NOCTTY, O_TRUNC, O_APPEND, O_NONBLOCK, O_SYNC, FASYNC, O_DIRECT, O_LARGEFILE, O_DIRECTORY, O_NOFOLLOW, O_NOATIME.</para></entry>
+                <entry><para> <emphasis role="bold">flags</emphasis></para></entry>
+                <entry><para> Can be a combination of O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_EXCL, O_NOCTTY, O_TRUNC, O_APPEND, O_NONBLOCK, O_SYNC, FASYNC, O_DIRECT, O_LARGEFILE, O_DIRECTORY, O_NOFOLLOW, O_NOATIME.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298606" xreflabel=""/><emphasis role="bold">mode</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298656" xreflabel=""/>Specifies the permission bits to be used for a new file when O_CREAT is used.</para></entry>
+                <entry><para> <emphasis role="bold">mode</emphasis></para></entry>
+                <entry><para> Specifies the permission bits to be used for a new file when O_CREAT is used.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298610" xreflabel=""/><emphasis role="bold">stripe_size</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298669" xreflabel=""/>Specifies stripe size (in bytes). Should be multiple of 64 KB, not exceeding 4 GB.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_size</emphasis></para></entry>
+                <entry><para> Specifies stripe size (in bytes). Should be multiple of 64 KB, not exceeding 4 GB.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298614" xreflabel=""/><emphasis role="bold">stripe_offset</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298678" xreflabel=""/>Specifies an OST index from which the file should start. The default value is -1.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_offset</emphasis></para></entry>
+                <entry><para> Specifies an OST index from which the file should start. The default value is -1.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298618" xreflabel=""/><emphasis role="bold">stripe_count</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298687" xreflabel=""/>Specifies the number of OSTs to stripe the file across. The default value is -1.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_count</emphasis></para></entry>
+                <entry><para> Specifies the number of OSTs to stripe the file across. The default value is -1.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298693" xreflabel=""/><emphasis role="bold">stripe_pattern</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298705" xreflabel=""/>Specifies the striping pattern. In this version of Lustre, only LOV_PATTERN_RAID0 is available. The default value is 0.</para></entry>
+                <entry><para> <emphasis role="bold">stripe_pattern</emphasis></para></entry>
+                <entry><para> Specifies the striping pattern. In this version of Lustre, only LOV_PATTERN_RAID0 is available. The default value is 0.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1298592" xreflabel=""/>Return Values</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297430" xreflabel=""/>llapi_file_open() and llapi_file_create() return:</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297431" xreflabel=""/><emphasis role="bold">&gt;=0</emphasis> On success, for llapi_file_open the return value is a file descriptor</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297432" xreflabel=""/><emphasis role="bold">&lt;0</emphasis> On failure, the absolute value is an error code</para>
+        <title>Return Values</title>
+        <para>llapi_file_open() and llapi_file_create() return:</para>
+        <para><emphasis role="bold">&gt;=0</emphasis> On success, for llapi_file_open the return value is a file descriptor</para>
+        <para><emphasis role="bold">&lt;0</emphasis> On failure, the absolute value is an error code</para>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1298750" xreflabel=""/>Errors</title>
+        <title>Errors</title>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1297435" xreflabel=""/>Errors</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1297437" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Errors</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297439" xreflabel=""/><emphasis role="bold">EINVAL</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297441" xreflabel=""/><emphasis role="bold">stripe_size</emphasis> or <emphasis role="bold">stripe_offset</emphasis> or <emphasis role="bold">stripe_count</emphasis> or <emphasis role="bold">stripe_pattern</emphasis> is invalid.</para></entry>
+                <entry><para> <emphasis role="bold">EINVAL</emphasis></para></entry>
+                <entry><para> <emphasis role="bold">stripe_size</emphasis> or <emphasis role="bold">stripe_offset</emphasis> or <emphasis role="bold">stripe_count</emphasis> or <emphasis role="bold">stripe_pattern</emphasis> is invalid.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297443" xreflabel=""/><emphasis role="bold">EEXIST</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298878" xreflabel=""/>Striping information has already been set and cannot be altered; <emphasis role="bold">name</emphasis> already exists.</para></entry>
+                <entry><para> <emphasis role="bold">EEXIST</emphasis></para></entry>
+                <entry><para> Striping information has already been set and cannot be altered; <emphasis role="bold">name</emphasis> already exists.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297447" xreflabel=""/><emphasis role="bold">EALREADY</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297449" xreflabel=""/>Striping information has already been set and cannot be altered</para></entry>
+                <entry><para> <emphasis role="bold">EALREADY</emphasis></para></entry>
+                <entry><para> Striping information has already been set and cannot be altered</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297451" xreflabel=""/><emphasis role="bold">ENOTTY</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297453" xreflabel=""/><emphasis role="bold">name</emphasis> may not point to a Lustre filesystem.</para></entry>
+                <entry><para> <emphasis role="bold">ENOTTY</emphasis></para></entry>
+                <entry><para> <emphasis role="bold">name</emphasis> may not point to a Lustre filesystem.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297462" xreflabel=""/>Example</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297463" xreflabel=""/>#include &lt;sys/types.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297464" xreflabel=""/>#include &lt;sys/stat.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297465" xreflabel=""/>#include &lt;fcntl.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297466" xreflabel=""/>#include &lt;errno.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297467" xreflabel=""/>#include &lt;stdio.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297468" xreflabel=""/>#include &lt;liblustre.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297469" xreflabel=""/>#include &lt;lustre/lustre_idl.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297470" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297471" xreflabel=""/>#include &lt;lustre/lustre_user.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297472" xreflabel=""/>int main(int argc, char *argv[])
-<anchor xml:id="dbdoclet.50438215_pgfId-1297473" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297474" xreflabel=""/>   int rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297475" xreflabel=""/>   if (argc != 2)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297476" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297477" xreflabel=""/>   rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297478" xreflabel=""/>   if (rc &lt; 0) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297479" xreflabel=""/>           fprintf(stderr, &quot;file creation has failed, %s\n&quot;,         strerror\
+        <title>Example</title>
+        <screen>#include &lt;sys/types.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;liblustre.h&gt;
+#include &lt;lustre/lustre_idl.h&gt;
+#include &lt;lustre/liblustreapi.h&gt;
+#include &lt;lustre/lustre_user.h&gt;
+int main(int argc, char *argv[])
+{
+   int rc;
+   if (argc != 2)
+           return -1;
+   rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
+   if (rc &lt; 0) {
+           fprintf(stderr, &quot;file creation has failed, %s\n&quot;,         strerror\
 (-rc));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297480" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297481" xreflabel=""/>   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297482" xreflabel=""/>   printf(&quot;%s with stripe size 1048576, striped across 2 OSTs,&quot;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297483" xreflabel=""/>           &quot; has been created!\n&quot;, argv[1]);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297484" xreflabel=""/>   return 0;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297485" xreflabel=""/>}
+           return -1;
+   }
+   printf(&quot;%s with stripe size 1048576, striped across 2 OSTs,&quot;
+           &quot; has been created!\n&quot;, argv[1]);
+   return 0;
+}
 </screen>
       </section>
     </section>
     <section xml:id="dbdoclet.50438215_12433">
       <title>34.4 llapi_quotactl</title>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1297144" xreflabel=""/>Use llapi_quotactl to manipulate disk quotas on a Lustre file system.</para>
+      <para>Use llapi_quotactl to manipulate disk quotas on a Lustre file system.</para>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297145" xreflabel=""/>Synopsis</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297146" xreflabel=""/>#include &lt;liblustre.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297147" xreflabel=""/>#include &lt;lustre/lustre_idl.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297148" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297149" xreflabel=""/>#include &lt;lustre/lustre_user.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297150" xreflabel=""/>int llapi_quotactl(char&quot; &quot; *mnt,&quot; &quot; struct if_quotactl&quot; &quot; *qctl)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297151" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297152" xreflabel=""/>struct if_quotactl {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297153" xreflabel=""/>        __u32                   qc_cmd;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297154" xreflabel=""/>        __u32                   qc_type;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297155" xreflabel=""/>        __u32                   qc_id;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297156" xreflabel=""/>        __u32                   qc_stat;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297157" xreflabel=""/>        struct obd_dqinfo       qc_dqinfo;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297158" xreflabel=""/>        struct obd_dqblk        qc_dqblk;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297159" xreflabel=""/>        char                    obd_type[16];
-<anchor xml:id="dbdoclet.50438215_pgfId-1297160" xreflabel=""/>        struct obd_uuid         obd_uuid;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297161" xreflabel=""/>};
-<anchor xml:id="dbdoclet.50438215_pgfId-1297162" xreflabel=""/>struct obd_dqblk {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297163" xreflabel=""/>        __u64 dqb_bhardlimit;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297164" xreflabel=""/>        __u64 dqb_bsoftlimit;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297165" xreflabel=""/>        __u64 dqb_curspace;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297166" xreflabel=""/>        __u64 dqb_ihardlimit;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297167" xreflabel=""/>        __u64 dqb_isoftlimit;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297168" xreflabel=""/>        __u64 dqb_curinodes;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297169" xreflabel=""/>        __u64 dqb_btime;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297170" xreflabel=""/>        __u64 dqb_itime;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297171" xreflabel=""/>        __u32 dqb_valid;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297172" xreflabel=""/>        __u32 padding;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297173" xreflabel=""/>};
-<anchor xml:id="dbdoclet.50438215_pgfId-1297174" xreflabel=""/>struct obd_dqinfo {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297175" xreflabel=""/>        __u64 dqi_bgrace;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297176" xreflabel=""/>        __u64 dqi_igrace;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297177" xreflabel=""/>        __u32 dqi_flags;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297178" xreflabel=""/>        __u32 dqi_valid;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297179" xreflabel=""/>};
-<anchor xml:id="dbdoclet.50438215_pgfId-1297180" xreflabel=""/>struct obd_uuid {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297181" xreflabel=""/>        char uuid[40];
-<anchor xml:id="dbdoclet.50438215_pgfId-1297182" xreflabel=""/>};
+        <title>Synopsis</title>
+        <screen>#include &lt;liblustre.h&gt;
+#include &lt;lustre/lustre_idl.h&gt;
+#include &lt;lustre/liblustreapi.h&gt;
+#include &lt;lustre/lustre_user.h&gt;
+int llapi_quotactl(char&quot; &quot; *mnt,&quot; &quot; struct if_quotactl&quot; &quot; *qctl)
+ 
+struct if_quotactl {
+        __u32                   qc_cmd;
+        __u32                   qc_type;
+        __u32                   qc_id;
+        __u32                   qc_stat;
+        struct obd_dqinfo       qc_dqinfo;
+        struct obd_dqblk        qc_dqblk;
+        char                    obd_type[16];
+        struct obd_uuid         obd_uuid;
+};
+struct obd_dqblk {
+        __u64 dqb_bhardlimit;
+        __u64 dqb_bsoftlimit;
+        __u64 dqb_curspace;
+        __u64 dqb_ihardlimit;
+        __u64 dqb_isoftlimit;
+        __u64 dqb_curinodes;
+        __u64 dqb_btime;
+        __u64 dqb_itime;
+        __u32 dqb_valid;
+        __u32 padding;
+};
+struct obd_dqinfo {
+        __u64 dqi_bgrace;
+        __u64 dqi_igrace;
+        __u32 dqi_flags;
+        __u32 dqi_valid;
+};
+struct obd_uuid {
+        char uuid[40];
+};
 </screen>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297183" xreflabel=""/>Description</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297184" xreflabel=""/>The llapi_quotactl() command manipulates disk quotas on a Lustre file system mount. qc_cmd indicates a command to be applied to UID qc_id or GID qc_id.</para>
+        <title>Description</title>
+        <para>The llapi_quotactl() command manipulates disk quotas on a Lustre file system mount. qc_cmd indicates a command to be applied to UID qc_id or GID qc_id.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1297187" xreflabel=""/>Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1297189" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297191" xreflabel=""/><emphasis role="bold">LUSTRE_Q_QUOTAON</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297193" xreflabel=""/>Turns on quotas for a Lustre file system. <emphasis>qc_type</emphasis> is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quota). The quota files must exist. They are normally created with the llapi_quotacheck call. This call is restricted to the super user privilege.</para></entry>
+                <entry><para> <emphasis role="bold">LUSTRE_Q_QUOTAON</emphasis></para></entry>
+                <entry><para> Turns on quotas for a Lustre file system. <emphasis>qc_type</emphasis> is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quota). The quota files must exist. They are normally created with the llapi_quotacheck call. This call is restricted to the super user privilege.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297195" xreflabel=""/><emphasis role="bold">LUSTRE_Q_QUOTAOFF</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297197" xreflabel=""/>Turns off quotas for a Lustre file system. <emphasis>qc_type</emphasis> is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quota). This call is restricted to the super user privilege.</para></entry>
+                <entry><para> <emphasis role="bold">LUSTRE_Q_QUOTAOFF</emphasis></para></entry>
+                <entry><para> Turns off quotas for a Lustre file system. <emphasis>qc_type</emphasis> is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quota). This call is restricted to the super user privilege.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297199" xreflabel=""/><emphasis role="bold">LUSTRE_Q_GETQUOTA</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297201" xreflabel=""/>Gets disk quota limits and current usage for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is USRQUOTA or GRPQUOTA. <emphasis>uuid</emphasis> may be filled with OBD UUID string to query quota information from a specific node. <emphasis>dqb_valid</emphasis> may be set nonzero to query information only from MDS. If <emphasis>uuid</emphasis> is an empty string and <emphasis>dqb_valid</emphasis> is zero then cluster-wide limits and usage are returned. On return, <emphasis>obd_dqblk</emphasis> contains the requested information (block limits unit is kilobyte). Quotas must be turned on before using this command.</para></entry>
+                <entry><para> <emphasis role="bold">LUSTRE_Q_GETQUOTA</emphasis></para></entry>
+                <entry><para> Gets disk quota limits and current usage for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is USRQUOTA or GRPQUOTA. <emphasis>uuid</emphasis> may be filled with OBD UUID string to query quota information from a specific node. <emphasis>dqb_valid</emphasis> may be set nonzero to query information only from MDS. If <emphasis>uuid</emphasis> is an empty string and <emphasis>dqb_valid</emphasis> is zero then cluster-wide limits and usage are returned. On return, <emphasis>obd_dqblk</emphasis> contains the requested information (block limits unit is kilobyte). Quotas must be turned on before using this command.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297203" xreflabel=""/><emphasis role="bold">LUSTRE_Q_SETQUOTA</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297205" xreflabel=""/>Sets disk quota limits for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is USRQUOTA or GRPQUOTA. <emphasis>dqb_valid</emphasis> must be set to QIF_ILIMITS, QIF_BLIMITS or QIF_LIMITS (both inode limits and block limits) dependent on updating limits. <emphasis>obd_dqblk</emphasis> must be filled with limits values (as set in <emphasis>dqb_valid</emphasis>, block limits unit is kilobyte). Quotas must be turned on before using this command.</para></entry>
+                <entry><para> <emphasis role="bold">LUSTRE_Q_SETQUOTA</emphasis></para></entry>
+                <entry><para> Sets disk quota limits for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is USRQUOTA or GRPQUOTA. <emphasis>dqb_valid</emphasis> must be set to QIF_ILIMITS, QIF_BLIMITS or QIF_LIMITS (both inode limits and block limits) dependent on updating limits. <emphasis>obd_dqblk</emphasis> must be filled with limits values (as set in <emphasis>dqb_valid</emphasis>, block limits unit is kilobyte). Quotas must be turned on before using this command.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297207" xreflabel=""/><emphasis role="bold">LUSTRE_Q_GETINFO</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297209" xreflabel=""/>Gets information about quotas. <emphasis>qc_type</emphasis> is either USRQUOTA or GRPQUOTA. On return, <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version.</para></entry>
+                <entry><para> <emphasis role="bold">LUSTRE_Q_GETINFO</emphasis></para></entry>
+                <entry><para> Gets information about quotas. <emphasis>qc_type</emphasis> is either USRQUOTA or GRPQUOTA. On return, <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297211" xreflabel=""/><emphasis role="bold">LUSTRE_Q_SETINFO</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297213" xreflabel=""/>Sets quota information (like grace times). <emphasis>qc_type</emphasis> is either USRQUOTA or GRPQUOTA. <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version and must be zeroed.</para></entry>
+                <entry><para> <emphasis role="bold">LUSTRE_Q_SETINFO</emphasis></para></entry>
+                <entry><para> Sets quota information (like grace times). <emphasis>qc_type</emphasis> is either USRQUOTA or GRPQUOTA. <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version and must be zeroed.</para></entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297216" xreflabel=""/>Return Values</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1298911" xreflabel=""/>llapi_quotactl() returns:</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1298922" xreflabel=""/><emphasis role="bold">0</emphasis> On success</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1298923" xreflabel=""/><emphasis role="bold">-1</emphasis> On failure and sets error number (errno) to indicate the error</para>
+        <title>Return Values</title>
+        <para>llapi_quotactl() returns:</para>
+        <para><emphasis role="bold">0</emphasis> On success</para>
+        <para><emphasis role="bold">-1</emphasis> On failure and sets error number (errno) to indicate the error</para>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297220" xreflabel=""/>Errors</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297258" xreflabel=""/>llapi_quotactl errors are described below.</para>
+        <title>Errors</title>
+        <para>llapi_quotactl errors are described below.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
             <colspec colname="c2" colwidth="50*"/>
             <thead>
               <row>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1297223" xreflabel=""/>Errors</emphasis></para></entry>
-                <entry><para><emphasis role="bold"><anchor xml:id="dbdoclet.50438215_pgfId-1297225" xreflabel=""/>Description</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Errors</emphasis></para></entry>
+                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
               </row>
             </thead>
             <tbody>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297227" xreflabel=""/><emphasis role="bold">EFAULT</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298931" xreflabel=""/><emphasis>qctl</emphasis> is invalid.</para></entry>
+                <entry><para> <emphasis role="bold">EFAULT</emphasis></para></entry>
+                <entry><para> <emphasis>qctl</emphasis> is invalid.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297231" xreflabel=""/><emphasis role="bold">ENOSYS</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298933" xreflabel=""/>Kernel or Lustre modules have not been compiled with the QUOTA option.</para></entry>
+                <entry><para> <emphasis role="bold">ENOSYS</emphasis></para></entry>
+                <entry><para> Kernel or Lustre modules have not been compiled with the QUOTA option.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297235" xreflabel=""/><emphasis role="bold">ENOMEM</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298935" xreflabel=""/>Insufficient memory to complete operation.</para></entry>
+                <entry><para> <emphasis role="bold">ENOMEM</emphasis></para></entry>
+                <entry><para> Insufficient memory to complete operation.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297239" xreflabel=""/><emphasis role="bold">ENOTTY</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298937" xreflabel=""/><emphasis>qc_cmd</emphasis> is invalid.</para></entry>
+                <entry><para> <emphasis role="bold">ENOTTY</emphasis></para></entry>
+                <entry><para> <emphasis>qc_cmd</emphasis> is invalid.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297243" xreflabel=""/><emphasis role="bold">EBUSY</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298939" xreflabel=""/> Cannot process during quotacheck.</para></entry>
+                <entry><para> <emphasis role="bold">EBUSY</emphasis></para></entry>
+                <entry><para>  Cannot process during quotacheck.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297247" xreflabel=""/><emphasis role="bold">ENOENT</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298941" xreflabel=""/><emphasis>uuid</emphasis> does not correspond to OBD or <emphasis>mnt</emphasis> does not exist.</para></entry>
+                <entry><para> <emphasis role="bold">ENOENT</emphasis></para></entry>
+                <entry><para> <emphasis>uuid</emphasis> does not correspond to OBD or <emphasis>mnt</emphasis> does not exist.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297251" xreflabel=""/><emphasis role="bold">EPERM</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298943" xreflabel=""/> The call is privileged and the caller is not the super user.</para></entry>
+                <entry><para> <emphasis role="bold">EPERM</emphasis></para></entry>
+                <entry><para>  The call is privileged and the caller is not the super user.</para></entry>
               </row>
               <row>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1297255" xreflabel=""/><emphasis role="bold">ESRCH</emphasis></para></entry>
-                <entry><para> <anchor xml:id="dbdoclet.50438215_pgfId-1298945" xreflabel=""/> No disk quota is found for the indicated user. Quotas have not been turned on for this file system.</para></entry>
+                <entry><para> <emphasis role="bold">ESRCH</emphasis></para></entry>
+                <entry><para>  No disk quota is found for the indicated user. Quotas have not been turned on for this file system.</para></entry>
               </row>
             </tbody>
           </tgroup>
@@ -593,272 +593,272 @@ rn -1; }
     </section>
     <section xml:id="dbdoclet.50438215_15718">
       <title>34.5 llapi_path2fid</title>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1297262" xreflabel=""/>Use llapi_path2fid to get the FID from the pathname.</para>
+      <para>Use llapi_path2fid to get the FID from the pathname.</para>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297263" xreflabel=""/>Synopsis</title>
-        <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297264" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297265" xreflabel=""/>#include &lt;lustre/lustre_user.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297266" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297267" xreflabel=""/>int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long\
+        <title>Synopsis</title>
+        <screen>#include &lt;lustre/liblustreapi.h&gt;
+#include &lt;lustre/lustre_user.h&gt;
+ 
+int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long\
  *oid, unsigned long *ver)
 </screen>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297268" xreflabel=""/>Description</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297269" xreflabel=""/>The llapi_path2fid function returns the FID (sequence : object ID : version) for the pathname.</para>
+        <title>Description</title>
+        <para>The llapi_path2fid function returns the FID (sequence : object ID : version) for the pathname.</para>
       </section>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297270" xreflabel=""/>Return Values</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297271" xreflabel=""/>llapi_path2fid returns:</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297272" xreflabel=""/><emphasis role="bold">0</emphasis> On success</para>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297273" xreflabel=""/>non-zero value On failure</para>
+        <title>Return Values</title>
+        <para>llapi_path2fid returns:</para>
+        <para><emphasis role="bold">0</emphasis> On success</para>
+        <para>non-zero value On failure</para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438215_marker-1297700">
       <title>34.6 Example Using the llapi Library</title>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1297702" xreflabel=""/>Use llapi_file_create to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1297709" xreflabel=""/>You can set striping from inside programs like ioctl. To compile the sample program, you need to download libtest.c and liblustreapi.c files from the Lustre source tree.</para>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1297710" xreflabel=""/><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
-      <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297711" xreflabel=""/>/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
-<anchor xml:id="dbdoclet.50438215_pgfId-1297712" xreflabel=""/> * vim:expandtab:shiftwidth=8:tabstop=8:
-<anchor xml:id="dbdoclet.50438215_pgfId-1297713" xreflabel=""/> *
-<anchor xml:id="dbdoclet.50438215_pgfId-1297714" xreflabel=""/> * lustredemo - simple code examples of liblustreapi functions
-<anchor xml:id="dbdoclet.50438215_pgfId-1297715" xreflabel=""/> */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297716" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297717" xreflabel=""/>#include &lt;stdio.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297718" xreflabel=""/>#include &lt;fcntl.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297719" xreflabel=""/>#include &lt;sys/stat.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297720" xreflabel=""/>#include &lt;sys/types.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297721" xreflabel=""/>#include &lt;dirent.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297722" xreflabel=""/>#include &lt;errno.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297723" xreflabel=""/>#include &lt;string.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297724" xreflabel=""/>#include &lt;unistd.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297725" xreflabel=""/>#include &lt;stdlib.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297726" xreflabel=""/>#include &lt;lustre/liblustreapi.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297727" xreflabel=""/>#include &lt;lustre/lustre_user.h&gt;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297728" xreflabel=""/>#define MAX_OSTS 1024
-<anchor xml:id="dbdoclet.50438215_pgfId-1297729" xreflabel=""/>#define LOV_EA_SIZE(lum, num) (sizeof(*lum) + num * sizeof(*lum-&gt;lmm_objects\
+      <para>Use llapi_file_create to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
+      <para>You can set striping from inside programs like ioctl. To compile the sample program, you need to download libtest.c and liblustreapi.c files from the Lustre source tree.</para>
+      <para><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
+      <screen>/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * lustredemo - simple code examples of liblustreapi functions
+ */
+ 
+#include &lt;stdio.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;dirent.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;lustre/liblustreapi.h&gt;
+#include &lt;lustre/lustre_user.h&gt;
+#define MAX_OSTS 1024
+#define LOV_EA_SIZE(lum, num) (sizeof(*lum) + num * sizeof(*lum-&gt;lmm_objects\
 ))
-<anchor xml:id="dbdoclet.50438215_pgfId-1297730" xreflabel=""/>#define LOV_EA_MAX(lum) LOV_EA_SIZE(lum, MAX_OSTS)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297731" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297732" xreflabel=""/>/* 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297733" xreflabel=""/>This program provides crude examples of using the liblustre API functions 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297734" xreflabel=""/>*/
-<anchor xml:id="dbdoclet.50438215_pgfId-1297735" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297736" xreflabel=""/>/* Change these definitions to suit */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297737" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297738" xreflabel=""/>#define TESTDIR &quot;/tmp&quot;                                                   /* R\
+#define LOV_EA_MAX(lum) LOV_EA_SIZE(lum, MAX_OSTS)
+ 
+/* 
+This program provides crude examples of using the liblustre API functions 
+*/
+ 
+/* Change these definitions to suit */
+ 
+#define TESTDIR &quot;/tmp&quot;                                                   /* R\
 esults directory */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297739" xreflabel=""/>#define TESTFILE &quot;lustre_dummy&quot;                                              \
+#define TESTFILE &quot;lustre_dummy&quot;                                              \
     /* Name for the file we create/destroy */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297740" xreflabel=""/>#define FILESIZE 262144                                                    \
+#define FILESIZE 262144                                                    \
 /* Size of the file in words */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297741" xreflabel=""/>#define DUMWORD &quot;DEADBEEF&quot;                                                   \
+#define DUMWORD &quot;DEADBEEF&quot;                                                   \
     /* Dummy word used to fill files */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297742" xreflabel=""/>#define MY_STRIPE_WIDTH 2                                                  \
+#define MY_STRIPE_WIDTH 2                                                  \
 /* Set this to the number of OST required */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297743" xreflabel=""/>#define MY_LUSTRE_DIR &quot;/mnt/lustre/ftest&quot;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297744" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297745" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297746" xreflabel=""/>int close_file(int fd)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297747" xreflabel=""/>{      
-<anchor xml:id="dbdoclet.50438215_pgfId-1297748" xreflabel=""/>   if (close(fd) &lt; 0) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297749" xreflabel=""/>           fprintf(stderr, &quot;File close failed: %d (%s)\n&quot;, errno, strerror(er\
+#define MY_LUSTRE_DIR &quot;/mnt/lustre/ftest&quot;
+ 
+ 
+int close_file(int fd)
+{      
+   if (close(fd) &lt; 0) {
+           fprintf(stderr, &quot;File close failed: %d (%s)\n&quot;, errno, strerror(er\
 rno));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297750" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297751" xreflabel=""/>   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297752" xreflabel=""/>   return 0;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297753" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297754" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297755" xreflabel=""/>int write_file(int fd)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297756" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297757" xreflabel=""/>   char *stng =  DUMWORD;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297758" xreflabel=""/>   int cnt = 0;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297759" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297760" xreflabel=""/>   for( cnt = 0; cnt &lt; FILESIZE; cnt++) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297761" xreflabel=""/>                write(fd, stng, sizeof(stng));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297762" xreflabel=""/>   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297763" xreflabel=""/>   return 0;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297764" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297765" xreflabel=""/>/* Open a file, set a specific stripe count, size and starting OST
-<anchor xml:id="dbdoclet.50438215_pgfId-1297766" xreflabel=""/>   Adjust the parameters to suit */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297767" xreflabel=""/>  
-<anchor xml:id="dbdoclet.50438215_pgfId-1297768" xreflabel=""/>int open_stripe_file()
-<anchor xml:id="dbdoclet.50438215_pgfId-1297769" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297770" xreflabel=""/>   char *tfile = TESTFILE;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297771" xreflabel=""/>   int stripe_size = 65536;                                                \
+           return -1;
+   }
+   return 0;
+}
+ 
+int write_file(int fd)
+{
+   char *stng =  DUMWORD;
+   int cnt = 0;
+ 
+   for( cnt = 0; cnt &lt; FILESIZE; cnt++) {
+                write(fd, stng, sizeof(stng));
+   }
+   return 0;
+}
+/* Open a file, set a specific stripe count, size and starting OST
+   Adjust the parameters to suit */
+  
+int open_stripe_file()
+{
+   char *tfile = TESTFILE;
+   int stripe_size = 65536;                                                \
                                 /* System default is 4M */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297772" xreflabel=""/>   int stripe_offset = -1;                                                 \
+   int stripe_offset = -1;                                                 \
                         /* Start at default */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297773" xreflabel=""/>   int stripe_count = MY_STRIPE_WIDTH;                                     \
+   int stripe_count = MY_STRIPE_WIDTH;                                     \
                                         /*Single stripe for this demo*/
-<anchor xml:id="dbdoclet.50438215_pgfId-1297774" xreflabel=""/>   int stripe_pattern = 0;                                                 \
+   int stripe_pattern = 0;                                                 \
                                 /* only RAID 0 at this time */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297775" xreflabel=""/>   int rc, fd;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297776" xreflabel=""/>   /* 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297777" xreflabel=""/>   */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297778" xreflabel=""/>   rc = llapi_file_create(tfile,
-<anchor xml:id="dbdoclet.50438215_pgfId-1297779" xreflabel=""/>stripe_size,stripe_offset,stripe_count,stripe_pattern);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297780" xreflabel=""/>   /* result code is inverted, we may return -EINVAL or an ioctl error.
-<anchor xml:id="dbdoclet.50438215_pgfId-1297781" xreflabel=""/>   We borrow an error message from sanity.c 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297782" xreflabel=""/>   */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297783" xreflabel=""/>   if (rc) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297784" xreflabel=""/>                fprintf(stderr,&quot;llapi_file_create failed: %d (%s) \n&quot;, rc, st\
+   int rc, fd;
+   /* 
+   */
+   rc = llapi_file_create(tfile,
+stripe_size,stripe_offset,stripe_count,stripe_pattern);
+   /* result code is inverted, we may return -EINVAL or an ioctl error.
+   We borrow an error message from sanity.c 
+   */
+   if (rc) {
+                fprintf(stderr,&quot;llapi_file_create failed: %d (%s) \n&quot;, rc, st\
 rerror(-rc));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297785" xreflabel=""/>                return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297786" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297787" xreflabel=""/>        /* llapi_file_create closes the file descriptor, we must re-open */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297788" xreflabel=""/>        fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297789" xreflabel=""/>        if (fd &lt; 0) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297790" xreflabel=""/>                fprintf(stderr, &quot;Can&apos;t open %s file: %d (%s)\n&quot;, tfile, errno\
+                return -1;
+        }
+        /* llapi_file_create closes the file descriptor, we must re-open */
+        fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
+        if (fd &lt; 0) {
+                fprintf(stderr, &quot;Can&apos;t open %s file: %d (%s)\n&quot;, tfile, errno\
 , strerror(errno));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297791" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297792" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297793" xreflabel=""/>        return fd;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297794" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297795" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297796" xreflabel=""/>/* output a list of uuids for this file */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297797" xreflabel=""/>int get_my_uuids(int fd)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297798" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297799" xreflabel=""/>   struct obd_uuid uuids[1024], *uuidp;                                    \
+           return -1;
+        }
+        return fd;
+}
+ 
+/* output a list of uuids for this file */
+int get_my_uuids(int fd)
+{
+   struct obd_uuid uuids[1024], *uuidp;                                    \
                                                 /* Output var */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297800" xreflabel=""/>   int obdcount = 1024;    
-<anchor xml:id="dbdoclet.50438215_pgfId-1297801" xreflabel=""/>   int rc,i;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297802" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297803" xreflabel=""/>   rc = llapi_lov_get_uuids(fd, uuids, &amp;obdcount);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297804" xreflabel=""/>   if (rc != 0) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297805" xreflabel=""/>           fprintf(stderr, &quot;get uuids failed: %d (%s)\n&quot;,errno, strerror(errn\
+   int obdcount = 1024;    
+   int rc,i;
+ 
+   rc = llapi_lov_get_uuids(fd, uuids, &amp;obdcount);
+   if (rc != 0) {
+           fprintf(stderr, &quot;get uuids failed: %d (%s)\n&quot;,errno, strerror(errn\
 o));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297806" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297807" xreflabel=""/>        printf(&quot;This file system has %d obds\n&quot;, obdcount);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297808" xreflabel=""/>        for (i = 0, uuidp = uuids; i &lt; obdcount; i++, uuidp++) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297809" xreflabel=""/>           printf(&quot;UUID %d is %s\n&quot;,i, uuidp-&gt;uuid);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297810" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297811" xreflabel=""/>        return 0;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297812" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297813" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297814" xreflabel=""/>/* Print out some LOV attributes. List our objects */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297815" xreflabel=""/>int get_file_info(char *path)
-<anchor xml:id="dbdoclet.50438215_pgfId-1297816" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297817" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297818" xreflabel=""/>   struct lov_user_md *lump;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297819" xreflabel=""/>   int rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297820" xreflabel=""/>   int i;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297821" xreflabel=""/>     
-<anchor xml:id="dbdoclet.50438215_pgfId-1297822" xreflabel=""/>   lump = malloc(LOV_EA_MAX(lump));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297823" xreflabel=""/>   if (lump == NULL) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297824" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297825" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297826" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297827" xreflabel=""/>        rc = llapi_file_get_stripe(path, lump);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297828" xreflabel=""/>        
-<anchor xml:id="dbdoclet.50438215_pgfId-1297829" xreflabel=""/>        if (rc != 0) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297830" xreflabel=""/>           fprintf(stderr, &quot;get_stripe failed: %d (%s)\n&quot;,errno, strerror(err\
+        }
+        printf(&quot;This file system has %d obds\n&quot;, obdcount);
+        for (i = 0, uuidp = uuids; i &lt; obdcount; i++, uuidp++) {
+           printf(&quot;UUID %d is %s\n&quot;,i, uuidp-&gt;uuid);
+        }
+        return 0;
+}
+ 
+/* Print out some LOV attributes. List our objects */
+int get_file_info(char *path)
+{
+ 
+   struct lov_user_md *lump;
+   int rc;
+   int i;
+     
+   lump = malloc(LOV_EA_MAX(lump));
+   if (lump == NULL) {
+           return -1;
+        }
+ 
+        rc = llapi_file_get_stripe(path, lump);
+        
+        if (rc != 0) {
+           fprintf(stderr, &quot;get_stripe failed: %d (%s)\n&quot;,errno, strerror(err\
 no));
-<anchor xml:id="dbdoclet.50438215_pgfId-1297831" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297832" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297833" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297834" xreflabel=""/>   printf(&quot;Lov magic %u\n&quot;, lump-&gt;lmm_magic);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297835" xreflabel=""/>   printf(&quot;Lov pattern %u\n&quot;, lump-&gt;lmm_pattern);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297836" xreflabel=""/>   printf(&quot;Lov object id %llu\n&quot;, lump-&gt;lmm_object_id);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297837" xreflabel=""/>   printf(&quot;Lov object group %llu\n&quot;, lump-&gt;lmm_object_gr);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297838" xreflabel=""/>   printf(&quot;Lov stripe size %u\n&quot;, lump-&gt;lmm_stripe_size);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297839" xreflabel=""/>   printf(&quot;Lov stripe count %hu\n&quot;, lump-&gt;lmm_stripe_count);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297840" xreflabel=""/>   printf(&quot;Lov stripe offset %u\n&quot;, lump-&gt;lmm_stripe_offset);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297841" xreflabel=""/>   for (i = 0; i &lt; lump-&gt;lmm_stripe_count; i++) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297842" xreflabel=""/>           printf(&quot;Object index %d Objid %llu\n&quot;, lump-&gt;lmm_objects[i].l_ost_i\
+           return -1;
+        }
+ 
+   printf(&quot;Lov magic %u\n&quot;, lump-&gt;lmm_magic);
+   printf(&quot;Lov pattern %u\n&quot;, lump-&gt;lmm_pattern);
+   printf(&quot;Lov object id %llu\n&quot;, lump-&gt;lmm_object_id);
+   printf(&quot;Lov object group %llu\n&quot;, lump-&gt;lmm_object_gr);
+   printf(&quot;Lov stripe size %u\n&quot;, lump-&gt;lmm_stripe_size);
+   printf(&quot;Lov stripe count %hu\n&quot;, lump-&gt;lmm_stripe_count);
+   printf(&quot;Lov stripe offset %u\n&quot;, lump-&gt;lmm_stripe_offset);
+   for (i = 0; i &lt; lump-&gt;lmm_stripe_count; i++) {
+           printf(&quot;Object index %d Objid %llu\n&quot;, lump-&gt;lmm_objects[i].l_ost_i\
 dx, lump-&gt;lmm_objects[i].l_object_id);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297843" xreflabel=""/>        }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297844" xreflabel=""/>    
-<anchor xml:id="dbdoclet.50438215_pgfId-1297845" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297846" xreflabel=""/>   free(lump);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297847" xreflabel=""/>   return rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297848" xreflabel=""/>   
-<anchor xml:id="dbdoclet.50438215_pgfId-1297849" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297850" xreflabel=""/>/* Ping all OSTs that belong to this filesysem */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297851" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297852" xreflabel=""/>int ping_osts()
-<anchor xml:id="dbdoclet.50438215_pgfId-1297853" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297854" xreflabel=""/>   DIR *dir;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297855" xreflabel=""/>   struct dirent *d;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297856" xreflabel=""/>   char osc_dir[100];
-<anchor xml:id="dbdoclet.50438215_pgfId-1297857" xreflabel=""/>   int rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297858" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297859" xreflabel=""/>   sprintf(osc_dir, &quot;/proc/fs/lustre/osc&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297860" xreflabel=""/>   dir = opendir(osc_dir);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297861" xreflabel=""/>   if (dir == NULL) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297862" xreflabel=""/>           printf(&quot;Can&apos;t open dir\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297863" xreflabel=""/>           return -1;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297864" xreflabel=""/>   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297865" xreflabel=""/>   while((d = readdir(dir)) != NULL) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297866" xreflabel=""/>           if ( d-&gt;d_type == DT_DIR ) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297867" xreflabel=""/>                   if (! strncmp(d-&gt;d_name, &quot;OSC&quot;, 3)) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297868" xreflabel=""/>                           printf(&quot;Pinging OSC %s &quot;, d-&gt;d_name);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297869" xreflabel=""/>                           rc = llapi_ping(&quot;osc&quot;, d-&gt;d_name);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297870" xreflabel=""/>                           if (rc) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297871" xreflabel=""/>                                   printf(&quot;  bad\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297872" xreflabel=""/>                           } else {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297873" xreflabel=""/>                                   printf(&quot;  good\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297874" xreflabel=""/>                           }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297875" xreflabel=""/>                   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297876" xreflabel=""/>           }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297877" xreflabel=""/>   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297878" xreflabel=""/>   return 0;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297879" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297880" xreflabel=""/>}
-<anchor xml:id="dbdoclet.50438215_pgfId-1297881" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297882" xreflabel=""/>int main()
-<anchor xml:id="dbdoclet.50438215_pgfId-1297883" xreflabel=""/>{
-<anchor xml:id="dbdoclet.50438215_pgfId-1297884" xreflabel=""/>   int file;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297885" xreflabel=""/>   int rc;
-<anchor xml:id="dbdoclet.50438215_pgfId-1297886" xreflabel=""/>   char filename[100];
-<anchor xml:id="dbdoclet.50438215_pgfId-1297887" xreflabel=""/>   char sys_cmd[100];
-<anchor xml:id="dbdoclet.50438215_pgfId-1297888" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297889" xreflabel=""/>   sprintf(filename, &quot;%s/%s&quot;,MY_LUSTRE_DIR, TESTFILE);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297890" xreflabel=""/>    
-<anchor xml:id="dbdoclet.50438215_pgfId-1297891" xreflabel=""/>   printf(&quot;Open a file with striping\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297892" xreflabel=""/>   file = open_stripe_file();
-<anchor xml:id="dbdoclet.50438215_pgfId-1297893" xreflabel=""/>   if ( file &lt; 0 ) {
-<anchor xml:id="dbdoclet.50438215_pgfId-1297894" xreflabel=""/>           printf(&quot;Exiting\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297895" xreflabel=""/>           exit(1);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297896" xreflabel=""/>   
-<anchor xml:id="dbdoclet.50438215_pgfId-1297897" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297898" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297899" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297900" xreflabel=""/>   }
-<anchor xml:id="dbdoclet.50438215_pgfId-1297901" xreflabel=""/>   printf(&quot;Getting uuid list\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297902" xreflabel=""/>   rc = get_my_uuids(file);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297903" xreflabel=""/>   rintf(&quot;Write to the file\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297904" xreflabel=""/>   rc = write_file(file);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297905" xreflabel=""/>   rc = close_file(file);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297906" xreflabel=""/>   printf(&quot;Listing LOV data\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297907" xreflabel=""/>   rc = get_file_info(filename);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297908" xreflabel=""/>   printf(&quot;Ping our OSTs\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297909" xreflabel=""/>   rc = ping_osts();
-<anchor xml:id="dbdoclet.50438215_pgfId-1297910" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297911" xreflabel=""/>   /* the results should match lfs getstripe */
-<anchor xml:id="dbdoclet.50438215_pgfId-1297912" xreflabel=""/>   printf(&quot;Confirming our results with lfs getsrtipe\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297913" xreflabel=""/>   sprintf(sys_cmd, &quot;/usr/bin/lfs getstripe %s/%s&quot;, MY_LUSTRE_DIR, TESTFILE);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297914" xreflabel=""/>   system(sys_cmd);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297915" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297916" xreflabel=""/>   printf(&quot;All done\n&quot;);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297917" xreflabel=""/>   exit(rc);
-<anchor xml:id="dbdoclet.50438215_pgfId-1297918" xreflabel=""/>}  
+        }
+    
+ 
+   free(lump);
+   return rc;
+   
+}
+/* Ping all OSTs that belong to this filesysem */
+ 
+int ping_osts()
+{
+   DIR *dir;
+   struct dirent *d;
+   char osc_dir[100];
+   int rc;
+ 
+   sprintf(osc_dir, &quot;/proc/fs/lustre/osc&quot;);
+   dir = opendir(osc_dir);
+   if (dir == NULL) {
+           printf(&quot;Can&apos;t open dir\n&quot;);
+           return -1;
+   }
+   while((d = readdir(dir)) != NULL) {
+           if ( d-&gt;d_type == DT_DIR ) {
+                   if (! strncmp(d-&gt;d_name, &quot;OSC&quot;, 3)) {
+                           printf(&quot;Pinging OSC %s &quot;, d-&gt;d_name);
+                           rc = llapi_ping(&quot;osc&quot;, d-&gt;d_name);
+                           if (rc) {
+                                   printf(&quot;  bad\n&quot;);
+                           } else {
+                                   printf(&quot;  good\n&quot;);
+                           }
+                   }
+           }
+   }
+   return 0;
+ 
+}
+ 
+int main()
+{
+   int file;
+   int rc;
+   char filename[100];
+   char sys_cmd[100];
+ 
+   sprintf(filename, &quot;%s/%s&quot;,MY_LUSTRE_DIR, TESTFILE);
+    
+   printf(&quot;Open a file with striping\n&quot;);
+   file = open_stripe_file();
+   if ( file &lt; 0 ) {
+           printf(&quot;Exiting\n&quot;);
+           exit(1);
+   
+ 
+ 
+ 
+   }
+   printf(&quot;Getting uuid list\n&quot;);
+   rc = get_my_uuids(file);
+   rintf(&quot;Write to the file\n&quot;);
+   rc = write_file(file);
+   rc = close_file(file);
+   printf(&quot;Listing LOV data\n&quot;);
+   rc = get_file_info(filename);
+   printf(&quot;Ping our OSTs\n&quot;);
+   rc = ping_osts();
+ 
+   /* the results should match lfs getstripe */
+   printf(&quot;Confirming our results with lfs getsrtipe\n&quot;);
+   sprintf(sys_cmd, &quot;/usr/bin/lfs getstripe %s/%s&quot;, MY_LUSTRE_DIR, TESTFILE);
+   system(sys_cmd);
+ 
+   printf(&quot;All done\n&quot;);
+   exit(rc);
+}  
 </screen>
-      <para><anchor xml:id="dbdoclet.50438215_pgfId-1297919" xreflabel=""/><emphasis role="bold">Makefile for sample application:</emphasis></para>
-      <screen><anchor xml:id="dbdoclet.50438215_pgfId-1297920" xreflabel=""/> 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297921" xreflabel=""/>gcc -g -O2 -Wall -o lustredemo libtest.c -llustreapi
-<anchor xml:id="dbdoclet.50438215_pgfId-1297922" xreflabel=""/>clean:
-<anchor xml:id="dbdoclet.50438215_pgfId-1297923" xreflabel=""/>rm -f core lustredemo *.o
-<anchor xml:id="dbdoclet.50438215_pgfId-1297924" xreflabel=""/>run: 
-<anchor xml:id="dbdoclet.50438215_pgfId-1297925" xreflabel=""/>make
-<anchor xml:id="dbdoclet.50438215_pgfId-1297926" xreflabel=""/>rm -f /mnt/lustre/ftest/lustredemo
-<anchor xml:id="dbdoclet.50438215_pgfId-1297927" xreflabel=""/>rm -f /mnt/lustre/ftest/lustre_dummy
-<anchor xml:id="dbdoclet.50438215_pgfId-1297928" xreflabel=""/>cp lustredemo /mnt/lustre/ftest/
+      <para><emphasis role="bold">Makefile for sample application:</emphasis></para>
+      <screen> 
+gcc -g -O2 -Wall -o lustredemo libtest.c -llustreapi
+clean:
+rm -f core lustredemo *.o
+run: 
+make
+rm -f /mnt/lustre/ftest/lustredemo
+rm -f /mnt/lustre/ftest/lustre_dummy
+cp lustredemo /mnt/lustre/ftest/
 </screen>
       <section remap="h5">
-        <title><anchor xml:id="dbdoclet.50438215_pgfId-1297929" xreflabel=""/>See Also</title>
-        <para><anchor xml:id="dbdoclet.50438215_pgfId-1297942" xreflabel=""/>
+        <title>See Also</title>
+        <para>
             <xref linkend="dbdoclet.50438215_30970"/>llapi_file_create, 
             <xref linkend="dbdoclet.50438215_50149"/>llapi_file_get_stripe, 
             <xref linkend="dbdoclet.50438215_86607"/>llapi_file_open, 
