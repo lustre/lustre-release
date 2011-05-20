@@ -16,6 +16,7 @@
       <para><xref linkend="dbdoclet.50438225_12316"/></para>
     </listitem>
   </itemizedlist>
+
   <section xml:id="dbdoclet.50438225_71141">
     <title>27.1 Recovering from Errors or Corruption on a Backing File System</title>
     <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the file system. <literal>ldiskfs</literal> journaling ensures that the file system remains coherent. The backing file systems are never accessed directly from the client, so client crashes are not relevant.</para>
