@@ -40,7 +40,7 @@
         </listitem>
       </itemizedlist>
       <para>Typically with these tests, Lustre should deliver 85-90% of the raw device performance.</para>
-      <para>A utility <literal>stats-collect</literal> is also provided to collect application profiling information from Lustre clients and servers. See <xref linkend="dbdoclet.50438212_58201">Collecting Application Profiling Information (stats-collect)</xref> for more information.</para>
+      <para>A utility <literal>stats-collect</literal> is also provided to collect application profiling information from Lustre clients and servers. See <xref linkend="dbdoclet.50438212_58201"/> for more information.</para>
     </section>
     <section remap="h3">
       <title>24.1.2 Preparing to Use the Lustre I/O Kit</title>
@@ -60,7 +60,7 @@
         </listitem>
       </itemizedlist>
       <para>Download the Lustre I/O kit (<literal>lustre-iokit</literal>)from:</para>
-      <para><ulink xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</ulink></para>
+      <para><link xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</link></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438212_51053">

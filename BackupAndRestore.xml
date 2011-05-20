@@ -110,7 +110,7 @@
               <row>
                 <entry>
                   <literal>
-                    <para>--xattr &lt;yes|no&gt;</para>
+                    --xattr &lt;yes|no&gt;
                   </literal>
                 </entry>
                 <entry>

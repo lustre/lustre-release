@@ -18,7 +18,7 @@
     <section remap="h3">
       <title>22.1.1 How ACLs Work</title>
       <para>Implementing ACLs varies between operating systems. Systems that support the Portable Operating System Interface (POSIX) family of standards share a simple yet powerful file system permission model, which should be well-known to the Linux/Unix administrator. ACLs add finer-grained permissions to this model, allowing for more complicated permission schemes. For a detailed explanation of ACLs on Linux, refer to the SuSE Labs article, <emphasis>Posix Access Control Lists on Linux</emphasis>:</para>
-      <para><ulink xl:href="http://www.suse.de/~agruen/acl/linux-acls/online/">http://www.suse.de/~agruen/acl/linux-acls/online/</ulink></para>
+      <para><link xl:href="http://www.suse.de/~agruen/acl/linux-acls/online/">http://www.suse.de/~agruen/acl/linux-acls/online/</link></para>
       <para>We have implemented ACLs according to this model. Lustre works with the standard Linux ACL tools, setfacl, getfacl, and the historical chacl, normally installed with the ACL package.</para>
       <note>
         <para>ACL support is a system-range feature, meaning that all clients have ACL enabled or not. You cannot specify which clients should enable ACL.</para>

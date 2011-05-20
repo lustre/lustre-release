@@ -85,25 +85,25 @@
     <para>Use the <literal>lfs setstripe</literal> command to create new files with a specific file layout (stripe pattern) configuration.</para>
     <screen>lfs setstripe [--size|-s stripe_size] [--count|-c stripe_count] 
 [--index|-i start_ost] [--pool|-p pool_name] &lt;filename|dirname&gt; </screen>
-    <para><literal>
-        <emphasis role="bold">stripe_size</emphasis>
-      </literal></para>
+    <para>
+        <emphasis role="bold"><literal>stripe_size</literal></emphasis>
+      </para>
     <para>The <literal>stripe_size</literal> indicates how much data to write to one OST before moving to the next OST. The default <literal>stripe_size</literal> is 1 MB, and passing a stripe_size of 0 causes the default stripe size to be used. Otherwise, the <literal>stripe_size</literal> value must be a multiple of 64 KB.</para>
-    <para><literal>
-        <emphasis role="bold">stripe_count</emphasis>
-      </literal></para>
+    <para>
+        <emphasis role="bold"><literal>stripe_count</literal></emphasis>
+      </para>
     <para>The <literal>stripe_count</literal> indicates how many OSTs to use. The default <literal>stripe_count</literal> value is 1. Setting <literal>stripe_count</literal> to 0 causes the default stripe count to be used. Setting <literal>stripe_count</literal> to -1 means stripe over all available OSTs (full OSTs are skipped).</para>
-    <para><literal>
-        <emphasis role="bold">start_ost</emphasis>
-      </literal></para>
+    <para>
+        <emphasis role="bold"><literal>start_ost</literal></emphasis>
+      </para>
     <para>The start OST is the first OST to which files are written. The default value for <literal>start_ost</literal> is -1, which allows the MDS to choose the starting index. This setting is strongly recommended, as it allows space and load balancing to be done by the MDS as needed. Otherwise, the file starts on the specified OST index. The numbering of the OSTs starts at 0.</para>
     <note>
       <para>If you pass a <literal>start_ost</literal> value of 0 and a <literal>stripe_count</literal> value of <emphasis>1</emphasis>, all files are written to OST 0, until space is exhausted. This is probably not what you meant to do. If you only want to adjust the stripe count and keep the other parameters at their default settings, do not specify any of the other parameters:</para>
       <para><screen>lfs setstripe -c &lt;stripe_count&gt; &lt;file&gt;</screen></para>
     </note>
-    <para><literal>
-        <emphasis role="bold">pool_name</emphasis>
-      </literal></para>
+    <para>
+        <emphasis role="bold"><literal>pool_name</literal></emphasis>
+      </para>
     <para>Specify the OST pool on which the file will be written. This allows limiting the OSTs used to a subset of all OSTs in the file system. For more details about using OST pools, see <link xl:href="ManagingFileSystemIO.html#50438211_75549">Creating and Managing OST Pools</link>.</para>
     <section remap="h3">
       <title>18.3.1 Using a Specific Striping Pattern/File Layout for a Single File</title>
@@ -184,7 +184,7 @@ bob
       <title>18.4.2 Inspecting the File Tree</title>
       <para>To inspect an entire tree of files, use the <literal>lfs</literal> find command:</para>
       <screen>lfs find [--recursive | -r] &lt;file or directory&gt; ...</screen>
-      <para>You can also use <literal>ls -l /proc/<emphasis>&lt;pid&gt;</emphasis>/fd/</literal> to find open files using Lustre. For example:</para>
+      <para>You can also use <literal>ls -l /proc/<replaceable>&lt;pid&gt;</replaceable>/fd/</literal> to find open files using Lustre. For example:</para>
       <screen>$ lfs getstripe $(readlink /proc/$(pidof cat)/fd/1)</screen>
       <para>Typical output is:</para>
       <screen>/mnt/lustre/foo
@@ -230,9 +230,9 @@ group
             </row>
             <row>
               <entry>
-                <para> <literal>
-                    <emphasis role="bold">-i, --inodes</emphasis>
-                  </literal></para>
+                <para> <emphasis>
+                    <literal role="bold">-i, --inodes</literal>
+                  </emphasis></para>
               </entry>
               <entry>
                 <para> Lists inodes instead of block usage.</para>

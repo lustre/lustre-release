@@ -112,7 +112,7 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
           </orderedlist>
         </listitem>
       </orderedlist>
-      <para>If you have a problem upgrading Lustre, contact us via the <ulink xl:href="https://jira.whamcloud.com">Whamcloud Jira</ulink> bug tracker.</para>
+      <para>If you have a problem upgrading Lustre, contact us via the <link xl:href="https://jira.whamcloud.com">Whamcloud Jira</link> bug tracker.</para>
     </section>
   </section>
 </chapter>

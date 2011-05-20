@@ -53,19 +53,20 @@
     <para>Use this procedure to enable (configure) disk quotas in Lustre.</para>
     <orderedlist>
       <listitem>
-        <emphasis role="bold">
-          <para>If you have re-complied your Linux kernel, be sure that <literal>CONFIG_QUOTA</literal> and <literal>CONFIG_QUOTACTL</literal> are enabled. Also, verify that <literal>CONFIG_QFMT_V1</literal> and/or <literal>CONFIG_QFMT_V2</literal> are enabled.</para>
-        </emphasis>
+                  <para><emphasis role="bold">
+If you have re-complied your Linux kernel, be sure that <literal>CONFIG_QUOTA</literal> and <literal>CONFIG_QUOTACTL</literal> are enabled. Also, verify that <literal>CONFIG_QFMT_V1</literal> and/or <literal>CONFIG_QFMT_V2</literal> are enabled.</emphasis></para>
+        
         <para>Quota is enabled in all Linux 2.6 kernels supplied for Lustre.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Start the server.</emphasis></para>
       </listitem>
       <listitem>
+<para>
         <emphasis role="bold">
-          <para>Mount the Lustre file system on the client and verify that the <literal>lquota</literal> module has loaded properly by using the <literal>lsmod</literal> command.</para>
+          Mount the Lustre file system on the client and verify that the <literal>lquota</literal> module has loaded properly by using the <literal>lsmod</literal> command.
         </emphasis>
-        <screen>$ lsmod
+        </para>   <screen>$ lsmod
 [root@oss161 ~]# lsmod
 Module                     Size                    Used by
 obdfilter          220532                  1
@@ -108,7 +109,7 @@ ksocklnd           111812                  1</screen>
       <para>Lustre 1.6.6 introduced the v2 file format for operational quotas, with continued support for the old file format (v1). The ost.quota_type parameter handles &apos;1&apos; and &apos;2&apos; options, to specify the Lustre quota versions that will be used. For example:</para>
       <screen>--param ost.quota_type=ug2
 --param ost.quota_type=u1</screen>
-      <para>For more information about the v1 and v2 formats, see <xref linkend="dbdoclet.50438217_66360">Quota File Formats</xref>.</para>
+      <para>For more information about the v1 and v2 formats, see <xref linkend="dbdoclet.50438217_66360"/>.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438217_49939">
@@ -265,14 +266,14 @@ lustre-OST0001_UUID        30720*          -               28872           \
       <para><emphasis role="bold">Hard limit</emphasis> -- When you are beyond the hard limit, you get <literal>-EQUOTA</literal> and cannot write inode/block any more. The hard limit is the absolute limit. When a grace period is set, you can exceed the soft limit within the grace period if are under the hard limits.</para>
       <para>Lustre quota allocation is controlled by two variables, <literal>quota_bunit_sz</literal> and <literal>quota_iunit_sz</literal> referring to KBs and inodes, respectively. These values can be accessed on the MDS as <literal>/proc/fs/lustre/mds/*/quota_*</literal> and on the OST as <literal>/proc/fs/lustre/obdfilter/*/quota_*</literal>. The <literal>quota_bunit_sz </literal>and <literal>quota_iunit_sz</literal> variables are the maximum qunit values for blocks and inodes, respectively. At any time, module lquota chooses a reasonable qunit between the minimum and maximum values.</para>
       <para>The /proc values are bounded by two other variables <literal>quota_btune_sz</literal> and <literal>quota_itune_sz</literal>. By default, the <literal>*tune_sz</literal> variables are set at 1/2 the <literal>*unit_sz</literal> variables, and you cannot set <literal>*tune_sz</literal> larger than <literal>*unit_sz</literal>. You must set <literal>bunit_sz</literal> first if it is increasing by more than 2x, and <literal>btune_sz</literal> first if it is decreasing by more than 2x.</para>
-      <para><emphasis role="bold">Total number of inodes</emphasis> -- To determine the total number of inodes, use <literal>lfs df -i</literal> (and also <literal>/proc/fs/lustre/*/*/filestotal</literal>). For more information on using the <literal>lfs df -i</literal> command and the command output, see <xref linkend="dbdoclet.50438209_35838">Checking File System Free Space</xref>.</para>
+      <para><emphasis role="bold">Total number of inodes</emphasis> -- To determine the total number of inodes, use <literal>lfs df -i</literal> (and also <literal>/proc/fs/lustre/*/*/filestotal</literal>). For more information on using the <literal>lfs df -i</literal> command and the command output, see <xref linkend="dbdoclet.50438209_35838"/>.</para>
       <para>Unfortunately, the <literal>statfs</literal> interface does not report the free inode count directly, but instead reports the total inode and used inode counts. The free inode count is calculated for <literal>df</literal> from (total inodes - used inodes).</para>
       <para>It is not critical to know a file system&apos;s total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
       <para>The values set for the MDS must match the values set on the OSTs.</para>
       <para>The <literal>quota_bunit_sz</literal> parameter displays bytes, however <literal>lfs setquota</literal> uses KBs. The <literal>quota_bunit_sz</literal> parameter must be a multiple of 1024. A proper minimum KB size for <literal>lfs setquota</literal> can be calculated as:</para>
-      <para><example>
+      <informalexample><para>
           <emphasis role="bold">Size in KBs = minimum_quota_bunit_sz * (number of OSTS + 1) = 1024 * (number of OSTs +1)</emphasis>
-        </example></para>
+        </para></informalexample>
       <para>We add one (1) to the number of OSTs as the MDS also consumes KBs. As inodes are only consumed on the MDS, the minimum inode size for <literal>lfs setquota</literal> is equal to <literal>quota_iunit_sz</literal>.</para>
       <note>
         <para>Setting the quota below this limit may prevent the user from all file creation.</para>

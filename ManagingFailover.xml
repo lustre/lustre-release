@@ -11,7 +11,7 @@
     </listitem>
   </itemizedlist>
   <note>
-    <para>For information about high availability(HA) management software, see the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</ulink> or the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">LuUsing Pacemaker with stre</ulink>.</para>
+    <para>For information about high availability(HA) management software, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link> or the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">LuUsing Pacemaker with stre</link>.</para>
   </note>
   <section xml:id="dbdoclet.50438213_13563">
     <title>20.1 Lustre Failover and <anchor xml:id="dbdoclet.50438213_marker-1301522" xreflabel=""/>Multiple-Mount Protection</title>
