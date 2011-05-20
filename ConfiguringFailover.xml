@@ -27,14 +27,14 @@
       <para>Shoot The Other Node In The HEAD (STONITH), is a set of power management tools provided with the Linux-HA package. STONITH has native support for many power control devices and is extensible. It uses expect scripts to automate control.</para>
       <para>PowerMan, available from the Lawrence Livermore National Laboratory (LLNL), is used to control remote power control (RPC) devices from a central location. PowerMan provides native support for several RPC varieties and expect-like configuration simplifies the addition of new devices.</para>
       <para>The latest versions of PowerMan are available at:</para>
-      <para><ulink xl:href="http://sourceforge.net/projects/powerman">http://sourceforge.net/projects/powerman</ulink></para>
+      <para><link xl:href="http://sourceforge.net/projects/powerman">http://sourceforge.net/projects/powerman</link></para>
       <para>For more information about PowerMan, go to:</para>
-      <para><ulink xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</ulink></para>
+      <para><link xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</link></para>
     </section>
     <section remap="h3">
       <title>11.1.2 Power Equipment</title>
       <para>Lustre failover also requires the use of RPC devices, which come in different configurations. Lustre server nodes may be equipped with some kind of service processor that allows remote power control. If a Lustre server node is not equipped with a service processor, then a multi-port, Ethernet-addressable RPC may be used as an alternative. For recommended products, refer to the list of supported RPC devices on the PowerMan website.</para>
-      <para><ulink xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</ulink></para>
+      <para><link xl:href="https://computing.llnl.gov/linux/powerman.html">https://computing.llnl.gov/linux/powerman.html</link></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438188_92688">
@@ -42,10 +42,10 @@
     <para>Lustre must be combined with high-availability (HA) software to enable a complete Lustre failover solution. Lustre can be used with several HA packages including:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Red Hat Cluster Manager</emphasis>  - For more information about setting up Lustre failover with Red Hat Cluster Manager, see the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</ulink>.</para>
+        <para><emphasis>Red Hat Cluster Manager</emphasis>  - For more information about setting up Lustre failover with Red Hat Cluster Manager, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link>.</para>
       </listitem>
       <listitem>
-        <para><emphasis>Pacemaker</emphasis>  - For more information about setting up Lustre failover with Pacemaker, see the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</ulink>.<anchor xml:id="dbdoclet.50438188_61775" xreflabel=""/></para>
+        <para><emphasis>Pacemaker</emphasis>  - For more information about setting up Lustre failover with Pacemaker, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</link>.<anchor xml:id="dbdoclet.50438188_61775" xreflabel=""/></para>
       </listitem>
     </itemizedlist>
   </section>

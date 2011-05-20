@@ -267,7 +267,7 @@
         <itemizedlist>
           <listitem>
             <para><emphasis role="bold">e2fsprogs</emphasis><anchor xml:id="dbdoclet.50438261_marker-1292893" xreflabel=""/> : Lustre requires a recent version of e2fsprogs that understands extents. Use <literal>e2fsprogs-1.41-90-wc1</literal> or later, available at:</para>
-            <para><ulink url="http://build.whamcloud.com/">http://build.whamcloud.com/</ulink></para>
+            <para><link xl:href="http://build.whamcloud.com/">http://build.whamcloud.com/</link></para>
             <para>A quilt patchset of all changes to the vanilla e2fsprogs is available in <literal>e2fsprogs-{version}-patches.tgz</literal>.</para>
             <note>
               <para>The Lustre-patched <literal>e2fsprogs</literal> utility is only required on machines that mount backend (<literal>ldiskfs</literal>) file systems, such as the OSS, MDS and MGS nodes. It does not need to be loaded on clients.</para>
@@ -285,10 +285,10 @@
       <section remap="h4">
         <title>8.1.1.4 (Optional) Debugging Tools and Other Optional Packages</title>
         <para>A variety of optional packages are provided on the <emphasis>
-            <ulink xl:href="http://downloads.whamcloud.com">Whamcloud download site</ulink>
+            <link xl:href="http://downloads.whamcloud.com">Whamcloud download site</link>
           </emphasis>. These include debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages.</para>
         <para>For more information about debugging tools, see the topic <emphasis>
-            <ulink xl:href="http://wiki.lustre.org/index.php/Debugging_Lustre">Debugging Lustre</ulink>
+            <link xl:href="http://wiki.lustre.org/index.php/Debugging_Lustre">Debugging Lustre</link>
           </emphasis> on the Lustre wiki.</para>
       </section>
     </section>
@@ -322,7 +322,7 @@
               <emphasis role="italic">
                 <emphasis>(Recommended)</emphasis>
               </emphasis>
-            </emphasis><emphasis role="bold"> Ensure client clocks are synchronized</emphasis> . Lustre uses client clocks for timestamps. If clocks are out of sync between clients, files will appear with different time stamps when accessed by different clients. Drifting clocks can also cause problems, for example, by making it difficult to debug multi-node issues or correlate logs, which depend on timestamps. We recommend that you use Network Time Protocol (NTP) to keep client and server clocks in sync with each other. For more information about NTP, see: <ulink xl:href="http://www.ntp.org/">http://www.ntp.org</ulink>.</para>
+            </emphasis><emphasis role="bold"> Ensure client clocks are synchronized</emphasis> . Lustre uses client clocks for timestamps. If clocks are out of sync between clients, files will appear with different time stamps when accessed by different clients. Drifting clocks can also cause problems, for example, by making it difficult to debug multi-node issues or correlate logs, which depend on timestamps. We recommend that you use Network Time Protocol (NTP) to keep client and server clocks in sync with each other. For more information about NTP, see: <link xl:href="http://www.ntp.org/">http://www.ntp.org</link>.</para>
         </listitem>
       </itemizedlist>
     </section>
@@ -350,7 +350,7 @@
         <para><emphasis role="bold">Download the Lustre RPMs.</emphasis></para>
         <orderedlist>
           <listitem>
-            <para><emphasis role="bold">On the <ulink xl:href="http://build.whamcloud.com/">Lustre download site</ulink>, select your platform.</emphasis></para>
+            <para><emphasis role="bold">On the <link xl:href="http://build.whamcloud.com/">Lustre download site</link>, select your platform.</emphasis></para>
             <para>The files required to install Lustre (kernels, modules and utilities RPMs) are listed for the selected platform.</para>
           </listitem>
           <listitem>
@@ -412,7 +412,7 @@ lustre-modules-&lt;ver&gt; lustre-ldiskfs-&lt;ver&gt;
                   <row>
                     <entry>
                       <para><emphasis role="bold">Note -</emphasis>The <literal>rpm</literal> command options <literal>--force</literal> or <literal>--nodeps</literal> should not be used to install or update the Lustre-specific <literal>e2fsprogs</literal> package. If errors are reported, file a bug (for instructions see the topic <emphasis>
-                          <ulink xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</ulink>
+                          <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>
                         </emphasis> on the Lustre wiki).</para>
                     </entry>
                   </row>

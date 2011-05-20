@@ -80,26 +80,27 @@
         </emphasis>, where <emphasis>
           <literal>&lt;number_of_data_disks&gt;</literal>
         </emphasis> does <emphasis>not</emphasis> include the RAID parity disks (1 for RAID 5 and 2 for RAID 6):</para>
-      <screen><emphasis>&lt;stripe_width_blocks&gt;</emphasis> = <emphasis>&lt;chunk_blocks&gt;</emphasis> * <emphasis>&lt;number_of_data_disks&gt;</emphasis> = 1 MB 
-</screen>
+      <screen><emphasis>&lt;stripe_width_blocks&gt;</emphasis> = <emphasis>&lt;chunk_blocks&gt;</emphasis> * <emphasis>&lt;number_of_data_disks&gt;</emphasis> = 1 MB </screen>
       <para>If the RAID configuration does not allow <emphasis>
           <literal>&lt;chunk_blocks&gt;</literal>
-        </emphasis> to fit evenly into 1 MB, select <literal>
-          <emphasis>&lt;chunkblocks&gt;</emphasis>
-        </literal>, such that <literal>
-          <emphasis>&lt;stripe_width_blocks&gt;</emphasis>
-        </literal> is close to 1 MB, but not larger.</para>
+        </emphasis> to fit evenly into 1 MB, select <emphasis>
+          <literal>&lt;chunkblocks&gt;</literal>
+        </emphasis><emphasis>
+          <literal>&lt;stripe_width_blocks&gt;</literal>
+        </emphasis>, such that  is close to 1 MB, but not larger.</para>
       <para>The <emphasis>
           <literal>&lt;stripe_width_blocks&gt;</literal>
-        </emphasis> value must equal <literal><emphasis>&lt;chunk_blocks&gt;</emphasis>*<emphasis>&lt;number_of_data_disks&gt;</emphasis></literal>. Specifying the <emphasis>
+        </emphasis> value must equal <emphasis>
+          <literal>&lt;chunk_blocks&gt;*&lt;number_of_data_disks&gt;</literal>
+        </emphasis>. Specifying the <emphasis>
           <literal>&lt;stripe_width_blocks&gt;</literal>
         </emphasis> parameter is only relevant for RAID 5 or RAID 6, and is not needed for RAID 1 plus 0.</para>
       <para>Run <literal>--reformat</literal> on the file system device (<literal>/dev/sdc</literal>), specifying the RAID geometry to the underlying ldiskfs file system, where:</para>
       <screen>--mkfsoptions &quot;<emphasis>&lt;other options&gt;</emphasis> -E stride=<emphasis>&lt;chunk_blocks&gt;</emphasis>, stripe_width=<emphasis>&lt;stripe_width_blocks&gt;</emphasis>&quot;
 </screen>
-      <para><example>A RAID 6 configuration with 6 disks has 4 data and 2 parity disks. The <literal>
-            <emphasis>&lt;chunk_blocks&gt;</emphasis>
-          </literal> &lt;= 1024KB/4 = 256KB.</example></para>
+<informalexample><para>A RAID 6 configuration with 6 disks has 4 data and 2 parity disks. The <emphasis>
+            <literal>&lt;chunk_blocks&gt;</literal>
+</emphasis> &lt;= 1024KB/4 = 256KB.</para></informalexample>
       <para>Because the number of data disks is equal to the power of 2, the stripe width is equal to 1 MB.</para>
       <screen>--mkfsoptions &quot;<emphasis>&lt;other options&gt;</emphasis> -E stride=<emphasis>&lt;chunk_blocks&gt;</emphasis>, stripe_width=<emphasis>&lt;stripe_width_blocks&gt;</emphasis>&quot;...
 </screen>
@@ -120,9 +121,9 @@
         <listitem>
           <para>Create a journal device on the partition. Run:</para>
           <screen>[oss#] mke2fs -b 4096 -O journal_dev /dev/sdb <emphasis>&lt;journal_size&gt;</emphasis></screen>
-          <para>The value of <literal>
-              <emphasis>&lt;journal_size&gt;</emphasis>
-            </literal> is specified in units of 4096-byte blocks. For example, 262144 for a 1 GB journal size.</para>
+          <para>The value of <emphasis>
+              <literal>&lt;journal_size&gt;</literal>
+            </emphasis> is specified in units of 4096-byte blocks. For example, 262144 for a 1 GB journal size.</para>
         </listitem>
         <listitem>
           <para>Create the OST.</para>

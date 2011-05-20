@@ -335,17 +335,17 @@ $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
   <section xml:id="dbdoclet.50438273_81684">
     <title>12.2 Lustre <anchor xml:id="dbdoclet.50438273_marker-1297386" xreflabel=""/>Monitoring Tool</title>
     <para>The Lustre Monitoring Tool (LMT) is a Python-based, distributed system developed and maintained by Lawrence Livermore National Lab (LLNL)). It provides a &apos;&apos;top&apos;&apos; like display of activity on server-side nodes (MDS, OSS and portals routers) on one or more Lustre file systems. It does not provide support for monitoring clients. For more information on LMT, including the setup procedure, see:</para>
-    <para><ulink xl:href="http://code.google.com/p/lmt/">http://code.google.com/p/lmt/</ulink></para>
+    <para><link xl:href="http://code.google.com/p/lmt/">http://code.google.com/p/lmt/</link></para>
     <para>LMT questions can be directed to:</para>
-    <para><ulink xl:href="mailto:lmt-discuss@googlegroups.com">lmt-discuss@googlegroups.com</ulink></para>
+    <para><link xl:href="mailto:lmt-discuss@googlegroups.com">lmt-discuss@googlegroups.com</link></para>
   </section>
   <section xml:id="dbdoclet.50438273_80593">
     <title>12.3 Collect<anchor xml:id="dbdoclet.50438273_marker-1297391" xreflabel=""/>L</title>
     <para>CollectL is another tool that can be used to monitor Lustre. You can run CollectL on a Lustre system that has any combination of MDSs, OSTs and clients. The collected data can be written to a file for continuous logging and played back at a later time. It can also be converted to a format suitable for plotting.</para>
     <para>For more information about CollectL, see:</para>
-    <para><ulink xl:href="http://collectl.sourceforge.net">http://collectl.sourceforge.net</ulink></para>
+    <para><link xl:href="http://collectl.sourceforge.net">http://collectl.sourceforge.net</link></para>
     <para>Lustre-specific documentation is also available. See:</para>
-    <para><ulink xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">http://collectl.sourceforge.net/Tutorial-Lustre.html</ulink></para>
+    <para><link xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">http://collectl.sourceforge.net/Tutorial-Lustre.html</link></para>
   </section>
   <section xml:id="dbdoclet.50438273_44185">
     <title>12.4 Other Monitoring Options</title>

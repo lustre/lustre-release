@@ -337,7 +337,8 @@ uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status
       <orderedlist>
         <listitem>
           <para>On the OST, list the NIDs of all MGS nodes at mkfs time.</para>
-          <screen><para>OST# mkfs.lustre --fsname sunfs --ost --mgsnode=10.0.0.1</para><para> --mgsnode=10.0.0.2 /dev/{device}</para></screen>
+          <screen>OST# mkfs.lustre --fsname sunfs --ost --mgsnode=10.0.0.1 \
+  --mgsnode=10.0.0.2 /dev/{device}</screen>
         </listitem>
         <listitem>
           <para>On the client, mount the file system.</para>
@@ -473,7 +474,7 @@ Inode      Pathname
       <para><literal>Debugfs</literal>&apos; &apos;&apos;ncheck&apos;&apos; is a brute-force search that may take a long time to complete.</para>
     </note>
     <note>
-      <para>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <emphasis><ulink>http://smartmontools.sourceforge.net/badblockhowto.html</ulink>. </emphasis> Then, follow the steps above to resolve the Lustre filename.</para>
+      <para>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <emphasis><link xl:href='http://smartmontools.sourceforge.net/badblockhowto.html'>http://smartmontools.sourceforge.net/badblockhowto.html</link>. </emphasis> Then, follow the steps above to resolve the Lustre filename.</para>
     </note>
   </section>
 </chapter>

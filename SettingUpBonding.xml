@@ -122,9 +122,7 @@ bond0
 </screen>
       </listitem>
       <listitem>
-        <emphasis role="bold">
-          <para>Append the following lines to the file.</para>
-        </emphasis>
+          <para><emphasis role="bold">Append the following lines to the file.</emphasis></para>
         <screen>DEVICE=bond0
 IPADDR=192.168.10.79 # Use the free IP Address of your network
 NETWORK=192.168.10.0
@@ -190,9 +188,7 @@ options bond0 mode=balance-alb miimon=100
         </orderedlist>
       </listitem>
       <listitem>
-        <emphasis role="bold">
-          <para>Start/restart the slave interfaces (using your normal network method).</para>
-        </emphasis>
+          <para><emphasis role="bold">Start/restart the slave interfaces (using your normal network method).</emphasis></para>
         <note>
           <para>You must modprobe the bonding module for each bonded interface. If you wish to create bond0 and bond1, two entries in modprobe.conf are required.</para>
         </note>
