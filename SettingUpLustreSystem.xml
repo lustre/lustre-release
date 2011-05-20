@@ -79,9 +79,9 @@
       <title>5.2.1 Determining MDS/MDT Space Requirements</title>
       <para>When calculating the MDT size, the important factor to consider is the number of files to be stored in the file system. This determines the number of inodes needed, which drives the MDT sizing. To be on the safe side, plan for 4 KB per inode on the MDT, which is the default value. Attached storage required for Lustre metadata is typically 1-2 percent of the file system capacity depending upon file size.</para>
       <para>For example, if the average file size is 5 MB and you have 100 TB of usable OST space, then you can calculate the minimum number of inodes as follows:</para>
-      <example>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</example>
+      <informalexample><para>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</para></informalexample>
       <para>We recommend that you use at least twice the minimum number of inodes to allow for future expansion and allow for an average file size smaller than expected. Thus, the required space is:</para>
-      <example>4 KB/inode * 40 million inodes = 160 GB</example>
+      <informalexample><para>4 KB/inode * 40 million inodes = 160 GB</para></informalexample>
       <para>If the average file size is small, 4 KB for example, Lustre is not very efficient as the MDT uses as much space as the OSTs. However, this is not a common configuration for Lustre.</para>
       <note>
         <para>If the MDT is too small, this can cause all the space on the OSTs to be unusable. Be sure to determine the appropriate size of the MDT needed to support the file system before formatting the file system. It is difficult to increase the number of inodes after the file system is formatted.</para>
@@ -360,13 +360,13 @@
         <title>5.4.2.1 Calculating MDS Memory Requirements</title>
         <para>By default, 400 MB are used for the file system journal. Additional RAM is used for caching file data for the larger working set, which is not actively in use by clients but should be kept &quot;hot&quot; for improved access times. Approximately 1.5 KB per file is needed to keep a file in cache without a lock.</para>
         <para>For example, for a single MDT on an MDS with 1,000 clients, 16 interactive nodes, and a 2 million file working set (of which 400,000 files are cached on the clients):</para>
-        <example>
+        <informalexample>
           <para>Operating system overhead = 512 MB</para>
           <para>File system journal = 400 MB</para>
           <para>1000 * 4-core clients * 100 files/core * 2kB = 800 MB</para>
           <para>16 interactive clients * 10,000 files * 2kB = 320 MB</para>
           <para>1,600,000 file extra working set * 1.5kB/file = 2400 MB</para>
-        </example>
+        </informalexample>
         <para>Thus, the minimum requirement for a system with this configuration is at least 4 GB of RAM. However, additional memory may significantly improve performance.</para>
         <para>For directories containing 1 million or more files, more memory may provide a significant benefit. For example, in an environment where clients randomly access one of 10 million files, having extra memory for the cache significantly improves performance.</para>
       </section>
@@ -388,7 +388,7 @@
       <section remap="h4">
         <title>5.4.3.1 Calculating OSS Memory Requirements</title>
         <para>The minimum recommended RAM size for an OSS with two OSTs is computed below:</para>
-        <example>
+        <informalexample>
           <para>Ethernet/TCP send/receive buffers (1 MB * 512 threads) = 512 MB</para>
           <para>400 MB journal size * 2 OST devices = 800 MB</para>
           <para>1.5 MB read/write per OST IO thread * 512 threads = 768 MB</para>
@@ -399,7 +399,7 @@
           <para>     DLM locks + filesystem metadata TOTAL = 3520MB</para>
           <para>Per OSS DLM locks + filesystem metadata = 3520MB/6 OSS = 600MB (approx.)</para>
           <para>Per OSS RAM minimum requirement = 4096MB (approx.)</para>
-        </example>
+        </informalexample>
         <para>This consumes about 1,400 MB just for the pre-allocated buffers, and an additional 2 GB for minimal file system and kernel usage. Therefore, for a non-failover configuration, the minimum RAM would be 4 GB for an OSS node with two OSTs. Adding additional memory on the OSS will improve the performance of reading smaller, frequently-accessed files.</para>
         <para>For a failover configuration, the minimum RAM would be at least 6 GB. For 4 OSTs on each OSS in a failover configuration 10GB of RAM is reasonable. When the OSS is not handling any failed-over OSTs the extra RAM will be used as a read cache.</para>
         <para>As a reasonable rule of thumb, about 2 GB of base memory plus 1 GB per OST can be used. In failover configurations, about 2 GB per OST is needed.</para>
@@ -433,9 +433,10 @@
         <para>If you are using multiple network types, then you&apos;ll need a router. Any node with appropriate interfaces can route Lustre Networking (LNET) traffic between different network hardware types or topologies --the node may be a server, a client, or a standalone router. LNET can route messages between different network types (such as TCP-to-InfiniBand) or across different topologies (such as bridging two InfiniBand or TCP/IP networks). Routing will be configured in <xref linkend="configuringlnet"/>.</para>
       </listitem>
       <listitem>
-        <emphasis role="bold">
-          <para>Identify the network interfaces to include in or exclude from LNET.</para>
+          <para><emphasis role="bold">
+          Identify the network interfaces to include in or exclude from LNET.
         </emphasis>
+    </para>
         <para>If not explicitly specified, LNET uses either the first available interface or a pre-defined default for a given network type. Interfaces that LNET should not use (such as an administrative network or IP-over-IB), can be excluded.</para>
         <para>Network interfaces to be used or excluded will be specified using the lnet kernel module parameters networks and <literal>ip2netsas</literal> described in <xref linkend="configuringlnet"/>.</para>
       </listitem>
