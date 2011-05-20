@@ -178,18 +178,18 @@ MB/s
         <para>Run the script using the <literal>case=disk</literal> parameter to run the test against all the local OSTs. The script automatically detects all local OSTs and includes them in the survey.</para>
         <para>To run the test against only specific OSTs, run the script using the <literal>target=parameter</literal> to list the OSTs to be tested explicitly. If some OSTs are on remote nodes, specify their hostnames in addition to the OST name (for example, <literal>oss2:lustre-OST0004</literal>).</para>
         <para>All <literal>obdfilter</literal> instances are driven directly. The script automatically loads the <literal>obdecho</literal> module (if required) and creates one instance of <literal>echo_client</literal> for each <literal>obdfilter</literal> instance in order to generate I/O requests directly to the OST.</para>
-        <para>For more details, see <xref linkend="dbdoclet.50438212_59319">Testing Local Disk Performance</xref>.</para>
+        <para>For more details, see <xref linkend="dbdoclet.50438212_59319"/>.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Network</emphasis>  - In this mode, the Lustre client generates I/O requests over the network but these requests are not sent to the OST file system. The OSS node runs the obdecho server to receive the requests but discards them before they are sent to the disk.</para>
-        <para>Pass the parameters <literal>case=network</literal> and <literal>target=<emphasis>&lt;hostname</emphasis>|<emphasis>IP_of_server&gt;</emphasis></literal> to the script. For each network case, the script does the required setup.</para>
-        <para>For more details, see <xref linkend="dbdoclet.50438212_36037">Testing Network Performance</xref></para>
+        <para>Pass the parameters <literal>case=network</literal> and <literal>target=<replaceable>&lt;hostname</replaceable>|<replaceable>IP_of_server&gt;</replaceable></literal> to the script. For each network case, the script does the required setup.</para>
+        <para>For more details, see <xref linkend="dbdoclet.50438212_36037"/></para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Remote file system over the network</emphasis>  - In this mode the <literal>obdfilter_survey</literal> script generates I/O from a Lustre client to a remote OSS to write the data to the file system.</para>
+      <para>To run the test against all the local OSCs, pass the parameter <literal>case=netdisk</literal> to the script. Alternately you can pass the target= parameter with one or more OSC devices (e.g., <literal>lustre-OST0000-osc-ffff88007754bc00</literal>) against which the tests are to be run.</para>
+      <para>For more details, see <xref linkend="dbdoclet.50438212_62662"/>.</para>
       </listitem>
-      <para>To run the test against all the local OSCs, pass the parameter case=netdisk to the script. Alternately you can pass the target= parameter with one or more OSC devices (e.g., lustre-OST0000-osc-ffff88007754bc00) against which the tests are to be run.</para>
-      <para>For more details, see <xref linkend="dbdoclet.50438212_62662">Testing Remote Disk Performance</xref>.</para>
     </itemizedlist>
     <caution>
       <para>The <literal>obdfilter_survey</literal> script is destructive and should not be run on devices that containing existing data that needs to be preserved. Thus, tests using <literal>obdfilter_survey</literal> should be run before the Lustre file system is placed in production.</para>
@@ -233,7 +233,7 @@ MB/s
         </listitem>
         <listitem>
           <para><emphasis role="bold">Verify that the <literal>obdecho</literal> module is loaded. Run:</emphasis></para>
-          <screen><para>modprobe obdecho</para></screen>
+          <screen>modprobe obdecho</screen>
         </listitem>
         <listitem>
           <para><emphasis role="bold">Determine the OST names.</emphasis></para>
@@ -276,7 +276,7 @@ lustre-OST0002&apos; sh obdfilter-survey</screen>
           <screen>lctl dl</screen>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Run the <literal>obdfilter_survey</literal> script with the parameters <literal>case=network</literal> and <literal><emphasis role="bold">targets=</emphasis><emphasis>&lt;hostname</emphasis>|<emphasis>ip_of_server&gt;</emphasis></literal>. For example:</emphasis></para>
+          <para>Run the <literal>obdfilter_survey</literal> script with the parameters <literal>case=network</literal> and <literal>targets=<replaceable>&lt;hostname</replaceable>|<replaceable>ip_of_server&gt;</replaceable></literal>. For example:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&apos;oss1 oss2&apos; case=network sh obdfilte\
 sh odbfilter-survey</screen>
         </listitem>
@@ -331,10 +331,10 @@ sh odbfilter-survey</screen>
         </listitem>
         <listitem>
           <para><emphasis role="bold">List all OSCs you want to test.</emphasis></para>
-          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name seperated by spaces using the format <literal><emphasis>&lt;fsname&gt;-&lt;OST_name&gt;</emphasis>-osc-<emphasis>&lt;OSC_number&gt;</emphasis></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <emphasis role="bold">do not have to specify an MDS or LOV.</emphasis></para>
+          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name seperated by spaces using the format <literal><replaceable>&lt;fsname&gt;-&lt;OST_name&gt;</replaceable>-osc-<replaceable>&lt;OSC_number&gt;</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <replaceable role="bold">do not have to specify an MDS or LOV.</replaceable></para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Run the <literal><emphasis role="bold">o</emphasis>bdfilter_survey</literal> script with the <literal>target=parameter</literal> and <literal>case=netdisk</literal>.</emphasis></para>
+          <para>Run the <literal><replaceable role="bold">o</replaceable>bdfilter_survey</literal> script with the <literal>target=parameter</literal> and <literal>case=netdisk</literal>.</para>
           <para>An example of a local test run with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size is shown below:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 \
   targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
@@ -496,7 +496,7 @@ sh odbfilter-survey</screen>
       <section remap="h4">
         <title>24.3.4.2 Visualizing Results</title>
         <para>It is useful to import the <literal>obdfilter_survey</literal> script summary data (it is fixed width) into Excel (or any graphing package) and graph the bandwidth versus the number of threads for varying numbers of concurrent regions. This shows how the OSS performs for a given number of concurrently-accessed objects (files) with varying numbers of I/Os in flight.</para>
-        <para>It is also useful to monitor and record average disk I/O sizes during each test using the &apos;disk io size&apos; histogram in the file <literal>/proc/fs/lustre/obdfilter/</literal> (see <xref linkend="dbdoclet.50438271_55057">Watching the OST Block I/O Stream</xref> for details). These numbers help identify problems in the system when full-sized I/Os are not submitted to the underlying disk. This may be caused by problems in the device driver or Linux block layer.</para>
+        <para>It is also useful to monitor and record average disk I/O sizes during each test using the &apos;disk io size&apos; histogram in the file <literal>/proc/fs/lustre/obdfilter/</literal> (see <xref linkend="dbdoclet.50438271_55057"/> for details). These numbers help identify problems in the system when full-sized I/Os are not submitted to the underlying disk. This may be caused by problems in the device driver or Linux block layer.</para>
         <screen> */brw_stats</screen>
         <para>The <literal>plot-obdfilter</literal> script included in the I/O toolkit is an example of processing output files to a .csv format and plotting a graph using <literal>gnuplot</literal>.</para>
       </section>
@@ -604,7 +604,7 @@ Ost index 2 Read time                      0.14            Write time      \
           <screen>sh gather_stats_everywhere.sh config.sh stop <emphasis>&lt;log_name.tgz&gt;</emphasis></screen>
           <para>When <emphasis>
               <literal>&lt;log_name.tgz&gt;</literal>
-            </emphasis> is specified, a profile tarball <literal>/tmp/<emphasis>&lt;log_name.tgz&gt;</emphasis></literal> is created.</para>
+            </emphasis> is specified, a profile tarball <literal>/tmp/<replaceable>&lt;log_name.tgz&gt;</replaceable></literal> is created.</para>
         </listitem>
         <listitem>
           <para>Analyze the collected statistics and create a csv tarball for the specified profiling data.</para>
