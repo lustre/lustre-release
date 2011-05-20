@@ -8,17 +8,17 @@
   <itemizedlist>
       <listitem>
           <para>
-              <link linkend='understandinglustre' endterm='understandinglustre.title'/>
+              <xref linkend='understandinglustre' endterm='understandinglustre.title'/>
           </para>
       </listitem>
       <listitem>
           <para>
-              <link linkend='understandinglustrenetworking' endterm='understandinglustrenetworking.title'/>
+              <xref linkend='understandinglustrenetworking' endterm='understandinglustrenetworking.title'/>
           </para>
       </listitem>
       <listitem>
           <para>
-              <link linkend='understandingfailover' endterm='understandingfailover.title'/>
+              <xref linkend='understandingfailover' endterm='understandingfailover.title'/>
           </para>
       </listitem>
   </itemizedlist>
