@@ -43,18 +43,18 @@
             </emphasis>  - This tool is used with the debug_kernel option to manually dump the Lustre debugging log or post-process debugging logs that are dumped automatically. For more information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref linkend="dbdoclet.50438219_38274"/>.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Lustre subsystem asserts</emphasis>  - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<emphasis>&lt;timestamp&gt;</emphasis></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669">Viewing Error Messages</xref>.</para>
+            <para><replaceable role="bold">Lustre subsystem asserts</replaceable>  - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<replaceable>&lt;timestamp&gt;</replaceable></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669"/>.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">
-              <literal>lfs</literal>
-            </emphasis>  - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more inforamtion about lfs, see <xref linkend="dbdoclet.50438206_94597">lfs</xref>.</para>
+          <para>
+                  <literal><replaceable>lfs</replaceable></literal>
+                  - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more inforamtion about lfs, see <xref linkend="dbdoclet.50438206_94597"/>.</para>
         </listitem>
       </itemizedlist>
     </section>
     <section remap="h3">
       <title>28.1.2 External Debugging Tools</title>
-      <para>The tools described in this section are provided in the Linux kernel or are available at an external website. For information about using some of these tools for Lustre debugging, see <xref linkend="dbdoclet.50438274_23607">Lustre Debugging Procedures</xref> and <xref linkend="dbdoclet.50438274_80443">Lustre Debugging for Developers</xref>.</para>
+      <para>The tools described in this section are provided in the Linux kernel or are available at an external website. For information about using some of these tools for Lustre debugging, see <xref linkend="dbdoclet.50438274_23607"/> and <xref linkend="dbdoclet.50438274_80443"/>.</para>
       <section remap="h4">
         <title>28.1.2.1 Tools for Administrators and Developers</title>
         <para>Some general debugging tools provided as a part of the standard Linux distro are:</para>
@@ -104,7 +104,7 @@
         <itemizedlist>
           <listitem>
             <para><literal>
-                <emphasis role="bold">leak_finder.pl</emphasis>
+                <replaceable role="bold">leak_finder.pl</replaceable>
               </literal> . This program provided with Lustre is useful for finding memory leaks in the code.</para>
           </listitem>
         </itemizedlist>
@@ -466,7 +466,7 @@
     </section>
     <section xml:id='dbdoclet.50438274_62472'>
       <title>28.2.2 Using the lctl Tool to View Debug Messages</title>
-      <para>The <literal>lctl</literal> tool allows debug messages to be filtered based on subsystems and message types to extract information useful for troubleshooting from a kernel debug log. For a command reference, see <xref linkend="dbdoclet.50438219_38274">lctl</xref>.</para>
+      <para>The <literal>lctl</literal> tool allows debug messages to be filtered based on subsystems and message types to extract information useful for troubleshooting from a kernel debug log. For a command reference, see <xref linkend="dbdoclet.50438219_38274"/>.</para>
       <para>You can use <literal>lctl</literal> to:</para>
       <itemizedlist>
         <listitem>
@@ -731,7 +731,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">DEBUG_REQ</emphasis>
+                    <replaceable role="bold">DEBUG_REQ</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -741,7 +741,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">OBD_FAIL_CHECK</emphasis>
+                    <replaceable role="bold">OBD_FAIL_CHECK</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -751,7 +751,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">OBD_FAIL_TIMEOUT</emphasis>
+                    <replaceable role="bold">OBD_FAIL_TIMEOUT</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -761,7 +761,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">OBD_RACE</emphasis>
+                    <replaceable role="bold">OBD_RACE</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -771,7 +771,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">OBD_FAIL_ONCE</emphasis>
+                    <replaceable role="bold">OBD_FAIL_ONCE</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -781,7 +781,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para><literal>
-                     <emphasis role="bold">OBD_FAIL_RAND</emphasis>
+                     <replaceable role="bold">OBD_FAIL_RAND</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -801,7 +801,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">OBD_FAIL_SOME</emphasis>
+                    <replaceable role="bold">OBD_FAIL_SOME</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -832,25 +832,31 @@ lctl&gt; debug_kernel [filename] </screen>
       <para>Request history is accessed and controlled using the following /proc files under the service directory:</para>
       <itemizedlist>
         <listitem>
+            <para>
           <literal>
-            <para>req_buffer_history_len</para>
+            req_buffer_history_len
           </literal>
+      </para>
           <para>Number of request buffers currently in the history</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
+      <para>
           <literal>
-            <para>req_buffer_history_max</para>
+            req_buffer_history_max
           </literal>
+      </para>
           <para>Maximum number of request buffers to keep</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
+            <para>
           <literal>
-            <para>req_history</para>
+            req_history
           </literal>
+      </para>
           <para>The request history</para>
         </listitem>
       </itemizedlist>
@@ -884,7 +890,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">target NID</emphasis>
+                    <replaceable role="bold">target NID</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -894,7 +900,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <emphasis role="bold">client ID</emphasis>
+                    <replaceable role="bold">client ID</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -903,9 +909,9 @@ lctl&gt; debug_kernel [filename] </screen>
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">
-                    <literal>xid</literal>
-                  </emphasis></para>
+                <para> 
+                        <literal><replaceable>xid</replaceable></literal>
+                  </para>
               </entry>
               <entry>
                 <para> <literal>rq_xid</literal></para>
@@ -963,7 +969,7 @@ lctl&gt; debug_kernel [filename] </screen>
       <para>Then complete the following steps:</para>
       <orderedlist>
         <listitem>
-          <para>Dump the log into a user-specified log file using lctl (see <xref linkend="dbdoclet.50438274_62472">Using the <literal>lctl</literal> Tool to View Debug Messages</xref>).</para>
+            <para>Dump the log into a user-specified log file using lctl (see <xref linkend="dbdoclet.50438274_62472"/>).</para>
         </listitem>
         <listitem>
           <para>Run the leak finder on the newly-created log dump:</para>
