@@ -645,20 +645,107 @@ static void ost_tls_put(struct ptlrpc_request *r)
         }
 }
 
+static int ost_handle_bulk_transfer(struct ptlrpc_request *req,
+                                    struct ptlrpc_bulk_desc *desc)
+{
+        struct obd_export *exp = req->rq_export;
+        time_t             start;
+        int                rc = 0;
+        int                is_get;
+        struct l_wait_info lwi;
+        ENTRY;
+
+        LASSERT(desc);
+        LASSERT(desc->bd_type == BULK_GET_SINK /* write */ ||
+                desc->bd_type == BULK_PUT_SOURCE /* read */ );
+
+        is_get = (desc->bd_type == BULK_GET_SINK);
+
+        /* Check if client was evicted while we were doing i/o or if it
+         * tried to reconnect already */
+        if (exp->exp_failed || exp->exp_abort_active_req)
+                RETURN(-ENOTCONN);
+
+        /* Start bulk transfer */
+        rc = ptlrpc_start_bulk_transfer(desc);
+        if (rc) {
+                DEBUG_REQ(D_ERROR, req, "bulk %s failed: rc %d",
+                          is_get ? "GET" : "PUT", rc);
+                RETURN(rc);
+        }
+
+        start = cfs_time_current_sec();
+        do {
+                long timeoutl = req->rq_deadline - cfs_time_current_sec();
+                cfs_duration_t timeout = timeoutl <= 0 ?
+                                         CFS_TICK : cfs_time_seconds(timeoutl);
+                lwi = LWI_TIMEOUT_INTERVAL(timeout,
+                                           cfs_time_seconds(1),
+                                           ost_bulk_timeout,
+                                           desc);
+                /* Wait for bulk transfer to complete.
+                 * If the client is evicted or reconnects in the meantime,
+                 * we abort the bulk */
+                rc = l_wait_event(desc->bd_waitq,
+                                  !ptlrpc_server_bulk_active(desc) ||
+                                  exp->exp_failed ||
+                                  exp->exp_abort_active_req,
+                                  &lwi);
+                LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                /* Wait again if we changed deadline */
+        } while ((rc == -ETIMEDOUT) &&
+                 (req->rq_deadline > cfs_time_current_sec()));
+
+        if (rc == -ETIMEDOUT) {
+                DEBUG_REQ(D_ERROR, req,
+                          "timeout on bulk %s after %ld%+lds",
+                          is_get ? "GET" : "PUT",
+                          req->rq_deadline - start,
+                          cfs_time_current_sec() - req->rq_deadline);
+                ptlrpc_abort_bulk(desc);
+                RETURN(rc);
+        }
+        if (exp->exp_failed) {
+                DEBUG_REQ(D_ERROR, req, "Eviction on bulk %s",
+                          is_get ? "GET" : "PUT");
+                ptlrpc_abort_bulk(desc);
+                RETURN(-ENOTCONN);
+        }
+        if (exp->exp_abort_active_req) {
+                DEBUG_REQ(D_ERROR, req, "Reconnect on bulk %s",
+                          is_get ? "GET" : "PUT");
+                ptlrpc_abort_bulk(desc);
+                RETURN(-ETIMEDOUT);
+        }
+        if (!desc->bd_success) {
+                DEBUG_REQ(D_ERROR, req, "network error on bulk %s",
+                          is_get ? "GET" : "PUT");
+                RETURN(-ETIMEDOUT);
+        }
+        if (desc->bd_nob_transferred != desc->bd_nob) {
+                DEBUG_REQ(D_ERROR, req, "truncated bulk PUT %d(%d)",
+                          desc->bd_nob_transferred,
+                          desc->bd_nob);
+                RETURN(-ETIMEDOUT);
+        }
+
+        RETURN(rc);
+}
+
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc = NULL;
         struct obd_export       *exp = req->rq_export;
-        struct niobuf_remote *remote_nb;
-        struct niobuf_local *local_nb;
-        struct obd_ioobj *ioo;
-        struct ost_body *body, *repbody;
-        struct l_wait_info lwi;
-        struct lustre_handle lockh = { 0 };
+        struct niobuf_remote    *remote_nb = NULL;
+        struct niobuf_local     *local_nb;
+        struct obd_ioobj        *ioo = NULL;
+        struct ost_body         *body, *repbody;
+        struct l_wait_info       lwi;
+        struct lustre_handle     lockh = { 0 };
         __u32  size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int niocount, npages, nob = 0, rc, i;
-        int no_reply = 0;
-        struct ost_thread_local_cache *tls;
+        int                      niocount, npages, nob = 0, rc, i;
+        int                      no_reply = 0;
+        struct ost_thread_local_cache *tls = NULL;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
@@ -696,12 +783,12 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         tls = ost_tls_get(req);
         if (tls == NULL)
-                GOTO(out_bulk, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         local_nb = tls->local;
 
         rc = ost_brw_lock_get(LCK_PR, exp, ioo, remote_nb, &lockh);
         if (rc != 0)
-                GOTO(out_tls, rc);
+                GOTO(out, rc);
 
         /*
          * If getting the lock took more time than
@@ -715,19 +802,16 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                        libcfs_id2str(req->rq_peer), ioo->ioo_id,
                        cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
                        req->rq_deadline - req->rq_arrival_time.tv_sec);
-                GOTO(out_lock, rc = -ETIMEDOUT);
+                GOTO(out, rc = -ETIMEDOUT);
         }
 
         npages = OST_THREAD_POOL_SIZE;
         rc = obd_preprw(OBD_BRW_READ, exp, &body->oa, 1, ioo,
                         remote_nb, &npages, local_nb, oti);
         if (rc != 0)
-                GOTO(out_lock, rc);
+                GOTO(out, rc);
 
-        desc = ptlrpc_prep_bulk_exp(req, npages,
-                                     BULK_PUT_SOURCE, OST_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out_commitrw, rc = -ENOMEM);
+        /* NB Having prepped, we must commit... */
 
         if (!lustre_handle_is_used(&lockh))
                 /* no needs to try to prolong lock if server is asked
@@ -735,14 +819,21 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa,
                                      LCK_PW | LCK_PR);
 
+        desc = ptlrpc_prep_bulk_exp(req, npages,
+                                    BULK_PUT_SOURCE, OST_BULK_PORTAL);
+        if (desc == NULL)
+                /* ENOMEN is one of the recoverable errors, see
+                 * osc_recoverable_error(). The client will resubmit
+                 * the bulk request at least a couple of times before
+                 * aborting */
+                GOTO(out_commitrw, rc = -ENOMEM);
+
         nob = 0;
         for (i = 0; i < npages; i++) {
                 int page_rc = local_nb[i].rc;
 
-                if (page_rc < 0) {              /* error */
-                        rc = page_rc;
-                        break;
-                }
+                if (page_rc < 0)                /* error */
+                        GOTO(out_commitrw, rc = page_rc) ;
 
                 nob += page_rc;
                 if (page_rc != 0) {             /* some data! */
@@ -774,79 +865,23 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
         /* We're finishing using body->oa as an input variable */
 
-        /* Check if client was evicted while we were doing i/o before touching
-           network */
-        if (rc == 0) {
-                /* Check if there is eviction in progress, and if so, wait for
-                 * it to finish */
-                if (unlikely(atomic_read(&exp->exp_obd->
-                                                obd_evict_inprogress))) {
-                        lwi = LWI_INTR(NULL, NULL);
-                        rc = l_wait_event(exp->exp_obd->
-                                                obd_evict_inprogress_waitq,
-                                          !atomic_read(&exp->exp_obd->
-                                                        obd_evict_inprogress),
-                                          &lwi);
-                }
-                /* Check if client was evicted or tried to reconnect already */
-                if (exp->exp_failed || exp->exp_abort_active_req)
-                        rc = -ENOTCONN;
-                else
-                        rc = ptlrpc_start_bulk_transfer(desc);
-                if (rc == 0) {
-                        time_t start = cfs_time_current_sec();
-                        do {
-                                long timeoutl = req->rq_deadline -
-                                        cfs_time_current_sec();
-                                cfs_duration_t timeout = timeoutl <= 0 ?
-                                        CFS_TICK : cfs_time_seconds(timeoutl);
-                                lwi = LWI_TIMEOUT_INTERVAL(timeout,
-                                                           cfs_time_seconds(1),
-                                                           ost_bulk_timeout,
-                                                           desc);
-                                rc = l_wait_event(desc->bd_waitq,
-                                                  !ptlrpc_server_bulk_active(desc) ||
-                                                  exp->exp_failed ||
-                                                  exp->exp_abort_active_req,
-                                                  &lwi);
-                                LASSERT(rc == 0 || rc == -ETIMEDOUT);
-                                /* Wait again if we changed deadline */
-                        } while ((rc == -ETIMEDOUT) &&
-                                 (req->rq_deadline > cfs_time_current_sec()));
-
-                        if (rc == -ETIMEDOUT) {
-                                DEBUG_REQ(D_ERROR, req,
-                                          "timeout on bulk PUT after %ld%+lds",
-                                          req->rq_deadline - start,
-                                          cfs_time_current_sec() -
-                                          req->rq_deadline);
-                                ptlrpc_abort_bulk(desc);
-                        } else if (exp->exp_failed) {
-                                DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
-                                rc = -ENOTCONN;
-                                ptlrpc_abort_bulk(desc);
-                        } else if (exp->exp_abort_active_req) {
-                                DEBUG_REQ(D_ERROR, req, "Reconnect on bulk PUT");
-                                /* we don't reply anyway */
-                                rc = -ETIMEDOUT;
-                                ptlrpc_abort_bulk(desc);
-                        } else if (!desc->bd_success ||
-                                   desc->bd_nob_transferred != desc->bd_nob) {
-                                DEBUG_REQ(D_ERROR, req, "%s bulk PUT %d(%d)",
-                                          desc->bd_success ?
-                                          "truncated" : "network error on",
-                                          desc->bd_nob_transferred,
-                                          desc->bd_nob);
-                                /* XXX should this be a different errno? */
-                                rc = -ETIMEDOUT;
-                        }
-                } else {
-                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d", rc);
-                }
-                no_reply = rc != 0;
+        /* Check if there is eviction in progress, and if so, wait for
+         * it to finish */
+        if (unlikely(atomic_read(&exp->exp_obd->
+                                       obd_evict_inprogress))) {
+                lwi = LWI_INTR(NULL, NULL);
+                rc = l_wait_event(exp->exp_obd-> obd_evict_inprogress_waitq,
+                                  !atomic_read(&exp->exp_obd->
+                                                obd_evict_inprogress),
+                                  &lwi);
         }
 
- out_commitrw:
+        rc = ost_handle_bulk_transfer(req, desc);
+        if (rc != 0)
+                /* don't reply if any comms problem with bulk */
+                no_reply = 1;
+
+out_commitrw:
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_READ, exp, &body->oa, 1, ioo,
                           remote_nb, npages, local_nb, oti, rc);
@@ -857,14 +892,13 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
         }
 
- out_lock:
-        ost_brw_lock_put(LCK_PR, ioo, remote_nb, &lockh);
- out_tls:
-        ost_tls_put(req);
- out_bulk:
+out:
+        if (lustre_handle_is_used(&lockh))
+                ost_brw_lock_put(LCK_PR, ioo, remote_nb, &lockh);
+        if (tls)
+                ost_tls_put(req);
         if (desc)
                 ptlrpc_free_bulk(desc);
- out:
         LASSERT(rc <= 0);
         if (rc == 0) {
                 req->rq_status = nob;
@@ -894,20 +928,20 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc = NULL;
         struct obd_export       *exp = req->rq_export;
-        struct niobuf_remote    *remote_nb;
+        struct niobuf_remote    *remote_nb = NULL;
         struct niobuf_local     *local_nb;
-        struct obd_ioobj        *ioo;
+        struct obd_ioobj        *ioo = NULL;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
         struct lustre_handle     lockh = {0};
         __u32                   *rcs;
         __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int objcount, niocount, npages;
-        int rc, i, j;
+        int                      objcount, niocount, npages;
+        int                      rc, i, j;
         obd_count                client_cksum = 0, server_cksum = 0;
         cksum_type_t             cksum_type = OBD_CKSUM_CRC32;
         int                      no_reply = 0, mmap = 0;
-        struct ost_thread_local_cache *tls;
+        struct ost_thread_local_cache *tls = NULL;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
@@ -961,12 +995,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         tls = ost_tls_get(req);
         if (tls == NULL)
-                GOTO(out_bulk, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         local_nb = tls->local;
 
         rc = ost_brw_lock_get(LCK_PW, exp, ioo, remote_nb, &lockh);
         if (rc != 0)
-                GOTO(out_tls, rc);
+                GOTO(out, rc);
 
         /*
          * If getting the lock took more time than
@@ -980,7 +1014,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                        libcfs_id2str(req->rq_peer), ioo->ioo_id,
                        cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
                        req->rq_deadline - req->rq_arrival_time.tv_sec);
-                GOTO(out_lock, rc = -ETIMEDOUT);
+                GOTO(out, rc = -ETIMEDOUT);
         }
 
         if (!lustre_handle_is_used(&lockh))
@@ -1009,75 +1043,28 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = obd_preprw(OBD_BRW_WRITE, exp, &body->oa, objcount,
                         ioo, remote_nb, &npages, local_nb, oti);
         if (rc != 0)
-                GOTO(out_lock, rc);
-
-        desc = ptlrpc_prep_bulk_exp(req, npages,
-                                     BULK_GET_SINK, OST_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(skip_transfer, rc = -ENOMEM);
+                GOTO(out, rc);
 
         /* NB Having prepped, we must commit... */
+
+        desc = ptlrpc_prep_bulk_exp(req, npages,
+                                    BULK_GET_SINK, OST_BULK_PORTAL);
+        if (desc == NULL)
+                /* ENOMEN is one of the recoverable errors, see
+                 * osc_recoverable_error(). The client will resubmit
+                 * the bulk request at least a couple of times before
+                 * aborting */
+                GOTO(skip_transfer, rc = -ENOMEM);
 
         for (i = 0; i < npages; i++)
                 ptlrpc_prep_bulk_page(desc, local_nb[i].page,
                                       local_nb[i].offset & ~CFS_PAGE_MASK,
                                       local_nb[i].len);
 
-        /* Check if client was evicted or tried to reconnect while we
-         * were doing i/o before touching network */
-        if (desc->bd_export->exp_failed ||
-            desc->bd_export->exp_abort_active_req)
-                rc = -ENOTCONN;
-        else
-                rc = ptlrpc_start_bulk_transfer(desc);
-        if (rc == 0) {
-                time_t start = cfs_time_current_sec();
-                do {
-                        long timeoutl = req->rq_deadline -
-                                cfs_time_current_sec();
-                        cfs_duration_t timeout = timeoutl <= 0 ?
-                                CFS_TICK : cfs_time_seconds(timeoutl);
-                        lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
-                                                   ost_bulk_timeout, desc);
-                        rc = l_wait_event(desc->bd_waitq,
-                                          !ptlrpc_server_bulk_active(desc) ||
-                                          desc->bd_export->exp_failed ||
-                                          desc->bd_export->exp_abort_active_req,
-                                          &lwi);
-                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
-                        /* Wait again if we changed deadline */
-                } while ((rc == -ETIMEDOUT) &&
-                         (req->rq_deadline > cfs_time_current_sec()));
-
-                if (rc == -ETIMEDOUT) {
-                        DEBUG_REQ(D_ERROR, req,
-                                  "timeout on bulk GET after %ld%+lds",
-                                  req->rq_deadline - start,
-                                  cfs_time_current_sec() -
-                                  req->rq_deadline);
-                        ptlrpc_abort_bulk(desc);
-                } else if (desc->bd_export->exp_failed) {
-                        DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
-                        rc = -ENOTCONN;
-                        ptlrpc_abort_bulk(desc);
-                } else if (desc->bd_export->exp_abort_active_req) {
-                        DEBUG_REQ(D_ERROR, req, "Reconnect on bulk GET");
-                        /* we don't reply anyway */
-                        rc = -ETIMEDOUT;
-                        ptlrpc_abort_bulk(desc);
-                } else if (!desc->bd_success ||
-                           desc->bd_nob_transferred != desc->bd_nob) {
-                        DEBUG_REQ(D_ERROR, req, "%s bulk GET %d(%d)",
-                                  desc->bd_success ?
-                                  "truncated" : "network error on",
-                                  desc->bd_nob_transferred, desc->bd_nob);
-                        /* XXX should this be a different errno? */
-                        rc = -ETIMEDOUT;
-                }
-        } else {
-                DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d", rc);
-        }
-        no_reply = rc != 0;
+        rc = ost_handle_bulk_transfer(req, desc);
+        if (rc != 0)
+                /* don't reply if any comms problem with bulk */
+                no_reply = 1;
 
 skip_transfer:
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
@@ -1196,14 +1183,13 @@ skip_transfer:
                 ptlrpc_lprocfs_brw(req, nob);
         }
 
- out_lock:
-        ost_brw_lock_put(LCK_PW, ioo, remote_nb, &lockh);
- out_tls:
-        ost_tls_put(req);
- out_bulk:
+out:
+        if (lustre_handle_is_used(&lockh))
+                ost_brw_lock_put(LCK_PW, ioo, remote_nb, &lockh);
+        if (tls)
+                ost_tls_put(req);
         if (desc)
                 ptlrpc_free_bulk(desc);
- out:
         if (rc == 0) {
                 oti_to_request(oti, req);
                 target_committed_to_req(req);

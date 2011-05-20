@@ -134,6 +134,9 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
         ENTRY;
         LASSERT(type == BULK_PUT_SOURCE || type == BULK_GET_SINK);
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DESC_ALLOC))
+                RETURN(NULL);
+
         desc = new_bulk(npages, type, portal);
         if (desc == NULL)
                 RETURN(NULL);
