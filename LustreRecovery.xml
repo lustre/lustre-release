@@ -101,7 +101,7 @@
     </section>
     <section remap="h3">
       <title>30.1.6 Failed Recovery</title>
-      <para>In the case of failed recovery, a client is evicted by the server and must reconnect after having flushed its saved state related to that server, as described in <xref linkend="dbdoclet.50438268_43796">Client Eviction</xref>, above. Failed recovery might occur for a number of reasons, including:</para>
+      <para>In the case of failed recovery, a client is evicted by the server and must reconnect after having flushed its saved state related to that server, as described in <xref linkend="dbdoclet.50438268_43796"/>, above. Failed recovery might occur for a number of reasons, including:</para>
       <itemizedlist>
         <listitem>
           <para> Failure of recovery</para>
@@ -160,7 +160,7 @@
       <title>30.2.7 Gaps in the Replay Sequence</title>
       <para>In some cases, a gap may occur in the reply sequence. This might be caused by lost replies, where the request was processed and committed to disk but the reply was not received by the client. It can also be caused by clients missing from recovery due to partial network failure or client death.</para>
       <para>In the case where all clients have reconnected, but there is a gap in the replay sequence the only possibility is that some requests were processed by the server but the reply was lost. Since the client must still have these requests in its resend list, they are processed after recovery is finished.</para>
-      <para>In the case where all clients have not reconnected, it is likely that the failed clients had requests that will no longer be replayed. The VBR feature is used to determine if a request following a transaction gap is safe to be replayed. Each item in the file system (MDS inode or OST object) stores on disk the number of the last transaction in which it was modified. Each reply from the server contains the previous version number of the objects that it affects. During VBR replay, the server matches the previous version numbers in the resend request against the current version number. If the versions match, the request is the next one that affects the object and can be safely replayed. For more information, see <xref linkend="dbdoclet.50438268_80068">Version-based Recovery</xref>.</para>
+      <para>In the case where all clients have not reconnected, it is likely that the failed clients had requests that will no longer be replayed. The VBR feature is used to determine if a request following a transaction gap is safe to be replayed. Each item in the file system (MDS inode or OST object) stores on disk the number of the last transaction in which it was modified. Each reply from the server contains the previous version number of the objects that it affects. During VBR replay, the server matches the previous version numbers in the resend request against the current version number. If the versions match, the request is the next one that affects the object and can be safely replayed. For more information, see <xref linkend="dbdoclet.50438268_80068"/>.</para>
     </section>
     <section remap="h3">
       <title>30.2.8 Lock Recovery</title>
