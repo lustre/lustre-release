@@ -1,545 +1,447 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lustremaintenance'>
-    <info>
-        <title xml:id='lustremaintenance.title'>Lustre Maintenance</title>
-    </info>
-    <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
-
-    <itemizedlist><listitem>
-            <para><xref linkend="dbdoclet.50438199_85142"/>Working with Inactive OSTs</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_15240"/>Finding Nodes in the Lustre File System</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_26070"/>Mounting a Server Without Lustre Service</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_54623"/>Regenerating Lustre Configuration Logs</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_31353"/>Changing a Server NID</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_22527"/>Adding a New OST to a Lustre File System</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_14978"/>Removing and Restoring OSTs</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_77819"/>Aborting Recovery</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_12607"/>Determining Which Machine is Serving an OST</para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438199_62333"/>Changing the Address of a Failover Node</para>
-        </listitem>
-        <listitem>
-            <para> </para>
-        </listitem>
-    </itemizedlist>
-    <section xml:id="dbdoclet.50438199_42877">
-        <title>14.1 <anchor xml:id="dbdoclet.50438199_85142" xreflabel=""/>Working with <anchor xml:id="dbdoclet.50438199_marker-1298888" xreflabel=""/>Inactive OSTs</title>
-        <para>To mount a client or an MDT with one or more inactive OSTs, run commands similar to this:</para>
-        <screen>client&gt; mount -o exclude=testfs-OST0000 -t lustre uml1:/testfs\ /mnt/testfs
-            client&gt; cat /proc/fs/lustre/lov/testfs-clilov-*/target_obd
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
+  <info>
+    <title xml:id="lustremaintenance.title">Lustre Maintenance</title>
+  </info>
+  <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_42877"/>Working with Inactive OSTs</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_15240"/>Finding Nodes in the Lustre File System</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_26070"/>Mounting a Server Without Lustre Service</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_54623"/>Regenerating Lustre Configuration Logs</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_31353"/>Changing a Server NID</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_22527"/>Adding a New OST to a Lustre File System</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_14978"/>Removing and Restoring OSTs</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_77819"/>Aborting Recovery</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_12607"/>Determining Which Machine is Serving an OST</para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438199_62333"/>Changing the Address of a Failover Node</para>
+    </listitem>
+    <listitem>
+      <para> </para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="dbdoclet.50438199_42877">
+    <title>14.1 Working with Inactive OSTs</title>
+    <para>To mount a client or an MDT with one or more inactive OSTs, run commands similar to this:</para>
+    <screen>client&gt; mount -o exclude=testfs-OST0000 -t lustre uml1:/testfs\ /mnt/testfs
+            client&gt; cat /proc/fs/lustre/lov/testfs-clilov-*/target_obd</screen>
+    <para>To activate an inactive OST on a live client or MDT, use the <literal>lctl activate</literal> command on the OSC device. For example:</para>
+    <screen>lctl --device 7 activate
         </screen>
-        <para>To activate an inactive OST on a live client or MDT, use the lctl activate command on the OSC device. For example:</para>
-        <screen>lctl --device 7 activate
-        </screen>
-
-
-        <note>
-            <para>
-                A colon-separated list can also be specified. For example, exclude=testfs-OST0000:testfs-OST0001.</para>
-        </note>
-
-        <section xml:id="dbdoclet.50438199_15240">
-            <title>14.2 Finding <anchor xml:id="dbdoclet.50438199_marker-1298897" xreflabel=""/>Nodes in the Lustre File System</title>
-            <para>There may be situations in which you need to find all nodes in your Lustre file system or get the names of all OSTs.</para>
-            <para>To get a list of all Lustre nodes, run this command on the MGS:</para>
-            <screen># cat /proc/fs/lustre/mgs/MGS/live/*
-            </screen>
-            <note>
-                <para>
-                    This command must be rund on the MGS.
+    <note>
+      <para>
+                A colon-separated list can also be specified. For example, <literal>exclude=testfs-OST0000:testfs-OST0001</literal>.</para>
+    </note>
+    <section xml:id="dbdoclet.50438199_15240">
+      <title>14.2 Finding Nodes in the Lustre File System</title>
+      <para>There may be situations in which you need to find all nodes in your Lustre file system or get the names of all OSTs.</para>
+      <para>To get a list of all Lustre nodes, run this command on the MGS:</para>
+      <screen># cat /proc/fs/lustre/mgs/MGS/live/*</screen>
+      <note>
+        <para>
+                    This command must be run on the MGS.
                 </para>
-            </note>
-
-            <para>In this example, file system lustre has three nodes, lustre-MDT0000, lustre-OST0000, and lustre-OST0001.</para>
-            <screen>cfs21:/tmp# cat /proc/fs/lustre/mgs/MGS/live/* 
+      </note>
+      <para>In this example, file system lustre has three nodes, <literal>lustre-MDT0000</literal>, <literal>lustre-OST0000</literal>, and <literal>lustre-OST0001</literal>.</para>
+      <screen>cfs21:/tmp# cat /proc/fs/lustre/mgs/MGS/live/* 
                 fsname: lustre 
                 flags: 0x0     gen: 26 
                 lustre-MDT0000 
                 lustre-OST0000 
-                lustre-OST0001 
-            </screen>
-            <para>To get the names of all OSTs, run this command on the MDS:</para>
-            <screen># cat /proc/fs/lustre/lov/&lt;fsname&gt;-mdtlov/target_obd 
-            </screen>
-            <note>
-                <para>
-                    This command must be rund on the MDS.
+                lustre-OST0001 </screen>
+      <para>To get the names of all OSTs, run this command on the MDS:</para>
+      <screen># cat /proc/fs/lustre/lov/&lt;fsname&gt;-mdtlov/target_obd </screen>
+      <note>
+        <para>
+                    This command must be run on the MDS.
                 </para>
-            </note>
-
-            <para>In this example, there are two OSTs, lustre-OST0000 and lustre-OST0001, which are both active.</para>
-            <screen>cfs21:/tmp# cat /proc/fs/lustre/lov/lustre-mdtlov/target_obd 
-                0: lustre-OST0000_UUID ACTIVE 
-                1: lustre-OST0001_UUID ACTIVE 
-            </screen>
-        </section>
-        <section xml:id="dbdoclet.50438199_26070">
-            <title>14.3 Mounting a Server Without <anchor xml:id="dbdoclet.50438199_marker-1298918" xreflabel=""/>Lustre Service</title>
-            <para>If you are using a combined MGS/MDT, but you only want to start the MGS and not the MDT, run this command:</para>
-            <screen>mount -t lustre &lt;MDT partition&gt; -o nosvc &lt;mount point&gt;
-            </screen>
-            <para>The &lt;MDT partition&gt; variable is the combined MGS/MDT.</para>
-            <para>In this example, the combined MGS/MDT is testfs-MDT0000 and the mount point is mnt/test/mdt.</para>
-            <screen>$ mount -t lustre -L testfs-MDT0000 -o nosvc /mnt/test/mdt
-            </screen>
-        </section>
-        <section xml:id="dbdoclet.50438199_54623">
-            <title>14.4 Regenerating Lustre <anchor xml:id="dbdoclet.50438199_marker-1305736" xreflabel=""/>Configuration Logs</title>
-            <para>If the Lustre system's configuration logs are in a state where the file system cannot be started, use the writeconf command to erase them. After the writeconf command is run and the servers restart, the configuration logs are re-generated and stored on the MGS (as in a new file system).</para>
-            <para>You should only use the writeconf command if:</para>
-            <itemizedlist><listitem>
-                    <para> The configuration logs are in a state where the file system cannot start</para>
-                </listitem>
-                <listitem>
-                    <para> A server NID is being changed</para>
-                </listitem>
-            </itemizedlist>
-            <para>The writeconf command is destructive to some configuration items (i.e., OST pools information and items set via conf_param), and should be used with caution. To avoid problems:</para>
-            <itemizedlist><listitem>
-                    <para> Shut down the file system before running the writeconf command</para>
-                </listitem>
-                <listitem>
-                    <para> Run the writeconf command on all servers (MDT first, then OSTs)</para>
-                </listitem>
-                <listitem>
-                    <para> Start the file system in this order:</para>
-                </listitem>
-                <listitem>
-                    <orderedlist><listitem>
-                            <para> MGS (or the combined MGS/MDT)</para>
-                        </listitem>
-                        <listitem>
-                            <para> MDT</para>
-                        </listitem>
-                        <listitem>
-                            <para> OSTs</para>
-                        </listitem>
-                        <listitem>
-                            <para> Lustre clients</para>
-                        </listitem>
-                    </orderedlist>
-                </listitem>
-            </itemizedlist>
-
-            <caution>
-                <para>
-                    The OST pools feature enables a group of OSTs to be named for file striping purposes. If you use OST pools, be aware that running the writeconf command erases <emphasis role="bold">all</emphasis> pools information (as well as any other parameters set via lctl conf_param). We recommend that the pools definitions (and conf_param settings) be executed via a script, so they can be reproduced easily after a writeconf is performed.</para>
-            </caution>
-
-            <para>To regenerate Lustre's system configuration logs:</para>
-            <orderedlist><listitem>
-                    <para>Shut down the file system in this order.</para>
-                    <orderedlist><listitem>
-                            <para>Unmount the clients.</para>
-                            </listitem><listitem>
-                            <para>Unmount the MDT.</para>
-                            </listitem><listitem>
-                            <para>Unmount all OSTs.</para>
-                    </listitem></orderedlist>
-                    </listitem><listitem>
-                    <para>Make sure the the MDT and OST devices are available.</para>
-                    </listitem><listitem>
-                    <para>Run the writeconf command on all servers.</para>
-                    <para>Run writeconf on the MDT first, and then the OSTs.</para>
-                    <orderedlist><listitem>
-                            <para>On the MDT, run:</para>
-                            <screen>&lt;mdt node&gt;$ tunefs.lustre --writeconf &lt;device&gt;
-                            </screen>
-                            </listitem><listitem>
-                            <para>On each OST, run:</para>
-                            <screen>&lt;ost node&gt;$ tunefs.lustre --writeconf &lt;device&gt;
-                            </screen>
-                    </listitem></orderedlist>
-                    <para>Restart the file system in this order.</para>
-                    <orderedlist><listitem>
-                            <para>Mount the MGS (or the combined MGS/MDT).</para>
-                            </listitem><listitem>
-                            <para>Mount the MDT.</para>
-                            </listitem><listitem>
-                            <para>Mount the OSTs.</para>
-                            </listitem><listitem>
-                            <para>Mount the clients.</para>
-                    </listitem></orderedlist>
-                    <para>After the writeconf command is run, the configuration logs are re-generated as servers restart.</para>
-            </listitem></orderedlist>
-        </section>
-        <section xml:id="dbdoclet.50438199_31353">
-            <title>14.5 Changing a <anchor xml:id="dbdoclet.50438199_marker-1305737" xreflabel=""/>Server NID</title>
-            <para>If you need to change the NID on the MDT or an OST, run the writeconf command to erase Lustre configuration information (including server NIDs), and then re-generate the system configuration using updated server NIDs.</para>
-            <para>Change a server NID in these situations:</para>
-            <itemizedlist><listitem>
-                    <para> New server hardware is added to the file system, and the MDS or an OSS is being moved to the new machine</para>
-                </listitem>
-                <listitem>
-                    <para> New network card is installed in the server</para>
-                </listitem>
-                <listitem>
-                    <para> You want to reassign IP addresses</para>
-                </listitem>
-            </itemizedlist>
-            <para><anchor xml:id="dbdoclet.50438199_DDE_LINK1" xreflabel=""/>To change a server NID:</para>
-            <orderedlist><listitem>
-                    <para>Update the LNET configuration in the /etc/modprobe.conf file so the list of server NIDs (lctl list_nids) is correct.</para>
-                    <para>The lctl list_nids command indicates which network(s) are configured to work with Lustre.</para>
-                    </listitem><listitem>
-                    <para>Shut down the file system in this order.</para>
-                    <orderedlist><listitem>
-                            <para>Unmount the clients.</para>
-                            </listitem><listitem>
-                            <para>Unmount the MDT.</para>
-                            </listitem><listitem>
-                            <para>Unmount all OSTs.</para>
-                    </listitem></orderedlist>
-                    </listitem><listitem>
-                    <para>Run the writeconf command on all servers.</para>
-                    <para>Run writeconf on the MDT first, and then the OSTs.</para>
-                    <orderedlist><listitem>
-                            <para>On the MDT, run:</para>
-                            <screen>&lt;mdt node&gt;$ tunefs.lustre --writeconf &lt;device&gt;
-                            </screen>
-                            </listitem><listitem>
-                            <para>On each OST, run:</para>
-                            <screen>&lt;ost node&gt;$ tunefs.lustre --writeconf &lt;device&gt;
-                            </screen>
-                            </listitem><listitem>
-                            <para>If the NID on the MGS was changed, communicate the new MGS location to each server. Run:</para>
-                            <screen>tunefs.lustre --erase-param --mgsnode=&lt;new_nid(s)&gt; --writeconf /dev/..
-                            </screen>
-                    </listitem></orderedlist>
-                    </listitem><listitem>
-                    <para>Restart the file system in this order.</para>
-                    <orderedlist><listitem>
-                            <para>Mount the MGS (or the combined MGS/MDT).</para>
-                            </listitem><listitem>
-                            <para>Mount the MDT.</para>
-                            </listitem><listitem>
-                            <para>Mount the OSTs.</para>
-                            </listitem><listitem>
-                            <para>Mount the clients.</para>
-                    </listitem></orderedlist>
-            </listitem></orderedlist>
-            <para>After the writeconf command is run, the configuration logs are re-generated as servers restart, and server NIDs in the updated list_nids file are used.</para>
-        </section>
-        <section xml:id="dbdoclet.50438199_22527">
-            <title>14.6 Adding a New <anchor xml:id="dbdoclet.50438199_marker-1306353" xreflabel=""/>OST to a Lustre File System</title>
-            <para>To add an OST to existing Lustre file system:</para>
-            <orderedlist><listitem>
-                    <para> 1. Add a new OST by passing on the following commands, run:</para>
-                    <screen>$ mkfs.lustre --fsname=spfs --ost --mgsnode=mds16@tcp0 /dev/sda
-                        $ mkdir -p /mnt/test/ost0
-                        $ mount -t lustre /dev/sda /mnt/test/ost0
-                    </screen>
-                    </listitem><listitem>
-                    <para> 2. Migrate the data (possibly).</para>
-            </listitem></orderedlist>
-<para>The file system is quite unbalanced when new empty OSTs are added. New file creations are automatically balanced. If this is a scratch file system or files are pruned at a regular interval, then no further work may be needed.</para>
-<para>New files being created will preferentially be placed on the empty OST. As old files are deleted, they will release space on the old OST.</para>
-<para>Files existing prior to the expansion can optionally be rebalanced with an in-place copy, which can be done with a simple script. The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
-<para>For example, to rebalance all files within /mnt/lustre/dir, enter:</para>
-<screen>lfs_migrate /mnt/lustre/file
+      </note>
+      <para>In this example, there are two OSTs, lustre-OST0000 and lustre-OST0001, which are both active.</para>
+      <screen>cfs21:/tmp# cat /proc/fs/lustre/lov/lustre-mdtlov/target_obd 
+0: lustre-OST0000_UUID ACTIVE 
+1: lustre-OST0001_UUID ACTIVE </screen>
+    </section>
+    <section xml:id="dbdoclet.50438199_26070">
+      <title>14.3 Mounting a Server Without Lustre Service</title>
+      <para>If you are using a combined MGS/MDT, but you only want to start the MGS and not the MDT, run this command:</para>
+      <screen>mount -t lustre &lt;MDT partition&gt; -o nosvc &lt;mount point&gt;</screen>
+      <para>The <literal>&lt;MDT partition&gt;</literal> variable is the combined MGS/MDT.</para>
+      <para>In this example, the combined MGS/MDT is <literal>testfs-MDT0000</literal> and the mount point is <literal>/mnt/test/md</literal>t.</para>
+      <screen>$ mount -t lustre -L testfs-MDT0000 -o nosvc /mnt/test/mdt</screen>
+    </section>
+    <section xml:id="dbdoclet.50438199_54623">
+      <title>14.4 Regenerating Lustre Configuration Logs</title>
+      <para>If the Lustre system&apos;s configuration logs are in a state where the file system cannot be started, use the <literal>writeconf</literal> command to erase them. After the <literal>writeconf</literal> command is run and the servers restart, the configuration logs are re-generated and stored on the MGS (as in a new file system).</para>
+      <para>You should only use the <literal>writeconf</literal> command if:</para>
+      <itemizedlist>
+        <listitem>
+          <para> The configuration logs are in a state where the file system cannot start</para>
+        </listitem>
+        <listitem>
+          <para> A server NID is being changed</para>
+        </listitem>
+      </itemizedlist>
+      <para>The <literal>writeconf</literal> command is destructive to some configuration items (i.e., OST pools information and items set via <literal>conf_param</literal>), and should be used with caution. To avoid problems:</para>
+      <itemizedlist>
+        <listitem>
+          <para> Shut down the file system before running the <literal>writeconf</literal> command</para>
+        </listitem>
+        <listitem>
+          <para> Run the <literal>writeconf</literal> command on all servers (MDT first, then OSTs)</para>
+        </listitem>
+        <listitem>
+          <para> Start the file system in this order:</para>
+          <itemizedlist>
+            <listitem>
+              <para> MGS (or the combined MGS/MDT)</para>
+            </listitem>
+            <listitem>
+              <para> MDT</para>
+            </listitem>
+            <listitem>
+              <para> OSTs</para>
+            </listitem>
+            <listitem>
+              <para> Lustre clients</para>
+            </listitem>
+          </itemizedlist>
+        </listitem>
+      </itemizedlist>
+      <caution>
+        <para>
+                    The OST pools feature enables a group of OSTs to be named for file striping purposes. If you use OST pools, be aware that running the <literal>writeconf</literal> command erases <emphasis role="bold">all</emphasis> pools information (as well as any other parameters set via <literal>lctl conf_param</literal>). We recommend that the pools definitions (and <literal>conf_param</literal> settings) be executed via a script, so they can be reproduced easily after a <literal>writeconf</literal> is performed.</para>
+      </caution>
+      <para>To regenerate Lustre&apos;s system configuration logs:</para>
+      <orderedlist>
+        <listitem>
+          <para><emphasis role="bold">Shut down the file system in this order.</emphasis></para>
+          <orderedlist>
+            <listitem>
+              <para>Unmount the clients.</para>
+            </listitem>
+            <listitem>
+              <para>Unmount the MDT.</para>
+            </listitem>
+            <listitem>
+              <para>Unmount all OSTs.</para>
+            </listitem>
+          </orderedlist>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Make sure the the MDT and OST devices are available.</emphasis></para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Run the <literal>writeconf</literal> command on all servers.</emphasis></para>
+          <para>Run writeconf on the MDT first, and then the OSTs.</para>
+          <orderedlist>
+            <listitem>
+              <para><emphasis role="bold">On the MDT, run:</emphasis></para>
+              <screen>&lt;mdt node&gt;$ tunefs.lustre --writeconf &lt;device&gt;</screen>
+            </listitem>
+            <listitem>
+              <emphasis role="bold">
+                <para>On each OST, run:</para>
+              </emphasis>
+              <screen>&lt;ost node&gt;$ tunefs.lustre --writeconf &lt;device&gt;</screen>
+            </listitem>
+          </orderedlist>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Restart the file system in this order.</emphasis></para>
+          <orderedlist>
+            <listitem>
+              <para>Mount the MGS (or the combined MGS/MDT).</para>
+            </listitem>
+            <listitem>
+              <para>Mount the MDT.</para>
+            </listitem>
+            <listitem>
+              <para>Mount the OSTs.</para>
+            </listitem>
+            <listitem>
+              <para>Mount the clients.</para>
+            </listitem>
+          </orderedlist>
+        </listitem>
+      </orderedlist>
+      <para>After the <literal>writeconf</literal> command is run, the configuration logs are re-generated as servers restart.</para>
+    </section>
+    <section xml:id="dbdoclet.50438199_31353">
+      <title>14.5 Changing a Server NID</title>
+      <para>If you need to change the NID on the MDT or an OST, run the <literal>writeconf</literal> command to erase Lustre configuration information (including server NIDs), and then re-generate the system configuration using updated server NIDs.</para>
+      <para>Change a server NID in these situations:</para>
+      <itemizedlist>
+        <listitem>
+          <para>New server hardware is added to the file system, and the MDS or an OSS is being moved to the new machine</para>
+        </listitem>
+        <listitem>
+          <para>New network card is installed in the server</para>
+        </listitem>
+        <listitem>
+          <para>You want to reassign IP addresses</para>
+        </listitem>
+      </itemizedlist>
+      <para>To change a server NID:</para>
+      <orderedlist>
+        <listitem>
+          <para><emphasis role="bold">Update the LNET configuration in the <literal>/etc/modprobe.conf</literal> file so the list of server NIDs (<literal>lctl list_nids</literal>) is correct.</emphasis></para>
+          <para>The <literal>lctl list_nids</literal> command indicates which network(s) are configured to work with Lustre.</para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Shut down the file system in this order.</emphasis></para>
+          <orderedlist>
+            <listitem>
+              <para>Unmount the clients.</para>
+            </listitem>
+            <listitem>
+              <para>Unmount the MDT.</para>
+            </listitem>
+            <listitem>
+              <para>Unmount all OSTs.</para>
+            </listitem>
+          </orderedlist>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Run the writeconf command on all servers.</emphasis></para>
+          <para>Run writeconf on the MDT first, and then the OSTs.</para>
+          <orderedlist>
+            <listitem>
+              <para>On the MDT, run:</para>
+              <screen>&lt;mdt node&gt;$ tunefs.lustre --writeconf &lt;device&gt;  </screen>
+            </listitem>
+            <listitem>
+              <para>On each OST, run:</para>
+              <screen>&lt;ost node&gt;$ tunefs.lustre --writeconf &lt;device&gt;</screen>
+            </listitem>
+            <listitem>
+              <para>If the NID on the MGS was changed, communicate the new MGS location to each server. Run:</para>
+              <screen>tunefs.lustre --erase-param --mgsnode=&lt;new_nid(s)&gt; --writeconf /dev/..                            </screen>
+            </listitem>
+          </orderedlist>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Restart the file system in this order.</emphasis></para>
+          <orderedlist>
+            <listitem>
+              <para>Mount the MGS (or the combined MGS/MDT).</para>
+            </listitem>
+            <listitem>
+              <para>Mount the MDT.</para>
+            </listitem>
+            <listitem>
+              <para>Mount the OSTs.</para>
+            </listitem>
+            <listitem>
+              <para>Mount the clients.</para>
+            </listitem>
+          </orderedlist>
+        </listitem>
+      </orderedlist>
+      <para>After the <literal>writeconf</literal> command is run, the configuration logs are re-generated as servers restart, and server NIDs in the updated <literal>list_nids</literal> file are used.</para>
+    </section>
+    <section xml:id="dbdoclet.50438199_22527">
+      <title>14.6 Adding a New OST to a Lustre File System</title>
+      <para>To add an OST to existing Lustre file system:</para>
+      <orderedlist>
+        <listitem>
+          <para> <emphasis role="bold">Add a new OST by passing on the following commands, run:</emphasis></para>
+          <screen>$ mkfs.lustre --fsname=spfs --ost --mgsnode=mds16@tcp0 /dev/sda
+$ mkdir -p /mnt/test/ost0
+$ mount -t lustre /dev/sda /mnt/test/ost0                 </screen>
+        </listitem>
+        <listitem>
+          <para> <emphasis role="bold">Migrate the data (possibly).</emphasis></para>
+          <para>The file system is quite unbalanced when new empty OSTs are added. New file creations are automatically balanced. If this is a scratch file system or files are pruned at a regular interval, then no further work may be needed.</para>
+          <para>New files being created will preferentially be placed on the empty OST. As old files are deleted, they will release space on the old OST.</para>
+          <para>Files existing prior to the expansion can optionally be rebalanced with an in-place copy, which can be done with a simple script. The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
+          <para>For example, to rebalance all files within <literal>/mnt/lustre/dir</literal>, enter:</para>
+          <screen>lfs_migrate /mnt/lustre/file</screen>
+          <para>To migrate files within the <literal>/test</literal> filesystem on <literal>OST0004</literal> that are larger than 4GB in size, enter:</para>
+          <screen>lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y
 </screen>
-<para>To migrate files within the /test filesystem on OST0004 that are larger than 4GB in size, enter:</para>
-<screen>lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y
-</screen>
-<para>See <xref linkend='userutilities'/> (lfs_migrate) for more details.</para>
-</section>
-<section xml:id="dbdoclet.50438199_14978">
-<title>14.7 Removing and Restoring OSTs</title>
-<para>OSTs can be removed from and restored to a Lustre file system. Currently in Lustre, removing an OST really means that the OST is 'deactivated' in the file system, not permanently removed. A removed OST still appears in the file system; do not create a new OST with the same name.</para>
-<para>You may want to remove (deactivate) an OST and prevent new files from being written to it in several situations:</para>
-<itemizedlist><listitem>
-<para> Hard drive has failed and a RAID resync/rebuild is underway</para>
-</listitem>
-<listitem>
-<para> OST is nearing its space capacity</para>
-</listitem>
-</itemizedlist>
-<section remap="h3">
-<title>14.7.1 Removing an OST from the File System</title>
-<para>OSTs can be removed from a Lustre file system. Currently in Lustre, removing an OST actually means that the OST is &apos;deactivated&apos; from the file system, not permanently removed. A removed OST still appears in the device listing; you should not normally create a new OST with the same name.</para>
-<para>You may want to deactivate an OST and prevent new files from being written to it in several situations:</para>
-<itemizedlist><listitem>
-<para> OST is nearing its space capacity</para>
-</listitem>
-<listitem>
-<para> Hard drive has failed and a RAID resync/rebuild is underway</para>
-</listitem>
-<listitem>
-<para> OST storage has failed permanently</para>
-</listitem>
-</itemizedlist>
-<para>When removing an OST, remember that the MDT does not communicate directly with OSTs. Rather, each OST has a corresponding OSC which communicates with the MDT. It is necessary to determine the device number of the OSC that corresponds to the OST. Then, you use this device number to deactivate the OSC on the MDT.</para>
-<para>To remove an OST from the file system:</para>
-
-<orderedlist><listitem>
-<para>For the OST to be removed, determine the device number of the corresponding OSC on the MDT.</para>
-<orderedlist><listitem>
-<para> List all OSCs on the node, along with their device numbers. Run:</para>
-<screen>lctldl|grep &quot; osc &quot;
-</screen>
-<para>This is sample lctldl|grep</para>
-<screen>
-11 UP osc lustre-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
+          <para>See <xref linkend="dbdoclet.50438206_42260"/>  for more details.</para>
+        </listitem>
+      </orderedlist>
+    </section>
+    <section xml:id="dbdoclet.50438199_14978">
+      <title>14.7 Removing and Restoring OSTs</title>
+      <para>OSTs can be removed from and restored to a Lustre file system. Currently in Lustre, removing an OST really means that the OST is &apos;deactivated&apos; in the file system, not permanently removed. A removed OST still appears in the file system; do not create a new OST with the same name.</para>
+      <para>You may want to remove (deactivate) an OST and prevent new files from being written to it in several situations:</para>
+      <itemizedlist>
+        <listitem>
+          <para> Hard drive has failed and a RAID resync/rebuild is underway</para>
+        </listitem>
+        <listitem>
+          <para> OST is nearing its space capacity</para>
+        </listitem>
+      </itemizedlist>
+      <section remap="h3">
+        <title>14.7.1 Removing an OST from the File System</title>
+        <para>OSTs can be removed from a Lustre file system. Currently in Lustre, removing an OST actually means that the OST is &apos;deactivated&apos; from the file system, not permanently removed. A removed OST still appears in the device listing; you should not normally create a new OST with the same name.</para>
+        <para>You may want to deactivate an OST and prevent new files from being written to it in several situations:</para>
+        <itemizedlist>
+          <listitem>
+            <para> OST is nearing its space capacity</para>
+          </listitem>
+          <listitem>
+            <para> Hard drive has failed and a RAID resync/rebuild is underway</para>
+          </listitem>
+          <listitem>
+            <para> OST storage has failed permanently</para>
+          </listitem>
+        </itemizedlist>
+        <para>When removing an OST, remember that the MDT does not communicate directly with OSTs. Rather, each OST has a corresponding OSC which communicates with the MDT. It is necessary to determine the device number of the OSC that corresponds to the OST. Then, you use this device number to deactivate the OSC on the MDT.</para>
+        <para>To remove an OST from the file system:</para>
+        <orderedlist>
+          <listitem>
+            <para><emphasis role="bold">For the OST to be removed, determine the device number of the corresponding OSC on the MDT.</emphasis></para>
+            <orderedlist>
+              <listitem>
+                <para>List all OSCs on the node, along with their device numbers. Run:</para>
+                <screen>lctldl|grep &quot; osc &quot;</screen>
+                <para>This is sample <literal>lctl dl | grep</literal></para>
+                <screen>11 UP osc lustre-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
 12 UP osc lustre-OST-0001-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
 13 IN osc lustre-OST-0000-osc lustre-MDT0000-mdtlov_UUID 5
-14 UP osc lustre-OST-0001-osc lustre-MDT0000-mdtlov_UUID 5
-</screen>
-</listitem><listitem>
-<para>Determine the device number of the OSC that corresponds to the OST to be removed.</para>
-</listitem></orderedlist>
-</listitem><listitem>
-
-<para>Temporarily deactivate the OSC on the MDT. On the MDT, run: </para>
-
-<screen>
-$ mdt> lctl --device &gt;devno&lt; deactivate
-</screen>
-<para>
-For example, based on the command output in Step 1, to deactivate device 13 (the MDT’s OSC for OST-0000), the command would be: 
+14 UP osc lustre-OST-0001-osc lustre-MDT0000-mdtlov_UUID 5</screen>
+              </listitem>
+              <listitem>
+                <para>Determine the device number of the OSC that corresponds to the OST to be removed.</para>
+              </listitem>
+            </orderedlist>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">Temporarily deactivate the OSC on the MDT. On the MDT, run:</emphasis> </para>
+            <screen>$ mdt&gt; lctl --device &gt;devno&lt; deactivate</screen>
+            <para>
+For example, based on the command output in Step 1, to deactivate device 13 (the MDT’s OSC for <literal>OST-0000</literal>), the command would be: 
 </para>
-
-<screen>
-$ mdt> lctl --device 13 deactivate
-</screen>
-
-<para>
+            <screen>$ mdt&gt; lctl --device 13 deactivate</screen>
+            <para>
 This marks the OST as inactive on the MDS, so no new objects are assigned to the OST. This does not prevent use of existing objects for reads or writes. 
 </para>
-
-<note><para>Do not deactivate the OST on the clients. Do so causes errors (EIOs), and the copy out to fail. </para></note>
-
-<caution><para>Do not use lctl conf_param to deactivate the OST. It permanently sets a parameter in the file system configuration.</para></caution>
-
-</listitem><listitem>
-<para>
-Discover all files that have objects residing on the deactivated OST.
+            <note>
+              <para>Do not deactivate the OST on the clients. Do so causes errors (EIOs), and the copy out to fail. </para>
+            </note>
+            <caution>
+              <para>Do not use <literal>lctl conf_param</literal> to deactivate the OST. It permanently sets a parameter in the file system configuration.</para>
+            </caution>
+          </listitem>
+          <listitem>
+            <para>
+<emphasis role="bold">Discover all files that have objects residing on the deactivated OST. </emphasis></para>
+            <para>Depending on whether the deactivated OST is available or not, the data from that OST may be migrated to other OSTs, or may need to be restored from backup.
 </para>
-
-<para>
-Depending on whether the deactivated OST is available or not, the data from that OST may be migrated to other OSTs, or may need to be restored from backup.
-</para>
-
-<orderedlist><listitem>
-<para>
+            <orderedlist>
+              <listitem>
+                <para>
 If the OST is still online and available, find all files with objects on the deactivated OST, and copy them to other OSTs in the file system to:
 </para>
+                <screen>[client]# lfs find --obd &lt;OST UUID&gt; &lt;mount_point&gt; | lfs_migrate -y</screen>
+              </listitem>
+              <listitem> If the OST is no longer available, delete the files on that OST and restore them from backup: <screen>[client]# lfs find --obd &lt;OST UUID&gt; -print0 &lt;mount_point&gt; | \
+tee /tmp/files_to_restore | xargs -0 -n 1 unlink</screen> The list of files that need to be restored from backup is stored in <literal>/tmp/files_to_restore</literal>. Restoring these files is beyond the scope of this document. </listitem>
+            </orderedlist>
+          </listitem>
+          <listitem> <emphasis role="bold">Deactivate the OST.</emphasis> <orderedlist>
+              <listitem> To temporarily disable the deactivated OST, enter: <screen>[client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0</screen>If there is expected to be a replacement OST in some short time (a few days), the OST can temporarily be deactivated on the clients: <note>
+                  <para>This setting is only temporary and will be reset if the clients or MDS are rebooted. It needs to be run on all clients.</para>
+                </note></listitem>
+              <listitem> b. To permanently disable the deactivated OST, enter: <screen>[mgs]# lctl conf_param {OST name}.osc.active=0</screen></listitem>
+            </orderedlist>If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS: <note>
+              <para>A removed OST still appears in the file system; do not create a new OST with the same name.</para>
+            </note></listitem>
+        </orderedlist>
+      </section>
+      <section remap="h3"><title>14.7.2 Backing Up OST Configuration Files</title>If the OST device is still accessible, then the Lustre configuration files on the OST should be backed up and saved for future use in order to avoid difficulties when a replacement OST is returned to service. These files rarely change, so they can and should be backed up while the OST is functional and accessible. If the deactivated OST is still available to mount (i.e. has not permanently failed or is unmountable due to severe corruption), an effort should be made to preserve these files. <orderedlist>
+          <listitem>
+             <emphasis role="bold">Mount the OST filesystem.</emphasis>
+             <screen>[oss]# mkdir -p /mnt/ost
+[oss]# mount -t ldiskfs {ostdev} /mnt/ost</screen>
+          </listitem>
+          <listitem>
+             <emphasis role="bold">Back up the OST configuration files.</emphasis>
+             <screen>[oss]# tar cvf {ostname}.tar -C /mnt/ost last_rcvd \
+CONFIGS/ O/0/LAST_ID</screen>
+          </listitem>
+          <listitem>
+             <emphasis role="bold">Unmount the OST filesystem.</emphasis>
+             <screen>[oss]# umount /mnt/ost</screen>
+          </listitem>
+        </orderedlist></section>
+        <section><title>14.7.3 Restoring OST Configuration Files</title>
 
-<screen>
-[client]# lfs find --obd &lt;OST UUID&gt; &lt;mount_point&gt; | lfs_migrate -y
-</screen>
+            <para>
+            If the original OST is still available, it is best to follow the OST backup and restore procedure given in either <xref linkend='dbdoclet.50438207_71633'/>, or <xref linkend='dbdoclet.50438207_21638'/> and <xref linkend='dbdoclet.50438207_22325'/>. 
+        </para>
+            
+        <para>To replace an OST that was removed from service due to corruption or hardware failure, the file system needs to be formatted for Lustre, and the Lustre configuration should be restored, if available. 
+            
+            </para>
+            <para>If the OST configuration files were not backed up, due to the OST file system being completely inaccessible, it is still possible to replace the failed OST with a new one at the same OST index. </para>
+                    <orderedlist>
+          <listitem>
+            <emphasis role="bold">Format the OST file system. </emphasis>
+            <screen>[oss]# mkfs.lustre --ost --index {OST index} {other options} \
+{newdev}</screen>
+          </listitem>
+          <listitem>
+             <emphasis role="bold">Mount the OST filesystem. </emphasis>
+            <screen>[oss]# mkdir /mnt/ost
+[oss]# mount -t ldiskfs {newdev} /mnt/ost</screen>
+          </listitem>
+          <listitem>
+            <emphasis role="bold">Restore the OST configuration files, if available. </emphasis>
+            <screen>[oss]# tar xvf {ostname}.tar -C /mnt/ost</screen>
+          </listitem>
+          <listitem>
+            <emphasis role="bold">Recreate the OST configuration files, if unavailable.</emphasis>
+            <para>Follow the procedure in <xref linkend='dbdoclet.50438198_69657'/> to recreate the LAST_ID file for this OST index. The <literal>last_rcvd</literal> file will be recreated when the OST is first mounted using the default parameters, which are normally correct for all file systems.
 
-</listitem><listitem>
-If the OST is no longer available, delete the files on that OST and restore them from backup:
+The <literal>CONFIGS/mountdata</literal> file is created by <literal>mkfs.lustre</literal> at format time, but has flags set that request it to register itself with the MGS. It is possible to copy these flags from another working OST (which should be the same):
 
-<screen>
-[client]# lfs find --obd &lt;OST UUID&gt; -print0 &lt;mount_point&gt; | \
-tee /tmp/files_to_restore | xargs -0 -n 1 unlink
-</screen>
-
-The list of files that need to be restored from backup is stored in /tmp/files_to_restore. Restoring these files is beyond the scope of this document.
-
-</listitem></orderedlist>
-</listitem><listitem>
-Deactivate the OST.
-
-<orderedlist><listitem>
-To temporarily disable the deactivated OST, enter:
-
-<screen>
-[client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0
-</screen>
-
-If there is expected to be a replacement OST in some short time (a few days), the OST can temporarily be deactivated on the clients:
-<note><para> This setting is only temporary and will be reset if the clients or MDS are rebooted. It needs to be run on all clients.</para></note>
-
-</listitem><listitem>
-b. To permanently disable the deactivated OST, enter:
-
-<screen>
-[mgs]# lctl conf_param {OST name}.osc.active=0
-</screen>
-</listitem></orderedlist>
-
-If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS:
-<note><para>A removed OST still appears in the file system; do not create a new OST with the same name.</para></note>
-</listitem></orderedlist>
-
-</section>
-<section remap="h3">
-    <title>14.7.2 Backing Up OST Configuration Files</title>
-
-If the OST device is still accessible, then the Lustre configuration files on the OST should be backed up and saved for future use in order to avoid difficulties when a replacement OST is returned to service. These files rarely change, so they can and should be backed up while the OST is functional and accessible. If the deactivated OST is still available to mount (i.e. has not permanently failed or is unmountable due to severe corruption), an effort should be made to preserve these files.
-
-<orderedlist><listitem>
-1. Mount the OST filesystem.
-
-<screen>
-[oss]# mkdir -p /mnt/ost
-[oss]# mount -t ldiskfs {ostdev} /mnt/ost
-</screen>
-
-</listitem><listitem>
-2. Back up the OST configuration files.
-
-<screen>
-[oss]# tar cvf {ostname}.tar -C /mnt/ost last_rcvd \
-CONFIGS/ O/0/LAST_ID
-</screen>
-
-</listitem><listitem>
-3. Unmount the OST filesystem.
-
-<screen>
-[oss]# umount /mnt/ost
-</screen>
-</listitem></orderedlist>
-
-</section>
-<section>
-    <title>14.7.3 Restoring OST Configuration Files</title>
-
-If the original OST is still available, it is best to follow the OST backup and restore procedure given in either Backing Up and Restoring an MDS or OST (Device Level), or Making a File-Level Backup of an OST File System and Restoring a File-Level Backup.
-
-To replace an OST that was removed from service due to corruption or hardware failure, the file system needs to be formatted for Lustre, and the Lustre configuration should be restored, if available.
-
-If the OST configuration files were not backed up, due to the OST file system being completely inaccessible, it is still possible to replace the failed OST with a new one at the same OST index.
-
-<orderedlist><listitem>
-1. Format the OST file system.
-
-<screen>
-[oss]# mkfs.lustre --ost --index {OST index} {other options} \
-{newdev}
-</screen>
-
-</listitem><listitem>
-2. Mount the OST filesystem.
-
-<screen>
-[oss]# mkdir /mnt/ost
-[oss]# mount -t ldiskfs {newdev} /mnt/ost
-</screen>
-
-</listitem><listitem>
-3. Restore the OST configuration files, if available.
-
-<screen>
-[oss]# tar xvf {ostname}.tar -C /mnt/ost
-</screen>
-
-</listitem><listitem>
-4. Recreate the OST configuration files, if unavailable.
-
-Follow the procedure in Fixing a Bad LAST_ID on an OST to recreate the LAST_ID file for this OST index. The last_rcvd file will be recreated when the OST is first mounted using the default parameters, which are normally correct for all file systems.
-
-The CONFIGS/mountdata file is created by mkfs.lustre at format time, but has flags set that request it to register itself with the MGS. It is possible to copy these flags from another working OST (which should be the same):
-
-<screen>
-[oss2]# debugfs -c -R "dump CONFIGS/mountdata /tmp/ldd" \
+<screen>[oss2]# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; \
 {other_osdev}
 [oss2]# scp /tmp/ldd oss:/tmp/ldd
 [oss]# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 \
-seek=5 skip=5
-</screen>
-
-</listitem><listitem>
-5. Unmount the OST filesystem.
-
-<screen>
-[oss]# umount /mnt/ost
-</screen>
-</listitem></orderedlist>
-
-</section>
-<section>
-    <title>14.7.4 Returning a Deactivated OST to Service</title>
-
-If the OST was permanently deactivated, it needs to be reactivated in the MGS configuration.
-
-<screen>
-[mgs]# lctl conf_param {OST name}.osc.active=1
-</screen>
-
-If the OST was temporarily deactivated, it needs to be reactivated on the MDS and clients.
-
-<screen>
-[mds]# lctl --device &lt;devno&gt; activate
-[client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0
-</screen>
-
-</section>
-</section>
-    <section xml:id="dbdoclet.50438199_77819">
-        <title>14.8 Aborting Recovery</title>
-
-You can abort recovery with either the lctl utility or by mounting the target with the abort_recov option (mount -o abort_recov). When starting a target, run:
-
-<screen>
-$ mount -t lustre -L &lt;MDT name&gt; -o abort_recov &lt;mount_point&gt;
-</screen>
-
-Note - The recovery process is blocked until all OSTs are available.
-
-</section>
-    <section xml:id="dbdoclet.50438199_12607">
-        <title>14.9 Determining Which Machine is Serving an OST </title>
-
-In the course of administering a Lustre file system, you may need to determine which machine is serving a specific OST. It is not as simple as identifying the machine’s IP address, as IP is only one of several networking protocols that Lustre uses and, as such, LNET does not use IP addresses as node identifiers, but NIDs instead.
-
-To identify the NID that is serving a specific OST, run one of the following commands on a client (you do not need to be a root user):
-
-<screen>
-client$ lctl get_param osc.${fsname}-${OSTname}*.ost_conn_uuid
-</screen>
-
-For example:
-
-<screen>
-client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
-osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-</screen>
-
-- OR -
-
-<screen>
-client$ lctl get_param osc.*.ost_conn_uuid 
+seek=5 skip=5</screen></para>
+           </listitem>
+          <listitem>
+            <emphasis role="bold">Unmount the OST filesystem.</emphasis>
+             <screen>[oss]# umount /mnt/ost</screen>
+          </listitem>
+        </orderedlist></section>
+      <section><title>14.7.4 Returning a Deactivated OST to Service</title> If the OST was permanently deactivated, it needs to be reactivated in the MGS configuration. <screen>[mgs]# lctl conf_param {OST name}.osc.active=1</screen> If the OST was temporarily deactivated, it needs to be reactivated on the MDS and clients. <screen>[mds]# lctl --device &lt;devno&gt; activate
+[client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0</screen></section>
+    </section>
+    <section xml:id="dbdoclet.50438199_77819"><title>14.8 Aborting Recovery</title>You can abort recovery with either the <literal>lctl</literal> utility or by mounting the target with the <literal>abort_recov</literal> option (<literal>mount -o abort_recov</literal>). When starting a target, run: <screen>$ mount -t lustre -L &lt;MDT name&gt; -o abort_recov &lt;mount_point&gt;</screen> Note - The recovery process is blocked until all OSTs are available. </section>
+    <section xml:id="dbdoclet.50438199_12607"><title>14.9 Determining Which Machine is Serving an OST </title> In the course of administering a Lustre file system, you may need to determine which machine is serving a specific OST. It is not as simple as identifying the machine’s IP address, as IP is only one of several networking protocols that Lustre uses and, as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the NID that is serving a specific OST, run one of the following commands on a client (you do not need to be a root user): <screen>client$ lctl get_param osc.${fsname}-${OSTname}*.ost_conn_uuid</screen> For example: <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
+osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen> - OR - <screen>client$ lctl get_param osc.*.ost_conn_uuid 
 osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.lustre-OST0001-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.lustre-OST0002-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.lustre-OST0003-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-osc.lustre-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-</screen>
-
-</section>
-    <section xml:id="dbdoclet.50438199_62333">
-        <title>14.10 Changing the Address of a Failover Node</title>
-
-To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition:
-
-<screen>
-tunefs.lustre --erase-params --failnode=&lt;NID&gt; &lt;device&gt; 
-</screen>
-
-
-
-
-    </section>
-    </section>
+osc.lustre-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></section>
+    <section xml:id="dbdoclet.50438199_62333"><title>14.10 Changing the Address of a Failover Node</title>To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition: <screen>tunefs.lustre --erase-params --failnode=&lt;NID&gt; &lt;device&gt; </screen></section>
+  </section>
 </chapter>

@@ -110,7 +110,7 @@ If you have a problem mounting the file system, check the syslogs on the client 
         <para><emphasis role="bold"><emphasis><emphasis role="italic">(Optional)</emphasis> Run benchmarking to</emphasis>ols to validate the performance of hardware and software layers in the cluster. Available tools include:</emphasis></para>
         <itemizedlist>
           <listitem>
-            <para><literal>obdfilter_survey</literal>  - Characterizes the storage performance of a Lustre file system. For details, see <xref linkend="dbdoclet.50438212_40624"/>.</para>
+            <para><literal>obdfilter_survey</literal>  - Characterizes the storage performance of a Lustre file system. For details, see <xref linkend="dbdoclet.50438212_26516"/>.</para>
           </listitem>
           <listitem>
             <para><literal>ost_survey</literal>  - Performs I/O against OSTs to detect anomalies between otherwise identical disk subsystems. For details, see <xref linkend="dbdoclet.50438212_85136"/>.</para>

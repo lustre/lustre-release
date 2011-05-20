@@ -1,52 +1,50 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='managingfailover'>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingfailover">
   <info>
-    <title xml:id='managingfailover.title'>Managing Failover</title>
+    <title xml:id="managingfailover.title">Managing Failover</title>
   </info>
   <para>This chapter describes failover in a Lustre system and includes the following sections:</para>
-
-  <itemizedlist><listitem>
-          <para><xref linkend="dbdoclet.50438213_13563"/></para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438213_13563"/></para>
     </listitem>
-</itemizedlist>
-
-          <note><para>For information about high availability(HA) management software, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link> or the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</link>.</para></note>
-
-    <section xml:id="dbdoclet.50438213_13563">
-      <title>20.1 Lustre Failover and <anchor xml:id="dbdoclet.50438213_marker-1301522" xreflabel=""/>Multiple-Mount Protection</title>
-      <para>The failover functionality in Lustre is implemented with the multiple-mount protection (MMP) feature, which protects the file system from being mounted simultaneously to more than one node. This feature is important in a shared storage environment (for example, when a failover pair of OSTs share a partition).</para>
-      <para>Lustre&apos;s backend file system, ldiskfs, supports the MMP mechanism. A block in the file system is updated by a kmmpd daemon at one second intervals, and a sequence number is written in this block. If the file system is cleanly unmounted, then a special &quot;clean&quot; sequence is written to this block. When mounting the file system, ldiskfs checks if the MMP block has a clean sequence or not.</para>
-      <para>Even if the MMP block has a clean sequence, ldiskfs waits for some interval to guard against the following situations:</para>
-      <itemizedlist><listitem>
-          <para> If I/O traffic is heavy, it may take longer for the MMP block to be updated.</para>
-        </listitem>
-<listitem>
-          <para> If another node is trying to mount the same file system, a &quot;race&quot; condition may occur.</para>
-        </listitem>
-</itemizedlist>
-      <para>With MMP enabled, mounting a clean file system takes at least 10 seconds. If the file system was not cleanly unmounted, then the file system mount may require additional time.</para>
-
-              <note><para>The MMP feature is only supported on Linux kernel versions &gt;= 2.6.9.</para></note>
-
-      <section remap="h3">
-        <title>20.1.1 Working with Multiple-Mount Protection</title>
-        <para>On a new Lustre file system, MMP is automatically enabled by mkfs.lustre at format time if failover is being used and the kernel and e2fsprogs version support it. On an existing file system, a Lustre administrator can manually enable MMP when the file system is unmounted.</para>
-        <para>Use the following commands to determine whether MMP is running in Lustre and to enable or disable the MMP feature.</para>
-        <para>To determine if MMP is enabled, run:</para>
-        <screen>dumpe2fs -h &lt;device&gt;|grep mmp
-</screen>
-        <para>Here is a sample command:</para>
-        <screen>dumpe2fs -h /dev/sdc | grep mmp 
+  </itemizedlist>
+  <note>
+    <para>For information about high availability(HA) management software, see the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</ulink> or the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">LuUsing Pacemaker with stre</ulink>.</para>
+  </note>
+  <section xml:id="dbdoclet.50438213_13563">
+    <title>20.1 Lustre Failover and <anchor xml:id="dbdoclet.50438213_marker-1301522" xreflabel=""/>Multiple-Mount Protection</title>
+    <para>The failover functionality in Lustre is implemented with the multiple-mount protection (MMP) feature, which protects the file system from being mounted simultaneously to more than one node. This feature is important in a shared storage environment (for example, when a failover pair of OSTs share a partition).</para>
+    <para>Lustre&apos;s backend file system, <literal>ldiskfs</literal>, supports the MMP mechanism. A block in the file system is updated by a <literal>kmmpd</literal> daemon at one second intervals, and a sequence number is written in this block. If the file system is cleanly unmounted, then a special &quot;clean&quot; sequence is written to this block. When mounting the file system, <literal>ldiskfs</literal> checks if the MMP block has a clean sequence or not.</para>
+    <para>Even if the MMP block has a clean sequence, <literal>ldiskfs</literal> waits for some interval to guard against the following situations:</para>
+    <itemizedlist>
+      <listitem>
+        <para> If I/O traffic is heavy, it may take longer for the MMP block to be updated.</para>
+      </listitem>
+      <listitem>
+        <para> If another node is trying to mount the same file system, a &quot;race&quot; condition may occur.</para>
+      </listitem>
+    </itemizedlist>
+    <para>With MMP enabled, mounting a clean file system takes at least 10 seconds. If the file system was not cleanly unmounted, then the file system mount may require additional time.</para>
+    <note>
+      <para>The MMP feature is only supported on Linux kernel versions &gt;= 2.6.9.</para>
+    </note>
+    <section remap="h3">
+      <title>20.1.1 Working with Multiple-Mount Protection</title>
+      <para>On a new Lustre file system, MMP is automatically enabled by mkfs.lustre at format time if failover is being used and the kernel and <literal>e2fsprogs</literal> version support it. On an existing file system, a Lustre administrator can manually enable MMP when the file system is unmounted.</para>
+      <para>Use the following commands to determine whether MMP is running in Lustre and to enable or disable the MMP feature.</para>
+      <para>To determine if MMP is enabled, run:</para>
+      <screen>dumpe2fs -h &lt;device&gt;|grep mmp</screen>
+      <para>Here is a sample command:</para>
+      <screen>dumpe2fs -h /dev/sdc | grep mmp 
 Filesystem features: has_journal ext_attr resize_inode dir_index 
-filetype extent mmp sparse_super large_file uninit_bg
-</screen>
-        <para>To manually disable MMP, run:</para>
-        <screen>tune2fs -O ^mmp &lt;device&gt; 
-</screen>
-        <para>To manually enable MMP, run:</para>
-        <screen>tune2fs -O mmp &lt;device&gt;
-</screen>
-        <para>When MMP is enabled, if ldiskfs detects multiple mount attempts after the file system is mounted, it blocks these later mount attempts and reports the time when the MMP block was last updated, the node name, and the device name of the node where the file system is currently mounted.</para>
-      </section>
+filetype extent mmp sparse_super large_file uninit_bg</screen>
+      <para>To manually disable MMP, run:</para>
+      <screen>tune2fs -O ^mmp &lt;device&gt; </screen>
+      <para>To manually enable MMP, run:</para>
+      <screen>tune2fs -O mmp &lt;device&gt;</screen>
+      <para>When MMP is enabled, if <literal>ldiskfs</literal> detects multiple mount attempts after the file system is mounted, it blocks these later mount attempts and reports the time when the MMP block was last updated, the node name, and the device name of the node where the file system is currently mounted.</para>
+    </section>
   </section>
 </chapter>

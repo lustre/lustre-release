@@ -207,8 +207,8 @@
         <para>For example, for a 2 stripe file, stripe size = 1M, the bad OST is at index 0, and you have holes in the file at: [(2*N + 0)*1M, (2*N + 0)*1M + 1M - 1], N = { 0, 1, 2, ...}</para>
         <para>If the file system cannot be mounted, currently there is no way that parses metadata directly from an MDS. If the bad OST does not start, options to mount the file system are to provide a loop device OST in its place or replace it with a newly-formatted OST. In that case, the missing objects are created and are read as zero-filled.</para>
       </section>
-      <section remap="h3">
-        <title>26.3.4 <anchor xml:id="dbdoclet.50438198_69657" xreflabel=""/>Fixing a Bad LAST_ID on an OST</title>
+      <section xml:id="dbdoclet.50438198_69657">
+        <title>26.3.4 Fixing a Bad LAST_ID on an OST</title>
         <para>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote><para>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para></footnote>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
         <para>During normal operation, the MDT keeps some pre-created (but unallocated) objects on the OST, and the relationship between LAST_ID and lov_objid should be LAST_ID &lt;= lov_objid. Any difference in the file values results in objects being created on the OST when it next connects to the MDS. These objects are never actually allocated to a file, since they are of 0 length (empty), but they do no harm. Creating empty objects enables the OST to catch up to the MDS, so normal operations resume.</para>
         <para>However, in the case where lov_objid &lt; LAST_ID, bad things can happen as the MDS is not aware of objects that have already been allocated on the OST, and it reallocates them to new files, overwriting their existing contents.</para>

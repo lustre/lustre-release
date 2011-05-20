@@ -1,155 +1,152 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='lnetselftest'>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetselftest">
   <info>
-    <title xml:id='lnetselftest.title'>Testing Lustre Network Performance (LNET Self-Test)</title>
+    <title xml:id="lnetselftest.title">Testing Lustre Network Performance (LNET Self-Test)</title>
   </info>
   <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET self-test, which is used by site administrators to confirm that Lustre Networking (LNET) has been properly installed and configured, and that underlying network software and hardware are performing according to expectations. The chapter includes:</para>
-
-    <itemizedlist><listitem>
-  <para><xref linkend="dbdoclet.50438223_91742"/></para>
-    </listitem><listitem>
-  <para><xref linkend="dbdoclet.50438223_48138"/></para>
-    </listitem><listitem>
-  <para><xref linkend="dbdoclet.50438223_27277"/></para>
-    </listitem></itemizedlist>
-
-    <section xml:id="dbdoclet.50438223_91742">
-      <title>23.1 LNET Self-Test Overview</title>
-      <para>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs. It is designed to:</para>
-      <itemizedlist><listitem>
-          <para> Test the connection ability of the Lustre network</para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438223_91742"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438223_48138"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.50438223_27277"/></para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="dbdoclet.50438223_91742">
+    <title>23.1 LNET Self-Test Overview</title>
+    <para>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs. It is designed to:</para>
+    <itemizedlist>
+      <listitem>
+        <para> Test the connection ability of the Lustre network</para>
+      </listitem>
+      <listitem>
+        <para> Run regression tests of the Lustre network</para>
+      </listitem>
+      <listitem>
+        <para> Test performance of the Lustre network</para>
+      </listitem>
+    </itemizedlist>
+    <para>After you have obtained performance results for your Lustre network, refer to <xref linkend="lustretuning"/> for information about parameters that can be used to tune LNET for optimum performance.</para>
+    <note>
+      <para>Apart from the performance impact, LNET self-test is invisible to Lustre.</para>
+    </note>
+    <para>An LNET self-test cluster includes two types of nodes:</para>
+    <itemizedlist>
+      <listitem>
+        <para><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNET self-test cluster. The console node serves as the user interface of the LNET self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNET self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis role="bold">Test nodes</emphasis>  - The nodes on which the tests are run. Test nodes are controlled by the user from the console node; the user does not need to log into them directly.</para>
+      </listitem>
+    </itemizedlist>
+    <para>LNET self-test has two user utilities:</para>
+    <itemizedlist>
+      <listitem>
+        <para><emphasis role="bold">
+            <literal>lst</literal>
+          </emphasis>  - The user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, including commands to create a session, create test groups, etc.</para>
+      </listitem>
+      <listitem>
+        <para><emphasis role="bold">
+            <literal>lstclient</literal>
+          </emphasis>  - The userspace LNET self-test program (run on a test node). The lstclient utility is linked with userspace LNDs and LNET. This utility is not needed if only kernel space LNET and LNDs are used.</para>
+      </listitem>
+    </itemizedlist>
+    <note>
+      <para>Test nodes can be in either kernel or userspace. A console user can invite a kernel test node to join the test session by running lstadd_groupNID, but the console user cannot actively add a userspace test node to the test-session. However, the console user can passively accept a test node to the test session while the test node is running lstclient to connect to the console.</para>
+    </note>
+    <section remap="h3">
+      <title>23.1.1 Prerequisites</title>
+      <para>To run LNET self-test, these modules must be loaded:</para>
+      <itemizedlist>
+        <listitem>
+          <para><literal>libcfs</literal></para>
         </listitem>
-
-<listitem>
-          <para> Run regression tests of the Lustre network</para>
+        <listitem>
+          <para><literal>net</literal></para>
         </listitem>
-
-<listitem>
-          <para> Test performance of the Lustre network</para>
+        <listitem>
+          <para><literal>lnet_selftest</literal></para>
         </listitem>
-
-</itemizedlist>
-<para>After you have obtained performance results for your Lustre network, refer to <xref linkend='lustretuning'/> for information about parameters that can be used to tune LNET for optimum performance.</para>
-              <note><para>Apart from the performance impact, LNET self-test is invisible to Lustre.</para></note>
-
-      <para>An LNET self-test cluster includes two types of nodes:</para>
-      <itemizedlist><listitem>
-          <para><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNET self-test cluster. The console node serves as the user interface of the LNET self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNET self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
+        <listitem>
+          <para> One of the <literal>klnds</literal> (i.e, <literal>ksocklnd</literal>, <literal>ko2iblnd</literal>...) as needed by your network configuration</para>
         </listitem>
-
-<listitem>
-          <para><emphasis role="bold">Test nodes</emphasis>  - The nodes on which the tests are run. Test nodes are controlled by the user from the console node; the user does not need to log into them directly.</para>
-        </listitem>
-
-</itemizedlist>
-      <para>LNET self-test has two user utilities:</para>
-      <itemizedlist><listitem>
-          <para><emphasis role="bold">lst</emphasis>  - The user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, including commands to create a session, create test groups, etc.</para>
-        </listitem>
-
-<listitem>
-          <para><emphasis role="bold">lstclient</emphasis>  - The userspace LNET self-test program (run on a test node). The lstclient utility is linked with userspace LNDs and LNET. This utility is not needed if only kernel space LNET and LNDs are used.</para>
-        </listitem>
-
-</itemizedlist>
-              <note><para>Test nodes can be in either kernel or userspace. A console user can invite a kernel test node to join the test session by running lstadd_groupNID, but the console user cannot actively add a userspace test node to the test-session. However, the console user can passively accept a test node to the test session while the test node is running lstclient to connect to the console.</para></note>
-
-      <section remap="h3">
-        <title>23.1.1 Prerequisites</title>
-        <para>To run LNET self-test, these modules must be loaded:</para>
-        <itemizedlist><listitem>
-            <para>libcfs</para>
-          </listitem>
-
-<listitem>
-            <para>net</para>
-          </listitem>
-
-<listitem>
-            <para>lnet_selftest</para>
-          </listitem>
-
-<listitem>
-            <para> One of the klnds (i.e, ksocklnd, ko2iblnd...) as needed by your network configuration</para>
-          </listitem>
-
-</itemizedlist>
-        <para>To load the required modules, run:</para>
-        <screen>modprobe lnet_selftest 
-</screen>
-        <para>This command recursively loads the modules on which LNET self-test depends.</para>
-                <note><para>While the console and test nodes require all the prerequisite modules to be loaded, userspace test nodes do not require these modules.</para></note>
-
-      </section>
+      </itemizedlist>
+      <para>To load the required modules, run:</para>
+      <screen>modprobe lnet_selftest </screen>
+      <para>This command recursively loads the modules on which LNET self-test depends.</para>
+      <note>
+        <para>While the console and test nodes require all the prerequisite modules to be loaded, userspace test nodes do not require these modules.</para>
+      </note>
     </section>
-    <section xml:id="dbdoclet.50438223_48138">
-      <title>23.2 Using LNET Self-Test</title>
-      <para>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
-      <section remap="h3">
-        <title>23.2.1 Creating a Session</title>
-        <para>A <emphasis>session</emphasis> is a set of processes that run on a test node. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (new_session, end_session, show_session). For more about session parameters, see <link xl:href="LNETSelfTest.html#50438223_91247">Session Commands</link>.</para>
-        <para>Almost all operations should be performed within the context of a session. From the console node, a user can only operate nodes in his own session. If a session ends, the session context in all test nodes is stopped.</para>
-        <para>The following commands set the LST_SESSION environment variable to identify the session on the console node and create a session called read_write:</para>
-        <screen>export LST_SESSION=$$
-lst new_session read_write
-</screen>
-      </section>
-      <section remap="h3">
-        <title>23.2.2 Setting Up Groups</title>
-        <para>A <emphasis>group</emphasis> is a named collection of nodes. Any number of groups can exist in a single LNET self-test session. Group membership is not restricted in that a node can be included in any number of groups.</para>
-        <para>Each node in a group has a rank, determined by the order in which it was added to the group. The rank is used to establish test traffic patterns.</para>
-        <para>A user can only control nodes in his/her session. To allocate nodes to the session, the user needs to add nodes to a group (of the session). All nodes in a group can be referenced by the group name. A node can be allocated to multiple groups of a session.</para>
-        <para>In the following example, three groups are established:</para>
-        <screen>lst add_group servers 192.168.10.[8,10,12-16]@tcp
+  </section>
+  <section xml:id="dbdoclet.50438223_48138">
+    <title>23.2 Using LNET Self-Test</title>
+    <para>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
+    <section remap="h3">
+      <title>23.2.1 Creating a Session</title>
+      <para>A <emphasis>session</emphasis> is a set of processes that run on a test node. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (new_session, end_session, show_session). For more about session parameters, see <xref linkend="dbdoclet.50438223_91247">Session Commands</xref>.</para>
+      <para>Almost all operations should be performed within the context of a session. From the console node, a user can only operate nodes in his own session. If a session ends, the session context in all test nodes is stopped.</para>
+      <para>The following commands set the LST_SESSION environment variable to identify the session on the console node and create a session called read_write:</para>
+      <screen>export LST_SESSION=$$
+lst new_session read_write</screen>
+    </section>
+    <section remap="h3">
+      <title>23.2.2 Setting Up Groups</title>
+      <para>A <emphasis>group</emphasis> is a named collection of nodes. Any number of groups can exist in a single LNET self-test session. Group membership is not restricted in that a node can be included in any number of groups.</para>
+      <para>Each node in a group has a rank, determined by the order in which it was added to the group. The rank is used to establish test traffic patterns.</para>
+      <para>A user can only control nodes in his/her session. To allocate nodes to the session, the user needs to add nodes to a group (of the session). All nodes in a group can be referenced by the group name. A node can be allocated to multiple groups of a session.</para>
+      <para>In the following example, three groups are established:</para>
+      <screen>lst add_group servers 192.168.10.[8,10,12-16]@tcp
 lst add_group readers 192.168.1.[1-253/2]@o2ib
-lst add_group writers 192.168.1.[2-254/2]@o2ib
-</screen>
-        <para>These three groups include:</para>
-        <itemizedlist><listitem>
-            <para> Nodes that will function as 'servers' to be accessed by 'clients' during the LNET self-test session</para>
-          </listitem>
-
-<listitem>
-            <para> Nodes that will function as 'clients' that will simulate <emphasis>reading</emphasis> data from the 'servers'</para>
-          </listitem>
-
-<listitem>
-            <para> Nodes that will function as 'clients' that will simulate <emphasis>writing</emphasis> data to the 'servers'</para>
-          </listitem>
-
-</itemizedlist>
-                <note><para>A console user can associate kernel space test nodes with the session by running lst add_group NIDs, but a userspace test node cannot be actively added to the session. However, the console user can passively &quot;accept&quot; a test node to associate with a test session while the test node running lstclient connects to the console node, i.e: lstclient --sesid CONSOLE_NID --group NAME).</para></note>
-      </section>
-      <section remap="h3">
-        <title>23.2.3 <anchor xml:id="dbdoclet.50438223_42848" xreflabel=""/>Defining and Running the Tests</title>
-        <para>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a source group identified using the --from parameter and a target group identified using the --to parameter. When a test is running, each node in the --from<emphasis>&lt;group&gt;</emphasis> simulates a client by sending requests to nodes in the --to<emphasis>&lt;group&gt;</emphasis>, which are simulating a set of servers, and then receives responses in return. This activity is designed to mimic Lustre RPC traffic.</para>
-        <para>A <emphasis>batch</emphasis> is a collection of tests that are started and stopped together and run in parallel. A test must always be run as part of a batch, even if it is just a single test. Users can only run or stop a test batch, not individual tests.</para>
-        <para>Tests in a batch are non-destructive to the file system, and can be run in a normal Lustre environment (provided the performance impact is acceptable).</para>
-        <para>A simple batch might contain a single test, for example, to determine whether the network bandwidth presents an I/O bottleneck. In this example, the --to<emphasis>&lt;group&gt;</emphasis> could be comprised of Lustre OSSs and --from<emphasis>&lt;group&gt;</emphasis> the compute nodes. A second test could be added to perform pings from a login node to the MDS to see how checkpointing affects the ls -l process.</para>
-        <para>Two types of tests are available:</para>
-        <itemizedlist><listitem>
-            <para><emphasis role="bold">ping -</emphasis>  A ping generates a short request message, which results in a short response. Pings are useful to determine latency and small message overhead and to simulate Lustre metadata traffic.</para>
-          </listitem>
-
-<listitem>
-            <para><emphasis role="bold">brw -</emphasis>  In a brw ('bulk read write') test, data is transferred from the target to the source (brwread) or data is transferred from the source to the target (brwwrite). The size of the bulk transfer is set using the size parameter. A brw test is useful to determine network bandwidth and to simulate Lustre I/O traffic.</para>
-          </listitem>
-
-</itemizedlist>
-        <para>In the example below, a batch is created called bulk_rw. Then two brw tests are added. In the first test, 1M of data is sent from the servers to the clients as a simulated read operation with a simple data validation check. In the second test, 4K of data is sent from the clients to the servers as a simulated write operation with a full data validation check.</para>
-        <screen>lst add_batch bulk_rw
+lst add_group writers 192.168.1.[2-254/2]@o2ib</screen>
+      <para>These three groups include:</para>
+      <itemizedlist>
+        <listitem>
+          <para>Nodes that will function as &apos;servers&apos; to be accessed by &apos;clients&apos; during the LNET self-test session</para>
+        </listitem>
+        <listitem>
+          <para>Nodes that will function as &apos;clients&apos; that will simulate <emphasis>reading</emphasis> data from the &apos;servers&apos;</para>
+        </listitem>
+        <listitem>
+          <para>Nodes that will function as &apos;clients&apos; that will simulate <emphasis>writing</emphasis> data to the &apos;servers&apos;</para>
+        </listitem>
+      </itemizedlist>
+      <note>
+        <para>A console user can associate kernel space test nodes with the session by running lst <literal>add_group</literal> <literal>NIDs</literal>, but a userspace test node cannot be actively added to the session. However, the console user can passively &quot;accept&quot; a test node to associate with a test session while the test node running <literal>lstclient</literal> connects to the console node, i.e: <literal>lstclient --sesid CONSOLE_NID --group NAME</literal>).</para>
+      </note>
+    </section>
+    <section xml:id='dbdoclet.50438223_42848'>
+      <title>23.2.3 Defining and Running the Tests</title>
+      <para>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a source group identified using the <literal>--from</literal> parameter and a target group identified using the <literal>--to</literal> parameter. When a test is running, each node in the <literal>--from<emphasis>&lt;group&gt;</emphasis></literal> simulates a client by sending requests to nodes in the <literal>--to<emphasis>&lt;group&gt;</emphasis></literal>, which are simulating a set of servers, and then receives responses in return. This activity is designed to mimic Lustre RPC traffic.</para>
+      <para>A <emphasis>batch</emphasis> is a collection of tests that are started and stopped together and run in parallel. A test must always be run as part of a batch, even if it is just a single test. Users can only run or stop a test batch, not individual tests.</para>
+      <para>Tests in a batch are non-destructive to the file system, and can be run in a normal Lustre environment (provided the performance impact is acceptable).</para>
+      <para>A simple batch might contain a single test, for example, to determine whether the network bandwidth presents an I/O bottleneck. In this example, the <literal>--to<emphasis>&lt;group&gt;</emphasis></literal> could be comprised of Lustre OSSs and <literal>--from<emphasis>&lt;group&gt;</emphasis></literal> the compute nodes. A second test could be added to perform pings from a login node to the MDS to see how checkpointing affects the <literal>ls -l</literal> process.</para>
+      <para>Two types of tests are available:</para>
+      <itemizedlist>
+        <listitem>
+          <para><emphasis role="bold"><literal>ping</literal> -</emphasis>  A <literal>ping</literal> generates a short request message, which results in a short response. Pings are useful to determine latency and small message overhead and to simulate Lustre metadata traffic.</para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold"><literal>brw</literal> -</emphasis>  In a <literal>brw</literal> (&apos;bulk read write&apos;) test, data is transferred from the target to the source (<literal>brwread</literal>) or data is transferred from the source to the target (<literal>brwwrite</literal>). The size of the bulk transfer is set using the <literal>size</literal> parameter. A brw test is useful to determine network bandwidth and to simulate Lustre I/O traffic.</para>
+        </listitem>
+      </itemizedlist>
+      <para>In the example below, a batch is created called <literal>bulk_rw</literal>. Then two <literal>brw</literal> tests are added. In the first test, 1M of data is sent from the servers to the clients as a simulated read operation with a simple data validation check. In the second test, 4K of data is sent from the clients to the servers as a simulated write operation with a full data validation check.</para>
+      <screen>lst add_batch bulk_rw
 lst add_test --batch bulk_rw --from readers --to servers \
-brw read check=simple size=1M
+  brw read check=simple size=1M
 lst add_test --batch bulk_rw --from writers --to servers \
-brw write check=full size=4K
-</screen>
-<para>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <xref linkend='dbdoclet.50438223_36860'/>.</para>
-      </section>
-      <section remap="h3">
-        <title>23.2.4 Sample Script</title>
-        <para>This sample LNET self-test script simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an InfiniBand network (connected via LNET routers). In this example, half the clients are reading and half the clients are writing.</para>
-        <para>Run this script on the console node:</para>
-        <screen>#!/bin/bash
+  brw write check=full size=4K</screen>
+      <para>The traffic pattern and test intensity is determined by several properties such as test type, distribution of test nodes, concurrency of test, and RDMA operation type. For more details, see <xref linkend="dbdoclet.50438223_36860"/>.</para>
+    </section>
+    <section remap="h3">
+      <title>23.2.4 Sample Script</title>
+      <para>This sample LNET self-test script simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an InfiniBand network (connected via LNET routers). In this example, half the clients are reading and half the clients are writing.</para>
+      <para>Run this script on the console node:</para>
+      <screen>#!/bin/bash
 export LST_SESSION=$$
 lst new_session read/write
 lst add_group servers 192.168.10.[8,10,12-16]@tcp
@@ -165,309 +162,561 @@ lst run bulk_rw
 # display server stats for 30 seconds
 lst stat servers &amp; sleep 30; kill $!
 # tear down
-lst end_session
-</screen>
-                <note><para>This script can be easily adapted to pass the group NIDs by shell variables or command line arguments (making it good for general-purpose use).</para></note>
-
-      </section>
+lst end_session</screen>
+      <note>
+        <para>This script can be easily adapted to pass the group NIDs by shell variables or command line arguments (making it good for general-purpose use).</para>
+      </note>
     </section>
-    <section xml:id="dbdoclet.50438223_27277">
-      <title>23.3 LNET Self-Test <anchor xml:id="dbdoclet.50438223_marker-1298562" xreflabel=""/>Command Reference</title>
-      <para>The LNET self-test (lst) utility is used to issue LNET self-test commands. The lst utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
-      <section remap="h3">
-        <title>23.3.1 <anchor xml:id="dbdoclet.50438223_91247" xreflabel=""/>Session Commands</title>
-        <para>This section describes lst session commands.</para>
-        <para><emphasis role="bold">LST_SESSION</emphasis></para>
-        <para>The lst utility uses the LST_SESSION environmental variable to identify the session locally on the self-test console node. This should be a numeric value that uniquely identifies all session processes on the node. It is convenient to set this to the process ID of the shell both for interactive use and in shell scripts. Almost all lst commands require LST_SESSION to be set.</para>
-        <para>Example:</para>
-        <screen>export LST_SESSION=$$
-</screen>
-        <para><emphasis role="bold">new_session [--timeout SECONDS] [--force] NAME</emphasis></para>
-        <para>Creates a new session.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> Console timeout value of the session. The session ends automatically if it remains idle (i.e., no commands are issued) for this period.</para></entry>
-              </row>
-              <row>
-                <entry><para> --force</para></entry>
-                <entry><para> Ends conflicting sessions. This determines who 'wins' when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already 'owned' by another session, the -force flag allows this session to 'steal' the node.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> A human-readable string to print when listing sessions or reporting session conflicts.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst new_session --force read_write
-</screen>
-        <para><emphasis role="bold">end_session</emphasis></para>
-        <para>Stops all operations and tests in the current session and clears the session'™s status.</para>
-        <screen>$ lst end_session
-</screen>
-        <para><emphasis role="bold">show_session</emphasis></para>
-        <para>Shows the session information. This command prints information about the current session. It does not require LST_SESSION to be defined in the process environment.</para>
-        <screen>$ lst show_session
-</screen>
-      </section>
-      <section remap="h3">
-        <title>23.3.2 Group Commands</title>
-        <para>This section describes lst group commands.</para>
-        <para><emphasis role="bold">add_group</emphasis><emphasis>&lt;name&gt; &lt;NIDS&gt; [&lt;NIDs&gt;...]</emphasis></para>
-        <para>Creates the group and adds a list of test nodes to the group.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> Name of the group.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis>&lt;NIDs&gt;</emphasis></para></entry>
-                <entry><para> A string that may be expanded to include one or more LNET NIDs.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst add_group servers 192.168.10.[35,40-45]@tcp$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\[10-20]@tcp</screen>
-        <para> </para>
-        <para><emphasis role="bold">update_group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--refresh] [--clean</emphasis><emphasis>&lt;status&gt;</emphasis><emphasis role="bold">] [--remove</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para>Updates the state of nodes in a group or adjusts a group'™s membership. This command is useful if some nodes have crashed and should be excluded from the group.</para>
-        <informaltable frame="all">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --refresh</para></entry>
-                <entry nameend="c3" namest="c2"><para> Refreshes the state of all inactive nodes in the group.</para></entry>
-              </row>
-              <row>
-                <entry><para> --clean<emphasis>&lt;status&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> Removes nodes with a specified status from the group. Status may be:</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> active</para></entry>
-                <entry><para> The node is in the current session.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> busy</para></entry>
-                <entry><para> The node is now owned by another session.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> down</para></entry>
-                <entry><para> The node has been marked down.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> unknown</para></entry>
-                <entry><para> The node'™s status has yet to be determined.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> invalid</para></entry>
-                <entry><para> Any state but active.</para></entry>
-              </row>
-              <row>
-                <entry><para> --remove<emphasis>&lt;NIDs&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> Removes specified nodes from the group.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst update_group clients --refresh$ lst update_group clients --clean busy$ lst update_group clients --clean invalid // \invalid == busy || down || unknown$ lst update_group clients --remove \192.168.1.[10-20]@tcp</screen>
-        <para> </para>
-        <para><emphasis role="bold">list_group [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--active] [--busy] [--down] [--unknown] [--all]</emphasis></para>
-        <para>Prints information about a group or lists all groups in the current session if no group is specified.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> The name of the group.</para></entry>
-              </row>
-              <row>
-                <entry><para> --active</para></entry>
-                <entry><para> Lists the active nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --busy</para></entry>
-                <entry><para> Lists the busy nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --down</para></entry>
-                <entry><para> Lists the down nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --unknown</para></entry>
-                <entry><para> Lists unknown nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --all</para></entry>
-                <entry><para> Lists all nodes.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para> </para>
-        <para>Example:</para>
-        <screen>$ lst list_group1) clients2) serversTotal 2 groups$ lst list_group clientsACTIVE BUSY DOWN UNKNOWN TOTAL3 1 2 0 6$ lst list_group clients --all192.168.1.10@tcp Active192.168.1.11@tcp Active192.168.1.12@tcp Busy192.168.1.13@tcp Active192.168.1.14@tcp DOWN192.168.1.15@tcp DOWNTotal 6 nodes$ lst list_group clients --busy192.168.1.12@tcp BusyTotal 1 node</screen>
-        <para> </para>
-        <para><emphasis role="bold">del_group</emphasis><emphasis>&lt;name&gt;</emphasis></para>
-        <para>Removes a group from the session. If the group is referred to by any test, then the operation fails. If nodes in the group are referred to only by this group, then they are kicked out from the current session; otherwise, they are still in the current session.</para>
-        <screen>$ lst del_group clients
-</screen>
-        <para><emphasis role="bold">lstclient --sesid</emphasis><emphasis>&lt;NID&gt;</emphasis><emphasis role="bold">--group</emphasis><emphasis>&lt;name&gt;</emphasis> [--server_mode]</para>
-        <para>Use lstclient to run the userland self-test client. The lstclient command should be executed after creating a session on the console. There are only two mandatory options for lstclient:</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --sesid<emphasis>&lt;NID&gt;</emphasis></para></entry>
-                <entry><para> The first console'™s NID.</para></entry>
-              </row>
-              <row>
-                <entry><para> --group<emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> The test group to join.</para></entry>
-              </row>
-              <row>
-                <entry><para> --server_mode</para></entry>
-                <entry><para> When included, forces LNET to behave as a server, such as starting an acceptor if the underlying NID needs it or using privileged ports. Only root is allowed to use the --server_mode option.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-         <para><emphasis role="bold">Example:</emphasis></para>
-         <screen>Console $ lst new_session testsession
+  </section>
+  <section xml:id="dbdoclet.50438223_27277">
+    <title>23.3 LNET Self-Test Command Reference</title>
+    <para>The LNET self-test (<literal>lst</literal>) utility is used to issue LNET self-test commands. The <literal>lst</literal> utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
+    <section xml:id="dbdoclet.50438223_91247">
+      <title>23.3.1 Session Commands</title>
+      <para>This section describes <literal>lst</literal> session commands.</para>
+      <para><emphasis role="bold">
+          <literal>LST_SESSION</literal>
+        </emphasis></para>
+      <para>The <literal>lst</literal> utility uses the <literal>LST_SESSION</literal> environmental variable to identify the session locally on the self-test console node. This should be a numeric value that uniquely identifies all session processes on the node. It is convenient to set this to the process ID of the shell both for interactive use and in shell scripts. Almost all <literal>lst</literal> commands require <literal>LST_SESSION</literal> to be set.</para>
+      <para>Example:</para>
+      <screen>export LST_SESSION=$$</screen>
+      <para><emphasis role="bold">
+          <literal>new_session [--timeout SECONDS] [--force] NAME</literal>
+        </emphasis></para>
+      <para>Creates a new session.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>--timeout<emphasis>&lt;seconds&gt;</emphasis></literal></para>
+              </entry>
+              <entry>
+                <para>Console timeout value of the session. The session ends automatically if it remains idle (i.e., no commands are issued) for this period.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--force</literal></para>
+              </entry>
+              <entry>
+                <para>Ends conflicting sessions. This determines who &apos;wins&apos; when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already &apos;owned&apos; by another session, the -force flag allows this session to &apos;steal&apos; the node.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis>
+                    <literal>&lt;name&gt;</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>A human-readable string to print when listing sessions or reporting session conflicts.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst new_session --force read_write</screen>
+      <para><literal>
+          <emphasis role="bold">end_session</emphasis>
+        </literal></para>
+      <para>Stops all operations and tests in the current session and clears the session&apos;s status.</para>
+      <screen>$ lst end_session</screen>
+      <para><literal>
+          <emphasis role="bold">show_session</emphasis>
+        </literal></para>
+      <para>Shows the session information. This command prints information about the current session. It does not require LST_SESSION to be defined in the process environment.</para>
+      <screen>$ lst show_session</screen>
+    </section>
+    <section remap="h3">
+      <title>23.3.2 Group Commands</title>
+      <para>This section describes <literal>lst</literal> group commands.</para>
+      <para><literal>
+          <emphasis role="bold">add_group</emphasis>
+          <emphasis> &lt;name&gt; &lt;NIDS&gt; [&lt;NIDs&gt;...]</emphasis>
+        </literal></para>
+      <para>Creates the group and adds a list of test nodes to the group.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>
+                    <emphasis>&lt;name&gt;</emphasis>
+                  </literal></para>
+              </entry>
+              <entry>
+                <para>Name of the group.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>
+                    <emphasis>&lt;NIDs&gt;</emphasis>
+                  </literal></para>
+              </entry>
+              <entry>
+                <para>A string that may be expanded to include one or more LNET NIDs.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst add_group servers 192.168.10.[35,40-45]@tcp$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\[10-20]@tcp</screen>
+      <para><literal>
+          <emphasis role="bold">update_group</emphasis>
+          <emphasis>&lt;name&gt;</emphasis>
+          <emphasis role="bold">[--refresh] [--clean</emphasis>
+          <emphasis>&lt;status&gt;</emphasis>
+          <emphasis role="bold">] [--remove</emphasis>
+          <emphasis>&lt;NIDs&gt;</emphasis>
+          <emphasis role="bold">]</emphasis>
+        </literal></para>
+      <para>Updates the state of nodes in a group or adjusts a group&apos;s membership. This command is useful if some nodes have crashed and should be excluded from the group.</para>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para>--refresh</para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para> Refreshes the state of all inactive nodes in the group.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--clean<emphasis>&lt;status&gt;</emphasis></literal></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para> Removes nodes with a specified status from the group. Status may be:</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para> active</para>
+              </entry>
+              <entry>
+                <para> The node is in the current session.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para> busy</para>
+              </entry>
+              <entry>
+                <para> The node is now owned by another session.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para> down</para>
+              </entry>
+              <entry>
+                <para> The node has been marked down.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para> unknown</para>
+              </entry>
+              <entry>
+                <para> The node&apos;™s status has yet to be determined.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para> invalid</para>
+              </entry>
+              <entry>
+                <para> Any state but active.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--remove<emphasis>&lt;NIDs&gt;</emphasis></literal></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para> Removes specified nodes from the group.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst update_group clients --refresh
+$ lst update_group clients --clean busy
+$ lst update_group clients --clean invalid // \
+  invalid == busy || down || unknown
+$ lst update_group clients --remove \192.168.1.[10-20]@tcp</screen>
+      <para><literal>
+          <emphasis role="bold">list_group [</emphasis>
+          <emphasis>&lt;name&gt;</emphasis>
+          <emphasis role="bold">] [--active] [--busy] [--down] [--unknown] [--all]</emphasis>
+        </literal></para>
+      <para>Prints information about a group or lists all groups in the current session if no group is specified.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>
+                    <emphasis>&lt;name&gt;</emphasis>
+                  </literal></para>
+              </entry>
+              <entry>
+                <para> The name of the group.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--active</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> Lists the active nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--busy</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> Lists the busy nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--down</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> Lists the down nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--unknown</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> Lists unknown nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--all</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> Lists all nodes.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>Example:</para>
+      <screen>$ lst list_group
+1) clients
+2) servers
+Total 2 groups
+$ lst list_group clients
+ACTIVE BUSY DOWN UNKNOWN TOTAL
+3 1 2 0 6
+$ lst list_group clients --all
+192.168.1.10@tcp Active
+192.168.1.11@tcp Active
+192.168.1.12@tcp Busy
+192.168.1.13@tcp Active
+192.168.1.14@tcp DOWN
+192.168.1.15@tcp DOWN
+Total 6 nodes
+$ lst list_group clients --busy
+192.168.1.12@tcp Busy
+Total 1 node</screen>
+      <para><literal>
+          <emphasis role="bold">del_group</emphasis>
+          <emphasis> &lt;name&gt;</emphasis>
+        </literal></para>
+      <para>Removes a group from the session. If the group is referred to by any test, then the operation fails. If nodes in the group are referred to only by this group, then they are kicked out from the current session; otherwise, they are still in the current session.</para>
+      <screen>$ lst del_group clients</screen>
+      <para><literal><emphasis role="bold">lstclient --sesid</emphasis><emphasis> &lt;NID&gt; </emphasis><emphasis role="bold">--group</emphasis><emphasis> &lt;name&gt;</emphasis> [--server_mode]</literal></para>
+      <para>Use <literal>lstclient</literal> to run the userland self-test client. The <literal>lstclient</literal> command should be executed after creating a session on the console. There are only two mandatory options for <literal>lstclient</literal>:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para> --sesid<emphasis>&lt;NID&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para> The first console&apos;s NID.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para> --group<emphasis>&lt;name&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para> The test group to join.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para> --server_mode</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> When included, forces LNET to behave as a server, such as starting an acceptor if the underlying NID needs it or using privileged ports. Only root is allowed to use the <literal>--server_mode</literal> option.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>Console $ lst new_session testsession
 Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>Client1 $ lstclient --sesid 192.168.1.52@tcp |--group clients --server_mode
-</screen>
-      </section>
-      <section remap="h3">
-        <title>23.3.3 <anchor xml:id="dbdoclet.50438223_36860" xreflabel=""/>Batch and Test Commands</title>
-        <para>This section describes lst batch and test commands.</para>
-        <para><emphasis role="bold">add_batch NAME</emphasis></para>
-        <para>A default batch test set named batch is created when the session is started. You can specify a batch name by using add_batch:</para>
-        <screen>$ lst add_batch bulkperf
-</screen>
-        <para>Creates a batch test called bulkperf.</para>
-        <para>add_test --batch<emphasis>&lt;batchname&gt;</emphasis> [--loop <emphasis>&lt;#&gt;]</emphasis><emphasis role="bold">[--concurrency</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--distribute</emphasis><emphasis>&lt;#:#&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para>--from<emphasis>&lt;group&gt;</emphasis> --to <emphasis>&lt;group&gt;</emphasis> {brw|ping} &lt;test options&gt;</para>
-        <para>Adds a test to a batch. The parameters are described below.</para>
-        <informaltable frame="all">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --batch<emphasis>&lt;batchname&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> Names a group of tests for later execution.</para></entry>
-              </row>
-              <row>
-                <entry><para> --loop<emphasis>&lt;#&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> Number of times to run the test.</para></entry>
-              </row>
-              <row>
-                <entry><para> --concurrency<emphasis>&lt;#&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> The number of requests that are active at one time.</para></entry>
-              </row>
-              <row>
-                <entry><para> --distribute<emphasis>&lt;#:#&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> Determines the ratio of client nodes to server nodes for the specified test. This allows you to specify a wide range of topologies, including one-to-one and all-to-all. Distribution divides the source group into subsets, which are paired with equivalent subsets from the target group so only nodes in matching subsets communicate.</para></entry>
-              </row>
-              <row>
-                <entry><para> --from<emphasis>&lt;group&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> The source group (test client).</para></entry>
-              </row>
-              <row>
-                <entry><para> --to<emphasis>&lt;group&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> The target group (test server).</para></entry>
-              </row>
-              <row>
-                <entry><para> ping</para></entry>
-                <entry nameend="c3" namest="c2"><para> Sends a small request message, resulting in a small reply message. For more details, see <link xl:href="LNETSelfTest.html#50438223_42848">Defining and Running the Tests</link></para></entry>
-              </row>
-              <row>
-                <entry><para> brw</para></entry>
-                <entry nameend="c3" namest="c2"><para> Sends a small request message followed by a bulk data transfer, resulting in a small reply message. <link xl:href="LNETSelfTest.html#50438223_42848">Defining and Running the Tests</link>. Options are:</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> read | write</para></entry>
-                <entry><para> Read or write. The default is read.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> size=&lt;#&gt;| &lt;#&gt;K | &lt;#&gt;M</para></entry>
-                <entry><para> I/O size in bytes, KB or MB (i.e., size=1024, size=4K, size=1M). The default is 4K bytes.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> check=full|simple</para></entry>
-                <entry><para> A data validation check (checksum of data). The default is that no check is done.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Examples showing use of the distribute parameter:</emphasis></para>
-        <screen>
-Clients: (C1, C2, C3, C4, C5, C6)
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>Client1 $ lstclient --sesid 192.168.1.52@tcp |--group clients --server_mode</screen>
+    </section>
+    <section xml:id="dbdoclet.50438223_36860">
+      <title>23.3.3 Batch and Test Commands</title>
+      <para>This section describes <literal>lst</literal> batch and test commands.</para>
+      <para><literal>
+          <emphasis role="bold">add_batch NAME</emphasis>
+        </literal></para>
+      <para>A default batch test set named batch is created when the session is started. You can specify a batch name by using add_batch:</para>
+      <screen>$ lst add_batch bulkperf</screen>
+      <para>Creates a batch test called <literal>bulkperf</literal>.</para>
+      <para><literal>
+          <emphasis role="bold">add_test --batch <emphasis>&lt;<emphasis role="italic">batchname</emphasis>&gt;</emphasis> [--loop&lt;#&gt;] <emphasis role="bold">[--concurrency</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--distribute</emphasis><emphasis>&lt;#:#&gt;</emphasis><emphasis role="bold">]</emphasis><para>--from<emphasis> &lt;<emphasis role="italic">group</emphasis>&gt;</emphasis> --to <emphasis>&lt;<emphasis role="italic">group</emphasis>&gt;</emphasis> {brw|ping} &lt;test options&gt;</para></emphasis>
+        </literal></para>
+      <para>Adds a test to a batch. The parameters are described below.</para>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>--batch<emphasis>&lt;batchname&gt;</emphasis></literal></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>Names a group of tests for later execution.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para> --loop<emphasis>&lt;#&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>Number of times to run the test.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para> --concurrency<emphasis>&lt;#&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>The number of requests that are active at one time.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para> --distribute<emphasis>&lt;#:#&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>Determines the ratio of client nodes to server nodes for the specified test. This allows you to specify a wide range of topologies, including one-to-one and all-to-all. Distribution divides the source group into subsets, which are paired with equivalent subsets from the target group so only nodes in matching subsets communicate.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--from<emphasis>&lt;group&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>The source group (test client).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--to<emphasis>&lt;group&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>The target group (test server).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>ping</literal></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>Sends a small request message, resulting in a small reply message. For more details, see <xref linkend="dbdoclet.50438223_42848">Defining and Running the Tests</xref></para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>brw</literal></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>Sends a small request message followed by a bulk data transfer, resulting in a small reply message. <xref linkend="dbdoclet.50438223_42848">Defining and Running the Tests</xref>. Options are:</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <literal>
+                  <para>read | write</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Read or write. The default is read.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <literal>
+                  <para>size=&lt;#&gt;| &lt;#&gt;K | &lt;#&gt;M</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>I/O size in bytes, KB or MB (i.e., <literal>size=1024</literal>, <literal>size=4</literal>K, <literal>size=1M</literal>). The default is 4K bytes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <literal>
+                  <para>check=full|simple</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>A data validation check (checksum of data). The default is that no check is done.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Examples showing use of the distribute parameter:</emphasis></para>
+      <screen>Clients: (C1, C2, C3, C4, C5, C6)
 Server: (S1, S2, S3)
 --distribute 1:1 (C1-&gt;S1), (C2-&gt;S2), (C3-&gt;S3), (C4-&gt;S1), (C5-&gt;S2),
 \(C6-&gt;S3) /* -&gt; means test conversation */ --distribute 2:1 (C1,C2-&gt;S1), (C3,C4-&gt;S2), (C5,C6-&gt;S3)
@@ -476,246 +725,522 @@ Server: (S1, S2, S3)
 --distribute 4:1 (C1,C2,C3,C4-&gt;S1), (C5,C6-&gt;S2), (NULL-&gt;S3)
 --distribute 4:2 (C1,C2,C3,C4-&gt;S1,S2), (C5, C6-&gt;S3, S1)
 --distribute 6:3 (C1,C2,C3,C4,C5,C6-&gt;S1,S2,S3)</screen>
-        <para>The setting --distribute 1:1 is the default setting where each source node communicates with one target node.</para>
-        <para>When the setting --distribute 1:<emphasis>&lt;n&gt;</emphasis> (where <emphasis>&lt;n&gt;</emphasis> is the size of the target group) is used, each source node communicates with every node in the target group.</para>
-        <para>Note that if there are more source nodes than target nodes, some source nodes may share the same target nodes. Also, if there are more target nodes than source nodes, some higher-ranked target nodes will be idle.</para>
-         <para><emphasis role="bold">Example showing a brw test:</emphasis></para>
-         <screen>
-$ lst add_group clients 192.168.1.[10-17]@tcp
+      <para>The setting <literal>--distribute 1:1</literal> is the default setting where each source node communicates with one target node.</para>
+      <para>When the setting <literal>--distribute 1:<emphasis>&lt;n&gt;</emphasis></literal> (where <emphasis>
+          <literal>&lt;n&gt;</literal>
+        </emphasis> is the size of the target group) is used, each source node communicates with every node in the target group.</para>
+      <para>Note that if there are more source nodes than target nodes, some source nodes may share the same target nodes. Also, if there are more target nodes than source nodes, some higher-ranked target nodes will be idle.</para>
+      <para><emphasis role="bold">Example showing a <literal>brw</literal> test:</emphasis></para>
+      <screen>$ lst add_group clients 192.168.1.[10-17]@tcp
 $ lst add_group servers 192.168.10.[100-103]@tcp
 $ lst add_batch bulkperf
 $ lst add_test --batch bulkperf --loop 100 --concurrency 4 \
---distribute 4:2 --from clients brw WRITE size=16K</screen>
-        <para>In the example above, a batch test called bulkperf that will do a 16 kbyte bulk write request. In this test, two groups of four clients (sources) write to each of four servers (targets) as shown below:</para>
-        <itemizedlist><listitem>
-            <para> 192.168.1.[10-13] will write to 192.168.10.[100,101]</para>
-          </listitem>
-
-<listitem>
-            <para> 192.168.1.[14-17] will write to 192.168.10.[102,103]</para>
-          </listitem>
-
-</itemizedlist>
-        <para> </para>
-        <para><emphasis role="bold">list_batch [</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--active] [--invalid]</emphasis> [--server | client<emphasis role="bold">]</emphasis></para>
-        <para>Lists batches in the current session or lists client and server nodes in a batch or a test.</para>
-        <informaltable frame="all">
-          <tgroup cols="3">
-            <colspec colname="c1" colwidth="33*"/>
-            <colspec colname="c2" colwidth="33*"/>
-            <colspec colname="c3" colwidth="33*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --test<emphasis>&lt;index&gt;</emphasis></para></entry>
-                <entry nameend="c3" namest="c2"><para> Lists tests in a batch. If no option is used, all tests in the batch are listed. IIf one of these options are used, only specified tests in the batch are listed:</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> active</para></entry>
-                <entry><para> Lists only active batch tests.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> invalid</para></entry>
-                <entry><para> Lists only invalid batch tests.</para></entry>
-              </row>
-              <row>
-                <entry><para>  </para></entry>
-                <entry><para> server | client</para></entry>
-                <entry><para> Lists client and server nodes in a batch test.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst list_batchbulkperf$ lst list_batch bulkperfBatch: bulkperf Tests: 1 State: IdleACTIVE BUSY DOWN UNKNOWN TOTALclient 8 0 0 0 8server 4 0 0 0 4Test 1(brw) (loop: 100, concurrency: 4)ACTIVE BUSY DOWN UNKNOWN TOTALclient 8 0 0 0 8server 4 0 0 0 4$ lst list_batch bulkperf --server --active192.168.10.100@tcp Active192.168.10.101@tcp Active192.168.10.102@tcp Active192.168.10.103@tcp Active</screen>
-        <para> </para>
-        <para><emphasis role="bold">run</emphasis><emphasis>&lt;name&gt;</emphasis></para>
-        <para>Runs the batch.</para>
-        <screen>$ lst run bulkperf
-</screen>
-        <para><emphasis role="bold">stop</emphasis><emphasis>&lt;name&gt;</emphasis></para>
-        <para>Stops the batch.</para>
-        <screen>$ lst stop bulkperf
-</screen>
-        <para><emphasis role="bold">query</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">[--test</emphasis><emphasis>&lt;index&gt;</emphasis><emphasis role="bold">] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">[--loop</emphasis><emphasis>&lt;#&gt;</emphasis><emphasis role="bold">] [--delay</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">] [--all]</emphasis></para>
-        <para>Queries the batch status.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --test<emphasis>&lt;index&gt;</emphasis></para></entry>
-                <entry><para> Only queries the specified test. The test index starts from 1.</para></entry>
-              </row>
-              <row>
-                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> The timeout value to wait for RPC. The default is 5 seconds.</para></entry>
-              </row>
-              <row>
-                <entry><para> --loop<emphasis>&lt;#&gt;</emphasis></para></entry>
-                <entry><para> The loop count of the query.</para></entry>
-              </row>
-              <row>
-                <entry><para> --delay<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> The interval of each query. The default is 5 seconds.</para></entry>
-              </row>
-              <row>
-                <entry><para> --all</para></entry>
-                <entry><para> The list status of all nodes in a batch or a test.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst run bulkperf$ lst query bulkperf --loop 5 --delay 3Batch is runningBatch is runningBatch is runningBatch is runningBatch is running$ lst query bulkperf --all192.168.1.10@tcp Running192.168.1.11@tcp Running192.168.1.12@tcp Running192.168.1.13@tcp Running192.168.1.14@tcp Running192.168.1.15@tcp Running192.168.1.16@tcp Running192.168.1.17@tcp Running$ lst stop bulkperf$ lst query bulkperfBatch is idle</screen>
-      </section>
-      <section remap="h3">
-        <title>23.3.4 Other Commands</title>
-        <para>This section describes other lst commands.</para>
-        <para><emphasis role="bold">ping [-session] [--group</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--nodes</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">] [--batch</emphasis><emphasis>&lt;name&gt;</emphasis><emphasis role="bold">] [--server] [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para>Sends a 'hello' query to the nodes.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --session</para></entry>
-                <entry><para> Pings all nodes in the current session.</para></entry>
-              </row>
-              <row>
-                <entry><para> --group<emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> Pings all nodes in a specified group.</para></entry>
-              </row>
-              <row>
-                <entry><para> --nodes<emphasis>&lt;NIDs&gt;</emphasis></para></entry>
-                <entry><para> Pings all specified nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --batch<emphasis>&lt;name&gt;</emphasis></para></entry>
-                <entry><para> Pings all client nodes in a batch.</para></entry>
-              </row>
-              <row>
-                <entry><para> --server</para></entry>
-                <entry><para> Sends RPC to all server nodes instead of client nodes. This option is only used with --batch<emphasis>&lt;name&gt;</emphasis>.</para></entry>
-              </row>
-              <row>
-                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> The RPC timeout value.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst ping 192.168.10.[15-20]@tcp192.168.1.15@tcp Active [session: liang id: 192.168.1.3@tcp]192.168.1.16@tcp Active [session: liang id: 192.168.1.3@tcp]192.168.1.17@tcp Active [session: liang id: 192.168.1.3@tcp]192.168.1.18@tcp Busy [session: Isaac id: 192.168.10.10@tcp]192.168.1.19@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]192.168.1.20@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]</screen>
-        <para> </para>
-        <para><emphasis role="bold">stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] &quot; &quot; [--timeout</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">] [--delay</emphasis><emphasis>&lt;seconds&gt;</emphasis><emphasis role="bold">]</emphasis><emphasis>&lt;group&gt;</emphasis><emphasis role="bold">|&lt;</emphasis><emphasis>NIDs&gt;</emphasis><emphasis role="bold">[</emphasis><emphasis>&lt;group&gt;</emphasis><emphasis role="bold">|</emphasis><emphasis>&lt;NIDs&gt;</emphasis><emphasis role="bold">]</emphasis></para>
-        <para>The collection performance and RPC statistics of one or more nodes.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --bw</para></entry>
-                <entry><para> Displays the bandwidth of the specified group/nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --rate</para></entry>
-                <entry><para> Displays the rate of RPCs of the specified group/nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --read</para></entry>
-                <entry><para> Displays the read statistics of the specified group/nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --write</para></entry>
-                <entry><para> Displays the write statistics of the specified group/nodes.</para></entry>
-              </row>
-              <row>
-                <entry><para> --max</para></entry>
-                <entry><para> Displays the maximum value of the statistics.</para></entry>
-              </row>
-              <row>
-                <entry><para> --min</para></entry>
-                <entry><para> Displays the minimum value of the statistics.</para></entry>
-              </row>
-              <row>
-                <entry><para> --avg</para></entry>
-                <entry><para> Displays the average of the statistics.</para></entry>
-              </row>
-              <row>
-                <entry><para> --timeout<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> The timeout of the statistics RPC. The default is 5 seconds.</para></entry>
-              </row>
-              <row>
-                <entry><para> --delay<emphasis>&lt;seconds&gt;</emphasis></para></entry>
-                <entry><para> The interval of the statistics (in seconds).</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst run bulkperf$ lst stat clients[LNet Rates of clients][W] Avg: 1108 RPC/s Min: 1060 RPC/s Max: 1155 RPC/s[R] Avg: 2215 RPC/s Min: 2121 RPC/s Max: 2310 RPC/s[LNet Bandwidth of clients][W] Avg: 16.60 MB/s Min: 16.10 MB/s Max: 17.1 MB/s[R] Avg: 40.49 MB/s Min: 40.30 MB/s Max: 40.68 MB/s</screen>
-        <para>Specifying a group name (<emphasis>&lt;group&gt;</emphasis>) causes statistics to be gathered for all nodes in a test group. For example:</para>
-        <screen>$ lst stat servers
-</screen>
-        <para>where servers is the name of a test group created by lst add_group</para>
-        <para>Specifying a NID range (<emphasis>&lt;NIDs&gt;</emphasis>) causes statistics to be gathered for selected nodes. For example:</para>
-        <screen>$ lst stat 192.168.0.[1-100/2]@tcp
-Only LNET performance statistics are available. By default, all statistics \
-information is displayed. Users can specify additional information with the\
-se options.
- 
-</screen>
-        <para><emphasis role="bold">show_error [--session] [&lt;group&gt;|&lt;NIDs&gt;]...</emphasis></para>
-        <para>Lists the number of failed RPCs on test nodes.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Parameter</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> --session</para></entry>
-                <entry><para> Lists errors in the current test session. With this option, historical RPC errors are not listed.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lst show_error clientsclients12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors] \[RPC: 20 errors, 0 dropped,12345-192.168.1.16@tcp: [Session: 0 brw errors, 0 ping errors] \[RPC: 1 errors, 0 dropped, Total 2 error nodes in clients$ lst show_error --session clientsclients12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors]Total 1 error nodes in clients</screen>
-      </section>
+  --distribute 4:2 --from clients brw WRITE size=16K</screen>
+      <para>In the example above, a batch test called bulkperf that will do a 16 kbyte bulk write request. In this test, two groups of four clients (sources) write to each of four servers (targets) as shown below:</para>
+      <itemizedlist>
+        <listitem>
+          <para> <literal>192.168.1.[10-13]</literal> will write to <literal>192.168.10.[100,101]</literal></para>
+        </listitem>
+        <listitem>
+          <para> <literal>192.168.1.[14-17]</literal> will write to <literal>192.168.10.[102,103]</literal></para>
+        </listitem>
+      </itemizedlist>
+      <para><emphasis role="bold">
+          <literal><emphasis role="bold">list_batch [</emphasis><emphasis><emphasis role="italic">&lt;name</emphasis>&gt;</emphasis><emphasis role="bold">] [--test</emphasis><emphasis> &lt;<emphasis role="italic">index</emphasis>&gt;</emphasis><emphasis role="bold">] [--active] [--invalid]</emphasis> [--server | client<emphasis role="bold">]</emphasis></literal>
+        </emphasis></para>
+      <para>Lists batches in the current session or lists client and server nodes in a batch or a test.</para>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para>--test<emphasis>&lt;index&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry nameend="c3" namest="c2">
+                <para>Lists tests in a batch. If no option is used, all tests in the batch are listed. IIf one of these options are used, only specified tests in the batch are listed:</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para><literal>active</literal></para>
+              </entry>
+              <entry>
+                <para>Lists only active batch tests.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <para><literal>invalid</literal></para>
+              </entry>
+              <entry>
+                <para>Lists only invalid batch tests.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> </para>
+              </entry>
+              <entry>
+                <literal>
+                  <para>server | client</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Lists client and server nodes in a batch test.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst list_batchbulkperf
+$ lst list_batch bulkperf
+Batch: bulkperf Tests: 1 State: Idle
+ACTIVE BUSY DOWN UNKNOWN TOTAL
+client 8 0 0 0 8
+server 4 0 0 0 4
+Test 1(brw) (loop: 100, concurrency: 4)
+ACTIVE BUSY DOWN UNKNOWN TOTAL
+client 8 0 0 0 8
+server 4 0 0 0 4
+$ lst list_batch bulkperf --server --active
+192.168.10.100@tcp Active
+192.168.10.101@tcp Active
+192.168.10.102@tcp Active
+192.168.10.103@tcp Active</screen>
+      <para><literal>
+          <emphasis role="bold">run</emphasis>
+          <emphasis role="bold">
+            <emphasis> &lt;<emphasis role="italic">name</emphasis>&gt;</emphasis>
+          </emphasis>
+        </literal></para>
+      <para>Runs the batch.</para>
+      <screen>$ lst run bulkperf</screen>
+      <para><literal>
+          <emphasis role="bold">
+            <emphasis role="bold">stop </emphasis>
+            <emphasis>&lt;<emphasis role="italic">name</emphasis>&gt;</emphasis>
+          </emphasis>
+        </literal></para>
+      <para>Stops the batch.</para>
+      <screen>$ lst stop bulkperf</screen>
+      <para><emphasis role="bold">
+          <literal>
+            <emphasis role="bold">query </emphasis>
+            <emphasis>&lt;<emphasis role="italic">name</emphasis>&gt; </emphasis>
+            <emphasis role="bold">[--test</emphasis>
+            <emphasis> &lt;<emphasis role="italic">index</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] [--timeout</emphasis>
+            <emphasis> &lt;<emphasis role="italic">seconds</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] [--loop</emphasis>
+            <emphasis>&lt;#&gt;</emphasis>
+            <emphasis role="bold">] [--delay</emphasis>
+             <emphasis>&lt;<emphasis role="italic">seconds</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] [--all]</emphasis>
+          </literal>
+        </emphasis></para>
+      <para>Queries the batch status.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para>--test<emphasis>&lt;index&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para> Only queries the specified test. The test index starts from 1.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--timeout<emphasis>&lt;seconds&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para> The timeout value to wait for RPC. The default is 5 seconds.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--loop<emphasis>&lt;#&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para> The loop count of the query.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--delay<emphasis>&lt;seconds&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para> The interval of each query. The default is 5 seconds.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--all</para>
+                </literal>
+              </entry>
+              <entry>
+                <para> The list status of all nodes in a batch or a test.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst run bulkperf
+$ lst query bulkperf --loop 5 --delay 3
+Batch is running
+Batch is running
+Batch is running
+Batch is running
+Batch is running
+$ lst query bulkperf --all
+192.168.1.10@tcp Running
+192.168.1.11@tcp Running
+192.168.1.12@tcp Running
+192.168.1.13@tcp Running
+192.168.1.14@tcp Running
+192.168.1.15@tcp Running
+192.168.1.16@tcp Running
+192.168.1.17@tcp Running
+$ lst stop bulkperf
+$ lst query bulkperf
+Batch is idle</screen>
     </section>
+    <section remap="h3">
+      <title>23.3.4 Other Commands</title>
+      <para>This section describes other <literal>lst</literal> commands.</para>
+      <para><literal>
+          <emphasis role="bold">
+            <emphasis role="bold">ping [-session] [--group</emphasis>
+            <emphasis>&lt;<emphasis role="italic">name</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] [--nodes</emphasis>
+            <emphasis> &lt;NIDs&gt;</emphasis>
+            <emphasis role="bold">] [--batch</emphasis>
+            <emphasis> &lt;<emphasis role="italic">name</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] [--server] [--timeout</emphasis>
+            <emphasis> &lt;<emphasis role="italic">seconds</emphasis>&gt;</emphasis>
+            <emphasis role="bold">]</emphasis>
+          </emphasis>
+        </literal></para>
+      <para>Sends a &apos;hello&apos; query to the nodes.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para>--session</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Pings all nodes in the current session.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--group<emphasis>&lt;name&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Pings all nodes in a specified group.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--nodes<emphasis>&lt;NIDs&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Pings all specified nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--batch<emphasis>&lt;name&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Pings all client nodes in a batch.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--server</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Sends RPC to all server nodes instead of client nodes. This option is only used with <literal>--batch<emphasis>&lt;name&gt;</emphasis></literal>.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--timeout<emphasis>&lt;seconds&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para>The RPC timeout value.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst ping 192.168.10.[15-20]@tcp
+192.168.1.15@tcp Active [session: liang id: 192.168.1.3@tcp]
+192.168.1.16@tcp Active [session: liang id: 192.168.1.3@tcp]
+192.168.1.17@tcp Active [session: liang id: 192.168.1.3@tcp]
+192.168.1.18@tcp Busy [session: Isaac id: 192.168.10.10@tcp]
+192.168.1.19@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]
+192.168.1.20@tcp Down [session: &lt;NULL&gt; id: LNET_NID_ANY]</screen>
+      <para><literal>
+          <emphasis role="bold">
+            <emphasis role="bold">stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] &quot; &quot; [--timeout</emphasis>
+            <emphasis> &lt;<emphasis role="italic">seconds</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] [--delay </emphasis>
+            <emphasis>&lt;<emphasis role="italic">seconds</emphasis>&gt;</emphasis>
+            <emphasis role="bold">] </emphasis>
+            <emphasis>&lt;<emphasis role="italic">group</emphasis>&gt;</emphasis>
+            <emphasis role="bold">|&lt;</emphasis>
+            <emphasis><emphasis role="italic">NIDs</emphasis>&gt; </emphasis>
+            <emphasis role="bold">[</emphasis>
+            <emphasis>&lt;<emphasis role="italic">group</emphasis>&gt;</emphasis>
+            <emphasis role="bold">|</emphasis>
+            <emphasis>&lt;<emphasis role="italic">NIDs</emphasis>&gt;</emphasis>
+            <emphasis role="bold">]</emphasis>
+          </emphasis>
+        </literal></para>
+      <para>The collection performance and RPC statistics of one or more nodes.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para>--bw</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the bandwidth of the specified group/nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--rate</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the rate of RPCs of the specified group/nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--read</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the read statistics of the specified group/nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--write</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the write statistics of the specified group/nodes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--max</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the maximum value of the statistics.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--min</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the minimum value of the statistics.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--avg</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Displays the average of the statistics.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--timeout<emphasis>&lt;seconds&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para>The timeout of the statistics RPC. The default is 5 seconds.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>
+                  <para>--delay<emphasis>&lt;seconds&gt;</emphasis></para>
+                </literal>
+              </entry>
+              <entry>
+                <para>The interval of the statistics (in seconds).</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst run bulkperf
+$ lst stat clients
+[LNet Rates of clients]
+[W] Avg: 1108 RPC/s Min: 1060 RPC/s Max: 1155 RPC/s
+[R] Avg: 2215 RPC/s Min: 2121 RPC/s Max: 2310 RPC/s
+[LNet Bandwidth of clients]
+[W] Avg: 16.60 MB/s Min: 16.10 MB/s Max: 17.1 MB/s
+[R] Avg: 40.49 MB/s Min: 40.30 MB/s Max: 40.68 MB/s</screen>
+      <para>Specifying a group name (<emphasis>
+          <literal>&lt;group&gt;</literal>
+        </emphasis>) causes statistics to be gathered for all nodes in a test group. For example:</para>
+      <screen>$ lst stat servers
+</screen>
+      <para>where servers is the name of a test group created by <literal>lst add_group</literal></para>
+      <para>Specifying a <literal>NID</literal> range (<emphasis>&lt;<literal>NIDs</literal>&gt;</emphasis>) causes statistics to be gathered for selected nodes. For example:</para>
+      <screen>$ lst stat 192.168.0.[1-100/2]@tcp</screen>
+      <para>Only LNET performance statistics are available. By default, all statistics
+information is displayed. Users can specify additional information with these options.</para>
+      <para><literal>
+          <emphasis role="bold">show_error [--session] [&lt;group&gt;|&lt;NIDs&gt;]...</emphasis>
+        </literal></para>
+      <para>Lists the number of failed RPCs on test nodes.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <literal>
+                  <para>--session</para>
+                </literal>
+              </entry>
+              <entry>
+                <para>Lists errors in the current test session. With this option, historical RPC errors are not listed.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Example:</emphasis></para>
+      <screen>$ lst show_error client
+sclients
+12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors] \
+  [RPC: 20 errors, 0 dropped,
+12345-192.168.1.16@tcp: [Session: 0 brw errors, 0 ping errors] \
+  [RPC: 1 errors, 0 dropped, Total 2 error nodes in clients
+$ lst show_error --session clients
+clients
+12345-192.168.1.15@tcp: [Session: 1 brw errors, 0 ping errors]
+Total 1 error nodes in clients</screen>
+    </section>
+  </section>
 </chapter>
