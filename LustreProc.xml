@@ -73,28 +73,28 @@ lustre-MDT0000</screen>
       </itemizedlist>
       <para>Specific Lustre timeouts are described below.</para>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lustre/timeout</replaceable>
+          /proc/sys/lustre/timeout
         </literal></para>
       <para>This is the time period that a client waits for a server to complete an RPC (default is 100s). Servers wait half of this time for a normal client RPC to complete and a quarter of this time for a single bulk request (read or write of up to 1 MB) to complete. The client pings recoverable targets (MDS and OSTs) at one quarter of the timeout, and the server waits one and a half times the timeout before evicting a client for being &quot;stale.&quot;</para>
       <note>
         <para>Lustre sends periodic &apos;PING&apos; messages to servers with which it had no communication for a specified period of time. Any network activity on the file system that triggers network traffic toward servers also works as a health check.</para>
       </note>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lustre/ldlm_timeout</replaceable>
+          /proc/sys/lustre/ldlm_timeout
         </literal></para>
       <para>This is the time period for which a server will wait for a client to reply to an initial AST (lock cancellation request) where default is 20s for an OST and 6s for an MDS. If the client replies to the AST, the server will give it a normal timeout (half of the client timeout) to flush any dirty data and release the lock.</para>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lustre/fail_loc</replaceable>
+          /proc/sys/lustre/fail_loc
         </literal></para>
       <para>This is the internal debugging failure hook.</para>
       <para>See <literal>lustre/include/linux/obd_support.h</literal> for the definitions of individual failure locations. The default value is 0 (zero).</para>
       <screen>sysctl -w lustre.fail_loc=0x80000122 # drop a single reply</screen>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lustre/dump_on_timeout</replaceable>
+          /proc/sys/lustre/dump_on_timeout
         </literal></para>
       <para>This triggers dumps of the Lustre debug log when timeouts occur. The default value is 0 (zero).</para>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lustre/dump_on_eviction</replaceable>
+          /proc/sys/lustre/dump_on_eviction
         </literal></para>
       <para>This triggers dumps of the Lustre debug log when an eviction occurs. The default value is 0 (zero). By default, debug logs are dumped to the /tmp folder; this location can be changed via /proc.</para>
     </section>
@@ -128,7 +128,7 @@ lustre-MDT0000</screen>
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">at_min</replaceable>
+                      at_min
                     </literal></para>
                 </entry>
                 <entry>
@@ -138,7 +138,7 @@ lustre-MDT0000</screen>
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">at_max</replaceable>
+                      at_max
                     </literal></para>
                 </entry>
                 <entry>
@@ -152,7 +152,7 @@ lustre-MDT0000</screen>
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">at_history</replaceable>
+                      at_history
                     </literal></para>
                 </entry>
                 <entry>
@@ -162,7 +162,7 @@ lustre-MDT0000</screen>
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">at_early_margin</replaceable>
+                      at_early_margin
                     </literal></para>
                 </entry>
                 <entry>
@@ -174,7 +174,7 @@ lustre-MDT0000</screen>
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">at_extra</replaceable>
+                      at_extra
                     </literal></para>
                 </entry>
                 <entry>
@@ -187,7 +187,7 @@ lustre-MDT0000</screen>
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">ldlm_enqueue_min</replaceable>
+                      ldlm_enqueue_min
                     </literal></para>
                 </entry>
                 <entry>
@@ -236,7 +236,7 @@ req_timeout               6 samples [sec] 1 10 15 105
       <title>31.1.4 LNET Information</title>
       <para>This section describes<literal> /proc</literal> entries for LNET information.</para>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lnet/peers</replaceable>
+          /proc/sys/lnet/peers
         </literal></para>
       <para>Shows all NIDs known to this node and also gives information on the queue state.</para>
       <screen># cat /proc/sys/lnet/peers
@@ -295,7 +295,7 @@ nid                        refs            state           max             rtr  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">max</replaceable>
+                    max
                   </literal></para>
               </entry>
               <entry>
@@ -305,7 +305,7 @@ nid                        refs            state           max             rtr  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">rtr</replaceable>
+                    rtr
                   </literal></para>
               </entry>
               <entry>
@@ -315,7 +315,7 @@ nid                        refs            state           max             rtr  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">min</replaceable>
+                    min
                   </literal></para>
               </entry>
               <entry>
@@ -325,7 +325,7 @@ nid                        refs            state           max             rtr  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">tx</replaceable>
+                    tx
                   </literal></para>
               </entry>
               <entry>
@@ -335,7 +335,7 @@ nid                        refs            state           max             rtr  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">min</replaceable>
+                    min
                   </literal></para>
               </entry>
               <entry>
@@ -345,7 +345,7 @@ nid                        refs            state           max             rtr  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">queue</replaceable>
+                    queue
                   </literal></para>
               </entry>
               <entry>
@@ -360,7 +360,7 @@ nid                        refs            state           max             rtr  
       <para>If <literal>rtr/tx</literal> is greater that max, there are operations blocking.</para>
       <para>LNET also limits concurrent sends and router buffers allocated to a single peer so that no peer can occupy all these resources.</para>
       <para><literal>
-          <replaceable role="bold">/proc/sys/lnet/nis</replaceable>
+          /proc/sys/lnet/nis
         </literal></para>
       <screen># cat /proc/sys/lnet/nis
 nid                                refs            peer            max             tx              min
@@ -386,7 +386,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">nid</replaceable>
+                    nid
                   </literal></para>
               </entry>
               <entry>
@@ -396,7 +396,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">refs</replaceable>
+                    refs
                   </literal></para>
               </entry>
               <entry>
@@ -406,7 +406,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">peer</replaceable>
+                    peer
                   </literal></para>
               </entry>
               <entry>
@@ -416,7 +416,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">max</replaceable>
+                    max
                   </literal></para>
               </entry>
               <entry>
@@ -426,7 +426,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">tx</replaceable>
+                    tx
                   </literal></para>
               </entry>
               <entry>
@@ -436,7 +436,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">min</replaceable>
+                    min
                   </literal></para>
               </entry>
               <entry>
@@ -446,7 +446,7 @@ nid                                refs            peer            max          
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">queue</replaceable>
+                    queue
                   </literal></para>
               </entry>
               <entry>
@@ -505,7 +505,7 @@ nid                                refs            peer            max          
     <title>31.2 Lustre I/O Tunables</title>
     <para>The section describes I/O tunables.</para>
     <para><literal>
-        <replaceable role="bold">/proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_cache_mb</replaceable>
+        /proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_cache_mb
       </literal></para>
     <screen># cat /proc/fs/lustre/llite/lustre-ce63ca00/max_cached_mb 128</screen>
     <para>This tunable is the maximum amount of inactive data cached by the client (default is 3/4 of RAM).</para>
@@ -521,19 +521,19 @@ blocksizefilesfree max_dirty_mb ost_server_uuid stats</screen>
       <para>... and so on.</para>
       <para>RPC stream tunables are described below.</para>
       <para><literal>
-          <replaceable role="bold">/proc/fs/lustre/osc/&lt;object name&gt;/max_dirty_mb</replaceable>
+          /proc/fs/lustre/osc/&lt;object name&gt;/max_dirty_mb
         </literal></para>
       <para>This tunable controls how many MBs of dirty data can be written and queued up in the OSC. POSIX file writes that are cached contribute to this count. When the limit is reached, additional writes stall until previously-cached writes are written to the server. This may be changed by writing a single ASCII integer to the file. Only values between 0 and 512 are allowable. If 0 is given, no writes are cached. Performance suffers noticeably unless you use large writes (1 MB or more).</para>
       <para><literal>
-          <replaceable role="bold">/proc/fs/lustre/osc/&lt;object name&gt;/cur_dirty_bytes</replaceable>
+          /proc/fs/lustre/osc/&lt;object name&gt;/cur_dirty_bytes
         </literal></para>
       <para>This tunable is a read-only value that returns the current amount of bytes written and cached on this OSC.</para>
       <para><literal>
-          <replaceable role="bold">/proc/fs/lustre/osc/&lt;object name&gt;/max_pages_per_rpc</replaceable>
+          /proc/fs/lustre/osc/&lt;object name&gt;/max_pages_per_rpc
         </literal></para>
       <para>This tunable is the maximum number of pages that will undergo I/O in a single RPC to the OST. The minimum is a single page and the maximum for this setting is platform dependent (256 for i386/x86_64, possibly less for ia64/PPC with larger <literal>PAGE_SIZE</literal>), though generally amounts to a total of 1 MB in the RPC.</para>
       <para><literal>
-          <replaceable role="bold">/proc/fs/lustre/osc/&lt;object name&gt;/max_rpcs_in_flight</replaceable>
+          /proc/fs/lustre/osc/&lt;object name&gt;/max_rpcs_in_flight
         </literal></para>
       <para>This tunable is the maximum number of concurrent RPCs in flight from an OSC to its OST. If the OSC tries to initiate an RPC but finds that it already has the same number of RPCs outstanding, it will wait to issue further RPCs until some complete. The minimum setting is 1 and maximum setting is 32. If you are looking to improve small file I/O performance, increase the <literal>max_rpcs_in_flight</literal> value.</para>
       <para>To maximize performance, the value for <literal>max_dirty_mb</literal> is recommended to be 4 * <literal>max_pages_per_rpc</literal> * <literal>max_rpcs_in_flight</literal>.</para>
@@ -658,7 +658,7 @@ R          8385            500                     600                     100  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">R/W</replaceable>
+                    R/W
                   </literal></para>
               </entry>
               <entry>
@@ -668,7 +668,7 @@ R          8385            500                     600                     100  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">PID</replaceable>
+                    PID
                   </literal></para>
               </entry>
               <entry>
@@ -678,7 +678,7 @@ R          8385            500                     600                     100  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">Range Start/Range End</replaceable>
+                    Range Start/Range End
                   </literal></para>
               </entry>
               <entry>
@@ -688,7 +688,7 @@ R          8385            500                     600                     100  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">Smallest Extent</replaceable>
+                    Smallest Extent
                   </literal></para>
               </entry>
               <entry>
@@ -698,7 +698,7 @@ R          8385            500                     600                     100  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">Largest Extent</replaceable>
+                    Largest Extent
                   </literal></para>
               </entry>
               <entry>
@@ -708,7 +708,7 @@ R          8385            500                     600                     100  
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">Offset</replaceable>
+                    Offset
                   </literal></para>
               </entry>
               <entry>
@@ -833,7 +833,7 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">pages per brw</replaceable>
+                    pages per brw
                   </literal></para>
               </entry>
               <entry>
@@ -843,7 +843,7 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">discont pages</replaceable>
+                    discont pages
                   </literal></para>
               </entry>
               <entry>
@@ -853,7 +853,7 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">discont blocks</replaceable>
+                    discont blocks
                   </literal></para>
               </entry>
               <entry>
@@ -892,11 +892,11 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
         <title>31.2.6.1 Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads by an application fail to be satisfied by the Linux buffer cache. The size of the initial readahead is 1 MB. Additional readaheads grow linearly, and increment until the readahead cache on the client is full at 40 MB.</para>
         <para><literal>
-            <replaceable role="bold">/proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_read_ahead_mb</replaceable>
+            /proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_read_ahead_mb
           </literal></para>
         <para>This tunable controls the maximum amount of data readahead on a file. Files are read ahead in RPC-sized chunks (1 MB or the size of read() call, if larger) after the second sequential read on a file descriptor. Random reads are done at the size of the read() call only (no readahead). Reads to non-contiguous regions of the file reset the readahead algorithm, and readahead is not triggered again until there are sequential reads again. To disable readahead, set this tunable to 0. The default value is 40 MB.</para>
         <para><literal>
-            <replaceable role="bold">/proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_read_ahead_whole_mb</replaceable>
+            /proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_read_ahead_whole_mb
           </literal></para>
         <para>This tunable controls the maximum size of a file that is read in its entirety, regardless of the size of the <literal>read()</literal>.</para>
       </section>
@@ -904,7 +904,7 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
         <title>31.2.6.2 Tuning Directory Statahead</title>
         <para>When the <literal>ls -l</literal> process opens a directory, its process ID is recorded. When the first directory entry is &apos;&apos;stated&apos;&apos; with this recorded process ID, a statahead thread is triggered which stats ahead all of the directory entries, in order. The <literal>ls -l</literal> process can use the stated directory entries directly, improving performance.</para>
         <para><literal>
-            <replaceable role="bold">/proc/fs/lustre/llite/*/statahead_max</replaceable>
+            /proc/fs/lustre/llite/*/statahead_max
           </literal></para>
         <para>This tunable controls whether directory <literal>statahead</literal> is enabled and the maximum statahead count. By default, statahead is active.</para>
         <para>To disable statahead, set this tunable to:</para>
@@ -1032,7 +1032,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
     <section remap="h3">
       <title>31.2.9 <literal>mballoc</literal> History</title>
       <para><literal>
-          <replaceable role="bold">/proc/fs/ldiskfs/sda/mb_history</replaceable>
+          /proc/fs/ldiskfs/sda/mb_history
         </literal></para>
       <para>Multi-Block-Allocate (<literal>mballoc</literal>), enables Lustre to ask <literal>ldiskfs</literal> to allocate multiple blocks with a single request to the block allocator. Typically, an <literal>ldiskfs</literal> file system allocates only one block per time. Each <literal>mballoc</literal>-enabled partition has this file. This is sample output:</para>
       <screen>pid  inode   goal            result          found   grps    cr      \   merge   tail    broken
@@ -1232,7 +1232,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">max_to_scan</replaceable>
+                    max_to_scan
                   </literal></para>
               </entry>
               <entry>
@@ -1242,7 +1242,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">min_to_scan</replaceable>
+                    min_to_scan
                   </literal></para>
               </entry>
               <entry>
@@ -1252,7 +1252,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">order2_req</replaceable>
+                    order2_req
                   </literal></para>
               </entry>
               <entry>
@@ -1262,7 +1262,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">stream_req</replaceable>
+                    stream_req
                   </literal></para>
               </entry>
               <entry>
@@ -1291,7 +1291,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">stats</replaceable>
+                    stats
                   </literal></para>
               </entry>
               <entry>
@@ -1301,7 +1301,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">max_to_scan</replaceable>
+                    max_to_scan
                   </literal></para>
               </entry>
               <entry>
@@ -1311,7 +1311,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">min_to_scan</replaceable>
+                    min_to_scan
                   </literal></para>
               </entry>
               <entry>
@@ -1321,7 +1321,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">order2_req</replaceable>
+                    order2_req
                   </literal></para>
               </entry>
               <entry>
@@ -1331,7 +1331,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">small_req</replaceable>
+                    small_req
                   </literal></para>
               </entry>
               <entry morerows="1">
@@ -1345,14 +1345,14 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">large_req</replaceable>
+                    large_req
                   </literal></para>
               </entry>
             </row>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">prealloc_table</replaceable>
+                    prealloc_table
                   </literal></para>
               </entry>
               <entry>
@@ -1362,7 +1362,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">group_prealloc</replaceable>
+                    group_prealloc
                   </literal></para>
               </entry>
               <entry>
@@ -1376,7 +1376,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
     <section remap="h3">
       <title>31.2.11 Locking</title>
       <para><literal>
-          <replaceable role="bold">/proc/fs/lustre/ldlm/ldlm/namespaces/&lt;OSC name|MDC name&gt;/lru_size</replaceable>
+          /proc/fs/lustre/ldlm/ldlm/namespaces/&lt;OSC name|MDC name&gt;/lru_size
         </literal></para>
       <para>The <literal>lru_size</literal> parameter is used to control the number of client-side locks in an LRU queue. LRU size is dynamic, based on load. This optimizes the number of locks available to nodes that have different workloads (e.g., login/build nodes vs. compute nodes vs. backup nodes).</para>
       <para>The total number of locks available is a function of the server&apos;s RAM. The default limit is 50 locks/1 MB of RAM. If there is too much memory pressure, then the LRU size is shrunk. The number of locks on the server is limited to {number of OST/MDT on node} * {number of clients} * {client lru_size}.</para>
@@ -1552,7 +1552,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
   <section xml:id="dbdoclet.50438271_83523">
     <title>31.3 Debug</title>
     <para><literal>
-        <replaceable role="bold">/proc/sys/lnet/debug</replaceable>
+        /proc/sys/lnet/debug
       </literal></para>
     <para>By default, Lustre generates a detailed log of all operations to aid in debugging. The level of debugging can affect the performance or speed you achieve with Lustre. Therefore, it is useful to reduce this overhead by turning down the debug level<footnote>
         <para>This controls the level of Lustre debugging kept in the internal log buffer. It does not alter the level of debugging that goes to syslog.</para>
@@ -1596,11 +1596,11 @@ neterror warning ha
 # cat /proc/sys/lnet/debug 
 neterror ha</screen>
     <para><literal>
-        <replaceable role="bold">/proc/sys/lnet/subsystem_debug</replaceable>
+        /proc/sys/lnet/subsystem_debug
       </literal></para>
     <para>This controls the debug logs for subsystems (see <literal>S_*</literal> definitions).</para>
     <para><literal>
-        <replaceable role="bold">/proc/sys/lnet/debug_path</replaceable>
+        /proc/sys/lnet/debug_path
       </literal></para>
     <para>This indicates the location where debugging symbols should be stored for <literal>gdb</literal>. The default is set to <literal>/r/tmp/lustre-log-localhost.localdomain</literal>.</para>
     <para>These values can also be set via <literal>sysctl -w lnet.debug={value}</literal></para>
@@ -1608,11 +1608,11 @@ neterror ha</screen>
       <para>The above entries only exist when Lustre has already been loaded.</para>
     </note>
     <para><literal>
-        <replaceable role="bold">/proc/sys/lnet/panic_on_lbug</replaceable>
+        /proc/sys/lnet/panic_on_lbug
       </literal></para>
     <para>This causes Lustre to call &apos;&apos;panic&apos;&apos; when it detects an internal problem (an <literal>LBUG</literal>); panic crashes the node. This is particularly useful when a kernel crash dump utility is configured. The crash dump is triggered when the internal inconsistency is detected by Lustre.</para>
     <para><literal>
-        <replaceable role="bold">/proc/sys/lnet/upcall</replaceable>
+        /proc/sys/lnet/upcall
       </literal></para>
     <para>This allows you to specify the path to the binary which will be invoked when an <literal>LBUG</literal> is encountered. This binary is called with four parameters. The first one is the string &apos;&apos;<literal>LBUG</literal>&apos;&apos;. The second one is the file where the <literal>LBUG</literal> occurred. The third one is the function name. The fourth one is the line number in the file.</para>
     <section remap="h3">
@@ -1696,7 +1696,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">Cur. Count</replaceable>
+                      Cur. Count
                     </literal></para>
                 </entry>
                 <entry>
@@ -1706,7 +1706,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">Cur. Rate</replaceable>
+                      Cur. Rate
                     </literal></para>
                 </entry>
                 <entry>
@@ -1716,7 +1716,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">#Events</replaceable>
+                      #Events
                     </literal></para>
                 </entry>
                 <entry>
@@ -1726,7 +1726,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">Unit</replaceable>
+                      Unit
                     </literal></para>
                 </entry>
                 <entry>
@@ -1736,7 +1736,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">last</replaceable>
+                      last
                     </literal></para>
                 </entry>
                 <entry>
@@ -1746,7 +1746,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">min</replaceable>
+                      min
                     </literal></para>
                 </entry>
                 <entry>
@@ -1756,7 +1756,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">avg</replaceable>
+                      avg
                     </literal></para>
                 </entry>
                 <entry>
@@ -1766,7 +1766,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">max</replaceable>
+                      max
                     </literal></para>
                 </entry>
                 <entry>
@@ -1776,7 +1776,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">stddev</replaceable>
+                      stddev
                     </literal></para>
                 </entry>
                 <entry>
@@ -1805,7 +1805,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">req_waittime</replaceable>
+                      req_waittime
                     </literal></para>
                 </entry>
                 <entry>
@@ -1815,7 +1815,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">req_qdepth</replaceable>
+                      req_qdepth
                     </literal></para>
                 </entry>
                 <entry>
@@ -1825,7 +1825,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">req_active</replaceable>
+                      req_active
                     </literal></para>
                 </entry>
                 <entry>
@@ -1835,7 +1835,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">reqbuf_avail</replaceable>
+                      reqbuf_avail
                     </literal></para>
                 </entry>
                 <entry>
@@ -1864,7 +1864,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">ldlm_enqueue</replaceable>
+                      ldlm_enqueue
                     </literal></para>
                 </entry>
                 <entry>
@@ -1874,7 +1874,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">mds_reint</replaceable>
+                      mds_reint
                     </literal></para>
                 </entry>
                 <entry>

@@ -288,7 +288,9 @@ lst end_session</screen>
         </tgroup>
       </informaltable>
       <para><emphasis role="bold">Example:</emphasis></para>
-      <screen>$ lst add_group servers 192.168.10.[35,40-45]@tcp$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\[10-20]@tcp</screen>
+      <screen>$ lst add_group servers 192.168.10.[35,40-45]@tcp
+$ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\
+  [10-20]@tcp</screen>
       <para><literal>
           <replaceable role="bold">update_group</replaceable>
           <replaceable>&lt;name&gt;</replaceable>
