@@ -123,7 +123,7 @@ summary_and_cleanup () {
     # actually failed though.  the first node in the END_RUN_NODE is
     # the one we are really interested in.
         if [ -n "$END_RUN_NODE" ]; then
-            var=$(client_var_name $END_RUN_NODE)_load
+            var=$(node_var_name $END_RUN_NODE)_load
             echo "Client load failed on node $END_RUN_NODE"
             echo
             echo "client $END_RUN_NODE load stdout and debug files :
@@ -222,7 +222,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     it_time_start=$(date +%s)
     
     FAIL_CLIENT=$(get_random_entry $NODES_TO_USE)
-    client_var=$(client_var_name $FAIL_CLIENT)_nums
+    client_var=$(node_var_name $FAIL_CLIENT)_nums
 
     # store the list of failed clients
     # lists are comma separated

@@ -1028,14 +1028,14 @@ check_progs_installed () {
 }
 
 # recovery-scale functions
-client_var_name() {
-    echo __$(echo $1 | tr '-' 'X')
+node_var_name() {
+    echo __$(echo $1 | tr '-' '_' | tr '.' '_')
 }
 
 start_client_load() {
     local client=$1
     local load=$2
-    local var=$(client_var_name $client)_load
+    local var=$(node_var_name $client)_load
     eval export ${var}=$load
 
     do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
@@ -1066,7 +1066,7 @@ start_client_loads () {
 # only for remote client 
 check_client_load () {
     local client=$1
-    local var=$(client_var_name $client)_load
+    local var=$(node_var_name $client)_load
     local TESTLOAD=run_${!var}.sh
 
     ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
@@ -1140,7 +1140,7 @@ restart_client_loads () {
         check_client_load $client
         rc=${PIPESTATUS[0]}
         if [ "$rc" != 0 -a "$expectedfail" ]; then
-            local var=$(client_var_name $client)_load
+            local var=$(node_var_name $client)_load
             start_client_load $client ${!var}
             echo "Restarted client load ${!var}: on $client. Checking ..."
             check_client_load $client

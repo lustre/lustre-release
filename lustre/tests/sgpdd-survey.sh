@@ -46,13 +46,13 @@ run_sgpdd_facets () {
     for facet in ${facets//,/ }; do
         local host=$(facet_host $facet)
         local dev=${facet}_dev
-        local var=${host}_devs
+        local var=$(node_var_name ${host}_devs)
         eval ${var}=$(expand_list ${!var} ${!dev})
         facetshosts=$(expand_list $facetshosts $host)
     done
 
     for host in ${facetshosts//,/ }; do
-        var=${host}_devs
+        var=$(node_var_name ${host}_devs)
         echo "=== $facets === $host === ${!var} ==="
         local scsidevs=${!var}
         run_sgpdd_host $host ${scsidevs}

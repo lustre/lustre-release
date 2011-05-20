@@ -119,7 +119,7 @@ summary_and_cleanup () {
     # actually failed though.  the first node in the END_RUN_NODE is
     # the one we are really interested in.
         if [ -n "$END_RUN_NODE" ]; then
-            var=$(client_var_name $END_RUN_NODE)_load
+            var=$(node_var_name $END_RUN_NODE)_load
             echo "Client load failed on node $END_RUN_NODE" 
             echo
             echo "client $END_RUN_NODE load stdout and debug files :
