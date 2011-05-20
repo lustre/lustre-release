@@ -30,7 +30,7 @@
 
 </itemizedlist>
     <section xml:id="dbdoclet.50438206_94597" >
-      <title>32.1 <anchor xreflabel=""/>l<anchor xml:id="dbdoclet.50438206_marker-1305209" xreflabel=""/>fs</title>
+        <title>32.1 <literal>lfs</literal></title>
       <para>The lfs utility can be used for user configuration routines and monitoring.</para>
       <section remap="h5">
         <title>Synopsis</title>
