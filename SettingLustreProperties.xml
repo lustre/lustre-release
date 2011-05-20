@@ -1,124 +1,138 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<chapter version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='settinglustreproperties'>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settinglustreproperties">
   <info>
-    <title xml:id='settinglustreproperties.title'>Setting Lustre Properties in a C Program (llapi)</title>
+    <title xml:id="settinglustreproperties.title">Setting Lustre Properties in a C Program (<literal>llapi</literal>)</title>
   </info>
-  <para>This chapter describes the llapi library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
-  <itemizedlist><listitem>
+  <para>This chapter describes the <literal>llapi</literal> library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
+  <itemizedlist>
+    <listitem>
       <para><xref linkend="dbdoclet.50438215_30970"/></para>
     </listitem>
-
-<listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438215_50149"/></para>
     </listitem>
-
-<listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438215_86607"/></para>
     </listitem>
-
-<listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438215_12433"/></para>
     </listitem>
-
-<listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438215_15718"/></para>
     </listitem>
+  </itemizedlist>
+  <note>
+    <para>Lustre programming interface man pages are found in the <literal>lustre/doc</literal> folder.</para>
+  </note>
+  <section xml:id="dbdoclet.50438215_30970">
+    <title>34.1 <literal>llapi_file_create</literal></title>
+    <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>#include &lt;lustre/liblustreapi.h&gt;
+#include &lt;lustre/lustre_user.h&gt;
 
-</itemizedlist>
-
-          <note><para>Lustre programming interface man pages are found in the lustre/doc folder.</para></note>
-
-    <section xml:id="dbdoclet.50438215_30970">
-      <title>34.1 llapi_file_create</title>
-      <para>Use llapi_file_create to set Lustre properties for a new file.</para>
-      <section remap="h5">
-        <title>Synopsis</title>
-        <screen>#include &lt;lustre/liblustreapi.h&gt;#include &lt;lustre/lustre_user.h&gt;
-int llapi_file_create(char *name, long stripe_size, int stripe_offset, int \
-stripe_count, int stripe_pattern);
+int llapi_file_create(char *name, long stripe_size, int stripe_offset, int stripe_count, int stripe_pattern);
 </screen>
-      </section>
-      <section remap="h5">
-        <title>Description</title>
-        <para>The llapi_file_create() function sets a file descriptor's Lustre striping information. The file descriptor is then accessed with open ().</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">llapi_file_create()</emphasis></para></entry>
-                <entry><para> If the file already exists, this parameter returns to 'EEXIST'. If the stripe parameters are invalid, this parameter returns to 'EINVAL'.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_size</emphasis></para></entry>
-                <entry><para> This value must be an even multiple of system page size, as shown by getpagesize (). The default Lustre stripe size is 4MB.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_offset</emphasis></para></entry>
-                <entry><para> Indicates the starting OST for this file.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_count</emphasis></para></entry>
-                <entry><para> Indicates the number of OSTs that this file will be striped across.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_pattern</emphasis></para></entry>
-                <entry><para>  Indicates the RAID pattern.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-                <note><para>Currently, only RAID 0 is supported. To use the system defaults, set these values: stripe_size = 0, stripe_offset = -1, stripe_count = 0, stripe_pattern = 0</para></note>
-      </section>
-      <section remap="h5">
-        <title>Examples</title>
-        <para>System default size is 4 MB.</para>
-        <screen>char *tfile = TESTFILE;
-int stripe_size = 65536
-</screen>
-         <para>To start at default, run:</para>
-        <screen>int stripe_offset = -1
-</screen>
-         <para>To start at the default, run:</para>
-        <screen>int stripe_count = 1
-</screen>
-         <para>To set a single stripe for this example, run:</para>
-        <screen>int stripe_pattern = 0
-</screen>
-         <para>Currently, only RAID 0 is supported.</para>
-        <screen>int stripe_pattern = 0; 
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The <literal>llapi_file_create()</literal> function sets a file descriptor&apos;s Lustre striping information. The file descriptor is then accessed with <literal>open()</literal>.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>llapi_file_create()</literal></para>
+              </entry>
+              <entry>
+                <para>If the file already exists, this parameter returns to &apos;<literal>EEXIST</literal>&apos;. If the stripe parameters are invalid, this parameter returns to &apos;<literal>EINVAL</literal>&apos;.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_size</literal></para>
+              </entry>
+              <entry>
+                <para>This value must be an even multiple of system page size, as shown by <literal>getpagesize()</literal>. The default Lustre stripe size is 4MB.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_offset</literal></para>
+              </entry>
+              <entry>
+                <para>Indicates the starting OST for this file.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_count</literal></para>
+              </entry>
+              <entry>
+                <para>Indicates the number of OSTs that this file will be striped across.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_pattern</literal></para>
+              </entry>
+              <entry>
+                <para>Indicates the RAID pattern.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <note>
+        <para>Currently, only RAID 0 is supported. To use the system defaults, set these values: <literal>stripe_size</literal> = 0, <literal>stripe_offset</literal> = -1, <literal>stripe_count</literal> = 0, <literal>stripe_pattern</literal> = 0</para>
+      </note>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para>System default size is 4 MB.</para>
+      <screen>char *tfile = TESTFILE;
+int stripe_size = 65536</screen>
+      <para>To start at default, run:</para>
+      <screen>int stripe_offset = -1</screen>
+      <para>To start at the default, run:</para>
+      <screen>int stripe_count = 1</screen>
+      <para>To set a single stripe for this example, run:</para>
+      <screen>int stripe_pattern = 0</screen>
+      <para>Currently, only RAID 0 is supported.</para>
+      <screen>int stripe_pattern = 0; 
 int rc, fd; 
-rc = llapi_file_create(tfile, stripe_size,stripe_offset, stripe_count,strip\
-e_pattern);
-</screen>
-         <para>Result code is inverted, you may return with 'EINVAL' or an ioctl error.</para>
-        <screen>if (rc) {
-fprintf(stderr,&quot;llapi_file_create failed: %d (%s) 0, rc, strerror(-rc));retu\
-rn -1; }
-</screen>
-        <para>llapi_file_create closes the file descriptor. You must re-open the descriptor. To do this, run:</para>
-        <screen>fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644); if (fd &lt; 0) \\
- { fprintf(stderr, &quot;Can't open %s file: %s0, tfile,
+rc = llapi_file_create(tfile, stripe_size,stripe_offset, stripe_count,stripe_pattern);</screen>
+      <para>Result code is inverted, you may return with &apos;<literal>EINVAL</literal>&apos; or an ioctl error.</para>
+      <screen>if (rc) {
+fprintf(stderr,&quot;llapi_file_create failed: %d (%s) 0, rc, strerror(-rc));return -1; }</screen>
+      <para><literal>llapi_file_create</literal> closes the file descriptor. You must re-open the descriptor. To do this, run:</para>
+      <screen>fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644); if (fd &lt; 0) \ { 
+fprintf(stderr, &quot;Can&apos;t open %s file: %s0, tfile,
 str-
 error(errno));
 return -1;
-}
-</screen>
-      </section>
+}</screen>
     </section>
-    <section xml:id="dbdoclet.50438215_50149">
-      <title>34.2 llapi_file_get_stripe</title>
-      <para>Use llapi_file_get_stripe to get striping information for a file or directory on a Lustre file system.</para>
-      <section remap="h5">
-        <title>Synopsis</title>
-        <screen>#include &lt;sys/types.h&gt; 
+  </section>
+  <section xml:id="dbdoclet.50438215_50149">
+    <title>34.2 llapi_file_get_stripe</title>
+    <para>Use <literal>llapi_file_get_stripe</literal> to get striping information for a file or directory on a Lustre file system.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>#include &lt;sys/types.h&gt; 
 #include &lt;sys/stat.h&gt; 
 #include &lt;fcntl.h&gt; 
 #include &lt;liblustre.h&gt; 
@@ -126,13 +140,12 @@ return -1;
 #include &lt;lustre/liblustreapi.h&gt; 
 #include &lt;lustre/lustre_user.h&gt; 
  
-int llapi_file_get_stripe(const char *<emphasis>path</emphasis>, void *<emphasis>lum</emphasis>);
-</screen>
-      </section>
-      <section remap="h5">
-        <title>Description</title>
-        <para>The llapi_file_get_stripe() function returns striping information for a file or directory <emphasis>path</emphasis> in <emphasis>lum</emphasis> (which should point to a large enough memory region) in one of the following formats:</para>
-        <screen>struct lov_user_md_v1 {
+int llapi_file_get_stripe(const char *<emphasis>path</emphasis>, void *<emphasis>lum</emphasis>);</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The <literal>llapi_file_get_stripe()</literal> function returns striping information for a file or directory <emphasis>path</emphasis> in <emphasis>lum</emphasis> (which should point to a large enough memory region) in one of the following formats:</para>
+      <screen>struct lov_user_md_v1 {
 __u32 lmm_magic;
 __u32 lmm_pattern;
 __u64 lmm_object_id;
@@ -152,121 +165,207 @@ __u16 lmm_stripe_count;
 __u16 lmm_stripe_offset;
 char lmm_pool_name[LOV_MAXPOOLNAME];
 struct lov_user_ost_data_v1 lmm_objects[0];
-} __attribute__((packed));
-</screen>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_magic</emphasis></para></entry>
-                <entry><para> Specifies the format of the returned striping information. <emphasis role="bold">LOV_MAGIC_V1</emphasis> isused for lov_user_md_v1. <emphasis role="bold">LOV_MAGIC_V3</emphasis> is used for lov_user_md_v3.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_pattern</emphasis></para></entry>
-                <entry><para> Holds the striping pattern. Only <emphasis role="bold">LOV_PATTERN_RAID0</emphasis> is possible in this Lustre version.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_object_id</emphasis></para></entry>
-                <entry><para> Holds the MDS object ID.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_object_gr</emphasis></para></entry>
-                <entry><para> Holds the MDS object group.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_stripe_size</emphasis></para></entry>
-                <entry><para> Holds the stripe size in bytes.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_stripe_count</emphasis></para></entry>
-                <entry><para> Holds the number of OSTs over which the file is striped.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_stripe_offset</emphasis></para></entry>
-                <entry><para> Holds the OST index from which the file starts.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_pool_name</emphasis></para></entry>
-                <entry><para> Holds the OST pool name to which the file belongs.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">lmm_objects</emphasis></para></entry>
-                <entry><para> An array of lmm_stripe_count members containing per OST file information in</para><para>the following format:</para><para>struct lov_user_ost_data_v1 {</para><para>__u64 l_object_id;</para><para>__u64 l_object_seq;</para><para>__u32 l_ost_gen;</para><para>__u32 l_ost_idx;</para><para>} __attribute__((packed));</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">l_object_id</emphasis></para></entry>
-                <entry><para> Holds the OST's object ID.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">l_object_seq</emphasis></para></entry>
-                <entry><para> Holds the OST's object group.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">l_ost_gen</emphasis></para></entry>
-                <entry><para> Holds the OST's index generation.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">l_ost_idx</emphasis></para></entry>
-                <entry><para> Holds the OST's index in LOV.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-      </section>
-      <section remap="h5">
-        <title>Return Values</title>
-        <para>llapi_file_get_stripe() returns:</para>
-        <para><emphasis role="bold">0</emphasis> On success</para>
-        <para><emphasis role="bold">!= 0</emphasis> On failure, <emphasis>errno</emphasis> is set appropriately</para>
-      </section>
-      <section remap="h5">
-        <title>Errors</title>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Errors</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">ENOMEM</emphasis></para></entry>
-                <entry><para> <emphasis role="bold">Failed to allocate memory</emphasis></para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENAMETOOLONG</emphasis></para></entry>
-                <entry><para> Path was too long</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOENT</emphasis></para></entry>
-                <entry><para> Path does not point to a file or directory</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOTTY</emphasis></para></entry>
-                <entry><para> Path does not point to a Lustre file system</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">EFAULT</emphasis></para></entry>
-                <entry><para> Memory region pointed by lum is not properly mapped</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-      </section>
-      <section remap="h5">
-        <title>Examples</title>
-        <screen>#include &lt;sys/vfs.h&gt;
+} __attribute__((packed));</screen>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>lmm_magic</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the format of the returned striping information. <literal>LOV_MAGIC_V1</literal> isused for lov_user_md_v1. LOV_MAGIC_V3 is used for <literal>lov_user_md_v3</literal>.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_pattern</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the striping pattern. Only <literal>LOV_PATTERN_RAID0</literal> is possible in this Lustre version.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_object_id</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the MDS object ID.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_object_gr</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the MDS object group.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_stripe_size</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the stripe size in bytes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_stripe_count</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the number of OSTs over which the file is striped.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_stripe_offset</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the OST index from which the file starts.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_pool_name</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the OST pool name to which the file belongs.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lmm_objects</literal></para>
+              </entry>
+              <entry>
+                <para>An array of <literal>lmm_stripe_count</literal> members containing per OST file information in</para>
+                <para>the following format:</para>
+                <screen>struct lov_user_ost_data_v1 {
+                __u64 l_object_id;
+                __u64 l_object_seq;
+                __u32 l_ost_gen;
+                __u32 l_ost_idx;
+                } __attribute__((packed));</screen>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>l_object_id</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the OST&apos;s object ID.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>l_object_seq</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the OST&apos;s object group.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>l_ost_gen</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the OST&apos;s index generation.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>l_ost_idx</literal></para>
+              </entry>
+              <entry>
+                <para>Holds the OST&apos;s index in LOV.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Return Values</title>
+      <para><literal>llapi_file_get_stripe()</literal> returns:</para>
+      <para><literal>0</literal> On success</para>
+      <para><literal>!= 0</literal> On failure, <literal>errno</literal> is set appropriately</para>
+    </section>
+    <section remap="h5">
+      <title>Errors</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Errors</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>ENOMEM</literal></para>
+              </entry>
+              <entry>
+                <para>Failed to allocate memory</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENAMETOOLONG</literal></para>
+              </entry>
+              <entry>
+                <para>Path was too long</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOENT</literal></para>
+              </entry>
+              <entry>
+                <para>Path does not point to a file or directory</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOTTY</literal></para>
+              </entry>
+              <entry>
+                <para>Path does not point to a Lustre file system</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>EFAULT</literal></para>
+              </entry>
+              <entry>
+                <para>Memory region pointed by lum is not properly mapped</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <screen>#include &lt;sys/vfs.h&gt;
 #include &lt;liblustre.h&gt;
 #include &lt;lnet/lnetctl.h&gt;
 #include &lt;obd.h&gt;
@@ -313,16 +412,15 @@ cleanup:
 if (lum_file != NULL)
 free(lum_file);
 return rc;
-}
-</screen>
-      </section>
+}</screen>
     </section>
-    <section xml:id="dbdoclet.50438215_86607">
-      <title>34.3 llapi_file_open</title>
-      <para>The llapi_file_open command opens (or creates) a file or device on a Lustre filesystem.</para>
-      <section remap="h5">
-        <title>Synopsis</title>
-        <screen>#include &lt;sys/types.h&gt; 
+  </section>
+  <section xml:id="dbdoclet.50438215_86607">
+    <title>34.3 <literal>llapi_file_open</literal></title>
+    <para>The <literal>llapi_file_open</literal> command opens (or creates) a file or device on a Lustre filesystem.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>#include &lt;sys/types.h&gt; 
 #include &lt;sys/stat.h&gt; 
 #include &lt;fcntl.h&gt; 
 #include &lt;liblustre.h&gt; 
@@ -336,92 +434,140 @@ int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long 
    int <emphasis>stripe_offset</emphasis>, int <emphasis>stripe_count</emphasis>, 
    int <emphasis>stripe_pattern</emphasis>);
 </screen>
-      </section>
-      <section remap="h5">
-        <title>Description</title>
-        <para>The llapi_file_create() call is equivalent to the llapi_file_open call with <emphasis>flags</emphasis> equal to O_CREAT|O_WRONLY and <emphasis>mode</emphasis> equal to 0644, followed by file close.</para>
-        <para>llapi_file_open() opens a file with a given name on a Lustre filesystem.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">flags</emphasis></para></entry>
-                <entry><para> Can be a combination of O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_EXCL, O_NOCTTY, O_TRUNC, O_APPEND, O_NONBLOCK, O_SYNC, FASYNC, O_DIRECT, O_LARGEFILE, O_DIRECTORY, O_NOFOLLOW, O_NOATIME.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">mode</emphasis></para></entry>
-                <entry><para> Specifies the permission bits to be used for a new file when O_CREAT is used.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_size</emphasis></para></entry>
-                <entry><para> Specifies stripe size (in bytes). Should be multiple of 64 KB, not exceeding 4 GB.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_offset</emphasis></para></entry>
-                <entry><para> Specifies an OST index from which the file should start. The default value is -1.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_count</emphasis></para></entry>
-                <entry><para> Specifies the number of OSTs to stripe the file across. The default value is -1.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">stripe_pattern</emphasis></para></entry>
-                <entry><para> Specifies the striping pattern. In this version of Lustre, only LOV_PATTERN_RAID0 is available. The default value is 0.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-      </section>
-      <section remap="h5">
-        <title>Return Values</title>
-        <para>llapi_file_open() and llapi_file_create() return:</para>
-        <para><emphasis role="bold">&gt;=0</emphasis> On success, for llapi_file_open the return value is a file descriptor</para>
-        <para><emphasis role="bold">&lt;0</emphasis> On failure, the absolute value is an error code</para>
-      </section>
-      <section remap="h5">
-        <title>Errors</title>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Errors</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">EINVAL</emphasis></para></entry>
-                <entry><para> <emphasis role="bold">stripe_size</emphasis> or <emphasis role="bold">stripe_offset</emphasis> or <emphasis role="bold">stripe_count</emphasis> or <emphasis role="bold">stripe_pattern</emphasis> is invalid.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">EEXIST</emphasis></para></entry>
-                <entry><para> Striping information has already been set and cannot be altered; <emphasis role="bold">name</emphasis> already exists.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">EALREADY</emphasis></para></entry>
-                <entry><para> Striping information has already been set and cannot be altered</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOTTY</emphasis></para></entry>
-                <entry><para> <emphasis role="bold">name</emphasis> may not point to a Lustre filesystem.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-      </section>
-      <section remap="h5">
-        <title>Example</title>
-        <screen>#include &lt;sys/types.h&gt;
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The <literal>llapi_file_create()</literal> call is equivalent to the <literal>llapi_file_open</literal> call with <emphasis>flags</emphasis> equal to <literal>O_CREAT|O_WRONLY</literal> and <emphasis>mode</emphasis> equal to <literal>0644</literal>, followed by file close.</para>
+      <para><literal>llapi_file_open()</literal> opens a file with a given name on a Lustre filesystem.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>flags</literal></para>
+              </entry>
+              <entry>
+                <para>Can be a combination of <literal>O_RDONLY</literal>, <literal>O_WRONLY</literal>, <literal>O_RDWR</literal>, <literal>O_CREAT</literal>, <literal>O_EXCL</literal>, <literal>O_NOCTTY</literal>, <literal>O_TRUNC</literal>, <literal>O_APPEND</literal>, <literal>O_NONBLOCK</literal>, <literal>O_SYNC</literal>, <literal>FASYNC</literal>, <literal>O_DIRECT</literal>, <literal>O_LARGEFILE</literal>, <literal>O_DIRECTORY</literal>, <literal>O_NOFOLLOW</literal>, <literal>O_NOATIME</literal>.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>mode</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the permission bits to be used for a new file when <literal>O_CREAT</literal> is used.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_size</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies stripe size (in bytes). Should be multiple of 64 KB, not exceeding 4 GB.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_offset</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies an OST index from which the file should start. The default value is -1.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_count</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the number of OSTs to stripe the file across. The default value is -1.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stripe_pattern</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the striping pattern. In this version of Lustre, only <literal>LOV_PATTERN_RAID0</literal> is available. The default value is 0.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Return Values</title>
+      <para><literal>llapi_file_open()</literal> and <literal>llapi_file_create()</literal> return:</para>
+      <para><literal>&gt;=0</literal> On success, for <literal>llapi_file_open</literal> the return value is a file descriptor</para>
+      <para><literal>&lt;0</literal> On failure, the absolute value is an error code</para>
+    </section>
+    <section remap="h5">
+      <title>Errors</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Errors</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>EINVAL</literal></para>
+              </entry>
+              <entry>
+                <para><literal>stripe_size</literal> or <literal>stripe_offset</literal> or <literal>stripe_count</literal> or <literal>stripe_pattern</literal> is invalid.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>EEXIST</literal></para>
+              </entry>
+              <entry>
+                <para> triping information has already been set and cannot be altered; <literal>name</literal> already exists.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>EALREADY</literal></para>
+              </entry>
+              <entry>
+                <para>Striping information has already been set and cannot be altered</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOTTY</literal></para>
+              </entry>
+              <entry>
+                <para> <literal>name</literal> may not point to a Lustre filesystem.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Example</title>
+      <screen>#include &lt;sys/types.h&gt;
 #include &lt;sys/stat.h&gt;
 #include &lt;fcntl.h&gt;
 #include &lt;errno.h&gt;
@@ -437,23 +583,21 @@ int main(int argc, char *argv[])
            return -1;
    rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
    if (rc &lt; 0) {
-           fprintf(stderr, &quot;file creation has failed, %s\n&quot;,         strerror\
-(-rc));
+           fprintf(stderr, &quot;file creation has failed, %s\n&quot;,         strerror(-rc));
            return -1;
    }
    printf(&quot;%s with stripe size 1048576, striped across 2 OSTs,&quot;
            &quot; has been created!\n&quot;, argv[1]);
    return 0;
-}
-</screen>
-      </section>
+}</screen>
     </section>
-    <section xml:id="dbdoclet.50438215_12433">
-      <title>34.4 llapi_quotactl</title>
-      <para>Use llapi_quotactl to manipulate disk quotas on a Lustre file system.</para>
-      <section remap="h5">
-        <title>Synopsis</title>
-        <screen>#include &lt;liblustre.h&gt;
+  </section>
+  <section xml:id="dbdoclet.50438215_12433">
+    <title>34.4 <literal>llapi_quotactl</literal></title>
+    <para>Use <literal>llapi_quotact</literal>l to manipulate disk quotas on a Lustre file system.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>#include &lt;liblustre.h&gt;
 #include &lt;lustre/lustre_idl.h&gt;
 #include &lt;lustre/liblustreapi.h&gt;
 #include &lt;lustre/lustre_user.h&gt;
@@ -489,137 +633,195 @@ struct obd_dqinfo {
 };
 struct obd_uuid {
         char uuid[40];
-};
-</screen>
-      </section>
-      <section remap="h5">
-        <title>Description</title>
-        <para>The llapi_quotactl() command manipulates disk quotas on a Lustre file system mount. qc_cmd indicates a command to be applied to UID qc_id or GID qc_id.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Option</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">LUSTRE_Q_QUOTAON</emphasis></para></entry>
-                <entry><para> Turns on quotas for a Lustre file system. <emphasis>qc_type</emphasis> is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quota). The quota files must exist. They are normally created with the llapi_quotacheck call. This call is restricted to the super user privilege.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">LUSTRE_Q_QUOTAOFF</emphasis></para></entry>
-                <entry><para> Turns off quotas for a Lustre file system. <emphasis>qc_type</emphasis> is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quota). This call is restricted to the super user privilege.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">LUSTRE_Q_GETQUOTA</emphasis></para></entry>
-                <entry><para> Gets disk quota limits and current usage for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is USRQUOTA or GRPQUOTA. <emphasis>uuid</emphasis> may be filled with OBD UUID string to query quota information from a specific node. <emphasis>dqb_valid</emphasis> may be set nonzero to query information only from MDS. If <emphasis>uuid</emphasis> is an empty string and <emphasis>dqb_valid</emphasis> is zero then cluster-wide limits and usage are returned. On return, <emphasis>obd_dqblk</emphasis> contains the requested information (block limits unit is kilobyte). Quotas must be turned on before using this command.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">LUSTRE_Q_SETQUOTA</emphasis></para></entry>
-                <entry><para> Sets disk quota limits for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is USRQUOTA or GRPQUOTA. <emphasis>dqb_valid</emphasis> must be set to QIF_ILIMITS, QIF_BLIMITS or QIF_LIMITS (both inode limits and block limits) dependent on updating limits. <emphasis>obd_dqblk</emphasis> must be filled with limits values (as set in <emphasis>dqb_valid</emphasis>, block limits unit is kilobyte). Quotas must be turned on before using this command.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">LUSTRE_Q_GETINFO</emphasis></para></entry>
-                <entry><para> Gets information about quotas. <emphasis>qc_type</emphasis> is either USRQUOTA or GRPQUOTA. On return, <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">LUSTRE_Q_SETINFO</emphasis></para></entry>
-                <entry><para> Sets quota information (like grace times). <emphasis>qc_type</emphasis> is either USRQUOTA or GRPQUOTA. <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version and must be zeroed.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-      </section>
-      <section remap="h5">
-        <title>Return Values</title>
-        <para>llapi_quotactl() returns:</para>
-        <para><emphasis role="bold">0</emphasis> On success</para>
-        <para><emphasis role="bold">-1</emphasis> On failure and sets error number (errno) to indicate the error</para>
-      </section>
-      <section remap="h5">
-        <title>Errors</title>
-        <para>llapi_quotactl errors are described below.</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry><para><emphasis role="bold">Errors</emphasis></para></entry>
-                <entry><para><emphasis role="bold">Description</emphasis></para></entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry><para> <emphasis role="bold">EFAULT</emphasis></para></entry>
-                <entry><para> <emphasis>qctl</emphasis> is invalid.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOSYS</emphasis></para></entry>
-                <entry><para> Kernel or Lustre modules have not been compiled with the QUOTA option.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOMEM</emphasis></para></entry>
-                <entry><para> Insufficient memory to complete operation.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOTTY</emphasis></para></entry>
-                <entry><para> <emphasis>qc_cmd</emphasis> is invalid.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">EBUSY</emphasis></para></entry>
-                <entry><para>  Cannot process during quotacheck.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ENOENT</emphasis></para></entry>
-                <entry><para> <emphasis>uuid</emphasis> does not correspond to OBD or <emphasis>mnt</emphasis> does not exist.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">EPERM</emphasis></para></entry>
-                <entry><para>  The call is privileged and the caller is not the super user.</para></entry>
-              </row>
-              <row>
-                <entry><para> <emphasis role="bold">ESRCH</emphasis></para></entry>
-                <entry><para>  No disk quota is found for the indicated user. Quotas have not been turned on for this file system.</para></entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-       </section>
+};</screen>
     </section>
-    <section xml:id="dbdoclet.50438215_15718">
-      <title>34.5 llapi_path2fid</title>
-      <para>Use llapi_path2fid to get the FID from the pathname.</para>
-      <section remap="h5">
-        <title>Synopsis</title>
-        <screen>#include &lt;lustre/liblustreapi.h&gt;
+    <section remap="h5">
+      <title>Description</title>
+      <para>The <literal>llapi_quotactl()</literal> command manipulates disk quotas on a Lustre file system mount. qc_cmd indicates a command to be applied to UID <literal>qc_id</literal> or GID <literal>qc_id</literal>.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>LUSTRE_Q_QUOTAON</literal></para>
+              </entry>
+              <entry>
+                <para>Turns on quotas for a Lustre file system. <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal>, <literal>GRPQUOTA</literal> or <literal>UGQUOTA</literal> (both user and group quota). The quota files must exist. They are normally created with the <literal>llapi_quotacheck</literal> call. This call is restricted to the super user privilege.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>LUSTRE_Q_QUOTAOFF</literal></para>
+              </entry>
+              <entry>
+                <para>Turns off quotas for a Lustre file system. <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal>, <literal>GRPQUOTA</literal> or <literal>UGQUOTA</literal> (both user and group quota). This call is restricted to the super user privilege.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>LUSTRE_Q_GETQUOTA</literal></para>
+              </entry>
+              <entry>
+                <para>Gets disk quota limits and current usage for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. <emphasis>uuid</emphasis> may be filled with <literal>OBD UUID</literal> string to query quota information from a specific node. <emphasis>dqb_valid</emphasis> may be set nonzero to query information only from MDS. If <emphasis>uuid</emphasis> is an empty string and <emphasis>dqb_valid</emphasis> is zero then cluster-wide limits and usage are returned. On return, <emphasis>obd_dqblk</emphasis> contains the requested information (block limits unit is kilobyte). Quotas must be turned on before using this command.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>LUSTRE_Q_SETQUOTA</literal></para>
+              </entry>
+              <entry>
+                <para>Sets disk quota limits for user or group <emphasis>qc_id</emphasis>. <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. <emphasis>dqb_valid</emphasis> must be set to <literal>QIF_ILIMITS</literal>, <literal>QIF_BLIMITS</literal> or <literal>QIF_LIMITS</literal> (both inode limits and block limits) dependent on updating limits. <emphasis>obd_dqblk</emphasis> must be filled with limits values (as set in <emphasis>dqb_valid</emphasis>, block limits unit is kilobyte). Quotas must be turned on before using this command.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>LUSTRE_Q_GETINFO</literal></para>
+              </entry>
+              <entry>
+                <para>Gets information about quotas. <emphasis>qc_type</emphasis> is either <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. On return, <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>LUSTRE_Q_SETINFO</literal></para>
+              </entry>
+              <entry>
+                <para>Sets quota information (like grace times). <emphasis>qc_type</emphasis> is either <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version and must be zeroed.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5"><title>Return Values</title><para><literal>llapi_quotactl()</literal> returns:</para><para><literal>0</literal> On success</para><para><literal>
+        -1
+</literal> On failure and sets error number (<literal>errno</literal>) to indicate the error</para></section>
+    <section remap="h5">
+      <title>Errors</title>
+      <para><literal>llapi_quotactl</literal> errors are described below.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Errors</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>EFAULT</literal></para>
+              </entry>
+              <entry>
+                <para><emphasis>qctl</emphasis> is invalid.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOSYS</literal></para>
+              </entry>
+              <entry>
+                <para>Kernel or Lustre modules have not been compiled with the <literal>QUOTA</literal> option.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOMEM</literal></para>
+              </entry>
+              <entry>
+                <para>Insufficient memory to complete operation.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOTTY</literal></para>
+              </entry>
+              <entry>
+                <para> <emphasis>qc_cmd</emphasis> is invalid.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>EBUSY</literal></para>
+              </entry>
+              <entry>
+                <para>Cannot process during quotacheck.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ENOENT</literal></para>
+              </entry>
+              <entry>
+                <para> <emphasis>uuid</emphasis> does not correspond to OBD or <emphasis>mnt</emphasis> does not exist.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>EPERM</literal></para>
+              </entry>
+              <entry>
+                <para>The call is privileged and the caller is not the super user.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ESRCH</literal></para>
+              </entry>
+              <entry>
+                <para>No disk quota is found for the indicated user. Quotas have not been turned on for this file system.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+  </section>
+  <section xml:id="dbdoclet.50438215_15718">
+    <title>34.5 <literal>llapi_path2fid</literal></title>
+    <para>Use <literal>llapi_path2fid</literal> to get the FID from the pathname.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>#include &lt;lustre/liblustreapi.h&gt;
 #include &lt;lustre/lustre_user.h&gt;
  
-int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long\
- *oid, unsigned long *ver)
-</screen>
-      </section>
-      <section remap="h5">
-        <title>Description</title>
-        <para>The llapi_path2fid function returns the FID (sequence : object ID : version) for the pathname.</para>
-      </section>
-      <section remap="h5">
-        <title>Return Values</title>
-        <para>llapi_path2fid returns:</para>
-        <para><emphasis role="bold">0</emphasis> On success</para>
-        <para>non-zero value On failure</para>
-      </section>
+int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long *oid, unsigned long *ver)</screen>
     </section>
-    <section xml:id="dbdoclet.50438215_marker-1297700">
-      <title>34.6 Example Using the llapi Library</title>
-      <para>Use llapi_file_create to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
-      <para>You can set striping from inside programs like ioctl. To compile the sample program, you need to download libtest.c and liblustreapi.c files from the Lustre source tree.</para>
-      <para><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
-      <screen>/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+    <section remap="h5">
+      <title>Description</title>
+      <para>The <literal>llapi_path2fid</literal> function returns the FID (sequence : object ID : version) for the pathname.</para>
+    </section>
+    <section remap="h5">
+      <title>Return Values</title>
+      <para><literal>llapi_path2fid</literal> returns:</para>
+      <para><literal>0</literal> On success</para>
+      <para>non-zero value On failure</para>
+    </section>
+  </section>
+  <section xml:id="dbdoclet.50438215_marker-1297700">
+    <title>34.6 Example Using the <literal>llapi</literal> Library</title>
+    <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
+    <para>You can set striping from inside programs like <literal>ioctl</literal>. To compile the sample program, you need to download libtest.c and liblustreapi.c files from the Lustre source tree.</para>
+    <para><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
+    <screen>/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * lustredemo - simple code examples of liblustreapi functions
@@ -637,34 +839,34 @@ int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long\
 #include &lt;lustre/liblustreapi.h&gt;
 #include &lt;lustre/lustre_user.h&gt;
 #define MAX_OSTS 1024
-#define LOV_EA_SIZE(lum, num) (sizeof(*lum) + num * sizeof(*lum-&gt;lmm_objects\
-))
+#define LOV_EA_SIZE(lum, num) (sizeof(*lum) + num * sizeof(*lum-&gt;lmm_objects))
 #define LOV_EA_MAX(lum) LOV_EA_SIZE(lum, MAX_OSTS)
+
+
+
+
  
 /* 
 This program provides crude examples of using the liblustre API functions 
 */
  
 /* Change these definitions to suit */
- 
-#define TESTDIR &quot;/tmp&quot;                                                   /* R\
-esults directory */
-#define TESTFILE &quot;lustre_dummy&quot;                                              \
-    /* Name for the file we create/destroy */
-#define FILESIZE 262144                                                    \
-/* Size of the file in words */
-#define DUMWORD &quot;DEADBEEF&quot;                                                   \
-    /* Dummy word used to fill files */
-#define MY_STRIPE_WIDTH 2                                                  \
-/* Set this to the number of OST required */
+
+
+
+
+#define TESTDIR &quot;/tmp&quot;           /* Results directory */
+#define TESTFILE &quot;lustre_dummy&quot;  /* Name for the file we create/destroy */
+#define FILESIZE 262144                    /* Size of the file in words */
+#define DUMWORD &quot;DEADBEEF&quot;       /* Dummy word used to fill files */
+#define MY_STRIPE_WIDTH 2                  /* Set this to the number of OST required */
 #define MY_LUSTRE_DIR &quot;/mnt/lustre/ftest&quot;
  
  
 int close_file(int fd)
 {      
    if (close(fd) &lt; 0) {
-           fprintf(stderr, &quot;File close failed: %d (%s)\n&quot;, errno, strerror(er\
-rno));
+           fprintf(stderr, &quot;File close failed: %d (%s)\n&quot;, errno, strerror(errno));
            return -1;
    }
    return 0;
@@ -686,14 +888,10 @@ int write_file(int fd)
 int open_stripe_file()
 {
    char *tfile = TESTFILE;
-   int stripe_size = 65536;                                                \
-                                /* System default is 4M */
-   int stripe_offset = -1;                                                 \
-                        /* Start at default */
-   int stripe_count = MY_STRIPE_WIDTH;                                     \
-                                        /*Single stripe for this demo*/
-   int stripe_pattern = 0;                                                 \
-                                /* only RAID 0 at this time */
+   int stripe_size = 65536;    /* System default is 4M */
+   int stripe_offset = -1;     /* Start at default */
+   int stripe_count = MY_STRIPE_WIDTH;  /*Single stripe for this demo*/
+   int stripe_pattern = 0;     /* only RAID 0 at this time */
    int rc, fd;
    /* 
    */
@@ -703,15 +901,13 @@ stripe_size,stripe_offset,stripe_count,stripe_pattern);
    We borrow an error message from sanity.c 
    */
    if (rc) {
-                fprintf(stderr,&quot;llapi_file_create failed: %d (%s) \n&quot;, rc, st\
-rerror(-rc));
+                fprintf(stderr,&quot;llapi_file_create failed: %d (%s) \n&quot;, rc, strerror(-rc));
                 return -1;
         }
         /* llapi_file_create closes the file descriptor, we must re-open */
         fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
         if (fd &lt; 0) {
-                fprintf(stderr, &quot;Can&apos;t open %s file: %d (%s)\n&quot;, tfile, errno\
-, strerror(errno));
+                fprintf(stderr, &quot;Can&apos;t open %s file: %d (%s)\n&quot;, tfile, errno, strerror(errno));
            return -1;
         }
         return fd;
@@ -720,15 +916,13 @@ rerror(-rc));
 /* output a list of uuids for this file */
 int get_my_uuids(int fd)
 {
-   struct obd_uuid uuids[1024], *uuidp;                                    \
-                                                /* Output var */
+   struct obd_uuid uuids[1024], *uuidp;        /* Output var */
    int obdcount = 1024;    
    int rc,i;
  
    rc = llapi_lov_get_uuids(fd, uuids, &amp;obdcount);
    if (rc != 0) {
-           fprintf(stderr, &quot;get uuids failed: %d (%s)\n&quot;,errno, strerror(errn\
-o));
+           fprintf(stderr, &quot;get uuids failed: %d (%s)\n&quot;,errno, strerror(errno));
         }
         printf(&quot;This file system has %d obds\n&quot;, obdcount);
         for (i = 0, uuidp = uuids; i &lt; obdcount; i++, uuidp++) {
@@ -753,8 +947,7 @@ int get_file_info(char *path)
         rc = llapi_file_get_stripe(path, lump);
         
         if (rc != 0) {
-           fprintf(stderr, &quot;get_stripe failed: %d (%s)\n&quot;,errno, strerror(err\
-no));
+           fprintf(stderr, &quot;get_stripe failed: %d (%s)\n&quot;,errno, strerror(errno));
            return -1;
         }
  
@@ -766,8 +959,7 @@ no));
    printf(&quot;Lov stripe count %hu\n&quot;, lump-&gt;lmm_stripe_count);
    printf(&quot;Lov stripe offset %u\n&quot;, lump-&gt;lmm_stripe_offset);
    for (i = 0; i &lt; lump-&gt;lmm_stripe_count; i++) {
-           printf(&quot;Object index %d Objid %llu\n&quot;, lump-&gt;lmm_objects[i].l_ost_i\
-dx, lump-&gt;lmm_objects[i].l_object_id);
+           printf(&quot;Object index %d Objid %llu\n&quot;, lump-&gt;lmm_objects[i].l_ost_idx, lump-&gt;lmm_objects[i].l_object_id);
         }
     
  
@@ -845,8 +1037,8 @@ int main()
    exit(rc);
 }  
 </screen>
-      <para><emphasis role="bold">Makefile for sample application:</emphasis></para>
-      <screen> 
+    <para><emphasis role="bold">Makefile for sample application:</emphasis></para>
+    <screen> 
 gcc -g -O2 -Wall -o lustredemo libtest.c -llustreapi
 clean:
 rm -f core lustredemo *.o
@@ -856,13 +1048,30 @@ rm -f /mnt/lustre/ftest/lustredemo
 rm -f /mnt/lustre/ftest/lustre_dummy
 cp lustredemo /mnt/lustre/ftest/
 </screen>
-      <section remap="h5">
-        <title>See Also</title>
-        <para>
-            <xref linkend="dbdoclet.50438215_30970"/>llapi_file_create, 
-            <xref linkend="dbdoclet.50438215_50149"/>llapi_file_get_stripe, 
-            <xref linkend="dbdoclet.50438215_86607"/>llapi_file_open, 
-            <xref linkend="dbdoclet.50438215_12433"/>llapi_quotactl</para>
-      </section>
+    <section remap="h5">
+      <title>See Also</title>
+  <itemizedlist>
+    <listitem>
+    <para>
+            <xref linkend="dbdoclet.50438215_30970"/>
+    </para>
+    </listitem>
+    <listitem>
+    <para>
+            <xref linkend="dbdoclet.50438215_50149"/>
+    </para>
+    </listitem>
+    <listitem>
+    <para>
+            <xref linkend="dbdoclet.50438215_86607"/>
+    </para>
+    </listitem>
+    <listitem>
+    <para>
+            <xref linkend="dbdoclet.50438215_12433"/>
+    </para>
+    </listitem>
+    </itemizedlist>
     </section>
+  </section>
 </chapter>

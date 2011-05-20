@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
-  <info>
-    <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNET)</title>
-  </info>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
+  <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNET)</title>
   <para>This chapter introduces Lustre Networking (LNET) and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -23,7 +20,7 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438191_22878">
-    <title>2.1 Introducing LNET</title>
+    <title>Introducing LNET</title>
     <para>In a cluster with a Lustre file system, the system network connecting the servers and the clients is implemented using Lustre Networking (LNET), which provides the communication infrastructure required by the Lustre file system.</para>
     <para>LNET supports many commonly-used network types, such as InfiniBand and IP networks, and allows simultaneous availability across multiple network types with routing between them. Remote Direct Memory Access (RDMA) is permitted when supported by underlying networks using the appropriate Lustre network driver (LND). High availability and recovery features enable transparent recovery in conjunction with failover servers.</para>
     <para>An LND is a pluggable driver that provides support for a particular network type. LNDs are loaded into the driver stack, with one LND for each network type in use.</para>
@@ -31,11 +28,11 @@
     <para>For information about administering LNET, see <xref linkend="adminlustrepart3"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438191_19625">
-    <title>2.2 Key Features of LNET</title>
+    <title>Key Features of LNET</title>
     <para>Key features of LNET include:</para>
     <itemizedlist>
       <listitem>
-        <para><anchor xml:id="dbdoclet.50438191_57931" xreflabel=""/>RDMA, when supported by underlying networks such as InfiniBand or Myrinet MX</para>
+        <para>RDMA, when supported by underlying networks such as InfiniBand or Myrinet MX</para>
       </listitem>
       <listitem>
         <para>Support for many commonly-used network types such as InfiniBand and TCP/IP</para>
@@ -51,7 +48,7 @@
     <para>Lustre can use bonded networks, such as bonded Ethernet networks, when the underlying network technology supports bonding. For more information, see <xref linkend="settingupbonding"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438191_20721">
-    <title>2.3 Supported Network Types</title>
+    <title>Supported Network Types</title>
     <para>LNET includes LNDs to support many network types including:</para>
     <itemizedlist>
       <listitem>
@@ -67,10 +64,10 @@
         <para> Myrinet: MX</para>
       </listitem>
       <listitem>
-        <para><anchor xml:id="dbdoclet.50438191_marker-1289887" xreflabel=""/> RapidArray: ra</para>
+        <para> RapidArray: ra</para>
       </listitem>
       <listitem>
-        <para><anchor xml:id="dbdoclet.50438191_marker-1289889" xreflabel=""/> Quadrics: Elan</para>
+        <para> Quadrics: Elan</para>
       </listitem>
     </itemizedlist>
   </section>
