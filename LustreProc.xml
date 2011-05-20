@@ -1815,7 +1815,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <replaceable role="bold">req<literal>_</literal>qdepth</replaceable>
+                      <replaceable role="bold">req_qdepth</replaceable>
                     </literal></para>
                 </entry>
                 <entry>
@@ -1835,7 +1835,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <emphasis role="bold">reqbuf_avail</emphasis>
+                      <replaceable role="bold">reqbuf_avail</replaceable>
                     </literal></para>
                 </entry>
                 <entry>
@@ -1864,7 +1864,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <emphasis role="bold">ldlm_enqueue</emphasis>
+                      <replaceable role="bold">ldlm_enqueue</replaceable>
                     </literal></para>
                 </entry>
                 <entry>
@@ -1874,7 +1874,7 @@ ost_write  21              2               59      [bytes]         7648424\    1
               <row>
                 <entry>
                   <para> <literal>
-                      <emphasis role="bold">mds_reint</emphasis>
+                      <replaceable role="bold">mds_reint</replaceable>
                     </literal></para>
                 </entry>
                 <entry>
