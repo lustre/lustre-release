@@ -20,7 +20,7 @@
   </itemizedlist>
   <section xml:id="dbdoclet.50438210_69313">
     <title>29.1 Overview and Prerequisites</title>
-    <para>Lustre can be installed from either pre-built binary packages (RPMs) or freely-available source code. Installing from the package release is recommended unless you need to customize the Lustre server kernel or will be using an Linux kernel that has not been tested with Lustre. For a list of supported Linux distributions and architectures, see the topic <ulink xl:href="http://wiki.lustre.org/index.php/Lustre_2.0">Lustre_2.0</ulink> on the Lustre wiki. The procedure for installing Lustre from RPMs is describe in <xref linkend="installinglustre">Chapter 8</xref>.</para>
+    <para>Lustre can be installed from either pre-built binary packages (RPMs) or freely-available source code. Installing from the package release is recommended unless you need to customize the Lustre server kernel or will be using an Linux kernel that has not been tested with Lustre. For a list of supported Linux distributions and architectures, see the topic <link xl:href="http://wiki.lustre.org/index.php/Lustre_2.0">Lustre_2.0</link> on the Lustre wiki. The procedure for installing Lustre from RPMs is describe in <xref linkend="installinglustre">Chapter 8</xref>.</para>
     <para>To install Lustre from source code, the following are required:</para>
     <itemizedlist>
       <listitem>
@@ -71,8 +71,8 @@
         </listitem>
       </itemizedlist>
       <para>A variety of <literal>quilt</literal> packages (RPMs, SRPMs and tarballs) are available from various sources. Use the most recent version you can find. <literal>quilt</literal> depends on several other utilities, e.g., the coreutils RPM that is only available in RedHat 9. For other RedHat kernels, you have to get the required packages to successfully install <literal>quilt</literal>. If you cannot locate a <literal>quilt</literal> package or fulfill its dependencies, you can build <literal>quilt</literal> from a tarball, available at the <literal>quilt</literal> project website:</para>
-      <para><ulink xl:href="http://savannah.nongnu.org/projects/quilt">http://savannah.nongnu.org/projects/quilt</ulink></para>
-      <para>For additional information on using Quilt, including its commands, see <ulink xl:href="http://www.suse.de/~agruen/quilt.pdf">Introduction to Quilt</ulink> and the <ulink xl:href="http://linux.die.net/man/1/quilt"><literal>quilt(1</literal>) man page.</ulink></para>
+      <para><link xl:href="http://savannah.nongnu.org/projects/quilt">http://savannah.nongnu.org/projects/quilt</link></para>
+      <para>For additional information on using Quilt, including its commands, see <link xl:href="http://www.suse.de/~agruen/quilt.pdf">Introduction to Quilt</link> and the <link xl:href="http://linux.die.net/man/1/quilt"><literal>quilt(1</literal>) man page.</link></para>
     </section>
     <section remap="h3">
       <title>29.2.2 Get the Lustre Source and Unpatched Kernel</title>
@@ -99,7 +99,7 @@
         </listitem>
         <listitem>
           <para>Download the Lustre source code.</para>
-          <para>On the <ulink xl:href="http://git.whamcloud.com/">Lustre download site</ulink>, select a version of Lustre to download and then select &apos;Source&apos; as the platform.</para>
+          <para>On the <link xl:href="http://git.whamcloud.com/">Lustre download site</link>, select a version of Lustre to download and then select &apos;Source&apos; as the platform.</para>
         </listitem>
         <listitem>
           <para>Download the unpatched kernel.</para>
@@ -261,7 +261,7 @@ $ echo &apos;%_topdir %(echo $HOME)/rpmbuild&apos; &gt; .rpmmacros</screen>
           </listitem>
           <listitem>
             <para>Install the patched Lustre source code.</para>
-            <para>This RPM is available at the <ulink xl:href="http://build.whamcloud.com">Lustre download site</ulink>.</para>
+            <para>This RPM is available at the <link xl:href="http://build.whamcloud.com">Lustre download site</link>.</para>
             <screen>$ rpm -ivh \
 kernel-lustre-source-2.6.18-92.1.10.el5_lustre.1.6.6.x86_64.rpm</screen>
           </listitem>
@@ -305,7 +305,7 @@ $ make install</screen>
         <para>Compile and install the Lustre source code.</para>
         <orderedlist>
           <listitem>
-            <para>Install the Lustre source (this can be done via RPM or tarball). The source file is available at the <ulink xl:href="http://git.whamcloud.com/">Lustre download site</ulink>. This example shows installation via the tarball.</para>
+            <para>Install the Lustre source (this can be done via RPM or tarball). The source file is available at the <link xl:href="http://git.whamcloud.com/">Lustre download site</link>. This example shows installation via the tarball.</para>
             <screen>$ cd /usr/src/
 $ gunzip lustre-1.6.6.tar.gz
 $ tar -xvf lustre-1.6.6.tar

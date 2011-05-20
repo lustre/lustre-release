@@ -110,7 +110,7 @@ lustre-MDT0000: ******* WARNING: Filesystem still has errors *******
       <listitem>
         <para>Make this file accessible on all OSTs, either by using a shared file system or copying the file to the OSTs. The <literal>pdcp</literal> command is useful here.</para>
         <para>The <literal>pdcp</literal> command (installed with <literal>pdsh</literal>), can be used to copy files to groups of hosts. <literal>pdcp</literal> is available here:</para>
-        <para><ulink xl:href="http://sourceforge.net/projects/pdsh">http://sourceforge.net/projects/pdsh</ulink></para>
+        <para><link xl:href="http://sourceforge.net/projects/pdsh">http://sourceforge.net/projects/pdsh</link></para>
       </listitem>
       <listitem>
         <para>Run a similar <literal>e2fsck</literal> step on the OSTs. The <literal>e2fsck --ostdb</literal> command can be run in parallel on all OSTs.</para>

@@ -214,9 +214,9 @@
   </section>
   <section xml:id="dbdoclet.50438198_30989">
     <title>26.2 Reporting a Lustre Bug</title>
-    <para>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <ulink xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</ulink>.</para>
-    <para>You can also post a question to the <ulink xl:href="http://wiki.lustre.org/index.php/Lustre_Mailing_Lists">lustre-discuss mailing list</ulink> or search the <ulink xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</ulink> for information about your issue.</para>
-    <para>A Lustre diagnostics tool is available for downloading at: <ulink xl:href="http://downloads.lustre.org/public/tools/lustre-diagnostics/">http://downloads.lustre.org/public/tools/lustre-diagnostics/</ulink></para>
+    <para>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
+    <para>You can also post a question to the <link xl:href="http://wiki.lustre.org/index.php/Lustre_Mailing_Lists">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
+    <para>A Lustre diagnostics tool is available for downloading at: <link xl:href="http://downloads.lustre.org/public/tools/lustre-diagnostics/">http://downloads.lustre.org/public/tools/lustre-diagnostics/</link></para>
     <para>You can run this tool to capture diagnostics output to include in the reported bug. To run this tool, enter one of these commands:</para>
     <screen># lustre-diagnostics -t &lt;bugzilla bug #&gt;
 # lustre-diagnostics.
