@@ -966,12 +966,20 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
                                      LDLM_GL_CALLBACK - LDLM_FIRST_OPC);
 
         rc = ptlrpc_queue_wait(req);
-        if (rc == -ELDLM_NO_LOCK_DATA)
+        /* Update the LVB from disk if the AST failed (this is a legal race)
+         *
+         * - Glimpse callback of local lock just return -ELDLM_NO_LOCK_DATA.
+         * - Glimpse callback of remote lock might return -ELDLM_NO_LOCK_DATA
+         *   when inode is cleared. LU-274
+         */
+        if (rc == -ELDLM_NO_LOCK_DATA) {
                 LDLM_DEBUG(lock, "lost race - client has a lock but no inode");
-        else if (rc != 0)
+                ldlm_res_lvbo_update(res, NULL, 1);
+        } else if (rc != 0) {
                 rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
-        else
+        } else {
                 rc = ldlm_res_lvbo_update(res, req, 1);
+        }
 
         ptlrpc_req_finished(req);
         if (rc == -ERESTART)
