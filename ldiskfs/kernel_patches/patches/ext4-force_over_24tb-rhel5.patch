@@ -1,0 +1,56 @@
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -57,6 +57,8 @@ MODULE_PARM_DESC(default_mb_history_leng
+ 
+ struct proc_dir_entry *ext4_proc_root;
+ 
++static int force_over_24tb;
++
+ static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
+ 			     unsigned long journal_devnum);
+ static int ext4_commit_super(struct super_block *sb, int sync);
+@@ -1151,6 +1153,7 @@ enum {
+ 	Opt_block_validity, Opt_noblock_validity,
+ 	Opt_inode_readahead_blks, Opt_journal_ioprio,
+ 	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_bigendian_extents,
++	Opt_force_over_24tb,
+ };
+ 
+ static match_table_t tokens = {
+@@ -1222,6 +1225,7 @@ static match_table_t tokens = {
+ 	{Opt_auto_da_alloc, "auto_da_alloc"},
+ 	{Opt_noauto_da_alloc, "noauto_da_alloc"},
+ 	{Opt_bigendian_extents, "bigendian_extents"},
++	{Opt_force_over_24tb, "force_over_24tb"},
+ 	{Opt_err, NULL},
+ };
+ 
+@@ -1674,6 +1678,9 @@ set_qf_format:
+ 			break;
+ 		case Opt_mballoc:
+ 			break;
++		case Opt_force_over_24tb:
++			force_over_24tb = 1;
++			break;
+ 		default:
+ 			ext4_msg(sb, KERN_ERR,
+ 			       "Unrecognized mount option \"%s\" "
+@@ -2715,6 +2722,16 @@ static int ext4_fill_super(struct super_
+ 		goto failed_mount;
+ 	}
+ 
++	if (ext4_blocks_count(es) >= (6ULL << 30)) {
++		if (force_over_24tb == 0) {
++			printk(KERN_ERR "EXT4-fs does not support filesystems "
++			       "greater than 24TB and can cause data corruption."
++			       "Use \"force_over_24tb\" mount option to override."
++			       "\n");
++			goto failed_mount;
++		}
++	}
++
+ 	if (EXT4_BLOCKS_PER_GROUP(sb) == 0)
+ 		goto cantfind_ext4;
+ 
