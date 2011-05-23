@@ -68,6 +68,11 @@ extern struct lustre_lock ldlm_handle_lock;
 static struct semaphore ldlm_ref_sem;
 static int ldlm_refcount;
 
+struct ldlm_cb_async_args {
+        struct ldlm_cb_set_arg *ca_set_arg;
+        struct ldlm_lock       *ca_lock;
+};
+
 static struct ldlm_state *ldlm_state;
 
 inline cfs_time_t round_timeout(cfs_time_t timeout)
@@ -617,14 +622,11 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 
 static int ldlm_cb_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
-        struct ldlm_cb_set_arg *arg;
-        struct ldlm_lock *lock;
+        struct ldlm_cb_async_args *ca = data;
+        struct ldlm_cb_set_arg *arg = ca->ca_set_arg;
+        struct ldlm_lock *lock = ca->ca_lock;
         ENTRY;
 
-        LASSERT(data != NULL);
-
-        arg = req->rq_async_args.pointer_arg[0];
-        lock = req->rq_async_args.pointer_arg[1];
         LASSERT(lock != NULL);
         if (rc != 0) {
                 rc = ldlm_handle_ast_error(lock, req, rc,
@@ -698,6 +700,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *desc,
                              void *data, int flag)
 {
+        struct ldlm_cb_async_args *ca;
         struct ldlm_cb_set_arg *arg = data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
@@ -722,8 +725,11 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req->rq_async_args.pointer_arg[0] = arg;
-        req->rq_async_args.pointer_arg[1] = lock;
+        CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
+        ca = ptlrpc_req_async_args(req);
+        ca->ca_set_arg = arg;
+        ca->ca_lock = lock;
+
         req->rq_interpret_reply = ldlm_cb_interpret;
         req->rq_no_resend = 1;
 
@@ -796,6 +802,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ldlm_cb_set_arg *arg = data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
+        struct ldlm_cb_async_args *ca;
         long total_enqueue_wait;
         __u32 size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body) };
@@ -821,8 +828,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req->rq_async_args.pointer_arg[0] = arg;
-        req->rq_async_args.pointer_arg[1] = lock;
+        CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
+        ca = ptlrpc_req_async_args(req);
+        ca->ca_set_arg = arg;
+        ca->ca_lock = lock;
+
         req->rq_interpret_reply = ldlm_cb_interpret;
         req->rq_no_resend = 1;
 

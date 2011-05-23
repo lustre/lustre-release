@@ -76,6 +76,10 @@ enum {
         LLOG_LCM_FL_EXIT        = 1 << 1
 };
 
+struct llcd_async_args {
+        struct llog_canceld_ctxt *la_ctxt;
+};
+
 static void llcd_print(struct llog_canceld_ctxt *llcd,
                        const char *func, int line)
 {
@@ -185,9 +189,11 @@ llcd_copy(struct llog_canceld_ctxt *llcd, struct llog_cookie *cookies)
  * in cleanup time when all inflight rpcs aborted.
  */
 static int
-llcd_interpret(struct ptlrpc_request *req, void *noused, int rc)
+llcd_interpret(struct ptlrpc_request *req, void *args, int rc)
 {
-        struct llog_canceld_ctxt *llcd = req->rq_async_args.pointer_arg[0];
+        struct llcd_async_args *la = args;
+        struct llog_canceld_ctxt *llcd = la->la_ctxt;
+
         CDEBUG(D_RPCTRACE, "Sent llcd %p (%d) - killing it\n", llcd, rc);
         llcd_free(llcd);
         return 0;
@@ -205,6 +211,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
         char *bufs[2] = { NULL, (char *)llcd->llcd_cookies };
         struct obd_import *import = NULL;
         struct llog_commit_master *lcm;
+        struct llcd_async_args *la;
         struct ptlrpc_request *req;
         struct llog_ctxt *ctxt;
         int rc;
@@ -270,7 +277,10 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
         ptlrpc_req_set_repsize(req, 1, NULL);
         ptlrpc_at_set_req_timeout(req);
         req->rq_interpret_reply = llcd_interpret;
-        req->rq_async_args.pointer_arg[0] = llcd;
+
+        CLASSERT(sizeof(*la) <= sizeof(req->rq_async_args));
+        la = ptlrpc_req_async_args(req);
+        la->la_ctxt = llcd;
 
         /* llog cancels will be replayed after reconnect so this will do twice
          * first from replay llog, second for resended rpc */
