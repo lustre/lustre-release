@@ -75,22 +75,6 @@
                            sigmask(SIGALRM))
 
 #ifdef __KERNEL__
-static inline sigset_t l_w_e_set_sigs(int sigs)
-{
-        sigset_t old;
-        unsigned long irqflags;
-
-        SIGNAL_MASK_LOCK(current, irqflags);
-        old = current->blocked;
-        siginitsetinv(&current->blocked, sigs);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, irqflags);
-
-        return old;
-}
-#endif
-
-#ifdef __KERNEL__
 /* initialize ost_lvb according to inode */
 static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
 {

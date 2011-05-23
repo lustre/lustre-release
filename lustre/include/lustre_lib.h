@@ -681,9 +681,9 @@ do {                                                                           \
                                                                                \
         /* Block all signals (just the non-fatal ones if no timeout). */       \
         if (info->lwi_on_signal != NULL && (__timeout == 0 || __allow_intr))   \
-                __blocked = l_w_e_set_sigs(LUSTRE_FATAL_SIGS);                 \
+                __blocked = cfs_block_sigsinv(LUSTRE_FATAL_SIGS);              \
         else                                                                   \
-                __blocked = l_w_e_set_sigs(0);                                 \
+                __blocked = cfs_block_sigsinv(0);                              \
                                                                                \
         for (;;) {                                                             \
                 unsigned       __wstate;                                       \
@@ -717,7 +717,7 @@ do {                                                                           \
                                 }                                              \
                                 /* Take signals after the timeout expires. */  \
                                 if (info->lwi_on_signal != NULL)               \
-                                    (void)l_w_e_set_sigs(LUSTRE_FATAL_SIGS);   \
+                                    (void)cfs_block_sigsinv(LUSTRE_FATAL_SIGS);\
                         }                                                      \
                 }                                                              \
                                                                                \

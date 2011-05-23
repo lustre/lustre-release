@@ -557,6 +557,13 @@ cfs_sigset_t cfs_block_sigs(sigset_t bit)
         return 0;
 }
 
+/* Block all signals except for the @sigs. It's only used in
+ * Linux kernel, just a dummy here. */
+cfs_sigset_t cfs_block_sigsinv(unsigned long sigs)
+{
+        return 0;
+}
+
 void cfs_restore_sigs(cfs_sigset_t old)
 {
 }

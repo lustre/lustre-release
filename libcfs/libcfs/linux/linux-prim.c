@@ -324,6 +324,22 @@ cfs_block_sigs(sigset_t bits)
         return old;
 }
 
+/* Block all signals except for the @sigs */
+cfs_sigset_t
+cfs_block_sigsinv(unsigned long sigs)
+{
+        unsigned long flags;
+        cfs_sigset_t old;
+
+        SIGNAL_MASK_LOCK(current, flags);
+        old = current->blocked;
+        siginitsetinv(&current->blocked, sigs);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+
+        return old;
+}
+
 void
 cfs_restore_sigs (cfs_sigset_t old)
 {
@@ -370,6 +386,7 @@ EXPORT_SYMBOL(cfs_daemonize);
 EXPORT_SYMBOL(cfs_daemonize_ctxt);
 EXPORT_SYMBOL(cfs_block_allsigs);
 EXPORT_SYMBOL(cfs_block_sigs);
+EXPORT_SYMBOL(cfs_block_sigsinv);
 EXPORT_SYMBOL(cfs_restore_sigs);
 EXPORT_SYMBOL(cfs_signal_pending);
 EXPORT_SYMBOL(cfs_clear_sigpending);

@@ -68,23 +68,4 @@ struct obd_ioctl_data;
                            sigmask(SIGTERM) | sigmask(SIGQUIT) |               \
                            sigmask(SIGALRM) | sigmask(SIGHUP))
 
-#ifdef __KERNEL__
-static inline sigset_t l_w_e_set_sigs(sigset_t sigs)
-{
-        sigset_t old = 0;
-
-        /* XXX Liang: how to change sigmask in Darwin8.x? 
-         * there is syscall like pthread_sigmask() but we cannot 
-         * use in kernel  */
-#if !defined(__DARWIN8__)
-        struct proc     *p = current_proc();
-        extern int block_procsigmask(struct proc *p,  int bit);
-        old = cfs_current()->uu_sigmask;
-        block_procsigmask(p, ~sigs);
-#endif
-
-        return old;
-}
-#endif
-
 #endif

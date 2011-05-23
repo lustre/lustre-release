@@ -947,6 +947,7 @@ static void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
 int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
 {
         cfs_waitlink_t waiter;
+        cfs_sigset_t blocked;
         int result;
 
         ENTRY;
@@ -958,6 +959,11 @@ int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
         cl_lock_trace(D_DLMTRACE, env, "state wait lock", lock);
         result = lock->cll_error;
         if (result == 0) {
+                /* To avoid being interrupted by the 'non-fatal' signals
+                 * (SIGCHLD, for instance), we'd block them temporarily.
+                 * LU-305 */
+                blocked = cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
+
                 cfs_waitlink_init(&waiter);
                 cfs_waitq_add(&lock->cll_wq, &waiter);
                 cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
@@ -970,6 +976,9 @@ int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
                 cfs_set_current_state(CFS_TASK_RUNNING);
                 cfs_waitq_del(&lock->cll_wq, &waiter);
                 result = cfs_signal_pending() ? -EINTR : 0;
+
+                /* Restore old blocked signals */
+                cfs_restore_sigs(blocked);
         }
         RETURN(result);
 }

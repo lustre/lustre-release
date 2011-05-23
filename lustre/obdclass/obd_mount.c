@@ -1432,7 +1432,7 @@ static void server_wait_finished(struct vfsmount *mnt)
                                       waited);
                /* Cannot use l_event_wait() for an interruptible sleep. */
                waited += 3;
-               blocked = l_w_e_set_sigs(sigmask(SIGKILL));
+               blocked = cfs_block_sigsinv(sigmask(SIGKILL));
                cfs_waitq_wait_event_interruptible_timeout(
                        waitq,
                        (atomic_read(&mnt->mnt_count) == 1),

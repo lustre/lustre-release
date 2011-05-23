@@ -303,6 +303,20 @@ cfs_sigset_t cfs_block_sigs(cfs_sigset_t blocks)
         return old;
 }
 
+/* Block all signals except for the @sigs. It's only used in
+ * Linux kernel, just a dummy here. */
+cfs_sigset_t cfs_block_sigsinv(unsigned long sigs)
+{
+        cfs_sigset_t old;
+        int rc;
+
+        /* Return old blocked sigs */
+        rc = sigprocmask(SIG_SETMASK, NULL, &old);
+        LASSERT(rc == 0);
+
+        return old;
+}
+
 void cfs_restore_sigs(cfs_sigset_t old)
 {
         int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
