@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremonitoring">
-  <info>
-    <title xml:id="lustremonitoring.title">Lustre Monitoring</title>
-  </info>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremonitoring">
+  <title xml:id="lustremonitoring.title">Lustre Monitoring</title>
   <para>This chapter provides information on monitoring Lustre and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -20,20 +17,24 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438273_18711">
-    <title>12.1 Lustre <anchor xml:id="dbdoclet.50438273_marker-1297383" xreflabel=""/>Changelogs</title>
+      <title><indexterm><primary>change logs</primary><see>monitoring</see></indexterm>
+<indexterm><primary>monitoring</primary></indexterm>
+<indexterm><primary>monitoring</primary><secondary>change logs</secondary></indexterm>
+
+Lustre Changelogs</title>
     <para>The changelogs feature records events that change the file system namespace or file metadata. Changes such as file creation, deletion, renaming, attribute changes, etc. are recorded with the target and parent file identifiers (FIDs), the name of the target, and a timestamp. These records can be used for a variety of purposes:</para>
     <itemizedlist>
       <listitem>
-        <para> Capture recent changes to feed into an archiving system.</para>
+        <para>Capture recent changes to feed into an archiving system.</para>
       </listitem>
       <listitem>
-        <para> Use changelog entries to exactly replicate changes in a file system mirror.</para>
+        <para>Use changelog entries to exactly replicate changes in a file system mirror.</para>
       </listitem>
       <listitem>
-        <para> Set up &quot;watch scripts&quot; that take action on certain events or directories.</para>
+        <para>Set up &quot;watch scripts&quot; that take action on certain events or directories.</para>
       </listitem>
       <listitem>
-        <para> Maintain a rough audit trail (file/directory changes with timestamps, but no user information).</para>
+        <para>Maintain a rough audit trail (file/directory changes with timestamps, but no user information).</para>
       </listitem>
     </itemizedlist>
     <para>Changelogs record types are:</para>
@@ -177,10 +178,13 @@
     </informaltable>
     <para>FID-to-full-pathname and pathname-to-FID functions are also included to map target and parent FIDs into the file system namespace.</para>
     <section remap="h3">
-      <title>12.1.1 Working with Changelogs</title>
+      <title><indexterm><primary>monitoring</primary><secondary>change logs</secondary></indexterm>
+Working with Changelogs</title>
       <para>Several commands are available to work with changelogs.</para>
       <section remap="h5">
-        <title>lctl changelog_register</title>
+        <title>
+          <literal>lctl changelog_register</literal>
+        </title>
         <para>Because changelog records take up space on the MDT, the system administration must register changelog users. The registrants specify which records they are &quot;done with&quot;, and the system purges up to the greatest common record.</para>
         <para>To register a new changelog user, run:</para>
         <screen>lctl --device &lt;mdt_device&gt; changelog_register
@@ -188,10 +192,11 @@
         <para>Changelog entries are not purged beyond a registered user&apos;s set point (see <literal>lfs changelog_clear</literal>).</para>
       </section>
       <section remap="h5">
-        <title>lfs changelog</title>
+        <title>
+          <literal>lfs changelog</literal>
+        </title>
         <para>To display the metadata changes on an MDT (the changelog records), run:</para>
-        <screen>lfs changelog &lt;MDT name&gt; [startrec [endrec]] 
-</screen>
+        <screen>lfs changelog &lt;MDT name&gt; [startrec [endrec]] </screen>
         <para>It is optional whether to specify the start and end records.</para>
         <para>These are sample changelog records:</para>
         <screen>2 02MKDIR 4298396676 0x0 t=[0x200000405:0x15f9:0x0] p=[0x13:0x15e5a7a3:0x0]\
@@ -201,33 +206,34 @@ x0] chloe.jpg
 4 06UNLNK 4298404466 0x0 t=[0x200000405:0x15fa:0x0] p=[0x200000405:0x15f9:0\
 x0] chloe.jpg 
 5 07RMDIR 4298405394 0x0 t=[0x200000405:0x15f9:0x0] p=[0x13:0x15e5a7a3:0x0]\
- pics 
-</screen>
+ pics </screen>
       </section>
       <section remap="h5">
-        <title>lfs changelog_clear</title>
+        <title>
+          <literal>lfs changelog_clear</literal>
+        </title>
         <para>To clear old changelog records for a specific user (records that the user no longer needs), run:</para>
-        <screen>lfs changelog_clear &lt;MDT name&gt; &lt;user ID&gt; &lt;endrec&gt;
-</screen>
+        <screen>lfs changelog_clear &lt;MDT name&gt; &lt;user ID&gt; &lt;endrec&gt;</screen>
         <para>The <literal>changelog_clear</literal> command indicates that changelog records previous to &lt;endrec&gt; are no longer of interest to a particular user &lt;user ID&gt;, potentially allowing the MDT to free up disk space. An <literal>&lt;endrec&gt;</literal> value of 0 indicates the current last record. To run <literal>changelog_clear</literal>, the changelog user must be registered on the MDT node using <literal>lctl</literal>.</para>
         <para>When all changelog users are done with records &lt; X, the records are deleted.</para>
       </section>
       <section remap="h5">
-        <title>lctl changelog_deregister</title>
+        <title>
+          <literal>lctl changelog_deregister</literal>
+        </title>
         <para>To deregister (unregister) a changelog user, run:</para>
         <screen>lctl --device &lt;mdt_device&gt; changelog_deregister &lt;user ID&gt;       </screen>
         <para> <literal>changelog_deregister cl1</literal> effectively does a <literal>changelog_clear cl1 0</literal> as it deregisters.</para>
       </section>
     </section>
     <section remap="h3">
-      <title>12.1.2 Changelog Examples</title>
+      <title>Changelog Examples</title>
       <para>This section provides examples of different changelog commands.</para>
       <section remap="h5">
         <title>Registering a Changelog User</title>
         <para>To register a new changelog user for a device (<literal>lustre-MDT0000</literal>):</para>
         <screen># lctl --device lustre-MDT0000 changelog_register
-lustre-MDT0000: Registered changelog userid &apos;cl1&apos;
-</screen>
+lustre-MDT0000: Registered changelog userid &apos;cl1&apos;</screen>
       </section>
       <section remap="h5">
         <title>Displaying Changelog Records</title>
@@ -239,8 +245,7 @@ lustre-MDT0000: Registered changelog userid &apos;cl1&apos;
 b4:0xca2c7dde:0x0] mydir 
 3 14SATTR 19:10:27.329356533 2010.03.24 0x0 t=[0x200000420:0x3:0x0] 
 4 01CREAT 19:10:37.113847713 2010.03.24 0x0 t=[0x200000420:0x4:0x0] p=[0x20\
-0000420:0x3:0x0] hosts 
-</screen>
+0000420:0x3:0x0] hosts </screen>
         <para>Changelog records include this information:</para>
         <screen>rec# 
 operation_type(numerical/text) 
@@ -249,51 +254,36 @@ datestamp
 flags 
 t=target_FID 
 p=parent_FID 
-target_name
-</screen>
+target_name</screen>
         <para>Displayed in this format:</para>
         <screen>rec# operation_type(numerical/text) timestamp datestamp flags t=target_FID \
-p=parent_FID target_name
-</screen>
+p=parent_FID target_name</screen>
         <para>For example:</para>
         <screen>4 01CREAT 19:10:37.113847713 2010.03.24 0x0 t=[0x200000420:0x4:0x0] p=[0x20\
-0000420:0x3:0x0] hosts
-</screen>
+0000420:0x3:0x0] hosts</screen>
       </section>
       <section remap="h5">
         <title>Clearing Changelog Records</title>
         <para>To notify a device that a specific user (<literal>cl1</literal>) no longer needs records (up to and including 3):</para>
-        <screen>$ lfs changelog_clear  lustre-MDT0000 cl1 3
-</screen>
+        <screen>$ lfs changelog_clear  lustre-MDT0000 cl1 3</screen>
         <para>To confirm that the <literal>changelog_clear</literal> operation was successful, run <literal>lfs changelog</literal>; only records after id-3 are listed:</para>
         <screen>$ lfs changelog lustre-MDT0000
 4 01CREAT 19:10:37.113847713 2010.03.24 0x0 t=[0x200000420:0x4:0x0] p=[0x20\
-0000420:0x3:0x0] hosts
-</screen>
+0000420:0x3:0x0] hosts</screen>
       </section>
       <section remap="h5">
         <title>Deregistering a Changelog User</title>
         <para>To deregister a changelog user (<literal>cl1</literal>) for a specific device (<literal>lustre-MDT0000</literal>):</para>
         <screen># lctl --device lustre-MDT0000 changelog_deregister cl1
-lustre-MDT0000: Deregistered changelog user &apos;cl1&apos;
-</screen>
+lustre-MDT0000: Deregistered changelog user &apos;cl1&apos;</screen>
         <para>The deregistration operation clears all changelog records for the specified user (<literal>cl1</literal>).</para>
         <screen>$ lfs changelog lustre-MDT0000
 5 00MARK  19:13:40.858292517 2010.03.24 0x0 t=[0x40001:0x0:0x0] p=[0:0x0:0x\
 0] mdd_obd-lustre-MDT0000-0 
 </screen>
-        <informaltable frame="none">
-          <tgroup cols="1">
-            <colspec colname="c1" colwidth="100*"/>
-            <tbody>
-              <row>
-                <entry>
-                  <para><emphasis role="bold">Note -</emphasis>MARK records typically indicate changelog recording status changes.</para>
-                </entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
+        <note>
+          <para>MARK records typically indicate changelog recording status changes.</para>
+        </note>
       </section>
       <section remap="h5">
         <title>Displaying the Changelog Index and Registered Users</title>
@@ -324,7 +314,7 @@ $ mkdir /mnt/lustre/mydir/foo
 $ cp /etc/hosts /mnt/lustre/mydir/foo/file
 $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
 </screen>
-        <para> Only item types that are in the mask show up in the changelog.</para>
+        <para>Only item types that are in the mask show up in the changelog.</para>
         <screen>$ lfs changelog lustre-MDT0000
 9 03HLINK 19:19:35.171867477 2010.03.24 0x0 t=[0x200000420:0x6:0x0] p=[0x20\
 0000420:0x3:0x0] myhardlink
@@ -333,24 +323,27 @@ $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
     </section>
   </section>
   <section xml:id="dbdoclet.50438273_81684">
-    <title>12.2 Lustre <anchor xml:id="dbdoclet.50438273_marker-1297386" xreflabel=""/>Monitoring Tool</title>
+    <title><indexterm><primary>monitoring</primary><secondary>Lustre Monitoring Tool</secondary></indexterm>
+Lustre Monitoring Tool</title>
     <para>The Lustre Monitoring Tool (LMT) is a Python-based, distributed system developed and maintained by Lawrence Livermore National Lab (LLNL)). It provides a &apos;&apos;top&apos;&apos; like display of activity on server-side nodes (MDS, OSS and portals routers) on one or more Lustre file systems. It does not provide support for monitoring clients. For more information on LMT, including the setup procedure, see:</para>
     <para><link xl:href="http://code.google.com/p/lmt/">http://code.google.com/p/lmt/</link></para>
     <para>LMT questions can be directed to:</para>
     <para><link xl:href="mailto:lmt-discuss@googlegroups.com">lmt-discuss@googlegroups.com</link></para>
   </section>
   <section xml:id="dbdoclet.50438273_80593">
-    <title>12.3 Collect<anchor xml:id="dbdoclet.50438273_marker-1297391" xreflabel=""/>L</title>
-    <para>CollectL is another tool that can be used to monitor Lustre. You can run CollectL on a Lustre system that has any combination of MDSs, OSTs and clients. The collected data can be written to a file for continuous logging and played back at a later time. It can also be converted to a format suitable for plotting.</para>
-    <para>For more information about CollectL, see:</para>
+    <title>
+      <literal>CollectL</literal>
+    </title>
+    <para><literal>CollectL</literal> is another tool that can be used to monitor Lustre. You can run <literal>CollectL</literal> on a Lustre system that has any combination of MDSs, OSTs and clients. The collected data can be written to a file for continuous logging and played back at a later time. It can also be converted to a format suitable for plotting.</para>
+    <para>For more information about <literal>CollectL</literal>, see:</para>
     <para><link xl:href="http://collectl.sourceforge.net">http://collectl.sourceforge.net</link></para>
     <para>Lustre-specific documentation is also available. See:</para>
     <para><link xl:href="http://collectl.sourceforge.net/Tutorial-Lustre.html">http://collectl.sourceforge.net/Tutorial-Lustre.html</link></para>
   </section>
   <section xml:id="dbdoclet.50438273_44185">
-    <title>12.4 Other Monitoring Options</title>
+    <title><indexterm><primary>monitoring</primary><secondary>additional tools</secondary></indexterm>
+Other Monitoring Options</title>
     <para>A variety of standard tools are available publically.</para>
-    <para>Another option is to script a simple monitoring solution that looks at various reports from ipconfig, as well as the procfs files generated by Lustre.</para>
-    <para><anchor xml:id="dbdoclet.50438273_67514" xreflabel=""/>&#160;</para>
+    <para>Another option is to script a simple monitoring solution that looks at various reports from <literal>ipconfig</literal>, as well as the <literal>procfs</literal> files generated by Lustre.</para>
   </section>
 </chapter>

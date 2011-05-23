@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringquotas">
-  <info>
-    <title xml:id="configuringquotas.title">Configuring and Managing Quotas</title>
-  </info>
+  <title xml:id="configuringquotas.title">Configuring and Managing Quotas</title>
   <para>This chapter describes how to configure quotas and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -25,7 +23,9 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438217_54945">
-    <title>21.1 Working with Quotas</title>
+      <title>
+          <indexterm><primary>Quotas</primary><secondary>configuring</secondary></indexterm>
+          Working with Quotas</title>
     <para>Quotas allow a system administrator to limit the amount of disk space a user or group can use in a directory. Quotas are set by root, and can be specified for individual users and/or groups. Before a file is written to a partition where quotas are set, the quota of the creator&apos;s group is checked. If a quota exists, then the file size counts towards the group&apos;s quota. If no quota exists, then the owner&apos;s user quota is checked before the file is written. Similarly, inode usage for specific functions can be controlled if a user over-uses the allocated space.</para>
     <para>Lustre quota enforcement differs from standard Linux quota enforcement in several ways:</para>
     <itemizedlist>
@@ -49,24 +49,22 @@
     </caution>
   </section>
   <section xml:id="dbdoclet.50438217_31982">
-    <title>21.2 Enabling Disk Quotas</title>
+    <title><indexterm><primary>Quotas</primary><secondary>enabling disk</secondary></indexterm>Enabling Disk Quotas</title>
     <para>Use this procedure to enable (configure) disk quotas in Lustre.</para>
     <orderedlist>
       <listitem>
-                  <para><emphasis role="bold">
-If you have re-complied your Linux kernel, be sure that <literal>CONFIG_QUOTA</literal> and <literal>CONFIG_QUOTACTL</literal> are enabled. Also, verify that <literal>CONFIG_QFMT_V1</literal> and/or <literal>CONFIG_QFMT_V2</literal> are enabled.</emphasis></para>
-        
+        <para>If you have re-complied your Linux kernel, be sure that <literal>CONFIG_QUOTA</literal> and <literal>CONFIG_QUOTACTL</literal> are enabled. Also, verify that <literal>CONFIG_QFMT_V1</literal> and/or <literal>CONFIG_QFMT_V2</literal> are enabled.</para>
         <para>Quota is enabled in all Linux 2.6 kernels supplied for Lustre.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Start the server.</emphasis></para>
+        <para>Start the server.</para>
       </listitem>
       <listitem>
-<para>
-        <emphasis role="bold">
-          Mount the Lustre file system on the client and verify that the <literal>lquota</literal> module has loaded properly by using the <literal>lsmod</literal> command.
-        </emphasis>
-        </para>   <screen>$ lsmod
+        <para>
+        Mount the Lustre file system on the client and verify that the <literal>lquota</literal> module has loaded properly by using the <literal>lsmod</literal> command.
+        
+        </para>
+        <screen>$ lsmod
 [root@oss161 ~]# lsmod
 Module                     Size                    Used by
 obdfilter          220532                  1
@@ -93,7 +91,7 @@ ksocklnd           111812                  1</screen>
       <para>If you are using <literal>mkfs.lustre --param mdt.quota_type=ug</literal> or <literal>tunefs.lustre --param ost.quota_type=ug</literal>, be sure to run the command on all OSTs and the MDT. Otherwise, abnormal results may occur.</para>
     </caution>
     <section remap="h4">
-      <title>21.2.0.1 Administrative and Operational Quotas</title>
+      <title><indexterm><primary>Quotas</primary><secondary>administrating</secondary></indexterm>Administrative and Operational Quotas</title>
       <para>Lustre has two kinds of quota files:</para>
       <itemizedlist>
         <listitem>
@@ -113,22 +111,22 @@ ksocklnd           111812                  1</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438217_49939">
-    <title>21.3 Creating Quota Files and Quota Administration</title>
+    <title><indexterm><primary>Quotas</primary><secondary>creating</secondary></indexterm>Creating Quota Files and Quota Administration</title>
     <para>Once each quota-enabled file system is remounted, it is capable of working with disk quotas. However, the file system is not yet ready to support quotas. If <literal>umount</literal> has been done regularly, run the <literal>lfs</literal> command with the <literal>quotaon</literal> option. If <literal>umount</literal> has not been done, perform these steps:</para>
     <orderedlist>
       <listitem>
-        <para><emphasis role="bold">Take Lustre &apos;&apos;offline&apos;&apos;.</emphasis></para>
+        <para>Take Lustre &apos;&apos;offline&apos;&apos;.</para>
         <para>That is, verify that no write operations (append, write, truncate, create or delete) are being performed (preparing to run <literal>lfs quotacheck</literal>). Operations that do not change Lustre files (such as read or mount) are okay to run.</para>
         <caution>
           <para>When <literal>lfs quotacheck</literal> is run, Lustre must NOT be performing any write operations. Failure to follow this caution may cause the statistic information of quota to be inaccurate. For example, the number of blocks used by OSTs for users or groups will be inaccurate, which can cause unexpected quota problems.</para>
         </caution>
       </listitem>
       <listitem>
-        <para> <emphasis role="bold">Run the <emphasis role="bold">
-              <literal>lfs</literal>
-            </emphasis> command with the <emphasis role="bold">
-              <literal>quotacheck</literal>
-            </emphasis> option:</emphasis></para>
+        <para> Run the <emphasis role="bold">
+            <literal>lfs</literal>
+          </emphasis> command with the <emphasis role="bold">
+            <literal>quotacheck</literal>
+          </emphasis> option:</para>
         <screen># lfs quotacheck -ug /mnt/lustre</screen>
         <para>By default, quota is turned on after <literal>quotacheck</literal> completes. Available options are:</para>
         <itemizedlist>
@@ -212,7 +210,7 @@ lustre-OST0001_UUID        0               -               16384           \
 -               0               -               0               -</screen>
   </section>
   <section xml:id="dbdoclet.50438217_15106">
-    <title>21.4 Quota Allocation</title>
+    <title><indexterm><primary>Quotas</primary><secondary>allocating</secondary></indexterm>Quota Allocation</title>
     <para>In Lustre, quota must be properly allocated or users may experience unnecessary failures. The file system block quota is divided up among the OSTs within the file system. Each OST requests an allocation which is increased up to the quota limit. The quota allocation is then <emphasis role="italic">quantized</emphasis> to reduce the number of quota-related request traffic. By default, Lustre supports both user and group quotas to limit disk usage and file counts.</para>
     <para>The quota system in Lustre is completely compatible with the quota systems used on other file systems. The Lustre quota system distributes quotas from the quota master. Generally, the MDS is the quota master for both inodes and blocks. All OSTs and the MDS are quota slaves to the OSS nodes. To reduce quota requests and get reasonably accurate quota distribution, the transfer quota unit (qunit) between quota master and quota slaves is changed dynamically by the lquota module. The default minimum value of qunit is 1 MB for blocks and 2 for inodes. The proc entries to set these values are: <literal>/proc/fs/lustre/mds/lustre-MDT*/quota_least_bunit</literal> and <literal>/proc/fs/lustre/mds/lustre-MDT*/quota_least_iunit</literal>. The default maximum value of <literal>qunit</literal> is 128 MB for blocks and 5120 for inodes. The proc entries to set these values are <literal>quota_bunit_sz</literal> and <literal>quota_iunit_sz</literal> in the MDT and OSTs.</para>
     <note>
@@ -271,9 +269,11 @@ lustre-OST0001_UUID        30720*          -               28872           \
       <para>It is not critical to know a file system&apos;s total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
       <para>The values set for the MDS must match the values set on the OSTs.</para>
       <para>The <literal>quota_bunit_sz</literal> parameter displays bytes, however <literal>lfs setquota</literal> uses KBs. The <literal>quota_bunit_sz</literal> parameter must be a multiple of 1024. A proper minimum KB size for <literal>lfs setquota</literal> can be calculated as:</para>
-      <informalexample><para>
+      <informalexample>
+        <para>
           <emphasis role="bold">Size in KBs = minimum_quota_bunit_sz * (number of OSTS + 1) = 1024 * (number of OSTs +1)</emphasis>
-        </para></informalexample>
+        </para>
+      </informalexample>
       <para>We add one (1) to the number of OSTs as the MDS also consumes KBs. As inodes are only consumed on the MDS, the minimum inode size for <literal>lfs setquota</literal> is equal to <literal>quota_iunit_sz</literal>.</para>
       <note>
         <para>Setting the quota below this limit may prevent the user from all file creation.</para>
@@ -281,32 +281,38 @@ lustre-OST0001_UUID        30720*          -               28872           \
     </section>
   </section>
   <section xml:id="dbdoclet.50438217_27895">
-    <title>21.5 Known Issues with Quotas</title>
+    <title><indexterm><primary>Quotas</primary><secondary>known issues</secondary></indexterm>Known Issues with Quotas</title>
     <para>Using quotas in Lustre can be complex and there are several known issues.</para>
     <section remap="h3">
-      <title>21.5.1 Granted Cache and Quota Limits</title>
+      <title>Granted Cache and Quota Limits</title>
       <para>In Lustre, granted cache does not respect quota limits. In this situation, OSTs grant cache to Lustre client to accelerate I/O. Granting cache causes writes to be successful in OSTs, even if they exceed the quota limits, and will overwrite them.</para>
       <para>The sequence is:</para>
       <orderedlist>
         <listitem>
-          <para><emphasis role="bold">A user writes files to Lustre.</emphasis></para>
+          <para>A user writes files to Lustre.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">If the Lustre client has enough granted cache, then it returns &apos;success&apos; to users and arranges the writes to the OSTs.</emphasis></para>
+          <para>If the Lustre client has enough granted cache, then it returns &apos;success&apos; to users and arranges the writes to the OSTs.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Because Lustre clients have delivered success to users, the OSTs cannot fail these writes.</emphasis></para>
+          <para>Because Lustre clients have delivered success to users, the OSTs cannot fail these writes.</para>
         </listitem>
       </orderedlist>
       <para>Because of granted cache, writes always overwrite quota limitations. For example, if you set a 400 GB quota on user A and use IOR to write for user A from a bundle of clients, you will write much more data than 400 GB, and cause an out-of-quota error (<literal>-EDQUOT</literal>).</para>
       <note>
         <para>The effect of granted cache on quota limits can be mitigated, but not eradicated. Reduce the <literal>max_dirty_buffer</literal> in the clients (can be set from 0 to 512). To set <literal>max_dirty_buffer</literal> to 0:</para>
-        <para> * In releases after Lustre 1.6.5, <literal>lctl set_param osc.*.max_dirty_mb=0</literal>.</para>
-        <para> * In releases before Lustre 1.6.5, <literal>proc/fs/lustre/osc/*/max_dirty_mb; do echo 512 &gt; $O</literal></para>
+        <itemizedlist>
+          <listitem>
+            <para>In releases after Lustre 1.6.5, <literal>lctl set_param osc.*.max_dirty_mb=0</literal>.</para>
+          </listitem>
+          <listitem>
+            <para>In releases before Lustre 1.6.5, <literal>proc/fs/lustre/osc/*/max_dirty_mb; do echo 512 &gt; $O</literal></para>
+          </listitem>
+        </itemizedlist>
       </note>
     </section>
     <section remap="h3">
-      <title>21.5.2 Quota Limits</title>
+      <title><indexterm><primary>Quotas</primary><secondary>limits</secondary></indexterm>Quota Limits</title>
       <para>Available quota limits depend on the Lustre version you are using.</para>
       <itemizedlist>
         <listitem>
@@ -400,7 +406,7 @@ lustre-OST0001_UUID        30720*          -               28872           \
       </itemizedlist>
     </section>
     <section xml:id="dbdoclet.50438217_66360">
-      <title>21.5.3 Quota File Formats</title>
+      <title><indexterm><primary>Quotas</primary><secondary>file formats</secondary></indexterm>Quota File Formats</title>
       <para>Lustre 1.6.5 introduced the v2 file format for administrative quotas, with 64-bit limits that support large-limits handling. The old quota file format (v1), with 32-bit limits, is also supported. Lustre 1.6.6 introduced the v2 file format for operational quotas. A few notes regarding the current quota file formats:</para>
       <para>Lustre 1.6.5 and later use <literal>mdt.quota_type</literal> to force a specific administrative quota version (v2 or v1).</para>
       <itemizedlist>
@@ -438,7 +444,7 @@ lustre-OST0001_UUID        30720*          -               28872           \
     </section>
   </section>
   <section xml:id="dbdoclet.50438217_20772">
-    <title>21.6 Lustre Quota Statistics</title>
+    <title><indexterm><primary>Quotas</primary><secondary>statistics</secondary></indexterm>Lustre Quota Statistics</title>
     <para>Lustre includes statistics that monitor quota activity, such as the kinds of quota RPCs sent during a specific period, the average time to complete the RPCs, etc. These statistics are useful to measure performance of a Lustre file system.</para>
     <para>Each quota statistic consists of a quota event and <literal>min_time</literal>, <literal>max_time</literal> and <literal>sum_time</literal> values for the event.</para>
     <informaltable frame="all">
@@ -572,7 +578,7 @@ lustre-OST0001_UUID        30720*          -               28872           \
       </tgroup>
     </informaltable>
     <section remap="h3">
-      <title>21.6.1 Interpreting Quota Statistics</title>
+      <title>Interpreting Quota Statistics</title>
       <para>Quota statistics are an important measure of a Lustre file system&apos;s performance. Interpreting these statistics correctly can help you diagnose problems with quotas, and may indicate adjustments to improve system performance.</para>
       <para>For example, if you run this command on the OSTs:</para>
       <screen>cat /proc/fs/lustre/lquota/lustre-OST0000/stats</screen>

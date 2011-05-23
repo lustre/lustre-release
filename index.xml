@@ -6,7 +6,9 @@
     <subtitle>Operations Manual</subtitle>
 
     <xi:include href="copyright.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Revision.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   </info>
+
 
   <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
@@ -28,4 +30,6 @@
                   
 
   <xi:include href="Glossary.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+  <xi:include href="ix.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </book>

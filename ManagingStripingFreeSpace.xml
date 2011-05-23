@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingstripingfreespace">
-  <info>
-    <title xml:id="managingstripingfreespace.title">Managing File Striping and Free Space</title>
-  </info>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingstripingfreespace">
+  <title xml:id="managingstripingfreespace.title">Managing File Striping and Free Space</title>
   <para>This chapter describes file striping and I/O options, and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -23,14 +20,21 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438209_79324">
-    <title>18.1 How Lustre Striping Works</title>
+      <title>
+          <indexterm><primary>space</primary></indexterm>
+          <indexterm><primary>striping</primary><secondary>how it works</secondary></indexterm>
+          <indexterm><primary>striping</primary><see>space</see></indexterm>
+          <indexterm><primary>space</primary><secondary>striping</secondary></indexterm>
+  How Lustre Striping Works</title>
     <para>Lustre uses a round-robin algorithm for selecting the next OST to which a stripe is to be written. Normally the usage of OSTs is well balanced. However, if users create a small number of exceptionally large files or incorrectly specify striping parameters, imbalanced OST usage may result.</para>
     <para>The MDS allocates objects on seqential OSTs. Periodically, it will adjust the striping layout to eliminate some degenerated cases where applications that create very regular file layouts (striping patterns) would preferentially use a particular OST in the sequence.</para>
     <para>Stripes are written to sequential OSTs until free space across the OSTs differs by more than 20%. The MDS will then use weighted random allocations with a preference for allocating objects on OSTs with more free space. This can reduce I/O performance until space usage is rebalanced to within 20% again.</para>
     <para>For a more detailed description of stripe assignments, see <xref linkend="dbdoclet.50438209_10424"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438209_48033">
-    <title>18.2 Lustre File <anchor xml:id="dbdoclet.50438209_marker-1291832" xreflabel=""/>Striping Considerations</title>
+      <title><indexterm><primary>striping</primary><secondary>considerations</secondary></indexterm>
+          <indexterm><primary>space</primary><secondary>considerations</secondary></indexterm>
+          Lustre File Striping Considerations</title>
     <para>Whether you should set up file striping and what parameter values you select depends on your need. A good rule of thumb is to stripe over as few objects as will meet those needs and no more.</para>
     <para>Some reasons for using striping include:</para>
     <itemizedlist>
@@ -56,7 +60,8 @@
       </listitem>
     </itemizedlist>
     <section remap="h3">
-      <title>18.2.1 Choosing a Stripe Size</title>
+        <title><indexterm><primary>striping</primary><secondary>size</secondary></indexterm>
+            Choosing a Stripe Size</title>
       <para>Choosing a stripe size is a small balancing act, but there are reasonable defaults.</para>
       <itemizedlist>
         <listitem>
@@ -81,35 +86,40 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438209_78664">
-    <title>18.3 Setting the File Layout/Striping Configuration (<literal>lfs setstripe</literal>)</title>
+      <title><indexterm><primary>striping</primary><secondary>configuration</secondary></indexterm>
+          Setting the File Layout/Striping Configuration (<literal>lfs setstripe</literal>)</title>
     <para>Use the <literal>lfs setstripe</literal> command to create new files with a specific file layout (stripe pattern) configuration.</para>
     <screen>lfs setstripe [--size|-s stripe_size] [--count|-c stripe_count] 
 [--index|-i start_ost] [--pool|-p pool_name] &lt;filename|dirname&gt; </screen>
-    <para>
-        <emphasis role="bold"><literal>stripe_size</literal></emphasis>
+    <para><emphasis role="bold">
+        <literal>stripe_size</literal>
+      </emphasis>
       </para>
     <para>The <literal>stripe_size</literal> indicates how much data to write to one OST before moving to the next OST. The default <literal>stripe_size</literal> is 1 MB, and passing a stripe_size of 0 causes the default stripe size to be used. Otherwise, the <literal>stripe_size</literal> value must be a multiple of 64 KB.</para>
-    <para>
-        <emphasis role="bold"><literal>stripe_count</literal></emphasis>
+    <para><emphasis role="bold">
+        <literal>stripe_count</literal>
+      </emphasis>
       </para>
     <para>The <literal>stripe_count</literal> indicates how many OSTs to use. The default <literal>stripe_count</literal> value is 1. Setting <literal>stripe_count</literal> to 0 causes the default stripe count to be used. Setting <literal>stripe_count</literal> to -1 means stripe over all available OSTs (full OSTs are skipped).</para>
-    <para>
-        <emphasis role="bold"><literal>start_ost</literal></emphasis>
+    <para><emphasis role="bold">
+        <literal>start_ost</literal>
+      </emphasis>
       </para>
     <para>The start OST is the first OST to which files are written. The default value for <literal>start_ost</literal> is -1, which allows the MDS to choose the starting index. This setting is strongly recommended, as it allows space and load balancing to be done by the MDS as needed. Otherwise, the file starts on the specified OST index. The numbering of the OSTs starts at 0.</para>
     <note>
       <para>If you pass a <literal>start_ost</literal> value of 0 and a <literal>stripe_count</literal> value of <emphasis>1</emphasis>, all files are written to OST 0, until space is exhausted. This is probably not what you meant to do. If you only want to adjust the stripe count and keep the other parameters at their default settings, do not specify any of the other parameters:</para>
       <para><screen>lfs setstripe -c &lt;stripe_count&gt; &lt;file&gt;</screen></para>
     </note>
-    <para>
-        <emphasis role="bold"><literal>pool_name</literal></emphasis>
+    <para><emphasis role="bold">
+        <literal>pool_name</literal>
+      </emphasis>
       </para>
     <para>Specify the OST pool on which the file will be written. This allows limiting the OSTs used to a subset of all OSTs in the file system. For more details about using OST pools, see <link xl:href="ManagingFileSystemIO.html#50438211_75549">Creating and Managing OST Pools</link>.</para>
     <section remap="h3">
-      <title>18.3.1 Using a Specific Striping Pattern/File Layout for a Single File</title>
+      <title>Using a Specific Striping Pattern/File Layout for a Single File</title>
       <para>It is possible to specify the file layout when a new file is created using the command <literal>lfs setstripe</literal>. This allows users to override the file system default parameters to tune the file layout more optimally for their application. Execution of an <literal>lfs setstripe</literal> command fails if the file already exists.</para>
       <section xml:id="dbdoclet.50438209_60155">
-        <title>18.3.1.1 Setting the Stripe Size</title>
+        <title>Setting the Stripe Size</title>
         <para>The command to create a new file with a specified stripe size is similar to:</para>
         <screen>[client]# lfs setstripe -s 4M /mnt/lustre/new_file</screen>
         <para>This example command creates the new file <literal>/mnt/lustre/new_file</literal> with a stripe size of 4 MB.</para>
@@ -124,7 +134,8 @@ obdidx     objid                   objid                           group
         <para>As can be seen, the stripe size is 4 MB.</para>
       </section>
       <section remap="h4">
-        <title>18.3.1.2 Setting the Stripe Count</title>
+          <title><indexterm><primary>striping</primary><secondary>count</secondary></indexterm>
+              Setting the Stripe Count</title>
         <para>The command below creates a new file with a stripe count of -1 to specify striping over all available OSTs:</para>
         <screen>[client]# lfs setstripe -c -1 /mnt/lustre/full_stripe</screen>
         <para>The example below indicates that the file full_stripe is striped over all six active OSTs in the configuration:</para>
@@ -141,19 +152,19 @@ obdidx objid objid group
       </section>
     </section>
     <section remap="h3">
-      <title>18.3.2 Changing Striping for a Directory</title>
+      <title><indexterm><primary>striping</primary><secondary>per directory</secondary></indexterm>Changing Striping for a Directory</title>
       <para>In a directory, the <literal>lfs setstripe</literal> command sets a default striping configuration for files created in the directory. The usage is the same as <literal>lfs setstripe</literal> for a regular file, except that the directory must exist prior to setting the default striping configuration. If a file is created in a directory with a default stripe configuration (without otherwise specifying striping), Lustre uses those striping parameters instead of the file system default for the new file.</para>
       <para>To change the striping pattern (file layout) for a sub-directory, create a directory with desired file layout as described above. Sub-directories inherit the file layout of the root/parent directory.</para>
     </section>
     <section remap="h3">
-      <title>18.3.3 Changing Striping for a File System</title>
+      <title><indexterm><primary>striping</primary><secondary>per file system</secondary></indexterm>Changing Striping for a File System</title>
       <para>Change the striping on the file system root will change the striping for all newly created files that would otherwise have a striping parameter from the parent directory or explicitly on the command line.</para>
       <note>
         <para>Striping of new files and sub-directories is done per the striping parameter settings of the root directory. Once you set striping on the root directory, then, by default, it applies to any new child directories created in that root directory (unless they have their own striping settings).</para>
       </note>
     </section>
     <section remap="h3">
-      <title>18.3.4 Creating a File on a Specific OST</title>
+      <title><indexterm><primary>striping</primary><secondary>on specific OST</secondary></indexterm>Creating a File on a Specific OST</title>
       <para>You can use <literal>lfs setstripe</literal> to create a file on a specific OST. In the following example, the file &quot;<literal>bob</literal>&quot; will be created on the first OST (id 0).</para>
       <screen>$ lfs setstripe --count 1 --index 0 bob
 $ dd if=/dev/zero of=bob count=1 bs=100M
@@ -169,10 +180,10 @@ bob
     </section>
   </section>
   <section xml:id="dbdoclet.50438209_44776">
-    <title>18.4 Retrieving File Layout/Striping Information (<literal>getstripe</literal>)</title>
+    <title><indexterm><primary>striping</primary><secondary>getting information</secondary></indexterm>Retrieving File Layout/Striping Information (<literal>getstripe</literal>)</title>
     <para>The <literal>lfs getstripe</literal> command is used to display information that shows over which OSTs a file is distributed. For each OST, the index and UUID is displayed, along with the OST index and object ID for each stripe in the file. For directories, the default settings for files created in that directory are printed.</para>
     <section remap="h3">
-      <title>18.4.1 Displaying the Current Stripe Size</title>
+      <title>Displaying the Current Stripe Size</title>
       <para>To see the current stripe size, use the <literal>lfs getstripe</literal> command on a Lustre file or directory. For example:</para>
       <screen>[client]# lfs getstripe /mnt/lustre </screen>
       <para>This command produces output similar to this:</para>
@@ -181,7 +192,7 @@ bob
       <para>In this example, the default stripe count is 1 (data blocks are striped over a single OSTs), the default stripe size is 1 MB, and objects are created over all available OSTs.</para>
     </section>
     <section remap="h3">
-      <title>18.4.2 Inspecting the File Tree</title>
+      <title>Inspecting the File Tree</title>
       <para>To inspect an entire tree of files, use the <literal>lfs</literal> find command:</para>
       <screen>lfs find [--recursive | -r] &lt;file or directory&gt; ...</screen>
       <para>You can also use <literal>ls -l /proc/<replaceable>&lt;pid&gt;</replaceable>/fd/</literal> to find open files using Lustre. For example:</para>
@@ -198,10 +209,10 @@ group
     </section>
   </section>
   <section xml:id="dbdoclet.50438209_10424">
-    <title>18.5 Managing Free Space</title>
+    <title><indexterm><primary>space</primary><secondary>free space</secondary></indexterm>Managing Free Space</title>
     <para>The MDT assigns file stripes to OSTs based on location (which OSS) and size considerations (free space) to optimize file system performance. Emptier OSTs are preferentially selected for stripes, and stripes are preferentially spread out between OSSs to increase network bandwidth utilization. The weighting factor between these two optimizations can be adjusted by the user.</para>
-    <section xml:id='dbdoclet.50438209_35838'>
-      <title>18.5.1 Checking File System Free Space</title>
+    <section xml:id="dbdoclet.50438209_35838">
+      <title>Checking File System Free Space</title>
       <para>Free space is an important consideration in assigning file stripes. The <literal>lfs df</literal> command shows available disk space on the mounted Lustre file system and space consumption per OST. If multiple Lustre file systems are mounted, a path may be specified, but is not required.</para>
       <informaltable frame="all">
         <tgroup cols="2">
@@ -220,9 +231,7 @@ group
           <tbody>
             <row>
               <entry>
-                <para> <emphasis role="bold">
-                    <literal>-h</literal>
-                  </emphasis></para>
+                <para> <literal>-h</literal></para>
               </entry>
               <entry>
                 <para> Human-readable print sizes in human readable format (for example: 1K, 234M, 5G).</para>
@@ -230,9 +239,7 @@ group
             </row>
             <row>
               <entry>
-                <para> <emphasis>
-                    <literal role="bold">-i, --inodes</literal>
-                  </emphasis></para>
+                <para> <literal role="bold">-i, --inodes</literal></para>
               </entry>
               <entry>
                 <para> Lists inodes instead of block usage.</para>
@@ -243,7 +250,7 @@ group
       </informaltable>
       <note>
         <para>The <literal>df -i</literal> and <literal>lfs df -i</literal> commands show the minimum number of inodes that can be created in the file system. Depending on the configuration, it may be possible to create more inodes than initially reported by <literal>df -i</literal>. Later, <literal>df -i</literal> operations will show the current, estimated free inode count.</para>
-        <para> If the underlying file system has fewer free blocks than inodes, then the total inode count for the file system reports only as many inodes as there are free blocks. This is done because Lustre may need to store an external attribute for each new inode, and it is better to report a free inode count that is the guaranteed, minimum number of inodes that can be created.</para>
+        <para>If the underlying file system has fewer free blocks than inodes, then the total inode count for the file system reports only as many inodes as there are free blocks. This is done because Lustre may need to store an external attribute for each new inode, and it is better to report a free inode count that is the guaranteed, minimum number of inodes that can be created.</para>
       </note>
       <para><emphasis role="bold">Examples</emphasis></para>
       <screen>[lin-cli1] $ lfs df
@@ -289,7 +296,8 @@ filesystem summary:        2211572                 41924                   \
 2169648                 1%              /mnt/lustre[OST:2]</screen>
     </section>
     <section remap="h3">
-      <title>18.5.2 Using Stripe Allocations</title>
+        <title><indexterm><primary>striping</primary><secondary>allocations</secondary></indexterm>
+            Using Stripe Allocations</title>
       <para>Two stripe allocation methods are provided: <emphasis>round-robin</emphasis> and <emphasis>weighted</emphasis>. By default, the allocation method is determined by the amount of free-space imbalance on the OSTs. The weighted allocator is used when any two OSTs are imbalanced by more than 20%. Otherwise, the faster round-robin allocator is used. (The round-robin order maximizes network balancing.)</para>
       <itemizedlist>
         <listitem>
@@ -349,7 +357,7 @@ filesystem summary:        2211572                 41924                   \
       </itemizedlist>
     </section>
     <section remap="h3">
-      <title>18.5.3 Adjusting the Weighting Between Free Space and Location</title>
+        <title><indexterm><primary>space</primary><secondary>locationg weighting</secondary></indexterm>>Adjusting the Weighting Between Free Space and Location</title>
       <para>The weighting priority can be adjusted in the <literal>/proc</literal> file <literal>/proc/fs/lustre/lov/lustre-mdtlov/qos_prio_free proc</literal>. The default value is 90%. Use this command on the MGS to permanently change this weighting:</para>
       <screen>lctl conf_param &lt;fsname&gt;-MDT0000.lov.qos_prio_free=90</screen>
       <para>Increasing this value puts more weighting on free space. When the free space priority is set to 100%, then location is no longer used in stripe-ordering calculations and weighting is based entirely on free space.</para>

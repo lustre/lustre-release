@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installinglustrefromsourcecode">
-  <info>
-    <title xml:id="installinglustrefromsourcecode.title">Installing Lustre from Source Code</title>
-  </info>
+  <title xml:id="installinglustrefromsourcecode.title">Installing Lustre from Source Code</title>
   <para>If you need to build a customized Lustre server kernel or are using a Linux kernel that has not been tested with the version of Lustre you are installing, you may need to build and install Lustre from source code. This chapter describes:</para>
   <itemizedlist>
     <listitem>
@@ -19,7 +17,9 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438210_69313">
-    <title>29.1 Overview and Prerequisites</title>
+      <title>
+          <indexterm><primary>installing</primary><secondary>from source</secondary></indexterm>
+          Overview and Prerequisites</title>
     <para>Lustre can be installed from either pre-built binary packages (RPMs) or freely-available source code. Installing from the package release is recommended unless you need to customize the Lustre server kernel or will be using an Linux kernel that has not been tested with Lustre. For a list of supported Linux distributions and architectures, see the topic <link xl:href="http://wiki.lustre.org/index.php/Lustre_2.0">Lustre_2.0</link> on the Lustre wiki. The procedure for installing Lustre from RPMs is describe in <xref linkend="installinglustre"/>.</para>
     <para>To install Lustre from source code, the following are required:</para>
     <itemizedlist>
@@ -46,16 +46,16 @@
       </listitem>
     </itemizedlist>
     <note>
-        <para>When using third-party network hardware with Lustre, the third-party modules (typically, the drivers) must be linked against the Linux kernel. The LNET modules in Lustre also need these references. To meet these requirements, a specific process must be followed to install and recompile Lustre. See <xref linkend="dbdoclet.50438210_27248"/>, for an example showing how to install Lustre 1.6.6 using the Myricom MX 1.2.7 driver. The same process can be used for other third-party network stacks.</para>
+      <para>When using third-party network hardware with Lustre, the third-party modules (typically, the drivers) must be linked against the Linux kernel. The LNET modules in Lustre also need these references. To meet these requirements, a specific process must be followed to install and recompile Lustre. See <xref linkend="dbdoclet.50438210_27248"/>, for an example showing how to install Lustre 1.6.6 using the Myricom MX 1.2.7 driver. The same process can be used for other third-party network stacks.</para>
     </note>
   </section>
   <section xml:id="dbdoclet.50438210_65411">
-    <title>29.2 Patching the Kernel</title>
+    <title><indexterm><primary>installing</primary><secondary>from source</secondary><tertiary>patching the kernel</tertiary></indexterm>Patching the Kernel</title>
     <para>If you are using non-standard hardware, plan to apply a Lustre patch, or have another reason not to use packaged Lustre binaries, you have to apply several Lustre patches to the core kernel and run the Lustre configure script against the kernel.</para>
     <section remap="h3">
-      <title>29.2.1 Introducing the <literal>quilt</literal> Utility</title>
-      <para>To simplify the process of applying Lustre patches to the kernel, we recommend that you use the <literal>qu</literal>ilt utility.</para>
-      <para><literal>quil</literal>t manages a stack of patches on a single source tree. A series file lists the patch files and the order in which they are applied. Patches are applied, incrementally, on the base tree and all preceding patches. You can:</para>
+      <title><indexterm><primary>quilt</primary></indexterm>Introducing the <literal>quilt</literal> Utility</title>
+      <para>To simplify the process of applying Lustre patches to the kernel, we recommend that you use the <literal>quilt</literal> utility.</para>
+      <para><literal>quilt</literal> manages a stack of patches on a single source tree. A series file lists the patch files and the order in which they are applied. Patches are applied, incrementally, on the base tree and all preceding patches. You can:</para>
       <itemizedlist>
         <listitem>
           <para>Apply patches from the stack (<literal>quilt push</literal>)</para>
@@ -75,7 +75,7 @@
       <para>For additional information on using Quilt, including its commands, see <link xl:href="http://www.suse.de/~agruen/quilt.pdf">Introduction to Quilt</link> and the <link xl:href="http://linux.die.net/man/1/quilt"><literal>quilt(1</literal>) man page.</link></para>
     </section>
     <section remap="h3">
-      <title>29.2.2 Get the Lustre Source and Unpatched Kernel</title>
+      <title>Get the Lustre Source and Unpatched Kernel</title>
       <para>The Lustre Engineering Team has targeted several Linux kernels for use with Lustre servers (MDS/OSS) and provides a series of patches for each one. The Lustre patches are maintained in the kernel_patch directory bundled with the Lustre source code.</para>
       <caution>
         <para>Lustre contains kernel modifications which interact with storage devices and may introduce security issues and data loss if not installed, configured and administered correctly. Before installing Lustre, be cautious and back up ALL data.</para>
@@ -90,10 +90,10 @@
           <para>For more information on these prerequisites, see:</para>
           <itemizedlist>
             <listitem>
-                <para> Hardware requirements in <xref linkend="settinguplustresystem"/>.</para>
+              <para> Hardware requirements in <xref linkend="settinguplustresystem"/>.</para>
             </listitem>
             <listitem>
-                <para> Software and environmental requirements in <xref linkend="dbdoclet.50438261_99193"/></para>
+              <para> Software and environmental requirements in <xref linkend="dbdoclet.50438261_99193"/></para>
             </listitem>
           </itemizedlist>
         </listitem>
@@ -108,7 +108,7 @@
       </orderedlist>
     </section>
     <section remap="h3">
-      <title>29.2.3 Patch the Kernel</title>
+      <title>Patch the Kernel</title>
       <para>This procedure describes how to use Quilt to apply the Lustre patches to the kernel. To illustrate the steps in this procedure, a RHEL 5 kernel is patched for Lustre 1.6.5.1.</para>
       <orderedlist>
         <listitem>
@@ -150,7 +150,10 @@ $ quilt push -av</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438210_47529">
-    <title>29.3 Creating and Installing the Lustre Packages</title>
+      <title>
+          <indexterm><primary>installing</primary><secondary>from source</secondary><tertiary>packaging</tertiary></indexterm>
+          
+          Creating and Installing the Lustre Packages</title>
     <para>After patching the kernel, configure it to work with Lustre, create the Lustre packages (RPMs) and install them.</para>
     <orderedlist>
       <listitem>
@@ -181,7 +184,7 @@ lustre-modules-1.6.5.1-\2.6.18_53.xx.xxel5_lustre.1.6.5.1.custom_20081021.i686.r
 
 lustre-source-1.6.5.1-\2.6.18_53.xx.xx.el5_lustre.1.6.5.1.custom_20081021.i686.rpm</screen>
         <note>
-            <para>If the steps to create the RPMs fail, contact Lustre Support by reporting a bug. See <xref linkend="dbdoclet.50438198_30989"/>.</para>
+          <para>If the steps to create the RPMs fail, contact Lustre Support by reporting a bug. See <xref linkend="dbdoclet.50438198_30989"/>.</para>
         </note>
         <note>
           <para>Several features and packages are available that extend the core functionality of Lustre. These features/packages can be enabled at the build time by issuing appropriate arguments to the configure command. For a list of these features and packages, run <literal>./configure -help</literal> in the Lustre source tree. The configs/ directory of the kernel source contains the config files matching each the kernel version. Copy one to <literal>.config</literal> at the root of the kernel tree.</para>
@@ -193,7 +196,7 @@ lustre-source-1.6.5.1-\2.6.18_53.xx.xx.el5_lustre.1.6.5.1.custom_20081021.i686.r
         <para>Example result:</para>
         <screen>kernel-2.6.95.0.3.EL_lustre.1.6.5.1custom-1.i686.rpm</screen>
         <note>
-            <para>Step <xref linkend="dbdoclet.50438210_41207"/> is only valid for RedHat and SuSE kernels. If you are using a stock Linux kernel, you need to get a script to create the kernel RPM.</para>
+          <para>Step <xref linkend="dbdoclet.50438210_41207"/> is only valid for RedHat and SuSE kernels. If you are using a stock Linux kernel, you need to get a script to create the kernel RPM.</para>
         </note>
       </listitem>
       <listitem>
@@ -246,7 +249,9 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
     </orderedlist>
   </section>
   <section xml:id="dbdoclet.50438210_27248">
-    <title>29.4 Installing Lustre with a Third-Party Network Stack</title>
+      <title>
+          <indexterm><primary>installing</primary><secondary>from source</secondary><tertiary>3rd-party network</tertiary></indexterm>
+          Installing Lustre with a Third-Party Network Stack</title>
     <para>When using third-party network hardware, you must follow a specific process to install and recompile Lustre. This section provides an installation example, describing how to install Lustre 1.6.6 while using the Myricom MX 1.2.7 driver. The same process is used for other third-party network stacks, by replacing MX-specific references in <xref linkend="dbdoclet.50438210_12366"/>  with the stack-specific build and using the proper <literal>--with</literal> option when configuring the Lustre source code.</para>
     <orderedlist>
       <listitem xml:id="dbdoclet.50438210_12366">

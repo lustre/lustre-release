@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreprogramminginterfaces">
-  <info>
-    <title xml:id="lustreprogramminginterfaces.title">Lustre Programming Interfaces</title>
-  </info>
+  <title xml:id="lustreprogramminginterfaces.title">Lustre Programming Interfaces</title>
   <para>This chapter describes public programming interfaces to control various aspects of Lustre from userspace. These interfaces are generally not guaranteed to remain unchanged over time, although we will make an effort to notify the user community well in advance of major changes. This chapter includes the following section:</para>
   <itemizedlist>
     <listitem>
@@ -16,21 +14,21 @@
     <para>Lustre programming interface man pages are found in the <literal>lustre/doc</literal> folder.</para>
   </note>
   <section xml:id="dbdoclet.50438291_32926">
-    <title>33.1 User/Group Cache Upcall</title>
+    <title><indexterm><primary>programming</primary><secondary>upcall</secondary></indexterm>User/Group Cache Upcall</title>
     <para>This section describes user and group upcall.</para>
     <note>
       <para>For information on a universal UID/GID, see <xref linkend="dbdoclet.50438261_19503"/>.</para>
     </note>
     <section remap="h3">
-      <title>33.1.1 Name</title>
+      <title>Name</title>
       <para>Use <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</literal> to look up a given user&apos;s group membership.</para>
     </section>
     <section remap="h3">
-      <title>33.1.2 Description</title>
+      <title>Description</title>
       <para>The group upcall file contains the path to an executable that, when installed, is invoked to resolve a numeric UID to a group membership list. This utility should complete the <literal>mds_grp_downcall_data</literal> data structure (see <xref linkend="dbdoclet.50438291_33759"/>) and write it to the <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal> pseudo-file.</para>
       <para>For a sample upcall program, see <literal>lustre/utils/l_getgroups.c</literal> in the Lustre source distribution.</para>
       <section remap="h4">
-        <title>33.1.2.1 Primary and Secondary Groups</title>
+        <title>Primary and Secondary Groups</title>
         <para>The mechanism for the primary/secondary group is as follows:</para>
         <itemizedlist>
           <listitem>
@@ -62,8 +60,7 @@
 * they can be listed together, seperated by &apos;,&apos;,
 * when perm and noperm are in the same line (item), noperm is preferential,
 * when they are in different lines (items), the latter is preferential,
-* &apos;*&apos; nid is as default perm, and is not preferential.*/
-</screen>
+* &apos;*&apos; nid is as default perm, and is not preferential.*/</screen>
         <para>Currently, <literal>rmtacl/normtacl</literal> can be ignored (part of security functionality), and used for remote clients. The /usr/sbin/l_getidentity utility can parse <literal>/etc/lustre/perm.conf</literal> to obtain permission mask for specified UID.</para>
         <itemizedlist>
           <listitem>
@@ -73,7 +70,7 @@
       </section>
     </section>
     <section remap="h3">
-      <title>33.1.3 Parameters</title>
+      <title>Parameters</title>
       <itemizedlist>
         <listitem>
           <para> Name of the MDS service</para>
@@ -83,8 +80,8 @@
         </listitem>
       </itemizedlist>
     </section>
-    <section remap="h3">
-      <title>33.1.4 <anchor xml:id="dbdoclet.50438291_33759" xreflabel=""/>Data Structures</title>
+    <section xml:id="dbdoclet.50438291_33759">
+      <title>Data Structures</title>
       <screen>struct identity_downcall_data {
    __u32           idd_magic;
    __u32           idd_err;
@@ -98,7 +95,7 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438291_73963">
-    <title>33.2 <literal>l_getgroups</literal><anchor xml:id="dbdoclet.50438291_marker-1294565" xreflabel=""/> Utility</title>
+    <title><indexterm><primary>programming</primary><secondary>l_getgroups</secondary></indexterm><literal>l_getgroups</literal> Utility</title>
     <para>The <literal>l_getgroups</literal> utility handles Lustre user/group cache upcall.</para>
     <section remap="h5">
       <title>Synopsis</title>

@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="troubleshootingrecovery">
-  <info>
-    <title xml:id="troubleshootingrecovery.title">Troubleshooting Recovery</title>
-  </info>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="troubleshootingrecovery">
+  <title xml:id="troubleshootingrecovery.title">Troubleshooting Recovery</title>
   <para>This chapter describes what to do if something goes wrong during recovery. It describes:</para>
   <itemizedlist>
     <listitem>
@@ -16,9 +13,8 @@
       <para><xref linkend="dbdoclet.50438225_12316"/></para>
     </listitem>
   </itemizedlist>
-
   <section xml:id="dbdoclet.50438225_71141">
-    <title>27.1 Recovering from Errors or Corruption on a Backing File System</title>
+      <title><indexterm><primary>recovery</primary><secondary>corruption of backing file system</secondary></indexterm>Recovering from Errors or Corruption on a Backing File System</title>
     <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the file system. <literal>ldiskfs</literal> journaling ensures that the file system remains coherent. The backing file systems are never accessed directly from the client, so client crashes are not relevant.</para>
     <para>The only time it is REQUIRED that <literal>e2fsck</literal> be run on a device is when an event causes problems that ldiskfs journaling is unable to handle, such as a hardware device failure or I/O error. If the ldiskfs kernel code detects corruption on the disk, it mounts the file system as read-only to prevent further corruption, but still allows read access to the device. This appears as error &quot;-30&quot; (<literal>EROFS</literal>) in the syslogs on the server, e.g.:</para>
     <screen>Dec 29 14:11:32 mookie kernel: LDISKFS-fs error (device sdz): 
@@ -49,7 +45,7 @@ root# e2fsck -fp /dev/sda   # fix filesystem using &quot;prudent&quot; answers (
     <para>In addition, the <literal>e2fsprogs</literal> package contains the <literal>lfsck</literal> tool, which does distributed coherency checking for the Lustre file system after <literal>e2fsck</literal> has been run. Running <literal>lfsck</literal> is NOT required in a large majority of cases, at a small risk of having some leaked space in the file system. To avoid a lengthy downtime, it can be run (with care) after Lustre is started.</para>
   </section>
   <section xml:id="dbdoclet.50438225_37365">
-    <title>27.2 Recovering from Corruption in the Lustre File System</title>
+    <title><indexterm><primary>recovery</primary><secondary>corruption of Lustre file system</secondary></indexterm>Recovering from Corruption in the Lustre File System</title>
     <para>In cases where the MDS or an OST becomes corrupt, you can run a distributed check on the file system to determine what sort of problems exist. Use <literal>lfsck</literal> to correct any defects found.</para>
     <orderedlist>
       <listitem>
@@ -200,8 +196,8 @@ lfsck: fixed 0 errors</screen>
         <para>If the file system is in use and being modified while the <literal>--mdsdb</literal> and <literal>--ostdb</literal> steps are running, <literal>lfsck</literal> may report inconsistencies where none exist due to files and objects being created/removed after the database files were collected. Examine the <literal>lfsck</literal> results closely. You may want to re-run the test.</para>
       </listitem>
     </orderedlist>
-    <section xml:id='dbdoclet.50438225_13916'>
-      <title>27.2.1 Working with Orphaned Objects</title>
+    <section xml:id="dbdoclet.50438225_13916">
+      <title><indexterm><primary>recovery</primary><secondary>orphaned objects</secondary></indexterm>Working with Orphaned Objects</title>
       <para>The easiest problem to resolve is that of orphaned objects. When the <literal>-l</literal> option for <literal>lfsck</literal> is used, these objects are linked to new files and put into <literal>lost+found</literal> in the Lustre file system, where they can be examined and saved or deleted as necessary. If you are certain the objects are not useful, run <literal>lfsck</literal> with the <literal>-d</literal> option to delete orphaned objects and free up any space they are using.</para>
       <para>To fix dangling inodes, use <literal>lfsck</literal> with the <literal>-c</literal> option to create new, zero-length objects on the OSTs. These files read back with binary zeros for stripes that had objects re-created. Even without <literal>lfsck</literal> repair, these files can be read by entering:</para>
       <screen>dd if=/lustre/bad/file of=/new/file bs=4k conv=sync,noerror</screen>
@@ -213,7 +209,7 @@ lfsck: fixed 0 errors</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438225_12316">
-    <title>27.3 Recovering from an Unavailable OST</title>
+    <title><indexterm><primary>recovery</primary><secondary>unavailable OST</secondary></indexterm>Recovering from an Unavailable OST</title>
     <para>One of the most common problems encountered in a Lustre environment is when an OST becomes unavailable, because of a network partition, OSS node crash, etc. When this happens, the OST&apos;s clients pause and wait for the OST to become available again, either on the primary OSS or a failover OSS. When the OST comes back online, Lustre starts a recovery process to enable clients to reconnect to the OST. Lustre servers put a limit on the time they will wait in recovery for clients to reconnect. The timeout length is determined by the <literal>obd_timeout</literal> parameter.</para>
     <para>During recovery, clients reconnect and replay their requests serially, in the same order they were done originally. Until a client receives a confirmation that a given transaction has been written to stable storage, the client holds on to the transaction, in case it needs to be replayed. Periodically, a progress message prints to the log, stating how_many/expected clients have reconnected. If the recovery is aborted, this log shows how many clients managed to reconnect. When all clients have completed recovery, or if the recovery timeout is reached, the recovery period ends and the OST resumes normal request processing.</para>
     <para>If some clients fail to replay their requests during the recovery period, this will not stop the recovery from completing. You may have a situation where the OST recovers, but some clients are not able to participate in recovery (e.g. network problems or client failure), so they are evicted and their requests are not replayed. This would result in any operations on the evicted clients failing, including in-progress writes, which would cause cached writes to be lost. This is a normal outcome; the recovery cannot wait indefinitely, or the file system would be hung any time a client failed. The lost transactions are an unfortunate result of the recovery process.</para>

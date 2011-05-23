@@ -1,16 +1,15 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installoverview">
-  <info>
-    <title xml:id="installoverview.title">Installation Overview</title>
-  </info>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installoverview">
+  <title xml:id="installoverview.title">Installation Overview</title>
   <para>This chapter provides on overview of the procedures required to set up, install and configure a Lustre file system.</para>
   <note>
     <para>
       If you are new to Lustre, you may find it helpful to refer to <xref linkend="part.intro"/> for a description of the Lustre architecture, file system components and terminology before proceeding with the installation procedure.</para>
   </note>
   <section remap="h2">
-    <title>4.1 Steps to Installing Lustre</title>
+      <title>
+          <indexterm><primary>installing</primary></indexterm>
+          Steps to Installing Lustre</title>
     <para>To set up Lustre file system hardware and install and configure the Lustre software, refer the the chapters below in the order listed:</para>
     <orderedlist>
       <listitem>

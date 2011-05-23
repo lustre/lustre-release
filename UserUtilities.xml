@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="userutilities">
-  <info>
-    <title xml:id="userutilities.title">User Utilities</title>
-  </info>
+  <title xml:id="userutilities.title">User Utilities</title>
   <para>This chapter describes user utilities and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -25,7 +23,9 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438206_94597">
-    <title>32.1 <literal>lfs</literal></title>
+    <title><indexterm><primary>lfs</primary></indexterm>
+      <literal>lfs</literal>
+    </title>
     <para>The <literal>lfs</literal> utility can be used for user configuration routines and monitoring.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -460,7 +460,7 @@ lfs help
                 <para> <literal>--pool &lt;pool&gt;</literal></para>
               </entry>
               <entry>
-                  <para>Name of the pre-defined pool of OSTs (see <xref linkend="dbdoclet.50438219_38274"/>) that will be used for striping. The <literal>stripe_cnt</literal>, <literal>stripe_size</literal> and <literal>start_ost</literal> values are used as well. The start-ost value must be part of the pool or an error is returned.</para>
+                <para>Name of the pre-defined pool of OSTs (see <xref linkend="dbdoclet.50438219_38274"/>) that will be used for striping. The <literal>stripe_cnt</literal>, <literal>stripe_size</literal> and <literal>start_ost</literal> values are used as well. The start-ost value must be part of the pool or an error is returned.</para>
               </entry>
             </row>
             <row>
@@ -551,7 +551,7 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                  <para><literal> setquota -t &lt;-u|-g&gt; [--block-grace &lt;block-grace&gt;] [--inode-grace &lt;inode-grace&gt;] &lt;filesystem&gt;</literal></para>
+                <para><literal> setquota -t &lt;-u|-g&gt; [--block-grace &lt;block-grace&gt;] [--inode-grace &lt;inode-grace&gt;] &lt;filesystem&gt;</literal></para>
               </entry>
               <entry>
                 <para>Sets the file system quota grace times for users or groups. Grace time is specified in &apos;<literal>XXwXXdXXhXXmXXs</literal>&apos; format or as an integer seconds value. See <xref linkend="dbdoclet.50438206_11903"/>.</para>
@@ -638,7 +638,9 @@ lfs help
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_42260">
-    <title>32.2 <literal>lfs_migrate</literal></title>
+    <title><indexterm><primary>lfs_migrate</primary></indexterm>
+      <literal>lfs_migrate</literal>
+    </title>
     <para>The <literal>lfs_migrate</literal> utility is a simple tool to migrate files between Lustre OSTs.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -695,7 +697,7 @@ lfs help
             </row>
             <row>
               <entry>
-                 <literal>-l</literal>
+                <literal>-l</literal>
               </entry>
               <entry>
                 <para>Migrates files with hard links (skips, by default). Files with multiple hard links are split into multiple separate files by <literal>lfs_migrate</literal>, so they are skipped, by default, to avoid breaking the hard links.</para>
@@ -703,7 +705,7 @@ lfs help
             </row>
             <row>
               <entry>
-                 <literal>-n</literal>
+                <literal>-n</literal>
               </entry>
               <entry>
                 <para>Only prints the names of files to be migrated.</para>
@@ -742,7 +744,9 @@ lfs help
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_91700">
-    <title>32.3 <literal>lfsck</literal></title>
+    <title><indexterm><primary>lfsck</primary></indexterm>
+       <literal>lfsck</literal>
+    </title>
     <para><literal>lfsck</literal> ensures that objects are not referenced by multiple MDS files, that there are no orphan objects on the OSTs (objects that do not have any file on the MDS which references them), and that all of the objects referenced by the MDS exist. Under normal circumstances, Lustre maintains such coherency by distributed logging mechanisms, but under exceptional circumstances that may fail (e.g. disk failure, file system corruption leading to e2fsck repair). To avoid lengthy downtime, you can also run <literal>lfsck</literal> once Lustre is already started.</para>
     <para>The <literal>e2fsck</literal> utility is run on each of the local MDS and OST device file systems and verifies that the underlying <literal>ldiskfs</literal> is consistent. After <literal>e2fsck</literal> is run, <literal>lfsck</literal> does distributed coherency checking for the Lustre file system. In most cases, <literal>e2fsck</literal> is sufficient to repair any file system issues and <literal>lfsck</literal> is not required.</para>
     <section remap="h5">
@@ -851,7 +855,9 @@ lfs help
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_75125">
-    <title>32.4 <literal>filefrag</literal></title>
+    <title><indexterm><primary>filefrag</primary></indexterm>
+      <literal>filefrag</literal>
+    </title>
     <para>The <literal>e2fsprogs</literal> package contains the <literal>filefrag</literal> tool which reports the extent of file fragmentation.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -951,7 +957,9 @@ ext:       device_logical:         start..end              physical:            
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_86244">
-    <title>32.5 <literal>mount</literal></title>
+    <title><indexterm><primary>mount</primary></indexterm>
+      <literal>mount</literal>
+    </title>
     <para>Lustre uses the standard <literal>mount(8)</literal> Linux command. When mounting a Lustre file system, mount(8) executes the <literal>/sbin/mount.lustre</literal> command to complete the mount. The mount command supports these Lustre-specific options:</para>
     <informaltable frame="all">
       <tgroup cols="2">
@@ -1039,7 +1047,7 @@ ext:       device_logical:         start..end              physical:            
     </informaltable>
   </section>
   <section xml:id="dbdoclet.50438206_56217">
-    <title>32.6 Handling Timeouts</title>
+    <title>Handling Timeouts</title>
     <para>Timeouts are the most common cause of hung applications. After a timeout involving an MDS or failover OST, applications attempting to access the disconnected resource wait until the connection gets established.</para>
     <para>When a client performs any remote operation, it gives the server a reasonable amount of time to respond. If a server does not reply either due to a down network, hung server, or any other reason, a timeout occurs which requires a recovery.</para>
     <para>If a timeout occurs, a message (similar to this one), appears on the console of the client, and in <literal>/var/log/messages</literal>:</para>
@@ -1047,7 +1055,6 @@ ext:       device_logical:         start..end              physical:            
  
 req@a2d45200 x5886/t0 o38-&gt;mds_svc_UUID@NID_mds_UUID:12 lens 168/64 ref 1 fl
  
-RPC:/0/0 rc 0
-</screen>
+RPC:/0/0 rc 0</screen>
   </section>
 </chapter>

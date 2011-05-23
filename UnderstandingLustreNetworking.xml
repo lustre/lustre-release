@@ -20,7 +20,10 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438191_22878">
-    <title>Introducing LNET</title>
+      <title>
+          <indexterm><primary>LNET</primary></indexterm>
+          <indexterm><primary>LNET</primary><secondary>understanding</secondary></indexterm>
+          Introducing LNET</title>
     <para>In a cluster with a Lustre file system, the system network connecting the servers and the clients is implemented using Lustre Networking (LNET), which provides the communication infrastructure required by the Lustre file system.</para>
     <para>LNET supports many commonly-used network types, such as InfiniBand and IP networks, and allows simultaneous availability across multiple network types with routing between them. Remote Direct Memory Access (RDMA) is permitted when supported by underlying networks using the appropriate Lustre network driver (LND). High availability and recovery features enable transparent recovery in conjunction with failover servers.</para>
     <para>An LND is a pluggable driver that provides support for a particular network type. LNDs are loaded into the driver stack, with one LND for each network type in use.</para>
@@ -28,7 +31,7 @@
     <para>For information about administering LNET, see <xref linkend="adminlustrepart3"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438191_19625">
-    <title>Key Features of LNET</title>
+    <title><indexterm><primary>LNET</primary><secondary>features</secondary></indexterm>Key Features of LNET</title>
     <para>Key features of LNET include:</para>
     <itemizedlist>
       <listitem>
@@ -48,7 +51,7 @@
     <para>Lustre can use bonded networks, such as bonded Ethernet networks, when the underlying network technology supports bonding. For more information, see <xref linkend="settingupbonding"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438191_20721">
-    <title>Supported Network Types</title>
+    <title><indexterm><primary>LNET</primary><secondary>supported networks</secondary></indexterm>Supported Network Types</title>
     <para>LNET includes LNDs to support many network types including:</para>
     <itemizedlist>
       <listitem>

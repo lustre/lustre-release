@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settinglustreproperties">
-  <info>
-    <title xml:id="settinglustreproperties.title">Setting Lustre Properties in a C Program (<literal>llapi</literal>)</title>
-  </info>
+  <title xml:id="settinglustreproperties.title">Setting Lustre Properties in a C Program (<literal>llapi</literal>)</title>
   <para>This chapter describes the <literal>llapi</literal> library of commands used for setting Lustre file properties within a C program running in a cluster environment, such as a data processing or MPI application. The commands described in this chapter are:</para>
   <itemizedlist>
     <listitem>
@@ -25,7 +23,9 @@
     <para>Lustre programming interface man pages are found in the <literal>lustre/doc</literal> folder.</para>
   </note>
   <section xml:id="dbdoclet.50438215_30970">
-    <title>34.1 <literal>llapi_file_create</literal></title>
+    <title>
+      <literal>llapi_file_create</literal>
+    </title>
     <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -128,7 +128,7 @@ return -1;
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_50149">
-    <title>34.2 llapi_file_get_stripe</title>
+    <title>llapi_file_get_stripe</title>
     <para>Use <literal>llapi_file_get_stripe</literal> to get striping information for a file or directory on a Lustre file system.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -416,7 +416,9 @@ return rc;
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_86607">
-    <title>34.3 <literal>llapi_file_open</literal></title>
+    <title>
+      <literal>llapi_file_open</literal>
+    </title>
     <para>The <literal>llapi_file_open</literal> command opens (or creates) a file or device on a Lustre filesystem.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -593,7 +595,9 @@ int main(int argc, char *argv[])
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_12433">
-    <title>34.4 <literal>llapi_quotactl</literal></title>
+    <title>
+      <literal>llapi_quotactl</literal>
+    </title>
     <para>Use <literal>llapi_quotact</literal>l to manipulate disk quotas on a Lustre file system.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -705,9 +709,12 @@ struct obd_uuid {
         </tgroup>
       </informaltable>
     </section>
-    <section remap="h5"><title>Return Values</title><para><literal>llapi_quotactl()</literal> returns:</para><para><literal>0</literal> On success</para><para><literal>
-        -1
-</literal> On failure and sets error number (<literal>errno</literal>) to indicate the error</para></section>
+    <section remap="h5">
+      <title>Return Values</title>
+      <para><literal>llapi_quotactl()</literal> returns:</para>
+      <para><literal>0</literal> On success</para>
+      <para><literal> -1 </literal> On failure and sets error number (<literal>errno</literal>) to indicate the error</para>
+    </section>
     <section remap="h5">
       <title>Errors</title>
       <para><literal>llapi_quotactl</literal> errors are described below.</para>
@@ -796,7 +803,9 @@ struct obd_uuid {
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_15718">
-    <title>34.5 <literal>llapi_path2fid</literal></title>
+    <title>
+      <literal>llapi_path2fid</literal>
+    </title>
     <para>Use <literal>llapi_path2fid</literal> to get the FID from the pathname.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -817,7 +826,7 @@ int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long *oid
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_marker-1297700">
-    <title>34.6 Example Using the <literal>llapi</literal> Library</title>
+    <title>Example Using the <literal>llapi</literal> Library</title>
     <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
     <para>You can set striping from inside programs like <literal>ioctl</literal>. To compile the sample program, you need to download libtest.c and liblustreapi.c files from the Lustre source tree.</para>
     <para><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
@@ -1050,28 +1059,28 @@ cp lustredemo /mnt/lustre/ftest/
 </screen>
     <section remap="h5">
       <title>See Also</title>
-  <itemizedlist>
-    <listitem>
-    <para>
+      <itemizedlist>
+        <listitem>
+          <para>
             <xref linkend="dbdoclet.50438215_30970"/>
     </para>
-    </listitem>
-    <listitem>
-    <para>
+        </listitem>
+        <listitem>
+          <para>
             <xref linkend="dbdoclet.50438215_50149"/>
     </para>
-    </listitem>
-    <listitem>
-    <para>
+        </listitem>
+        <listitem>
+          <para>
             <xref linkend="dbdoclet.50438215_86607"/>
     </para>
-    </listitem>
-    <listitem>
-    <para>
+        </listitem>
+        <listitem>
+          <para>
             <xref linkend="dbdoclet.50438215_12433"/>
     </para>
-    </listitem>
-    </itemizedlist>
+        </listitem>
+      </itemizedlist>
     </section>
   </section>
 </chapter>

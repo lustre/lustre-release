@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretroubleshooting">
-  <info>
-    <title xml:id="lustretroubleshooting.title">Lustre Troubleshooting</title>
-  </info>
+  <title xml:id="lustretroubleshooting.title">Lustre Troubleshooting</title>
   <para>This chapter provides information to troubleshoot Lustre, submit a Lustre bug, and Lustre performance tips. It includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -16,10 +14,14 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438198_11171">
-    <title>26.1 Lustre Error Messages</title>
+      <title><indexterm><primary>troubleshooting</primary></indexterm>
+          <indexterm><primary>lustre</primary><secondary>troubleshooting</secondary><see>troubleshooting</see></indexterm>
+          <indexterm><primary>lustre</primary><secondary>errors</secondary><see>troubleshooting</see></indexterm>
+          <indexterm><primary>errors</primary><see>troubleshooting</see></indexterm>
+          Lustre Error Messages</title>
     <para>Several resources are available to help troubleshoot Lustre. This section describes error numbers, error messages and logs.</para>
     <section remap="h3">
-      <title>26.1.1 Error Numbers</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>error numbers</secondary></indexterm>Error Numbers</title>
       <para>Error numbers for Lustre come from the Linux errno.h, and are located in <literal>/usr/include/asm/errno.h</literal>. Lustre does not use all of the available Linux error numbers. The exact meaning of an error number depends on where it is used. Here is a summary of the basic errors that Lustre users may encounter.</para>
       <informaltable frame="all">
         <tgroup cols="3">
@@ -45,22 +47,16 @@
                 <para> -1</para>
               </entry>
               <entry>
-                <literal>
-                   -EPERM
-                </literal>
+                <literal> -EPERM </literal>
               </entry>
               <entry>
                 <para> Permission is denied.</para>
               </entry>
             </row>
             <row>
+              <entry> -2 </entry>
               <entry>
-                 -2
-              </entry>
-              <entry>
-                <literal>
-                   -ENOENT
-                </literal>
+                <literal> -ENOENT </literal>
               </entry>
               <entry>
                 <para> The requested file or directory does not exist.</para>
@@ -71,9 +67,7 @@
                 <para> -4</para>
               </entry>
               <entry>
-                <literal>
-                   -EINTR
-                </literal>
+                <literal> -EINTR </literal>
               </entry>
               <entry>
                 <para> The operation was interrupted (usually CTRL-C or a killing process).</para>
@@ -84,9 +78,7 @@
                 <para> -5</para>
               </entry>
               <entry>
-                <literal>
-                   -EIO
-                </literal>
+                <literal> -EIO </literal>
               </entry>
               <entry>
                 <para> The operation failed with a read or write error.</para>
@@ -97,9 +89,7 @@
                 <para> -19</para>
               </entry>
               <entry>
-                <literal>
-                   -ENODEV
-                </literal>
+                <literal> -ENODEV </literal>
               </entry>
               <entry>
                 <para> No such device is available. The server stopped or failed over.</para>
@@ -110,9 +100,7 @@
                 <para> -22</para>
               </entry>
               <entry>
-                <literal>
-                   -EINVAL
-                </literal>
+                <literal> -EINVAL </literal>
               </entry>
               <entry>
                 <para> The parameter contains an invalid value.</para>
@@ -123,9 +111,7 @@
                 <para> -28</para>
               </entry>
               <entry>
-                <literal>
-                   -ENOSPC
-                </literal>
+                <literal> -ENOSPC </literal>
               </entry>
               <entry>
                 <para> The file system is out-of-space or out of inodes. Use <literal>lfs df</literal> (query the amount of file system space) or <literal>lfs df -i</literal> (query the number of inodes).</para>
@@ -136,9 +122,7 @@
                 <para> -30</para>
               </entry>
               <entry>
-                <literal>
-                   -EROFS
-                </literal>
+                <literal> -EROFS </literal>
               </entry>
               <entry>
                 <para> The file system is read-only, likely due to a detected error.</para>
@@ -149,9 +133,7 @@
                 <para> -43</para>
               </entry>
               <entry>
-                <literal>
-                   -EIDRM
-                </literal>
+                <literal> -EIDRM </literal>
               </entry>
               <entry>
                 <para> The UID/GID does not match any known UID/GID on the MDS. Update etc/hosts and etc/group on the MDS to add the missing user or group.</para>
@@ -162,9 +144,7 @@
                 <para> -107</para>
               </entry>
               <entry>
-                <literal>
-                   -ENOTCONN
-                </literal>
+                <literal> -ENOTCONN </literal>
               </entry>
               <entry>
                 <para> The client is not connected to this server.</para>
@@ -175,9 +155,7 @@
                 <para> -110</para>
               </entry>
               <entry>
-                <literal>
-                   -ETIMEDOUT
-                </literal>
+                <literal> -ETIMEDOUT </literal>
               </entry>
               <entry>
                 <para> The operation took too long and timed out.</para>
@@ -188,7 +166,7 @@
       </informaltable>
     </section>
     <section xml:id="dbdoclet.50438198_40669">
-      <title>26.1.2 Viewing Error Messages</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>error messages</secondary></indexterm>Viewing Error Messages</title>
       <para>As Lustre code runs on the kernel, single-digit error codes display to the application; these error codes are an indication of the problem. Refer to the kernel console log (dmesg) for all recent kernel messages from that node. On the node, <literal>/var/log/messages</literal> holds a log of all messages for at least the past day.</para>
       <para>The error message initiates with &quot;LustreError&quot; in the console log and provides a short description of:</para>
       <itemizedlist>
@@ -205,15 +183,15 @@
       <para>Lustre logs are dumped to <literal>/proc/sys/lnet/debug_pat</literal>h.</para>
       <para>Collect the first group of messages related to a problem, and any messages that precede &quot;LBUG&quot; or &quot;assertion failure&quot; errors. Messages that mention server nodes (OST or MDS) are specific to that server; you must collect similar messages from the relevant server console logs.</para>
       <para>Another Lustre debug log holds information for Lustre action for a short period of time which, in turn, depends on the processes on the node to use Lustre. Use the following command to extract debug logs on each of the nodes, run</para>
-      <screen>$ lctl dk &lt;filename&gt;
-</screen>
+      <screen>$ lctl dk &lt;filename&gt;</screen>
       <note>
         <para>LBUG freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para>
       </note>
     </section>
   </section>
   <section xml:id="dbdoclet.50438198_30989">
-    <title>26.2 Reporting a Lustre Bug</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>reporting bugs</secondary></indexterm><indexterm><primary>reporting bugs</primary><see>troubleshooing</see></indexterm>
+          Reporting a Lustre Bug</title>
     <para>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
     <para>You can also post a question to the <link xl:href="http://wiki.lustre.org/index.php/Lustre_Mailing_Lists">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
     <para>A Lustre diagnostics tool is available for downloading at: <link xl:href="http://downloads.lustre.org/public/tools/lustre-diagnostics/">http://downloads.lustre.org/public/tools/lustre-diagnostics/</link></para>
@@ -224,10 +202,10 @@
     <para>Output is sent directly to the terminal. Use normal file redirection to send the output to a file, and then manually attach the file to the bug you are submitting.</para>
   </section>
   <section xml:id="dbdoclet.50438198_93109">
-    <title>26.3 Common Lustre Problems</title>
+    <title><indexterm><primary>troubleshooting</primary><secondary>common problems</secondary></indexterm>Common Lustre Problems</title>
     <para>This section describes how to address common issues encountered with Lustre.</para>
     <section remap="h3">
-      <title>26.3.1 OST Object is Missing or Damaged</title>
+      <title>OST Object is Missing or Damaged</title>
       <para>If the OSS fails to find an object or finds a damaged object, this message appears:</para>
       <para><screen>OST object missing or damaged (OST &quot;ost1&quot;, object 98148, error -2)</screen></para>
       <para>If the reported error is -2 (<literal>-ENOENT</literal>, or &quot;No such file or directory&quot;), then the object is missing. This can occur either because the MDS and OST are out of sync, or because an OST object was corrupted and deleted.</para>
@@ -240,7 +218,7 @@
       <para>If the reported error is anything else, then you should immediately inspect this server for storage problems.</para>
     </section>
     <section remap="h3">
-      <title>26.3.2 OSTs Become Read-Only</title>
+      <title>OSTs Become Read-Only</title>
       <para>If the SCSI devices are inaccessible to Lustre at the block device level, then <literal>ldiskfs</literal> remounts the device read-only to prevent file system corruption. This is a normal behavior. The status in <literal>/proc/fs/lustre/health_check</literal> also shows &quot;not healthy&quot; on the affected nodes.</para>
       <para>To determine what caused the &quot;not healthy&quot; condition:</para>
       <itemizedlist>
@@ -260,7 +238,7 @@
       <para>To recover from this problem, you must restart Lustre services using these file systems. There is no other way to know that the I/O made it to disk, and the state of the cache may be inconsistent with what is on disk.</para>
     </section>
     <section remap="h3">
-      <title>26.3.3 Identifying a Missing OST</title>
+      <title>Identifying a Missing OST</title>
       <para>If an OST is missing for any reason, you may need to know what files are affected. Although an OST is missing, the files system should be operational. From any mounted client node, generate a list of files that reside on the affected OST. It is advisable to mark the missing OST as &apos;unavailable&apos; so clients and the MDS do not time out trying to contact it.</para>
       <orderedlist>
         <listitem>
@@ -273,10 +251,10 @@
           <screen>$ lctl --device &lt;OST device name or number&gt; deactivate</screen>
           <para>The OST device number or device name is generated by the lctl dl command.</para>
           <para>The <literal>deactivate</literal> command prevents clients from creating new objects on the specified OST, although you can still access the OST for reading.</para>
-        <note>
-          <para>If the OST later becomes available it needs to be reactivated, run:</para>
-          <screen># lctl --device &lt;OST device name or number&gt; activate</screen>
-        </note>
+          <note>
+            <para>If the OST later becomes available it needs to be reactivated, run:</para>
+            <screen># lctl --device &lt;OST device name or number&gt; activate</screen>
+          </note>
         </listitem>
         <listitem>
           <para>Determine all files that are striped over the missing OST, run:</para>
@@ -290,10 +268,10 @@
         <listitem>
           <para>You can delete these files with the unlink or munlink command.</para>
           <screen># unlink|munlink filename {filename ...} </screen>
-        <note>
-          <para>There is no functional difference between the <literal>unlink</literal> and <literal>munlink</literal> commands. The unlink command is for newer Linux distributions. You can run <literal>munlink</literal> if <literal>unlink</literal> is not available.</para>
-          <para>When you run the <literal>unlink</literal> or <literal>munlink</literal> command, the file on the MDS is permanently removed.</para>
-        </note>
+          <note>
+            <para>There is no functional difference between the <literal>unlink</literal> and <literal>munlink</literal> commands. The unlink command is for newer Linux distributions. You can run <literal>munlink</literal> if <literal>unlink</literal> is not available.</para>
+            <para>When you run the <literal>unlink</literal> or <literal>munlink</literal> command, the file on the MDS is permanently removed.</para>
+          </note>
         </listitem>
         <listitem>
           <para>If you need to know, specifically, which parts of the file are missing data, then you first need to determine the file layout (striping pattern), which includes the index of the missing OST). Run:</para>
@@ -311,7 +289,7 @@
       <para>If the file system cannot be mounted, currently there is no way that parses metadata directly from an MDS. If the bad OST does not start, options to mount the file system are to provide a loop device OST in its place or replace it with a newly-formatted OST. In that case, the missing objects are created and are read as zero-filled.</para>
     </section>
     <section xml:id="dbdoclet.50438198_69657">
-      <title>26.3.4 Fixing a Bad LAST_ID on an OST</title>
+      <title>Fixing a Bad LAST_ID on an OST</title>
       <para>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote>
           <para>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para>
         </footnote>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
@@ -410,7 +388,7 @@ tail -30 /tmp/objects.{diskname}</screen>
       </orderedlist>
     </section>
     <section remap="h3">
-      <title>26.3.5 Handling/Debugging &quot;<literal>Bind: Address already in use</literal>&quot; Error</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>'Address already in use'</secondary></indexterm>Handling/Debugging &quot;<literal>Bind: Address already in use</literal>&quot; Error</title>
       <para>During startup, Lustre may report a <literal>bind: Address already in use</literal> error and reject to start the operation. This is caused by a portmap service (often NFS locking) which starts before Lustre and binds to the default port 988. You must have port 988 open from firewall or IP tables for incoming connections on the client, OSS, and MDS nodes. LNET will create three outgoing connections on available, reserved ports to each client-server pair, starting with 1023, 1022 and 1021.</para>
       <para>Unfortunately, you cannot set sunprc to avoid port 988. If you receive this error, do the following:</para>
       <itemizedlist>
@@ -432,7 +410,7 @@ tail -30 /tmp/objects.{diskname}</screen>
       </note>
     </section>
     <section remap="h3">
-      <title>26.3.6 Handling/Debugging Error &quot;- 28&quot;</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>'Error -28'</secondary></indexterm>Handling/Debugging Error &quot;- 28&quot;</title>
       <para>A Linux error -28 (<literal>ENOSPC</literal>) that occurs during a write or sync operation indicates that an existing file residing on an OST could not be rewritten or updated because the OST was full, or nearly full. To verify if this is the case, on a client on which the OST is mounted, enter :</para>
       <screen>lfs df -h</screen>
       <para>To address this issue, you can do one of the following:</para>
@@ -458,7 +436,7 @@ grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/files{free,total}</screen>
       </note>
     </section>
     <section remap="h3">
-      <title>26.3.7 Triggering Watchdog for PID NNN</title>
+      <title>Triggering Watchdog for PID NNN</title>
       <para>In some cases, a server node triggers a watchdog timer and this causes a process stack to be dumped to the console along with a Lustre kernel debug log being dumped into <literal>/tmp</literal> (by default). The presence of a watchdog timer does NOT mean that the thread OOPSed, but rather that it is taking longer time than expected to complete a given operation. In some cases, this situation is expected.</para>
       <para>For example, if a RAID rebuild is really slowing down I/O on an OST, it might trigger watchdog timers to trip. But another message follows shortly thereafter, indicating that the thread in question has completed processing (after some number of seconds). Generally, this indicates a transient problem. In other cases, it may legitimately signal that a thread is stuck because of a software error (lock inversion, for example).</para>
       <screen>Lustre: 0:0:(watchdog.c:122:lcw_cb()) </screen>
@@ -483,7 +461,7 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
 </screen>
     </section>
     <section remap="h3">
-      <title>26.3.8 Handling Timeouts on Initial Lustre Setup</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>timeouts on setup</secondary></indexterm>Handling Timeouts on Initial Lustre Setup</title>
       <para>If you come across timeouts or hangs on the initial setup of your Lustre system, verify that name resolution for servers and clients is working correctly. Some distributions configure <literal>/etc/hosts sts</literal> so the name of the local machine (as reported by the &apos;hostname&apos; command) is mapped to local host (127.0.0.1) instead of a proper IP address.</para>
       <para>This might produce this error:</para>
       <screen>LustreError:(ldlm_handle_cancel()) received cancel for unknown lock cookie
@@ -491,7 +469,7 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
 </screen>
     </section>
     <section remap="h3">
-      <title>26.3.9 Handling/Debugging &quot;LustreError: xxx went back in time&quot;</title>
+      <title>Handling/Debugging &quot;LustreError: xxx went back in time&quot;</title>
       <para>Each time Lustre changes the state of the disk file system, it records a unique transaction number. Occasionally, when committing these transactions to the disk, the last committed transaction number displays to other nodes in the cluster to assist the recovery. Therefore, the promised transactions remain absolutely safe on the disappeared disk.</para>
       <para>This situation arises when:</para>
       <itemizedlist>
@@ -506,11 +484,11 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
       <para>If the error occurs during failover, examine your disk cache settings. If it occurs after a restart without failover, try to determine how the disk can report that a write succeeded, then lose the Data Device corruption or Disk Errors.</para>
     </section>
     <section remap="h3">
-      <title>26.3.10 Lustre Error: &quot;<literal>Slow Start_Page_Write</literal>&quot;</title>
+      <title>Lustre Error: &quot;<literal>Slow Start_Page_Write</literal>&quot;</title>
       <para>The slow <literal>start_page_write</literal> message appears when the operation takes an extremely long time to allocate a batch of memory pages. Use these pages to receive network traffic first, and then write to disk.</para>
     </section>
     <section remap="h3">
-      <title>26.3.11 Drawbacks in Doing Multi-client O_APPEND Writes</title>
+      <title>Drawbacks in Doing Multi-client O_APPEND Writes</title>
       <para>It is possible to do multi-client <literal>O_APPEND</literal> writes to a single file, but there are few drawbacks that may make this a sub-optimal solution. These drawbacks are:</para>
       <itemizedlist>
         <listitem>
@@ -525,12 +503,12 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
       </itemizedlist>
     </section>
     <section remap="h3">
-      <title>26.3.12 Slowdown Occurs During Lustre Startup</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>slowdown during startup</secondary></indexterm>Slowdown Occurs During Lustre Startup</title>
       <para>When Lustre starts, the Lustre file system needs to read in data from the disk. For the very first mdsrate run after the reboot, the MDS needs to wait on all the OSTs for object pre-creation. This causes a slowdown to occur when Lustre starts up.</para>
       <para>After the file system has been running for some time, it contains more data in cache and hence, the variability caused by reading critical metadata from disk is mostly eliminated. The file system now reads data from the cache.</para>
     </section>
     <section remap="h3">
-      <title>26.3.13 Log Message <literal>&apos;Out of Memory</literal>&apos; on OST</title>
+      <title><indexterm><primary>troubleshooting</primary><secondary>OST out of memory</secondary></indexterm>Log Message <literal>&apos;Out of Memory</literal>&apos; on OST</title>
       <para>When planning the hardware for an OSS node, consider the memory usage of several components in the Lustre system. If insufficient memory is available, an &apos;out of memory&apos; message can be logged.</para>
       <para>During normal operation, several conditions indicate insufficient RAM on a server node:</para>
       <itemizedlist>
@@ -547,7 +525,7 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
       <para>For information on determining the MDS memory and OSS memory requirements, see <xref linkend="dbdoclet.50438256_26456"/>.</para>
     </section>
     <section remap="h3">
-      <title>26.3.14 Setting SCSI I/O Sizes</title>
+      <title>Setting SCSI I/O Sizes</title>
       <para>Some SCSI drivers default to a maximum I/O size that is too small for good Lustre performance. we have fixed quite a few drivers, but you may still find that some drivers give unsatisfactory performance with Lustre. As the default value is hard-coded, you need to recompile the drivers to change their default. On the other hand, some drivers may have a wrong default set.</para>
       <para>If you suspect bad I/O performance and an analysis of Lustre statistics indicates that I/O is not 1 MB, check <literal>/sys/block/&lt;device&gt;/queue/max_sectors_kb</literal>. If the <literal>max_sectors_kb</literal> value is less than 1024, set it to at least 1024 to improve performance. If changing <literal>max_sectors_kb</literal> does not change the I/O size as reported by Lustre, you may want to examine the SCSI driver code.</para>
     </section>

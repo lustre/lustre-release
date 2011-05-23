@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustredebugging">
-  <info>
-    <title xml:id="lustredebugging.title">Lustre Debugging</title>
-  </info>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustredebugging">
+  <title xml:id="lustredebugging.title">Lustre Debugging</title>
   <para>This chapter describes tips and information to debug Lustre, and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -17,10 +14,12 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438274_15874">
-    <title>28.1 Diagnostic and Debugging Tools</title>
+    <title><indexterm><primary>debugging</primary></indexterm>
+Diagnostic and Debugging Tools</title>
     <para>A variety of diagnostic and analysis tools are available to debug issues with the Lustre software. Some of these are provided in Linux distributions, while others have been developed and are made available by the Lustre project.</para>
     <section remap="h3">
-      <title>28.1.1 Lustre Debugging Tools</title>
+      <title><indexterm><primary>debugging</primary><secondary>tools</secondary></indexterm>
+Lustre Debugging Tools</title>
       <para>The following in-kernel debug mechanisms are incorporated into the Lustre software:</para>
       <itemizedlist>
         <listitem>
@@ -43,20 +42,22 @@
             </emphasis>  - This tool is used with the debug_kernel option to manually dump the Lustre debugging log or post-process debugging logs that are dumped automatically. For more information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref linkend="dbdoclet.50438219_38274"/>.</para>
         </listitem>
         <listitem>
-            <para><replaceable role="bold">Lustre subsystem asserts</replaceable>  - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<replaceable>&lt;timestamp&gt;</replaceable></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669"/>.</para>
+          <para><replaceable role="bold">Lustre subsystem asserts</replaceable>  - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<replaceable>&lt;timestamp&gt;</replaceable></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669"/>.</para>
         </listitem>
         <listitem>
           <para>
-                  <literal><replaceable>lfs</replaceable></literal>
+                  <literal>
+              <replaceable>lfs</replaceable>
+            </literal>
                   - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more inforamtion about lfs, see <xref linkend="dbdoclet.50438206_94597"/>.</para>
         </listitem>
       </itemizedlist>
     </section>
     <section remap="h3">
-      <title>28.1.2 External Debugging Tools</title>
+      <title><indexterm><primary>debugging</primary><secondary>external tools</secondary></indexterm>External Debugging Tools</title>
       <para>The tools described in this section are provided in the Linux kernel or are available at an external website. For information about using some of these tools for Lustre debugging, see <xref linkend="dbdoclet.50438274_23607"/> and <xref linkend="dbdoclet.50438274_80443"/>.</para>
       <section remap="h4">
-        <title>28.1.2.1 Tools for Administrators and Developers</title>
+        <title><indexterm><primary>debugging</primary><secondary>admin tools</secondary></indexterm>Tools for Administrators and Developers</title>
         <para>Some general debugging tools provided as a part of the standard Linux distro are:</para>
         <itemizedlist>
           <listitem>
@@ -98,7 +99,7 @@
         </itemizedlist>
       </section>
       <section remap="h4">
-        <title>28.1.2.2 Tools for Developers</title>
+        <title><indexterm><primary>debugging</primary><secondary>developer tools</secondary></indexterm>Tools for Developers</title>
         <para>The tools described in this section may be useful for debugging Lustre in a development environment.</para>
         <para>Of general interest is:</para>
         <itemizedlist>
@@ -151,17 +152,17 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438274_23607">
-    <title>28.2 Lustre Debugging Procedures</title>
+    <title><indexterm><primary>debugging</primary><secondary>procedure</secondary></indexterm>Lustre Debugging Procedures</title>
     <para>The procedures below may be useful to administrators or developers debugging a Lustre files system.</para>
     <section remap="h3">
-      <title>28.2.1 Understanding the Lustre Debug Messaging Format</title>
+      <title><indexterm><primary>debugging</primary><secondary>message format</secondary></indexterm>Understanding the Lustre Debug Messaging Format</title>
       <para>Lustre debug messages are categorized by originating sybsystem, message type, and locaton in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
       <note>
         <para>For a current list of subsystems and debug message types, see <literal>lnet/include/libcfs/libcfs.h</literal> in the Lustre tree</para>
       </note>
       <para>The elements of a Lustre debug message are described in <xref linkend="dbdoclet.50438274_57177"/> Format of Lustre Debug Messages.</para>
       <section xml:id="dbdoclet.50438274_57603">
-        <title>28.2.1.1 Lustre Debug Messages</title>
+        <title>Lustre Debug Messages</title>
         <para>Each Lustre debug message has the tag of the subsystem it originated in, the message type, and the location in the source code. The subsystems and debug types used in Lustre are as follows:</para>
         <itemizedlist>
           <listitem>
@@ -365,7 +366,7 @@
         </itemizedlist>
       </section>
       <section xml:id="dbdoclet.50438274_57177">
-        <title>28.2.1.2 Format of Lustre Debug Messages</title>
+        <title>Format of Lustre Debug Messages</title>
         <para>Lustre uses the <literal>CDEBUG</literal> and <literal>CERROR</literal> macros to print the debug or error messages. To print the message, the <literal>CDEBUG</literal> macro uses <literal>portals_debug_msg</literal> (<literal>portals/linux/oslib/debug.c</literal>). The message format is described below, along with an example.</para>
         <informaltable frame="all">
           <tgroup cols="2">
@@ -460,12 +461,12 @@
         </informaltable>
       </section>
       <section remap="h4">
-        <title>28.2.1.3 Lustre Debug Messages Buffer</title>
+        <title>Lustre Debug Messages Buffer</title>
         <para>Lustre debug messages are maintained in a buffer, with the maximum buffer size specified (in MBs) by the <literal>debug_mb</literal> parameter (<literal>/proc/sys/lnet/debug_mb</literal>). The buffer is circular, so debug messages are kept until the allocated buffer limit is reached, and then the first messages are overwritten.</para>
       </section>
     </section>
-    <section xml:id='dbdoclet.50438274_62472'>
-      <title>28.2.2 Using the lctl Tool to View Debug Messages</title>
+    <section xml:id="dbdoclet.50438274_62472">
+      <title><indexterm><primary>debugging</primary><secondary>using lctl</secondary></indexterm>Using the lctl Tool to View Debug Messages</title>
       <para>The <literal>lctl</literal> tool allows debug messages to be filtered based on subsystems and message types to extract information useful for troubleshooting from a kernel debug log. For a command reference, see <xref linkend="dbdoclet.50438219_38274"/>.</para>
       <para>You can use <literal>lctl</literal> to:</para>
       <itemizedlist>
@@ -514,7 +515,7 @@
         <para>Debug messages displayed with <literal>lctl</literal> are also subject to the kernel debug masks; the filters are additive.</para>
       </note>
       <section remap="h4">
-        <title>28.2.2.1 Sample <literal>lctl</literal> Run</title>
+        <title><indexterm><primary>debugging</primary><secondary>lctl example</secondary></indexterm>Sample <literal>lctl</literal> Run</title>
         <para>Below is a sample run using the <literal>lctl</literal> command.</para>
         <screen>bash-2.04# ./lctl 
 lctl &gt; debug_kernel /tmp/lustre_logs/log_all 
@@ -533,12 +534,12 @@ Debug log: 324 lines, 258 kept, 66 dropped.
       </section>
     </section>
     <section remap="h3">
-      <title>28.2.3 Dumping the Buffer to a File (<literal>debug_daemon</literal>)</title>
+      <title>Dumping the Buffer to a File (<literal>debug_daemon</literal>)</title>
       <para>The <literal>debug_daemon</literal> option is used by <literal>lctl</literal> to control the dumping of the <literal>debug_kernel</literal> buffer to a user-specified file. This functionality uses a kernel thread on top of <literal>debug_kernel</literal>, which works in parallel with the <literal>debug_daemon</literal> command.</para>
       <para>The <literal>debug_daemon</literal> is highly dependent on file system write speed. File system write operations may not be fast enough to flush out all of the <literal>debug_buffer</literal> if the Lustre file system is under heavy system load and continues to <literal>CDEBUG</literal> to the <literal>debug_buffer</literal>. The <literal>debug_daemon</literal> will write the message <literal>DEBUG MARKER:</literal> Trace buffer full into the <literal>debug_buffer</literal> to indicate the <literal>debug_buffer</literal> contents are overlapping before the <literal>debug_daemon</literal> flushes data to a file.</para>
       <para>Users can use <literal>lctl control</literal> to start or stop the Lustre daemon from dumping the <literal>debug_buffe</literal>r to a file. Users can also temporarily hold daemon from dumping the file. Use of the <literal>debug_daemon</literal> sub-command to <literal>lctl</literal> can provide the same function.</para>
       <section remap="h4">
-        <title>28.2.3.1 <literal>lctl debug_daemon</literal> Commands</title>
+        <title><literal>lctl debug_daemon</literal> Commands</title>
         <para>This section describes <literal>lctl debug_daemon</literal> commands.</para>
         <para>To initiate the <literal>debug_daemon</literal> to start dumping <literal>debug_buffer</literal> into a file., enter</para>
         <screen>$ lctl debug_daemon start [{file} {megabytes}]</screen>
@@ -561,7 +562,7 @@ Debug log: 324 lines, 258 kept, 66 dropped.
       </section>
     </section>
     <section remap="h3">
-      <title>28.2.4 Controlling Information Written to the Kernel Debug Log</title>
+      <title><indexterm><primary>debugging</primary><secondary>kernel debug log</secondary></indexterm>Controlling Information Written to the Kernel Debug Log</title>
       <para>Masks are provided in <literal>/proc/sys/lnet/subsystem_debug</literal> and <literal>/proc/sys/lnet/debug</literal> to be used with the systctl command to determine what information is to be written to the debug log. The subsystem_debug mask determines the information written to the log based on the subsystem (such as iobdfilter, net, portals, or OSC). The debug mask controls information based on debug type (such as info, error, trace, or alloc).</para>
       <para>To turn off Lustre debugging completely:</para>
       <screen>sysctl -w lnet.debug=0 </screen>
@@ -576,7 +577,7 @@ Debug log: 324 lines, 258 kept, 66 dropped.
       <para>The various options available to print to kernel debug logs are listed in <literal>lnet/include/libcfs/libcfs.h</literal></para>
     </section>
     <section remap="h3">
-      <title>28.2.5 Troubleshooting with <literal>strace</literal></title>
+      <title><indexterm><primary>debugging</primary><secondary>using strace</secondary></indexterm>Troubleshooting with <literal>strace</literal></title>
       <para>The <literal>strace</literal> utility provided with the Linux distribution enables system calls to be traced by intercepting all the system calls made by a process and recording the system call name, arguments, and return values.</para>
       <para>To invoke <literal>strace</literal> on a program, enter:</para>
       <screen>$ strace <emphasis>&lt;program&gt; &lt;args&gt;</emphasis> </screen>
@@ -589,7 +590,7 @@ Debug log: 324 lines, 258 kept, 66 dropped.
       <screen>$ strace -o /r/tmp/vi.strace </screen>
     </section>
     <section remap="h3">
-      <title>28.2.6 Looking at Disk Content</title>
+      <title><indexterm><primary>debugging</primary><secondary>disk contents</secondary></indexterm>Looking at Disk Content</title>
       <para>In Lustre, the inodes on the metadata server contain extended attributes (EAs) that store information about file striping. EAs contain a list of all object IDs and their locations (that is, the OST that stores them). The <literal>lfs</literal> tool can be used to obtain this information for a given file using the <literal>getstripe</literal> subcommand. Use a corresponding <literal>lfs setstripe</literal> command to specify striping attributes for a new file or directory.</para>
       <para>The <literal>lfs getstripe</literal> utility is written in C; it takes a Lustre filename as input and lists all the objects that form a part of this file. To obtain this information for the file <literal>/mnt/lustre/frog</literal> in Lustre file system, run:</para>
       <screen>$ lfs getstripe /mnt/lustre/frog
@@ -616,11 +617,11 @@ $
    debugfs: quit</screen>
     </section>
     <section remap="h3">
-      <title>28.2.7 Finding the Lustre UUID of an OST</title>
+      <title>Finding the Lustre UUID of an OST</title>
       <para>To determine the Lustre UUID of an obdfilter disk (for example, if you mix up the cables on your OST devices or the SCSI bus numbering suddenly changes and the SCSI devices get new names), use <literal>debugfs</literal> to get the <literal>last_rcvd</literal> file.</para>
     </section>
     <section remap="h3">
-      <title>28.2.8 Printing Debug Messages to the Console</title>
+      <title>Printing Debug Messages to the Console</title>
       <para>To dump debug messages to the console (<literal>/var/log/messages</literal>), set the corresponding debug mask in the <literal>printk</literal> flag:</para>
       <screen>sysctl -w lnet.printk=-1 </screen>
       <para>This slows down the system dramatically. It is also possible to selectively enable or disable this capability for particular flags using:</para>
@@ -629,7 +630,7 @@ sysctl -w lnet.printk=-vfstrace </screen>
       <para>It is possible to disable warning, error, and console messages, though it is strongly recommended to have something like <literal>lctl debug_daemon</literal> running to capture this data to a local file system for debugging purposes.</para>
     </section>
     <section remap="h3">
-      <title>28.2.9 Tracing Lock Traffic</title>
+      <title>Tracing Lock Traffic</title>
       <para>Lustre has a specific debug type category for tracing lock traffic. Use:</para>
       <screen>lctl&gt; filter all_types 
 lctl&gt; show dlmtrace 
@@ -637,10 +638,10 @@ lctl&gt; debug_kernel [filename] </screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438274_80443">
-    <title>28.3 Lustre Debugging for Developers</title>
+    <title><indexterm><primary>debugging</primary><secondary>developers tools</secondary></indexterm>Lustre Debugging for Developers</title>
     <para>The procedures in this section may be useful to developers debugging Lustre code.</para>
     <section remap="h3">
-      <title>28.3.1 Adding Debugging to the Lustre Source Code</title>
+      <title>Adding Debugging to the Lustre Source Code</title>
       <para>The debugging infrastructure provides a number of macros that can be used in Lustre source code to aid in debugging or reporting serious errors.</para>
       <para>To use these macros, you will need to set the <literal>DEBUG_SUBSYSTEM</literal> variable at the top of the file as shown below:</para>
       <screen>#define DEBUG_SUBSYSTEM S_PORTALS</screen>
@@ -781,7 +782,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para><literal>
-                     <replaceable role="bold">OBD_FAIL_RAND</replaceable>
+                    <replaceable role="bold">OBD_FAIL_RAND</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -813,7 +814,7 @@ lctl&gt; debug_kernel [filename] </screen>
       </informaltable>
     </section>
     <section remap="h3">
-      <title>28.3.2 Accessing a <literal>ptlrpc</literal> Request History</title>
+      <title>Accessing a <literal>ptlrpc</literal> Request History</title>
       <para>Each service maintains a request history, which can be useful for first occurrence troubleshooting.</para>
       <para><literal>ptlrpc</literal> is an RPC protocol layered on LNET that deals with stateful servers and has semantics and built-in support for recovery.</para>
       <para>A <literal>prlrpc</literal> request history works as follows:</para>
@@ -832,30 +833,21 @@ lctl&gt; debug_kernel [filename] </screen>
       <para>Request history is accessed and controlled using the following /proc files under the service directory:</para>
       <itemizedlist>
         <listitem>
-            <para>
-          <literal>
-            req_buffer_history_len
-          </literal>
+          <para><literal>req_buffer_history_len </literal>
       </para>
           <para>Number of request buffers currently in the history</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
-      <para>
-          <literal>
-            req_buffer_history_max
-          </literal>
+          <para><literal>req_buffer_history_max </literal>
       </para>
           <para>Maximum number of request buffers to keep</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
-            <para>
-          <literal>
-            req_history
-          </literal>
+          <para><literal>req_history </literal>
       </para>
           <para>The request history</para>
         </listitem>
@@ -910,7 +902,9 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> 
-                        <literal><replaceable>xid</replaceable></literal>
+                        <literal>
+                    <replaceable>xid</replaceable>
+                  </literal>
                   </para>
               </entry>
               <entry>
@@ -962,14 +956,14 @@ lctl&gt; debug_kernel [filename] </screen>
       </informaltable>
     </section>
     <section remap="h3">
-      <title>28.3.3 Finding Memory Leaks Using <literal>leak_finder.pl</literal></title>
+      <title><indexterm><primary>debugging</primary><secondary>memory leaks</secondary></indexterm>Finding Memory Leaks Using <literal>leak_finder.pl</literal></title>
       <para>Memory leaks can occur in code when memory has been allocated and then not freed once it is no longer required. The <literal>leak_finder.pl</literal> program provides a way to find memory leaks.</para>
       <para>Before running this program, you must turn on debugging to collect all <literal>malloc</literal> and free entries. Run:</para>
       <screen>sysctl -w lnet.debug=+malloc </screen>
       <para>Then complete the following steps:</para>
       <orderedlist>
         <listitem>
-            <para>Dump the log into a user-specified log file using lctl (see <xref linkend="dbdoclet.50438274_62472"/>).</para>
+          <para>Dump the log into a user-specified log file using lctl (see <xref linkend="dbdoclet.50438274_62472"/>).</para>
         </listitem>
         <listitem>
           <para>Run the leak finder on the newly-created log dump:</para>

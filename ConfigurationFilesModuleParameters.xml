@@ -1,8 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configurationfilesmoduleparameters">
-  <info>
     <title xml:id="configurationfilesmoduleparameters.title">Configuration Files and Module Parameters</title>
-  </info>
   <para>This section describes configuration files and module parameters and includes the following sections:</para>
   <itemizedlist>
     <listitem>
@@ -13,7 +11,12 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438293_15350">
-    <title>35.1 Introduction</title>
+      <title>
+          <indexterm><primary>configuring</primary></indexterm>
+          <indexterm><primary>LNET</primary><see>configuring</see></indexterm>
+          
+          
+          Introduction</title>
     <para>LNET network hardware and routing are now configured via module parameters. Parameters should be specified in the <literal>/etc/modprobe.conf </literal>file, for example:</para>
     <screen>alias lustre llite
 options lnet networks=tcp0,elan0</screen>
@@ -31,7 +34,10 @@ options lnet networks=tcp0,elan0</screen>
     <para>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. (Unmarked parameters can only be set when LNET loads for the first time.) Changes to parameters marked with <literal>Wc</literal> only have effect when connections are established (existing connections are not affected by these changes.)</para>
   </section>
   <section xml:id="dbdoclet.50438293_78010">
-    <title>35.2 Module Options</title>
+      <title>
+          <indexterm><primary>configuring</primary><secondary>module options</secondary></indexterm>
+          
+          Module Options</title>
     <itemizedlist>
       <listitem>
         <para>With routed or other multi-network configurations, use <literal>ip2nets</literal> rather than networks, so all nodes can use the same configuration.</para>
@@ -54,10 +60,12 @@ options lnet networks=tcp0,elan0</screen>
       </listitem>
     </itemizedlist>
     <section remap="h3">
-      <title>35.2.1 LNET Options</title>
+      <title><indexterm><primary>configuring</primary><secondary>LNET options</secondary></indexterm>
+LNET Options</title>
       <para>This section describes LNET options.</para>
       <section remap="h4">
-        <title>35.2.1.1 Network Topology</title>
+        <title><indexterm><primary>configuring</primary><secondary>network topology</secondary></indexterm>
+Network Topology</title>
         <para>Network topology module parameters determine which networks a node should join, whether it should route between these networks, and how it communicates with non-local networks.</para>
         <para>Here is a list of various networks and the supported software stacks:</para>
         <informaltable frame="all">
@@ -151,11 +159,13 @@ options lnet networks=tcp0,elan0</screen>
         elan  198.128.88.98@tcp # TCP NID of router  &apos;</screen>
       </section>
       <section remap="h4">
-        <title>35.2.1.2 networks (&quot;tcp&quot;)</title>
+          <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>tcp</tertiary></indexterm>
+networks (&quot;tcp&quot;)</title>
         <para>This is an alternative to &quot;<literal>ip2nets</literal>&quot; which can be used to specify the networks to be instantiated explicitly. The syntax is a simple comma separated list of <literal>&lt;net-spec&gt;</literal>s (see above). The default is only used if neither &apos;ip2nets&apos; nor &apos;networks&apos; is specified.</para>
       </section>
       <section remap="h4">
-        <title>35.2.1.3 routes (&quot;&quot;)</title>
+          <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>routes</tertiary></indexterm>
+routes (&quot;&quot;)</title>
         <para>This is a string that lists networks and the NIDs of routers that forward to them.</para>
         <para>It has the following syntax (<literal>&lt;w&gt;</literal> is one or more whitespace characters):</para>
         <screen>&lt;routes&gt; :== &lt;route&gt;{ ; &lt;route&gt; }
@@ -175,7 +185,8 @@ options lnet networks=tcp0,elan0</screen>
         <para>If the target network string contains no expansions, then the hopcount defaults to 1 and may be omitted (that is, the remote network is adjacent). In practice, this is true for most multi-network configurations. It is an error to specify an inconsistent hop count for a given target network. This is why an explicit hopcount is required if the target network string specifies more than one network.</para>
       </section>
       <section remap="h4">
-        <title>35.2.1.4 forwarding (&quot;&quot;)</title>
+          <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>forwarding</tertiary></indexterm>
+forwarding (&quot;&quot;)</title>
         <para>This is a string that can be set either to &quot;<literal>enabled</literal>&quot; or &quot;<literal>disabled</literal>&quot; for explicit control of whether this node should act as a router, forwarding communications between all local networks.</para>
         <para>A standalone router can be started by simply starting LNET (&apos;<literal>modprobe ptlrpc</literal>&apos;) with appropriate network topology options.</para>
         <informaltable frame="all">
@@ -256,7 +267,8 @@ options lnet networks=tcp0,elan0</screen>
       </section>
     </section>
     <section remap="h3">
-      <title>35.2.2 <literal>SOCKLND</literal> Kernel TCP/IP LND</title>
+        <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>SOCKLND</tertiary></indexterm>
+<literal>SOCKLND</literal> Kernel TCP/IP LND</title>
       <para>The <literal>SOCKLND</literal> kernel TCP/IP LND (<literal>socklnd</literal>) is connection-based and uses the acceptor to establish communications via sockets with its peers.</para>
       <para>It supports multiple instances and load balances dynamically over multiple interfaces. If no interfaces are specified by the <literal>ip2nets</literal> or networks module parameter, all non-loopback IP interfaces are used. The address-within-network is determined by the address of the first IP interface an instance of the <literal>socklnd</literal> encounters.</para>
       <para>Consider a node on the &apos;edge&apos; of an InfiniBand network, with a low-bandwidth management Ethernet (<literal>eth0</literal>), IP over IB configured (<literal>ipoib0</literal>), and a pair of GigE NICs (<literal>eth1</literal>,<literal>eth2</literal>) providing off-cluster connectivity. This node should be configured with &apos;<literal>networks=vib,tcp(eth1,eth2)</literal>&apos; to ensure that the <literal>socklnd</literal> ignores the management Ethernet and IPoIB.</para>
@@ -411,7 +423,7 @@ options lnet networks=tcp0,elan0</screen>
       </informaltable>
     </section>
     <section remap="h3">
-      <title>35.2.3 Portals LND (Linux)</title>
+      <title><indexterm><primary>configuring</primary><secondary>portals</secondary></indexterm>Portals LND (Linux)</title>
       <para>The Portals LND Linux (<literal>ptllnd</literal>) can be used as a interface layer to communicate with Sandia Portals networking devices. This version is intended to work on Cray XT3 Linux nodes that use Cray Portals as a network transport.</para>
       <para><emphasis role="bold">Message Buffers</emphasis></para>
       <para>When <literal>ptllnd</literal> starts up, it allocates and posts sufficient message buffers to allow all expected peers (set by concurrent_peers) to send one unsolicited message. The first message that a peer actually sends is (so-called) &quot;<literal>HELLO</literal>&quot; message, used to negotiate how much additional buffering to setup (typically 8 messages). If 10000 peers actually exist, then enough buffers are posted for 80000 messages.</para>
@@ -536,7 +548,7 @@ options lnet networks=tcp0,elan0</screen>
       </informaltable>
     </section>
     <section remap="h3">
-      <title>35.2.4 MX LND</title>
+      <title><indexterm><primary>configuring</primary><secondary>MX LND</secondary></indexterm>MX LND</title>
       <para><literal>MXLND</literal> supports a number of load-time parameters using Linux&apos;s module parameter system. The following variables are available:</para>
       <informaltable frame="all">
         <tgroup cols="2">
