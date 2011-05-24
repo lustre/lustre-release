@@ -85,7 +85,7 @@
         <title xml:id="understandingfailover.fig.configmdt"> Lustre failover configuration for an MDT </title>
         <mediaobject>
           <imageobject>
-            <imagedata fileref="./figures/MDT_Failover.png"/>
+            <imagedata scalefit="1" width="100%" fileref="./figures/MDT_Failover.png"/>
           </imageobject>
           <textobject>
             <phrase>Lustre failover configuration for an MDT </phrase>
@@ -103,7 +103,7 @@
         <title xml:id="understandingfailover.fig.configost"> Lustre failover configuration for an OSTs </title>
         <mediaobject>
           <imageobject>
-            <imagedata fileref="./figures/OST_Failover.png"/>
+            <imagedata scalefit="1" width="100%" fileref="./figures/OST_Failover.png"/>
           </imageobject>
           <textobject>
             <phrase>Lustre failover configuration for an OSTs </phrase>

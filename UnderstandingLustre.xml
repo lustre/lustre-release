@@ -221,7 +221,7 @@
       <title xml:id="understandinglustre.fig.cluster">Lustre components in a basic cluster </title>
       <mediaobject>
         <imageobject>
-          <imagedata fileref="./figures/Basic_Cluster.png"/>
+          <imagedata scalefit="1" width="100%" fileref="./figures/Basic_Cluster.png"/>
         </imageobject>
         <textobject>
           <phrase> Lustre components in a basic cluster </phrase>
@@ -325,7 +325,7 @@
         <title xml:id="understandinglustre.fig.lustrescale"><indexterm><primary>Lustre</primary><secondary>at scale</secondary></indexterm>Lustre cluster at scale</title>
         <mediaobject>
           <imageobject>
-            <imagedata fileref="./figures/Scaled_Cluster.png"/>
+            <imagedata scalefit="1" width="100%" fileref="./figures/Scaled_Cluster.png"/>
           </imageobject>
           <textobject>
             <phrase> Lustre clustre at scale </phrase>
@@ -344,7 +344,7 @@
       <title xml:id="understandinglustre.fig.mdtost">MDT file points to objects on OSTs containing file data</title>
       <mediaobject>
         <imageobject>
-          <imagedata fileref="./figures/Metadata_File.png"/>
+          <imagedata scalefit="1" width="100%" fileref="./figures/Metadata_File.png"/>
         </imageobject>
         <textobject>
           <phrase> MDT file points to objects on OSTs containing file data </phrase>
@@ -356,7 +356,7 @@
       <title xml:id="understandinglustre.fig.fileio">File open and file I/O in Lustre</title>
       <mediaobject>
         <imageobject>
-          <imagedata fileref="./figures/File_Write.png"/>
+          <imagedata scalefit="1" width="100%" fileref="./figures/File_Write.png"/>
         </imageobject>
         <textobject>
           <phrase> File open and file I/O in Lustre </phrase>
@@ -395,7 +395,7 @@
         <title xml:id="understandinglustre.fig.filestripe">File striping on Lustre</title>
         <mediaobject>
           <imageobject>
-            <imagedata fileref="./figures/File_Striping.png"/>
+            <imagedata scalefit="1" width="100%" fileref="./figures/File_Striping.png"/>
           </imageobject>
           <textobject>
             <phrase>File striping pattern across three OSTs for three different data files. The file is sparse and missing chunk 6. </phrase>
