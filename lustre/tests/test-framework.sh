@@ -414,10 +414,14 @@ set_debug_size () {
 }
 
 set_default_debug () {
-    lctl set_param debug=$PTLDEBUG
-    lctl set_param subsystem_debug=${SUBSYSTEM# }
+    local debug=${1:-"$PTLDEBUG"}
+    local subsystem_debug=${2:-"$SUBSYSTEM"}
+    local debug_size=${3:-$DEBUG_SIZE}
 
-    set_debug_size $DEBUG_SIZE
+    lctl set_param debug="$debug"
+    lctl set_param subsystem_debug="${subsystem_debug# }"
+
+    set_debug_size $debug_size
     sync
 }
 
@@ -430,7 +434,8 @@ set_default_debug_nodes () {
     local nodes=$1
 
     if remote_node $nodes; then
-	do_rpc_nodes $nodes set_default_debug
+	do_rpc_nodes $nodes set_default_debug \
+            \\\"$PTLDEBUG\\\" \\\"$SUBSYSTEM\\\" $DEBUG_SIZE
     else
 	set_default_debug
     fi
@@ -438,8 +443,10 @@ set_default_debug_nodes () {
 
 set_default_debug_facet () {
     local facet=$1
+    local node=$(facet_active_host $facet)
+    [ -z "$node" ] && echo "No host defined for facet $facet" && exit 1
 
-    set_default_debug_nodes $(facet_host ${facet})
+    set_default_debug_nodes $node
 }
 
 # Facet functions
