@@ -61,8 +61,13 @@ cfs_mem_cache_t *ll_file_data_slab;
 CFS_LIST_HEAD(ll_super_blocks);
 cfs_spinlock_t ll_sb_lock = CFS_SPIN_LOCK_UNLOCKED;
 
+#ifndef MS_HAS_NEW_AOPS
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
+#else
+extern struct address_space_operations_ext ll_aops;
+extern struct address_space_operations_ext ll_dir_aops;
+#endif
 
 #ifndef log2
 #define log2(n) cfs_ffz(~(n))
@@ -220,6 +225,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 #ifdef HAVE_MS_FLOCK_LOCK
         /* force vfs to use lustre handler for flock() calls - bug 10743 */
         sb->s_flags |= MS_FLOCK_LOCK;
+#endif
+#ifdef MS_HAS_NEW_AOPS
+        sb->s_flags |= MS_HAS_NEW_AOPS;
 #endif
 
         if (sbi->ll_flags & LL_SBI_FLOCK)
@@ -1688,12 +1696,12 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 struct ll_sb_info *sbi = ll_i2sbi(inode);
                 inode->i_op = &ll_file_inode_operations;
                 inode->i_fop = sbi->ll_fop;
-                inode->i_mapping->a_ops = &ll_aops;
+                inode->i_mapping->a_ops = (struct address_space_operations *)&ll_aops;
                 EXIT;
         } else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &ll_dir_inode_operations;
                 inode->i_fop = &ll_dir_operations;
-                inode->i_mapping->a_ops = &ll_dir_aops;
+                inode->i_mapping->a_ops = (struct address_space_operations *)&ll_dir_aops;
                 EXIT;
         } else if (S_ISLNK(inode->i_mode)) {
                 inode->i_op = &ll_fast_symlink_inode_operations;

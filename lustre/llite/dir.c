@@ -193,9 +193,15 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         return rc;
 }
 
+#ifndef MS_HAS_NEW_AOPS
 struct address_space_operations ll_dir_aops = {
         .readpage  = ll_dir_readpage,
 };
+#else
+struct address_space_operations_ext ll_dir_aops = {
+        .orig_aops.readpage  = ll_dir_readpage,
+};
+#endif
 
 static void ll_check_page(struct inode *dir, struct page *page)
 {
