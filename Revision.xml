@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<revhistory>
-
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+    <title>Revisions</title>
+    <para>
+    <revhistory>
     <revision>
         <revnumber>1.0</revnumber>
         <date>June 2011</date>
-        <author>Whamcloud, Inc</author>
+        <author><orgname>Whamcloud, Inc</orgname></author>
         <revremark>First release of Lustre 2.x manual</revremark>
     </revision>
 </revhistory>
+</para>
+</chapter>

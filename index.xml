@@ -1,36 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<book version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
+<book version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:xi="http://www.w3.org/2001/XInclude">
 
   <info>
-  <title>Lustre 2.x Filesystem</title>
+      <title>Lustre 2.x Filesystem
+      
+      </title>
     <subtitle>Operations Manual</subtitle>
 
-    <xi:include href="copyright.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="legalnotice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="Revision.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="copyright.xml"  xmlns:xi="http://www.w3.org/2001/XInclude"/>
+    <xi:include href="legalnotice.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
   </info>
 
+    <xi:include href="Revision.xml"  xmlns:xi="http://www.w3.org/2001/XInclude"/>
 
-  <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Preface.xml" />
 
-  <xi:include href="I_LustreIntro.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="I_LustreIntro.xml" />
 
+  <xi:include href="II_LustreInstallConfig.xml" />
 
-  <xi:include href="II_LustreInstallConfig.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="III_LustreAdministration.xml" />
 
-  <xi:include href="III_LustreAdministration.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="IV_LustreTuning.xml" />
 
+  <xi:include href="V_LustreTroubleshooting.xml" />
 
-  <xi:include href="IV_LustreTuning.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="VI_Reference.xml" />
 
+  <xi:include href="Glossary.xml" />
 
-  <xi:include href="V_LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
-  <xi:include href="VI_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-                  
-
-  <xi:include href="Glossary.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-  <xi:include href="ix.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="ix.xml" />
 </book>

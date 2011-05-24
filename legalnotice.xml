@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<legalnotice>
+<legalnotice xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+    <title>Important Notice</title>
+
+
+    <para>Copyright © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+
       <para>This software and related documentation are provided under a license agreement containing restrictions on use and disclosure and are protected by intellectual property laws. Except as expressly permitted in your license agreement or allowed by law, you may not use, copy, reproduce, translate, broadcast, modify, license, transmit, distribute, exhibit, perform, publish, or display any part, in any form, or by any means. Reverse engineering, disassembly, or decompilation of this software, unless required by law for interoperability, is prohibited.</para>
       <para>The information contained herein is subject to change without notice and is not warranted to be error-free. If you find any errors, please report them to us in writing.</para>
       <para>If this is software or related software documentation that is delivered to the U.S. Government or anyone licensing it on behalf of the U.S. Government, the following notice is applicable:</para>
@@ -30,6 +35,6 @@
           <para>Ce logiciel ou matériel et la documentation qui l’accompagne peuvent fournir des informations ou des liens donnant accès à des contenus, des produits et des services émanant de tiers. Oracle Corporation et ses affiliés déclinent toute responsabilité ou garantie expresse quant aux contenus, produits ou services émanant de tiers. En aucun cas, Oracle Corporation et ses affiliés ne sauraient être tenus pour responsables des pertes subies, des coûts occasionnés ou des dommages causés par l’accès à des contenus, produits ou services tiers, ou à leur utilisation.</para>
 
 
-      <para>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit <link href="http://creativecommons.org/licenses/by-sa/3.0/us">Creative Commons Attribution-Share Alike 3.0 United States</link> or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>
+      <para>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit <link xl:href="http://creativecommons.org/licenses/by-sa/3.0/us">Creative Commons Attribution-Share Alike 3.0 United States</link> or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>
 
 </legalnotice>
