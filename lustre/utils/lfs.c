@@ -277,7 +277,7 @@ static int lfs_setstripe(int argc, char **argv)
         char *stripe_off_arg = NULL;
         char *stripe_count_arg = NULL;
         char *pool_name_arg = NULL;
-        unsigned long long size_units;
+        unsigned long long size_units = 1;
 
         struct option long_opts[] = {
                 {"count",       required_argument, 0, 'c'},
@@ -494,7 +494,7 @@ static int lfs_find(int argc, char **argv)
         int new_fashion = 1;
         int c, ret;
         time_t t;
-        struct find_param param = { .maxdepth = -1 };
+        struct find_param param = { .maxdepth = -1, .size_units = 0 };
         struct option long_opts[] = {
                 {"atime",     required_argument, 0, 'A'},
                 {"ctime",     required_argument, 0, 'C'},
@@ -1565,9 +1565,9 @@ error:
         return ULONG_MAX;
 }
 
-#define ARG2ULL(nr, str, defscale)                                      \
+#define ARG2ULL(nr, str, def_units)                                     \
 do {                                                                    \
-        unsigned long long limit, units = 0;                            \
+        unsigned long long limit, units = def_units;                    \
         int rc;                                                         \
                                                                         \
         rc = parse_size(str, &limit, &units, 1);                        \
@@ -1575,7 +1575,7 @@ do {                                                                    \
                 fprintf(stderr, "error: bad limit value %s\n", str);    \
                 return CMD_HELP;                                        \
         }                                                               \
-        nr = ((units == 0) ? (defscale) : 1) * limit;                   \
+        nr = limit;                                                     \
 } while (0)
 
 static inline int has_times_option(int argc, char **argv)
