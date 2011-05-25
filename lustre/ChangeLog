@@ -1,9 +1,25 @@
-xxxx-xx-xx Oracle, Inc.
+2011-xx-xx Whamcloud, Inc.
+	* version 1.8.6-wc
+	* Support for kernels:
+	  2.6.18-238.9.1.el5 (RHEL 5)
+	  2.6.32-71.18.2.el6 (RHEL 6) - patchless client only
+	* Client support for unpatched kernels:
+	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	  2.6.16 - 2.6.32 vanilla (kernel.org)
+	* Recommended e2fsprogs version: 1.41.10-sun2
+	* The async journal commit feature (bug 19128) and the cancel
+	  lock before replay feature (bug 16774) are disabled by default.
+
+
+-------------------------------------------------------------------------------
+
+2011-05-12 Oracle, Inc.
 	* version 1.8.6
 	* Support for kernels:
-	  2.6.16.60-0.69.1 (SLES 10),
-	  2.6.32.19-0.2.1  (SLES 11),
-	  2.6.18-238.9.1.el5 (RHEL 5)
+	  2.6.16.60-0.42.8 (SLES 10),
+	  2.6.27.39-0.3.1 (SLES 11),
+	  2.6.18-194.3.1.el5 (RHEL 5)
+	  2.6.18-194.3.1.0.1.el5 (OEL 5)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.32 vanilla (kernel.org)
