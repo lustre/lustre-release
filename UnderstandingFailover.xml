@@ -85,7 +85,7 @@
         <title xml:id="understandingfailover.fig.configmdt"> Lustre failover configuration for an MDT </title>
         <mediaobject>
           <imageobject>
-            <imagedata scalefit="1" width="100%" fileref="./figures/MDT_Failover.png"/>
+            <imagedata fileref="./figures/MDT_Failover.png"/>
           </imageobject>
           <textobject>
             <phrase>Lustre failover configuration for an MDT </phrase>
