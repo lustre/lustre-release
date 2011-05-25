@@ -7,7 +7,16 @@
       </title>
     <subtitle>Operations Manual</subtitle>
 
-    <xi:include href="copyright.xml"  xmlns:xi="http://www.w3.org/2001/XInclude"/>
+    <copyright>
+        <year>2010</year>
+        <year>2011</year>
+        <holder>Oracle and/or its affiliates.</holder>
+        </copyright>
+    <copyright>
+        <year>2011</year>
+        <holder>Whamcloud, Inc.</holder>
+    </copyright>
+
     <xi:include href="legalnotice.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
   </info>
 
