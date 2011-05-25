@@ -3402,19 +3402,27 @@ test_56n() {
 run_test 56n "check lfs find -type l ============================="
 
 test_56o() {
-	setup_56 $NUMFILES $NUMDIRS
 	TDIR=$DIR/${tdir}g
+	rm -rf $TDIR
+	setup_56 $NUMFILES $NUMDIRS
 
 	utime $TDIR/file1 > /dev/null || error "utime (1)"
 	utime $TDIR/file2 > /dev/null || error "utime (2)"
 	utime $TDIR/dir1 > /dev/null || error "utime (3)"
 	utime $TDIR/dir2 > /dev/null || error "utime (4)"
 	utime $TDIR/dir1/file1 > /dev/null || error "utime (5)"
+	dd if=/dev/zero count=1 >> $TDIR/dir1/file1 && sync
 
-	EXPECTED=5
-	NUMS=`$LFIND -mtime +1 $TDIR | wc -l`
+	EXPECTED=4
+	NUMS=`$LFIND -mtime +0 $TDIR | wc -l`
 	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -mtime $TDIR wrong: found $NUMS, expected $EXPECTED"
+		error "lfs find -mtime +0 $TDIR wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=12
+	NUMS=`$LFIND -mtime 0 $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -mtime 0 $TDIR wrong: found $NUMS, expected $EXPECTED"
+
 }
 run_test 56o "check lfs find -mtime for old files =========================="
 
@@ -3477,6 +3485,7 @@ test_56r() {
 	[ $NUMS -eq $EXPECTED ] || \
 		error "lfs find $TDIR ! -size 0 wrong: found $NUMS, expected $EXPECTED"
 	echo "test" > $TDIR/56r && sync
+	echo "test2" > $TDIR/56r2 && sync
 	EXPECTED=1
 	NUMS=`$LFIND -size 5 -t f $TDIR | wc -l`
 	[ $NUMS -eq $EXPECTED ] || \
@@ -3485,14 +3494,18 @@ test_56r() {
 	NUMS=`$LFIND -size +5 -t f $TDIR | wc -l`
 	[ $NUMS -eq $EXPECTED ] || \
 		error "lfs find $TDIR -size +5 wrong: found $NUMS, expected $EXPECTED"
-	EXPECTED=13
+	EXPECTED=2
 	NUMS=`$LFIND -size +0 -t f $TDIR | wc -l`
 	[ $NUMS -eq $EXPECTED ] || \
 		error "lfs find $TDIR -size +0 wrong: found $NUMS, expected $EXPECTED"
-	EXPECTED=0
+	EXPECTED=2
 	NUMS=`$LFIND ! -size -5 -t f $TDIR | wc -l`
 	[ $NUMS -eq $EXPECTED ] || \
 		error "lfs find $TDIR ! -size -5 wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=12
+	NUMS=`$LFIND -size -5 -t f $TDIR | wc -l`
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find $TDIR -size -5 wrong: found $NUMS, expected $EXPECTED"
 }
 
 run_test 56r "check lfs find -size works =========================="
