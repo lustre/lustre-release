@@ -132,7 +132,7 @@
       <title><indexterm><primary>inodes</primary><secondary>OST</secondary></indexterm>Setting the Number of Inodes for an OST</title>
       <para>When formatting OST file systems, it is normally advantageous to take local file system usage into account. Try to minimize the number of inodes on each OST, while keeping enough margin for potential variance in future usage. This helps reduce the format and file system check time, and makes more space available for data.</para>
       <para>The current default is to create one inode per 16 KB of space in the OST file system, but in many environments, this is far too many inodes for the average file size. As a good rule of thumb, the OSTs should have at least:</para>
-      <screen>num_ost_inodes = 4 * <emphasis>&lt;num_mds_inodes&gt;</emphasis> * <emphasis>&lt;default_stripe_count&gt;</emphasis> / <emphasis>&lt;number_osts&gt;</emphasis></screen>
+      <para>num_ost_inodes = 4 * <emphasis>&lt;num_mds_inodes&gt;</emphasis> * <emphasis>&lt;default_stripe_count&gt;</emphasis> / <emphasis>&lt;number_osts&gt;</emphasis></para>
       <para>You can specify the number of inodes on the OST file systems using the following option to the <literal>--mkfs</literal> option:</para>
       <screen>-N <emphasis>&lt;num_inodes&gt;</emphasis></screen>
       <para> Alternately, if you know the average file size, then you can specify the OST inode count for the OST file systems using:</para>
