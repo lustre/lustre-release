@@ -1304,21 +1304,16 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent)
 }
 
 /**
- * for 32 bit inode numbers directly map seq+oid to 32bit number.
- */
-__u32 cl_fid_build_ino32(const struct lu_fid *fid)
-{
-        RETURN(fid_flatten32(fid));
-}
-
-/**
  * build inode number from passed @fid */
-__u64 cl_fid_build_ino(const struct lu_fid *fid)
+__u64 cl_fid_build_ino(const struct lu_fid *fid, int need_32bit)
 {
 #if BITS_PER_LONG == 32
         RETURN(fid_flatten32(fid));
 #else
-        RETURN(fid_flatten(fid));
+        if (need_32bit)
+                RETURN(fid_flatten32(fid));
+        else
+                RETURN(fid_flatten(fid));
 #endif
 }
 

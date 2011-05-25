@@ -73,7 +73,7 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         struct ptlrpc_request *req = NULL;
         struct inode          *inode = NULL;
         int                   eadatalen = 0;
-        unsigned long         hash = (unsigned long) cl_fid_build_ino(fid);
+        unsigned long         hash = (unsigned long) cl_fid_build_ino(fid, 0);
         struct  md_op_data    *op_data;
         int                   rc;
         ENTRY;
@@ -141,7 +141,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
         if (!result)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        ll_dops_init(result, 1);
+        ll_dops_init(result, 1, 0);
 
         RETURN(result);
 }
@@ -182,6 +182,63 @@ static int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen,
         *plen = sizeof(struct lustre_nfs_fid)/4;
 
         RETURN(LUSTRE_NFS_FID);
+}
+
+static int ll_nfs_get_name_filldir(void *cookie, const char *name, int namelen,
+                                   loff_t hash, u64 ino, unsigned type)
+{
+        /* It is hack to access lde_fid for comparison with lgd_fid.
+         * So the input 'name' must be part of the 'lu_dirent'. */
+        struct lu_dirent *lde = container_of0(name, struct lu_dirent, lde_name);
+        struct ll_getname_data *lgd = cookie;
+        struct lu_fid fid;
+
+        fid_le_to_cpu(&fid, &lde->lde_fid);
+        if (lu_fid_eq(&fid, &lgd->lgd_fid)) {
+                memcpy(lgd->lgd_name, name, namelen);
+                lgd->lgd_name[namelen] = 0;
+                lgd->lgd_found = 1;
+        }
+        return lgd->lgd_found;
+}
+
+static int ll_get_name(struct dentry *dentry, char *name,
+                       struct dentry *child)
+{
+        struct inode *dir = dentry->d_inode;
+        struct file *filp;
+        struct ll_getname_data lgd;
+        int rc;
+        ENTRY;
+
+        if (!dir || !S_ISDIR(dir->i_mode))
+                GOTO(out, rc = -ENOTDIR);
+
+        if (!dir->i_fop)
+                GOTO(out, rc = -EINVAL);
+
+        filp = ll_dentry_open(dget(dentry), NULL, O_RDONLY, current_cred());
+        if (IS_ERR(filp))
+                GOTO(out, rc = PTR_ERR(filp));
+
+        if (!filp->f_op->readdir)
+                GOTO(out_close, rc = -EINVAL);
+
+        lgd.lgd_name = name;
+        lgd.lgd_fid = ll_i2info(child->d_inode)->lli_fid;
+        lgd.lgd_found = 0;
+
+        cfs_mutex_lock(&dir->i_mutex);
+        rc = ll_readdir(filp, &lgd, ll_nfs_get_name_filldir);
+        cfs_mutex_unlock(&dir->i_mutex);
+        if (!rc && !lgd.lgd_found)
+                rc = -ENOENT;
+        EXIT;
+
+out_close:
+        fput(filp);
+out:
+        return rc;
 }
 
 #ifdef HAVE_FH_TO_DENTRY
@@ -290,6 +347,7 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
 struct export_operations lustre_export_operations = {
        .get_parent = ll_get_parent,
        .encode_fh  = ll_encode_fh,
+       .get_name   = ll_get_name,
 #ifdef HAVE_FH_TO_DENTRY
         .fh_to_dentry = ll_fh_to_dentry,
         .fh_to_parent = ll_fh_to_parent,

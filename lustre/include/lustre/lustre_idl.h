@@ -790,8 +790,9 @@ static inline int lu_fid_cmp(const struct lu_fid *f0,
  * enumeration.
  */
 enum lu_dirent_attrs {
-        LUDA_FID    = 0x0001,
-        LUDA_TYPE   = 0x0002,
+        LUDA_FID        = 0x0001,
+        LUDA_TYPE       = 0x0002,
+        LUDA_64BITHASH  = 0x0004,
 };
 
 /**
@@ -900,7 +901,8 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
         return le16_to_cpu(ent->lde_reclen);
 }
 
-#define DIR_END_OFF              0xfffffffffffffffeULL
+#define DIR_END_OFF              0x7fffffffffffffffULL
+#define DIR_END_OFF_32BIT        0x7fffffffUL
 
 /** @} lu_dir */
 
@@ -1070,6 +1072,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_MAX_EASIZE    0x800000000ULL /* preserved for large EA */
 #define OBD_CONNECT_FULL20       0x1000000000ULL /* it is 2.0 client */
 #define OBD_CONNECT_LAYOUTLOCK   0x2000000000ULL /* client supports layout lock */
+#define OBD_CONNECT_64BITHASH    0x4000000000ULL /* client supports 64-bits
+                                                  * directory hash */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -1090,7 +1094,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_LOV_V3 | OBD_CONNECT_SOM | \
-                                OBD_CONNECT_FULL20)
+                                OBD_CONNECT_FULL20 | OBD_CONNECT_64BITHASH)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \

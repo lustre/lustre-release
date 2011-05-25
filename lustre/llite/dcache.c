@@ -200,7 +200,7 @@ static int ll_set_dd(struct dentry *de)
         RETURN(0);
 }
 
-int ll_dops_init(struct dentry *de, int block)
+int ll_dops_init(struct dentry *de, int block, int init_sa)
 {
         struct ll_dentry_data *lld = ll_d2d(de);
         int rc = 0;
@@ -213,7 +213,7 @@ int ll_dops_init(struct dentry *de, int block)
                 lld = ll_d2d(de);
         }
 
-        if (lld != NULL)
+        if (lld != NULL && init_sa != 0)
                 lld->lld_sa_generation = 0;
 
         de->d_op = &ll_d_ops;

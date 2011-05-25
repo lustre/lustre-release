@@ -1489,6 +1489,8 @@ static int mdt_readpage(struct mdt_thread_info *info)
         }
 
         rdpg->rp_attrs = reqbody->mode;
+        if (info->mti_exp->exp_connect_flags & OBD_CONNECT_64BITHASH)
+                rdpg->rp_attrs |= LUDA_64BITHASH;
         rdpg->rp_count  = reqbody->nlink;
         rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>>CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);

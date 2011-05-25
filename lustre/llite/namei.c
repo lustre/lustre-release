@@ -388,7 +388,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 lock_dentry(dentry);
                 __d_drop(dentry);
                 unlock_dentry(dentry);
-                ll_dops_init(dentry, 0);
+                ll_dops_init(dentry, 0, 1);
                 d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
                 cfs_spin_unlock(&ll_lookup_lock);
@@ -409,7 +409,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 unlock_dentry(last_discon);
                 spin_unlock(&dcache_lock);
                 cfs_spin_unlock(&ll_lookup_lock);
-                ll_dops_init(last_discon, 1);
+                ll_dops_init(last_discon, 1, 1);
                 d_rehash(de);
                 d_move(last_discon, de);
                 iput(inode);
@@ -460,14 +460,14 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                    Everybody else who needs correct file size would call
                    cl_glimpse_size or some equivalent themselves anyway.
                    Also see bug 7198. */
-                ll_dops_init(*de, 1);
+                ll_dops_init(*de, 1, 1);
                 *de = ll_find_alias(inode, *de);
                 if (*de != save) {
                         struct ll_dentry_data *lld = ll_d2d(*de);
 
                         /* just make sure the ll_dentry_data is ready */
                         if (unlikely(lld == NULL))
-                                ll_dops_init(*de, 1);
+                                ll_dops_init(*de, 1, 1);
                 }
                 /* we have lookup look - unhide dentry */
                 if (bits & MDS_INODELOCK_LOOKUP) {
@@ -476,7 +476,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                         unlock_dentry(*de);
                 }
         } else {
-                ll_dops_init(*de, 1);
+                ll_dops_init(*de, 1, 1);
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
                    might get picked up later when UPDATE lock will appear */
@@ -650,7 +650,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                         if ((nd->flags & LOOKUP_CREATE ) && !(nd->flags & LOOKUP_OPEN)) {
                                 /* We are sure this is new dentry, so we need to create
                                    our private data and set the dentry ops */ 
-                                ll_dops_init(dentry, 1);
+                                ll_dops_init(dentry, 1, 1);
                                 RETURN(NULL);
                         }
                         it = ll_convert_intent(&nd->intent.open, nd->flags);

@@ -1,8 +1,20 @@
-Index: linux-2.6.18-194.17.1-ext3/fs/ext3/dir.c
+Index: linux-stage/fs/ext3/dir.c
 ===================================================================
---- linux-2.6.18-194.17.1-ext3.orig/fs/ext3/dir.c	2010-11-30 22:46:09.000000000 +0300
-+++ linux-2.6.18-194.17.1-ext3/fs/ext3/dir.c	2010-12-16 00:10:12.000000000 +0300
-@@ -240,19 +240,34 @@ out:
+--- linux-stage.orig/fs/ext3/dir.c	2011-04-19 01:39:47.000000000 +0800
++++ linux-stage/fs/ext3/dir.c	2011-04-19 01:44:19.000000000 +0800
+@@ -237,22 +237,50 @@
+ }
+
+ #ifdef CONFIG_EXT3_INDEX
++static inline int is_32bit_api(void)
++{
++#ifdef HAVE_IS_COMPAT_TASK
++        return is_compat_task();
++#else
++        return (BITS_PER_LONG == 32);
++#endif
++}
++
  /*
   * These functions convert from the major/minor hash to an f_pos
   * value.
@@ -16,128 +28,108 @@ Index: linux-2.6.18-194.17.1-ext3/fs/ext3/dir.c
 - * system call.  Worse yet, NFSv2 only allows for a 32-bit readdir
 - * cookie.  Sigh.
 + *
-+ * Whether 64-bit or 32-bit hash value is exported as file pos is
-+ * controlled by "64bithash" mount option.
++ * Up layer (OSD) should specify O_32BITHASH or O_64BITHASH explicitly.
++ * On the other hand, we allow ldiskfs to be mounted directly on both 32-bit
++ * and 64-bit nodes, under such case, neither O_32BITHASH nor O_64BITHASH is
++ * specified.
   */
 -#define hash2pos(major, minor)	(major >> 1)
 -#define pos2maj_hash(pos)	((pos << 1) & 0xffffffff)
 -#define pos2min_hash(pos)	(0)
-+
-+static inline loff_t hash2pos(struct super_block *sb, __u32 major, __u32 minor)
++static inline loff_t hash2pos(struct file *filp, __u32 major, __u32 minor)
 +{
-+	if (test_opt(sb, 64BITHASH))
-+		return (((__u64)(major >> 1) << 32) | (__u64)minor);
-+	else
++	if ((filp->f_flags & O_32BITHASH) ||
++	    (!(filp->f_flags & O_64BITHASH) && is_32bit_api()))
 +		return (major >> 1);
++	else
++		return (((__u64)(major >> 1) << 32) | (__u64)minor);
 +}
 +
-+static inline __u32 pos2maj_hash(struct super_block *sb, loff_t pos)
++static inline __u32 pos2maj_hash(struct file *filp, loff_t pos)
 +{
-+	if (test_opt(sb, 64BITHASH))
-+		return (((pos >> 32) << 1) & 0xffffffff);
-+	else
++	if ((filp->f_flags & O_32BITHASH) ||
++	    (!(filp->f_flags & O_64BITHASH) && is_32bit_api()))
 +		return ((pos << 1) & 0xffffffff);
++	else
++		return (((pos >> 32) << 1) & 0xffffffff);
 +}
 +
-+static inline __u32 pos2min_hash(struct super_block *sb, loff_t pos)
++static inline __u32 pos2min_hash(struct file *filp, loff_t pos)
 +{
-+	if (test_opt(sb, 64BITHASH))
-+		return (pos & 0xffffffff);
-+	else
++	if ((filp->f_flags & O_32BITHASH) ||
++	    (!(filp->f_flags & O_64BITHASH) && is_32bit_api()))
 +		return (0);
++	else
++		return (pos & 0xffffffff);
 +}
  
  /*
   * This structure holds the nodes of the red-black tree used to store
-@@ -314,7 +329,7 @@ static void free_rb_tree_fname(struct rb
+@@ -314,7 +342,7 @@
  }
  
  
 -static struct dir_private_info *create_dir_info(loff_t pos)
-+static struct dir_private_info *create_dir_info(struct super_block *sb, loff_t pos)
++static struct dir_private_info *create_dir_info(struct file* filp, loff_t pos)
  {
  	struct dir_private_info *p;
  
-@@ -325,8 +340,8 @@ static struct dir_private_info *create_d
+@@ -325,8 +353,8 @@
  	p->curr_node = NULL;
  	p->extra_fname = NULL;
  	p->last_pos = 0;
 -	p->curr_hash = pos2maj_hash(pos);
 -	p->curr_minor_hash = pos2min_hash(pos);
-+	p->curr_hash = pos2maj_hash(sb, pos);
-+	p->curr_minor_hash = pos2min_hash(sb, pos);
++	p->curr_hash = pos2maj_hash(filp, pos);
++	p->curr_minor_hash = pos2min_hash(filp, pos);
  	p->next_hash = 0;
  	return p;
  }
-@@ -422,7 +437,7 @@ static int call_filldir(struct file * fi
+@@ -422,7 +450,7 @@
  		printk("call_filldir: called with null fname?!?\n");
  		return 0;
  	}
 -	curr_pos = hash2pos(fname->hash, fname->minor_hash);
-+	curr_pos = hash2pos(sb, fname->hash, fname->minor_hash);
++	curr_pos = hash2pos(filp, fname->hash, fname->minor_hash);
  	while (fname) {
  		error = filldir(dirent, fname->name,
  				fname->name_len, curr_pos, 
-@@ -447,7 +462,7 @@ static int ext3_dx_readdir(struct file *
+@@ -447,7 +475,7 @@
  	int	ret;
  
  	if (!info) {
 -		info = create_dir_info(filp->f_pos);
-+		info = create_dir_info(inode->i_sb, filp->f_pos);
++		info = create_dir_info(filp, filp->f_pos);
  		if (!info)
  			return -ENOMEM;
  		filp->private_data = info;
-@@ -461,8 +476,8 @@ static int ext3_dx_readdir(struct file *
+@@ -461,8 +489,8 @@
  		free_rb_tree_fname(&info->root);
  		info->curr_node = NULL;
  		info->extra_fname = NULL;
 -		info->curr_hash = pos2maj_hash(filp->f_pos);
 -		info->curr_minor_hash = pos2min_hash(filp->f_pos);
-+		info->curr_hash = pos2maj_hash(inode->i_sb, filp->f_pos);
-+		info->curr_minor_hash = pos2min_hash(inode->i_sb, filp->f_pos);
++		info->curr_hash = pos2maj_hash(filp, filp->f_pos);
++		info->curr_minor_hash = pos2min_hash(filp, filp->f_pos);
  	}
  
  	/*
-Index: linux-2.6.18-194.17.1-ext3/fs/ext3/super.c
+Index: linux-stage/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18-194.17.1-ext3.orig/fs/ext3/super.c	2010-11-30 22:48:01.000000000 +0300
-+++ linux-2.6.18-194.17.1-ext3/fs/ext3/super.c	2010-12-16 00:11:59.000000000 +0300
-@@ -742,6 +742,7 @@ enum {
- 	Opt_grpquota,
- 	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
- 	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_maxdirsize, Opt_force_over_8tb,
-+	Opt_64bithash,
- };
- 
- static match_table_t tokens = {
-@@ -808,6 +809,7 @@ static match_table_t tokens = {
- 	{Opt_force_over_8tb, "force_over_8tb"},
- 	{Opt_resize, "resize"},
- 	{Opt_maxdirsize, "maxdirsize=%u"},
-+	{Opt_64bithash, "64bithash"},
- 	{Opt_err, NULL}
- };
- 
-@@ -1195,6 +1197,9 @@ clear_qf_name:
- 		case Opt_force_over_8tb:
- 			force_over_8tb = 1;
- 			break;
-+		case Opt_64bithash:
-+			set_opt(sbi->s_mount_opt, 64BITHASH);
-+			break;
- 		default:
- 			printk (KERN_ERR
- 				"EXT3-fs: Unrecognized mount option \"%s\" "
-Index: linux-2.6.18-194.17.1-ext3/include/linux/ext3_fs.h
-===================================================================
---- linux-2.6.18-194.17.1-ext3.orig/include/linux/ext3_fs.h	2010-11-30 22:52:58.000000000 +0300
-+++ linux-2.6.18-194.17.1-ext3/include/linux/ext3_fs.h	2010-12-16 00:12:45.000000000 +0300
-@@ -483,6 +483,8 @@ do {									       \
- #define EXT3_MOUNT_JOURNAL_ASYNC_COMMIT 0x20000000 /* Journal Async Commit */
+--- linux-stage.orig/include/linux/ext3_fs.h	2011-04-19 01:39:47.000000000 +0800
++++ linux-stage/include/linux/ext3_fs.h	2011-04-19 01:45:21.000000000 +0800
+@@ -54,6 +54,14 @@
+ #define ext3_debug(f, a...)	do {} while (0)
  #endif
  
-+#define EXT3_MOUNT_64BITHASH            0x40000000 /* export 64-bit name hash */
++#ifndef O_32BITHASH
++# define O_32BITHASH    0x10000000
++#endif
 +
- /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
- #ifndef clear_opt
- #define clear_opt(o, opt)		o &= ~EXT3_MOUNT_##opt
++#ifndef O_64BITHASH
++# define O_64BITHASH    0x20000000
++#endif
++
+ #define EXT3_MULTIBLOCK_ALLOCATOR	1
+
+ #define EXT3_MB_HINT_MERGE		1	/* prefer goal again. length */

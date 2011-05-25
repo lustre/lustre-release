@@ -250,7 +250,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
                 RETURN(-ENOTDIR);
 
         iops = &obj->do_index_ops->dio_it;
-        it = iops->init(env, obj, BYPASS_CAPA);
+        it = iops->init(env, obj, LUDA_64BITHASH, BYPASS_CAPA);
         if (!IS_ERR(it)) {
                 result = iops->get(env, it, (const void *)"");
                 if (result > 0) {

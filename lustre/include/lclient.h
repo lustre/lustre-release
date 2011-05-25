@@ -361,8 +361,7 @@ void cl_inode_fini(struct inode *inode);
 int cl_local_size(struct inode *inode);
 
 __u16 ll_dirent_type_get(struct lu_dirent *ent);
-__u64 cl_fid_build_ino(const struct lu_fid *fid);
-__u32 cl_fid_build_ino32(const struct lu_fid *fid);
+__u64 cl_fid_build_ino(const struct lu_fid *fid, int need_32bit);
 __u32 cl_fid_build_gen(const struct lu_fid *fid);
 
 #ifdef INVARIANT_CHECK

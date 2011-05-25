@@ -2302,22 +2302,19 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                   struct lookup_intent *it, struct kstat *stat)
 {
         struct inode *inode = de->d_inode;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
         int res = 0;
 
         res = ll_inode_revalidate_it(de, it, MDS_INODELOCK_UPDATE |
                                              MDS_INODELOCK_LOOKUP);
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETATTR, 1);
+        ll_stats_ops_tally(sbi, LPROC_LL_GETATTR, 1);
 
         if (res)
                 return res;
 
         stat->dev = inode->i_sb->s_dev;
-        if (ll_need_32bit_api(ll_i2sbi(inode)))
-                stat->ino = cl_fid_build_ino32(&lli->lli_fid);
-        else
-                stat->ino = inode->i_ino;
-
+        stat->ino = cl_fid_build_ino(&lli->lli_fid, ll_need_32bit_api(sbi));
         stat->mode = inode->i_mode;
         stat->nlink = inode->i_nlink;
         stat->uid = inode->i_uid;
