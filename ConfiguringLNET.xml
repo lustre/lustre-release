@@ -199,36 +199,28 @@ lctl network configure</screen>
     <itemizedlist>
       <listitem>
         <para><literal>live_router_check_interval</literal>  - Specifies a time interval in seconds after which the router checker will ping the live routers. The default value is 0, meaning no checking is done. To set the value to 60, enter:</para>
-      </listitem>
-    </itemizedlist>
     <screen>options lnet live_router_check_interval=60</screen>
-    <itemizedlist>
+      </listitem>
       <listitem>
         <para><literal>dead_router_check_interval</literal>  - Specifies a time interval in seconds after which the router checker will check for dead routers. The default value is 0, meaning no checking is done. To set the value to 60, enter:</para>
-      </listitem>
-    </itemizedlist>
     <screen>options lnet dead_router_check_interval=60</screen>
-    <itemizedlist>
+      </listitem>
       <listitem>
         <para>auto_down  - Enables/disables (1/0) the automatic marking of router state as up or down. The default value is 1. To disable router marking, enter:</para>
-      </listitem>
-    </itemizedlist>
     <screen>options lnet auto_down=0</screen>
-    <itemizedlist>
+      </listitem>
       <listitem>
         <para><literal>router_ping_timeout</literal>  - Specifies a timeout for the router checker when it checks live or dead routers. The router checker sends a ping message to each dead or live router once every dead_router_check_interval or live_router_check_interval respectively. The default value is 50. To set the value to 60, enter:</para>
-      </listitem>
-    </itemizedlist>
     <screen>options lnet router_ping_timeout=60</screen>
     <note>
-      <para>The router_ping_timeout is consistent with the default LND timeouts. You may have to increase it on very large clusters if the LND timeout is also increased. For larger clusters, we suggest increasing the check interval.</para>
+        <para>The <literal>router_ping_timeout</literal> is consistent with the default LND timeouts. You may have to increase it on very large clusters if the LND timeout is also increased. For larger clusters, we suggest increasing the check interval.</para>
     </note>
-    <itemizedlist>
+      </listitem>
       <listitem>
-        <para>check_routers_before_use  - Specifies that routers are to be checked before use. Set to off by default. If this parameter is set to on, the dead_router_check_interval parameter must be given a positive integer value.</para>
+          <para><literal>check_routers_before_use</literal>  - Specifies that routers are to be checked before use. Set to off by default. If this parameter is set to on, the dead_router_check_interval parameter must be given a positive integer value.</para>
+    <screen>options lnet check_routers_before_use=on</screen>
       </listitem>
     </itemizedlist>
-    <screen>options lnet check_routers_before_use=on</screen>
     <para>The router checker obtains the following information from each router:</para>
     <itemizedlist>
       <listitem>
