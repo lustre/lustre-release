@@ -6048,17 +6048,18 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
-check_stats() {
+check_stats_facet() {
 	local res
 	local count
-	case $1 in
-	mds) local dev=$(get_mds_mdt_device_proc_path)
-	     res=`do_facet mds $LCTL get_param $dev.$FSNAME-MDT0000.stats | grep "$2"`
-		 ;;
-	ost) res=`do_facet ost0 $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$2"`
-		 ;;
-	*) error "Wrong argument $1" ;;
-	esac
+	local facet=$1
+	local svc=${facet}_svc
+
+	local dev=obdfilter
+
+	[[ $facet = mds ]] && dev=$(get_mds_mdt_device_proc_path)
+	param=$dev.${!svc}.stats
+
+	res=$(do_facet $facet $LCTL get_param $param | grep "$2")
 	echo $res
 	count=`echo $res | awk '{print $2}'`
 	[ -z "$res" ] && error "The counter for $2 on $1 was not incremented"
@@ -6082,25 +6083,25 @@ test_133a() {
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
 	do_facet mds $LCTL set_param $dev.*.stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	# verify mdt stats first.
 	mkdir ${testdir} || error "mkdir failed"
-	check_stats mds "mkdir" 1
+	check_stats_facet mds "mkdir" 1
 	touch ${testdir}/${tfile} || "touch failed"
 	# LPROC_MDS_OPEN is incremented by 2 - in mds_open() and mds_intent_policy()
-	check_stats mds "open" 2
-	check_stats mds "close" 1
+	check_stats_facet mds "open" 2
+	check_stats_facet mds "close" 1
 	mknod ${testdir}/${tfile}-pipe p || "mknod failed"
-	check_stats mds "mknod" 1
+	check_stats_facet mds "mknod" 1
 	rm -f ${testdir}/${tfile}-pipe || "pipe remove failed"
-	check_stats mds "unlink" 1
+	check_stats_facet mds "unlink" 1
 	rm -f ${testdir}/${tfile} || error "file remove failed"
-	check_stats mds "unlink" 2
+	check_stats_facet mds "unlink" 2
 
 	# remove working dir and check mdt stats again.
 	rmdir ${testdir} || error "rmdir failed"
-	check_stats mds "rmdir" 1
+	check_stats_facet mds "rmdir" 1
 
 	rm -rf $DIR/${tdir}
 }
@@ -6122,15 +6123,15 @@ test_133b() {
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
 	do_facet mds $LCTL set_param $dev.*.stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	# extra mdt stats verification.
 	stat ${testdir}/${tfile} || error "stat failed"
-	check_stats mds "getattr" 0
+	check_stats_facet mds "getattr" 0
 	chmod 444 ${testdir}/${tfile} || error "chmod failed"
-	check_stats mds "setattr" 1
+	check_stats_facet mds "setattr" 1
 	$LFS df || error "lfs failed"
-	check_stats mds "statfs" 1
+	check_stats_facet mds "statfs" 1
 
 	rm -rf $DIR/${tdir}
 }
@@ -6155,21 +6156,21 @@ test_133c() {
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
 	do_facet mds $LCTL set_param $dev.*.stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	dd if=/dev/zero of=${testdir}/${tfile} bs=1024k count=1 || error "dd failed"
 	sync
 	cancel_lru_locks osc
-	check_stats ost "write" 1
+	check_stats_facet ost1 "write" 1
 
 	dd if=${testdir}/${tfile} of=/dev/null bs=1k count=1 || error "dd failed"
-	check_stats ost "read" 1
+	check_stats_facet ost1 "read" 1
 
 	> ${testdir}/${tfile} || error "truncate failed"
-	check_stats ost "punch" 1
+	check_stats_facet ost1 "punch" 1
 
 	rm -f ${testdir}/${tfile} || error "file remove failed"
-	check_stats ost "destroy" 1
+	check_stats_facet ost1 "destroy" 1
 
 	rm -rf $DIR/${tdir}
 }
