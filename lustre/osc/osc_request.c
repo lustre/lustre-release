@@ -1709,7 +1709,7 @@ restart_bulk:
         ptlrpc_req_finished(req);
         if (osc_recoverable_error(rc)) {
                 resends++;
-                if (!osc_should_resend(resends, &exp->exp_obd->u.cli)) {
+                if (!client_should_resend(resends, &exp->exp_obd->u.cli)) {
                         CERROR("too many resend retries, returning error\n");
                         RETURN(-EIO);
                 }
@@ -1733,7 +1733,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         int rc = 0;
         ENTRY;
 
-        if (!osc_should_resend(aa->aa_resends, aa->aa_cli)) {
+        if (!client_should_resend(aa->aa_resends, aa->aa_cli)) {
                 CERROR("too many resent retries, returning error\n");
                 RETURN(-EIO);
         }

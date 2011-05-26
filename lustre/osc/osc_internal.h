@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -191,13 +194,6 @@ extern struct lu_device_type osc_device_type;
 static inline int osc_recoverable_error(int rc)
 {
         return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
-}
-
-/* return 1 if osc should be resend request */
-static inline int osc_should_resend(int resend, struct client_obd *cli)
-{
-        return cfs_atomic_read(&cli->cl_resends) ?
-               cfs_atomic_read(&cli->cl_resends) > resend : 1;
 }
 
 #ifndef min_t

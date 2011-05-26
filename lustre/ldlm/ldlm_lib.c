@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -2459,3 +2462,107 @@ void ldlm_dump_export_locks(struct obd_export *exp)
         cfs_spin_unlock(&exp->exp_locks_list_guard);
 }
 #endif
+
+static int target_bulk_timeout(void *data)
+{
+        ENTRY;
+        /* We don't fail the connection here, because having the export
+         * killed makes the (vital) call to commitrw very sad.
+         */
+        RETURN(1);
+}
+
+static inline char *bulk2type(struct ptlrpc_bulk_desc *desc)
+{
+        return desc->bd_type == BULK_GET_SINK ? "GET" : "PUT";
+}
+
+int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
+                   struct l_wait_info *lwi)
+{
+        struct ptlrpc_request *req = desc->bd_req;
+        int rc = 0;
+        ENTRY;
+
+        /* Check if there is eviction in progress, and if so, wait for
+         * it to finish */
+        if (unlikely(cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
+                *lwi = LWI_INTR(NULL, NULL);
+                rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
+                                  !cfs_atomic_read(&exp->exp_obd->
+                                                   obd_evict_inprogress),
+                                  lwi);
+        }
+
+        /* Check if client was evicted or tried to reconnect already */
+        if (exp->exp_failed || exp->exp_abort_active_req) {
+                rc = -ENOTCONN;
+        } else {
+                if (desc->bd_type == BULK_PUT_SINK)
+                        rc = sptlrpc_svc_wrap_bulk(req, desc);
+                if (rc == 0)
+                        rc = ptlrpc_start_bulk_transfer(desc);
+        }
+
+        if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
+                ptlrpc_abort_bulk(desc);
+        } else if (rc == 0) {
+                time_t start = cfs_time_current_sec();
+                do {
+                        long timeoutl = req->rq_deadline - cfs_time_current_sec();
+                        cfs_duration_t timeout = timeoutl <= 0 ?
+                                CFS_TICK : cfs_time_seconds(timeoutl);
+                        *lwi = LWI_TIMEOUT_INTERVAL(timeout,
+                                                    cfs_time_seconds(1),
+                                                   target_bulk_timeout,
+                                                   desc);
+                        rc = l_wait_event(desc->bd_waitq,
+                                          !ptlrpc_server_bulk_active(desc) ||
+                                          exp->exp_failed ||
+                                          exp->exp_abort_active_req,
+                                          lwi);
+                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                        /* Wait again if we changed deadline */
+                } while ((rc == -ETIMEDOUT) &&
+                         (req->rq_deadline > cfs_time_current_sec()));
+
+                if (rc == -ETIMEDOUT) {
+                        DEBUG_REQ(D_ERROR, req,
+                                  "timeout on bulk %s after %ld%+lds",
+                                  bulk2type(desc),
+                                  req->rq_deadline - start,
+                                  cfs_time_current_sec() -
+                                  req->rq_deadline);
+                        ptlrpc_abort_bulk(desc);
+                } else if (exp->exp_failed) {
+                        DEBUG_REQ(D_ERROR, req, "Eviction on bulk %s",
+                                  bulk2type(desc));
+                        rc = -ENOTCONN;
+                        ptlrpc_abort_bulk(desc);
+                } else if (exp->exp_abort_active_req) {
+                        DEBUG_REQ(D_ERROR, req, "Reconnect on bulk %s",
+                                  bulk2type(desc));
+                        /* we don't reply anyway */
+                        rc = -ETIMEDOUT;
+                        ptlrpc_abort_bulk(desc);
+                } else if (!desc->bd_success ||
+                           desc->bd_nob_transferred != desc->bd_nob) {
+                        DEBUG_REQ(D_ERROR, req, "%s bulk %s %d(%d)",
+                                  desc->bd_success ?
+                                  "truncated" : "network error on",
+                                  bulk2type(desc),
+                                  desc->bd_nob_transferred,
+                                  desc->bd_nob);
+                        /* XXX should this be a different errno? */
+                        rc = -ETIMEDOUT;
+                } else if (desc->bd_type == BULK_GET_SINK) {
+                        rc = sptlrpc_svc_unwrap_bulk(req, desc);
+                }
+        } else {
+                DEBUG_REQ(D_ERROR, req, "bulk %s failed: rc %d",
+                          bulk2type(desc), rc);
+        }
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(target_bulk_io);

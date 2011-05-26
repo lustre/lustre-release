@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -858,7 +861,14 @@ struct lu_dirpage {
 };
 
 enum lu_dirpage_flags {
-        LDF_EMPTY = 1 << 0
+        /**
+         * dirpage contains no entry.
+         */
+        LDF_EMPTY   = 1 << 0,
+        /**
+         * last entry's lde_hash equals ldp_hash_end.
+         */
+        LDF_COLLIDE = 1 << 1
 };
 
 static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
@@ -905,6 +915,21 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
 }
 
 #define MDS_DIR_END_OFF 0xfffffffffffffffeULL
+
+/**
+ * MDS_READPAGE page size
+ *
+ * This is the directory page size packed in MDS_READPAGE RPC.
+ * It's different than CFS_PAGE_SIZE because the client needs to
+ * access the struct lu_dirpage header packed at the beginning of
+ * the "page" and without this there isn't any way to know find the
+ * lu_dirpage header is if client and server CFS_PAGE_SIZE differ.
+ */
+#define LU_PAGE_SHIFT 12
+#define LU_PAGE_SIZE  (1UL << LU_PAGE_SHIFT)
+#define LU_PAGE_MASK  (~(LU_PAGE_SIZE - 1))
+
+#define LU_PAGE_COUNT 1 << (CFS_PAGE_SHIFT - LU_PAGE_SHIFT)
 
 /** @} lu_dir */
 
@@ -1092,11 +1117,12 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT_FORCE | \
-                                OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
-                                OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
-                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
-                                OBD_CONNECT_LOV_V3 | OBD_CONNECT_SOM | \
-                                OBD_CONNECT_FULL20 | OBD_CONNECT_64BITHASH)
+                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_MDS_CAPA | \
+                                OBD_CONNECT_OSS_CAPA | OBD_CONNECT_MDS_MDS | \
+                                OBD_CONNECT_FID | LRU_RESIZE_CONNECT_FLAG | \
+                                OBD_CONNECT_VBR | OBD_CONNECT_LOV_V3 | \
+                                OBD_CONNECT_SOM | OBD_CONNECT_FULL20 | \
+                                OBD_CONNECT_64BITHASH)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \

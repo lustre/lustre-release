@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -1999,14 +2002,15 @@ static inline int md_sync(struct obd_export *exp, const struct lu_fid *fid,
 
 static inline int md_readpage(struct obd_export *exp, const struct lu_fid *fid,
                               struct obd_capa *oc, __u64 offset,
-                              struct page *page,
+                              struct page **pages, unsigned npages,
                               struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, readpage);
         EXP_MD_COUNTER_INCREMENT(exp, readpage);
-        rc = MDP(exp->exp_obd, readpage)(exp, fid, oc, offset, page, request);
+        rc = MDP(exp->exp_obd, readpage)(exp, fid, oc, offset, pages, npages,
+                                         request);
         RETURN(rc);
 }
 

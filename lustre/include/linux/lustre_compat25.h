@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -835,6 +838,24 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 
 #ifndef HAVE_BI_HW_SEGMENTS
 #define bio_hw_segments(q, bio) 0
+#endif
+
+#ifndef HAVE_PAGEVEC_LRU_ADD_FILE
+#define pagevec_lru_add_file pagevec_lru_add
+#endif
+
+#ifdef HAVE_ADD_TO_PAGE_CACHE_LRU
+#define ll_add_to_page_cache_lru(pg, mapping, off, gfp) \
+        add_to_page_cache_lru(pg, mapping, off, gfp)
+#define ll_pagevec_init(pv, cold)       do {} while (0)
+#define ll_pagevec_add(pv, pg)          (0)
+#define ll_pagevec_lru_add_file(pv)     do {} while (0)
+#else
+#define ll_add_to_page_cache_lru(pg, mapping, off, gfp) \
+        add_to_page_cache(pg, mapping, off, gfp)
+#define ll_pagevec_init(pv, cold)       pagevec_init(&lru_pvec, cold);
+#define ll_pagevec_add(pv, pg)          pagevec_add(pv, pg)
+#define ll_pagevec_lru_add_file(pv)     pagevec_lru_add_file(pv)
 #endif
 
 #endif /* __KERNEL__ */

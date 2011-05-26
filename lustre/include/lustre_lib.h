@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -92,12 +95,16 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 
+struct l_wait_info;
+
 void target_cancel_recovery_timer(struct obd_device *obd);
 void target_stop_recovery_thread(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
+int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
+                   struct l_wait_info *lwi);
 
 /* client.c */
 

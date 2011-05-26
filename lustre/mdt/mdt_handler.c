@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -1207,7 +1210,7 @@ static int mdt_disconnect(struct mdt_thread_info *info)
 }
 
 static int mdt_sendpage(struct mdt_thread_info *info,
-                        struct lu_rdpg *rdpg)
+                        struct lu_rdpg *rdpg, int nob)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct obd_export       *exp = req->rq_export;
@@ -1215,7 +1218,6 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         struct l_wait_info      *lwi = &info->mti_u.rdpg.mti_wait_info;
         int                      tmpcount;
         int                      tmpsize;
-        int                      timeout;
         int                      i;
         int                      rc;
         ENTRY;
@@ -1225,63 +1227,16 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (desc == NULL)
                 RETURN(-ENOMEM);
 
-        for (i = 0, tmpcount = rdpg->rp_count;
-                i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
+        for (i = 0, tmpcount = nob;
+                i < rdpg->rp_npages && tmpcount > 0; i++, tmpcount -= tmpsize) {
                 tmpsize = min_t(int, tmpcount, CFS_PAGE_SIZE);
                 ptlrpc_prep_bulk_page(desc, rdpg->rp_pages[i], 0, tmpsize);
         }
 
-        LASSERT(desc->bd_nob == rdpg->rp_count);
-        rc = sptlrpc_svc_wrap_bulk(req, desc);
-        if (rc)
-                GOTO(free_desc, rc);
-
-        rc = ptlrpc_start_bulk_transfer(desc);
-        if (rc)
-                GOTO(free_desc, rc);
-
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
-                GOTO(abort_bulk, rc = 0);
-
-        do {
-                timeout = (int) req->rq_deadline - cfs_time_current_sec();
-                if (timeout < 0)
-                        CERROR("Req deadline already passed %lu (now: %lu)\n",
-                               req->rq_deadline, cfs_time_current_sec());
-                *lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(max(timeout, 1)),
-                                            cfs_time_seconds(1), NULL, NULL);
-                rc = l_wait_event(desc->bd_waitq,
-                                  !ptlrpc_server_bulk_active(desc) ||
-                                  exp->exp_failed ||
-                                  exp->exp_abort_active_req, lwi);
-                LASSERT (rc == 0 || rc == -ETIMEDOUT);
-        } while ((rc == -ETIMEDOUT) &&
-                 (req->rq_deadline > cfs_time_current_sec()));
-
-        if (rc == 0) {
-                if (desc->bd_success &&
-                    desc->bd_nob_transferred == rdpg->rp_count)
-                        GOTO(free_desc, rc);
-
-                rc = -ETIMEDOUT;
-                if (exp->exp_abort_active_req || exp->exp_failed)
-                        GOTO(abort_bulk, rc);
-        }
-
-        DEBUG_REQ(D_ERROR, req, "bulk failed: %s %d(%d), evicting %s@%s",
-                  (rc == -ETIMEDOUT) ? "timeout" : "network error",
-                  desc->bd_nob_transferred, rdpg->rp_count,
-                  exp->exp_client_uuid.uuid,
-                  exp->exp_connection->c_remote_uuid.uuid);
-
-        class_fail_export(exp);
-
-        EXIT;
-abort_bulk:
-        ptlrpc_abort_bulk(desc);
-free_desc:
+        LASSERT(desc->bd_nob == nob);
+        rc = target_bulk_io(exp, desc, lwi);
         ptlrpc_free_bulk(desc);
-        return rc;
+        RETURN(rc);
 }
 
 #ifdef HAVE_SPLIT_SUPPORT
@@ -1491,8 +1446,10 @@ static int mdt_readpage(struct mdt_thread_info *info)
         rdpg->rp_attrs = reqbody->mode;
         if (info->mti_exp->exp_connect_flags & OBD_CONNECT_64BITHASH)
                 rdpg->rp_attrs |= LUDA_64BITHASH;
-        rdpg->rp_count  = reqbody->nlink;
-        rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>>CFS_PAGE_SHIFT;
+        rdpg->rp_count  = min_t(unsigned int, reqbody->nlink,
+                                PTLRPC_MAX_BRW_SIZE);
+        rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1) >>
+                          CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
                 RETURN(-ENOMEM);
@@ -1505,11 +1462,11 @@ static int mdt_readpage(struct mdt_thread_info *info)
 
         /* call lower layers to fill allocated pages with directory data */
         rc = mo_readpage(info->mti_env, mdt_object_child(object), rdpg);
-        if (rc)
+        if (rc < 0)
                 GOTO(free_rdpg, rc);
 
         /* send pages to client */
-        rc = mdt_sendpage(info, rdpg);
+        rc = mdt_sendpage(info, rdpg, rc);
 
         EXIT;
 free_rdpg:
@@ -4920,6 +4877,24 @@ static int mdt_connect_internal(struct obd_export *exp,
 
                 if (!mdt->mdt_som_conf)
                         data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
+
+                if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
+                        data->ocd_brw_size = min(data->ocd_brw_size,
+                               (__u32)(PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT));
+                        if (data->ocd_brw_size == 0) {
+                                CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
+                                       " ocd_version: %x ocd_grant: %d "
+                                       "ocd_index: %u ocd_brw_size is "
+                                       "unexpectedly zero, network data "
+                                       "corruption? Refusing connection of this"
+                                       " client\n",
+                                       exp->exp_obd->obd_name,
+                                       exp->exp_client_uuid.uuid,
+                                       exp, data->ocd_connect_flags, data->ocd_version,
+                                       data->ocd_grant, data->ocd_index);
+                                return -EPROTO;
+                        }
+                }
 
                 cfs_spin_lock(&exp->exp_lock);
                 exp->exp_connect_flags = data->ocd_connect_flags;

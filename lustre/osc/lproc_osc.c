@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -74,44 +77,6 @@ static int osc_wr_active(struct file *file, const char *buffer,
                 rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
         else
                 CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
-
-        LPROCFS_CLIMP_EXIT(dev);
-        return count;
-}
-
-static int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{
-        struct obd_device *dev = data;
-        struct client_obd *cli = &dev->u.cli;
-        int rc;
-
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        rc = snprintf(page, count, "%d\n", cli->cl_max_pages_per_rpc);
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
-        return rc;
-}
-
-static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
-{
-        struct obd_device *dev = data;
-        struct client_obd *cli = &dev->u.cli;
-        struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        LPROCFS_CLIMP_CHECK(dev);
-        if (val < 1 || val > ocd->ocd_brw_size >> CFS_PAGE_SHIFT) {
-                LPROCFS_CLIMP_EXIT(dev);
-                return -ERANGE;
-        }
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_max_pages_per_rpc = val;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         LPROCFS_CLIMP_EXIT(dev);
         return count;
@@ -618,8 +583,8 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "ost_conn_uuid",   lprocfs_rd_conn_uuid, 0, 0 },
         { "active",          osc_rd_active,
                              osc_wr_active, 0 },
-        { "max_pages_per_rpc", osc_rd_max_pages_per_rpc,
-                               osc_wr_max_pages_per_rpc, 0 },
+        { "max_pages_per_rpc", lprocfs_obd_rd_max_pages_per_rpc,
+                               lprocfs_obd_wr_max_pages_per_rpc, 0 },
         { "max_rpcs_in_flight", osc_rd_max_rpcs_in_flight,
                                 osc_wr_max_rpcs_in_flight, 0 },
         { "destroys_in_flight", osc_rd_destroys_in_flight, 0, 0 },

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -1020,15 +1023,22 @@ EXPORT_SYMBOL(mdc_sendpage);
 #endif
 
 int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
-                 struct obd_capa *oc, __u64 offset, struct page *page,
-                 struct ptlrpc_request **request)
+                 struct obd_capa *oc, __u64 offset, struct page **pages,
+                 unsigned npages, struct ptlrpc_request **request)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
+        int                      i;
+        cfs_waitq_t              waitq;
+        int                      resends = 0;
+        struct l_wait_info       lwi;
         int                      rc;
         ENTRY;
 
         *request = NULL;
+        cfs_waitq_init(&waitq);
+
+restart_bulk:
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_READPAGE);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -1044,21 +1054,35 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         req->rq_request_portal = MDS_READPAGE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
 
-        desc = ptlrpc_prep_bulk_imp(req, 1, BULK_PUT_SINK, MDS_BULK_PORTAL);
+        desc = ptlrpc_prep_bulk_imp(req, npages, BULK_PUT_SINK,
+                                    MDS_BULK_PORTAL);
         if (desc == NULL) {
                 ptlrpc_request_free(req);
                 RETURN(-ENOMEM);
         }
 
         /* NB req now owns desc and will free it when it gets freed */
-        ptlrpc_prep_bulk_page(desc, page, 0, CFS_PAGE_SIZE);
-        mdc_readdir_pack(req, offset, CFS_PAGE_SIZE, fid, oc);
+        for (i = 0; i < npages; i++)
+                ptlrpc_prep_bulk_page(desc, pages[i], 0, CFS_PAGE_SIZE);
+
+        mdc_readdir_pack(req, offset, CFS_PAGE_SIZE * npages, fid, oc);
 
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
         if (rc) {
                 ptlrpc_req_finished(req);
-                RETURN(rc);
+                if (rc != -ETIMEDOUT)
+                        RETURN(rc);
+
+                resends++;
+                if (!client_should_resend(resends, &exp->exp_obd->u.cli)) {
+                        CERROR("too many resend retries, returning error\n");
+                        RETURN(-EIO);
+                }
+                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(resends), NULL, NULL, NULL);
+                l_wait_event(waitq, 0, &lwi);
+
+                goto restart_bulk;
         }
 
         rc = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk,
@@ -1068,9 +1092,10 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        if (req->rq_bulk->bd_nob_transferred != CFS_PAGE_SIZE) {
+        if (req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK) {
                 CERROR("Unexpected # bytes transferred: %d (%ld expected)\n",
-                        req->rq_bulk->bd_nob_transferred, CFS_PAGE_SIZE);
+                        req->rq_bulk->bd_nob_transferred,
+                        CFS_PAGE_SIZE * npages);
                 ptlrpc_req_finished(req);
                 RETURN(-EPROTO);
         }

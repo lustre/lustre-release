@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -149,6 +152,14 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         /*{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },*/
         { "mds_server_uuid", lprocfs_rd_server_uuid, 0, 0 },
         { "mds_conn_uuid",   lprocfs_rd_conn_uuid,   0, 0 },
+        /*
+         * FIXME: below proc entry is provided, but not in used, instead
+         * sbi->sb_md_brw_size is used, the per obd variable should be used
+         * when CMD is enabled, and dir pages are managed in MDC layer.
+         * Remember to enable proc write function.
+         */
+        { "max_pages_per_rpc",  lprocfs_obd_rd_max_pages_per_rpc,
+                                /* lprocfs_obd_wr_max_pages_per_rpc */0, 0 },
         { "max_rpcs_in_flight", mdc_rd_max_rpcs_in_flight,
                                 mdc_wr_max_rpcs_in_flight, 0 },
         { "timeouts",        lprocfs_rd_timeouts,    0, 0 },

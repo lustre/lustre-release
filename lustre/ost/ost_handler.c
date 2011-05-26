@@ -513,15 +513,6 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
-static int ost_bulk_timeout(void *data)
-{
-        ENTRY;
-        /* We don't fail the connection here, because having the export
-         * killed makes the (vital) call to commitrw very sad.
-         */
-        RETURN(1);
-}
-
 static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
                                cksum_type_t cksum_type)
 {
@@ -909,76 +900,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (rc == 0) {
-                /* Check if there is eviction in progress, and if so, wait for
-                 * it to finish */
-                if (unlikely(cfs_atomic_read(&exp->exp_obd->
-                                             obd_evict_inprogress))) {
-                        lwi = LWI_INTR(NULL, NULL);
-                        rc = l_wait_event(exp->exp_obd->
-                                          obd_evict_inprogress_waitq,
-                                          !cfs_atomic_read(&exp->exp_obd->
-                                          obd_evict_inprogress),
-                                          &lwi);
-                }
-                /* Check if client was evicted or tried to reconnect already */
-                if (exp->exp_failed || exp->exp_abort_active_req)
-                        rc = -ENOTCONN;
-                else {
-                        rc = sptlrpc_svc_wrap_bulk(req, desc);
-                        if (rc == 0)
-                                rc = ptlrpc_start_bulk_transfer(desc);
-                }
-
-                if (rc == 0) {
-                        time_t start = cfs_time_current_sec();
-                        do {
-                                long timeoutl = req->rq_deadline -
-                                        cfs_time_current_sec();
-                                cfs_duration_t timeout = timeoutl <= 0 ?
-                                        CFS_TICK : cfs_time_seconds(timeoutl);
-                                lwi = LWI_TIMEOUT_INTERVAL(timeout,
-                                                           cfs_time_seconds(1),
-                                                           ost_bulk_timeout,
-                                                           desc);
-                                rc = l_wait_event(desc->bd_waitq,
-                                                  !ptlrpc_server_bulk_active(desc) ||
-                                                  exp->exp_failed ||
-                                                  exp->exp_abort_active_req,
-                                                  &lwi);
-                                LASSERT(rc == 0 || rc == -ETIMEDOUT);
-                                /* Wait again if we changed deadline */
-                        } while ((rc == -ETIMEDOUT) &&
-                                 (req->rq_deadline > cfs_time_current_sec()));
-
-                        if (rc == -ETIMEDOUT) {
-                                DEBUG_REQ(D_ERROR, req,
-                                          "timeout on bulk PUT after %ld%+lds",
-                                          req->rq_deadline - start,
-                                          cfs_time_current_sec() -
-                                          req->rq_deadline);
-                                ptlrpc_abort_bulk(desc);
-                        } else if (exp->exp_failed) {
-                                DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
-                                rc = -ENOTCONN;
-                                ptlrpc_abort_bulk(desc);
-                        } else if (exp->exp_abort_active_req) {
-                                DEBUG_REQ(D_ERROR, req, "Reconnect on bulk PUT");
-                                /* we don't reply anyway */
-                                rc = -ETIMEDOUT;
-                                ptlrpc_abort_bulk(desc);
-                        } else if (!desc->bd_success ||
-                                   desc->bd_nob_transferred != desc->bd_nob) {
-                                DEBUG_REQ(D_ERROR, req, "%s bulk PUT %d(%d)",
-                                          desc->bd_success ?
-                                          "truncated" : "network error on",
-                                          desc->bd_nob_transferred,
-                                          desc->bd_nob);
-                                /* XXX should this be a different errno? */
-                                rc = -ETIMEDOUT;
-                        }
-                } else {
-                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d", rc);
-                }
+                rc = target_bulk_io(exp, desc, &lwi);
                 no_reply = rc != 0;
         }
 
@@ -1056,17 +978,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         /* pause before transaction has been started */
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, (obd_timeout + 1) / 4);
-
-        /* Check if there is eviction in progress, and if so, wait for it to
-         * finish */
-        if (unlikely(cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
-                lwi = LWI_INTR(NULL, NULL); // We do not care how long it takes
-                rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-                        !cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress),
-                        &lwi);
-        }
-        if (exp->exp_failed)
-                GOTO(out, rc = -ENOTCONN);
 
         /* ost_body, ioobj & noibuf_remote are verified and swabbed in
          * ost_rw_hpreq_check(). */
@@ -1189,58 +1100,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
-        /* Check if client was evicted or tried to reconnect while we
-         * were doing i/o before touching network */
-        if (desc->bd_export->exp_failed ||
-            desc->bd_export->exp_abort_active_req)
-                rc = -ENOTCONN;
-        else
-                rc = ptlrpc_start_bulk_transfer(desc);
-        if (rc == 0) {
-                time_t start = cfs_time_current_sec();
-                do {
-                        long timeoutl = req->rq_deadline -
-                                cfs_time_current_sec();
-                        cfs_duration_t timeout = timeoutl <= 0 ?
-                                CFS_TICK : cfs_time_seconds(timeoutl);
-                        lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
-                                                   ost_bulk_timeout, desc);
-                        rc = l_wait_event(desc->bd_waitq,
-                                          !ptlrpc_server_bulk_active(desc) ||
-                                          desc->bd_export->exp_failed ||
-                                          desc->bd_export->exp_abort_active_req,
-                                          &lwi);
-                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
-                        /* Wait again if we changed deadline */
-                } while ((rc == -ETIMEDOUT) &&
-                         (req->rq_deadline > cfs_time_current_sec()));
-
-                if (rc == -ETIMEDOUT) {
-                        DEBUG_REQ(D_ERROR, req,
-                                  "timeout on bulk GET after %ld%+lds",
-                                  req->rq_deadline - start,
-                                  cfs_time_current_sec() -
-                                  req->rq_deadline);
-                        ptlrpc_abort_bulk(desc);
-                } else if (desc->bd_export->exp_failed) {
-                        DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
-                        rc = -ENOTCONN;
-                        ptlrpc_abort_bulk(desc);
-                } else if (desc->bd_export->exp_abort_active_req) {
-                        DEBUG_REQ(D_ERROR, req, "Reconnect on bulk GET");
-                        /* we don't reply anyway */
-                        rc = -ETIMEDOUT;
-                        ptlrpc_abort_bulk(desc);
-                } else if (!desc->bd_success) {
-                        DEBUG_REQ(D_ERROR, req, "network error on bulk GET");
-                        /* XXX should this be a different errno? */
-                        rc = -ETIMEDOUT;
-                } else {
-                        rc = sptlrpc_svc_unwrap_bulk(req, desc);
-                }
-        } else {
-                DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d", rc);
-        }
+        rc = target_bulk_io(exp, desc, &lwi);
         no_reply = rc != 0;
 
 skip_transfer:

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -641,6 +644,10 @@ int lprocfs_obd_wr_recovery_time_hard(struct file *file,
                                       unsigned long count, void *data);
 int lprocfs_obd_rd_mntdev(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
+int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data);
+int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
+                                     unsigned long count, void *data);
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start,
                                   off_t off, int count,

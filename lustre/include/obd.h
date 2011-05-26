@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -1503,8 +1506,8 @@ struct md_ops {
         int (*m_sync)(struct obd_export *, const struct lu_fid *,
                       struct obd_capa *, struct ptlrpc_request **);
         int (*m_readpage)(struct obd_export *, const struct lu_fid *,
-                          struct obd_capa *, __u64, struct page *,
-                          struct ptlrpc_request **);
+                          struct obd_capa *, __u64, struct page **,
+                          unsigned, struct ptlrpc_request **);
 
         int (*m_unlink)(struct obd_export *, struct md_op_data *,
                         struct ptlrpc_request **);
@@ -1660,5 +1663,12 @@ static inline struct md_open_data *obd_mod_alloc(void)
 
 extern void obdo_from_inode(struct obdo *dst, struct inode *src,
                             struct lu_fid *parent, obd_flag valid);
+
+/* return 1 if client should be resend request */
+static inline int client_should_resend(int resend, struct client_obd *cli)
+{
+        return cfs_atomic_read(&cli->cl_resends) ?
+               cfs_atomic_read(&cli->cl_resends) > resend : 1;
+}
 
 #endif /* __OBD_H */

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -199,12 +202,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         /* indicate the features supported by this client */
         data->ocd_connect_flags = OBD_CONNECT_IBITS    | OBD_CONNECT_NODEVOH  |
                                   OBD_CONNECT_JOIN     | OBD_CONNECT_ATTRFID  |
-                                  OBD_CONNECT_VERSION  | OBD_CONNECT_MDS_CAPA |
-                                  OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
-                                  OBD_CONNECT_FID      | OBD_CONNECT_AT |
-                                  OBD_CONNECT_LOV_V3 | OBD_CONNECT_RMT_CLIENT |
-                                  OBD_CONNECT_VBR      | OBD_CONNECT_FULL20 |
-                                  OBD_CONNECT_64BITHASH;
+                                  OBD_CONNECT_VERSION  | OBD_CONNECT_BRW_SIZE |
+                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
+                                  OBD_CONNECT_CANCELSET| OBD_CONNECT_FID      |
+                                  OBD_CONNECT_AT       | OBD_CONNECT_LOV_V3   |
+                                  OBD_CONNECT_RMT_CLIENT | OBD_CONNECT_VBR    |
+                                  OBD_CONNECT_FULL20   | OBD_CONNECT_64BITHASH;
 
         if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
                 data->ocd_connect_flags |= OBD_CONNECT_SOM;
@@ -243,6 +246,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         data->ocd_connect_flags |= OBD_CONNECT_REAL;
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
                 data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT_FORCE;
+
+        data->ocd_brw_size = PTLRPC_MAX_BRW_SIZE;
 
         err = obd_connect(NULL, &sbi->ll_md_exp, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
@@ -343,6 +348,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (data->ocd_connect_flags & OBD_CONNECT_64BITHASH)
                 sbi->ll_flags |= LL_SBI_64BIT_HASH;
 
+        if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
+                sbi->ll_md_brw_size = data->ocd_brw_size;
+        else
+                sbi->ll_md_brw_size = CFS_PAGE_SIZE;
+
         obd = class_name2obd(dt);
         if (!obd) {
                 CERROR("DT %s: not setup or attached\n", dt);
@@ -386,7 +396,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = cl_ocd_update;
-        data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
+
+        data->ocd_brw_size = PTLRPC_MAX_BRW_SIZE;
 
         err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {

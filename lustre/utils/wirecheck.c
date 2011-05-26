@@ -1460,6 +1460,10 @@ main(int argc, char **argv)
         CHECK_VALUE(MGS_TARGET_DEL);
         CHECK_VALUE(MGS_SET_INFO);
 
+        CHECK_VALUE(LDF_EMPTY);
+        CHECK_VALUE(LDF_COLLIDE);
+        CHECK_VALUE(LU_PAGE_SIZE);
+
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
         CHECK_STRUCT(obd_uuid);

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -102,7 +105,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 
         offset = (__u64)hash_x_index(page->index, 0);
         rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
-                         offset, page, &request);
+                         offset, &page, 1, &request);
         if (!rc) {
                 body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body != NULL);         /* checked by md_readpage() */

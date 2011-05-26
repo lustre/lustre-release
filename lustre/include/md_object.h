@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -242,6 +245,7 @@ struct md_object_operations {
         int (*moo_xattr_del)(const struct lu_env *env, struct md_object *obj,
                              const char *name);
 
+        /** \retval number of bytes actually read upon success */
         int (*moo_readpage)(const struct lu_env *env, struct md_object *obj,
                             const struct lu_rdpg *rdpg);
 
