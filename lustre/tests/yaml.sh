@@ -95,6 +95,8 @@ cat <<EOF
     os_distribution: $TEST_DISTRO
     lustre_version: $LUSTRE_VERSION
     lustre_build: $LUSTRE_BUILD
+    lustre_branch: $LUSTRE_BRANCH
+    lustre_revision: $LUSTRE_REVISION
     kernel_version: $(uname -r)
 EOF
 }
