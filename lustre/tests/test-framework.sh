@@ -425,20 +425,16 @@ set_default_debug () {
     sync
 }
 
-remote_node () {
-    local node=$1
-    [ "$node" != "$(hostname)" ]
-}
-
 set_default_debug_nodes () {
     local nodes=$1
 
-    if remote_node $nodes; then
-	do_rpc_nodes $nodes set_default_debug \
-            \\\"$PTLDEBUG\\\" \\\"$SUBSYSTEM\\\" $DEBUG_SIZE
-    else
+    if [[ ,$nodes, = *,$HOSTNAME,* ]]; then
+	nodes=$(exclude_items_from_list "$nodes" "$HOSTNAME")
 	set_default_debug
     fi
+
+    [[ -n $nodes ]] && do_rpc_nodes $nodes set_default_debug \
+            \\\"$PTLDEBUG\\\" \\\"$SUBSYSTEM\\\" $DEBUG_SIZE || true
 }
 
 set_default_debug_facet () {
@@ -1562,6 +1558,8 @@ change_active() {
     # save the active host for this facet
     local activevar=${facet}active
     echo "$activevar=${!activevar}" > $TMP/$activevar
+    [[ $facet = mds ]] && combined_mgs_mds && \
+        echo "mgsactive=${!activevar}" > $TMP/mgsactive
     local TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     done
@@ -1680,6 +1678,7 @@ add() {
     # make sure its not already running
     stop ${facet} -f
     rm -f $TMP/${facet}active
+    [[ $facet = mds ]] && combined_mgs_mds && rm -f $TMP/mgsactive
     do_facet ${facet} $MKFS $*
 }
 
@@ -1725,6 +1724,7 @@ stopall() {
     # currently we use do_facet mds in local.sh
     stop mds -f
     rm -f ${TMP}/mdsactive
+    combined_mgs_mds && rm -f $TMP/mgsactive
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
         rm -f $TMP/ost${num}active
@@ -2928,6 +2928,11 @@ osc_to_ost()
 ostuuid_from_index()
 {
     $LFS osts $2 | awk '/^'$1'/ { print $2 }'
+}
+
+remote_node () {
+    local node=$1
+    [[ $node != $HOSTNAME ]]
 }
 
 remote_mds ()
