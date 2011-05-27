@@ -1,7 +1,7 @@
 Index: linux-stage/fs/ext4/dynlocks.c
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ linux-stage/fs/ext4/dynlocks.c	2011-03-03 15:25:04.025526781 +0800
+--- /dev/null
++++ linux-stage/fs/ext4/dynlocks.c
 @@ -0,0 +1,236 @@
 +/*
 + * Dynamic Locks
@@ -241,8 +241,8 @@ Index: linux-stage/fs/ext4/dynlocks.c
 +EXPORT_SYMBOL(dynlock_is_locked);
 Index: linux-stage/include/linux/dynlocks.h
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ linux-stage/include/linux/dynlocks.h	2011-03-03 15:25:04.055526552 +0800
+--- /dev/null
++++ linux-stage/include/linux/dynlocks.h
 @@ -0,0 +1,34 @@
 +#ifndef _LINUX_DYNLOCKS_H
 +#define _LINUX_DYNLOCKS_H
@@ -280,23 +280,22 @@ Index: linux-stage/include/linux/dynlocks.h
 +
 Index: linux-stage/fs/ext4/Makefile
 ===================================================================
---- linux-stage.orig/fs/ext4/Makefile	2011-03-05 11:50:43.000000000 +0800
-+++ linux-stage/fs/ext4/Makefile	2011-03-05 11:52:42.349154982 +0800
-@@ -6,7 +6,8 @@
- 
- ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+--- linux-stage.orig/fs/ext4/Makefile
++++ linux-stage/fs/ext4/Makefile
+@@ -7,7 +7,7 @@ obj-$(CONFIG_EXT4_FS) += ext4.o
+ ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  		ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
--		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o
-+		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o \
-+		dynlocks.o
+ 		ext4_jbd2.o migrate.o mballoc.o block_validity.o move_extent.o \
+-		mmp.o
++		mmp.o dynlocks.o
  
  ext4-$(CONFIG_EXT4_FS_XATTR)		+= xattr.o xattr_user.o xattr_trusted.o
  ext4-$(CONFIG_EXT4_FS_POSIX_ACL)	+= acl.o
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c	2011-03-05 11:50:43.000000000 +0800
-+++ linux-stage/fs/ext4/super.c	2011-03-05 11:57:33.632869451 +0800
-@@ -4457,17 +4457,20 @@
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -4125,32 +4125,37 @@ static int __init init_ext4_fs(void)
  		return err;
  	ext4_kset = kset_create_and_add("ext4", NULL, fs_kobj);
  	if (!ext4_kset)
@@ -320,8 +319,7 @@ Index: linux-stage/fs/ext4/super.c
  		goto out1;
  	err = register_filesystem(&ext4_fs_type);
  	if (err)
-@@ -4477,15 +4480,17 @@
- 
+ 		goto out;
  	return 0;
  out:
 -	destroy_inodecache();
@@ -342,7 +340,7 @@ Index: linux-stage/fs/ext4/super.c
  	exit_ext4_system_zone();
  	return err;
  }
-@@ -4493,6 +4498,7 @@
+@@ -4158,6 +4163,7 @@ out4:
  static void __exit exit_ext4_fs(void)
  {
  	unregister_filesystem(&ext4_fs_type);
