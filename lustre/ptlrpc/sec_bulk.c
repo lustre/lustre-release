@@ -691,13 +691,9 @@ EXPORT_SYMBOL(sptlrpc_enc_pool_del_user);
 static inline void enc_pools_alloc(void)
 {
         LASSERT(page_pools.epp_max_pools);
-        /*
-         * on system with huge memory but small page size, this might lead to
-         * high-order allocation. but it's not common, and we suppose memory
-         * be not too much fragmented at module loading time.
-         */
-        OBD_ALLOC(page_pools.epp_pools,
-                  page_pools.epp_max_pools * sizeof(*page_pools.epp_pools));
+        OBD_ALLOC_LARGE(page_pools.epp_pools,
+                        page_pools.epp_max_pools *
+                        sizeof(*page_pools.epp_pools));
 }
 
 static inline void enc_pools_free(void)
@@ -705,8 +701,9 @@ static inline void enc_pools_free(void)
         LASSERT(page_pools.epp_max_pools);
         LASSERT(page_pools.epp_pools);
 
-        OBD_FREE(page_pools.epp_pools,
-                 page_pools.epp_max_pools * sizeof(*page_pools.epp_pools));
+        OBD_FREE_LARGE(page_pools.epp_pools,
+                       page_pools.epp_max_pools *
+                       sizeof(*page_pools.epp_pools));
 }
 
 int sptlrpc_enc_pool_init(void)
