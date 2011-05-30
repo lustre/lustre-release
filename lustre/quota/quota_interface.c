@@ -446,17 +446,19 @@ static int quota_chk_acq_common(struct obd_device *obd, struct obd_export *exp,
                 cfs_spin_lock(&qctxt->lqc_lock);
                 if (!qctxt->lqc_import && oti) {
                         cfs_spin_unlock(&qctxt->lqc_lock);
-
-                        LASSERT(oti && oti->oti_thread &&
-                                oti->oti_thread->t_watchdog);
-
-                        lc_watchdog_disable(oti->oti_thread->t_watchdog);
+                        LASSERT(oti->oti_thread);
+                        /* The recovery thread doesn't have watchdog
+                         * attached. LU-369 */
+                        if (oti->oti_thread->t_watchdog)
+                                lc_watchdog_disable(oti->oti_thread->\
+                                                t_watchdog);
                         CDEBUG(D_QUOTA, "sleep for quota master\n");
                         l_wait_event(qctxt->lqc_wait_for_qmaster, check_qm(qctxt),
                                      &lwi);
                         CDEBUG(D_QUOTA, "wake up when quota master is back\n");
-                        lc_watchdog_touch(oti->oti_thread->t_watchdog,
-                                 CFS_GET_TIMEOUT(oti->oti_thread->t_svc));
+                        if (oti->oti_thread->t_watchdog)
+                                lc_watchdog_touch(oti->oti_thread->t_watchdog,
+                                       CFS_GET_TIMEOUT(oti->oti_thread->t_svc));
                 } else {
                         cfs_spin_unlock(&qctxt->lqc_lock);
                 }

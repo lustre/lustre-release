@@ -1040,17 +1040,19 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 cfs_spin_lock(&qctxt->lqc_lock);
                 if (wait && !qctxt->lqc_import) {
                         cfs_spin_unlock(&qctxt->lqc_lock);
-
-                        LASSERT(oti && oti->oti_thread &&
-                                oti->oti_thread->t_watchdog);
-
-                        lc_watchdog_disable(oti->oti_thread->t_watchdog);
+                        LASSERT(oti && oti->oti_thread);
+                        /* The recovery thread doesn't have watchdog
+                         * attached. LU-369 */
+                        if (oti->oti_thread->t_watchdog)
+                                lc_watchdog_disable(oti->oti_thread->\
+                                                t_watchdog);
                         CDEBUG(D_QUOTA, "sleep for quota master\n");
                         l_wait_event(qctxt->lqc_wait_for_qmaster,
                                      check_qm(qctxt), &lwi);
                         CDEBUG(D_QUOTA, "wake up when quota master is back\n");
-                        lc_watchdog_touch(oti->oti_thread->t_watchdog,
-                                 CFS_GET_TIMEOUT(oti->oti_thread->t_svc));
+                        if (oti->oti_thread->t_watchdog)
+                                lc_watchdog_touch(oti->oti_thread->t_watchdog,
+                                      CFS_GET_TIMEOUT(oti->oti_thread->t_svc));
                 } else {
                         cfs_spin_unlock(&qctxt->lqc_lock);
                 }
