@@ -16,7 +16,18 @@ include build/autoMakefile.am.toplevel
 EXTRA_DIST += config.h.in
 
 if USES_DPKG
-EXTRA_DIST += debian/*
+EXTRA_DIST += debian/control.modules.in debian/control.main \
+	      debian/linux-patch-lustre.kpatches \
+	      debian/lustre-utils.examples debian/copyright debian/source \
+	      debian/source/format debian/lustre-source.docs \
+	      debian/lustre-utils.docs debian/lustre-utils.manpages \
+	      debian/lustre-client-modules.install debian/README.Debian \
+	      debian/.gitignore debian/linux-patch-lustre.dirs \
+	      debian/linux-patch-lustre.unpatch debian/lustre-dev.install \
+	      debian/lustre-source.dirs debian/liblustre.install debian/rules \
+	      debian/lustre-dev.dirs debian/linux-patch-lustre.apply \
+	      debian/control debian/changelog debian/lustre-tests.install \
+	      debian/lustre-utils.install
 endif
 
 if LDISKFS_ENABLED
@@ -46,11 +57,14 @@ checkstack-clean:
 
 module-dist-hook:
 	if [ -d CVS -o -d .git ]; then \
-	    perl lustre/scripts/tree_status.pl > $(distdir)/tree_status; \
-	elif [ -f tree_status ]; then \
-	    cp tree_status $(distdir)/tree_status; \
+	    perl lustre/scripts/make_META.pl > $(distdir)/META; \
+	    cp $(distdir)/META $(distdir)/ldiskfs/META; \
+	elif [ -f META ]; then \
+	    cp META $(distdir)/META; \
+	    cp $(distdir)/META $(distdir)/ldiskfs/META; \
 	else \
-	    echo -e "I have no idea how to create a tree_status file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+	    echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+	    exit 1; \
 	fi
 	if [ -d .git ]; then \
 		build/extract_patches $(distdir); \

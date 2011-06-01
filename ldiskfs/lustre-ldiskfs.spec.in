@@ -1,10 +1,25 @@
-%define version @VERSION@
-%define kversion @LINUXRELEASE@
+# lustre-ldiskfs.spec
+%{!?version: %define version @VERSION@}
+%{!?kdir: %define kdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else echo "/lib/modules/$(uname -r)/build"; fi)}
+
+%{!?kobjdir: %define kobjdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux-obj=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else echo "%kdir"; fi)}
+
+# as an alternative to this implementation we could simply "make -C $kdir kernelversion"
+%{!?kversion: %define kversion %(if test -s %kobjdir/include/linux/utsrelease.h ; then LINUXRELEASEHEADER=utsrelease.h; else LINUXRELEASEHEADER=version.h; fi; sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %kobjdir/include/linux/$LINUXRELEASEHEADER)}
+
+%{!?downstream_release: %define downstream_release "@DOWNSTREAM_RELEASE@"}
+
+%define buildid %(if [ -n "@BUILDID@" ]; then echo "_@BUILDID@"; fi)
+
+%{!?release: %define release %(if [ -n "%downstream_release" ]; then echo -n "%{downstream_release}_"; fi; release=$(echo %kversion | tr '-' '_'); echo ${release})}
+
+# always append the buildid, even when the caller defines %release
+%define fullrelease %{release}%{buildid}
 
 Summary: ldiskfs backend file system
 Name: lustre-ldiskfs
 Version: %{version}
-Release: @RELEASE@
+Release: %{fullrelease}
 License: GPL
 Group: Development/Kernel
 Source: lustre-ldiskfs-%{version}.tar.gz
@@ -38,10 +53,27 @@ rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-ldiskfs-%{version}
-./configure @ac_configure_args@ %{?configure_flags:configure_flags} \
+CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
+
+# if %%kdir was given, make sure it's not in the configure arguments
+if [ -n "%kdir" ]; then
+	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux=[^ ][^ ]* \?//')
+fi
+# ditto for %%kobjdir
+if [ -n "%kobjdir" ]; then
+	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux-obj=[^ ][^ ]* \?//')
+fi
+
+# we need to eval "configure" because $CONFIGURE_ARGS could have a quoted
+# string in it which we don't want word splitted by the shell
+%define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#')
+
+eval ./configure %{?configure_args} \
+	%{?kdir: --with-linux=%kdir} %{?kobjdir: --with-linux-obj=%kobjdir} \
 	--sysconfdir=%{_sysconfdir} \
 	--mandir=%{_mandir} \
-	--libdir=%{_libdir}
+	--libdir=%{_libdir} \
+	$CONFIGURE_ARGS
 make -j $RPM_BUILD_NCPUS -s
 
 %install

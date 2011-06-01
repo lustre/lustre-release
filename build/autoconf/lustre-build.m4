@@ -29,6 +29,86 @@ AC_SUBST(lb_target_os)
 ])
 
 #
+# LB_DOWNSTREAM_RELEASE
+#
+AC_DEFUN([LB_DOWNSTREAM_RELEASE],
+[AC_ARG_WITH([downstream-release],
+	AC_HELP_STRING([--with-downstream-release=string],
+		       [set a string in the BUILD_VERSION and RPM Release: (default is nothing)]),
+	[DOWNSTREAM_RELEASE=$with_downstream_release],
+	[
+	# if not specified, see if it's in the META file
+	if test -f META; then
+		DOWNSTREAM_RELEASE=$(sed -ne '/^LOCAL_VERSION =/s/.*= *//p' META)
+	fi
+	])
+AC_SUBST(DOWNSTREAM_RELEASE)
+])
+
+#
+# LB_BUILDID
+#
+# Check if the source is a GA release and if not, set a "BUILDID"
+#
+# Currently there are at least two ways/modes of/for doing this.  One
+# is if we are in a valid git repository, the other is if we are in a
+# non-git source tree of some form.  Building the latter from the former
+# will be handled here.
+AC_DEFUN([LB_BUILDID],
+[
+AC_MSG_CHECKING([for buildid])
+BUILDID=""
+if git branch >/dev/null 2>&1; then
+	ffw=0
+	hash=""
+	ver=$(git describe --match [[0-9v]]\* --tags)
+	if [[[ $ver = *-*-* ]]]; then
+		hash=${ver##*-}
+		ffw=${ver#*-}
+		ffw=${ffw%-*}
+		ver=${ver%%-*}
+	fi
+	# it's tempting to use [[ $ver =~ ^v([0-9]+_)+([0-9]+|RC[0-9]+)$ ]]
+	# here but the portability of the regex on the right is dismal
+	# (thanx suse)
+	if echo "$ver" | egrep -q "^v([0-9]+_)+([0-9]+|RC[0-9]+)$"; then
+		ver=$(echo $ver | sed -e 's/^v\(.*\)/\1/' \
+				      -e 's/_RC[[0-9]].*$//' -e 's/_/./g')
+	fi
+
+	# a "lustre fix" value of .0 should be truncated
+	if [[[ $ver = *.*.*.0 ]]]; then
+		ver=${ver%.0}
+	fi
+	# ditto for a "lustre fix" value of _0
+	if [[[ $ver = v*_*_*_0 ]]]; then
+		ver=${ver%_0}
+	fi
+
+
+	# only do this test for lustre (not ldiskfs)
+	if test "$PACKAGE" = "lustre" -a "$ver" != "$VERSION"; then
+		AC_MSG_ERROR([most recent tag found: $ver does not match current version $VERSION.])
+	fi
+
+	if test "$ffw" != "0"; then
+		BUILDID="$hash"
+		msg="$BUILDID (ahead by $ffw commits)"
+		AC_MSG_RESULT([$msg])
+	else
+		AC_MSG_RESULT([none... congratulations, you must be on a tag])
+	fi
+elif test -f META; then
+	BUILDID=$(sed -ne '/^BUILDID =/s/.*= *//p' META)
+	msg="$BUILDID (from META file)"
+	AC_MSG_RESULT([$msg])
+else
+	AC_MSG_WARN([FIXME: I don't know how to deal with source trees outside of git that don't have a META file.  Not setting a buildid.])
+fi
+AC_SUBST(BUILDID)
+])
+
+#
 # LB_CHECK_FILE
 #
 # Check for file existance even when cross compiling
@@ -227,7 +307,7 @@ case x$with_ldiskfs in
 		;;
 	*)
 		AC_MSG_RESULT([$with_ldiskfs])
-		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/linux/ldiskfs_fs.h],[],[
+		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/inode.c],[],[
 			AC_MSG_ERROR([A complete (built) external ldiskfs was not found.])
 		])
 		LDISKFS_DIR=$with_ldiskfs
@@ -622,6 +702,30 @@ fi
 ])
 
 #
+# LB_CONFIG_DIST
+#
+# Just enough configure so that "make dist" is useful
+#
+# this simply re-adjusts some defaults, which of course can be overridden
+# on the configure line after the --for-dist option
+#
+AC_DEFUN([LB_CONFIG_DIST],
+[AC_MSG_CHECKING([whether to configure just enough for make dist])
+AC_ARG_ENABLE([dist],
+	AC_HELP_STRING([--enable-dist],
+			[only configure enough for make dist]),
+	[enable_dist='yes'],[enable_dist='no'])
+AC_MSG_RESULT([$enable_dist])
+if test x$enable_dist != xno; then
+	enable_modules='no'
+	enable_utils='no'
+        enable_liblustre='no'
+        enable_doc='no'
+        enable_tests='no'
+fi
+])
+
+#
 # LB_CONFIG_DOCS
 #
 # Build docs?
@@ -836,6 +940,9 @@ AC_DEFUN([LB_CONFIGURE],
 
 LB_CONFIG_DIST
 
+LB_DOWNSTREAM_RELEASE
+LB_BUILDID
+
 LB_USES_DPKG
 
 LB_LIBCFS_DIR
@@ -856,7 +963,7 @@ LB_CONFIG_UTILS
 LB_CONFIG_TESTS
 LC_CONFIG_CLIENT_SERVER
 
-# two macros for cmd3 
+# two macros for cmd3
 m4_ifdef([LC_CONFIG_SPLIT], [LC_CONFIG_SPLIT])
 LN_CONFIG_CDEBUG
 LC_QUOTA

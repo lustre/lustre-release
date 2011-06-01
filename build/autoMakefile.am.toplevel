@@ -112,10 +112,20 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | sed -re 's/--(en|dis)able-tests//'); \
-	RPMARGS="--define \"configure_args $$CONFIGURE_ARGS\""; \
+	if [ -n "@LINUX@" ]; then \
+		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | sed -re 's/--with-linux=[^ ][^ ]*//'); \
+		RPMARGS="--define \"kdir @LINUX@\""; \
+		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | sed -re 's/--with-linux-obj=[^ ][^ ]*//'); \
+		if [ -n "@LINUX_OBJ@" -a "@LINUX_OBJ@" != "@LINUX@" ]; then \
+			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
+		fi; \
+	fi; \
+	CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | sed -re 's/--with-release=[^ ][^ ]*//'); \
+	RPMARGS="$$RPMARGS --define \"configure_args $$CONFIGURE_ARGS\""; \
 	if ! $(BUILD_TESTS); then \
 		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
 	fi; \
+	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
 srpm-real: @PACKAGE_TARNAME@.spec dist Makefile

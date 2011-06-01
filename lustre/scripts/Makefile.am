@@ -43,9 +43,10 @@ genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman lustre_createcsv \
 sbin_SCRIPTS = $(genscripts) $(sbinscripts)
 bin_SCRIPTS = lustre_req_history lfs_migrate
 
-EXTRA_DIST = license-status maketags.sh version_tag.pl lc_common \
+EXTRA_DIST = license-status maketags.sh version_tag.pl version_tag-git.pl \
+	     version_tag-cvs.pl version_tag-none.pl lc_common \
 	     $(addsuffix .in,$(genscripts)) lc_mon $(sbinscripts) \
-	     $(bin_SCRIPTS) tree_status.pl
+	     $(bin_SCRIPTS) make_META.pl
 
 scriptlibdir = @libexecdir@/@PACKAGE@
 scriptlib_DATA = lc_common
@@ -56,5 +57,5 @@ $(genscripts): %: %.in
 	sed -e 's#@scriptlibdir@#$(scriptlibdir)#' < $< > $@
 	chmod +x $@
 
-tree_status.pl: version_tag.pl
-	ln -f version_tag.pl tree_status.pl
+make_META.pl: version_tag.pl
+	ln -f $< $@

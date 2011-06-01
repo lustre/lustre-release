@@ -34,6 +34,18 @@ if [ $ffw -gt 0 ]; then
 	rm -f 00list *.dpatch
 	for file in [0-9][0-9][0-9][0-9]-*.patch; do
 		if [ -s $file ] && ! grep -q "^--- a/debian/" $file; then
+			# remove patching of files that the debian packaging
+			# should not be touching
+			ed <<EOF $file
+/diff --git a\/local-env.sh b\/local-env.sh
+/diff --git a\//i
+endofrangemarker
+.
+?diff --git a\/
+/diff --git a\/local-env.sh b\/local-env.sh/,/endofrangemarker/d
+w
+q
+EOF
 			desc=$(cat $file | sed -e '1,/^$/d' \
 						 -e '/^---$/,$d')
 			dpatch_file=${file/.patch/.dpatch}

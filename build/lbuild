@@ -50,7 +50,6 @@ TARGET_ARCHS_ALL="$TARGET_ARCH"
 CONFIGURE_FLAGS=
 EXTERNAL_PATCHES=
 EXTRA_VERSION=
-LUSTRE_EXTRA_VERSION=
 STAGEDIR=
 TMPDIR=${TMPDIR:-"/var/tmp"}
 TIMESTAMP=
@@ -131,6 +130,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Specifies the CVS Root to use when pulling files from CVS.  The
     environment variable \$CVSROOT is used if this option is not
     present.
+
+  --downstream-release
+    Set the downstream version.
 
   --external-patches=EXTERNAL_PATCHES
     Directory similar to lustre/lustre/kernel_patches/ that lbuild should
@@ -248,7 +250,22 @@ EOF
     fatal "$1" "$2"
 }
 
-# canonicalize a relative path
+# canonicalize a relative path to a file
+canon_filepath() {
+    local PATH="$1"
+
+    if [ ! -f "$PATH" ]; then
+        return 1
+    fi
+
+    local FILE=${PATH##*/}
+    local DIR=${PATH%/*}
+
+    echo $(canon_path "$DIR")/$FILE
+    return 0
+}
+
+# canonicalize a relative path to a dir
 canon_path() {
     local PATH="$1"
 
@@ -632,7 +649,9 @@ load_target() {
         if $PATCHLESS || [ -n "$SERIES" ]; then
             EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e "s/\(.*_lustre\)\..*/\1/")
 #            EXTRA_VERSION="${EXTRA_VERSION}-${TAG}.${TIMESTAMP}"
-            EXTRA_VERSION="${EXTRA_VERSION}.${TIMESTAMP}"
+            if ! $PATCHLESS && [ -n "$BUILDID" ]; then
+                EXTRA_VERSION="${EXTRA_VERSION}.${BUILDID}"
+            fi
         fi
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
@@ -728,7 +747,8 @@ unpack_lustre() {
             fatal 1 "There was an error checking out Lustre/Portals/Build from CVS."
         echo "Creating lustre tarball..."
         sh autogen.sh || fatal 1 "There was an error running autogen.sh."
-        ./configure --disable-{modules,utils,liblustre,tests,doc} || \
+        ./configure --enable-dist \
+                    --with-downstream-release "$DOWNSTREAM_RELEASE" || \
             fatal 1 "There was an error running ./configure to create makefiles."
         make dist || fatal 1 "There was an error running 'make dist'."
         LUSTRE=$PWD/lustre-*.tar.gz
@@ -791,46 +811,70 @@ build_lustre() {
         targets="--target $arch $targets"
     done
 
-    local confoptions="--with-linux=${linux}"
+    local confoptions=""
+
     if $PATCHLESS; then
-        confoptions="--with-linux=${linux} --disable-server"
-    fi
-    if [ "$linuxobj" != "" ]; then
-        confoptions="$confoptions --with-linux-obj=${linuxobj}"
+        confoptions="$confoptions --disable-server"
     fi
 
-    ./configure $confoptions ${CONFIGURE_FLAGS} 2>&1
-    if [ "$?" != "0" ]; then
-        local saved_config="../config.log.$(date +%s)"
-        cp config.log $saved_config
-        chmod a+r $saved_config
-        echo "Saved config.log is at $saved_config"
-        cat /proc/mounts
-        ls -l /proc/$$
-        pwd
-        echo "config.log contents:"
-        cat config.log
-        popd
-        return 255
-    fi
-
-    gen_lustre_version
-
-    # hack. Somebody move build/lustre.spec to lustre.spec for b1_6
-    local lustre_spec
-    [ -f lustre.spec ] && lustre_spec=lustre.spec
-    [ -f build/lustre.spec ] && lustre_spec=build/lustre.spec
-
-    [ -f "$lustre_spec" ] && sed \
-        -e "s^Release: .*$^Release: $LUSTRE_EXTRA_VERSION^" \
-        < $lustre_spec \
-        > ../lustre.spec
-
-    local rpmbuildopt='-bb'
+    local rpmbuildopt='-tb'
     if $NORPM; then
-        rpmbuildopt='-bc'
+        rpmbuildopt='-tc'
         echo NORPM mode. Only compiling.
     fi
+
+    ( $(skeep_ldiskfs_rpm $TAG) ) || {
+
+        pushd ldiskfs > /dev/null || return 255
+
+        if !  ./configure --enable-dist; then
+            echo "failed to configure in ldiskfs"
+            popd >/dev/null # pushd ldiskfs
+            popd >/dev/null # pushd lustre
+            return 255
+        fi
+
+        if ! make dist 2>&1; then
+            popd >/dev/null # pushd ldiskfs
+            popd >/dev/null # pushd lustre
+            return 255
+        fi
+
+        #cp lustre-ldiskfs*.tar.gz $TOPDIR/SOURCES || \
+        #    fatal 1 "Could not copy lustre-ldiskfs*.tar.gz to $TOPDIR/SOURCES"
+
+        if ! $RPMBUILD $targets $rpmbuildopt lustre-ldiskfs*.tar.gz \
+            --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
+            --define "kdir $linux" \
+            ${linuxobj:+--define "kobjdir $linuxobj"} \
+            --define "_tmppath /var/tmp" \
+            --define "_topdir $TOPDIR" 2>&1; then
+            popd >/dev/null # pushd ldiskfs
+            popd >/dev/null # pushd lustre
+            return 255
+        fi
+
+        if $DO_SRC; then
+            if ! $RPMBUILD -ts lustre-ldiskfs*.tar.gz \
+                --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
+                --define "kdir $linux" \
+                ${linuxobj:+--define "kobjdir $linuxobj"} \
+                --define "_tmppath /var/tmp" \
+                --define "_topdir $TOPDIR" 2>&1; then
+                popd >/dev/null # pushd ldiskfs
+                popd >/dev/null # pushd lustre
+                return 255
+            fi
+        fi
+        popd >/dev/null # pushd ldiskfs
+
+        # tell lustre where ldiskfs is
+        # XXX - pointing to the RPM BUILD dir is a hack.  we need to flesh
+        #       out the ldiskfs RPM build so that it builds a
+        #       lustre-ldiskfs-devel RPM and install that and point lustre
+        #       to that instead
+        confoptions="$confoptions --with-ldiskfs=$(ls -d $TOPDIR/BUILD/lustre-ldiskfs-*)"
+    }
 
     # convert the $PATCHLESS boolean to an empty/not-empty boolean
     # as silly as this seems, it makes the syntax of the rpmbuild command
@@ -846,50 +890,18 @@ build_lustre() {
         lustre_tests="no"
     fi
 
-    $RPMBUILD $targets $rpmbuildopt ../lustre.spec \
+    $RPMBUILD $targets $rpmbuildopt "$LUSTRE" \
         ${is_patchless:+--define "lustre_name lustre-client"} \
         ${lustre_tests:+--define "build_lustre_tests 0"} \
         ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
         --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
+        --define "kdir $linux" \
+        ${linuxobj:+--define "kobjdir $linuxobj"} \
         --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" 2>&1 || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     popd >/dev/null
-    ( $(skeep_ldiskfs_rpm $TAG) ) && return
-
-    pushd lustre/ldiskfs || return 255
-    make dist 2>&1
-    if [ "$?" != "0" ]; then
-        popd
-        return 255
-    fi
-    cp lustre-ldiskfs*.tar.gz $TOPDIR/SOURCES
-
-    gen_lustre_version
-
-    local ldiskfs_spec=lustre-ldiskfs.spec
-    [ -f "$ldiskfs_spec" ] && sed \
-    -e "s^Release: .*$^Release: $LUSTRE_EXTRA_VERSION^" \
-    < $ldiskfs_spec \
-    > ../lustre-ldiskfs.spec
-
-    if ! $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
-        --define "_tmppath /var/tmp" \
-        --define "_topdir $TOPDIR" 2>&1; then
-        popd
-        return 255
-    fi
-
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs ../lustre-ldiskfs.spec \
-            --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR" 2>&1; then
-            popd
-            return 255
-        fi
-    fi
-    popd
 
 }
 
@@ -913,33 +925,21 @@ stage() {
 
 #check if we need to build separate ldiskfs RPM
 skeep_ldiskfs_rpm() {
-        local tag="$1"
+    local tag="$1"
 
-        local skip=false
+    local skip=false
 
-        if ! $LDISKFSRPM; then
-            skip=true
-        elif $PATCHLESS; then
-            skip=true
-        else
-            for skiptag in $SKIPLDISKFSRPM; do
-                [[ $tag == $skiptag ]] && skip=true && break
-            done
-        fi
+    if ! $LDISKFSRPM; then
+        skip=true
+    elif $PATCHLESS; then
+        skip=true
+    else
+        for skiptag in $SKIPLDISKFSRPM; do
+            [[ $tag == $skiptag ]] && skip=true && break
+        done
+    fi
 
-        pushd $TOPDIR/BUILD/lustre-[1-9]* >/dev/null
-        grep -q '^SERVER_TRUE[ \t]=[ \t]#$' autoMakefile && skip=true
-        popd >/dev/null
-
-        echo $skip
-
-}
-
-#generate LUSTRE_EXTRA_VERSION from EXTRA_VERSION
-gen_lustre_version() {
-
-    LUSTRE_EXTRA_VERSION="${lnxmaj}-${EXTRA_VERSION}${FLAVOR_DELIMITER}${RPMSMPTYPE}"
-    LUSTRE_EXTRA_VERSION=${LUSTRE_EXTRA_VERSION//-/_}
+    echo $skip
 
 }
 
@@ -1454,7 +1454,7 @@ build_ofed() {
             return 0
         fi
     fi
-    
+
     # build kernel-ib
     if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
         local REUSE_SIGNATURE=$({ echo "$ofed_version";
@@ -1760,7 +1760,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen,enable-mptlinux,enable-rdac -- "$@")
+options=$(getopt -o d:D:h -l kerneltree:,distro:,downstream-release:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen,enable-mptlinux,enable-rdac -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1783,6 +1783,10 @@ while [ "$1" ]; do
             ;;
         -D)
             DATE=$2
+            shift 2
+            ;;
+        --downstream-release)
+            DOWNSTREAM_RELEASE=$2
             shift 2
             ;;
         --external-patches)
@@ -1849,7 +1853,9 @@ while [ "$1" ]; do
             shift 2
             ;;
         --lustre)
-            LUSTRE=$2
+            if ! LUSTRE=$(canon_filepath "$2"); then
+                fatal 1 "Could not determine the canonical location of $2"
+            fi
             shift 2
             ;;
         --nodownload)
@@ -1931,6 +1937,10 @@ done
 check_options
 
 unpack_lustre
+
+# XXX - should we _always_ get the buildid from the META file?  what are the
+# other (i.e. non-lustre-tarball use cases of lbuild)?
+BUILDID=$(sed -ne '/^BUILDID =/s/.*= *//p' lustre/META)
 
 load_target
 
