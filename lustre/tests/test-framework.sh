@@ -928,7 +928,8 @@ check_progs_installed () {
 }
 
 node_var_name() {
-    echo __$(echo $1 | tr '-' 'X')
+    local node=${1//./_}
+    echo __${node//-/_}
 }
 
 start_client_load() {
