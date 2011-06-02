@@ -861,7 +861,7 @@ keep_de:
                 }
                 pos = le64_to_cpu(dp->ldp_hash_end);
                 ll_put_page(page);
-                if (pos == DIR_END_OFF) {
+                if (pos == MDS_DIR_END_OFF) {
                         /*
                          * End of directory reached.
                          */
@@ -1050,7 +1050,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                 }
                 pos = le64_to_cpu(dp->ldp_hash_end);
                 ll_put_page(page);
-                if (pos == DIR_END_OFF) {
+                if (pos == MDS_DIR_END_OFF) {
                         /*
                          * End of directory reached.
                          */

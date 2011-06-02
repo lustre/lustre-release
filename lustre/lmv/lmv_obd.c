@@ -2320,7 +2320,7 @@ static void lmv_hash_adjust(__u64 *hash, __u64 hash_adj)
         val = le64_to_cpu(*hash);
         if (val < hash_adj)
                 val += MAX_HASH_SIZE;
-        if (val != DIR_END_OFF)
+        if (val != MDS_DIR_END_OFF)
                 *hash = cpu_to_le64(val - hash_adj);
 }
 
@@ -2453,7 +2453,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         __u64 end;
 
                         end = le64_to_cpu(dp->ldp_hash_end);
-                        if (end == DIR_END_OFF) {
+                        if (end == MDS_DIR_END_OFF) {
                                 dp->ldp_hash_end = cpu_to_le32(seg_size *
                                                                (tgt0_idx + 1));
                                 CDEBUG(D_INODE,

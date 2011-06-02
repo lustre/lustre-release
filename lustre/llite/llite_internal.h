@@ -52,6 +52,10 @@
 #define FMODE_EXEC 0
 #endif
 
+/** Only used on client-side for indicating the tail of dir hash/offset. */
+#define LL_DIR_END_OFF          0x7fffffffffffffffULL
+#define LL_DIR_END_OFF_32BIT    0x7fffffffUL
+
 #ifndef DCACHE_LUSTRE_INVALID
 #define DCACHE_LUSTRE_INVALID 0x4000000
 #endif
@@ -312,8 +316,9 @@ enum stats_track_type {
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
 #define LL_SBI_LAZYSTATFS       0x800 /* lazystatfs mount option */
-#define LL_SBI_SOM_PREVIEW      0x1000 /* SOM preview mount option */
-#define LL_SBI_32BIT_API        0x2000 /* generate 32 bit inodes. */
+#define LL_SBI_SOM_PREVIEW     0x1000 /* SOM preview mount option */
+#define LL_SBI_32BIT_API       0x2000 /* generate 32 bit inodes. */
+#define LL_SBI_64BIT_HASH      0x4000 /* support 64-bits dir hash/offset */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60

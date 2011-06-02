@@ -1305,16 +1305,12 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent)
 
 /**
  * build inode number from passed @fid */
-__u64 cl_fid_build_ino(const struct lu_fid *fid, int need_32bit)
+__u64 cl_fid_build_ino(const struct lu_fid *fid, int api32)
 {
-#if BITS_PER_LONG == 32
-        RETURN(fid_flatten32(fid));
-#else
-        if (need_32bit)
+        if (BITS_PER_LONG == 32 || api32)
                 RETURN(fid_flatten32(fid));
         else
                 RETURN(fid_flatten(fid));
-#endif
 }
 
 /**

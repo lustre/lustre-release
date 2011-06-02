@@ -901,8 +901,7 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
         return le16_to_cpu(ent->lde_reclen);
 }
 
-#define DIR_END_OFF              0x7fffffffffffffffULL
-#define DIR_END_OFF_32BIT        0x7fffffffUL
+#define MDS_DIR_END_OFF 0xfffffffffffffffeULL
 
 /** @} lu_dir */
 

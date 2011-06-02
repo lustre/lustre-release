@@ -2345,7 +2345,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                 /*
                  * end of directory.
                  */
-                hash_end = DIR_END_OFF;
+                hash_end = MDS_DIR_END_OFF;
                 rc = 0;
         }
         if (rc == 0) {
@@ -2402,7 +2402,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 dp = (struct lu_dirpage*)cfs_kmap(pg);
                 memset(dp, 0 , sizeof(struct lu_dirpage));
                 dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
-                dp->ldp_hash_end   = cpu_to_le64(DIR_END_OFF);
+                dp->ldp_hash_end   = cpu_to_le64(MDS_DIR_END_OFF);
                 dp->ldp_flags |= LDF_EMPTY;
                 dp->ldp_flags = cpu_to_le32(dp->ldp_flags);
                 cfs_kunmap(pg);

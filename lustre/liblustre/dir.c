@@ -100,7 +100,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        offset = (__u64)hash_x_index(page->index);
+        offset = (__u64)hash_x_index(page->index, 0);
         rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
                          offset, page, &request);
         if (!rc) {
@@ -129,7 +129,7 @@ static cfs_page_t *llu_dir_read_page(struct inode *ino, __u64 hash,
         OBD_PAGE_ALLOC(page, 0);
         if (!page)
                 RETURN(ERR_PTR(-ENOMEM));
-        page->index = hash_x_index(hash);
+        page->index = hash_x_index(hash, 0);
 
         rc = llu_dir_do_readpage(ino, page);
         if (rc) {
@@ -208,7 +208,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                 RETURN(0);
         }
 
-        if (pos == DIR_END_OFF)
+        if (pos == MDS_DIR_END_OFF)
                 /*
                  * end-of-file.
                  */
@@ -229,7 +229,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                          * If page is empty (end of directoryis reached),
                          * use this value.
                          */
-                        __u64 hash = DIR_END_OFF;
+                        __u64 hash = MDS_DIR_END_OFF;
                         __u64 next;
 
                         dp = page->addr;
@@ -269,7 +269,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                         OBD_PAGE_FREE(page);
                         if (!done) {
                                 pos = next;
-                                if (pos == DIR_END_OFF)
+                                if (pos == MDS_DIR_END_OFF)
                                         /*
                                          * End of directory reached.
                                          */

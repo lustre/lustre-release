@@ -232,13 +232,14 @@ static void ll_release_page(struct page *page, __u64 hash,
 static struct page *ll_dir_page_locate(struct inode *dir, __u64 *hash,
                                        __u64 *start, __u64 *end)
 {
+        int hash64 = ll_i2sbi(dir)->ll_flags & LL_SBI_64BIT_HASH;
         struct address_space *mapping = dir->i_mapping;
         /*
          * Complement of hash is used as an index so that
          * radix_tree_gang_lookup() can be used to find a page with starting
          * hash _smaller_ than one we are looking for.
          */
-        unsigned long offset = hash_x_index(*hash);
+        unsigned long offset = hash_x_index(*hash, hash64);
         struct page *page;
         int found;
 
@@ -261,14 +262,14 @@ static struct page *ll_dir_page_locate(struct inode *dir, __u64 *hash,
                 wait_on_page(page);
                 if (PageUptodate(page)) {
                         dp = kmap(page);
-#if BITS_PER_LONG == 32
-                        *start = le64_to_cpu(dp->ldp_hash_start) >> 32;
-                        *end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
-                        *hash  = *hash >> 32;
-#else
-                        *start = le64_to_cpu(dp->ldp_hash_start);
-                        *end   = le64_to_cpu(dp->ldp_hash_end);
-#endif
+                        if (BITS_PER_LONG == 32 && hash64) {
+                                *start = le64_to_cpu(dp->ldp_hash_start) >> 32;
+                                *end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
+                                *hash  = *hash >> 32;
+                        } else {
+                                *start = le64_to_cpu(dp->ldp_hash_start);
+                                *end   = le64_to_cpu(dp->ldp_hash_end);
+                        }
                         LASSERTF(*start <= *hash, "start = "LPX64",end = "
                                  LPX64",hash = "LPX64"\n", *start, *end, *hash);
                         if (*hash > *end || (*end != *start && *hash == *end)) {
@@ -301,6 +302,7 @@ struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
         __u64 end = 0;
         __u64 lhash = hash;
         struct ll_inode_info *lli = ll_i2info(dir);
+        int hash64 = ll_i2sbi(dir)->ll_flags & LL_SBI_64BIT_HASH;
 
         mode = LCK_PR;
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
@@ -378,7 +380,7 @@ struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
                 }
         }
 
-        page = read_cache_page(mapping, hash_x_index(hash),
+        page = read_cache_page(mapping, hash_x_index(hash, hash64),
                                (filler_t*)mapping->a_ops->readpage, filp);
         if (IS_ERR(page)) {
                 CERROR("read cache page: "DFID" at "LPU64": rc %ld\n",
@@ -402,23 +404,23 @@ struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
         }
 hash_collision:
         dp = page_address(page);
-#if BITS_PER_LONG == 32
-        start = le64_to_cpu(dp->ldp_hash_start) >> 32;
-        end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
-        lhash = hash >> 32;
-#else
-        start = le64_to_cpu(dp->ldp_hash_start);
-        end   = le64_to_cpu(dp->ldp_hash_end);
-        lhash = hash;
-#endif
+        if (BITS_PER_LONG == 32 && hash64) {
+                start = le64_to_cpu(dp->ldp_hash_start) >> 32;
+                end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
+                lhash = hash >> 32;
+        } else {
+                start = le64_to_cpu(dp->ldp_hash_start);
+                end   = le64_to_cpu(dp->ldp_hash_end);
+                lhash = hash;
+        }
         if (end == start) {
                 LASSERT(start == lhash);
                 CWARN("Page-wide hash collision: "LPU64"\n", end);
-#if BITS_PER_LONG == 32
-                CWARN("Real page-wide hash collision at ["LPU64" "LPU64"] with "
-                      "hash "LPU64"\n", le64_to_cpu(dp->ldp_hash_start),
-                      le64_to_cpu(dp->ldp_hash_end), hash);
-#endif
+                if (BITS_PER_LONG == 32 && hash64)
+                        CWARN("Real page-wide hash collision at ["LPU64" "LPU64
+                              "] with hash "LPU64"\n",
+                              le64_to_cpu(dp->ldp_hash_start),
+                              le64_to_cpu(dp->ldp_hash_end), hash);
                 /*
                  * Fetch whole overflow chain...
                  *
@@ -444,7 +446,8 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         struct ll_sb_info    *sbi        = ll_i2sbi(inode);
         struct ll_file_data  *fd         = LUSTRE_FPRIVATE(filp);
         __u64                 pos        = fd->fd_dir.lfd_pos;
-        int                   need_32bit = ll_need_32bit_api(sbi);
+        int                   api32      = ll_need_32bit_api(sbi);
+        int                   hash64     = sbi->ll_flags & LL_SBI_64BIT_HASH;
         struct page          *page;
         struct ll_dir_chain   chain;
         int                   done;
@@ -454,9 +457,9 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu 32bit_api %d\n",
                inode->i_ino, inode->i_generation, inode,
-               (unsigned long)pos, i_size_read(inode), need_32bit);
+               (unsigned long)pos, i_size_read(inode), api32);
 
-        if (pos == DIR_END_OFF)
+        if (pos == MDS_DIR_END_OFF)
                 /*
                  * end-of-file.
                  */
@@ -479,7 +482,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                          * If page is empty (end of directory is reached),
                          * use this value.
                          */
-                        __u64 hash = DIR_END_OFF;
+                        __u64 hash = MDS_DIR_END_OFF;
                         __u64 next;
 
                         dp = page_address(page);
@@ -510,12 +513,12 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                          */
                                         continue;
 
-                                if (need_32bit)
+                                if (api32 && hash64)
                                         lhash = hash >> 32;
                                 else
                                         lhash = hash;
                                 fid_le_to_cpu(&fid, &ent->lde_fid);
-                                ino = cl_fid_build_ino(&fid,need_32bit);
+                                ino = cl_fid_build_ino(&fid, api32);
                                 type = ll_dirent_type_get(ent);
                                 /* For 'll_nfs_get_name_filldir()', it will try
                                  * to access the 'ent' through its 'lde_name',
@@ -528,7 +531,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                         ll_put_page(page);
                         if (!done) {
                                 pos = next;
-                                if (pos == DIR_END_OFF) {
+                                if (pos == MDS_DIR_END_OFF) {
                                         /*
                                          * End of directory reached.
                                          */
@@ -557,13 +560,16 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         }
 
         fd->fd_dir.lfd_pos = pos;
-        if (need_32bit) {
-                if (pos == DIR_END_OFF)
-                        filp->f_pos = DIR_END_OFF_32BIT;
+        if (pos == MDS_DIR_END_OFF) {
+                if (api32)
+                        filp->f_pos = LL_DIR_END_OFF_32BIT;
                 else
-                        filp->f_pos = pos >> 32;
+                        filp->f_pos = LL_DIR_END_OFF;
         } else {
-                filp->f_pos = pos;
+                if (api32 && hash64)
+                        filp->f_pos = pos >> 32;
+                else
+                        filp->f_pos = pos;
         }
         filp->f_version = inode->i_version;
         touch_atime(filp->f_vfsmnt, filp->f_dentry);
@@ -1377,7 +1383,8 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 {
         struct inode *inode = file->f_mapping->host;
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-        int need_32bit = ll_need_32bit_api(ll_i2sbi(inode));
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        int api32 = ll_need_32bit_api(sbi);
         loff_t ret = -EINVAL;
         ENTRY;
 
@@ -1391,32 +1398,32 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
                 case SEEK_END:
                         if (offset > 0)
                                 GOTO(out, ret);
-                        if (need_32bit)
-                                offset += DIR_END_OFF_32BIT;
+                        if (api32)
+                                offset += LL_DIR_END_OFF_32BIT;
                         else
-                                offset += DIR_END_OFF;
+                                offset += LL_DIR_END_OFF;
                         break;
                 default:
                         GOTO(out, ret);
         }
 
         if (offset >= 0 &&
-            ((need_32bit && offset <= DIR_END_OFF_32BIT) || !need_32bit)) {
+            ((api32 && offset <= LL_DIR_END_OFF_32BIT) ||
+             (!api32 && offset <= LL_DIR_END_OFF))) {
                 if (offset != file->f_pos) {
-                        if (need_32bit) {
-                                if (offset == DIR_END_OFF_32BIT)
-                                        fd->fd_dir.lfd_pos = DIR_END_OFF;
-                                else
-                                        fd->fd_dir.lfd_pos = offset << 32;
-                        } else {
+                        if ((api32 && offset == LL_DIR_END_OFF_32BIT) ||
+                            (!api32 && offset == LL_DIR_END_OFF))
+                                fd->fd_dir.lfd_pos = MDS_DIR_END_OFF;
+                        else if (api32 && sbi->ll_flags & LL_SBI_64BIT_HASH)
+                                fd->fd_dir.lfd_pos = offset << 32;
+                        else
                                 fd->fd_dir.lfd_pos = offset;
-                        }
                         file->f_pos = offset;
                         file->f_version = 0;
                 }
                 ret = offset;
         }
-        EXIT;
+        GOTO(out, ret);
 
 out:
         cfs_mutex_unlock(&inode->i_mutex);

@@ -2697,4 +2697,3 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct link_ea_entry *)0)->lee_name) == 0, " found %lld\n",
                  (long long)(int)sizeof(((struct link_ea_entry *)0)->lee_name));
 }
-
