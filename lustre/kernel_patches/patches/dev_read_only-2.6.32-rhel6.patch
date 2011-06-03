@@ -17,11 +17,11 @@ checksum does not match that expected by the block pointer.
 Initial efforts to remove this patch are under way in bug 20776.
 Once this work comes to fruition this patch can be dropped.
 
-Index: linux-2.6.32-71.18.1.el6-master/block/blk-core.c
+Index: linux-2.6.32-131.0.15.el6.x86_64/block/blk-core.c
 ===================================================================
---- linux-2.6.32-71.18.1.el6-master.orig/block/blk-core.c	2011-03-05 11:35:40.404043293 +0800
-+++ linux-2.6.32-71.18.1.el6-master/block/blk-core.c	2011-03-11 20:21:10.492302510 +0800
-@@ -1405,6 +1405,8 @@
+--- linux-2.6.32-131.0.15.el6.x86_64.orig/block/blk-core.c	2011-05-10 21:38:33.000000000 +0300
++++ linux-2.6.32-131.0.15.el6.x86_64/block/blk-core.c	2011-05-19 21:01:04.000000000 +0300
+@@ -1416,6 +1416,8 @@ static inline int should_fail_request(st
  
  #endif /* CONFIG_FAIL_MAKE_REQUEST */
  
@@ -30,7 +30,7 @@ Index: linux-2.6.32-71.18.1.el6-master/block/blk-core.c
  /*
   * Check whether this bio extends beyond the end of the device.
   */
-@@ -1506,6 +1508,23 @@
+@@ -1517,6 +1519,23 @@ static inline void __generic_make_reques
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
  
@@ -54,7 +54,7 @@ Index: linux-2.6.32-71.18.1.el6-master/block/blk-core.c
  		if (should_fail_request(bio))
  			goto end_io;
  
-@@ -2578,6 +2586,99 @@
+@@ -2628,6 +2647,99 @@ int kblockd_schedule_work(struct request
  }
  EXPORT_SYMBOL(kblockd_schedule_work);
  
@@ -154,11 +154,11 @@ Index: linux-2.6.32-71.18.1.el6-master/block/blk-core.c
  int __init blk_dev_init(void)
  {
  	BUILD_BUG_ON(__REQ_NR_BITS > 8 *
-Index: linux-2.6.32-71.18.1.el6-master/fs/block_dev.c
+Index: linux-2.6.32-131.0.15.el6.x86_64/fs/block_dev.c
 ===================================================================
---- linux-2.6.32-71.18.1.el6-master.orig/fs/block_dev.c	2011-03-05 11:35:40.486042782 +0800
-+++ linux-2.6.32-71.18.1.el6-master/fs/block_dev.c	2011-03-05 11:37:35.624324775 +0800
-@@ -1389,6 +1389,7 @@
+--- linux-2.6.32-131.0.15.el6.x86_64.orig/fs/block_dev.c	2011-05-10 21:38:29.000000000 +0300
++++ linux-2.6.32-131.0.15.el6.x86_64/fs/block_dev.c	2011-05-19 21:01:04.000000000 +0300
+@@ -1389,6 +1389,7 @@ static int __blkdev_put(struct block_dev
  		if (bdev != bdev->bd_contains)
  			victim = bdev->bd_contains;
  		bdev->bd_contains = NULL;
@@ -166,11 +166,23 @@ Index: linux-2.6.32-71.18.1.el6-master/fs/block_dev.c
  	}
  	unlock_kernel();
  	mutex_unlock(&bdev->bd_mutex);
-Index: linux-2.6.32-71.18.1.el6-master/include/linux/fs.h
+Index: linux-2.6.32-131.0.15.el6.x86_64/include/linux/blk_types.h
 ===================================================================
---- linux-2.6.32-71.18.1.el6-master.orig/include/linux/fs.h	2011-03-05 11:35:40.445043037 +0800
-+++ linux-2.6.32-71.18.1.el6-master/include/linux/fs.h	2011-03-05 11:37:35.726324137 +0800
-@@ -2204,6 +2204,10 @@
+--- linux-2.6.32-131.0.15.el6.x86_64.orig/include/linux/blk_types.h	2011-05-10 21:37:58.000000000 +0300
++++ linux-2.6.32-131.0.15.el6.x86_64/include/linux/blk_types.h	2011-05-19 21:03:42.000000000 +0300
+@@ -24,6 +24,7 @@
+ #define BIO_NULL_MAPPED 9	/* contains invalid user pages */
+ #define BIO_FS_INTEGRITY 10	/* fs owns integrity data, not block layer */
+ #define BIO_QUIET	11	/* Make BIO Quiet */
++#define BIO_RDONLY	31	/* device is readonly */
+ #define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag)))
+ 
+ /*
+Index: linux-2.6.32-131.0.15.el6.x86_64/include/linux/fs.h
+===================================================================
+--- linux-2.6.32-131.0.15.el6.x86_64.orig/include/linux/fs.h	2011-05-10 21:38:29.000000000 +0300
++++ linux-2.6.32-131.0.15.el6.x86_64/include/linux/fs.h	2011-05-19 21:01:04.000000000 +0300
+@@ -2244,6 +2244,10 @@ struct bio;
  extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
  #endif
@@ -181,15 +193,3 @@ Index: linux-2.6.32-71.18.1.el6-master/include/linux/fs.h
  extern int set_blocksize(struct block_device *, int);
  extern int sb_set_blocksize(struct super_block *, int);
  extern int sb_min_blocksize(struct super_block *, int);
-Index: linux+rh+chaos/include/linux/bio.h
-===================================================================
---- linux+rh+chaos.orig/include/linux/bio.h
-+++ linux+rh+chaos/include/linux/bio.h
-@@ -126,6 +126,7 @@ struct bio {
- #define BIO_NULL_MAPPED 9	/* contains invalid user pages */
- #define BIO_FS_INTEGRITY 10	/* fs owns integrity data, not block layer */
- #define BIO_QUIET	11	/* Make BIO Quiet */
-+#define BIO_RDONLY	31	/* device is readonly */
- #define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag)))
- 
- /*

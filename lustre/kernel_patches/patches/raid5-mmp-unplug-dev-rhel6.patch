@@ -3,11 +3,11 @@ instead of handling from cache.  This is needed for MMP
 on MD RAID devices, and in theory could be accepted in
 the upstream kernel.  Not needed for DMU.
 
-Index: linux-2.6.32-71.18.1.el6-master/drivers/md/raid5.c
+Index: linux-2.6.32-131.0.15.el6.x86_64/drivers/md/raid5.c
 ===================================================================
---- linux-2.6.32-71.18.1.el6-master.orig/drivers/md/raid5.c	2011-02-28 16:57:31.222666050 +0800
-+++ linux-2.6.32-71.18.1.el6-master/drivers/md/raid5.c	2011-02-28 16:58:27.011983275 +0800
-@@ -2098,6 +2098,8 @@
+--- linux-2.6.32-131.0.15.el6.x86_64.orig/drivers/md/raid5.c	2011-05-10 21:38:35.000000000 +0300
++++ linux-2.6.32-131.0.15.el6.x86_64/drivers/md/raid5.c	2011-05-20 08:26:04.000000000 +0300
+@@ -2177,6 +2177,8 @@ static int add_stripe_bio(struct stripe_
  		bi->bi_next = *bip;
  	*bip = bi;
  	bi->bi_phys_segments++;
@@ -16,12 +16,13 @@ Index: linux-2.6.32-71.18.1.el6-master/drivers/md/raid5.c
  	spin_unlock_irq(&conf->device_lock);
  	spin_unlock(&sh->lock);
  
-@@ -4031,6 +4033,8 @@
- 		wait_event(mddev->thread->wqueue,
- 			   atomic_read(&conf->preread_active_stripes) == 0);
+@@ -4132,6 +4134,9 @@ static int make_request(mddev_t *mddev, 
+ 		bio_endio(bi, 0);
  	}
+ 
 +	if (bio_rw_flagged(bi, BIO_RW_SYNCIO))
-+		raid5_unplug_device(mddev->queue);
++		md_raid5_unplug_device(conf);
++
  	return 0;
  }
  

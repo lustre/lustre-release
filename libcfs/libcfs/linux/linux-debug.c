@@ -271,9 +271,9 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
         /* show_trace_log_lvl() */
 	printk("\nCall Trace:\n");
 	dump_trace(tsk, NULL, NULL,
-#ifdef HAVE_TRACE_ADDRESS_RELIABLE
+#ifdef HAVE_DUMP_TRACE_ADDRESS
                    0,
-#endif /* HAVE_TRACE_ADDRESS_RELIABLE */
+#endif /* HAVE_DUMP_TRACE_ADDRESS */
                    &print_trace_ops, NULL);
 	printk("\n");
 #elif defined(HAVE_SHOW_TASK)
