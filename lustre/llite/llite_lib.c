@@ -944,8 +944,7 @@ void ll_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         char *profilenm = get_profile_name(sb);
-        int force = 1;
-        struct obd_device *prev;
+        int force = 1, next;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
@@ -965,9 +964,9 @@ void ll_put_super(struct super_block *sb)
         /* We need to set force before the lov_disconnect in
            lustre_common_put_super, since l_d cleans up osc's as well. */
         if (force) {
-                prev = NULL;
+                next = 0;
                 while ((obd = class_devices_in_group(&sbi->ll_sb_uuid,
-                                                     &prev)) != NULL) {
+                                                     &next)) != NULL) {
                         obd->obd_force = force;
                 }
         }
@@ -977,8 +976,8 @@ void ll_put_super(struct super_block *sb)
                 client_common_put_super(sb);
         }
 
-        prev = NULL;
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &prev)) !=NULL) {
+        next = 0;
+        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
         }
 

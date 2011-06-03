@@ -284,28 +284,36 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
-        int rc = 0;
-        struct obd_device *obd;
-
+        int rc = 0, i;
         *eof = 1;
+
         if (libcfs_catastrophe)
                 rc += snprintf(page + rc, count - rc, "LBUG\n");
 
-        for(obd_devlist_first(&obd);
-            obd != NULL;
-            obd_devlist_next(&obd)) {
-                if (obd->obd_attached || !obd->obd_set_up)
+        cfs_spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd;
+
+                obd = class_num2obd(i);
+                if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
                         continue;
 
+                LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                 if (obd->obd_stopping)
                         continue;
+
+                class_incref(obd, __FUNCTION__, cfs_current());
+                cfs_spin_unlock(&obd_dev_lock);
 
                 if (obd_health_check(obd)) {
                         rc += snprintf(page + rc, count - rc,
                                        "device %s reported unhealthy\n",
                                        obd->obd_name);
                 }
+                class_decref(obd, __FUNCTION__, cfs_current());
+                cfs_spin_lock(&obd_dev_lock);
         }
+        cfs_spin_unlock(&obd_dev_lock);
 
         if (rc == 0)
                 return snprintf(page, count, "healthy\n");
@@ -328,43 +336,50 @@ struct lprocfs_vars lprocfs_base[] = {
 #endif /* LPROCFS */
 
 #ifdef __KERNEL__
-
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {
-        struct obd_device *obd;
-        loff_t i = *pos;
+        if (*pos >= class_devno_max())
+                return NULL;
 
-        for(obd_devlist_first(&obd);
-            i != 0 && obd != NULL;
-            obd_devlist_next(&obd)) {
-                i --;
-        }
-
-        return obd;
+        return pos;
 }
 
 static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 {
-        obd_devlist_last(v);
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
-        struct obd_device *obd = v;
+        ++*pos;
+        if (*pos >= class_devno_max())
+                return NULL;
 
-        ++ *pos;
-        obd_devlist_next(&obd);
-        return obd;
+        return pos;
 }
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        struct obd_device *obd = v;
-        const char *status;
+        loff_t index = *(loff_t *)v;
+        struct obd_device *obd = class_num2obd((int)index);
+        char *status;
 
-        status = obd_dev_status(obd);
+        if (obd == NULL)
+                return 0;
+
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+        if (obd->obd_stopping)
+                status = "ST";
+        else if (obd->obd_inactive)
+                status = "IN";
+        else if (obd->obd_set_up)
+                status = "UP";
+        else if (obd->obd_attached)
+                status = "AT";
+        else
+                status = "--";
+
         return seq_printf(p, "%3d %s %s %s %s %d\n",
-                          obd->obd_minor, status, obd->obd_type->typ_name,
+                          (int)index, status, obd->obd_type->typ_name,
                           obd->obd_name, obd->obd_uuid.uuid,
                           cfs_atomic_read(&obd->obd_refcount));
 }

@@ -76,48 +76,20 @@ int class_register_type(struct obd_ops *, struct md_ops *,
                         struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 
-
-
-
-/**
- allocate one minor number
- */
-int obd_minor_alloc(void);
-/**
- release allocated minor
- */
-void obd_minor_release(long minor);
-/**
- return 1 if minor is point to allocated device,
- return 0 otherwise
- */
-int obd_minor_valid(long minor);
-
-int obd_hashes_init(void);
-void obd_hashes_fini(void);
-
-struct obd_device *class_newdev(const char *type_name, const char *name,
-                                const char *uuid);
+struct obd_device *class_newdev(const char *type_name, const char *name);
 void class_release_dev(struct obd_device *obd);
 
 int class_name2dev(const char *name);
 struct obd_device *class_name2obd(const char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
-
 void class_obd_list(void);
-void obd_devlist_first(struct obd_device **pos);
-void obd_devlist_next(struct obd_device **pos);
-void obd_devlist_last(struct obd_device *pos);
-const char *obd_dev_status(struct obd_device *obd);
-
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           const char * typ_name,
                                           struct obd_uuid *grp_uuid);
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
-                                           struct obd_device **prev);
-struct obd_device * class_num2obd(__u32 num);
-
+                                           int *next);
+struct obd_device * class_num2obd(int num);
 
 int class_notify_sptlrpc_conf(const char *fsname, int namelen);
 
@@ -495,6 +467,11 @@ do {                                                                 \
                 RETURN(err);                                         \
         }                                                            \
 } while (0)
+
+static inline int class_devno_max(void)
+{
+        return MAX_OBD_DEVICES;
+}
 
 static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
                                void *key, __u32 *vallen, void *val,

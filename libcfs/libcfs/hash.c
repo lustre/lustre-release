@@ -1157,7 +1157,7 @@ CFS_EXPORT_SYMBOL(cfs_hash_getref);
 
 void cfs_hash_putref(cfs_hash_t *hs)
 {
-        if (hs && cfs_atomic_dec_and_test(&hs->hs_refcount))
+        if (cfs_atomic_dec_and_test(&hs->hs_refcount))
                 cfs_hash_destroy(hs);
 }
 CFS_EXPORT_SYMBOL(cfs_hash_putref);

@@ -46,7 +46,6 @@
 #include <obd_ost.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <libcfs/bitmap.h>
 
 extern cfs_list_t obd_types;
 cfs_spinlock_t obd_types_lock;
@@ -66,240 +65,6 @@ static void print_export_data(struct obd_export *exp,
                               const char *status, int locks);
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-
-
-cfs_spinlock_t obd_minor_lock;
-/**
- * Maximum number of OBD devices on a single node (includes devices
- * from all filesystems mounted on a client). This limit is itself arbitrary,
- * though the lov_user_md_{v1,v3} structures (used for specifying the
- * striping layout from llapi_setstripe() and on directory default EAs)
- * have a 16-bit limit on the starting OST index.
- **/
-const int obd_minor_map_size = 65536;
-cfs_bitmap_t *obd_minor_map;
-
-int obd_minor_alloc(void)
-{
-        int ret;
-
-        cfs_spin_lock(&obd_minor_lock);
-        ret = cfs_find_first_zero_bit(obd_minor_map->data, obd_minor_map_size);
-        if (ret != obd_minor_map_size)
-                cfs_bitmap_set(obd_minor_map, ret);
-        else
-                ret = -1;
-        cfs_spin_unlock(&obd_minor_lock);
-
-        return ret;
-}
-void obd_minor_release(long minor)
-{
-        cfs_spin_lock(&obd_minor_lock);
-        cfs_bitmap_clear(obd_minor_map, minor);
-        cfs_spin_unlock(&obd_minor_lock);
-}
-
-int obd_minor_valid(long minor)
-{
-        int ret;
-
-        cfs_spin_lock(&obd_minor_lock);
-        ret = cfs_bitmap_check(obd_minor_map, minor);
-        cfs_spin_unlock(&obd_minor_lock);
-
-        return ret;
-}
-
-static CFS_LIST_HEAD(obd_dev_list);
-static const int obd_hash_init_bits = 10;
-static const int obd_hash_max_bits = 30;
-static const int obd_hash_bkt_bits = 10;
-
-static cfs_hash_t *obd_name_hash = NULL;
-static unsigned obd_name_hops_hash(cfs_hash_t *lh, const void *key,
-                                   unsigned mask)
-{
-        return cfs_hash_djb2_hash(key, strlen(key), mask);
-}
-
-static void *obd_name_hops_obj(cfs_hlist_node_t *hn)
-{
-        struct obd_device *obd = cfs_hlist_entry(hn, struct obd_device,
-                                                 obd_name_node);
-        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
-                 "%p obd_magic %08x != %08x\n",
-                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
-
-        return (void *)obd;
-}
-
-static void *obd_name_hops_key(cfs_hlist_node_t *hn)
-{
-        struct obd_device *obd = obd_name_hops_obj(hn);
-
-        return &obd->obd_name;
-}
-
-static int obd_name_hops_compare(const void *key, cfs_hlist_node_t *hn)
-{
-        void *nk = obd_name_hops_key(hn);
-
-        return strcmp(key, nk) == 0;
-}
-
-static void obd_name_hops_noop(cfs_hash_t *hs, cfs_hlist_node_t *hn)
-{
-        obd_name_hops_obj(hn);
-}
-
-static cfs_hash_ops_t obd_name_hops = {
-        .hs_hash        = obd_name_hops_hash,
-        .hs_keycmp      = obd_name_hops_compare,
-        .hs_key         = obd_name_hops_key,
-        .hs_object      = obd_name_hops_obj,
-        .hs_get         = obd_name_hops_noop,
-        .hs_put_locked  = obd_name_hops_noop,
-};
-
-static cfs_hash_t *obd_uuid_hash = NULL;
-static unsigned obd_uuid_hops_hash(cfs_hash_t *lh, const void *key,
-                                   unsigned mask)
-{
-        return cfs_hash_djb2_hash(key, strlen(key), mask);
-}
-
-static void *obd_uuid_hops_obj(cfs_hlist_node_t *hn)
-{
-        struct obd_device *obd = cfs_hlist_entry(hn, struct obd_device,
-                                                 obd_uuid_node);
-        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
-                 "%p obd_magic %08x != %08x\n",
-                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
-
-        return (void *)obd;
-}
-
-static void *obd_uuid_hops_key(cfs_hlist_node_t *hn)
-{
-        struct obd_device *obd = obd_uuid_hops_obj(hn);
-
-        return &obd->obd_uuid;
-}
-
-static int obd_uuid_hops_compare(const void *key, cfs_hlist_node_t *hn)
-{
-        void *nk = obd_uuid_hops_key(hn);
-
-        return obd_uuid_equals(key, nk);
-}
-
-static void obd_uuid_hops_noop(cfs_hash_t *hs, cfs_hlist_node_t *hn)
-{
-        obd_uuid_hops_obj(hn);
-}
-
-static cfs_hash_ops_t obd_uuid_hops = {
-        .hs_hash        = obd_uuid_hops_hash,
-        .hs_keycmp      = obd_uuid_hops_compare,
-        .hs_key         = obd_uuid_hops_key,
-        .hs_object      = obd_uuid_hops_obj,
-        .hs_get         = obd_uuid_hops_noop,
-        .hs_put_locked  = obd_uuid_hops_noop,
-};
-
-static cfs_hash_t *obd_minor_hash = NULL;
-static unsigned obd_minor_hops_hash(cfs_hash_t *lh, const void *key,
-                                    unsigned mask)
-{
-        return cfs_hash_u32_hash(*((__u32 *)key), mask);
-}
-
-static void *obd_minor_hops_obj(cfs_hlist_node_t *hn)
-{
-        struct obd_device *obd = cfs_hlist_entry(hn, struct obd_device,
-                                                 obd_minor_node);
-        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
-                 "%p obd_magic %08x != %08x\n",
-                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
-
-        return (void *)obd;
-}
-
-static void *obd_minor_hops_key(cfs_hlist_node_t *hn)
-{
-        struct obd_device *obd = obd_minor_hops_obj(hn);
-
-        return &obd->obd_minor;
-}
-
-static int obd_minor_hops_compare(const void *key, cfs_hlist_node_t *hn)
-{
-        __u32 *nk = obd_minor_hops_key(hn);
-
-        return *((__u32 *)key) == *nk;
-}
-
-static void obd_minor_hops_noop(cfs_hash_t *hs, cfs_hlist_node_t *hn)
-{
-        obd_minor_hops_obj(hn);
-}
-
-static cfs_hash_ops_t obd_minor_hops = {
-        .hs_hash        = obd_minor_hops_hash,
-        .hs_keycmp      = obd_minor_hops_compare,
-        .hs_key         = obd_minor_hops_key,
-        .hs_object      = obd_minor_hops_obj,
-        .hs_get         = obd_minor_hops_noop,
-        .hs_put_locked  = obd_minor_hops_noop,
-};
-
-int obd_hashes_init(void)
-{
-        obd_name_hash = cfs_hash_create("obd_name",
-                                        obd_hash_init_bits, obd_hash_max_bits,
-                                        obd_hash_bkt_bits, 0,
-                                        CFS_HASH_MIN_THETA, CFS_HASH_MAX_THETA,
-                                        &obd_name_hops,
-                                        CFS_HASH_DEFAULT | CFS_HASH_NO_ITEMREF);
-        if (obd_name_hash == NULL)
-                return -ENOMEM;
-
-        obd_uuid_hash = cfs_hash_create("obd_uuid",
-                                        obd_hash_init_bits, obd_hash_max_bits,
-                                        obd_hash_bkt_bits, 0,
-                                        CFS_HASH_MIN_THETA, CFS_HASH_MAX_THETA,
-                                        &obd_uuid_hops,
-                                        CFS_HASH_DEFAULT | CFS_HASH_NO_ITEMREF);
-        if (obd_name_hash == NULL)
-                return -ENOMEM;
-
-        obd_minor_hash = cfs_hash_create("obd_minor",
-                                         obd_hash_init_bits, obd_hash_max_bits,
-                                         obd_hash_bkt_bits, 0,
-                                         CFS_HASH_MIN_THETA, CFS_HASH_MAX_THETA,
-                                         &obd_minor_hops,
-                                         CFS_HASH_DEFAULT | CFS_HASH_NO_ITEMREF);
-        if (obd_name_hash == NULL)
-                return -ENOMEM;
-
-        obd_minor_map = CFS_ALLOCATE_BITMAP(obd_minor_map_size);
-        if (obd_minor_map == NULL)
-                return -ENOMEM;
-
-        cfs_spin_lock_init(&obd_minor_lock);
-
-        return 0;
-}
-
-void obd_hashes_fini(void)
-{
-        if (obd_minor_map)
-               CFS_FREE_BITMAP(obd_minor_map);
-        cfs_hash_putref(obd_name_hash);
-        cfs_hash_putref(obd_uuid_hash);
-        cfs_hash_putref(obd_minor_hash);
-}
 
 /*
  * support functions: we could use inter-module communication, but this
@@ -491,63 +256,6 @@ int class_unregister_type(const char *name)
         RETURN(0);
 } /* class_unregister_type */
 
-const char *obd_dev_status(struct obd_device *obd)
-{
-        const char *status;
-
-        if (obd->obd_stopping)
-                status = "ST";
-        else if (obd->obd_inactive)
-                status = "IN";
-        else if (obd->obd_set_up)
-                status = "UP";
-        else if (obd->obd_attached)
-                status = "AT";
-        else
-                status = "--";
-
-        return status;
-}
-
-#define cfs_list_entry_safe(pos, head, type, member)  \
-        (pos == head ? NULL : cfs_list_entry(pos, type, member))
-
-void obd_devlist_first(struct obd_device **pos)
-{
-        struct obd_device *obd;
-
-        cfs_spin_lock(&obd_dev_lock);
-        obd = cfs_list_entry_safe(obd_dev_list.next, &obd_dev_list,
-                                  struct obd_device, obd_list);
-        if (obd != NULL)
-                class_incref(obd, "devlist", obd);
-        cfs_spin_unlock(&obd_dev_lock);
-
-        *pos = obd;
-}
-
-void obd_devlist_next(struct obd_device **pos)
-{
-        struct obd_device *obd = NULL;
-
-        cfs_spin_lock(&obd_dev_lock);
-        obd = cfs_list_entry_safe((*pos)->obd_list.next, &obd_dev_list,
-                                  struct obd_device, obd_list);
-        if (obd)
-                class_incref(obd, "devlist", obd);
-        cfs_spin_unlock(&obd_dev_lock);
-
-        class_decref(*pos, "devlist", *pos);
-        *pos = obd;
-}
-
-void obd_devlist_last(struct obd_device *pos)
-{
-        if (pos)
-                class_decref(pos,"devlist", pos);
-
-}
-
 /**
  * Create a new obd device.
  *
@@ -559,11 +267,13 @@ void obd_devlist_last(struct obd_device *pos)
  * \retval NULL if create fails, otherwise return the obd device
  *         pointer created.
  */
-struct obd_device *class_newdev(const char *type_name, const char *name, const char *uuid)
+struct obd_device *class_newdev(const char *type_name, const char *name)
 {
+        struct obd_device *result = NULL;
         struct obd_device *newdev;
-        struct obd_type *type;
-        long ret;
+        struct obd_type *type = NULL;
+        int i;
+        int new_obd_minor = 0;
 
         if (strlen(name) >= MAX_OBD_NAME) {
                 CERROR("name/uuid must be < %u bytes long\n", MAX_OBD_NAME);
@@ -573,52 +283,62 @@ struct obd_device *class_newdev(const char *type_name, const char *name, const c
         type = class_get_type(type_name);
         if (type == NULL){
                 CERROR("OBD: unknown type: %s\n", type_name);
-                ret = -ENODEV;
-                goto error_type;
+                RETURN(ERR_PTR(-ENODEV));
         }
 
         newdev = obd_device_alloc();
         if (newdev == NULL) {
-                ret = -ENOMEM;
-                goto error_device;
+                class_put_type(type);
+                RETURN(ERR_PTR(-ENOMEM));
         }
-
-        newdev->obd_minor = obd_minor_alloc();
-        if (newdev->obd_minor < 0) {
-                CERROR("don't have free minors\n");
-                ret = -ENODATA;
-                goto error_minor;
-        }
-
-        /* find add unique by name */
-        strncpy(newdev->obd_name, name, sizeof(newdev->obd_name) - 1);
-        if (cfs_hash_add_unique(obd_name_hash, name, &newdev->obd_name_node)) {
-                CERROR("fails to add an unique obddev (%s) to the hash\n",
-                       name);
-                ret = -EEXIST;
-                goto error_dup;
-        }
-        newdev->obd_type = type;
-
-        cfs_hash_add(obd_minor_hash, &newdev->obd_minor, &newdev->obd_minor_node);
-        memcpy(newdev->obd_uuid.uuid, uuid, strlen(uuid));
-        cfs_hash_add(obd_uuid_hash, uuid, &newdev->obd_uuid_node);
+        LASSERT(newdev->obd_magic == OBD_DEVICE_MAGIC);
 
         cfs_spin_lock(&obd_dev_lock);
-        cfs_list_add_tail(&newdev->obd_list, &obd_dev_list);
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd->obd_name &&
+                    (strcmp(name, obd->obd_name) == 0)) {
+                        CERROR("Device %s already exists, won't add\n", name);
+                        if (result) {
+                                LASSERTF(result->obd_magic == OBD_DEVICE_MAGIC,
+                                         "%p obd_magic %08x != %08x\n", result,
+                                         result->obd_magic, OBD_DEVICE_MAGIC);
+                                LASSERTF(result->obd_minor == new_obd_minor,
+                                         "%p obd_minor %d != %d\n", result,
+                                         result->obd_minor, new_obd_minor);
+
+                                obd_devs[result->obd_minor] = NULL;
+                                result->obd_name[0]='\0';
+                         }
+                        result = ERR_PTR(-EEXIST);
+                        break;
+                }
+                if (!result && !obd) {
+                        result = newdev;
+                        result->obd_minor = i;
+                        new_obd_minor = i;
+                        result->obd_type = type;
+                        strncpy(result->obd_name, name,
+                                sizeof(result->obd_name) - 1);
+                        obd_devs[i] = result;
+                }
+        }
         cfs_spin_unlock(&obd_dev_lock);
 
-        CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
-               newdev->obd_name, newdev);
-        RETURN(newdev);
-error_dup:
-       obd_minor_release(newdev->obd_minor);
-error_minor:
-        obd_device_free(newdev);
-error_device:
-        class_put_type(type);
-error_type:
-        RETURN(ERR_PTR(ret));
+        if (result == NULL && i >= class_devno_max()) {
+                CERROR("all %u OBD devices used, increase MAX_OBD_DEVICES\n",
+                       class_devno_max());
+                result = ERR_PTR(-EOVERFLOW);
+        }
+
+        if (IS_ERR(result)) {
+                obd_device_free(newdev);
+                class_put_type(type);
+        } else {
+                CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
+                       result->obd_name, result);
+        }
+        return result;
 }
 
 void class_release_dev(struct obd_device *obd)
@@ -627,20 +347,16 @@ void class_release_dev(struct obd_device *obd)
 
         LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "%p obd_magic %08x != %08x\n",
                  obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+        LASSERTF(obd == obd_devs[obd->obd_minor], "obd %p != obd_devs[%d] %p\n",
+                 obd, obd->obd_minor, obd_devs[obd->obd_minor]);
         LASSERT(obd_type != NULL);
 
         CDEBUG(D_INFO, "Release obd device %s obd_type name =%s\n",
                obd->obd_name,obd->obd_type->typ_name);
 
-        cfs_hash_del(obd_name_hash, obd->obd_name, &obd->obd_name_node);
-        cfs_hash_del(obd_uuid_hash, &obd->obd_uuid, &obd->obd_uuid_node);
-        cfs_hash_del(obd_minor_hash, &obd->obd_minor, &obd->obd_minor_node);
-
         cfs_spin_lock(&obd_dev_lock);
-        cfs_list_del(&obd->obd_list);
+        obd_devs[obd->obd_minor] = NULL;
         cfs_spin_unlock(&obd_dev_lock);
-
-        obd_minor_release(obd->obd_minor);
         obd_device_free(obd);
 
         class_put_type(obd_type);
@@ -648,28 +364,63 @@ void class_release_dev(struct obd_device *obd)
 
 int class_name2dev(const char *name)
 {
-        struct obd_device *obd;
+        int i;
 
-        obd = cfs_hash_lookup(obd_name_hash, name);
-        return obd != NULL ? obd->obd_minor : -1 ;
+        if (!name)
+                return -1;
+
+        cfs_spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+                        /* Make sure we finished attaching before we give
+                           out any references */
+                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+                        if (obd->obd_attached) {
+                                cfs_spin_unlock(&obd_dev_lock);
+                                return i;
+                        }
+                        break;
+                }
+        }
+        cfs_spin_unlock(&obd_dev_lock);
+
+        return -1;
 }
 
 struct obd_device *class_name2obd(const char *name)
 {
-        return cfs_hash_lookup(obd_name_hash, name);
+        int dev = class_name2dev(name);
+
+        if (dev < 0 || dev > class_devno_max())
+                return NULL;
+        return class_num2obd(dev);
 }
 
 int class_uuid2dev(struct obd_uuid *uuid)
 {
-        struct obd_device *obd;
+        int i;
 
-        obd = cfs_hash_lookup(obd_uuid_hash, uuid);
-        return obd != NULL ? obd->obd_minor : -1;
+        cfs_spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd_uuid_equals(uuid, &obd->obd_uuid)) {
+                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+                        cfs_spin_unlock(&obd_dev_lock);
+                        return i;
+                }
+        }
+        cfs_spin_unlock(&obd_dev_lock);
+
+        return -1;
 }
 
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 {
-        return  cfs_hash_lookup(obd_uuid_hash, uuid);
+        int dev = class_uuid2dev(uuid);
+        if (dev < 0)
+                return NULL;
+        return class_num2obd(dev);
 }
 
 /**
@@ -680,30 +431,50 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
  * \retval NULL if ::obd_devs[\a num] does not contains an obd device
  *         otherwise return the obd device there.
  */
-struct obd_device *class_num2obd(__u32 minor)
+struct obd_device *class_num2obd(int num)
 {
-        struct obd_device *obd;
+        struct obd_device *obd = NULL;
 
-        obd = cfs_hash_lookup(obd_minor_hash, &minor);
+        if (num < class_devno_max()) {
+                obd = obd_devs[num];
+                if (obd == NULL)
+                        return NULL;
+
+                LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
+                         "%p obd_magic %08x != %08x\n",
+                         obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+                LASSERTF(obd->obd_minor == num,
+                         "%p obd_minor %0d != %0d\n",
+                         obd, obd->obd_minor, num);
+        }
 
         return obd;
 }
 
 void class_obd_list(void)
 {
-        const char *status;
-        struct obd_device *obd;
+        char *status;
+        int i;
 
-        for (obd_devlist_first(&obd);
-             obd != NULL;
-             obd_devlist_next(&obd)) {
-
-                status = obd_dev_status(obd);
+        cfs_spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd == NULL)
+                        continue;
+                if (obd->obd_stopping)
+                        status = "ST";
+                else if (obd->obd_set_up)
+                        status = "UP";
+                else if (obd->obd_attached)
+                        status = "AT";
+                else
+                        status = "--";
                 LCONSOLE(D_CONFIG, "%3d %s %s %s %s %d\n",
-                         obd->obd_minor, status, obd->obd_type->typ_name,
+                         i, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
                          cfs_atomic_read(&obd->obd_refcount));
         }
+        cfs_spin_unlock(&obd_dev_lock);
         return;
 }
 
@@ -714,23 +485,25 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           const char * typ_name,
                                           struct obd_uuid *grp_uuid)
 {
-        struct obd_device *obd;
+        int i;
 
-        for (obd_devlist_first(&obd);
-             obd != NULL;
-             obd_devlist_next(&obd)) {
-                /* XXX per type list ? */
+        cfs_spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd == NULL)
+                        continue;
                 if ((strncmp(obd->obd_type->typ_name, typ_name,
                              strlen(typ_name)) == 0)) {
                         if (obd_uuid_equals(tgt_uuid,
                                             &obd->u.cli.cl_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
                                                          &obd->obd_uuid) : 1)) {
-                                obd_devlist_last(obd);
+                                cfs_spin_unlock(&obd_dev_lock);
                                 return obd;
                         }
                 }
         }
+        cfs_spin_unlock(&obd_dev_lock);
 
         return NULL;
 }
@@ -739,24 +512,30 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
    searching at *next, and if a device is found, the next index to look
    at is saved in *next. If next is NULL, then the first matching device
    will always be returned. */
-struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
-                                           struct obd_device **prev)
+struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {
-        struct obd_device *obd = *prev;
+        int i;
 
-        if (obd == NULL)
-               obd_devlist_first(&obd);
+        if (next == NULL)
+                i = 0;
+        else if (*next >= 0 && *next < class_devno_max())
+                i = *next;
         else
-               obd_devlist_next(&obd);
+                return NULL;
 
-
-        for (; obd != NULL; obd_devlist_next(&obd)) {
+        cfs_spin_lock(&obd_dev_lock);
+        for (; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd == NULL)
+                        continue;
                 if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
-                        /* XXX return with reference */
-                        *prev = obd;
+                        if (next != NULL)
+                                *next = i+1;
+                        cfs_spin_unlock(&obd_dev_lock);
                         return obd;
                 }
         }
+        cfs_spin_unlock(&obd_dev_lock);
 
         return NULL;
 }
@@ -769,14 +548,15 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
 {
         struct obd_device  *obd;
         const char         *type;
-        int                 rc = 0, rc2;
+        int                 i, rc = 0, rc2;
 
         LASSERT(namelen > 0);
 
-        for (obd_devlist_first(&obd);
-             obd != NULL;
-             obd_devlist_next(&obd)) {
-                if (obd->obd_set_up == 0 || obd->obd_stopping)
+        cfs_spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                obd = class_num2obd(i);
+
+                if (obd == NULL || obd->obd_set_up == 0 || obd->obd_stopping)
                         continue;
 
                 /* only notify mdc, osc, mdt, ost */
@@ -790,13 +570,16 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
                 if (strncmp(obd->obd_name, fsname, namelen))
                         continue;
 
-                /** XXX - some new obd can be added at that point */
+                class_incref(obd, __FUNCTION__, obd);
+                cfs_spin_unlock(&obd_dev_lock);
                 rc2 = obd_set_info_async(obd->obd_self_export,
                                          sizeof(KEY_SPTLRPC_CONF),
                                          KEY_SPTLRPC_CONF, 0, NULL, NULL);
                 rc = rc ? rc : rc2;
+                class_decref(obd, __FUNCTION__, obd);
+                cfs_spin_lock(&obd_dev_lock);
         }
-
+        cfs_spin_unlock(&obd_dev_lock);
         return rc;
 }
 EXPORT_SYMBOL(class_notify_sptlrpc_conf);
