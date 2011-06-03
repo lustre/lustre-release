@@ -1723,10 +1723,23 @@ void ll_delete_inode(struct inode *inode)
         ENTRY;
 
         rc = obd_fid_delete(sbi->ll_md_exp, ll_inode2fid(inode));
-        if (rc) {
+        if (rc)
                 CERROR("fid_delete() failed, rc %d\n", rc);
-        }
+
         truncate_inode_pages(&inode->i_data, 0);
+
+        /* Workaround for LU-118 */
+        if (inode->i_data.nrpages) {
+                TREE_READ_LOCK_IRQ(&inode->i_data);
+                TREE_READ_UNLOCK_IRQ(&inode->i_data);
+                LASSERTF(inode->i_data.nrpages == 0,
+                         "inode=%lu/%u(%p) nrpages=%lu, see "
+                         "http://jira.whamcloud.com/browse/LU-118\n",
+                         inode->i_ino, inode->i_generation, inode,
+                         inode->i_data.nrpages);
+        }
+        /* Workaround end */
+
         clear_inode(inode);
 
         EXIT;
