@@ -1,0 +1,11 @@
+1
+/^%define include_udev_rules/s/%(eval.*$/0/
+/    \/sbin\/depmod.* %{KVERSION}/i
+deletetohere
+.
+?%post -n kernel-ib
++,/deletetohere/d
++,/# END of post -n kernel-ib/d
+/%preun -n kernel-ib/,/^fi$/d
+/%postun -n kernel-ib/,/%postun -n kernel-ib-devel/d
+g/^\/etc\/init.d\/openibd$/d
