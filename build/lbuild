@@ -1036,12 +1036,17 @@ build_kernel_ib() {
         rpm --define "_topdir ${TOPDIR}" -ivh $SOURCE
         SOURCE="${TOPDIR}/SPECS/ofa_kernel.spec"
         local file ed_fragment1 ed_fragment2 n=1
-        for file in $(ls ${TOPDIR}/lustre/build/patches/ofed/*); do
+        for file in $(ls ${TOPDIR}/lustre/build/patches/ofed/*.patch); do
             ed_fragment1="$ed_fragment1
 Patch$n: ${file%%*/}"
             ed_fragment2="$ed_fragment2
 %patch$n -p0"
             cp $file ${TOPDIR}/SOURCES
+            let n=$n+1
+        done
+        for file in $(ls ${TOPDIR}/lustre/build/patches/ofed/*.ed); do
+            ed_fragment3="$ed_fragment3
+$(cat $file)"
             let n=$n+1
         done
 
@@ -1053,6 +1058,7 @@ $ed_fragment1
 /^%setup /a
 $ed_fragment2
 .
+$ed_fragment3
 wq
 EOF
         fi
