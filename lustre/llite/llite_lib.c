@@ -162,7 +162,8 @@ static struct dentry_operations ll_d_root_ops = {
         .d_revalidate = ll_revalidate_nd,
 };
 
-static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
+static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
+                                    struct vfsmount *mnt)
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -518,6 +519,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         uuid = obd_get_uuid(sbi->ll_md_exp);
         if (uuid != NULL)
                 sb->s_dev = get_uuid2int(uuid->uuid, strlen(uuid->uuid));
+        sbi->ll_mnt = mnt;
 
         RETURN(err);
 out_root:
@@ -844,7 +846,7 @@ static inline int ll_bdi_register(struct backing_dev_info *bdi)
 #endif
 }
 
-int ll_fill_super(struct super_block *sb)
+int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 {
         struct lustre_profile *lprof;
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -922,7 +924,7 @@ int ll_fill_super(struct super_block *sb)
         sprintf(md, "%s-%s", lprof->lp_md, ll_instance);
 
         /* connections, registrations, sb setup */
-        err = client_common_fill_super(sb, md, dt);
+        err = client_common_fill_super(sb, md, dt, mnt);
 
 out_free:
         if (md)

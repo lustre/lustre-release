@@ -228,7 +228,8 @@ static int ll_get_name(struct dentry *dentry, char *name,
         if (!dir->i_fop)
                 GOTO(out, rc = -EINVAL);
 
-        filp = ll_dentry_open(dget(dentry), NULL, O_RDONLY, current_cred());
+        filp = ll_dentry_open(dget(dentry), mntget(ll_i2sbi(dir)->ll_mnt),
+                              O_RDONLY, current_cred());
         if (IS_ERR(filp))
                 GOTO(out, rc = PTR_ERR(filp));
 

@@ -414,6 +414,7 @@ struct ll_sb_info {
                                                  * clustred nfs */
         struct rmtacl_ctl_table   ll_rct;
         struct eacl_table         ll_et;
+        struct vfsmount          *ll_mnt;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
@@ -713,7 +714,7 @@ extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 void ll_lli_init(struct ll_inode_info *lli);
-int ll_fill_super(struct super_block *sb);
+int ll_fill_super(struct super_block *sb, struct vfsmount *mnt);
 void ll_put_super(struct super_block *sb);
 void ll_kill_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
