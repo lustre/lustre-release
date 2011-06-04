@@ -70,6 +70,10 @@ struct lustre_intent_data {
 #define FMODE_EXEC 0
 #endif
 
+/** Only used on client-side for indicating the tail of dir hash/offset. */
+#define LL_DIR_END_OFF          0x7fffffffffffffffULL
+#define LL_DIR_END_OFF_32BIT    0x7fffffffUL
+
 #ifndef DCACHE_LUSTRE_INVALID
 #define DCACHE_LUSTRE_INVALID 0x100
 #endif
@@ -304,6 +308,7 @@ enum stats_track_type {
 #define LL_SBI_LLITE_CHECKSUM  0x100 /* checksum each page in memory */
 #define LL_SBI_LAZYSTATFS      0x200 /* lazystatfs mount option */
 #define LL_SBI_32BIT_API       0x400 /* generate 32 bit inodes. */
+#define LL_SBI_64BIT_HASH      0x800 /* support 64-bits dir hash/offset */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -1204,8 +1209,7 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
 void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
 void ll_iocontrol_unregister(void *magic);
 
-__u64 ll_fid_build_ino(const struct ll_fid *fid);
-__u32 ll_fid_build_ino32(const struct ll_fid *fid);
+__u64 ll_fid_build_ino(const struct ll_fid *fid, int api32);
 __u32 ll_fid_build_gen(struct ll_sb_info *sbi,
                        struct ll_fid *fid);
 

@@ -3448,18 +3448,19 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                   struct lookup_intent *it, struct kstat *stat)
 {
         struct inode *inode = de->d_inode;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ll_inode_info *lli = ll_i2info(inode);
         int res = 0;
 
         res = ll_inode_revalidate_it(de, it);
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETATTR, 1);
+        ll_stats_ops_tally(sbi, LPROC_LL_GETATTR, 1);
 
         if (res)
                 return res;
 
         stat->dev = inode->i_sb->s_dev;
-        if (cfs_curproc_is_32bit())
-                stat->ino = ll_fid_build_ino32((struct ll_fid *)&lli->lli_fid);
+        if (ll_need_32bit_api(sbi))
+                stat->ino = ll_fid_build_ino((struct ll_fid *)&lli->lli_fid, 1);
         else
                 stat->ino = inode->i_ino;
         stat->mode = inode->i_mode;

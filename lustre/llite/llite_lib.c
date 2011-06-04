@@ -384,6 +384,11 @@ static int client_common_fill_super(struct super_block *sb,
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
 
+        if (data->ocd_connect_flags & OBD_CONNECT_64BITHASH) {
+                LCONSOLE_INFO("client supports 64-bits dir hash/offset!\n");
+                sbi->ll_flags |= LL_SBI_64BIT_HASH;
+        }
+
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
@@ -504,7 +509,7 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         LASSERT(sbi->ll_rootino != 0);
-        root = ll_iget(sb, ll_fid_build_ino(&rootfid), &md);
+        root = ll_iget(sb, ll_fid_build_ino(&rootfid, 0), &md);
 
         ptlrpc_req_finished(request);
 
@@ -1959,7 +1964,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         }
 #endif
 
-        inode->i_ino = ll_fid_build_ino(&body->fid1);
+        inode->i_ino = ll_fid_build_ino(&body->fid1, 0);
         inode->i_generation = ll_fid_build_gen(sbi, &body->fid1);
         *ll_inode_lu_fid(inode) = *((struct lu_fid*)&md->body->fid1);
 
@@ -2294,7 +2299,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 /** hashing VFS inode by FIDs.
                  * IGIF will be used for for compatibility if needed.
                  */
-                *inode =ll_iget(sb, ll_fid_build_ino(&md.body->fid1), &md);
+                *inode =ll_iget(sb, ll_fid_build_ino(&md.body->fid1, 0), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
                         mdc_free_lustre_md(exp, &md);
                         rc = -ENOMEM;

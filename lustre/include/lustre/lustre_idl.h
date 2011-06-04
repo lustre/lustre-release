@@ -768,6 +768,7 @@ enum lu_dirent_attrs {
         LUDA_TYPE   = 0x0002,
 };
 
+#define MDS_DIR_END_OFF 0xfffffffffffffffeULL
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 

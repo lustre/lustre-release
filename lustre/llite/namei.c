@@ -115,22 +115,13 @@ static inline __u32 fid_flatten32(const struct lu_fid *fid)
 }
 
 /**
- * for 32 bit inode numbers directly map seq+oid to 32bit number.
- */
-__u32 ll_fid_build_ino32(const struct ll_fid *fid)
-{
-        RETURN(fid_flatten32((struct lu_fid *)fid));
-}
-
-/**
  * build inode number from passed @fid */
-__u64 ll_fid_build_ino(const struct ll_fid *fid)
+__u64 ll_fid_build_ino(const struct ll_fid *fid, int api32)
 {
-#if BITS_PER_LONG == 32
-        RETURN(fid_flatten32((struct lu_fid *)fid));
-#else
-        RETURN(fid_flatten((struct lu_fid *)fid));
-#endif
+        if (BITS_PER_LONG == 32 || api32)
+                RETURN(fid_flatten32((struct lu_fid *)fid));
+        else
+                RETURN(fid_flatten((struct lu_fid *)fid));
 }
 
 __u32 ll_fid_build_gen(struct ll_sb_info *sbi, struct ll_fid *fid)
