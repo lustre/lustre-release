@@ -1064,3 +1064,23 @@ get_lustre_items() {
 
     return 0
 }
+
+# Execute command on comma-seperated hosts
+remote_exec() {
+    local host_list=$1
+    shift
+    local command=$@
+    local host
+
+    [ -z "$host_list" -o -z "$command" ] && return 0
+
+    command="export PATH=\$PATH:/sbin:/usr/sbin; $command"
+
+    if is_pdsh; then
+        $REMOTE $host_list "$command"
+    else
+        for host in ${host_list//,/ }; do
+            $REMOTE $host "$command"
+        done
+    fi
+}

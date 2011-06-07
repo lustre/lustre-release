@@ -225,26 +225,19 @@ mass_op() {
 
 # Unload the modules to make cleanup
 unload_modules() {
-    local command
-    local host
-    local host_list
+    local command="if grep -q libcfs /proc/modules; then
+                       lctl net down 1>/dev/null 2>&1
+                       lustre_rmmod
+                   fi"
 
-    host_list=$(comma_list "${HOST_NAME[@]}")
-    [ -z "$host_list" ] && return 0
+    remote_exec $(comma_list ${HOST_NAME[@]}) "$command"
+}
 
-    command="PATH=\$PATH:/sbin:/usr/sbin
-if grep -q libcfs /proc/modules; then
-    lctl net down 1>/dev/null 2>&1
-    lustre_rmmod
-fi"
+# Load lustre modules on all the nodes
+load_modules() {
+    local command="modprobe lustre && lsmod | grep -q ^lustre 2>&1"
 
-    if is_pdsh; then
-        $REMOTE $host_list "$command"
-    else
-        for host in ${host_list//,/ }; do
-            $REMOTE $host "$command"
-        done
-    fi
+    remote_exec $(comma_list ${HOST_NAME[@]}) "$command"
 }
 
 # Start the services on Lustre server targets
@@ -273,6 +266,9 @@ mass_start() {
             checked_hosts="$checked_hosts,${HOST_NAME[i]}"
         fi
     done
+
+    # load modules explicitly to prevent multiple devices from racing - b24464.
+    load_modules || return ${PIPESTATUS[0]}
 
     # Start MGS or the MGS service on combo MGS/MDT (with "-o nosvc -n" options)
     if [ -n "${MGS_NODENAME[0]}" ]; then
