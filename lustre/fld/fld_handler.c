@@ -342,14 +342,13 @@ static int fld_server_handle(struct lu_server_fld *fld,
 static int fld_req_handle(struct ptlrpc_request *req,
                           struct fld_thread_info *info)
 {
-        struct lu_site *site;
+        struct obd_export *exp = req->rq_export;
+        struct lu_site *site = exp->exp_obd->obd_lu_dev->ld_site;
         struct lu_seq_range *in;
         struct lu_seq_range *out;
         int rc;
         __u32 *opc;
         ENTRY;
-
-        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
 
         rc = req_capsule_server_pack(info->fti_pill);
         if (rc)
@@ -364,6 +363,13 @@ static int fld_req_handle(struct ptlrpc_request *req,
                 if (out == NULL)
                         RETURN(err_serious(-EPROTO));
                 *out = *in;
+
+                /* For old 2.0 client, the 'lsr_flags' is uninitialized.
+                 * Set it as 'LU_SEQ_RANGE_MDT' by default.
+                 * Old 2.0 liblustre client cannot talk with new 2.1 server. */
+                if (!(exp->exp_connect_flags & OBD_CONNECT_64BITHASH) &&
+                    !exp->exp_libclient)
+                        out->lsr_flags = LU_SEQ_RANGE_MDT;
 
                 rc = fld_server_handle(lu_site2md(site)->ms_server_fld,
                                        req->rq_svc_thread->t_env,
