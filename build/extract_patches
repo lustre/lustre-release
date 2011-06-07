@@ -33,7 +33,7 @@ if [ $ffw -gt 0 ]; then
 	mkdir ../patched
 	rm -f 00list *.dpatch
 	for file in [0-9][0-9][0-9][0-9]-*.patch; do
-		if ! grep -q "^--- a/debian/" $file; then
+		if [ -s $file ] && ! grep -q "^--- a/debian/" $file; then
 			desc=$(cat $file | sed -e '1,/^$/d' \
 						 -e '/^---$/,$d')
 			dpatch_file=${file/.patch/.dpatch}
