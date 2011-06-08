@@ -361,6 +361,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
 #define OBD_CONNECT_LAYOUTLOCK   0x2000000000ULL /* client supports layout lock */
 #define OBD_CONNECT_64BITHASH    0x4000000000ULL /* client supports 64-bits
                                                   * directory hash */
+#define OBD_CONNECT_MAXBYTES     0x8000000000ULL /* max stripe size */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -412,8 +413,8 @@ struct obd_connect_data {
         __u32 ocd_group;         /* Used in lustre 1.8 */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
         __u32 ocd_max_easize;    /* How big LOV EA size can be on MDS */
-        __u32 padding1;          /* also fix lustre_swab_connect */
-        __u64 padding2;          /* also fix lustre_swab_connect */
+        __u32 padding;           /* also fix lustre_swab_connect */
+        __u64 ocd_maxbytes;      /* Maximum object size in bytes */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
