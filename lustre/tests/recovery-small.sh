@@ -644,7 +644,9 @@ wait_client_evicted () {
 	local exports=$2
 	local varsvc=${facet}_svc
 
-	wait_update $(facet_host $facet) "lctl get_param -n *.${!varsvc}.num_exports | cut -d' ' -f2" $((exports - 1)) $3
+	wait_update $(facet_active_host $facet) \
+                "lctl get_param -n *.${!varsvc}.num_exports | cut -d' ' -f2" \
+                $((exports - 1)) $3
 }
 
 test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger

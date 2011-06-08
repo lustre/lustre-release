@@ -1711,6 +1711,8 @@ change_active() {
     # save the active host for this facet
     local activevar=${facet}active
     echo "$activevar=${!activevar}" > $TMP/$activevar
+    [[ $facet = mds1 ]] && combined_mgs_mds && \
+        echo "mgsactive=${!activevar}" > $TMP/mgsactive
     local TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     done
@@ -1840,6 +1842,7 @@ add() {
     # make sure its not already running
     stop ${facet} -f
     rm -f $TMP/${facet}active
+    [[ $facet = mds1 ]] && combined_mgs_mds && rm -f $TMP/mgsactive
     do_facet ${facet} $MKFS $*
 }
 
@@ -1861,6 +1864,8 @@ mdsdevname() {
 
 facet_mntpt () {
     local facet=$1
+    [[ $facet = mgs ]] && combined_mgs_mds && facet="mds1"
+
     local var=${facet}_MOUNT
     eval mntpt=${!var:-${MOUNT%/*}/$facet}
 
@@ -1892,6 +1897,7 @@ stopall() {
         stop mds$num -f
         rm -f ${TMP}/mds${num}active
     done
+    combined_mgs_mds && rm -f $TMP/mgsactive
 
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
