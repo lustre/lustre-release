@@ -721,7 +721,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                  * Only useful for filesystems with < 2^32 blocks due to resize
                  * limitations. */
                 if (IS_OST(&mop->mo_ldd) && mop->mo_device_sz > 100 * 1024 &&
-                    mop->mo_device_sz / L_BLOCK_SIZE <= 0xffffffff) {
+                    mop->mo_device_sz * 1024 / L_BLOCK_SIZE <= 0xffffffffULL) {
                         unsigned group_blocks = L_BLOCK_SIZE * 8;
                         unsigned desc_per_block = L_BLOCK_SIZE / 32;
                         unsigned resize_blks;
