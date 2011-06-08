@@ -1,11 +1,80 @@
-2011-xx-xx Whamcloud, Inc.
+2011-06-30 Whamcloud, Inc.
 	* version 1.8.6-wc
 	* Support for kernels:
 	  2.6.18-238.9.1.el5 (RHEL 5)
 	  2.6.32-71.18.2.el6 (RHEL 6) - patchless client only
 	* Recommended e2fsprogs version: 1.41.90.wc2
 	* Use ext4-based ldiskfs as default for RHEL5
+	* Add support for 24TB LUN (RHEL5 server only)
 
+Severity   : enhancement
+Jira       : LU-228
+Description: Add support for RHEL5.6 (2.6.18-238.9.1.el5)
+
+Severity   : enhancement
+Jira       : LU-62, LU-73
+Description: Add RHEL6 client support
+
+Severity   : major
+Jira       : LU-286, LU-234
+Description: Fix client crash introduced in 1.8.5
+Details    : The patch from bugzilla ticket 18213 landed for 1.8.5 can cause
+	     a crash in mdc_exit_request() when the process is interrupted.
+
+Severity   : major
+Jira       : LU-274
+Description: ls -l reports wrong file size
+Details    : Always update LVB from disk when a glimpse callback returns an
+	     error
+
+Severity   : major (2.6.32-based kernels only)
+Jira       : LU-118
+Description: Add workaround for a race causing an assertion failure in
+	     clear_inode() on lustre clients.
+
+Severity   : normal
+Jira       : LU-376, LU-200
+Description: Fix interoperability issue between 1.8 clients and 2.x servers
+Details    : The ldlm hash handling in Lustre 2.x is incompatible with the one
+	     used in Lustre 1.8. Add support for 64-bit dir name hash to the
+	     1.8 client.
+
+Severity   : normal
+Jira       : LU-15
+Description: Reduce cache pressure on OSS
+Details    : Don't keep pages for objects >8MB in cache to alleviate memory
+	     pressure on OSSs. This is done by changing the default value
+	     of readcache_max_filesize to 8MB.
+
+Severity   : normal
+Jira       : LU-15
+Description: slow IO with read-intense application
+Details    : Align the readahead extent by 1M after when it is trimed by
+	     ra_max_pages.
+
+Severity   : normal
+Jira       : LU-179
+Description: lustre client lockup under memory pressure
+Details    : Under memory pressure, the rpc memory allocation in bulk
+	     registration on the memory release path also needs be covered.
+
+Severity   : normal
+Jira       : LU-129
+Description: Skip quotacheck on administratively disabled OSTs
+
+Severity   : minor
+Jira       : LU-265
+Description: Some autogen improvements
+
+Severity   : enhancement
+Jira       : LU-123, LU-296, LU-230
+Description: Add support for yaml data logging and auster script.
+
+Severity   : enhancement
+Jira       : LU-57
+Description: Allow OSTs to be created with no primary node
+Details    : Add a --servicenode parameter for mkfs.lustre to treat all
+	     service nodes equally.
 
 -------------------------------------------------------------------------------
 

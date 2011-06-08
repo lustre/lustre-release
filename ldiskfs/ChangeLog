@@ -1,5 +1,28 @@
-2011-xx-xx Whamcloud, Inc.
+2011-06-30 Whamcloud, Inc.
 	* version 3.1.50
+
+Severity   : enhancement
+Jira       : LU-136
+Description: Add support for 24TB LUN on RHEL5 with ext4-based ldiskfs
+	     The force_over_16tb mount option has now been renamed
+	     force_over_24tb
+
+Severity   : major
+Jira       : LU-206
+Description: fix memory corruption introduced in 1.8.5 in the MMP patch
+
+Severity   : normal
+Jira       : LU-264, LU-268
+Description: Fix 2TB limitation for mmp-block
+
+Severity   : normal
+Jira       : LU-216
+Description: Fix fiemap locking issue in 2.6.32 kernels
+
+Severity   : normal
+Jira       : LU-15
+Description: slow I/O on new files via mballoc
+Details    : Apply upstream patch to avoid loading bitmaps from full groups
 
 -------------------------------------------------------------------------------
 

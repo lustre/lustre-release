@@ -1,4 +1,4 @@
-2011-xx-xx Whamcloud, Inc.
+2011-06-30 Whamcloud, Inc.
 	* version 1.8.6-wc
 	* Support for networks:
 	  socklnd   - any kernel supported by Lustre,
@@ -7,6 +7,10 @@
 	  gmlnd     - GM 2.1.22 and later,
 	  mxlnd     - MX 1.2.10 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Jira       : LU-388, LU-303, TT-121
+Description: Add support for OFED 1.5.3.1
 
 -------------------------------------------------------------------------------
 
