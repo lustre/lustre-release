@@ -53,12 +53,6 @@ Details    : Align the readahead extent by 1M after when it is trimed by
 	     ra_max_pages.
 
 Severity   : normal
-Jira       : LU-179
-Description: lustre client lockup under memory pressure
-Details    : Under memory pressure, the rpc memory allocation in bulk
-	     registration on the memory release path also needs be covered.
-
-Severity   : normal
 Jira       : LU-129
 Description: Skip quotacheck on administratively disabled OSTs
 
