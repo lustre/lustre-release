@@ -1,5 +1,5 @@
 2011-06-30 Whamcloud, Inc.
-	* version 1.8.6-wc
+	* version 1.8.6-wc1
 	* Support for networks:
 	  socklnd   - any kernel supported by Lustre,
 	  qswlnd    - Qsnet kernel modules 5.20 and later,
