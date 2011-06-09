@@ -1,7 +1,7 @@
 2011-06-30 Whamcloud, Inc.
 	* version 1.8.6-wc
 	* Support for kernels:
-	  2.6.18-238.9.1.el5 (RHEL 5)
+	  2.6.18-238.12.1.el5 (RHEL 5)
 	  2.6.32-71.18.2.el6 (RHEL 6) - patchless client only
 	* Recommended e2fsprogs version: 1.41.90.wc2
 	* Use ext4-based ldiskfs as default for RHEL5
