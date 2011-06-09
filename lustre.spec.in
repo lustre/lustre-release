@@ -302,15 +302,16 @@ else
 	depmod -ae %{kversion} || exit 0
 fi
 
+MODULES_RPM_NAME=$(rpm -q %{name}-modules | grep "%{version}-%{release}")
 # "weak modules" support
 # Suse
 if [ -x /usr/lib/module-init-tools/weak-modules ]; then
-    rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' |
+    rpm -ql $MODULES_RPM_NAME | grep '\.ko$' |
         /usr/lib/module-init-tools/weak-modules --add-modules
 fi
 # RedHat
 if [ -x /sbin/weak-modules ]; then
-    rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' |
+    rpm -ql $MODULES_RPM_NAME | grep '\.ko$' |
         /sbin/weak-modules --add-modules
 fi
 
@@ -330,7 +331,8 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
 fi
 
 %preun modules
-rpm -ql %{name}-modules-%{version}-%{release} | grep '\.ko$' > /var/run/%{name}-modules
+MODULES_RPM_NAME=$(rpm -q %{name}-modules | grep "%{version}-%{release}")
+rpm -ql $MODULES_RPM_NAME | grep '\.ko$' > /var/run/%{name}-modules || true
 
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then
@@ -342,12 +344,12 @@ fi
 # "weak modules" support
 # Suse
 if [ -x /usr/lib/module-init-tools/weak-modules ]; then
-    cat /var/run/%{name}-modules | grep '\.ko$' |
+    cat /var/run/%{name}-modules |
         /usr/lib/module-init-tools/weak-modules --remove-modules
 fi
 # RedHat
 if [ -x /sbin/weak-modules ]; then
-    cat /var/run/%{name}-modules | grep '\.ko$' |
+    cat /var/run/%{name}-modules |
         /sbin/weak-modules --remove-modules
 fi
 rm /var/run/%{name}-modules
