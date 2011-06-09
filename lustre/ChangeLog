@@ -14,6 +14,8 @@ TBD  Oracle, Inc.
        * NFS export disabled when stack size < 8192. Since the NFSv4 export of
          Lustre filesystem with 4K stack may cause a stack overflow. For more
          information, please refer to bugzilla 17630.
+       * NFSv4 reexport requires Lustre client on the re-exporting nodes to be
+         mounted with "32bitapi" mount option
 
 Severity   : enhancement
 Description: Update RHEL5.6 kernel to 2.6.18-238.9.1.el5
