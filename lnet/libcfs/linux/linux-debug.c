@@ -278,9 +278,9 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
         /* show_trace_log_lvl() */
 	printk("\nCall Trace:\n");
 	dump_trace(tsk, NULL, NULL,
-#ifdef HAVE_TRACE_ADDRESS_RELIABLE
+#ifdef HAVE_DUMP_TRACE_ADDRESS
                    0,
-#endif /* HAVE_TRACE_ADDRESS_RELIABLE */
+#endif /* HAVE_DUMP_TRACE_ADDRESS */
                    &print_trace_ops, NULL);
 	printk("\n");
 #elif defined(HAVE_SCHED_SHOW_TASK)

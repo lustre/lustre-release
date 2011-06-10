@@ -1329,6 +1329,21 @@ AC_DEFUN([LN_FUNC_DUMP_TRACE],
 		AC_MSG_RESULT(no)
 	],[
 	])
+	AC_MSG_CHECKING([dump_trace want address])
+	LB_LINUX_TRY_COMPILE([
+		struct task_struct;
+		struct pt_regs;
+		#include <asm/stacktrace.h>
+	],[
+		dump_trace(NULL, NULL, NULL, 0, NULL, NULL);
+	],[
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(HAVE_DUMP_TRACE_ADDRESS, 1,
+			  [dump_trace want address argument])
+	],[
+		AC_MSG_RESULT(no)
+	],[
+	])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 ])

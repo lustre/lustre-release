@@ -373,7 +373,9 @@ _ACEOF
 # LB_LANG_PROGRAM(C)([PROLOGUE], [BODY])
 # --------------------------------------
 m4_define([LB_LANG_PROGRAM],
-[$1
+[
+#include <linux/kernel.h>
+$1
 int
 main (void)
 {
