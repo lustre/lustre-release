@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <legalnotice xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
-    <title>Important Notice</title>
 
-
-    <para>Copyright © 2011, Oracle and/or its affiliates. All rights reserved.</para>
+    <title>Important Notice from Oracle</title>
 
       <para>This software and related documentation are provided under a license agreement containing restrictions on use and disclosure and are protected by intellectual property laws. Except as expressly permitted in your license agreement or allowed by law, you may not use, copy, reproduce, translate, broadcast, modify, license, transmit, distribute, exhibit, perform, publish, or display any part, in any form, or by any means. Reverse engineering, disassembly, or decompilation of this software, unless required by law for interoperability, is prohibited.</para>
       <para>The information contained herein is subject to change without notice and is not warranted to be error-free. If you find any errors, please report them to us in writing.</para>

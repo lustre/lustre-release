@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<legalnotice xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+    <title>Important Notice from Whamcloud </title>
+
+    <para>THE ORIGINAL LUSTRE 2.x FILESYSTEM: ORACLE OPERATIONS MANUAL HAS BEEN MODIFIED: THIS OPERATIONS MANUAL IS A MODIFIED VERSION OF, AND IS DERIVED FROM, THE LUSTRE 2.0 FILESYSTEM: OPERATIONS MANUAL PUBLISHED BY ORACLE AND AVAILABLE AT [WWW.LUSTRE.ORG].  THE MODIFICATIONS (collectively, the “Modifications”) HAVE BEEN MADE BY WHAMCLOUD, INC. (“Whamcloud”).  ORACLE AND ITS AFFILIATES HAVE NOT REVIEWED, APPROVED, SPONSORED, OR ENDORSED THIS MODIFIED OPERATIONS MANUAL, OR ENDORSED WHAMCLOUD, AND ORACLE AND ITS AFFILIATES ARE NOT RESPONSIBLE OR LIABLE FOR ANY MODIFICATIONS THAT WHAMCLOUD HAS MADE TO THE ORIGINAL OPERATIONS MANUAL.</para>
+
+    <para>NOTHING IN THIS MODIFIED OPERATIONS MANUAL IS INTENDED TO AFFECT THE NOTICE PROVIDED BY ORACLE BELOW IN RESPECT OF THE ORIGINAL OPERATIONS MANUAL AND SUCH ORACLE NOTICE CONTINUES TO APPLY TO THIS MODIFIED OPERATIONS MANUAL EXCEPT FOR THE MODIFICATIONS; THIS WHAMCLOUD NOTICE SHALL APPLY TO THE MODIFICATIONS.  AS BETWEEN YOU AND ORACLE: (I) NOTHING IN THIS WHAMCLOUD NOTICE IS INTENDED TO AFFECT THE TERMS OF THE ORACLE NOTICE BELOW; AND (II) IN THE EVENT OF ANY CONFLICT BETWEEN THE TERMS OF THIS WHAMCLOUD NOTICE AND THE TERMS OF THE ORACLE NOTICE, THE ORACLE NOTICE SHALL PREVAIL.
+    </para>
+
+    <para>Your use of any Whamcloud software shall be governed by separate license terms containing restrictions on use and disclosure and are protected by intellectual property laws.</para>
+
+    <para>The information contained herein is subject to change without notice and is not warranted to be error-free.  If you find any errors, please report them to us in writing.</para>
+
+    <para>Whamcloud is a trademark of Whamcloud.  Other names may be trademarks of their respective owners.</para>
+
+    <para>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit Creative Commons Attribution-Share Alike 3.0 United States [http://creativecommons.org/licenses/by-sa/3.0/us] or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>
+
+</legalnotice>
