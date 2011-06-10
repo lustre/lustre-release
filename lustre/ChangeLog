@@ -1,5 +1,5 @@
 2011-06-30 Whamcloud, Inc.
-	* version 1.8.6-wc
+	* version 1.8.6-wc1
 	* Support for kernels:
 	  2.6.18-238.12.1.el5 (RHEL 5)
 	  2.6.32-131.2.1.el6 (RHEL 6) - patchless client only
