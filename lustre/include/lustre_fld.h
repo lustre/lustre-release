@@ -193,6 +193,8 @@ int fld_client_add_target(struct lu_client_fld *fld,
 int fld_client_del_target(struct lu_client_fld *fld,
                           __u64 idx);
 
+void fld_client_proc_fini(struct lu_client_fld *fld);
+
 /** @} fld */
 
 #endif

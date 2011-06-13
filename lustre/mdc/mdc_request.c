@@ -2082,6 +2082,8 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         libcfs_kkuc_group_rem(0, KUC_GRP_HSM);
 
                 obd_cleanup_client_import(obd);
+                ptlrpc_lprocfs_unregister_obd(obd);
+                lprocfs_obd_cleanup(obd);
 
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
@@ -2099,8 +2101,6 @@ static int mdc_cleanup(struct obd_device *obd)
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
         OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
 
-        ptlrpc_lprocfs_unregister_obd(obd);
-        lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
         return client_obd_cleanup(obd);

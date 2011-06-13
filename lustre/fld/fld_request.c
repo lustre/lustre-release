@@ -280,8 +280,6 @@ int fld_client_del_target(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_del_target);
 
-static void fld_client_proc_fini(struct lu_client_fld *fld);
-
 #ifdef LPROCFS
 static int fld_client_proc_init(struct lu_client_fld *fld)
 {
@@ -314,7 +312,7 @@ out_cleanup:
         return rc;
 }
 
-static void fld_client_proc_fini(struct lu_client_fld *fld)
+void fld_client_proc_fini(struct lu_client_fld *fld)
 {
         ENTRY;
         if (fld->lcf_proc_dir) {
@@ -330,11 +328,13 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         return 0;
 }
 
-static void fld_client_proc_fini(struct lu_client_fld *fld)
+void fld_client_proc_fini(struct lu_client_fld *fld)
 {
         return;
 }
 #endif
+
+EXPORT_SYMBOL(fld_client_proc_fini);
 
 static inline int hash_is_sane(int hash)
 {
@@ -397,8 +397,6 @@ void fld_client_fini(struct lu_client_fld *fld)
 {
         struct lu_fld_target *target, *tmp;
         ENTRY;
-
-        fld_client_proc_fini(fld);
 
         cfs_spin_lock(&fld->lcf_lock);
         cfs_list_for_each_entry_safe(target, tmp,

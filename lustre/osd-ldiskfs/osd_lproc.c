@@ -121,7 +121,12 @@ int lprocfs_osd_rd_blksize(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct osd_device *osd = data;
-        int rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        int rc;
+
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
         if (!rc) {
                 *eof = 1;
                 rc = snprintf(page, count, "%ld\n", osd->od_kstatfs.f_bsize);
@@ -133,7 +138,12 @@ int lprocfs_osd_rd_kbytestotal(char *page, char **start, off_t off, int count,
                                int *eof, void *data)
 {
         struct osd_device *osd = data;
-        int rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        int rc;
+
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
         if (!rc) {
                 __u32 blk_size = osd->od_kstatfs.f_bsize >> 10;
                 __u64 result = osd->od_kstatfs.f_blocks;
@@ -151,7 +161,12 @@ int lprocfs_osd_rd_kbytesfree(char *page, char **start, off_t off, int count,
                               int *eof, void *data)
 {
         struct osd_device *osd = data;
-        int rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        int rc;
+
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
         if (!rc) {
                 __u32 blk_size = osd->od_kstatfs.f_bsize >> 10;
                 __u64 result = osd->od_kstatfs.f_bfree;
@@ -169,7 +184,12 @@ int lprocfs_osd_rd_kbytesavail(char *page, char **start, off_t off, int count,
                                int *eof, void *data)
 {
         struct osd_device *osd = data;
-        int rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        int rc;
+
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
         if (!rc) {
                 __u32 blk_size = osd->od_kstatfs.f_bsize >> 10;
                 __u64 result = osd->od_kstatfs.f_bavail;
@@ -187,7 +207,12 @@ int lprocfs_osd_rd_filestotal(char *page, char **start, off_t off, int count,
                               int *eof, void *data)
 {
         struct osd_device *osd = data;
-        int rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        int rc;
+
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
         if (!rc) {
                 *eof = 1;
                 rc = snprintf(page, count, LPU64"\n", osd->od_kstatfs.f_files);
@@ -200,7 +225,12 @@ int lprocfs_osd_rd_filesfree(char *page, char **start, off_t off, int count,
                              int *eof, void *data)
 {
         struct osd_device *osd = data;
-        int rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        int rc;
+
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
         if (!rc) {
                 *eof = 1;
                 rc = snprintf(page, count, LPU64"\n", osd->od_kstatfs.f_ffree);
@@ -223,6 +253,9 @@ static int lprocfs_osd_rd_mntdev(char *page, char **start, off_t off, int count,
         struct osd_device *osd = data;
 
         LASSERT(osd != NULL);
+        if (unlikely(osd->od_mount == NULL))
+                return -EINPROGRESS;
+
         LASSERT(osd->od_mount->lmi_mnt->mnt_devname);
         *eof = 1;
 
