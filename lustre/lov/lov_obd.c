@@ -884,6 +884,7 @@ static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 break;
         }
         case OBD_CLEANUP_EXPORTS:
+                lprocfs_obd_cleanup(obd);
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
@@ -897,6 +898,7 @@ static int lov_cleanup(struct obd_device *obd)
         struct lov_obd *lov = &obd->u.lov;
         cfs_list_t *pos, *tmp;
         struct pool_desc *pool;
+        ENTRY;
 
         cfs_list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = cfs_list_entry(pos, struct pool_desc, pool_list);
@@ -932,10 +934,6 @@ static int lov_cleanup(struct obd_device *obd)
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
         }
-
-        /* clear pools parent proc entry only after all pools is killed */
-        lprocfs_obd_cleanup(obd);
-
         OBD_FREE_PTR(lov->lov_qos.lq_statfs_data);
         RETURN(0);
 }

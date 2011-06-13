@@ -615,6 +615,12 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 class_disconnect_exports(obd);
         }
 
+        /* Precleanup, we must make sure all exports get destroyed. */
+        err = obd_precleanup(obd, OBD_CLEANUP_EXPORTS);
+        if (err)
+                CERROR("Precleanup %s returned %d\n",
+                       obd->obd_name, err);
+
         /* destroy an uuid-export hash body */
         if (obd->obd_uuid_hash) {
                 cfs_hash_putref(obd->obd_uuid_hash);
@@ -633,13 +639,9 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 obd->obd_nid_stats_hash = NULL;
         }
 
-        /* Precleanup, we must make sure all exports get destroyed. */
-        err = obd_precleanup(obd, OBD_CLEANUP_EXPORTS);
-        if (err)
-                CERROR("Precleanup %s returned %d\n",
-                       obd->obd_name, err);
         class_decref(obd, "setup", obd);
         obd->obd_set_up = 0;
+
         RETURN(0);
 }
 

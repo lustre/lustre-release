@@ -837,6 +837,7 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
         }
         cfs_spin_unlock(&cm->cmm_tgt_guard);
 
+        fld_client_proc_fini(cm->cmm_fld);
         fld_client_fini(cm->cmm_fld);
         ls = cmm2lu_dev(cm)->ld_site;
         lu_site2md(ls)->ms_client_fld = NULL;

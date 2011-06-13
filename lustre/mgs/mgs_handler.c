@@ -281,13 +281,19 @@ err_put:
 
 static int mgs_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
+        struct mgs_obd *mgs = &obd->u.mgs;
         int rc = 0;
         ENTRY;
 
         switch (stage) {
         case OBD_CLEANUP_EARLY:
+                break;
         case OBD_CLEANUP_EXPORTS:
+                ping_evictor_stop();
+                ptlrpc_unregister_service(mgs->mgs_service);
+                mgs_cleanup_fsdb_list(obd);
                 rc = obd_llog_finish(obd, 0);
+                lproc_mgs_cleanup(obd);
                 break;
         }
         RETURN(rc);
@@ -304,12 +310,6 @@ static int mgs_cleanup(struct obd_device *obd)
         if (mgs->mgs_sb == NULL)
                 RETURN(0);
 
-        ping_evictor_stop();
-
-        ptlrpc_unregister_service(mgs->mgs_service);
-
-        mgs_cleanup_fsdb_list(obd);
-        lproc_mgs_cleanup(obd);
         mgs_fs_cleanup(obd);
 
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);

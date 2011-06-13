@@ -126,18 +126,20 @@ int mdt_procfs_fini(struct mdt_device *mdt)
         struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
         struct obd_device *obd = ld->ld_obd;
 
+        if (obd->obd_proc_exports_entry) {
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
+        }
+        lprocfs_free_per_client_stats(obd);
+        lprocfs_obd_cleanup(obd);
+        ptlrpc_lprocfs_unregister_obd(obd);
         if (mdt->mdt_proc_entry) {
                 lu_time_fini(&ld->ld_site->ls_time_stats);
                 lu_time_fini(&mdt->mdt_stats);
                 mdt->mdt_proc_entry = NULL;
         }
-        if (obd->obd_proc_exports_entry) {
-                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
-                obd->obd_proc_exports_entry = NULL;
-        }
-        ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_free_md_stats(obd);
-        lprocfs_obd_cleanup(obd);
+        lprocfs_free_obd_stats(obd);
 
         RETURN(0);
 }
@@ -536,7 +538,6 @@ static int lprocfs_rd_root_squash(char *page, char **start, off_t off,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        ENTRY;
 
         return snprintf(page, count, "%u:%u\n", mdt->mdt_squash_uid,
                         mdt->mdt_squash_gid);

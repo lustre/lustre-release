@@ -2613,7 +2613,16 @@ static int filter_precleanup(struct obd_device *obd,
         case OBD_CLEANUP_EXPORTS:
                 /* Stop recovery before namespace cleanup. */
                 target_recovery_fini(obd);
+
+                obd_exports_barrier(obd);
+                obd_zombie_barrier();
+
                 rc = filter_llog_preclean(obd);
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                lprocfs_free_per_client_stats(obd);
+                lprocfs_obd_cleanup(obd);
+                lprocfs_free_obd_stats(obd);
+                lquota_cleanup(filter_quota_interface_ref, obd);
                 break;
         }
         RETURN(rc);
@@ -2627,15 +2636,6 @@ static int filter_cleanup(struct obd_device *obd)
         if (obd->obd_fail)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
                               "will be preserved.\n", obd->obd_name);
-
-        obd_exports_barrier(obd);
-        obd_zombie_barrier();
-
-        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
-        lprocfs_free_per_client_stats(obd);
-        lprocfs_free_obd_stats(obd);
-        lprocfs_obd_cleanup(obd);
-        lquota_cleanup(filter_quota_interface_ref, obd);
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
         obd->obd_namespace = NULL;
