@@ -124,6 +124,10 @@ init_test_env() {
 
     export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check fs after each test suite
     export FSCK_MAX_ERR=4   # File system errors left uncorrected
+
+    # This is used by a small number of tests to share state between the client
+    # running the tests, or in some cases between the servers (e.g. lfsck.sh).
+    # It needs to be a non-lustre filesystem that is available on all the nodes.
     export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
     export MDSDB=${MDSDB:-$SHARED_DIRECTORY/mdsdb}
     export OSTDB=${OSTDB:-$SHARED_DIRECTORY/ostdb}
