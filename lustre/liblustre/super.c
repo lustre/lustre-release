@@ -1849,7 +1849,6 @@ llu_fsswop_mount(const char *source,
         struct lustre_md md;
         class_uuid_t uuid;
         struct config_llog_instance cfg = {0, };
-        char ll_instance[sizeof(sbi) * 2 + 3];
         struct lustre_profile *lprof;
         char *zconf_mgsnid, *zconf_profile;
         char *osc = NULL, *mdc = NULL;
@@ -1880,10 +1879,9 @@ llu_fsswop_mount(const char *source,
 
         /* generate a string unique to this super, let's try
          the address of the super itself.*/
-        snprintf(ll_instance, sizeof(ll_instance), "%p", sbi);
+        snprintf(cfg.cfg_instance, sizeof(cfg.cfg_instance), "%p", sbi);
 
         /* retrive & parse config log */
-        cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = sbi->ll_sb_uuid;
         err = liblustre_process_log(&cfg, zconf_mgsnid, zconf_profile, 1);
         if (err < 0) {
@@ -1896,11 +1894,11 @@ llu_fsswop_mount(const char *source,
                 CERROR("No profile found: %s\n", zconf_profile);
                 GOTO(out_free, err = -EINVAL);
         }
-        OBD_ALLOC(osc, strlen(lprof->lp_dt) + strlen(ll_instance) + 2);
-        sprintf(osc, "%s-%s", lprof->lp_dt, ll_instance);
+        OBD_ALLOC(osc, strlen(lprof->lp_dt) + strlen(cfg.cfg_instance) + 2);
+        sprintf(osc, "%s-%s", lprof->lp_dt, cfg.cfg_instance);
 
-        OBD_ALLOC(mdc, strlen(lprof->lp_md) + strlen(ll_instance) + 2);
-        sprintf(mdc, "%s-%s", lprof->lp_md, ll_instance);
+        OBD_ALLOC(mdc, strlen(lprof->lp_md) + strlen(cfg.cfg_instance) + 2);
+        sprintf(mdc, "%s-%s", lprof->lp_md, cfg.cfg_instance);
 
         if (!osc) {
                 CERROR("no osc\n");

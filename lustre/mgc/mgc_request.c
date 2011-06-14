@@ -146,9 +146,6 @@ static void config_log_put(struct config_llog_data *cld)
 
                 class_export_put(cld->cld_mgcexp);
                 OBD_FREE(cld->cld_logname, strlen(cld->cld_logname) + 1);
-                if (cld->cld_cfg.cfg_instance != NULL)
-                        OBD_FREE(cld->cld_cfg.cfg_instance,
-                                 strlen(cld->cld_cfg.cfg_instance) + 1);
                 OBD_FREE(cld, sizeof(*cld));
         } else {
                 cfs_spin_unlock(&config_list_lock);
@@ -164,13 +161,11 @@ struct config_llog_data *config_log_find(char *logname,
 {
         struct config_llog_data *cld;
         char *logid = logname;
-        int match_instance = 0;
         ENTRY;
 
-        if (cfg && cfg->cfg_instance) {
-                match_instance++;
+        if (cfg)
                 logid = cfg->cfg_instance;
-        }
+
         if (!logid) {
                 CERROR("No log specified\n");
                 RETURN(ERR_PTR(-EINVAL));
@@ -178,11 +173,10 @@ struct config_llog_data *config_log_find(char *logname,
 
         cfs_spin_lock(&config_list_lock);
         cfs_list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
-                if (match_instance && cld->cld_cfg.cfg_instance &&
-                    strcmp(logid, cld->cld_cfg.cfg_instance) == 0)
-                        goto out_found;
-                if (!match_instance &&
-                    strcmp(logid, cld->cld_logname) == 0)
+                char *name = cld->cld_logname;
+                if (cfg)
+                        name = cld->cld_cfg.cfg_instance;
+                if (strcmp(logid, name) == 0)
                         goto out_found;
         }
         cfs_spin_unlock(&config_list_lock);
@@ -230,12 +224,6 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(obd->obd_self_export);
-
-        if (cfg && cfg->cfg_instance != NULL) {
-                OBD_ALLOC(cld->cld_cfg.cfg_instance,
-                          strlen(cfg->cfg_instance) + 1);
-                strcpy(cld->cld_cfg.cfg_instance, cfg->cfg_instance);
-        }
 
         if (is_sptlrpc) {
                 sptlrpc_conf_log_start(logname);
@@ -1257,7 +1245,7 @@ int mgc_process_log(struct obd_device *mgc,
         struct llog_ctxt *ctxt, *lctxt;
         struct lustre_handle lockh;
         struct client_obd *cli = &mgc->u.cli;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved_ctxt;
         struct lustre_sb_info *lsi = NULL;
         int rc = 0, rcl, flags = 0, must_pop = 0;
         ENTRY;
@@ -1290,6 +1278,12 @@ int mgc_process_log(struct obd_device *mgc,
                 RETURN(-EINVAL);
         }
 
+        OBD_ALLOC_PTR(saved_ctxt);
+        if (saved_ctxt == NULL) {
+                cfs_mutex_unlock(&cld->cld_lock);
+                RETURN(-ENOMEM);
+        }
+
         /* Get the cfg lock on the llog */
         rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL,
                           LCK_CR, &flags, NULL, NULL, NULL,
@@ -1311,7 +1305,7 @@ int mgc_process_log(struct obd_device *mgc,
         if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) &&
             (lsi->lsi_srv_mnt == cli->cl_mgc_vfsmnt) &&
             !IS_MGS(lsi->lsi_ldd)) {
-                push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
+                push_ctxt(saved_ctxt, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
                 if (rcl == 0)
                         /* Only try to copy log if we have the lock. */
@@ -1347,8 +1341,9 @@ out_pop:
         if (ctxt != lctxt)
                 llog_ctxt_put(lctxt);
         if (must_pop)
-                pop_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
+                pop_ctxt(saved_ctxt, &mgc->obd_lvfs_ctxt, NULL);
 
+        OBD_FREE_PTR(saved_ctxt);
         /*
          * update settings on existing OBDs. doing it inside
          * of llog_process_lock so no device is attaching/detaching
@@ -1385,11 +1380,12 @@ out_pop:
 static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
-        int cmd;
+        struct config_llog_instance *cfg = NULL;
+        char *logname;
         int rc = 0;
         ENTRY;
 
-        switch(cmd = lcfg->lcfg_command) {
+        switch(lcfg->lcfg_command) {
         case LCFG_LOV_ADD_OBD: {
                 /* Overloading this cfg command: register a new target */
                 struct mgs_target_info *mti;
@@ -1415,9 +1411,9 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
         }
         case LCFG_LOG_START: {
                 struct config_llog_data *cld;
-                struct config_llog_instance *cfg;
                 struct super_block *sb;
-                char *logname = lustre_cfg_string(lcfg, 1);
+
+                logname = lustre_cfg_string(lcfg, 1);
                 cfg = (struct config_llog_instance *)lustre_cfg_buf(lcfg, 2);
                 sb = *(struct super_block **)lustre_cfg_buf(lcfg, 3);
 
@@ -1445,8 +1441,8 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 break;
         }
         case LCFG_LOG_END: {
-                struct config_llog_instance *cfg = NULL;
-                char *logname = lustre_cfg_string(lcfg, 1);
+                logname = lustre_cfg_string(lcfg, 1);
+
                 if (lcfg->lcfg_bufcount >= 2)
                         cfg = (struct config_llog_instance *)lustre_cfg_buf(
                                 lcfg, 2);

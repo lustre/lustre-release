@@ -394,7 +394,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg)
 {
         struct lustre_cfg *lcfg;
-        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg_bufs *bufs;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
         int rc;
@@ -403,14 +403,20 @@ int lustre_process_log(struct super_block *sb, char *logname,
         LASSERT(mgc);
         LASSERT(cfg);
 
+        OBD_ALLOC_PTR(bufs);
+        if (bufs == NULL)
+                RETURN(-ENOMEM);
+
         /* mgc_process_config */
-        lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
-        lustre_cfg_bufs_set_string(&bufs, 1, logname);
-        lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
-        lustre_cfg_bufs_set(&bufs, 3, &sb, sizeof(sb));
-        lcfg = lustre_cfg_new(LCFG_LOG_START, &bufs);
+        lustre_cfg_bufs_reset(bufs, mgc->obd_name);
+        lustre_cfg_bufs_set_string(bufs, 1, logname);
+        lustre_cfg_bufs_set(bufs, 2, cfg, sizeof(*cfg));
+        lustre_cfg_bufs_set(bufs, 3, &sb, sizeof(sb));
+        lcfg = lustre_cfg_new(LCFG_LOG_START, bufs);
         rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
         lustre_cfg_free(lcfg);
+
+        OBD_FREE_PTR(bufs);
 
         if (rc == -EINVAL)
                 LCONSOLE_ERROR_MSG(0x15b, "%s: The configuration from log '%s'"

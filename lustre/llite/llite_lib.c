@@ -172,7 +172,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_capa *oc = NULL;
-        struct obd_statfs osfs;
+        struct obd_statfs *osfs = NULL;
         struct ptlrpc_request *request = NULL;
         struct obd_connect_data *data = NULL;
         struct obd_uuid *uuid;
@@ -191,6 +191,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         OBD_ALLOC_PTR(data);
         if (data == NULL)
                 RETURN(-ENOMEM);
+
+        OBD_ALLOC_PTR(osfs);
+        if (osfs == NULL) {
+                OBD_FREE_PTR(data);
+                RETURN(-ENOMEM);
+        }
 
         if (proc_lustre_fs_root) {
                 err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
@@ -268,7 +274,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out_md, err);
         }
 
-        err = obd_statfs(obd, &osfs,
+        err = obd_statfs(obd, osfs,
                          cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
         if (err)
                 GOTO(out_md_fid, err);
@@ -281,9 +287,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out_md, err);
         }
 
-        LASSERT(osfs.os_bsize);
-        sb->s_blocksize = osfs.os_bsize;
-        sb->s_blocksize_bits = log2(osfs.os_bsize);
+        LASSERT(osfs->os_bsize);
+        sb->s_blocksize = osfs->os_bsize;
+        sb->s_blocksize_bits = log2(osfs->os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
 
         /* for bug 11559. in $LINUX/fs/read_write.c, function do_sendfile():
@@ -299,7 +305,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 #else
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
 #endif
-        sbi->ll_namelen = osfs.os_namelen;
+        sbi->ll_namelen = osfs->os_namelen;
         sbi->ll_max_rw_chunk = LL_DEFAULT_MAX_RW_CHUNK;
 
         if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
@@ -516,9 +522,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         cl_sb_init(sb);
 
         sb->s_root = d_alloc_root(root);
-        if (data != NULL)
-                OBD_FREE(data, sizeof(*data));
-
         sb->s_root->d_op = &ll_d_root_ops;
 
         sbi->ll_sdev_orig = sb->s_dev;
@@ -532,6 +535,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (uuid != NULL)
                 sb->s_dev = get_uuid2int(uuid->uuid, strlen(uuid->uuid));
         sbi->ll_mnt = mnt;
+
+        if (data != NULL)
+                OBD_FREE_PTR(data);
+        if (osfs != NULL)
+                OBD_FREE_PTR(osfs);
 
         RETURN(err);
 out_root:
@@ -550,6 +558,8 @@ out_md:
 out:
         if (data != NULL)
                 OBD_FREE_PTR(data);
+        if (osfs != NULL)
+                OBD_FREE_PTR(osfs);
         lprocfs_unregister_mountpoint(sbi);
         return err;
 }
@@ -865,12 +875,15 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         struct ll_sb_info *sbi;
         char  *dt = NULL, *md = NULL;
         char  *profilenm = get_profile_name(sb);
-        struct config_llog_instance cfg = {0, };
-        char   ll_instance[sizeof(sb) * 2 + 1];
+        struct config_llog_instance *cfg;
         int    err;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
+
+        OBD_ALLOC_PTR(cfg);
+        if (cfg == NULL)
+                RETURN(-ENOMEM);
 
         cfs_module_get();
 
@@ -878,6 +891,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         lsi->lsi_llsbi = sbi = ll_init_sbi();
         if (!sbi) {
                 cfs_module_put(THIS_MODULE);
+                OBD_FREE_PTR(cfg);
                 RETURN(-ENOMEM);
         }
 
@@ -901,12 +915,11 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         /* Generate a string unique to this super, in case some joker tries
            to mount the same fs at two mount points.
            Use the address of the super itself.*/
-        sprintf(ll_instance, "%p", sb);
-        cfg.cfg_instance = ll_instance;
-        cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
+        snprintf(cfg->cfg_instance, sizeof(cfg->cfg_instance), "%p", sb);
+        cfg->cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
 
         /* set up client obds */
-        err = lustre_process_log(sb, profilenm, &cfg);
+        err = lustre_process_log(sb, profilenm, cfg);
         if (err < 0) {
                 CERROR("Unable to process log: %d\n", err);
                 GOTO(out_free, err);
@@ -924,16 +937,16 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
                lprof->lp_md, lprof->lp_dt);
 
         OBD_ALLOC(dt, strlen(lprof->lp_dt) +
-                  strlen(ll_instance) + 2);
+                  strlen(cfg->cfg_instance) + 2);
         if (!dt)
                 GOTO(out_free, err = -ENOMEM);
-        sprintf(dt, "%s-%s", lprof->lp_dt, ll_instance);
+        sprintf(dt, "%s-%s", lprof->lp_dt, cfg->cfg_instance);
 
         OBD_ALLOC(md, strlen(lprof->lp_md) +
-                  strlen(ll_instance) + 2);
+                  strlen(cfg->cfg_instance) + 2);
         if (!md)
                 GOTO(out_free, err = -ENOMEM);
-        sprintf(md, "%s-%s", lprof->lp_md, ll_instance);
+        sprintf(md, "%s-%s", lprof->lp_md, cfg->cfg_instance);
 
         /* connections, registrations, sb setup */
         err = client_common_fill_super(sb, md, dt, mnt);
@@ -948,6 +961,7 @@ out_free:
         else
                 LCONSOLE_WARN("Client %s has started\n", profilenm);
 
+        OBD_FREE_PTR(cfg);
         RETURN(err);
 } /* ll_fill_super */
 
@@ -957,7 +971,6 @@ void lu_context_keys_dump(void);
 void ll_put_super(struct super_block *sb)
 {
         struct config_llog_instance cfg;
-        char   ll_instance[sizeof(sb) * 2 + 1];
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -969,8 +982,7 @@ void ll_put_super(struct super_block *sb)
 
         ll_print_capa_stat(sbi);
 
-        sprintf(ll_instance, "%p", sb);
-        cfg.cfg_instance = ll_instance;
+        snprintf(cfg.cfg_instance, sizeof(cfg.cfg_instance), "%p", sb);
         lustre_end_log(sb, NULL, &cfg);
 
         if (sbi->ll_md_exp) {
@@ -1014,7 +1026,7 @@ void ll_put_super(struct super_block *sb)
 
         cl_env_cache_purge(~0);
 
-        LCONSOLE_WARN("client %s umount complete\n", ll_instance);
+        LCONSOLE_WARN("client %s umount complete\n", cfg.cfg_instance);
 
         cfs_module_put(THIS_MODULE);
 

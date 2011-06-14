@@ -144,8 +144,8 @@ static inline void lprocfs_echo_init_vars(struct lprocfs_static_vars *lvars)
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
-        char *              cfg_instance;
         char *              cfg_obdname;
+        char                cfg_instance[sizeof(void*) * 2 + 1];
         struct super_block *cfg_sb;
         struct obd_uuid     cfg_uuid;
         int                 cfg_last_idx; /* for partial llog processing */
