@@ -479,12 +479,6 @@ static int import_select_connection(struct obd_import *imp)
                        imp->imp_obd->obd_name,
                        libcfs_nid2str(conn->oic_conn->c_peer.nid),
                        conn->oic_last_attempt);
-                /* Don't thrash connections */
-                if (cfs_time_before_64(cfs_time_current_64(),
-                                     conn->oic_last_attempt +
-                                     cfs_time_seconds(CONNECTION_SWITCH_MIN))) {
-                        continue;
-                }
 
                 /* If we have not tried this connection since
                    the last successful attempt, go with this one */
@@ -735,42 +729,12 @@ EXPORT_SYMBOL(ptlrpc_connect_import);
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {
 #ifdef __KERNEL__
-        struct obd_import_conn *imp_conn;
-#endif
-        int wake_pinger = 0;
-
-        ENTRY;
-
-        cfs_spin_lock(&imp->imp_lock);
-        if (cfs_list_empty(&imp->imp_conn_list))
-                GOTO(unlock, 0);
-
-#ifdef __KERNEL__
-        imp_conn = cfs_list_entry(imp->imp_conn_list.prev,
-                                  struct obd_import_conn,
-                                  oic_item);
-
-        /* XXX: When the failover node is the primary node, it is possible
-         * to have two identical connections in imp_conn_list. We must
-         * compare not conn's pointers but NIDs, otherwise we can defeat
-         * connection throttling. (See bug 14774.) */
-        if (imp->imp_conn_current->oic_conn->c_peer.nid !=
-                                imp_conn->oic_conn->c_peer.nid) {
-                ptlrpc_ping_import_soon(imp);
-                wake_pinger = 1;
-        }
+        /* the pinger takes care of issuing the next reconnect request */
+        return;
 #else
         /* liblustre has no pinger thread, so we wakeup pinger anyway */
-        wake_pinger = 1;
+        ptlrpc_pinger_wake_up();
 #endif
-
- unlock:
-        cfs_spin_unlock(&imp->imp_lock);
-
-        if (wake_pinger)
-                ptlrpc_pinger_wake_up();
-
-        EXIT;
 }
 
 static int ptlrpc_busy_reconnect(int rc)

@@ -1493,25 +1493,29 @@ test_35b() { # bug 18674
 		at_max_set 0 mds client
 	fi
 
-	mkdir -p $MOUNT/testdir
-	touch $MOUNT/testdir/test
+	mkdir -p $MOUNT/$tdir
 
 	log "Injecting EBUSY on MDS"
 	# Setting OBD_FAIL_MDS_RESEND=0x136
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x80000136" || return 2
 
-	log "Stat on a test file"
-	stat $MOUNT/testdir/test
+	$LCTL set_param mdc.${FSNAME}*.stats=clear
+  
+	log "Creating a test file and stat it"
+	touch $MOUNT/$tdir/$tfile
+	stat $MOUNT/$tdir/$tfile
 
 	log "Stop injecting EBUSY on MDS"
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0" || return 3
-	rm -f $MOUNT/testdir/test
+	rm -f $MOUNT/$tdir/$tfile
 
 	log "done"
 	# restore adaptive timeout
 	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds client
 
 	$LCTL dk $TMP/lustre-log-$TESTNAME.log
+
+	CONNCNT=`$LCTL get_param mdc.${FSNAME}*.stats | awk '/mds_connect/{print $2}'`
 
 	# retrieve from the log if the client has ever tried to
 	# contact the fake server after the loss of connection
@@ -1532,7 +1536,14 @@ test_35b() { # bug 18674
 		log "ERROR: The client tried to reconnect to the failover server while the primary was busy" && \
 		return 5
 
-        cleanup
+	# LU-290
+	# When OBD_FAIL_MDS_RESEND is hit, we sleep for 2 * obd_timeout
+	# Reconnects are supposed to be rate limited to one every 5s
+	[ $CONNCNT -gt $((2 * $TIMEOUT / 5 + 1)) ] && \
+		log "ERROR: Too many reconnects $CONNCNT" && \
+		return 6
+
+	cleanup
 	# remove nid settings
 	writeconf
 }
