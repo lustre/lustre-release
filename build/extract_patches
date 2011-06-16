@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 # extract all of the changesets since the last tagged version and put them
 # into debian/patche{s,d} as if this was a patched tree on that tag
@@ -16,8 +17,8 @@ if [ $ffw -gt 0 ]; then
 	tag=$ver
 	if [[ $ver =~ ^v([0-9]+_)+([0-9]+|RC[0-9]+)$ ]]; then
 		ver=$(echo $ver |
-		  sed -e 's/^v\(.*\)/\1/'
-		      -e 's/_RC[0-9].*$//'
+		  sed -e 's/^v\(.*\)/\1/' \
+		      -e 's/_RC[0-9].*$//' \
 		      -e 's/_/./g')
 	fi
 	pdir="$TARGET/debian/patches"
@@ -47,7 +48,7 @@ w
 q
 EOF
 			desc=$(cat $file | sed -e '1,/^$/d' \
-						 -e '/^---$/,$d')
+					       -e '/^---$/,$d')
 			dpatch_file=${file/.patch/.dpatch}
 			sed -e '1,/^---$/d' $file | \
 			  dpatch patch-template -p "${file%.patch}" \
