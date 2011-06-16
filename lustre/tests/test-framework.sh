@@ -291,6 +291,18 @@ load_module() {
     fi
 }
 
+load_module_llite_lloop() {
+    local n1=$(uname -r | cut -d. -f1)
+    local n2=$(uname -r | cut -d. -f2)
+    local n3=$(uname -r | cut -d- -f1 | cut -d. -f3)
+
+    # load the llite_lloop module for < 2.6.32 kernels
+    if [[ $n1 -lt 2 ]] || [[ $n1 -eq 2 && $n2 -lt 6 ]] || \
+        [[ $n1 -eq 2 && $n2 -eq 6 && $n3 -lt 32 ]]; then
+        load_module llite/llite_lloop
+    fi
+}
+
 load_modules_local() {
     if [ -n "$MODPROBE" ]; then
         # use modprobe
@@ -345,7 +357,7 @@ load_modules_local() {
     fi
 
     load_module llite/lustre
-    load_module llite/llite_lloop
+    load_module_llite_lloop
     rm -f $TMP/ogdb-$HOSTNAME
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
