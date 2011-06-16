@@ -71,7 +71,7 @@ endif
 DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
 	$(LIBLUSTRE_SUBDIRS) $(QUOTA_SUBDIRS)
 
-EXTRA_DIST = BUGS FDL kernel_patches
+EXTRA_DIST = BUGS FDL kernel_patches BUILDING
 
 lvfs-sources:
 	$(MAKE) sources -C lvfs
