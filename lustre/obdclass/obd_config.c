@@ -545,10 +545,6 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                obd->obd_name, obd->obd_uuid.uuid);
 
         class_decref(obd, "attach", obd);
-
-        /* not strictly necessary, but cleans up eagerly */
-        obd_zombie_impexp_cull();
-
         RETURN(0);
 }
 
