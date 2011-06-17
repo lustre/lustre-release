@@ -632,15 +632,28 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                          * metadata beyond the inode.  It could go down as
                          * low as 1024 bytes, but this is conservative.
                          * Account for external EA blocks for wide striping. */
-                        if (IS_MDT(&mop->mo_ldd))
-                                bytes_per_inode = 4096;
+                        if (IS_MDT(&mop->mo_ldd)) {
+                                bytes_per_inode = inode_size + 1536;
+
+                                if (mop->mo_stripe_count > 72) {
+                                        int extra = mop->mo_stripe_count * 24;
+                                        extra = ((extra - 1) | 4095) + 1;
+                                        bytes_per_inode += extra;
+                                }
+                        }
 
                         /* Allocate fewer inodes on large OST devices.  Most
                          * filesystems can be much more aggressive than even
                          * this, but it is impossible to know in advance. */
                         if (IS_OST(&mop->mo_ldd)) {
+                                /* OST > 16TB assume average file size 1MB */
+                                if (device_sz >= (16ULL << 30))
+                                        bytes_per_inode = 1024 * 1024;
+                                /* OST > 4TB assume average file size 512kB */
+                                else if (device_sz >= (4ULL << 30))
+                                        bytes_per_inode = 512 * 1024;
                                 /* OST > 1TB assume average file size 256kB */
-                                if (device_sz >= (1ULL << 30))
+                                else if (device_sz >= (1ULL << 30))
                                         bytes_per_inode = 256 * 1024;
                                 /* OST > 100GB assume average file size 64kB,
                                  * plus a bit so that inodes will fit into a
@@ -1625,7 +1638,7 @@ int main(int argc, char *const argv[])
         }
 
         if (mountopts) {
-        if (mountopts) {
+                trim_mountfsoptions(mountopts);
                 trim_mountfsoptions(mountopts);
                 (void)check_mountfsoptions(mountopts, default_mountopts, 1);
                 if (check_mountfsoptions(mountopts, always_mountopts, 0)) {
