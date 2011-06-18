@@ -695,5 +695,10 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define queue_max_hw_segments(rq)         queue_max_segments(rq)
 #endif
 
+/* Linux 2.6.34+ no longer define NO_QUOTA */
+#ifndef NO_QUOTA
+#define NO_QUOTA 1
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

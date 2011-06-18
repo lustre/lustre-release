@@ -52,6 +52,11 @@
 # include <liblustre.h>
 #endif
 
+/* Linux 2.6.34+ no longer define QUOTA_OK */
+#ifndef QUOTA_OK
+#define QUOTA_OK 0
+#endif
+
 #include <obd_class.h>
 #include <lustre_mds.h>
 #include <lustre_dlm.h>
