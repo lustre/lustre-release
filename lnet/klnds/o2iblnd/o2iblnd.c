@@ -1629,7 +1629,7 @@ kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
                 fps->fps_version ++;
                 cfs_list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
         } else {
-                fps->fps_next_retry = cfs_time_shift(10);
+                fps->fps_next_retry = cfs_time_shift(IBLND_POOL_RETRY);
         }
         cfs_spin_unlock(&fps->fps_lock);
 
@@ -1824,8 +1824,7 @@ kiblnd_pool_alloc_node(kib_poolset_t *ps)
         if (rc == 0) {
                 cfs_list_add_tail(&pool->po_list, &ps->ps_pool_list);
         } else {
-                /* retry 10 seconds later */
-                ps->ps_next_retry = cfs_time_shift(10);
+                ps->ps_next_retry = cfs_time_shift(IBLND_POOL_RETRY);
                 CERROR("Can't allocate new %s pool because out of memory\n",
                        ps->ps_name);
         }

@@ -227,7 +227,10 @@ typedef struct kib_hca_dev
         cfs_atomic_t         ibh_ref;           /* refcount */
 } kib_hca_dev_t;
 
-#define IBLND_POOL_DEADLINE     300             /* # of seconds to keep pool alive */
+/** # of seconds to keep pool alive */
+#define IBLND_POOL_DEADLINE     300
+/** # of seconds to retry if allocation failed */
+#define IBLND_POOL_RETRY        1
 
 typedef struct
 {
