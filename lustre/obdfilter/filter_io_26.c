@@ -157,7 +157,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 CERROR("***** bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
-                       "report this to <http://bugzilla.lustre.org/> , along "
+                       "report this to <http://bugs.whamcloud.com/>, along "
                        "with any interesting messages leading up to this point "
                        "(like SCSI errors, perhaps).  Because bi_private is "
                        "NULL, I can't wake up the thread that initiated this "

@@ -2678,7 +2678,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 CWARN("!!! This export (nid %s) used object group %d "
                        "earlier; now it's trying to use group %d!  This could "
                        "be a bug in the MDS. Please report to "
-                       "http://bugzilla.lustre.org/\n",
+                       "http://bugs.whamcloud.com/\n",
                        obd_export_nid2str(exp), fed->fed_group,data->ocd_group);
                 RETURN(-EPROTO);
         }

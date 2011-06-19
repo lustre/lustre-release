@@ -1,5 +1,5 @@
 
-AC_INIT([Lustre], [LUSTRE_VERSION], [https://bugzilla.lustre.org/], [lustre])
+AC_INIT([Lustre], [LUSTRE_VERSION], [http://bugs.whamcloud.com/], [lustre])
 sinclude(lustre/autoconf/lustre-version.ac)
 
 # Overridden in LB_PATH_LDISKFS on certain branches

@@ -510,7 +510,7 @@ int init_obdclass(void)
 #ifdef CRAY_XT3
         LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
 #else
-        LCONSOLE_INFO("OBD class driver, http://www.lustre.org/\n");
+        LCONSOLE_INFO("OBD class driver, http://wiki.whamcloud.com/\n");
         LCONSOLE_INFO("        Lustre Version: "LUSTRE_VERSION_STRING"\n");
         LCONSOLE_INFO("        Build Version: "BUILD_VERSION"\n");
 #endif

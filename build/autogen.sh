@@ -35,7 +35,7 @@ error_msg() {
 		 Ubuntu|Debian) howto "apt-get install $cmd" ;;
 	CentOS|RedHat*|Fedora*) howto "yum install $cmd" ;;
 	                 SUSE*) howto "yast -i $cmd" ;;
-	                     *) echo -e "\nInstallation instructions for the package $cmd on $dist_id are not known.\nIf you know how to install the required package, please file a bug at\njira.whamcloud.com and include your distribution and that the output from:\n\"lsb_release -is\" is: \"$dist_id\"" ;;
+	                     *) echo -e "\nInstallation instructions for the package $cmd on $dist_id are not known.\nIf you know how to install the required package, please file a bug at\nhttp://bugs.whamcloud.com/ and include your distribution and the output from:\n\"lsb_release -is\" is: \"$dist_id\"" ;;
 	esac
 
 	exit 1

@@ -304,7 +304,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
                                 CWARN("extent-mapped directory found with "
                                       "ext3-based ldiskfs - contact "
-                                      "http://bugzilla.lustre.org/\n");
+                                      "http://bugs.whamcloud.com/\n");
                                 warned = 1;
                         }
                 }
