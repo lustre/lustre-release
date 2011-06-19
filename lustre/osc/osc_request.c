@@ -1518,7 +1518,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 if (server_cksum == ~0 && rc > 0) {
                         CERROR("Protocol error: server %s set the 'checksum' "
                                "bit, but didn't send a checksum.  Not fatal, "
-                               "but please notify on http://bugzilla.lustre.org/\n",
+                               "but please notify on http://bugs.whamcloud.com/\n",
                                libcfs_nid2str(peer->nid));
                 } else if (server_cksum != client_cksum) {
                         LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "

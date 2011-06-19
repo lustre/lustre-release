@@ -4179,7 +4179,7 @@ static int __init obdfilter_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        printk(KERN_INFO "Lustre: Filtering OBD driver; http://www.lustre.org/\n");
+        printk(KERN_INFO "Lustre: Filtering OBD driver; http://wiki.whamcloud.com/\n");
 
         lprocfs_filter_init_vars(&lvars);
 
