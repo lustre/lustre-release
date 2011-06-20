@@ -106,6 +106,15 @@ disable_mmp() {
     return ${PIPESTATUS[0]}
 }
 
+# Set the MMP block to 'fsck' state
+mark_mmp_block() {
+    local facet=$1
+    local device=$2
+
+    do_facet $facet "$LUSTRE/tests/mmp_mark.sh $device"
+    return ${PIPESTATUS[0]}
+}
+
 # Reset the MMP block (if any) back to the clean state.
 reset_mmp_block() {
     local facet=$1
@@ -541,10 +550,6 @@ run_test 8 "mount during e2fsck"
 
 # Test 9 - mount after aborted e2fsck (should never succeed).
 test_9() {
-    local e2fsck_pid
-    local mdt_mmp_check_interval
-    local ost_mmp_check_interval
-
     start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS || return ${PIPESTATUS[0]}
     if ! start $MMP_OSS $MMP_OSTDEV $OST_MOUNT_OPTS; then
         local rc=${PIPESTATUS[0]}
@@ -553,12 +558,8 @@ test_9() {
     fi
     stop_services primary || return ${PIPESTATUS[0]}
 
-    mdt_mmp_check_interval=$(get_mmp_check_interval $MMP_MDS $MMP_MDSDEV)
-    run_e2fsck $MMP_MDS_FAILOVER $MMP_MDSDEV "-fy" &
-    e2fsck_pid=$!
-    sleep $((2 * $mdt_mmp_check_interval))
-    kill -s ABRT $e2fsck_pid
-
+    mark_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
+    
     log "Mounting $MMP_MDSDEV on $MMP_MDS..."
     if start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS; then
         error_noexit "mount $MMP_MDSDEV on $MMP_MDS should fail"
@@ -566,14 +567,11 @@ test_9() {
         return 1
     fi
 
+    kill -9 $debugfspid
+
     reset_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
 
-    echo
-    ost_mmp_check_interval=$(get_mmp_check_interval $MMP_OSS $MMP_OSTDEV)
-    run_e2fsck $MMP_OSS_FAILOVER $MMP_OSTDEV "-fy" &
-    e2fsck_pid=$!
-    sleep $((2 * $ost_mmp_check_interval))
-    kill -s ABRT $e2fsck_pid
+    mark_mmp_block $MMP_OSS $MMP_OSTDEV || return ${PIPESTATUS[0]}
 
     log "Mounting $MMP_OSTDEV on $MMP_OSS..."
     if start $MMP_OSS $MMP_OSTDEV $OST_MOUNT_OPTS; then
