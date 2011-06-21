@@ -1578,7 +1578,12 @@ static void obd_zombie_import_add(struct obd_import *imp) {
  */
 static void obd_zombie_impexp_notify(void)
 {
-        cfs_waitq_signal(&obd_zombie_waitq);
+        /*
+         * Make sure obd_zomebie_impexp_thread get this notification.
+         * It is possible this signal only get by obd_zombie_barrier, and
+         * barrier gulps this notification and sleeps away and hangs ensues
+         */
+        cfs_waitq_broadcast(&obd_zombie_waitq);
 }
 
 /**
