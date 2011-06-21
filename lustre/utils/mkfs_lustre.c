@@ -1632,6 +1632,7 @@ int main(int argc, char *const argv[])
                 ret = EINVAL;
                 goto out;
         }
+        }
 
 
         if (mountopts) {
