@@ -145,17 +145,6 @@ AC_SUBST(LDISKFS_SERIES)
 
 AC_SUBST(ac_configure_args)
 
-LB_CHECK_SYMBOL_EXPORT([d_rehash_cond],
-		       [fs/dcache.c],
-		       [AC_DEFINE(HAVE_D_REHASH_COND, 1,
-				  [d_rehash_cond is exported by the kernel])],
-				  [])
-
-LB_CHECK_SYMBOL_EXPORT([__d_rehash],
-		       [fs/dcache.c],
-		       [AC_DEFINE(HAVE___D_REHASH, 1,
-				  [__d_rehash is exported by the kernel])],
-				  [])
 
 LB_CONFIG_FILES
 AC_CONFIG_FILES([ldiskfs/autoMakefile ldiskfs/Makefile])

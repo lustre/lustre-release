@@ -33,6 +33,9 @@
  *
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -617,7 +620,12 @@ static int osd_param_is_sane(const struct osd_device *dev,
 /*
  * Concurrency: shouldn't matter.
  */
+#ifdef HAVE_LDISKFS_JOURNAL_CALLBACK_ADD
+static void osd_trans_commit_cb(struct super_block *sb,
+                                struct journal_callback *jcb, int error)
+#else
 static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
+#endif
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
         struct thandle     *th  = &oh->ot_super;
@@ -694,12 +702,12 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                                 /* add commit callback */
                                 lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
                                 lu_context_enter(&th->th_ctx);
-                                osd_journal_callback_set(jh, osd_trans_commit_cb,
-                                                         (struct journal_callback *)&oh->ot_jcb);
-                                        LASSERT(oti->oti_txns == 0);
-                                        LASSERT(oti->oti_r_locks == 0);
-                                        LASSERT(oti->oti_w_locks == 0);
-                                        oti->oti_txns++;
+                                osd_journal_callback_set(jh,osd_trans_commit_cb,
+                                                         &oh->ot_jcb);
+                                LASSERT(oti->oti_txns == 0);
+                                LASSERT(oti->oti_r_locks == 0);
+                                LASSERT(oti->oti_w_locks == 0);
+                                oti->oti_txns++;
                         } else {
                                 OBD_FREE_PTR(oh);
                                 th = (void *)jh;

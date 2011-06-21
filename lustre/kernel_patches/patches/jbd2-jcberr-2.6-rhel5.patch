@@ -1,3 +1,8 @@
+This patch is no longer needed for Lustre, since Lustre 2.1.  It is kept
+in the kernel patch series for compatibility with older Lustre releases
+to simplify the upgrade process so that both the kernel and Lustre do
+not need to be upgraded at the same time.  See Jira issue LU-433.
+
 Index: linux-2.6.18-128.1.6/include/linux/jbd2.h
 ===================================================================
 --- linux-2.6.18-128.1.6.orig/include/linux/jbd2.h	2009-04-15 08:35:28.000000000 +0530

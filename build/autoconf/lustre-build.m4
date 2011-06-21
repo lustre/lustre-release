@@ -320,6 +320,10 @@ AC_SUBST(LDISKFS_SUBDIR)
 AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
 AM_CONDITIONAL(LDISKFS_IN_KERNEL, test x$with_ldiskfs = xinkernel)
 
+if test x$with_ldiskfs != xno ; then
+	LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET
+fi
+
 if test x$enable_ext4 = xyes ; then
 	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
 fi
@@ -383,6 +387,28 @@ case x$libcfs_is_module in
 esac
 AC_SUBST(LIBCFS_SUBDIR)
 AC_SUBST(LIBCFS_INCLUDE_DIR)
+])
+ 
+#
+# Check for jbd2_journal_callback_set(), which is needed for commit
+# callbacks.  When LU-433 lands jbd2_journal_callback_set() will only
+# remain for legacy reasons and AC_MSG_ERROR can be removed.
+#
+# 2.6.18 with ext3 still uses journal_callback_set() for commit callbacks.
+#
+AC_DEFUN([LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET],
+[
+	LB_CHECK_SYMBOL_EXPORT([jbd2_journal_callback_set],
+	[fs/jbd2/journal.c],
+	[AC_DEFINE(HAVE_JBD2_JOURNAL_CALLBACK_SET, 1,
+		   [kernel exports jbd2_journal_callback_set])],
+	[LB_CHECK_SYMBOL_EXPORT([journal_callback_set],
+		[fs/jbd/journal.c],
+		[AC_DEFINE(HAVE_JOURNAL_CALLBACK_SET, 1,
+			   [kernel exports journal_callback_set])],
+		[if test x$with_ldiskfs != xno ; then
+			AC_MSG_ERROR([ldiskfs needs jbd2-jcberr patch])
+		fi])])
 ])
 
 #
