@@ -41,13 +41,6 @@ Details    : The ldlm hash handling in Lustre 2.x is incompatible with the one
 
 Severity   : normal
 Jira       : LU-15
-Description: Reduce cache pressure on OSS
-Details    : Don't keep pages for objects >8MB in cache to alleviate memory
-	     pressure on OSSs. This is done by changing the default value
-	     of readcache_max_filesize to 8MB.
-
-Severity   : normal
-Jira       : LU-15
 Description: slow IO with read-intense application
 Details    : Align the readahead extent by 1M after when it is trimed by
 	     ra_max_pages.
