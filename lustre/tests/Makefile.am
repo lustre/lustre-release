@@ -69,7 +69,7 @@ endif # TESTS
 mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
-multiop_LDADD=$(LIBLUSTREAPI) -lrt
+multiop_LDADD=$(LIBLUSTREAPI) -lrt $(PTHREAD_LIBS)
 copytool_LDADD=$(LIBLUSTREAPI)
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
