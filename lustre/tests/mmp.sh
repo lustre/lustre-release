@@ -567,8 +567,6 @@ test_9() {
         return 1
     fi
 
-    kill -9 $debugfspid
-
     reset_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
 
     mark_mmp_block $MMP_OSS $MMP_OSTDEV || return ${PIPESTATUS[0]}
