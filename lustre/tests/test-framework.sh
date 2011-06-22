@@ -386,7 +386,7 @@ load_modules_local() {
     }
 
     load_module llite/lustre
-    load_module_llite/llite_lloop
+    load_module_llite_lloop
     [ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
     OGDB=${OGDB:-$TMP}
     rm -f $OGDB/ogdb-$HOSTNAME
