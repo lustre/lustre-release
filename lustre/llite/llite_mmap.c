@@ -287,7 +287,7 @@ int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
         fault_ret = vio->u.fault.fault.ft_flags;
 
 out_err:
-        if (result != 0)
+        if ((result != 0) && !(fault_ret & VM_FAULT_RETRY))
                 fault_ret |= VM_FAULT_ERROR;
 
         vma->vm_flags |= ra_flags;

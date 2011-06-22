@@ -670,6 +670,9 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
                 return -ENOMEM;
         }
 
+        if (unlikely(cfio->fault.ft_flags & VM_FAULT_RETRY))
+                return -EAGAIN;
+
         CERROR("unknow error in page fault!\n");
         return -EINVAL;
 }
