@@ -76,11 +76,11 @@ do {                                    \
 
 #define sfw_unpack_fw_counters(fc)        \
 do {                                      \
-        __swab32s(&(fc).brw_errors);      \
-        __swab32s(&(fc).ping_errors);     \
-        __swab32s(&(fc).active_tests);    \
+        __swab32s(&(fc).running_ms);      \
         __swab32s(&(fc).active_batches);  \
         __swab32s(&(fc).zombie_sessions); \
+        __swab32s(&(fc).brw_errors);      \
+        __swab32s(&(fc).ping_errors);     \
 } while (0)
 
 #define sfw_unpack_rpc_counters(rc)     \
@@ -302,6 +302,7 @@ sfw_init_session (sfw_session_t *sn, lst_sid_t sid, const char *name)
         sn->sn_timer_active = 0;
         sn->sn_id           = sid;
         sn->sn_timeout      = session_timeout;
+        sn->sn_started      = cfs_time_current();
 
         timer->stt_data = sn;
         timer->stt_func = sfw_session_expired;
@@ -403,6 +404,7 @@ sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
         sfw_session_t  *sn = sfw_data.fw_session;
         sfw_counters_t *cnt = &reply->str_fw;
         sfw_batch_t    *bat;
+        struct timeval  tv;
 
         reply->str_sid = (sn == NULL) ? LST_INVALID_SID : sn->sn_id;
 
@@ -422,19 +424,21 @@ sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
 
         srpc_get_counters(&reply->str_rpc);
 
+        /* send over the msecs since the session was started
+         - with 32 bits to send, this is ~49 days */
+        cfs_duration_usec(cfs_time_sub(cfs_time_current(),
+                                       sn->sn_started), &tv);
+
+        cnt->running_ms      = (__u32)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
         cnt->brw_errors      = cfs_atomic_read(&sn->sn_brw_errors);
         cnt->ping_errors     = cfs_atomic_read(&sn->sn_ping_errors);
         cnt->zombie_sessions = cfs_atomic_read(&sfw_data.fw_nzombies);
 
-        cnt->active_tests = cnt->active_batches = 0;
+        cnt->active_batches = 0;
         cfs_list_for_each_entry_typed (bat, &sn->sn_batches,
                                        sfw_batch_t, bat_list) {
-                int n = cfs_atomic_read(&bat->bat_nactive);
-
-                if (n > 0) {
+                if (cfs_atomic_read(&bat->bat_nactive) > 0)
                         cnt->active_batches++;
-                        cnt->active_tests += n;
-                }
         }
 
         reply->str_status = 0;
