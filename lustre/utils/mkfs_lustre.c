@@ -555,9 +555,14 @@ static void enable_default_ext4_features(struct mkfs_opts *mop)
         if (is_e2fsprogs_feature_supp("-O huge_file") == 0)
                 strscat(mop->mo_mkfsopts,",huge_file",sizeof(mop->mo_mkfsopts));
 
+        /* Enable large block addresses if the LUN is over 2^32 blocks. */
+        if (mop->mo_device_sz / (L_BLOCK_SIZE >> 10) >= 0x100002000ULL &&
+                    is_e2fsprogs_feature_supp("-O 64bit") == 0)
+                strscat(mop->mo_mkfsopts, ",64bit", sizeof(mop->mo_mkfsopts));
+
         /* Cluster inode/block bitmaps and inode table for more efficient IO.
-         * Align the flex groups on a 1MB boundary for better performance.
-         * This -O feature needs to go last, since it adds an extra option. */
+         * Align the flex groups on a 1MB boundary for better performance. */
+        /* This -O feature needs to go last, since it adds the "-G" option. */
         if (is_e2fsprogs_feature_supp("-O flex_bg") == 0) {
                 char tmp_buf[64];
 
@@ -570,6 +575,7 @@ static void enable_default_ext4_features(struct mkfs_opts *mop)
                                 sizeof(mop->mo_mkfsopts));
                 }
         }
+        /* Don't add any more "-O" options here, see last comment above */
 #endif
 }
 
@@ -686,19 +692,21 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                          * filesystems can be much more aggressive than even
                          * this, but it is impossible to know in advance. */
                         if (IS_OST(&mop->mo_ldd)) {
-                                /* OST > 8TB assume average file size 1MB */
-                                if (device_sz >= (8ULL << 30))
+                                /* OST > 16TB assume average file size 1MB */
+                                if (device_sz > (16ULL << 30))
                                         bytes_per_inode = 1024 * 1024;
+                                /* OST > 4TB assume average file size 512kB */
+                                else if (device_sz > (4ULL << 30))
+                                        bytes_per_inode = 512 * 1024;
                                 /* OST > 1TB assume average file size 256kB */
-                                else if (device_sz >= (1ULL << 30))
+                                else if (device_sz > (1ULL << 30))
                                         bytes_per_inode = 256 * 1024;
-                                /* OST > 100GB assume average file size 64kB,
+                                /* OST > 10GB assume average file size 64kB,
                                  * plus a bit so that inodes will fit into a
                                  * 256x flex_bg without overflowing */
-                                else if (device_sz >= (10ULL << 20))
+                                else if (device_sz > (10ULL << 20))
                                         bytes_per_inode = 69905;
                         }
-
 
                         if (bytes_per_inode > 0) {
                                 sprintf(buf, " -i %ld", bytes_per_inode);
