@@ -3139,11 +3139,11 @@ out:
         RETURN(rc);
 }
 
-static void osc_set_lock_data_with_check(struct ldlm_lock *lock,
-                                         struct ldlm_enqueue_info *einfo,
-                                         int flags)
+static int osc_set_lock_data_with_check(struct ldlm_lock *lock,
+                                        struct ldlm_enqueue_info *einfo)
 {
         void *data = einfo->ei_cbdata;
+        int set = 0;
 
         LASSERT(lock != NULL);
         LASSERT(lock->l_blocking_ast == einfo->ei_cb_bl);
@@ -3153,24 +3153,31 @@ static void osc_set_lock_data_with_check(struct ldlm_lock *lock,
 
         lock_res_and_lock(lock);
         cfs_spin_lock(&osc_ast_guard);
-        LASSERT(lock->l_ast_data == NULL || lock->l_ast_data == data);
-        lock->l_ast_data = data;
+
+        if (lock->l_ast_data == NULL)
+                lock->l_ast_data = data;
+        if (lock->l_ast_data == data)
+                set = 1;
+
         cfs_spin_unlock(&osc_ast_guard);
         unlock_res_and_lock(lock);
+
+        return set;
 }
 
-static void osc_set_data_with_check(struct lustre_handle *lockh,
-                                    struct ldlm_enqueue_info *einfo,
-                                    int flags)
+static int osc_set_data_with_check(struct lustre_handle *lockh,
+                                   struct ldlm_enqueue_info *einfo)
 {
         struct ldlm_lock *lock = ldlm_handle2lock(lockh);
+        int set = 0;
 
         if (lock != NULL) {
-                osc_set_lock_data_with_check(lock, einfo, flags);
+                set = osc_set_lock_data_with_check(lock, einfo);
                 LDLM_LOCK_PUT(lock);
         } else
                 CERROR("lockh %p, data %p - client evicted?\n",
                        lockh, einfo->ei_cbdata);
+        return set;
 }
 
 static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -3382,13 +3389,11 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         if (mode) {
                 struct ldlm_lock *matched = ldlm_handle2lock(lockh);
 
-                if (matched->l_ast_data == NULL ||
-                    matched->l_ast_data == einfo->ei_cbdata) {
+                if (osc_set_lock_data_with_check(matched, einfo)) {
                         /* addref the lock only if not async requests and PW
                          * lock is matched whereas we asked for PR. */
                         if (!rqset && einfo->ei_mode != mode)
                                 ldlm_lock_addref(lockh, LCK_PR);
-                        osc_set_lock_data_with_check(matched, einfo, *flags);
                         if (intent) {
                                 /* I would like to be able to ASSERT here that
                                  * rss <= kms, but I can't, for reasons which
@@ -3513,8 +3518,13 @@ int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         rc = ldlm_lock_match(obd->obd_namespace, lflags,
                              res_id, type, policy, rc, lockh, unref);
         if (rc) {
-                if (data != NULL)
-                        osc_set_data_with_check(lockh, data, lflags);
+                if (data != NULL) {
+                        if (!osc_set_data_with_check(lockh, data)) {
+                                if (!(lflags & LDLM_FL_TEST_LOCK))
+                                        ldlm_lock_decref(lockh, rc);
+                                RETURN(0);
+                        }
+                }
                 if (!(lflags & LDLM_FL_TEST_LOCK) && mode != rc) {
                         ldlm_lock_addref(lockh, LCK_PR);
                         ldlm_lock_decref(lockh, LCK_PW);
