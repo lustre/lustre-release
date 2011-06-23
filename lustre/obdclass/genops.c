@@ -78,7 +78,6 @@ static struct obd_device *obd_device_alloc(void)
         }
         return obd;
 }
-EXPORT_SYMBOL(obd_device_alloc);
 
 static void obd_device_free(struct obd_device *obd)
 {
@@ -93,7 +92,6 @@ static void obd_device_free(struct obd_device *obd)
         }
         OBD_SLAB_FREE_PTR(obd, obd_device_cachep);
 }
-EXPORT_SYMBOL(obd_device_free);
 
 struct obd_type *class_search_type(const char *name)
 {
