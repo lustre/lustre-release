@@ -885,13 +885,12 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
-                cksum_type_t cksum_type = OBD_CKSUM_CRC32;
-
-                if (body->oa.o_valid & OBD_MD_FLFLAGS)
-                        cksum_type = cksum_type_unpack(body->oa.o_flags);
+                cksum_type_t cksum_type =
+                        cksum_type_unpack(body->oa.o_valid & OBD_MD_FLFLAGS ?
+                                          body->oa.o_flags : 0);
                 body->oa.o_flags = cksum_type_pack(cksum_type);
                 body->oa.o_valid = OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
-                body->oa.o_cksum = ost_checksum_bulk(desc, OST_READ, cksum_type);
+                body->oa.o_cksum = ost_checksum_bulk(desc, OST_READ,cksum_type);
                 CDEBUG(D_PAGE,"checksum at read origin: %x\n",body->oa.o_cksum);
         } else {
                 body->oa.o_valid = 0;

@@ -728,7 +728,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         /* send max bytes per rpc */
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
         /* send the list of supported checksum types */
-        data->ocd_cksum_types = OBD_CKSUM_ALL;
+        data->ocd_cksum_types = cksum_types_supported();
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(NULL, &mds->mds_lov_exp, mds->mds_lov_obd, &obd->obd_uuid, data, NULL);
         OBD_FREE(data, sizeof(*data));

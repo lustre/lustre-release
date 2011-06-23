@@ -44,6 +44,8 @@
 #ifdef __KERNEL__
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
+#include <asm/cpufeature.h>
+#include <asm/processor.h>
 #endif
 #include <linux/seq_file.h>
 #include <linux/module.h>

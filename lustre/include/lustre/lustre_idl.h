@@ -1220,6 +1220,7 @@ extern void lustre_swab_connect(struct obd_connect_data *ocd);
 typedef enum {
         OBD_CKSUM_CRC32 = 0x00000001,
         OBD_CKSUM_ADLER = 0x00000002,
+        OBD_CKSUM_CRC32C= 0x00000004,
 } cksum_type_t;
 
 /*
@@ -1265,7 +1266,7 @@ enum obdo_flags {
         OBD_FL_SRVLOCK      = 0x00000800, /* delegate DLM locking to server */
         OBD_FL_CKSUM_CRC32  = 0x00001000, /* CRC32 checksum type */
         OBD_FL_CKSUM_ADLER  = 0x00002000, /* ADLER checksum type */
-        OBD_FL_CKSUM_RSVD1  = 0x00004000, /* for future cksum types */
+        OBD_FL_CKSUM_CRC32C = 0x00004000, /* CRC32C checksum type */
         OBD_FL_CKSUM_RSVD2  = 0x00008000, /* for future cksum types */
         OBD_FL_CKSUM_RSVD3  = 0x00010000, /* for future cksum types */
         OBD_FL_SHRINK_GRANT = 0x00020000, /* object shrink the grant */
@@ -1273,7 +1274,10 @@ enum obdo_flags {
         OBD_FL_RECOV_RESEND = 0x00080000, /* recoverable resent */
         OBD_FL_NOSPC_BLK    = 0x00100000, /* no more block space on OST */
 
-        OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER,
+        /* Note that while these checksum values are currently separate bits,
+         * in 2.x we can actually allow all values from 1-31 if we wanted. */
+        OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER |
+                              OBD_FL_CKSUM_CRC32C,
 
         /* mask for local-only flag, which won't be sent over network */
         OBD_FL_LOCAL_MASK   = 0xF0000000,

@@ -2769,9 +2769,10 @@ static int filter_connect_internal(struct obd_export *exp,
                 /* The client set in ocd_cksum_types the checksum types it
                  * supports. We have to mask off the algorithms that we don't
                  * support */
-                if (cksum_types & OBD_CKSUM_ALL)
-                        data->ocd_cksum_types &= OBD_CKSUM_ALL;
-                else
+                data->ocd_cksum_types &= cksum_types_supported();
+
+                /* 1.6.4- only support CRC32 and didn't set ocd_cksum_types */
+                if (unlikely(data->ocd_cksum_types == 0))
                         data->ocd_cksum_types = OBD_CKSUM_CRC32;
 
                 CDEBUG(D_RPCTRACE, "%s: cli %s supports cksum type %x, return "
