@@ -11,8 +11,8 @@ diff .prev/drivers/md/bitmap.c ./drivers/md/bitmap.c
 +			 * after the test as long as we do it before dropping
 +			 * the spinlock.
 +			 */
-+			prepare_to_wait(&bitmap->overflow_wait, &__wait,
-+					TASK_UNINTERRUPTIBLE);
++			prepare_to_wait(&bitmap->overflow_wait,
++					&__wait, TASK_UNINTERRUPTIBLE);
 +			spin_unlock_irq(&bitmap->lock);
 +			bitmap->mddev->queue
 +				->unplug_fn(bitmap->mddev->queue);
