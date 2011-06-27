@@ -2,22 +2,23 @@
 <book version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:xi="http://www.w3.org/2001/XInclude">
 
   <info>
-      <title>Lustre 2.x Filesystem
-      
-      </title>
+      <title>Lustre 2.x Filesystem</title>
     <subtitle>Operations Manual</subtitle>
 
     <copyright>
         <year>2010</year>
         <year>2011</year>
-        <holder>Oracle and/or its affiliates.</holder>
+        <holder>Oracle and/or its affiliates. (The original version of this Operations Manual without the Whamcloud modifications.)</holder>
         </copyright>
     <copyright>
         <year>2011</year>
-        <holder>Whamcloud, Inc.</holder>
+        <holder>Whamcloud, Inc. (Whamcloud modifications to the original version of this Operations Manual.)</holder>
     </copyright>
 
-    <xi:include href="legalnotice.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+    <legalnotice><para>Notwithstanding Whamcloud’s ownership of the copyright in the modifications to the original version of this Operations Manual, as between Whamcloud and Oracle, Oracle and/or its affiliates retain sole ownership of the copyright in the unmodified portions of this Operations Manual.</para></legalnotice>
+
+    <xi:include href="legalnoticeWhamcloud.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+    <xi:include href="legalnoticeOracle.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
   </info>
 
 
