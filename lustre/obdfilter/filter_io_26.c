@@ -503,9 +503,14 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                                iobuf->dr_ignore_quota);
         }
 
-        rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
+        if (rw == OBD_BRW_WRITE &&
+            OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC)) {
+                rc = -ENOSPC;
+        } else {
+                rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
                                     iobuf->dr_npages, iobuf->dr_blocks,
                                     obdfilter_created_scratchpad, create, sem);
+        }
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
@@ -519,6 +524,13 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 }
 
                 UNLOCK_INODE_MUTEX(inode);
+
+                /* Force commit to make the just-deleted blocks
+                 * reusable. LU-456 */
+                if (rc == -ENOSPC) {
+                        fsfilt_commit(obd, inode, oti->oti_handle, 1);
+                        RETURN(rc);
+                }
 
                 rc2 = filter_finish_transno(exp, inode, oti, 0, 0);
                 if (rc2 != 0) {
@@ -597,6 +609,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         unsigned int qcids[MAXQUOTAS] = { oa->o_uid, oa->o_gid };
         int rec_pending[MAXQUOTAS] = { 0, 0 }, quota_pages = 0;
         int sync_journal_commit = obd->u.filter.fo_syncjournal;
+        int retries = 0;
         ENTRY;
 
         LASSERT(oti != NULL);
@@ -684,6 +697,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         ll_vfs_dq_init(inode);
         fsfilt_check_slow(obd, now, "quota init");
 
+retry:
         LOCK_INODE_MUTEX(inode);
         fsfilt_check_slow(obd, now, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
@@ -742,6 +756,13 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* filter_direct_io drops i_mutex */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, sync_journal_commit ? &wait_handle : NULL);
+        if (rc == -ENOSPC && retries++ < 3) {
+                CDEBUG(D_INODE, "retry after force commit, retries:%d\n",
+                       retries);
+                oti->oti_handle = NULL;
+                fsfilt_check_slow(obd, now, "direct_io");
+                goto retry;
+        }
 
         obdo_from_inode(oa, inode, NULL, rc == 0 ? FILTER_VALID_FLAGS : 0 |
                                                    OBD_MD_FLUID |OBD_MD_FLGID);
