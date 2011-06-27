@@ -113,7 +113,8 @@ enum {
         LPROC_FILTER_LAST,
 };
 
-#define FILTER_MAX_CACHE_SIZE (8 * 1024 * 1024)
+//#define FILTER_MAX_CACHE_SIZE (32 * 1024 * 1024) /* was OBD_OBJECT_EOF */
+#define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
 /* We have to pass a 'created' array to fsfilt_map_inode_pages() which we
  * then ignore.  So we pre-allocate one that everyone can use... */
