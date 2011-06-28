@@ -781,7 +781,7 @@ static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry)
         u32 *addr;
 
         addr = iam_entry_off(entry, iam_path_descr(p)->id_ikey_size);
-        return le32_to_cpu(get_unaligned(addr)) & 0x00ffffff;
+        return le32_to_cpu(get_unaligned(addr));
 }
 
 static inline void dx_set_block(struct iam_path *p,
