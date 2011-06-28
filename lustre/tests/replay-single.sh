@@ -1572,7 +1572,7 @@ test_65a() #bug 3055
     at_start || return 0
     $LCTL dk > /dev/null
     debugsave
-    sysctl -w lnet.debug="+other"
+    $LCTL set_param debug="other"
     # Slow down a request to the current service time, this is critical
     # because previous tests may have caused this value to increase.
     REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
@@ -1601,7 +1601,7 @@ test_65b() #bug 3055
     at_start || return 0
     # turn on D_ADAPTTO
     debugsave
-    sysctl -w lnet.debug="other trace"
+    $LCTL set_param debug="other trace"
     $LCTL dk > /dev/null
     # Slow down a request to the current service time, this is critical
     # because previous tests may have caused this value to increase.
