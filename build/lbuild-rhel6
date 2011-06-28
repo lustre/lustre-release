@@ -27,6 +27,12 @@ Patch99995: linux-%{version}-lustre.patch' \
 # lustre patch\
 ApplyOptionalPatch linux-%{version}-lustre.patch\
 ' \
+           -e '/rm -f include\/generated\/kernel.cross/i\
+  # lustre kernel config.\
+  if [ -f %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-$Arch.config ]; then\
+    echo "# $Arch" > configs/kernel-%{version}-$Arch.config\
+    cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-$Arch.config >> configs/kernel-%{version}-$Arch.config\
+  fi'\
           SPECS/$SPEC_NAME 2>&1 || \
         fatal 1 "Error while editing SPECS/$SPEC_NAME"
 

@@ -114,7 +114,11 @@ prepare_and_build_srpm() {
     # for informative purposes, display a diff between the .config that
     # was actually built and what we proposed as a .config
     echo "Diffs between $(basename $CONFIG_FILE) and the built kernel's .config:"
-    diff -u $CONFIG_FILE $TOPDIR/BUILD/kernel-${lnxmaj}-${lnxrel}/linux-${lnxmaj}-${lnxrel}.${BUILD_ARCHS# }/.config
+    local rpmname="$TOPDIR/RPMS/${BUILD_ARCHS# }/kernel-${lnxmaj}-${lnxrel}${buildid}.${BUILD_ARCHS# }.rpm"
+    rpmcfg=$(rpm -qpl $rpmname | grep '/boot/config-')
+    rpm2cpio $rpmname | cpio -id .$rpmcfg
+    diff -u $CONFIG_FILE .$rpmcfg
+    rm -rf .$rpmcfg
 
     return 0
 
