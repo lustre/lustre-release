@@ -1877,7 +1877,8 @@ enum {
         MDS_SOM           = 1 << 4,
         MDS_QUOTA_IGNORE  = 1 << 5,
         MDS_CLOSE_CLEANUP = 1 << 6,
-        MDS_KEEP_ORPHAN   = 1 << 7
+        MDS_KEEP_ORPHAN   = 1 << 7,
+        MDS_RECOV_OPEN    = 1 << 8,
 };
 
 /* instance of mdt_reint_rec */
@@ -2545,7 +2546,7 @@ struct llog_size_change_rec {
 /** bits covering all \a changelog_rec_type's */
 #define CHANGELOG_ALLMASK 0XFFFFFFFF
 /** default \a changelog_rec_type mask */
-#define CHANGELOG_DEFMASK CHANGELOG_ALLMASK & ~(1 << CL_ATIME)
+#define CHANGELOG_DEFMASK CHANGELOG_ALLMASK & ~(1 << CL_ATIME | 1 << CL_CLOSE)
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"

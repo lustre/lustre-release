@@ -693,7 +693,11 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                                 cfs_spin_unlock(&med->med_open_lock);
                                 /* no attr update for that close */
                                 la->la_valid = 0;
+                                ma->ma_valid |= MA_FLAGS;
+                                ma->ma_attr_flags |= MDS_RECOV_OPEN;
                                 mdt_mfd_close(info, old_mfd);
+                                ma->ma_attr_flags &= ~MDS_RECOV_OPEN;
+                                ma->ma_valid &= ~MA_FLAGS;
                         }
                         CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
                                info->mti_rr.rr_handle->cookie);
@@ -1517,7 +1521,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         ma->ma_valid &= ~MA_INODE;
 
         if (!MFD_CLOSED(mode))
-                rc = mo_close(info->mti_env, next, ma);
+                rc = mo_close(info->mti_env, next, ma, mode);
 
         if (ret == MDT_IOEPOCH_GETATTR || ret == MDT_IOEPOCH_OPENED) {
                 struct mdt_export_data *med;

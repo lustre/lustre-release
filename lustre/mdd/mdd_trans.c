@@ -277,6 +277,9 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
                                  *c = 2 * dt[DTO_INDEX_INSERT] +
                                           dt[DTO_OBJECT_CREATE];
                                 break;
+                        case MDD_TXN_CLOSE_OP:
+                                *c = 0;
+                                break;
                         default:
                                 CERROR("Invalid op %d init its credit\n", op);
                                 LBUG();

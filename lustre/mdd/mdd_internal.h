@@ -84,6 +84,7 @@ enum mdd_txn_op {
         MDD_TXN_RENAME_TGT_OP,
         MDD_TXN_CREATE_DATA_OP,
         MDD_TXN_MKDIR_OP,
+        MDD_TXN_CLOSE_OP,
         MDD_TXN_LAST_OP
 };
 

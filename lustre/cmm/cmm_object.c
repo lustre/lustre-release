@@ -349,11 +349,11 @@ static int cml_open(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cml_close(const struct lu_env *env, struct md_object *mo,
-                     struct md_attr *ma)
+                     struct md_attr *ma, int mode)
 {
         int rc;
         ENTRY;
-        rc = mo_close(env, md_object_next(mo), ma);
+        rc = mo_close(env, md_object_next(mo), ma, mode);
         RETURN(rc);
 }
 
@@ -1099,7 +1099,7 @@ static int cmr_open(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cmr_close(const struct lu_env *env, struct md_object *mo,
-                     struct md_attr *ma)
+                     struct md_attr *ma, int mode)
 {
         return -EFAULT;
 }

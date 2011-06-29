@@ -542,7 +542,7 @@ static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
 }
 
 static int dot_lustre_mdd_close(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma)
+                                struct md_attr *ma, int mode)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
 
@@ -794,7 +794,7 @@ static int obf_mdd_open(const struct lu_env *env, struct md_object *obj,
 }
 
 static int obf_mdd_close(const struct lu_env *env, struct md_object *obj,
-                         struct md_attr *ma)
+                         struct md_attr *ma, int mode)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
 

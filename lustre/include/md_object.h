@@ -272,7 +272,7 @@ struct md_object_operations {
                         struct md_object *obj, int flag);
 
         int (*moo_close)(const struct lu_env *env, struct md_object *obj,
-                         struct md_attr *ma);
+                         struct md_attr *ma, int mode);
 
         int (*moo_capa_get)(const struct lu_env *, struct md_object *,
                             struct lustre_capa *, int renewal);
@@ -693,10 +693,11 @@ static inline int mo_open(const struct lu_env *env,
 
 static inline int mo_close(const struct lu_env *env,
                            struct md_object *m,
-                           struct md_attr *ma)
+                           struct md_attr *ma,
+                           int mode)
 {
         LASSERT(m->mo_ops->moo_close);
-        return m->mo_ops->moo_close(env, m, ma);
+        return m->mo_ops->moo_close(env, m, ma, mode);
 }
 
 static inline int mo_readpage(const struct lu_env *env,
