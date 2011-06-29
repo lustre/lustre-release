@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -329,7 +332,8 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io = ccc_env_thread_io(env);
+        /* Do NOT call "ccc_env_thread_io()" again to prevent reinitializing */
+        io = &ccc_env_info(env)->cti_io;
         if (cl_io_rw_init(env, io, session->lis_cmd == OBD_BRW_WRITE?CIT_WRITE:
                                                                       CIT_READ,
                           pos, len) == 0) {
