@@ -207,10 +207,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
         /* indicate the features supported by this client */
         data->ocd_connect_flags = OBD_CONNECT_IBITS    | OBD_CONNECT_NODEVOH  |
-                                  OBD_CONNECT_JOIN     | OBD_CONNECT_ATTRFID  |
+                                  OBD_CONNECT_ATTRFID  |
                                   OBD_CONNECT_VERSION  | OBD_CONNECT_BRW_SIZE |
                                   OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
-                                  OBD_CONNECT_CANCELSET| OBD_CONNECT_FID      |
+                                  OBD_CONNECT_CANCELSET | OBD_CONNECT_FID     |
                                   OBD_CONNECT_AT       | OBD_CONNECT_LOV_V3   |
                                   OBD_CONNECT_RMT_CLIENT | OBD_CONNECT_VBR    |
                                   OBD_CONNECT_FULL20   | OBD_CONNECT_64BITHASH;
@@ -278,6 +278,30 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                          cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
         if (err)
                 GOTO(out_md_fid, err);
+
+        /* This needs to be after statfs to ensure connect has finished.
+         * Note that "data" does NOT contain the valid connect reply.
+         * If connecting to a 1.8 server there will be no LMV device, so
+         * we can access the MDC export directly and exp_connect_flags will
+         * be non-zero, but if accessing an upgraded 2.1 server it will
+         * have the correct flags filled in.
+         * XXX: fill in the LMV exp_connect_flags from MDC(s). */
+        valid = sbi->ll_md_exp->exp_connect_flags & CLIENT_CONNECT_MDT_REQD;
+        if (sbi->ll_md_exp->exp_connect_flags != 0 &&
+            valid != CLIENT_CONNECT_MDT_REQD) {
+                char *buf;
+
+                OBD_ALLOC_WAIT(buf, CFS_PAGE_SIZE);
+                obd_connect_flags2str(buf, CFS_PAGE_SIZE,
+                                      valid ^ CLIENT_CONNECT_MDT_REQD, ",");
+                LCONSOLE_ERROR_MSG(0x170, "Server %s does not support "
+                                   "feature(s) needed for correct operation "
+                                   "of this client (%s). Please upgrade "
+                                   "server or downgrade client.\n",
+                                   sbi->ll_md_exp->exp_obd->obd_name, buf);
+                OBD_FREE(buf, CFS_PAGE_SIZE);
+                GOTO(out_md, err = -EPROTO);
+        }
 
         size = sizeof(*data);
         err = obd_get_info(sbi->ll_md_exp, sizeof(KEY_CONN_DATA),

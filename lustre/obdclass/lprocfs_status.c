@@ -813,7 +813,7 @@ static const char *obd_connect_names[] = {
         NULL
 };
 
-static int obd_connect_flags2str(char *page, int count, __u64 flags, char *sep)
+int obd_connect_flags2str(char *page, int count, __u64 flags, char *sep)
 {
         __u64 mask = 1;
         int i, ret = 0;
@@ -829,6 +829,7 @@ static int obd_connect_flags2str(char *page, int count, __u64 flags, char *sep)
                                 ret ? sep : "", flags & ~(mask - 1));
         return ret;
 }
+EXPORT_SYMBOL(obd_connect_flags2str);
 
 int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       int *eof, void *data)

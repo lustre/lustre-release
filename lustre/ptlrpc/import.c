@@ -987,13 +987,14 @@ finish:
                         /* Sigh, some compilers do not like #ifdef in the middle
                            of macro arguments */
 #ifdef __KERNEL__
-                        const char *older =
-                                "older. Consider upgrading this client";
+                        const char *older = "older. Consider upgrading server "
+                                            "or downgrading client";
 #else
-                        const char *older =
-                                "older. Consider recompiling this application";
+                        const char *older = "older. Consider recompiling this "
+                                            "application";
 #endif
-                        const char *newer = "newer than client version";
+                        const char *newer = "newer than client version. "
+                                            "Consider upgrading client";
 
                         LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
                                       "is much %s (%s)\n",

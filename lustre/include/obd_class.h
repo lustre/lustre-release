@@ -100,6 +100,7 @@ char *obd_export_nid2str(struct obd_export *exp);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);
+int obd_connect_flags2str(char *page, int count, __u64 flags, char *sep);
 
 int obd_zombie_impexp_init(void);
 void obd_zombie_impexp_stop(void);
@@ -945,11 +946,11 @@ static inline struct obd_uuid *obd_get_uuid(struct obd_export *exp)
 static inline int obd_connect(const struct lu_env *env,
                               struct obd_export **exp,struct obd_device *obd,
                               struct obd_uuid *cluuid,
-                              struct obd_connect_data *d,
+                              struct obd_connect_data *data,
                               void *localdata)
 {
         int rc;
-        __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition
+        __u64 ocf = data ? data->ocd_connect_flags : 0; /* for post-condition
                                                    * check */
         ENTRY;
 
@@ -957,10 +958,10 @@ static inline int obd_connect(const struct lu_env *env,
         OBD_CHECK_DT_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(env, exp, obd, cluuid, d, localdata);
+        rc = OBP(obd, connect)(env, exp, obd, cluuid, data, localdata);
         /* check that only subset is granted */
-        LASSERT(ergo(d != NULL,
-                     (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
+        LASSERT(ergo(data != NULL, (data->ocd_connect_flags & ocf) ==
+                                    data->ocd_connect_flags));
         RETURN(rc);
 }
 
