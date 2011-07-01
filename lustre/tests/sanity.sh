@@ -3905,6 +3905,37 @@ test_80() { # bug 10718
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
+test_81a() { # LU-456
+        # define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
+        # MUST OR with the OBD_FAIL_ONCE (0x80000000)
+        do_facet ost0 lctl set_param fail_loc=0x80000228
+
+        # write should trigger a retry and success
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+        if [ $RC -ne 0 ] ; then
+                error "write should success, but failed for $RC"
+        fi
+}
+run_test 81a "OST should retry write when get -ENOSPC ==============="
+
+test_81b() { # LU-456
+        # define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
+        # Don't OR with the OBD_FAIL_ONCE (0x80000000)
+        do_facet ost0 lctl set_param fail_loc=0x228
+
+        # write should retry several times and return -ENOSPC finally
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
+        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        RC=$?
+        ENOSPC=28
+        if [ $RC -ne $ENOSPC ] ; then
+                error "write should fail for -ENOSPC, but succeed."
+        fi
+}
+run_test 81b "OST should return -ENOSPC when retry still fails ======="
+
 test_99a() {
 	[ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	mkdir -p $DIR/d99cvsroot || error "mkdir $DIR/d99cvsroot failed"

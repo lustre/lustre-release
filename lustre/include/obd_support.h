@@ -234,6 +234,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_CONNECT_NET2        0x225
 #define OBD_FAIL_OST_NOMEM               0x226
 #define OBD_FAIL_OST_BRW_PAUSE_BULK2     0x227
+#define OBD_FAIL_OST_MAPBLK_ENOSPC       0x228
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
