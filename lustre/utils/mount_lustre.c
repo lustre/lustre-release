@@ -400,12 +400,16 @@ int set_blockdev_tunables(char *source, int fan_out)
          * match any entry under /sys/block/. In that case we need to
          * match the major/minor number to find the entry under
          * sys/block corresponding to /dev/X */
-        dev = real_path + strlen(real_path);
-        while (--dev > real_path && isdigit(*dev))
-                *dev = 0;
 
-        if (strncmp(real_path, "/dev/md_", 8) == 0)
-                *dev = 0;
+        /* Don't chop tail digit on /dev/mapper/xxx, LU-478 */
+        if (strncmp(real_path, "/dev/mapper", 11) != 0) {
+                dev = real_path + strlen(real_path);
+                while (--dev > real_path && isdigit(*dev))
+                        *dev = 0;
+
+                if (strncmp(real_path, "/dev/md_", 8) == 0)
+                        *dev = 0;
+        }
 
         rc = stat(real_path, &stat_buf);
         if (rc) {
@@ -488,7 +492,9 @@ set_params:
                 if (verbose)
                         fprintf(stderr, "warning: opening %s: %s\n",
                                 real_path, strerror(errno));
-                return rc;
+                /* No MAX_HW_SECTORS_KB_PATH isn't necessary an
+                 * error for some device. */
+                rc = 0;
         }
 
         if (strlen(buf) - 1 > 0) {
@@ -499,7 +505,9 @@ set_params:
                         if (verbose)
                                 fprintf(stderr, "warning: writing to %s: %s\n",
                                         real_path, strerror(errno));
-                        return rc;
+                        /* No MAX_SECTORS_KB_PATH isn't necessary an
+                         * error for some device. */
+                        rc = 0;
                 }
         }
 
