@@ -782,10 +782,12 @@ test_23a() {	# was test_23
 	echo mount pid is ${MOUNT_PID}, mount.lustre pid is ${MOUNT_LUSTRE_PID}
 	ps --ppid $MOUNT_PID
 	ps --ppid $MOUNT_LUSTRE_PID
-	# FIXME why o why can't I kill these? Manual "ctrl-c" works...
-	kill -TERM $MOUNT_LUSTRE_PID
 	echo "waiting for mount to finish"
 	ps -ef | grep mount
+	# "ctrl-c" sends SIGINT but it usually (in script) does not work on child process
+	# SIGTERM works but it does not spread to offspring processses
+	kill -s SIGTERM $MOUNT_PID
+	kill -s SIGTERM $MOUNT_LUSTRE_PID
 	# we can not wait $MOUNT_PID because it is not a child of this shell
 	local PID1
 	local PID2
