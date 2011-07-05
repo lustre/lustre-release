@@ -2958,28 +2958,18 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         RETURN(0);
 }
 
-struct osc_async_page *oap_from_cookie(void *cookie)
-{
-        struct osc_async_page *oap = cookie;
-        if (oap->oap_magic != OAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return oap;
-};
-
-int osc_queue_async_io(const struct lu_env *env,
-                       struct obd_export *exp, struct lov_stripe_md *lsm,
-                       struct lov_oinfo *loi, void *cookie,
-                       int cmd, obd_off off, int count,
-                       obd_flag brw_flags, enum async_flags async_flags)
+int osc_queue_async_io(const struct lu_env *env, struct obd_export *exp,
+                       struct lov_stripe_md *lsm, struct lov_oinfo *loi,
+                       struct osc_async_page *oap, int cmd, obd_off off,
+                       int count, obd_flag brw_flags,
+                       enum async_flags async_flags)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
-        struct osc_async_page *oap;
         int rc = 0;
         ENTRY;
 
-        oap = oap_from_cookie(cookie);
-        if (IS_ERR(oap))
-                RETURN(PTR_ERR(oap));
+        if (oap->oap_magic != OAP_MAGIC)
+                RETURN(-EINVAL);
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);
@@ -3091,19 +3081,16 @@ int osc_set_async_flags_base(struct client_obd *cli,
         RETURN(0);
 }
 
-int osc_teardown_async_page(struct obd_export *exp,
-                            struct lov_stripe_md *lsm,
-                            struct lov_oinfo *loi, void *cookie)
+int osc_teardown_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
+                            struct lov_oinfo *loi, struct osc_async_page *oap)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct loi_oap_pages *lop;
-        struct osc_async_page *oap;
         int rc = 0;
         ENTRY;
 
-        oap = oap_from_cookie(cookie);
-        if (IS_ERR(oap))
-                RETURN(PTR_ERR(oap));
+        if (oap->oap_magic != OAP_MAGIC)
+                RETURN(-EINVAL);
 
         if (loi == NULL)
                 loi = lsm->lsm_oinfo[0];

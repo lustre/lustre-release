@@ -154,14 +154,13 @@ int  osc_oap_interrupted(const struct lu_env *env, struct osc_async_page *oap);
 void loi_list_maint(struct client_obd *cli, struct lov_oinfo *loi);
 void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli);
 
-int osc_queue_async_io(const struct lu_env *env,
-                       struct obd_export *exp, struct lov_stripe_md *lsm,
-                       struct lov_oinfo *loi, void *cookie,
-                       int cmd, obd_off off, int count,
-                       obd_flag brw_flags, enum async_flags async_flags);
-int osc_teardown_async_page(struct obd_export *exp,
-                            struct lov_stripe_md *lsm,
-                            struct lov_oinfo *loi, void *cookie);
+int osc_queue_async_io(const struct lu_env *env, struct obd_export *exp,
+                       struct lov_stripe_md *lsm, struct lov_oinfo *loi,
+                       struct osc_async_page *oap, int cmd, obd_off off,
+                       int count, obd_flag brw_flags,
+                       enum async_flags async_flags);
+int osc_teardown_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
+                            struct lov_oinfo *loi, struct osc_async_page *oap);
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *cfg);
 int osc_set_async_flags_base(struct client_obd *cli,
                              struct lov_oinfo *loi, struct osc_async_page *oap,
