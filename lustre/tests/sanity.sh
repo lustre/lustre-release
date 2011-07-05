@@ -6041,6 +6041,7 @@ test_124a() {
                 LRU_SIZE=$(lctl get_param -n $PARAM)
                 if [ $LRU_SIZE -gt $(default_lru_size) ]; then
                         NSDIR=$(echo $PARAM | cut -d "." -f1-3)
+						log "NSDIR=$NSDIR"
                         log "NS=$(basename $NSDIR)"
                         break
                 fi
@@ -6058,6 +6059,7 @@ test_124a() {
         # for 10h. After that locks begin to be killed by client.
         local MAX_HRS=10
         local LIMIT=`lctl get_param -n $NSDIR.pool.limit`
+		log "LIMIT=$LIMIT"
 
         # Make LVF so higher that sleeping for $SLEEP is enough to _start_
         # killing locks. Some time was spent for creating locks. This means
@@ -6072,6 +6074,7 @@ test_124a() {
         local LRU_SIZE_B=$LRU_SIZE
         log "LVF=$LVF"
         local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
+		log "OLD_LVF=$OLD_LVF"
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
 
         # Let's make sure that we really have some margin. Client checks
