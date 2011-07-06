@@ -240,7 +240,7 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
 
         ll_stats_ops_tally(ll_i2sbi(inode),
                         (rw == WRITE) ? LPROC_LL_BRW_WRITE : LPROC_LL_BRW_READ,
-                        page_count << PAGE_CACHE_SHIFT);
+                        page_count);
 
         pvec->ldp_size = page_count << PAGE_CACHE_SHIFT;
         pvec->ldp_nr = page_count;
