@@ -57,16 +57,15 @@
                 <para> <emphasis role="bold">Client Scalability</emphasis></para>
               </entry>
               <entry>
-                <para> 100-100,000</para>
+                <para> 100-100000</para>
               </entry>
               <entry>
-                <para> 50,000+ clients</para>
-                <para>Many installations in 10,000 to 20,000 range</para>
+                <para> 50000+ clients, many in the 10000 to 20000 range</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para>Client Performance</para>
+                <para><emphasis role="bold">Client Performance</emphasis></para>
               </entry>
               <entry>
                 <para> <emphasis>Single client: </emphasis></para>
@@ -87,13 +86,16 @@
               </entry>
               <entry>
                 <para> <emphasis>Single OSS:</emphasis></para>
-                <para>1-8 OSTs per OSS, 128TB per OST</para>
+                <para>1-32 OSTs per OSS,</para>
+                <para>128TB per OST</para>
                 <para> <emphasis>OSS count:</emphasis></para>
-                <para>500 OSSes, with up to 4000 OSTs, </para>
+                <para>500 OSSs, with up to 4000 OSTs</para>
+                <para/>
               </entry>
               <entry>
                 <para> <emphasis>Single OSS:</emphasis></para>
-                <para>8 OSTs per OSS, 16TB per OST</para>
+                <para>8 OSTs per OSS,</para>
+                <para>16TB per OST</para>
                 <para> <emphasis>OSS count:</emphasis></para>
                 <para>450 OSSs with 1000 4TB OSTs</para>
                 <para>192 OSSs with 1344 8TB OSTs</para>
@@ -124,13 +126,13 @@
                 <para> <emphasis>Single MDS:</emphasis></para>
                 <para> 4 billion files</para>
                 <para> <emphasis>MDS count:</emphasis></para>
-                <para> 1 + 1 (primary with one backup)</para>
+                <para> 1 primary + 1 backup</para>
               </entry>
               <entry>
                 <para> <emphasis>Single MDS:</emphasis></para>
                 <para> 750 million files</para>
                 <para> <emphasis>MDS count:</emphasis></para>
-                <para> 1 + 1 (primary with one backup)</para>
+                <para> 1 primary + 1 backup</para>
               </entry>
             </row>
             <row>
@@ -138,10 +140,12 @@
                 <para> <emphasis role="bold">MDS Performance</emphasis></para>
               </entry>
               <entry>
-                <para> 35000/s create, 100000/s stat metadata operations</para>
+                <para> 35000/s create operations,</para>
+                <para> 100000/s metadata stat operations</para>
               </entry>
               <entry>
-                <para> 15000/s create, 35000/s stat metadata operations</para>
+                <para> 15000/s create operations,</para>
+                <para> 35000/s metadata stat operations</para>
               </entry>
             </row>
             <row>
@@ -167,12 +171,10 @@
       <para>Other Lustre features are:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Performance-enhanced ext4 file system:</emphasis>  Lustre uses an improved version of the ext4 journaling file system to store data and metadata. This version, called <emphasis role="italic">
-              <literal>ldiskfs</literal>
-            </emphasis>, has been enhanced to improve performance and provide additional functionality needed by Lustre.</para>
+          <para><emphasis role="bold">Performance-enhanced ext4 file system:</emphasis>  Lustre uses an improved version of the ext4 journaling file system to store data and metadata. This version, called <emphasis role="italic"><literal>ldiskfs</literal></emphasis>, has been enhanced to improve performance and provide additional functionality needed by Lustre.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">POSIX compliance</emphasis> : The full POSIX test suite passes in an identical manner to a local ext4 filesystem, with limited exceptions on Lustre clients. In a cluster, most operations are atomic so that clients never see stale data or metadata. Lustre supports mmap() file I/O.</para>
+          <para><emphasis role="bold">POSIX compliance:</emphasis> The full POSIX test suite passes in an identical manner to a local ext4 filesystem, with limited exceptions on Lustre clients. In a cluster, most operations are atomic so that clients never see stale data or metadata. Lustre supports mmap() file I/O.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">High-performance heterogeneous networking:</emphasis>  Lustre supports a variety of high performance, low latency networks and permits Remote Direct Memory Access (RDMA) for Infiniband (OFED) and other advanced networks for fast and efficient network transport. Multiple RDMA networks can be bridged using Lustre routing for maximum performance. Lustre also provides integrated network diagnostics.</para>
@@ -181,7 +183,7 @@
           <para><emphasis role="bold">High-availability:</emphasis>  Lustre offers active/active failover using shared storage partitions for OSS targets (OSTs) and active/passive failover using a shared storage partition for the MDS target (MDT). This allows application transparent recovery. Lustre can work with a variety of high availability (HA) managers to allow automated failover and has no single point of failure (NSPF). Multiple mount protection (MMP) provides integrated protection from errors in highly-available systems that would otherwise cause file system corruption.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Security:</emphasis>  By default TCP connections are only allowed from privileged ports. Unix group membership is verified is done on the MDS.</para>
+          <para><emphasis role="bold">Security:</emphasis>  By default TCP connections are only allowed from privileged ports. Unix group membership is verified on the MDS.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">Access control list (ACL), exended attributes:</emphasis>  the Lustre security model follows that of a UNIX file system, enhanced with POSIX ACLs. Noteworthy additional features include root squash.</para>
@@ -193,7 +195,7 @@
           <para><emphasis role="bold">Object-based architecture:</emphasis>  Clients are isolated from the on-disk file structure enabling upgrading of the storage architecture without affecting the client.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Byte-granular file and fine-grained metadata locking:</emphasis>  Many clients can read and modify the same file or directory concurrently. The Lustre distributed lock manager (LDLM) ensures that files are coherent between all clients and servers in the filesystem.  The MDT DLM manages locks on inode permissions and pathnames.   Each OST has its own DLM for locks on file stripes stored theron, which scales the locking performance as the filesystem grows.</para>
+          <para><emphasis role="bold">Byte-granular file and fine-grained metadata locking:</emphasis>  Many clients can read and modify the same file or directory concurrently. The Lustre distributed lock manager (LDLM) ensures that files are coherent between all clients and servers in the filesystem.  The MDT LDLM manages locks on inode permissions and pathnames.   Each OST has its own LDLM for locks on file stripes stored thereon, which scales the locking performance as the filesystem grows.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">Quotas:</emphasis> User and group quotas are available for Lustre.</para>
