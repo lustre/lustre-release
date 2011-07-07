@@ -2012,14 +2012,16 @@ test_29()
                 timeout=$(lctl get_param -n timeout)
                 lctl set_param timeout=10
         fi
+	# actually send a RPC to make service at_current confined within at_max
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR || error "should succeed"
 
         #define OBD_FAIL_MDS_QUOTACTL_NET 0x12e
         lustre_fail mds 0x12e
 
         $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR & pid=$!
 
-        echo "sleeping for $((10 * 2)) seconds"
-        sleep $((10 * 2))
+        echo "sleeping for 10 * 1.25 + 5 + 10 seconds"
+        sleep 28
         ps -p $pid && error "lfs hadn't finished by timeout"
         wait $pid && error "succeeded, but should have failed"
 
