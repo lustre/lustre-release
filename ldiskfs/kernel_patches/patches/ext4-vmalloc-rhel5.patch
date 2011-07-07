@@ -1,0 +1,198 @@
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -662,7 +662,12 @@ static void ext4_put_super(struct super_
+ 
+ 	for (i = 0; i < sbi->s_gdb_count; i++)
+ 		brelse(sbi->s_group_desc[i]);
+-	kfree(sbi->s_group_desc);
++
++	if (is_vmalloc_addr(sbi->s_group_desc))
++		vfree(sbi->s_group_desc);
++	else
++		kfree(sbi->s_group_desc);
++
+ 	if (is_vmalloc_addr(sbi->s_flex_groups))
+ 		vfree(sbi->s_flex_groups);
+ 	else
+@@ -2402,12 +2407,13 @@ static int ext4_fill_super(struct super_
+ 	unsigned long offset = 0;
+ 	unsigned long journal_devnum = 0;
+ 	unsigned long def_mount_opts;
+-	struct inode *root;
++	struct inode *root = NULL;
+ 	char *cp;
+ 	const char *descr;
+ 	int ret = -EINVAL;
+ 	int blocksize;
+ 	unsigned int db_count;
++	size_t size;
+ 	unsigned int i;
+ 	int needs_recovery, has_huge_files;
+ 	__u64 blocks_count;
+@@ -2718,10 +2724,16 @@ static int ext4_fill_super(struct super_
+ 			(EXT4_MAX_BLOCK_FILE_PHYS / EXT4_BLOCKS_PER_GROUP(sb)));
+ 	db_count = (sbi->s_groups_count + EXT4_DESC_PER_BLOCK(sb) - 1) /
+ 		   EXT4_DESC_PER_BLOCK(sb);
+-	sbi->s_group_desc = kmalloc(db_count * sizeof(struct buffer_head *),
+-				    GFP_KERNEL);
++	size = (size_t) db_count * sizeof(struct buffer_head *);
++	sbi->s_group_desc = kzalloc(size, GFP_KERNEL);
++	if (sbi->s_group_desc == NULL) {
++		sbi->s_group_desc = vmalloc(size);
++		if (sbi->s_group_desc != NULL)
++			memset(sbi->s_group_desc, 0, size);
++	}
+ 	if (sbi->s_group_desc == NULL) {
+-		ext4_msg(sb, KERN_ERR, "not enough memory");
++		ext4_msg(sb, KERN_ERR, "not enough memory for %u groups (%u)\n",
++			sbi->s_groups_count, (unsigned int) size);
+ 		goto failed_mount;
+ 	}
+ 
+@@ -2907,17 +2919,16 @@ no_journal:
+ 	if (IS_ERR(root)) {
+ 		ext4_msg(sb, KERN_ERR, "get root inode failed");
+ 		ret = PTR_ERR(root);
++		root = NULL;
+ 		goto failed_mount4;
+ 	}
+ 	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size) {
+-		iput(root);
+ 		ext4_msg(sb, KERN_ERR, "corrupt root inode, run e2fsck");
+ 		goto failed_mount4;
+ 	}
+ 	sb->s_root = d_alloc_root(root);
+ 	if (!sb->s_root) {
+ 		ext4_msg(sb, KERN_ERR, "get root dentry failed");
+-		iput(root);
+ 		ret = -ENOMEM;
+ 		goto failed_mount4;
+ 	}
+@@ -2968,6 +2979,7 @@ no_journal:
+ 	if (err) {
+ 		ext4_msg(sb, KERN_ERR, "failed to initalize mballoc (%d)",
+ 			 err);
++		ret = err;
+ 		goto failed_mount4;
+ 	}
+ 
+@@ -3011,6 +3023,8 @@ cantfind_ext4:
+ 	goto failed_mount;
+ 
+ failed_mount4:
++	iput(root);
++	sb->s_root = NULL;
+ 	ext4_msg(sb, KERN_ERR, "mount failed");
+ 	destroy_workqueue(EXT4_SB(sb)->dio_unwritten_wq);
+ failed_mount_wq:
+@@ -3033,7 +3047,11 @@ failed_mount3:
+ failed_mount2:
+ 	for (i = 0; i < db_count; i++)
+ 		brelse(sbi->s_group_desc[i]);
+-	kfree(sbi->s_group_desc);
++
++	if (is_vmalloc_addr(sbi->s_group_desc))
++		vfree(sbi->s_group_desc);
++	else
++		kfree(sbi->s_group_desc);
+ failed_mount:
+ 	if (sbi->s_proc) {
+ 		remove_proc_entry(sb->s_id, ext4_proc_root);
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -2607,10 +2607,21 @@ static int ext4_mb_init_backend(struct s
+ 	while (array_size < sizeof(*sbi->s_group_info) *
+ 	       num_meta_group_infos_max)
+ 		array_size = array_size << 1;
+-	/* An 8TB filesystem with 64-bit pointers requires a 4096 byte
+-	 * kmalloc. A 128kb malloc should suffice for a 256TB filesystem.
+-	 * So a two level scheme suffices for now. */
+-	sbi->s_group_info = kmalloc(array_size, GFP_KERNEL);
++
++	/*
++	 * A 16TB filesystem with 64-bit pointers requires an 8192 byte
++	 * kmalloc(). Filesystems larger than 2^32 blocks (16TB normally)
++	 * have group descriptors at least twice as large (64 bytes or
++	 * more vs. 32 bytes for traditional ext3 filesystems, so a 128TB
++	 * filesystem needs a 128kB allocation, which may need vmalloc().
++	 */
++	sbi->s_group_info = kzalloc(array_size, GFP_KERNEL);
++	if (sbi->s_group_info == NULL) {
++		sbi->s_group_info = vmalloc(array_size);
++		if (sbi->s_group_info != NULL)
++			memset(sbi->s_group_info, 0, array_size);
++	}
++
+ 	if (sbi->s_group_info == NULL) {
+ 		printk(KERN_ERR "EXT4-fs: can't allocate buddy meta group\n");
+ 		return -ENOMEM;
+@@ -2620,6 +2631,11 @@ static int ext4_mb_init_backend(struct s
+ 		printk(KERN_ERR "EXT4-fs: can't get new inode\n");
+ 		goto err_freesgi;
+ 	}
++	/*
++	 * To avoid colliding with an valid on-disk inode number,
++	 * EXT4_BAD_INO is used here as the number of the buddy cache inode.
++	 */
++	sbi->s_buddy_cache->i_ino = EXT4_BAD_INO;
+ 	EXT4_I(sbi->s_buddy_cache)->i_disksize = 0;
+ 	for (i = 0; i < ngroups; i++) {
+ 		desc = ext4_get_group_desc(sb, i, NULL);
+@@ -2642,7 +2658,10 @@ err_freebuddy:
+ 		kfree(sbi->s_group_info[i]);
+ 	iput(sbi->s_buddy_cache);
+ err_freesgi:
+-	kfree(sbi->s_group_info);
++	if (is_vmalloc_addr(sbi->s_group_info))
++		vfree(sbi->s_group_info);
++	else
++		kfree(sbi->s_group_info);
+ 	return -ENOMEM;
+ }
+ 
+@@ -2683,14 +2702,6 @@ int ext4_mb_init(struct super_block *sb,
+ 		i++;
+ 	} while (i <= sb->s_blocksize_bits + 1);
+ 
+-	/* init file for buddy data */
+-	ret = ext4_mb_init_backend(sb);
+-	if (ret != 0) {
+-		kfree(sbi->s_mb_offsets);
+-		kfree(sbi->s_mb_maxs);
+-		return ret;
+-	}
+-
+ 	spin_lock_init(&sbi->s_md_lock);
+ 	spin_lock_init(&sbi->s_bal_lock);
+ 
+@@ -2717,6 +2728,14 @@ int ext4_mb_init(struct super_block *sb,
+ 		spin_lock_init(&lg->lg_prealloc_lock);
+ 	}
+ 
++	/* init file for buddy data */
++	ret = ext4_mb_init_backend(sb);
++	if (ret != 0) {
++		kfree(sbi->s_mb_offsets);
++		kfree(sbi->s_mb_maxs);
++		return ret;
++	}
++
+ 	ext4_mb_history_init(sb);
+ 
+ 	if (sbi->s_journal)
+@@ -2766,7 +2785,10 @@ int ext4_mb_release(struct super_block *
+ 			EXT4_DESC_PER_BLOCK_BITS(sb);
+ 		for (i = 0; i < num_meta_group_infos; i++)
+ 			kfree(sbi->s_group_info[i]);
+-		kfree(sbi->s_group_info);
++		if (is_vmalloc_addr(sbi->s_group_info))
++			vfree(sbi->s_group_info);
++		else
++			kfree(sbi->s_group_info);
+ 	}
+ 	kfree(sbi->s_mb_offsets);
+ 	kfree(sbi->s_mb_maxs);
