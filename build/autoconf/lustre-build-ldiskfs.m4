@@ -236,8 +236,16 @@ AC_DEFUN([LB_LDISKFS_DEFINE_OPTIONS],
 [
 AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
 
+with_ldiskfs_pdo=no
 if test $LDISKFS_BACKFS = 'ext4'; then
 	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
+	case $LINUXRELEASE in
+	2.6.32*)
+		if test x$RHEL_KERNEL = xyes; then
+			with_ldiskfs_pdo=yes
+			AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
+		fi
+	esac
 fi
 
 LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET

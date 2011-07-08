@@ -33,3 +33,4 @@ ext4-export-64bit-name-hash.patch
 ext4-vmalloc-rhel6.patch
 ext4-journal-callback.patch
 ext4-store-tree-generation-at-find.patch
+ext4_pdirop-rhel6.patch

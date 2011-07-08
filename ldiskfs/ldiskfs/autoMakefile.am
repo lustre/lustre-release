@@ -72,10 +72,12 @@ endif
 			linux-stage/include/trace/events/@BACKFS@$$i \
 			> trace/events/ldiskfs$$i ; \
 	done
-	sed $(strip $(ldiskfs_sed_flags)) \
-        linux-stage/include/linux/dynlocks.h \
-        > linux/dynlocks.h
-
+	for i in $(notdir $(linux_new_headers)) ; do \
+		echo -n " $$i"; \
+		sed $(strip $(ldiskfs_sed_flags)) \
+                linux-stage/include/linux/$$i \
+                > linux/$$i ; \
+	done
 
 	@echo
 	touch sources
@@ -89,7 +91,7 @@ foo-check:
 	@echo "ldiskfs_LDADD: $(ldiskfs_LDADD)"
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-CLEANFILES = sources $(notdir $(linux_headers) $(backfs_headers) $(backfs_sources) $(new_sources) $(new_headers) $(trace_headers))
+CLEANFILES = sources $(notdir $(linux_new_headers) $(linux_headers) $(backfs_headers) $(backfs_sources) $(new_sources) $(new_headers) $(trace_headers))
 
 clean: clean-am
 	rm -rf linux linux-stage ldiskfs*.h trace

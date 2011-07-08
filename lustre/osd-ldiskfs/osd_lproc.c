@@ -263,6 +263,31 @@ static int lprocfs_osd_rd_mntdev(char *page, char **start, off_t off, int count,
                         osd->od_mount->lmi_mnt->mnt_devname);
 }
 
+#ifdef HAVE_LDISKFS_PDO
+static int lprocfs_osd_rd_pdo(char *page, char **start, off_t off, int count,
+                              int *eof, void *data)
+{
+        *eof = 1;
+
+        return snprintf(page, count, "%s\n", ldiskfs_pdo ? "ON" : "OFF");
+}
+
+static int lprocfs_osd_wr_pdo(struct file *file, const char *buffer,
+                              unsigned long count, void *data)
+{
+        int     pdo;
+        int     rc;
+
+        rc = lprocfs_write_helper(buffer, count, &pdo);
+        if (rc != 0)
+                return rc;
+
+        ldiskfs_pdo = !!pdo;
+
+        return count;
+}
+#endif
+
 struct lprocfs_vars lprocfs_osd_obd_vars[] = {
         { "blocksize",       lprocfs_osd_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_osd_rd_kbytestotal, 0, 0 },
@@ -272,6 +297,9 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
         { "filesfree",       lprocfs_osd_rd_filesfree,   0, 0 },
         { "fstype",          lprocfs_osd_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_osd_rd_mntdev,      0, 0 },
+#ifdef HAVE_LDISKFS_PDO
+        { "pdo",             lprocfs_osd_rd_pdo, lprocfs_osd_wr_pdo, 0 },
+#endif
         { 0 }
 };
 

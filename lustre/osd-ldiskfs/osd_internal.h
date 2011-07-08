@@ -98,6 +98,55 @@ struct osd_ctxt {
 };
 #endif
 
+#ifdef HAVE_LDISKFS_PDO
+
+#define osd_ldiskfs_find_entry(dir, dentry, de, lock)   \
+        ll_ldiskfs_find_entry(dir, dentry, de, lock)
+#define osd_ldiskfs_add_entry(handle, child, cinode, hlock) \
+        ldiskfs_add_entry(handle, child, cinode, hlock)
+
+#else /* HAVE_LDISKFS_PDO */
+
+struct htree_lock {
+        int     dummy;
+};
+
+struct htree_lock_head {
+        int     dummy;
+};
+
+#define ldiskfs_htree_lock(lock, head, inode, op)  do { LBUG(); } while (0)
+#define ldiskfs_htree_unlock(lock)                 do { LBUG(); } while (0)
+
+static inline struct htree_lock_head *ldiskfs_htree_lock_head_alloc(int dep)
+{
+        LBUG();
+        return NULL;
+}
+
+#define ldiskfs_htree_lock_head_free(lh)           do { LBUG(); } while (0)
+
+#define LDISKFS_DUMMY_HTREE_LOCK        0xbabecafe
+
+static inline struct htree_lock *ldiskfs_htree_lock_alloc(void)
+{
+        return (struct htree_lock *)LDISKFS_DUMMY_HTREE_LOCK;
+}
+
+static inline void ldiskfs_htree_lock_free(struct htree_lock *lk)
+{
+        LASSERT((unsigned long)lk == LDISKFS_DUMMY_HTREE_LOCK);
+}
+
+#define HTREE_HBITS_DEF         0
+
+#define osd_ldiskfs_find_entry(dir, dentry, de, lock)   \
+        ll_ldiskfs_find_entry(dir, dentry, de)
+#define osd_ldiskfs_add_entry(handle, child, cinode, lock) \
+        ldiskfs_add_entry(handle, child, cinode)
+
+#endif /* HAVE_LDISKFS_PDO */
+
 /*
  * osd device.
  */
@@ -219,6 +268,7 @@ struct osd_thread_info {
 
         /** dentry for Iterator context. */
         struct dentry          oti_it_dentry;
+        struct htree_lock     *oti_hlock;
 
         struct lu_fid          oti_fid;
         struct osd_inode_id    oti_id;
@@ -288,6 +338,8 @@ struct osd_thread_info {
         char                   oti_ldp[OSD_FID_REC_SZ];
         char                   oti_ldp2[OSD_FID_REC_SZ];
 };
+
+extern int ldiskfs_pdo;
 
 #ifdef LPROCFS
 /* osd_lproc.c */

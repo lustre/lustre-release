@@ -7,6 +7,8 @@ backfs_extra := $(wildcard @LINUX@/fs/@BACKFS@/Makefile)
 
 backfs_headers := $(wildcard @EXT_DIR@/*.h)
 linux_headers := $(wildcard @LINUX@/include/linux/@BACKFS@*.h)
+linux_new_headers := dynlocks.h
+@LDISKFS_PDO_TRUE@linux_new_headers += htree_lock.h
 trace_headers := $(wildcard @LINUX@/include/trace/events/@BACKFS@*.h)
 
 backfs_sources := $(filter-out %.mod.c,$(wildcard @EXT_DIR@/*.c))
@@ -15,6 +17,7 @@ ext3_new_sources := extents.c mballoc.c group.h dynlocks.c fiemap.h
 ext3_new_headers := ext3_extents.h
 
 ext4_new_sources := dynlocks.c fiemap.h mmp.c
+@LDISKFS_PDO_TRUE@ext4_new_sources += htree_lock.c
 ext4_new_headers :=
 
 new_sources := $(@BACKFS@_new_sources)

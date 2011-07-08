@@ -121,6 +121,8 @@ BACKFSU=${BACKFS/ext/EXT}
 AC_SUBST(BACKFSU) # We need a Upper string
 fi
 
+AM_CONDITIONAL(LDISKFS_PDO, test x$with_ldiskfs_pdo = xyes)
+
 AC_SUBST(ac_configure_args)
 
 LB_CONFIG_FILES
