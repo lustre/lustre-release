@@ -184,19 +184,9 @@ struct cl_page *lov_page_init_raid0(const struct lu_env *env,
                 lpg->lps_invalid = 0;
                 result = NULL;
         } else {
-                /*
-                 * This is only possible when TRANSIENT page
-                 * is being created, and CACHEABLE sub-page
-                 * (attached to already existing top-page) has
-                 * been found. Tell cl_page_find() to use
-                 * existing page.
-                 */
-                LASSERT(subpage->cp_type == CPT_CACHEABLE);
-                LASSERT(page->cp_type == CPT_TRANSIENT);
-                /* TODO: this is problematic, what if the page is being freed? */
-                result = cl_page_top(subpage);
-                cl_page_get(result);
-                cl_page_put(env, subpage);
+                CL_PAGE_DEBUG(D_ERROR, env, page, "parent page\n");
+                CL_PAGE_DEBUG(D_ERROR, env, subpage, "child page\n");
+                LASSERT(0);
         }
 
         EXIT;
