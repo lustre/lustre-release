@@ -1031,6 +1031,7 @@ run_test 39c "check truncate mtime update ======================"
 check_pdo_conflict() {
 	local pid=$1
 	local conflict=0
+	sleep 1 # to ensure OP1 is finished on client if OP2 is blocked by OP1
 	if [[ `ps --pid $pid | wc -l` == 1 ]]; then
 		conflict=1
 		echo "Conflict"
