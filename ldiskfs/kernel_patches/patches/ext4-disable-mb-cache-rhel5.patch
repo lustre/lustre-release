@@ -115,7 +115,7 @@ Index: linux-stage/fs/ext4/super.c
 @@ -1481,6 +1481,7 @@ enum {
 
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_bigendian_extents,
- 	Opt_force_over_16tb,
+ 	Opt_force_over_128tb,
 +	Opt_no_mbcache,
  };
  
@@ -123,7 +123,7 @@ Index: linux-stage/fs/ext4/super.c
 @@ -1554,6 +1555,7 @@ static match_table_t tokens = {
 	{Opt_noauto_da_alloc, "noauto_da_alloc"},
 	{Opt_bigendian_extents, "bigendian_extents"},
- 	{Opt_force_over_16tb, "force_over_16tb"},
+ 	{Opt_force_over_128tb, "force_over_128tb"},
 +	{Opt_no_mbcache, "no_mbcache"},
  	{Opt_err, NULL},
  };

@@ -93,7 +93,7 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
 @@ -1334,6 +1336,7 @@ enum {
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_bigendian_extents,
- 	Opt_force_over_16tb,
+ 	Opt_force_over_128tb,
 +	Opt_extents, Opt_noextents,
  };
  
@@ -101,7 +101,7 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
 @@ -1401,6 +1404,8 @@ static match_table_t tokens = {
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
  	{Opt_bigendian_extents, "bigendian_extents"},
- 	{Opt_force_over_16tb, "force_over_16tb"},
+ 	{Opt_force_over_128tb, "force_over_128tb"},
 +	{Opt_extents, "extents"},
 +	{Opt_noextents, "noextents"},
  	{Opt_err, NULL},
@@ -116,8 +116,8 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
  	if (!options)
  		return 1;
 @@ -1829,6 +1835,33 @@ set_qf_format:
- 		case Opt_force_over_16tb:
- 			force_over_16tb = 1;
+ 		case Opt_force_over_128tb:
+ 			force_over_128tb = 1;
  			break;
 +		case Opt_extents:
 +			if (!EXT4_HAS_INCOMPAT_FEATURE(sb,

@@ -96,7 +96,7 @@ Index: linux-stage/fs/ext4/super.c
 @@ -1515,6 +1517,7 @@ enum {
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_discard, Opt_nodiscard,
- 	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_16tb,
+ 	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
 +	Opt_extents, Opt_noextents,
  };
  
@@ -119,8 +119,8 @@ Index: linux-stage/fs/ext4/super.c
  	if (!options)
  		return 1;
 @@ -2039,6 +2045,32 @@ set_qf_format:
- 		case Opt_force_over_16tb:
- 			force_over_16tb = 1;
+ 		case Opt_force_over_128tb:
+ 			force_over_128tb = 1;
  			break;
 +		case Opt_extents:
 +			if (!EXT4_HAS_INCOMPAT_FEATURE(sb,

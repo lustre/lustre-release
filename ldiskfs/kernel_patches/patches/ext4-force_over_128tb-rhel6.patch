@@ -6,7 +6,7 @@ Index: linux-stage/fs/ext4/super.c
  struct proc_dir_entry *ext4_proc_root;
  static struct kset *ext4_kset;
  
-+static int force_over_16tb;
++static int force_over_128tb;
 +
  static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
  			     unsigned long journal_devnum);
@@ -16,7 +16,7 @@ Index: linux-stage/fs/ext4/super.c
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_discard, Opt_nodiscard,
 -	Opt_mballoc, Opt_bigendian_extents,
-+	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_16tb,
++	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
  };
  
  static const match_table_t tokens = {
@@ -24,7 +24,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
  	{Opt_bigendian_extents, "bigendian_extents"},
-+	{Opt_force_over_16tb, "force_over_16tb"},
++	{Opt_force_over_128tb, "force_over_128tb"},
  	{Opt_mballoc, "mballoc"},
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
@@ -32,8 +32,8 @@ Index: linux-stage/fs/ext4/super.c
  			break;
  		case Opt_mballoc:
  			break;
-+		case Opt_force_over_16tb:
-+			force_over_16tb = 1;
++		case Opt_force_over_128tb:
++			force_over_128tb = 1;
 +			break;
  		default:
  			ext4_msg(sb, KERN_ERR,
@@ -42,11 +42,11 @@ Index: linux-stage/fs/ext4/super.c
  		goto failed_mount;
  	}
  
-+	if (ext4_blocks_count(es) >= (1ULL << 32)) {
-+		if (force_over_16tb == 0) {
++	if (ext4_blocks_count(es) > (8ULL << 32)) {
++		if (force_over_128tb == 0) {
 +			printk(KERN_ERR "EXT4-fs does not support filesystems "
-+			       "greater than 16TB and can cause data corruption."
-+			       "Use \"force_over_16tb\" mount option to override."
++			       "greater than 128TB and can cause data corruption."
++			       "Use \"force_over_128tb\" mount option to override."
 +			       "\n");
 +			goto failed_mount;
 +		}

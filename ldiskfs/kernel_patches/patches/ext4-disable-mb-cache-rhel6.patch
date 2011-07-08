@@ -19,7 +19,7 @@ Index: linux-stage/fs/ext4/super.c
 @@ -1502,6 +1502,7 @@
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_discard, Opt_nodiscard,
- 	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_16tb,
+ 	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
 +	Opt_no_mbcache,
  	Opt_extents, Opt_noextents,
  };

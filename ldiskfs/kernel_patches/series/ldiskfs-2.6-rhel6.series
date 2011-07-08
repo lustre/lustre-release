@@ -14,7 +14,7 @@ ext4-mballoc-extra-checks-rhel6.patch
 ext4-misc-rhel6.patch 
 ext4-big-endian-check-2.6-rhel6.patch
 ext4-alloc-policy-2.6-rhel5.patch
-ext4-force_over_16tb-rhel6.patch
+ext4-force_over_128tb-rhel6.patch
 ext4-pdir-fix-rhel6.patch
 ext4-osd-iop-common-rhel6.patch
 ext4-osd-iam-exports-rhel6.patch
