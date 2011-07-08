@@ -97,7 +97,7 @@ int ptlrpc_connection_put(struct ptlrpc_connection *conn)
         if (!conn)
                 RETURN(rc);
 
-        LASSERT(!cfs_hlist_unhashed(&conn->c_hash));
+        LASSERT(cfs_atomic_read(&conn->c_refcount) > 1);
 
         /*
          * We do not remove connection from hashtable and
