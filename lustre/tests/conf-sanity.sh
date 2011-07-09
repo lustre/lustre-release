@@ -786,8 +786,8 @@ test_23a() {	# was test_23
 	ps -ef | grep mount
 	# "ctrl-c" sends SIGINT but it usually (in script) does not work on child process
 	# SIGTERM works but it does not spread to offspring processses
-	kill -s SIGTERM $MOUNT_PID
-	kill -s SIGTERM $MOUNT_LUSTRE_PID
+	kill -s TERM $MOUNT_PID
+	kill -s TERM $MOUNT_LUSTRE_PID
 	# we can not wait $MOUNT_PID because it is not a child of this shell
 	local PID1
 	local PID2
