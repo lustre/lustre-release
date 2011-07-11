@@ -46,7 +46,7 @@ Index: linux-stage/fs/ext4/dir.c
  		error_msg = "rec_len is too small for name_len";
  	else if (((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize)
  		error_msg = "directory entry across blocks";
-@@ -181,7 +188,7 @@ revalidate:
+@@ -182,7 +189,7 @@ revalidate:
  				 * failure will be detected in the
  				 * dirent test below. */
  				if (ext4_rec_len_from_disk(de->rec_len,
@@ -55,7 +55,7 @@ Index: linux-stage/fs/ext4/dir.c
  					break;
  				i += ext4_rec_len_from_disk(de->rec_len,
  							    sb->s_blocksize);
-@@ -344,12 +351,17 @@ int ext4_htree_store_dirent(struct file 
+@@ -345,12 +352,17 @@ int ext4_htree_store_dirent(struct file 
  	struct fname *fname, *new_fn;
  	struct dir_private_info *info;
  	int len;
@@ -74,7 +74,7 @@ Index: linux-stage/fs/ext4/dir.c
  	new_fn = kzalloc(len, GFP_KERNEL);
  	if (!new_fn)
  		return -ENOMEM;
-@@ -358,7 +370,7 @@ int ext4_htree_store_dirent(struct file 
+@@ -359,7 +371,7 @@ int ext4_htree_store_dirent(struct file 
  	new_fn->inode = le32_to_cpu(dirent->inode);
  	new_fn->name_len = dirent->name_len;
  	new_fn->file_type = dirent->file_type;
@@ -87,7 +87,7 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -1187,6 +1187,7 @@ static inline void ext4_clear_inode_stat
+@@ -1267,6 +1267,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  #define EXT4_FEATURE_INCOMPAT_64BIT		0x0080
  #define EXT4_FEATURE_INCOMPAT_MMP               0x0100
  #define EXT4_FEATURE_INCOMPAT_FLEX_BG		0x0200
@@ -95,7 +95,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  #define EXT4_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
  #define EXT4_FEATURE_INCOMPAT_SUPP	(EXT4_FEATURE_INCOMPAT_FILETYPE| \
-@@ -1195,7 +1196,9 @@ static inline void ext4_clear_inode_stat
+@@ -1275,7 +1276,9 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
@@ -106,7 +106,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -1277,6 +1280,43 @@ struct ext4_dir_entry_2 {
+@@ -1357,6 +1360,43 @@ struct ext4_dir_entry_2 {
  #define EXT4_FT_SYMLINK		7
  
  #define EXT4_FT_MAX		8
@@ -150,7 +150,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  /*
   * EXT4_DIR_PAD defines the directory entries boundaries
-@@ -1285,8 +1325,11 @@ struct ext4_dir_entry_2 {
+@@ -1365,8 +1405,11 @@ struct ext4_dir_entry_2 {
   */
  #define EXT4_DIR_PAD			4
  #define EXT4_DIR_ROUND			(EXT4_DIR_PAD - 1)
@@ -163,7 +163,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_MAX_REC_LEN		((1<<16)-1)
  
  static inline unsigned int
-@@ -1613,7 +1656,7 @@ extern struct buffer_head * ext4_find_en
+@@ -1726,7 +1769,7 @@ extern struct buffer_head * ext4_find_en
  					    struct ext4_dir_entry_2 ** res_dir);
  #define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
@@ -172,9 +172,9 @@ Index: linux-stage/fs/ext4/ext4.h
  extern struct buffer_head *ext4_append(handle_t *handle,
  				       struct inode *inode,
  				       ext4_lblk_t *block, int *err);
-@@ -1944,6 +1987,28 @@ static inline void set_bitmap_uptodate(s
- 
- #define in_range(b, first, len)	((b) >= (first) && (b) <= (first) + (len) - 1)
+@@ -2069,6 +2112,28 @@ extern wait_queue_head_t aio_wq[];
+ #define to_aio_wq(v) (&aio_wq[((unsigned long)v) % WQ_HASH_SZ])
+ extern void ext4_aio_wait(struct inode *inode);
  
 +/*
 + * Compute the total directory entry data length.
@@ -447,7 +447,20 @@ Index: linux-stage/fs/ext4/namei.c
  
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
-@@ -2007,17 +2043,32 @@ int ext4_add_dot_dotdot(handle_t *handle
+@@ -1996,28 +2032,40 @@ int ext4_add_dot_dotdot(handle_t *handle
+ 	inode->i_fop = &ext4_dir_operations;
+ 	inode->i_size = EXT4_I(inode)->i_disksize = inode->i_sb->s_blocksize;
+ 	dir_block = ext4_bread(handle, inode, 0, 1, &err);
+-	if (!dir_block) {
+-		clear_nlink(inode);
+-		ext4_mark_inode_dirty(handle, inode);
+-		iput (inode);
++	if (!dir_block)
+ 		goto get_out;
+-	}
++
+ 	BUFFER_TRACE(dir_block, "get_write_access");
+ 	ext4_journal_get_write_access(handle, dir_block);
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
@@ -483,15 +496,20 @@ Index: linux-stage/fs/ext4/namei.c
  	inode->i_nlink = 2;
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	ext4_handle_dirty_metadata(handle, dir, dir_block);
-@@ -2054,7 +2105,7 @@ retry:
+@@ -2054,9 +2102,12 @@ retry:
  	if (IS_ERR(inode))
  		goto out_stop;
  
 -	err = ext4_add_dot_dotdot(handle, dir, inode);
 +	err = ext4_add_dot_dotdot(handle, dir, inode, NULL, NULL);
  	if (err) {
++		clear_nlink(inode);
  		unlock_new_inode(inode);
++		ext4_mark_inode_dirty(handle, inode);
++		iput (inode);
  		goto out_stop;
+ 	}
+ 
 @@ -2092,7 +2143,7 @@ static int empty_dir(struct inode *inode
  	int err = 0;
  
