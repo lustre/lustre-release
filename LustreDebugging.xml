@@ -367,7 +367,7 @@ Lustre Debugging Tools</title>
       </section>
       <section xml:id="dbdoclet.50438274_57177">
         <title>Format of Lustre Debug Messages</title>
-        <para>Lustre uses the <literal>CDEBUG</literal> and <literal>CERROR</literal> macros to print the debug or error messages. To print the message, the <literal>CDEBUG</literal> macro uses <literal>portals_debug_msg</literal> (<literal>portals/linux/oslib/debug.c</literal>). The message format is described below, along with an example.</para>
+        <para>Lustre uses the <literal>CDEBUG()</literal> and <literal>CERROR()</literal> macros to print the debug or error messages. To print the message, the <literal>CDEBUG()</literal> macro uses the function <literal>libcfs_debug_msg()</literal> (<literal>libcfs/libcfs/tracefile.c</literal>). The message format is described below, along with an example.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
@@ -375,10 +375,10 @@ Lustre Debugging Tools</title>
             <thead>
               <row>
                 <entry>
-                  <para><emphasis role="bold">Parameter</emphasis></para>
+                  <para><emphasis role="bold">Description</emphasis></para>
                 </entry>
                 <entry>
-                  <para><emphasis role="bold">Description</emphasis></para>
+                  <para><emphasis role="bold">Parameter</emphasis></para>
                 </entry>
               </row>
             </thead>
@@ -409,11 +409,10 @@ Lustre Debugging Tools</title>
               </row>
               <row>
                 <entry>
-                  <para> <emphasis role="bold">sec.used</emphasis></para>
+                  <para> <emphasis role="bold">seconds.microseconds</emphasis></para>
                 </entry>
                 <entry>
-                  <para> 10818808</para>
-                  <para> 47.677302</para>
+                  <para> 1081880847.677302</para>
                 </entry>
               </row>
               <row>
@@ -421,7 +420,7 @@ Lustre Debugging Tools</title>
                   <para> <emphasis role="bold">stack size</emphasis></para>
                 </entry>
                 <entry>
-                  <para> 1204:</para>
+                  <para> 1204</para>
                 </entry>
               </row>
               <row>
@@ -429,23 +428,23 @@ Lustre Debugging Tools</title>
                   <para> <emphasis role="bold">pid</emphasis></para>
                 </entry>
                 <entry>
-                  <para> 2973:</para>
+                  <para> 2973</para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> <emphasis role="bold">host pid (if uml) or zero</emphasis></para>
+                  <para> <emphasis role="bold">host pid (UML only) or zero</emphasis></para>
                 </entry>
                 <entry>
-                  <para> 31070:</para>
+                  <para> 31070</para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> <emphasis role="bold">(file:line #:functional())</emphasis></para>
+                  <para> <emphasis role="bold">(file:line #:function_name())</emphasis></para>
                 </entry>
                 <entry>
-                  <para> (as_dev.c:144:create_write_buffers())</para>
+                  <para> (obd_mount.c:2089:lustre_fill_super())</para>
                 </entry>
               </row>
               <row>
@@ -462,7 +461,7 @@ Lustre Debugging Tools</title>
       </section>
       <section remap="h4">
         <title>Lustre Debug Messages Buffer</title>
-        <para>Lustre debug messages are maintained in a buffer, with the maximum buffer size specified (in MBs) by the <literal>debug_mb</literal> parameter (<literal>/proc/sys/lnet/debug_mb</literal>). The buffer is circular, so debug messages are kept until the allocated buffer limit is reached, and then the first messages are overwritten.</para>
+        <para>Lustre debug messages are maintained in a buffer, with the maximum buffer size specified (in MBs) by the <literal>debug_mb</literal> parameter (<literal>lctl get_param debug_mb</literal>). The buffer is circular, so debug messages are kept until the allocated buffer limit is reached, and then the first messages are overwritten.</para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438274_62472">
@@ -472,13 +471,13 @@ Lustre Debugging Tools</title>
       <itemizedlist>
         <listitem>
           <para>Obtain a list of all the types and subsystems:</para>
-          <screen>lctl &gt; debug_list <emphasis>&lt;subs | types&gt;</emphasis></screen>
+          <screen>lctl &gt; debug_list <emphasis>{subs | types}</emphasis></screen>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
           <para>Filter the debug log:</para>
-          <screen>lctl &gt; filter <emphasis>&lt;subsystem name | debug type&gt;</emphasis></screen>
+          <screen>lctl &gt; filter <emphasis>{subsystem name | debug type}</emphasis></screen>
         </listitem>
       </itemizedlist>
       <note>
@@ -487,7 +486,7 @@ Lustre Debugging Tools</title>
       <itemizedlist>
         <listitem>
           <para>Show debug messages belonging to certain subsystem or type:</para>
-          <screen>lctl &gt; show <emphasis>&lt;subsystem name | debug type&gt;</emphasis></screen>
+          <screen>lctl &gt; show <emphasis>{subsystem name | debug type}</emphasis></screen>
           <para><literal>debug_kernel</literal> pulls the data from the kernel logs, filters it appropriately, and displays or saves it as per the specified options</para>
           <screen>lctl &gt; debug_kernel [<emphasis>output filename</emphasis>]</screen>
           <para>If the debugging is being done on User Mode Linux (UML), it might be useful to save the logs on the host machine so that they can be used at a later time.</para>
@@ -496,7 +495,7 @@ Lustre Debugging Tools</title>
       <itemizedlist>
         <listitem>
           <para>Filter a log on disk, if you already have a debug log saved to disk (likely from a crash):</para>
-          <screen>lctl &gt; debug_file <emphasis>&lt;input filename&gt;</emphasis> [<emphasis>output filename</emphasis>] </screen>
+          <screen>lctl &gt; debug_file <emphasis>{input filename}</emphasis> [<emphasis>output filename</emphasis>] </screen>
           <para>During the debug session, you can add markers or breaks to the log for any reason:</para>
           <screen>lctl &gt; mark [marker text] </screen>
           <para>The marker text defaults to the current date and time in the debug log (similar to the example shown below):</para>
@@ -535,99 +534,114 @@ Debug log: 324 lines, 258 kept, 66 dropped.
     </section>
     <section remap="h3">
       <title>Dumping the Buffer to a File (<literal>debug_daemon</literal>)</title>
-      <para>The <literal>debug_daemon</literal> option is used by <literal>lctl</literal> to control the dumping of the <literal>debug_kernel</literal> buffer to a user-specified file. This functionality uses a kernel thread on top of <literal>debug_kernel</literal>, which works in parallel with the <literal>debug_daemon</literal> command.</para>
-      <para>The <literal>debug_daemon</literal> is highly dependent on file system write speed. File system write operations may not be fast enough to flush out all of the <literal>debug_buffer</literal> if the Lustre file system is under heavy system load and continues to <literal>CDEBUG</literal> to the <literal>debug_buffer</literal>. The <literal>debug_daemon</literal> will write the message <literal>DEBUG MARKER:</literal> Trace buffer full into the <literal>debug_buffer</literal> to indicate the <literal>debug_buffer</literal> contents are overlapping before the <literal>debug_daemon</literal> flushes data to a file.</para>
-      <para>Users can use <literal>lctl control</literal> to start or stop the Lustre daemon from dumping the <literal>debug_buffe</literal>r to a file. Users can also temporarily hold daemon from dumping the file. Use of the <literal>debug_daemon</literal> sub-command to <literal>lctl</literal> can provide the same function.</para>
+      <para>The <literal>lctl debug_daemon</literal> command is used to continuously dump the <literal>debug_kernel</literal> buffer to a user-specified file. This functionality uses a kernel thread to continuously dump the messages from the kernel debug log, so that much larger debug logs can be saved over a longer time than would fit in the kernel ringbuffer.</para>
+      <para>The <literal>debug_daemon</literal> is highly dependent on file system write speed. File system write operations may not be fast enough to flush out all of the <literal>debug_buffer</literal> if the Lustre file system is under heavy system load and continues to log debug messages to the <literal>debug_buffer</literal>. The <literal>debug_daemon</literal> will write the message <literal>DEBUG MARKER: Trace buffer full</literal> into the <literal>debug_buffer</literal> to indicate the <literal>debug_buffer</literal> contents are overlapping before the <literal>debug_daemon</literal> flushes data to a file.</para>
+      <para>Users can use the <literal>lctl debug_daemon</literal> command to start or stop the Lustre daemon from dumping the <literal>debug_buffer</literal> to a file.</para>
       <section remap="h4">
         <title><literal>lctl debug_daemon</literal> Commands</title>
-        <para>This section describes <literal>lctl debug_daemon</literal> commands.</para>
-        <para>To initiate the <literal>debug_daemon</literal> to start dumping <literal>debug_buffer</literal> into a file., enter</para>
-        <screen>$ lctl debug_daemon start [{file} {megabytes}]</screen>
-        <para>The file can be a system default file, as shown in <literal>/proc/sys/lnet/debug_path</literal>. After Lustre starts, the default path is <literal>/tmp/lustre-log-$HOSTNAME</literal>. Users can specify a new filename for <literal>debug_daemon</literal> to output <literal>debug_buffer</literal>. The new file name shows up in <literal>/proc/sys/lnet/debug_path</literal>. Megabytes is the limitation of the file size in MBs.</para>
-        <para>The daemon wraps around and dumps data to the beginning of the file when the output file size is over the limit of the user-specified file size. To decode the dumped file to ASCII and order the log entries by time, run:</para>
-        <screen>lctl debug_file {file} &gt; {newfile}</screen>
-        <para>The output is internally sorted by the <literal>lct</literal>l command using quicksort.</para>
-        <para>To completely shut down the <literal>debug_daemon</literal> operation and flush the file output, enter:</para>
-        <screen>debug_daemon stop</screen>
+        <para>To initiate the <literal>debug_daemon</literal> to start dumping the <literal>debug_buffer</literal> into a file, run as the root user:</para>
+        <screen>lctl debug_daemon start {filename} [{megabytes}]</screen>
+        <para>The debug log will be written to the specified filename from the kernel.  The file will be limited to the optionally specified number of megabytes.</para>
+        <para>The daemon wraps around and dumps data to the beginning of the file when the output file size is over the limit of the user-specified file size. To decode the dumped file to ASCII and sort the log entries by time, run:</para>
+        <screen>lctl debug_file {filename} &gt; {newfile}</screen>
+        <para>The output is internally sorted by the <literal>lctl</literal> command.</para>
+        <para>To stop the <literal>debug_daemon</literal> operation and flush the file output, run:</para>
+        <screen>lctl debug_daemon stop</screen>
         <para>Otherwise, <literal>debug_daemon</literal> is shut down as part of the Lustre file system shutdown process. Users can restart <literal>debug_daemon</literal> by using start command after each stop command issued.</para>
-        <para>This is an example using <literal>debug_daemon</literal> with the interactive mode of <literal>lctl</literal> to dump debug logs to a 10 MB file.</para>
-        <screen>#~/utils/lctl</screen>
-        <para>To start the daemon to dump debug_buffer into a 40 MB <literal>/tmp/dump</literal> file, enter:</para>
-        <screen>lctl &gt; debug_daemon start /trace/log 40 </screen>
-        <para>To completely shut down the daemon, enter:</para>
+        <para>This is an example using <literal>debug_daemon</literal> with the interactive mode of <literal>lctl</literal> to dump debug logs to a 40 MB file.</para>
+        <screen>lctl</screen>
+        <screen>lctl &gt; debug_daemon start /var/log/lustre.40.bin 40 </screen>
+        <screen>{run filesystem operations to debug}</screen>
         <screen>lctl &gt; debug_daemon stop </screen>
-        <para>To start another daemon with an unlimited file size, enter:</para>
-        <screen>lctl &gt; debug_daemon start /tmp/unlimited </screen>
+        <screen>lctl &gt; debug_file /var/log/lustre.bin /var/log/lustre.log</screen>
+        <para>To start another daemon with an unlimited file size, run:</para>
+        <screen>lctl &gt; debug_daemon start /var/log/lustre.bin </screen>
         <para>The text message <literal>*** End of debug_daemon trace log ***</literal> appears at the end of each output file.</para>
       </section>
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>kernel debug log</secondary></indexterm>Controlling Information Written to the Kernel Debug Log</title>
-      <para>Masks are provided in <literal>/proc/sys/lnet/subsystem_debug</literal> and <literal>/proc/sys/lnet/debug</literal> to be used with the systctl command to determine what information is to be written to the debug log. The subsystem_debug mask determines the information written to the log based on the subsystem (such as iobdfilter, net, portals, or OSC). The debug mask controls information based on debug type (such as info, error, trace, or alloc).</para>
+      <para>Running <literal>lctl set_param subsystem_debug={subsystem_mask}</literal> and <literal>lcdebug</literal> to be used with the systctl command to determine what information is to be written to the debug log. The subsystem_debug mask determines the information written to the log based on the subsystem (such as iobdfilter, net, portals, or OSC). The debug mask controls information based on debug type (such as info, error, trace, or alloc).</para>
       <para>To turn off Lustre debugging completely:</para>
-      <screen>sysctl -w lnet.debug=0 </screen>
+      <screen>lctl set_param debug=0 </screen>
       <para>To turn on full Lustre debugging:</para>
-      <screen>sysctl -w lnet.debug=-1 </screen>
-      <para>To turn on logging of messages related to network communications:</para>
-      <screen>sysctl -w lnet.debug=net </screen>
+      <screen>lctl set_param debug=-1 </screen>
+      <para>To log only messages related to network communications:</para>
+      <screen>lctl set_param debug=net </screen>
       <para>To turn on logging of messages related to network communications and existing debug flags:</para>
-      <screen>sysctl -w lnet.debug=+net </screen>
+      <screen>lctl set_param debug=+net </screen>
       <para>To turn off network logging with changing existing flags:</para>
-      <screen>sysctl -w lnet.debug=-net </screen>
-      <para>The various options available to print to kernel debug logs are listed in <literal>lnet/include/libcfs/libcfs.h</literal></para>
+      <screen>lctl set_param debug=-net </screen>
+      <para>The various options available to print to kernel debug logs are listed in <literal>libcfs/include/libcfs/libcfs.h</literal></para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>using strace</secondary></indexterm>Troubleshooting with <literal>strace</literal></title>
       <para>The <literal>strace</literal> utility provided with the Linux distribution enables system calls to be traced by intercepting all the system calls made by a process and recording the system call name, arguments, and return values.</para>
       <para>To invoke <literal>strace</literal> on a program, enter:</para>
-      <screen>$ strace <emphasis>&lt;program&gt; &lt;args&gt;</emphasis> </screen>
+      <screen>$ strace <emphasis>{program} {args}</emphasis> </screen>
       <para>Sometimes, a system call may fork child processes. In this situation, use the <literal>-f</literal> option of <literal>strace</literal> to trace the child processes:</para>
-      <screen>$ strace -f <emphasis>&lt;program&gt; &lt;args&gt;</emphasis> </screen>
+      <screen>$ strace -f <emphasis>{program} {args}</emphasis> </screen>
       <para>To redirect the <literal>strace</literal> output to a file, enter:</para>
-      <screen>$ strace -o <emphasis>&lt;filename&gt; &lt;program&gt; &lt;args&gt;</emphasis> </screen>
+      <screen>$ strace -o <emphasis>{filename} {program} {args}</emphasis> </screen>
       <para>Use the <literal>-ff</literal> option, along with <literal>-o</literal>, to save the trace output in <literal>filename.pid</literal>, where <literal>pid</literal> is the process ID of the process being traced. Use the <literal>-ttt</literal> option to timestamp all lines in the strace output, so they can be correlated to operations in the lustre kernel debug log.</para>
-      <para>If the debugging is done in UML, save the traces on the host machine. In this example, <literal>hostfs</literal> is mounted on <literal>/r</literal>:</para>
-      <screen>$ strace -o /r/tmp/vi.strace </screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>disk contents</secondary></indexterm>Looking at Disk Content</title>
       <para>In Lustre, the inodes on the metadata server contain extended attributes (EAs) that store information about file striping. EAs contain a list of all object IDs and their locations (that is, the OST that stores them). The <literal>lfs</literal> tool can be used to obtain this information for a given file using the <literal>getstripe</literal> subcommand. Use a corresponding <literal>lfs setstripe</literal> command to specify striping attributes for a new file or directory.</para>
-      <para>The <literal>lfs getstripe</literal> utility is written in C; it takes a Lustre filename as input and lists all the objects that form a part of this file. To obtain this information for the file <literal>/mnt/lustre/frog</literal> in Lustre file system, run:</para>
+      <para>The <literal>lfs getstripe</literal> command takes a Lustre filename as input and lists all the objects that form a part of this file. To obtain this information for the file <literal>/mnt/lustre/frog</literal> in Lustre file system, run:</para>
       <screen>$ lfs getstripe /mnt/lustre/frog
-$
-   obdix                           objid
-   0                               17
-   1                               4
-</screen>
+lmm_stripe_count:   2
+lmm_stripe_size:    1048576
+lmm_stripe_offset:  2
+        obdidx           objid          objid           group
+             2          818855        0xc7ea7               0
+             0          873123        0xd52a3               0
+        </screen>
       <para>The <literal>debugfs</literal> tool is provided in the <literal>e2fsprogs</literal> package. It can be used for interactive debugging of an <literal>ldiskfs</literal> file system. The <literal>debugfs</literal> tool can either be used to check status or modify information in the file system. In Lustre, all objects that belong to a file are stored in an underlying <literal>ldiskfs</literal> file system on the OSTs. The file system uses the object IDs as the file names. Once the object IDs are known, use the <literal>debugfs</literal> tool to obtain the attributes of all objects from different OSTs.</para>
       <para>A sample run for the <literal>/mnt/lustre/frog</literal> file used in the above example is shown here:</para>
-      <screen>     $ debugfs -c /tmp/ost1
-   debugfs: cd O
-   debugfs: cd 0                                   /* for files in group 0 */
-   debugfs: cd d&lt;objid % 32&gt;
-   debugfs: stat &lt;objid&gt;                           /* for getattr on object */
-   debugfs: quit
-## Suppose object id is 36, then follow the steps below:
-   $ debugfs /tmp/ost1
-   debugfs: cd O
-   debugfs: cd 0
-   debugfs: cd d4                                  /* objid % 32 */
-   debugfs: stat 36                                /* for getattr on obj 4*/
-   debugfs: dump 36 /tmp/obj.36                    /* dump contents of obj 4 */
-   debugfs: quit</screen>
+      <screen>$ debugfs -c -R "stat O/0/d$((818855 % 32))/818855" /dev/vgmyth/lvmythost2
+
+debugfs 1.41.90.wc3 (28-May-2011)
+/dev/vgmyth/lvmythost2: catastrophic mode - not reading inode or group bitmaps
+Inode: 227649   Type: regular    Mode:  0666   Flags: 0x80000
+Generation: 1375019198    Version: 0x0000002f:0000728f
+User:  1000   Group:  1000   Size: 2800
+File ACL: 0    Directory ACL: 0
+Links: 1   Blockcount: 8
+Fragment:  Address: 0    Number: 0    Size: 0
+ ctime: 0x4e177fe5:00000000 -- Fri Jul  8 16:08:37 2011
+ atime: 0x4d2e2397:00000000 -- Wed Jan 12 14:56:39 2011
+ mtime: 0x4e177fe5:00000000 -- Fri Jul  8 16:08:37 2011
+crtime: 0x4c3b5820:a364117c -- Mon Jul 12 12:00:00 2010
+Size of extra inode fields: 28
+Extended attributes stored in inode body: 
+  fid = "08 80 24 00 00 00 00 00 28 8a e7 fc 00 00 00 00 a7 7e 0c 00 00 00 00 00
+ 00 00 00 00 00 00 00 00 " (32)
+  fid: objid=818855 seq=0 parent=[0x248008:0xfce78a28:0x0] stripe=0
+EXTENTS:
+(0):63331288
+      </screen>
     </section>
     <section remap="h3">
       <title>Finding the Lustre UUID of an OST</title>
-      <para>To determine the Lustre UUID of an obdfilter disk (for example, if you mix up the cables on your OST devices or the SCSI bus numbering suddenly changes and the SCSI devices get new names), use <literal>debugfs</literal> to get the <literal>last_rcvd</literal> file.</para>
+      <para>To determine the Lustre UUID of an OST disk (for example, if you mix up the cables on your OST devices or the SCSI bus numbering suddenly changes and the SCSI devices get new names), it is possible to extract this from the last_rcvd file using debugfs:</para>
+      <screen>debugfs -c -R "dump last_rcvd /tmp/last_rcvd" /dev/sdc
+strings /tmp/last_rcvd | head -1
+myth-OST0004_UUID
+      </screen>
+      <para>It is also possible (and easier) to extract this from the filesystem label using the <literal>dumpe2fs</literal> command:</para>
+      <screen>dumpe2fs -h /dev/sdc | grep volume
+dumpe2fs 1.41.90.wc3 (28-May-2011)
+Filesystem volume name:   myth-OST0004
+      </screen>
+      <para>The debugfs and dumpe2fs commands are well documented in the <literal>debugfs(8)</literal> and <literal>dumpe2fs(8)</literal> manual pages.</para>
     </section>
     <section remap="h3">
       <title>Printing Debug Messages to the Console</title>
       <para>To dump debug messages to the console (<literal>/var/log/messages</literal>), set the corresponding debug mask in the <literal>printk</literal> flag:</para>
-      <screen>sysctl -w lnet.printk=-1 </screen>
-      <para>This slows down the system dramatically. It is also possible to selectively enable or disable this capability for particular flags using:</para>
-      <screen>sysctl -w lnet.printk=+vfstrace 
-sysctl -w lnet.printk=-vfstrace </screen>
-      <para>It is possible to disable warning, error, and console messages, though it is strongly recommended to have something like <literal>lctl debug_daemon</literal> running to capture this data to a local file system for debugging purposes.</para>
+      <screen>lctl set_param printk=-1 </screen>
+      <para>This slows down the system dramatically. It is also possible to selectively enable or disable this capability for particular flags using:<literal>lctl set_param printk=+vfstrace</literal> and <literal>lctl set_param printk=-vfstrace </literal>.</para>
+      <para>It is possible to disable warning, error, and console messages, though it is strongly recommended to have something like <literal>lctl debug_daemon</literal> running to capture this data to a local file system for failure detection purposes.</para>
     </section>
     <section remap="h3">
       <title>Tracing Lock Traffic</title>
@@ -664,129 +678,198 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <emphasis role="bold">
-                    <literal>LBUG</literal>
+                    <literal>LBUG()</literal>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>A panic-style assertion in the kernel which causes Lustre to dump its circular log to the <literal>/tmp/lustre-log</literal> file. This file can be retrieved after a reboot. LBUG freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para>
+                <para>A panic-style assertion in the kernel which causes Lustre to dump its circular log to the <literal>/tmp/lustre-log</literal> file. This file can be retrieved after a reboot. <literal>LBUG()</literal> freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para>
               </entry>
             </row>
             <row>
               <entry>
                 <para> <emphasis role="bold">
-                    <literal>LASSERT</literal>
+                    <literal>LASSERT()</literal>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>Validates a given expression as true, otherwise calls LBUG. The failed expression is printed on the console, although the values that make up the expression are not printed.</para>
+                <para>Validates a given expression as true, otherwise calls LBUG(). The failed expression is printed on the console, although the values that make up the expression are not printed.</para>
               </entry>
             </row>
             <row>
               <entry>
                 <para> <emphasis role="bold">
-                    <literal>LASSERTF</literal>
+                    <literal>LASSERTF()</literal>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>Similar to LASSERT but allows a free-format message to be printed, like <literal>printf/printk</literal>.</para>
+                <para>Similar to <literal>LASSERT()</literal> but allows a free-format message to be printed, like <literal>printf/printk</literal>.</para>
               </entry>
             </row>
             <row>
               <entry>
                 <para> <emphasis role="bold">
-                    <literal>CDEBUG</literal>
+                    <literal>CDEBUG()</literal>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>The basic, most commonly used debug macro that takes just one more argument than standard <literal>printf</literal> - the debug type. This message adds to the debug log with the debug mask set accordingly. Later, when a user retrieves the log for troubleshooting, they can filter based on this type.</para>
-                <para><literal>CDEBUG(D_INFO, &quot;This is my debug message: the number is %d\n&quot;, number)</literal>.</para>
+                <para>The basic, most commonly used debug macro that takes just one more argument than standard <literal>printf()</literal> - the debug type. This message adds to the debug log with the debug mask set accordingly. Later, when a user retrieves the log for troubleshooting, they can filter based on this type.</para>
+                <para><literal>CDEBUG(D_INFO, &quot;debug message: rc=%d\n&quot;, number);</literal></para>
               </entry>
             </row>
             <row>
               <entry>
                 <para> <emphasis role="bold">
-                    <literal>CERROR</literal>
+                    <literal>CDEBUG_LIMIT()</literal>
                   </emphasis></para>
               </entry>
               <entry>
-                <para> Behaves similarly to <literal>CDEBUG</literal>, but unconditionally prints the message in the debug log and to the console. This is appropriate for serious errors or fatal conditions:</para>
-                <para><literal>CERROR(&quot;Something very bad has happened, and the return code is %d.\n&quot;, rc);</literal></para>
+                <para> Behaves similarly to <literal>CDEBUG()</literal>, but rate limits this message when printing to the console (for <literal>D_WARN</literal>, <literal>D_ERROR</literal>, and <literal>D_CONSOLE</literal> message types. This is useful for messages that use a variable debug mask:</para>
+                <para><literal>CDEBUG(mask, &quot;maybe bad: rc=%d\n&quot;, rc);</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold"><literal>ENTRY</literal> and <literal>EXIT</literal></emphasis></para>
+                <para> <emphasis role="bold">
+                    <literal>CERROR()</literal>
+                  </emphasis></para>
               </entry>
               <entry>
-                <para> Add messages to aid in call tracing (takes no arguments). When using these macros, cover all exit conditions to avoid confusion when the debug log reports that a function was entered, but never exited.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <emphasis role="bold"><literal>LDLM_DEBUG</literal> and <literal>LDLM_DEBUG_NOLOCK</literal></emphasis></para>
-              </entry>
-              <entry>
-                <para>Used when tracing MDS and VFS operations for locking. These macros build a thin trace that shows the protocol exchanges between nodes.</para>
+                <para>Internally using <literal>CDEBUG_LIMIT(D_ERROR, ...)</literal>, which unconditionally prints the message in the debug log and to the console. This is appropriate for serious errors or fatal conditions.  Messages printed to the console are prefixed with <literal>LustreError:</literal>, and are rate-limited, to avoid flooding the console with duplicates.</para>
+                <para><literal>CERROR(&quot;Something bad happened: rc=%d\n&quot;, rc);</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>
-                    <replaceable role="bold">DEBUG_REQ</replaceable>
-                  </literal></para>
+                <para> <emphasis role="bold">
+                    <literal>CWARN()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para> Behaves similarly to <literal>CERROR()</literal>, but prefixes the messages with <literal>Lustre:</literal>. This is appropriate for important, but not fatal conditions.  Messages printed to the console are rate-limited.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>CNETERR()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para> Behaves similarly to <literal>CERROR()</literal>, but prints error messages for LNET if <literal>D_NETERR</literal> is set in the <literal>debug</literal> mask. This is appropriate for serious networking errors. Messages printed to the console are rate-limited.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>DEBUG_REQ()</literal>
+                  </emphasis></para>
               </entry>
               <entry>
                 <para>Prints information about the given <literal>ptlrpc_request</literal> structure.</para>
+                <para><literal>DEBUG_REQ(D_RPCTRACE, req, &quot;"Handled RPC: rc=%d\n&quot;, rc);</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>
-                    <replaceable role="bold">OBD_FAIL_CHECK</replaceable>
-                  </literal></para>
+                <para> <emphasis role="bold">
+                    <literal>ENTRY</literal>
+                  </emphasis></para>
               </entry>
               <entry>
-                <para>Allows insertion of failure points into the Lustre code. This is useful to generate regression tests that can hit a very specific sequence of events. This works in conjunction with &quot;<literal>sysctl -w lustre.fail_loc={fail_loc}</literal>&quot; to set a specific failure point for which a given <literal>OBD_FAIL_CHECK</literal> will test.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>
-                    <replaceable role="bold">OBD_FAIL_TIMEOUT</replaceable>
-                  </literal></para>
-              </entry>
-              <entry>
-                <para>Similar to <literal>OBD_FAIL_CHECK</literal>. Useful to simulate hung, blocked or busy processes or network devices. If the given <literal>fail_loc</literal> is hit, <literal>OBD_FAIL_TIMEOUT</literal> waits for the specified number of seconds.</para>
+                <para> Add messages to the entry of a function to aid in call tracing (takes no arguments). When using these macros, cover all exit conditions with a single <literal>EXIT</literal>, <literal>GOTO()</literal>, or <literal>RETURN()</literal> macro to avoid confusion when the debug log reports that a function was entered, but never exited.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>
-                    <replaceable role="bold">OBD_RACE</replaceable>
-                  </literal></para>
+                <para> <emphasis role="bold">
+                    <literal>EXIT</literal>
+                  </emphasis></para>
               </entry>
               <entry>
-                <para>Similar to <literal>OBD_FAIL_CHECK</literal>. Useful to have multiple processes execute the same code concurrently to provoke locking races. The first process to hit <literal>OBD_RACE</literal> sleeps until a second process hits <literal>OBD_RACE</literal>, then both processes continue.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>
-                    <replaceable role="bold">OBD_FAIL_ONCE</replaceable>
-                  </literal></para>
-              </entry>
-              <entry>
-                <para>A flag set on a <literal>lustre.fail_loc</literal> breakpoint to cause the <literal>OBD_FAIL_CHECK</literal> condition to be hit only one time. Otherwise, a <literal>fail_loc</literal> is permanent until it is cleared with &quot;<literal>sysctl -w lustre.fail_loc=0</literal>&quot;.</para>
+                <para> Mark the exit of a function, to match <literal>ENTRY</literal> (takes no arguments).</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para><literal>
-                    <replaceable role="bold">OBD_FAIL_RAND</replaceable>
-                  </literal></para>
+                <para> <emphasis role="bold">
+                    <literal>GOTO()</literal>
+                  </emphasis></para>
               </entry>
               <entry>
-                <para>Has <literal>OBD_FAIL_CHECK</literal> fail randomly; on average every (1 / lustre.fail_val) times.</para>
+                <para> Mark when code jumps via <literal>goto</literal> to the end of a function, to match <literal>ENTRY</literal>, and prints out the goto label and function return code in signed and unsigned decimal, and hexadecimal format.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>RETURN()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para> Mark the exit of a function, to match <literal>ENTRY</literal>, and prints out the function return code in signed and unsigned decimal, and hexadecimal format.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>LDLM_DEBUG()</literal>
+                  </emphasis></para>
+                <para> <emphasis role="bold">
+                    <literal>LDLM_DEBUG_NOLOCK()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>Used when tracing LDLM locking operations. These macros build a thin trace that shows the locking requests on a node, and can also be linked across the client and server node using the printed lock handles.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>OBD_FAIL_CHECK()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>Allows insertion of failure points into the Lustre code. This is useful to generate regression tests that can hit a very specific sequence of events. This works in conjunction with &quot;<literal>lctl set_param fail_loc={fail_loc}</literal>&quot; to set a specific failure point for which a given <literal>OBD_FAIL_CHECK()</literal> will test.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>OBD_FAIL_TIMEOUT()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>Similar to <literal>OBD_FAIL_CHECK()</literal>. Useful to simulate hung, blocked or busy processes or network devices. If the given <literal>fail_loc</literal> is hit, <literal>OBD_FAIL_TIMEOUT()</literal> waits for the specified number of seconds.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>OBD_RACE()</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>Similar to <literal>OBD_FAIL_CHECK()</literal>. Useful to have multiple processes execute the same code concurrently to provoke locking races. The first process to hit <literal>OBD_RACE()</literal> sleeps until a second process hits <literal>OBD_RACE()</literal>, then both processes continue.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>OBD_FAIL_ONCE</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>A flag set on a <literal>fail_loc</literal> breakpoint to cause the <literal>OBD_FAIL_CHECK()</literal> condition to be hit only one time. Otherwise, a <literal>fail_loc</literal> is permanent until it is cleared with &quot;<literal>lctl set_param fail_loc=0</literal>&quot;.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">
+                    <literal>OBD_FAIL_RAND</literal>
+                  </emphasis></para>
+              </entry>
+              <entry>
+                <para>A flag set on a <literal>fail_loc</literal> breakpoint to cause <literal>OBD_FAIL_CHECK()</literal> to fail randomly; on average every (1 / fail_val) times.</para>
               </entry>
             </row>
             <row>
@@ -796,17 +879,17 @@ lctl&gt; debug_kernel [filename] </screen>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>Has <literal>OBD_FAIL_CHECK</literal> succeed <literal>lustre.fail_val</literal> times, and then fail permanently or once with <literal>OBD_FAIL_ONCE</literal>.</para>
+                <para>A flag set on a <literal>fail_loc</literal> breakpoint to cause <literal>OBD_FAIL_CHECK()</literal> to succeed <literal>fail_val</literal> times, and then fail permanently or once with <literal>OBD_FAIL_ONCE</literal>.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>
-                    <replaceable role="bold">OBD_FAIL_SOME</replaceable>
-                  </literal></para>
+                <para> <emphasis role="bold">
+                    <literal>OBD_FAIL_SOME</literal>
+                  </emphasis></para>
               </entry>
               <entry>
-                <para>Has <literal>OBD_FAIL_CHECK</literal> fail <literal>lustre.fail_val</literal> times, and then succeed.</para>
+                <para>A flag set on <literal>fail_loc</literal> breakpoint to cause <literal>OBD_FAIL_CHECK</literal> to fail <literal>fail_val</literal> times, and then succeed.</para>
               </entry>
             </row>
           </tbody>
@@ -814,10 +897,10 @@ lctl&gt; debug_kernel [filename] </screen>
       </informaltable>
     </section>
     <section remap="h3">
-      <title>Accessing a <literal>ptlrpc</literal> Request History</title>
+      <title>Accessing the <literal>ptlrpc</literal> Request History</title>
       <para>Each service maintains a request history, which can be useful for first occurrence troubleshooting.</para>
       <para><literal>ptlrpc</literal> is an RPC protocol layered on LNET that deals with stateful servers and has semantics and built-in support for recovery.</para>
-      <para>A <literal>prlrpc</literal> request history works as follows:</para>
+      <para>The ptlrpc request history works as follows:</para>
       <orderedlist>
         <listitem>
           <para><literal>request_in_callback()</literal> adds the new request to the service&apos;s request history.</para>
@@ -826,29 +909,25 @@ lctl&gt; debug_kernel [filename] </screen>
           <para>When a request buffer becomes idle, it is added to the service&apos;s request buffer history list.</para>
         </listitem>
         <listitem>
-          <para>Buffers are culled from the service&apos;s request buffer history if it has grown above</para>
-          <para><literal>req_buffer_history_max</literal> and its reqs are removed from the service&apos;s request history.</para>
+          <para>Buffers are culled from the service request buffer history if it has grown above <literal>req_buffer_history_max</literal> and its reqs are removed from the service request history.</para>
         </listitem>
       </orderedlist>
       <para>Request history is accessed and controlled using the following /proc files under the service directory:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>req_buffer_history_len </literal>
-      </para>
+          <para><literal>req_buffer_history_len </literal></para>
           <para>Number of request buffers currently in the history</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
-          <para><literal>req_buffer_history_max </literal>
-      </para>
+          <para><literal>req_buffer_history_max </literal></para>
           <para>Maximum number of request buffers to keep</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
-          <para><literal>req_history </literal>
-      </para>
+          <para><literal>req_history </literal> </para>
           <para>The request history</para>
         </listitem>
       </itemizedlist>
@@ -959,7 +1038,7 @@ lctl&gt; debug_kernel [filename] </screen>
       <title><indexterm><primary>debugging</primary><secondary>memory leaks</secondary></indexterm>Finding Memory Leaks Using <literal>leak_finder.pl</literal></title>
       <para>Memory leaks can occur in code when memory has been allocated and then not freed once it is no longer required. The <literal>leak_finder.pl</literal> program provides a way to find memory leaks.</para>
       <para>Before running this program, you must turn on debugging to collect all <literal>malloc</literal> and free entries. Run:</para>
-      <screen>sysctl -w lnet.debug=+malloc </screen>
+      <screen>lctl set_param debug=+malloc </screen>
       <para>Then complete the following steps:</para>
       <orderedlist>
         <listitem>
@@ -967,7 +1046,7 @@ lctl&gt; debug_kernel [filename] </screen>
         </listitem>
         <listitem>
           <para>Run the leak finder on the newly-created log dump:</para>
-          <screen>perl leak_finder.pl &lt;ascii-logname&gt;</screen>
+          <screen>perl leak_finder.pl {ascii-logname}</screen>
         </listitem>
       </orderedlist>
       <para>The output is:</para>
