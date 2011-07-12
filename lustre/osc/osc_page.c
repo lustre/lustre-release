@@ -588,7 +588,7 @@ static int osc_completion(const struct lu_env *env,
         if (rc == 0 && oap->oap_brw_flags & OBD_BRW_SRVLOCK) {
                 struct lu_device *ld    = opg->ops_cl.cpl_obj->co_lu.lo_dev;
                 struct osc_stats *stats = &lu2osc_dev(ld)->od_stats;
-                int bytes = opg->ops_to - opg->ops_from;
+                int bytes = oap->oap_count;
 
                 if (crt == CRT_READ)
                         stats->os_lockless_reads += bytes;

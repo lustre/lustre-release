@@ -2654,15 +2654,19 @@ static inline int cl_object_same(struct cl_object *o0, struct cl_object *o1)
 
 /** \defgroup cl_page cl_page
  * @{ */
-struct cl_page       *cl_page_lookup(struct cl_object_header *hdr,
+enum {
+        CLP_GANG_OKAY = 0,
+        CLP_GANG_AGAIN,
+        CLP_GANG_RESCHED
+};
+
+int             cl_page_gang_lookup (const struct lu_env *env,
+                                     struct cl_object *obj,
+                                     struct cl_io *io,
+                                     pgoff_t start, pgoff_t end,
+                                     struct cl_page_list *plist);
+struct cl_page *cl_page_lookup      (struct cl_object_header *hdr,
                                      pgoff_t index);
-void                  cl_page_gang_lookup(const struct lu_env *env,
-                                          struct cl_object *obj,
-                                          struct cl_io *io,
-                                          pgoff_t start, pgoff_t end,
-                                          struct cl_page_list *plist,
-                                          int nonblock,
-                                          int *resched);
 struct cl_page *cl_page_find        (const struct lu_env *env,
                                      struct cl_object *obj,
                                      pgoff_t idx, struct page *vmpage,
@@ -2962,6 +2966,15 @@ do {                                                                    \
 
 /** \defgroup cl_page_list cl_page_list
  * @{ */
+
+/**
+ * Last page in the page list.
+ */
+static inline struct cl_page *cl_page_list_last(struct cl_page_list *plist)
+{
+        LASSERT(plist->pl_nr > 0);
+        return cfs_list_entry(plist->pl_pages.prev, struct cl_page, cp_batch);
+}
 
 /**
  * Iterate over pages in a page list.

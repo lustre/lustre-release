@@ -807,7 +807,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 
 static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
                             struct cl_page *page, struct ccc_page *cp,
-                            int to, enum cl_req_type crt)
+                            enum cl_req_type crt)
 {
         struct cl_2queue  *queue;
         int result;
@@ -815,13 +815,10 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 
         queue = &io->ci_queue;
-
         cl_2queue_init_page(queue, page);
-        cl_page_clip(env, page, 0, to);
 
         result = cl_io_submit_sync(env, io, crt, queue, CRP_NORMAL, 0);
         LASSERT(cl_page_is_owned(page, io));
-        cl_page_clip(env, page, 0, CFS_PAGE_SIZE);
 
         if (crt == CRT_READ)
                 /*
@@ -863,8 +860,7 @@ static int vvp_io_prepare_partial(const struct lu_env *env, struct cl_io *io,
                 } else if (cp->cpg_defer_uptodate)
                         cp->cpg_ra_used = 1;
                 else
-                        result = vvp_page_sync_io(env, io, pg, cp,
-                                                  CFS_PAGE_SIZE, CRT_READ);
+                        result = vvp_page_sync_io(env, io, pg, cp, CRT_READ);
                 /*
                  * In older implementations, obdo_refresh_inode is called here
                  * to update the inode because the write might modify the
@@ -968,7 +964,10 @@ static int vvp_io_commit_write(const struct lu_env *env,
                  * it will not soon. */
                 vvp_write_pending(cl2ccc(obj), cp);
                 result = cl_page_cache_add(env, io, pg, CRT_WRITE);
-                if (result == -EDQUOT)
+                if (result == -EDQUOT) {
+                        pgoff_t last_index = i_size_read(inode) >> CFS_PAGE_SHIFT;
+                        bool need_clip = true;
+
                         /*
                          * Client ran out of disk space grant. Possible
                          * strategies are:
@@ -983,11 +982,21 @@ static int vvp_io_commit_write(const struct lu_env *env,
                          * what the new code continues to do for the time
                          * being.
                          */
-                        result = vvp_page_sync_io(env, io, pg, cp,
-                                                  to, CRT_WRITE);
+                        if (last_index > pg->cp_index) {
+                                to = CFS_PAGE_SIZE;
+                                need_clip = false;
+                        } else if (last_index == pg->cp_index) {
+                                int size_to = i_size_read(inode) & ~CFS_PAGE_MASK;
+                                if (to < size_to)
+                                        to = size_to;
+                        }
+                        if (need_clip)
+                                cl_page_clip(env, pg, 0, to);
+                        result = vvp_page_sync_io(env, io, pg, cp, CRT_WRITE);
                         if (result)
                                 CERROR("Write page %lu of inode %p failed %d\n",
                                        pg->cp_index, inode, result);
+                }
         } else {
                 tallyop = LPROC_LL_DIRTY_HITS;
                 result = 0;
@@ -1010,7 +1019,6 @@ static int vvp_io_commit_write(const struct lu_env *env,
                         cl_page_discard(env, io, pg);
         }
         ll_inode_size_unlock(inode, 0);
-        
         RETURN(result);
 }
 

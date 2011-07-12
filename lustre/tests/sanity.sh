@@ -8077,6 +8077,21 @@ test_218() {
 }
 run_test 218 "parallel read and truncate should not deadlock ======================="
 
+test_219() {
+        # write one partial page
+        dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1
+        # set no grant so vvp_io_commit_write will do sync write
+        $LCTL set_param fail_loc=0x411
+        # write a full page at the end of file
+        dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=1 conv=notrunc
+
+        $LCTL set_param fail_loc=0
+        dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=3
+        $LCTL set_param fail_loc=0x411
+        dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1 seek=2 conv=notrunc
+}
+run_test 219 "LU-394: Write partial won't cause uncontiguous pages vec at LND"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

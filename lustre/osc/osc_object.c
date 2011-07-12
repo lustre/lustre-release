@@ -151,8 +151,11 @@ int osc_attr_set(const struct lu_env *env, struct cl_object *obj,
                 lvb->lvb_ctime = attr->cat_ctime;
         if (valid & CAT_BLOCKS)
                 lvb->lvb_blocks = attr->cat_blocks;
-        if (valid & CAT_KMS)
+        if (valid & CAT_KMS) {
+                CDEBUG(D_CACHE, "set kms from "LPU64"to "LPU64"\n",
+                       oinfo->loi_kms, (__u64)attr->cat_kms);
                 loi_kms_set(oinfo, attr->cat_kms);
+        }
         return 0;
 }
 

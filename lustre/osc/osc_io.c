@@ -411,7 +411,7 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
          * XXX this is quite expensive check.
          */
         cl_page_list_init(list);
-        cl_page_gang_lookup(env, clob, io, start + partial, CL_PAGE_EOF, list, 0);
+        cl_page_gang_lookup(env, clob, io, start + partial, CL_PAGE_EOF, list);
 
         cl_page_list_for_each(page, list)
                 CL_PAGE_DEBUG(D_ERROR, env, page, "exists %lu\n", start);
