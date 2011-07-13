@@ -811,15 +811,25 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_connect_data, ocd_ibits_known));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_ibits_known) == 8, "found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_ibits_known));
-        LASSERTF((int)offsetof(struct obd_connect_data, ocd_nllu) == 32, "found %lld\n",
-                 (long long)(int)offsetof(struct obd_connect_data, ocd_nllu));
-        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_nllu) == 4, "found %lld\n",
-                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_nllu));
-        LASSERTF((int)offsetof(struct obd_connect_data, ocd_nllg) == 36, "found %lld\n",
-                 (long long)(int)offsetof(struct obd_connect_data, ocd_nllg));
-        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_nllg) == 4, "found %lld\n",
-                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_nllg));
-        LASSERTF((int)offsetof(struct obd_connect_data, ocd_transno) == 40, "found %lld\n",
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_ibits_known) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_ibits_known));
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_blocksize) == 32, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_blocksize));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_blocksize) == 1, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_blocksize));
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_inodespace) == 33, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_inodespace));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_inodespace) == 1, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_inodespace));
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_grant_extent) == 34, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_grant_extent));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_grant_extent) == 2, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_grant_extent));
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_unused) == 36, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, ocd_unused));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_unused) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_unused));
+        LASSERTF((int)offsetof(struct obd_connect_data, ocd_transno) == 40, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, ocd_transno));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_transno) == 8, "found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_transno));
@@ -984,6 +994,12 @@ void lustre_assert_wire_constants(void)
                  OBD_CONNECT_MAXBYTES);
         LASSERTF(OBD_CONNECT_IMP_RECOV == 0x10000000000ULL, "found 0x%.16llxULL\n",
                  OBD_CONNECT_IMP_RECOV);
+        LASSERTF(OBD_CONNECT_JOBSTATS ==  0x20000000000ULL, "found 0x%.16llxULL\n",
+                 OBD_CONNECT_JOBSTATS);
+        LASSERTF(OBD_CONNECT_GRANT_PARAM == 0x40000000000ULL, "found 0x%.16llxULL\n",
+                 OBD_CONNECT_GRANT_PARAM);
+        LASSERTF(OBD_CONNECT_EINPROGRESS == 0x80000000000ULL, "found 0x%.16llxULL\n",
+                 OBD_CONNECT_EINPROGRESS);
         LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
                  (unsigned)OBD_CKSUM_CRC32);
         LASSERTF(OBD_CKSUM_ADLER == 0x00000002UL, "found 0x%.8xUL\n",
@@ -1094,10 +1110,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_gid_h));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_gid_h) == 4, "found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_gid_h));
-        LASSERTF((int)offsetof(struct obdo, o_padding_3) == 176, " found %lld\n",
-                 (long long)(int)offsetof(struct obdo, o_padding_3));
-        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_3) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_3));
+        LASSERTF((int)offsetof(struct obdo, o_data_version) == 176, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_data_version));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_data_version) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_data_version));
         LASSERTF((int)offsetof(struct obdo, o_padding_4) == 184, "found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_padding_4));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_4) == 8, "found %lld\n",
@@ -1204,6 +1220,8 @@ void lustre_assert_wire_constants(void)
                  OBD_MD_FLRMTRSETFACL);
         LASSERTF(OBD_MD_FLRMTRGETFACL == (0x0008000000000000ULL), "found 0x%.16llxULL\n",
                  OBD_MD_FLRMTRGETFACL);
+        LASSERTF(OBD_MD_FLDATAVERSION == (0x0010000000000000ULL), "found 0x%.16llxULL\n",
+                 OBD_MD_FLDATAVERSION);
         CLASSERT(OBD_FL_INLINEDATA == 0x00000001);
         CLASSERT(OBD_FL_OBDMDEXISTS == 0x00000002);
         CLASSERT(OBD_FL_DELORPHAN == 0x00000004);
