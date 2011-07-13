@@ -25,6 +25,5 @@ prune-icache-use-trylock-rhel5.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
 md-avoid-bug_on-when-bmc-overflow.patch
-export-symbols-for-dmu.patch
 jbd2_stats_proc_init-wrong-place.patch
 lustre_iser_max_sectors_tuning_lustre2.0.patch
