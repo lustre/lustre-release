@@ -206,7 +206,7 @@ stt_start_timer_thread (void)
 
         LASSERT (!stt_data.stt_shuttingdown);
 
-        pid = cfs_kernel_thread(stt_timer_main, NULL, 0);
+        pid = cfs_create_thread(stt_timer_main, NULL, 0);
         if (pid < 0)
                 return (int)pid;
 

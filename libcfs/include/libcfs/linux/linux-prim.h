@@ -184,18 +184,9 @@ typedef long                            cfs_task_state_t;
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
 
-static inline int cfs_kernel_thread(int (*fn)(void *),
-                                    void *arg, unsigned long flags)
-{
-        void *orig_info = current->journal_info;
-        int rc;
-
-        current->journal_info = NULL;
-        rc = kernel_thread(fn, arg, flags);
-        current->journal_info = orig_info;
-        return rc;
-}
-
+#define CFS_DAEMON_FLAGS (CLONE_VM | CLONE_FILES)
+extern int cfs_create_thread(int (*fn)(void *),
+                             void *arg, unsigned long flags);
 
 /*
  * Task struct

@@ -363,7 +363,7 @@ int ptlrpc_start_pinger(void)
 
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in cfs_daemonize_ctxt() right away. */
-        rc = cfs_kernel_thread(ptlrpc_pinger_main, &d, CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(ptlrpc_pinger_main, &d, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE(pinger_thread, sizeof(*pinger_thread));
@@ -698,7 +698,7 @@ void ping_evictor_start(void)
 
         cfs_waitq_init(&pet_waitq);
 
-        rc = cfs_kernel_thread(ping_evictor_main, NULL, CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(ping_evictor_main, NULL, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 pet_refcount--;
                 CERROR("Cannot start ping evictor thread: %d\n", rc);

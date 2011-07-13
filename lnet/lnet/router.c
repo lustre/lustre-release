@@ -1003,7 +1003,7 @@ lnet_router_checker_start(void)
 
         the_lnet.ln_rc_state = LNET_RC_STATE_RUNNING;
 #ifdef __KERNEL__
-        rc = (int)cfs_kernel_thread(lnet_router_checker, NULL, 0);
+        rc = cfs_create_thread(lnet_router_checker, NULL, 0);
         if (rc < 0) {
                 CERROR("Can't start router checker thread: %d\n", rc);
                 the_lnet.ln_rc_state = LNET_RC_STATE_UNLINKING;

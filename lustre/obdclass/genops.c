@@ -1687,7 +1687,7 @@ int obd_zombie_impexp_init(void)
         obd_zombie_pid = 0;
 
 #ifdef __KERNEL__
-        rc = cfs_kernel_thread(obd_zombie_impexp_thread, NULL, 0);
+        rc = cfs_create_thread(obd_zombie_impexp_thread, NULL, 0);
         if (rc < 0)
                 RETURN(rc);
 

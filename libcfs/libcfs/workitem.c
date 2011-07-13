@@ -332,7 +332,7 @@ cfs_wi_start_thread (int (*func) (void*), void *arg)
 {
         long pid;
 
-        pid = cfs_kernel_thread(func, arg, 0);
+        pid = cfs_create_thread(func, arg, 0);
         if (pid < 0)
                 return (int)pid;
 

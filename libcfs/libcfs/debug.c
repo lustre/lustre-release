@@ -379,7 +379,7 @@ void libcfs_debug_dumplog(void)
         else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
 
-        /* be sure to teardown if cfs_kernel_thread() failed */
+        /* be sure to teardown if cfs_create_thread() failed */
         cfs_waitq_del(&debug_ctlwq, &wait);
         cfs_set_current_state(CFS_TASK_RUNNING);
 }

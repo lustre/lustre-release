@@ -1782,7 +1782,7 @@ kiblnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 int
 kiblnd_thread_start (int (*fn)(void *arg), void *arg)
 {
-        long    pid = cfs_kernel_thread (fn, arg, 0);
+        long    pid = cfs_create_thread (fn, arg, 0);
 
         if (pid < 0)
                 return ((int)pid);

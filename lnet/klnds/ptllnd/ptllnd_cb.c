@@ -669,11 +669,11 @@ kptllnd_thread_start (int (*fn)(void *arg), void *arg)
 
         cfs_atomic_inc(&kptllnd_data.kptl_nthreads);
 
-        pid = cfs_kernel_thread (fn, arg, 0);
+        pid = cfs_create_thread (fn, arg, 0);
         if (pid >= 0)
                 return 0;
 
-        CERROR("Failed to start cfs_kernel_thread: error %d\n", (int)pid);
+        CERROR("Failed to start thread: error %d\n", (int)pid);
         kptllnd_thread_fini();
         return (int)pid;
 }

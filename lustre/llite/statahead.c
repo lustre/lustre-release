@@ -1198,7 +1198,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         }
 
         lli->lli_sai = sai;
-        rc = cfs_kernel_thread(ll_statahead_thread, parent, 0);
+        rc = cfs_create_thread(ll_statahead_thread, parent, 0);
         if (rc < 0) {
                 CERROR("can't start ll_sa thread, rc: %d\n", rc);
                 dput(parent);

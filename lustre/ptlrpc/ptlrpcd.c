@@ -436,7 +436,7 @@ int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc)
         }
 
 #ifdef __KERNEL__
-        rc = cfs_kernel_thread(ptlrpcd, pc, 0);
+        rc = cfs_create_thread(ptlrpcd, pc, 0);
         if (rc < 0)  {
                 lu_context_fini(&pc->pc_env.le_ctx);
                 ptlrpc_set_destroy(pc->pc_set);

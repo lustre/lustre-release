@@ -401,7 +401,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
         cfs_waitq_init(&lcq->lcq_waitq);
         cfs_init_completion(&lcq->lcq_comp);
 
-        pid = cfs_kernel_thread(ll_close_thread, lcq, 0);
+        pid = cfs_create_thread(ll_close_thread, lcq, 0);
         if (pid < 0) {
                 OBD_FREE(lcq, sizeof(*lcq));
                 return pid;

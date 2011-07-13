@@ -1487,8 +1487,8 @@ qslave_start_recovery(struct obd_device *obd, struct lustre_quota_ctxt *qctxt)
         data.qctxt = qctxt;
         cfs_init_completion(&data.comp);
 
-        rc = cfs_kernel_thread(qslave_recovery_main, &data,
-                               CLONE_VM|CLONE_FILES);
+        rc = cfs_create_thread(qslave_recovery_main, &data,
+                               CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("Cannot start quota recovery thread: rc %d\n", rc);
                 goto exit;

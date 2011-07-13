@@ -297,7 +297,7 @@ int ll_capa_thread_start(void)
 
         cfs_waitq_init(&ll_capa_thread.t_ctl_waitq);
 
-        rc = cfs_kernel_thread(capa_thread_main, NULL, 0);
+        rc = cfs_create_thread(capa_thread_main, NULL, 0);
         if (rc < 0) {
                 CERROR("cannot start expired capa thread: rc %d\n", rc);
                 RETURN(rc);

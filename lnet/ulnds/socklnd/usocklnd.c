@@ -298,7 +298,7 @@ usocklnd_base_startup()
         /* Spawn poll threads */
         for (i = 0; i < usock_data.ud_npollthreads; i++) {
                 rc = cfs_create_thread(usocklnd_poll_thread,
-                                       &usock_data.ud_pollthreads[i]);
+                                       &usock_data.ud_pollthreads[i], 0);
                 if (rc) {
                         usocklnd_base_shutdown(i);
                         return rc;

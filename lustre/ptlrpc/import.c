@@ -1325,8 +1325,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                  * invalidate thread without reference to import and import can
                  * be freed at same time. */
                 class_import_get(imp);
-                rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
-                                       CLONE_VM | CLONE_FILES);
+                rc = cfs_create_thread(ptlrpc_invalidate_import_thread, imp,
+                                       CFS_DAEMON_FLAGS);
                 if (rc < 0) {
                         class_import_put(imp);
                         CERROR("error starting invalidate thread: %d\n", rc);

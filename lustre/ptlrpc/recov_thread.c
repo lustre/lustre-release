@@ -546,8 +546,7 @@ static int llog_recov_thread_replay(struct llog_ctxt *ctxt,
                 OBD_FREE_PTR(lpca);
                 RETURN(-ENODEV);
         }
-        rc = cfs_kernel_thread(llog_cat_process_thread, lpca,
-                               CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(llog_cat_process_thread, lpca, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("Error starting llog_cat_process_thread(): %d\n", rc);
                 OBD_FREE_PTR(lpca);

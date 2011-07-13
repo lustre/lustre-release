@@ -326,7 +326,7 @@ static void lcw_dispatch_start(void)
         cfs_waitq_init(&lcw_event_waitq);
 
         CDEBUG(D_INFO, "starting dispatch thread\n");
-        rc = cfs_kernel_thread(lcw_dispatch_main, NULL, 0);
+        rc = cfs_create_thread(lcw_dispatch_main, NULL, 0);
         if (rc < 0) {
                 CERROR("error spawning watchdog dispatch thread: %d\n", rc);
                 EXIT;

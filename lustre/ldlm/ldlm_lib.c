@@ -1836,7 +1836,7 @@ static int target_start_recovery_thread(struct lu_target *lut,
         cfs_init_completion(&trd->trd_finishing);
         trd->trd_recovery_handler = handler;
 
-        if (cfs_kernel_thread(target_recovery_thread, lut, 0) > 0) {
+        if (cfs_create_thread(target_recovery_thread, lut, 0) > 0) {
                 cfs_wait_for_completion(&trd->trd_starting);
                 LASSERT(obd->obd_recovering != 0);
         } else

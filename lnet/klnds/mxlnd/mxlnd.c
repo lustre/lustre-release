@@ -397,9 +397,9 @@ mxlnd_thread_start(int (*fn)(void *arg), void *arg)
         cfs_atomic_inc(&kmxlnd_data.kmx_nthreads);
         cfs_init_completion(&kmxlnd_data.kmx_completions[i]);
 
-        pid = cfs_kernel_thread (fn, arg, 0);
+        pid = cfs_create_thread(fn, arg, 0);
         if (pid < 0) {
-                CERROR("cfs_kernel_thread() failed with %d\n", pid);
+                CERROR("cfs_create_thread() failed with %d\n", pid);
                 cfs_atomic_dec(&kmxlnd_data.kmx_nthreads);
         }
         return pid;

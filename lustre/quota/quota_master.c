@@ -1766,8 +1766,8 @@ int mds_quota_recovery(struct obd_device *obd)
         data.obd = obd;
         cfs_init_completion(&data.comp);
 
-        rc = cfs_kernel_thread(qmaster_recovery_main, &data,
-                               CLONE_VM|CLONE_FILES);
+        rc = cfs_create_thread(qmaster_recovery_main, &data,
+                               CFS_DAEMON_FLAGS);
         if (rc < 0)
                 CERROR("%s: cannot start quota recovery thread: rc %d\n",
                        obd->obd_name, rc);

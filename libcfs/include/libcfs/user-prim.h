@@ -142,12 +142,13 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 #define cfs_sigfillset(l)               do {} while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
 /* Fine, crash, but stop giving me compile warnings */
-#define cfs_kernel_thread(l,m,n)        (LBUG(), l, 0)
 #define cfs_kthread_run(fn,d,fmt,...)   LBUG()
+
+#define CFS_DAEMON_FLAGS                0
 
 #ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);
-int cfs_create_thread(cfs_thread_t func, void *arg);
+int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flags);
 #else
 #define cfs_create_thread(l,m) LBUG()
 #endif

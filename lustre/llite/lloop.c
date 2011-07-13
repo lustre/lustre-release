@@ -553,7 +553,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
 
         set_blocksize(bdev, lo->lo_blocksize);
 
-        cfs_kernel_thread(loop_thread, lo, CLONE_KERNEL);
+        cfs_create_thread(loop_thread, lo, CLONE_KERNEL);
         cfs_down(&lo->lo_sem);
         return 0;
 

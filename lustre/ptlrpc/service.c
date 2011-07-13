@@ -2325,8 +2325,7 @@ static int ptlrpc_start_hr_thread(struct ptlrpc_hr_service *hr, int n, int cpu)
         args.cpu_index = cpu;
         args.hrs = hr;
 
-        rc = cfs_kernel_thread(ptlrpc_hr_main, (void*)&args,
-                               CLONE_VM|CLONE_FILES);
+        rc = cfs_create_thread(ptlrpc_hr_main, (void*)&args, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 cfs_complete(&t->hrt_completion);
                 GOTO(out, rc);
@@ -2518,7 +2517,7 @@ int ptlrpc_start_thread(struct ptlrpc_service *svc)
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in cfs_daemonize_ctxt() right away.
          */
-        rc = cfs_kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(ptlrpc_main, &d, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("cannot start thread '%s': rc %d\n", name, rc);
 

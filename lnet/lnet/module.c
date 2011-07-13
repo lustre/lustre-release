@@ -49,7 +49,7 @@ static cfs_semaphore_t lnet_config_mutex;
 int
 lnet_configure (void *arg)
 {
-        /* 'arg' only there so I can be passed to cfs_kernel_thread() */
+        /* 'arg' only there so I can be passed to cfs_create_thread() */
         int    rc = 0;
 
         LNET_MUTEX_DOWN(&lnet_config_mutex);
@@ -133,7 +133,7 @@ init_lnet(void)
         if (config_on_load) {
                 /* Have to schedule a separate thread to avoid deadlocking
                  * in modload */
-                (void) cfs_kernel_thread(lnet_configure, NULL, 0);
+                (void) cfs_create_thread(lnet_configure, NULL, 0);
         }
 
         RETURN(0);

@@ -1096,7 +1096,7 @@ int cfs_trace_start_thread(void)
         cfs_waitq_init(&tctl->tctl_waitq);
         cfs_atomic_set(&tctl->tctl_shutdown, 0);
 
-        if (cfs_kernel_thread(tracefiled, tctl, 0) < 0) {
+        if (cfs_create_thread(tracefiled, tctl, 0) < 0) {
                 rc = -ECHILD;
                 goto out;
         }

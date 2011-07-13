@@ -953,8 +953,8 @@ int mds_lov_start_synchronize(struct obd_device *obd,
 
         if (ev != OBD_NOTIFY_SYNC) {
                 /* Synchronize in the background */
-                rc = cfs_kernel_thread(mds_lov_synchronize, mlsi,
-                                       CLONE_VM | CLONE_FILES);
+                rc = cfs_create_thread(mds_lov_synchronize, mlsi,
+                                       CFS_DAEMON_FLAGS);
                 if (rc < 0) {
                         CERROR("%s: error starting mds_lov_synchronize: %d\n",
                                obd->obd_name, rc);

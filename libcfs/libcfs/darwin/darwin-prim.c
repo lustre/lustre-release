@@ -334,7 +334,7 @@ cfs_thread_agent (void)
 extern thread_t kernel_thread(task_t task, void (*start)(void));
 
 int
-cfs_kernel_thread(cfs_thread_t  func, void *arg, int flag)
+cfs_create_thread(cfs_thread_t  func, void *arg, unsigned long flag)
 {
         int ret = 0;
         thread_t th = NULL;

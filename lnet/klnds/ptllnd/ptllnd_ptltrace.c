@@ -166,9 +166,9 @@ kptllnd_dump_ptltrace(void)
         cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
         cfs_waitq_add(&ptltrace_debug_ctlwq, &wait);
 
-        rc = cfs_kernel_thread(kptllnd_dump_ptltrace_thread,
+        rc = cfs_create_thread(kptllnd_dump_ptltrace_thread,
                                (void *)(long)cfs_curproc_pid(),
-                               CLONE_VM | CLONE_FS | CLONE_FILES);
+                               CFS_DAEMON_FLAGS | CLONE_FS);
         if (rc < 0) {
                 CERROR("Error %d starting ptltrace dump thread\n", rc);
         } else {

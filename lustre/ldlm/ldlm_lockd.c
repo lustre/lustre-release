@@ -2193,7 +2193,7 @@ static int ldlm_bl_thread_start(struct ldlm_bl_pool *blp)
         int rc;
 
         cfs_init_completion(&bltd.bltd_comp);
-        rc = cfs_kernel_thread(ldlm_bl_thread_main, &bltd, 0);
+        rc = cfs_create_thread(ldlm_bl_thread_main, &bltd, 0);
         if (rc < 0) {
                 CERROR("cannot start LDLM thread ldlm_bl_%02d: rc %d\n",
                        cfs_atomic_read(&blp->blp_num_threads), rc);
@@ -2527,7 +2527,7 @@ static int ldlm_setup(void)
         cfs_spin_lock_init(&waiting_locks_spinlock);
         cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
 
-        rc = cfs_kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(expired_lock_main, NULL, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);
                 GOTO(out_thread, rc);

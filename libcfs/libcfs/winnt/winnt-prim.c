@@ -82,7 +82,7 @@ cfs_thread_proc(
 }
 
 /*
- * cfs_kernel_thread
+ * cfs_create_thread
  *   Create a system thread to execute the routine specified
  *
  * Arguments:
@@ -97,7 +97,7 @@ cfs_thread_proc(
  *   N/A
  */
 
-int cfs_kernel_thread(int (*func)(void *), void *arg, int flag)
+int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag)
 {
     cfs_handle_t  thread = NULL;
     NTSTATUS      status;

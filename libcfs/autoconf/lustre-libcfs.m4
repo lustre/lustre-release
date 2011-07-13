@@ -662,6 +662,34 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LIBCFS_HAVE_OOM_H],
+[LB_CHECK_FILE([$LINUX/include/linux/oom.h], [
+        AC_DEFINE(HAVE_LINUX_OOM_H, 1,
+                [kernel has include/oom.h])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.18 store oom parameters in task struct.
+# 2.6.32 store oom parameters in signal struct
+AC_DEFUN([LIBCFS_OOMADJ_IN_SIG],
+[AC_MSG_CHECKING([kernel store oom parameters in task])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/sched.h>
+],[
+        struct signal_struct s;
+
+        s.oom_adj = 0;
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_OOMADJ_IN_SIG, 1,
+                  [kernel store a oom parameters in signal struct])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
 #
@@ -752,6 +780,8 @@ LIBCFS_SOCK_MAP_FD_2ARG
 # 2.6.32
 LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR
+LIBCFS_HAVE_OOM_H
+LIBCFS_OOMADJ_IN_SIG
 # 2.6.34
 LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
 ])

@@ -533,7 +533,7 @@ static int is_last_frame(void *addr)
 		return 1;
 	else if (is_addr_in_range(addr, trap, syscall_trace))
 		return 1;
-	else if (is_addr_in_range(addr, cfs_thread_agent, cfs_kernel_thread))
+	else if (is_addr_in_range(addr, cfs_thread_agent, cfs_create_thread))
 		return 1;
 	else
 		return 0;

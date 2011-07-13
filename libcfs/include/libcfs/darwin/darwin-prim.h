@@ -204,7 +204,9 @@ extern task_t	kernel_task;
 
 #define CLONE_SIGNAL    (CLONE_SIGHAND | CLONE_THREAD)
 
-extern int cfs_kernel_thread(cfs_thread_t func, void *arg, int flag);
+#define CFS_DAEMON_FLAGS (CLONE_VM | CLONE_FILES)
+
+extern int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flag);
 
 
 /*

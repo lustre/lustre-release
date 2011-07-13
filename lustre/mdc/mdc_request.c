@@ -1348,8 +1348,7 @@ static int mdc_ioc_changelog_send(struct obd_device *obd,
 
         /* New thread because we should return to user app before
            writing into our pipe */
-        rc = cfs_kernel_thread(mdc_changelog_send_thread, cs,
-                               CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(mdc_changelog_send_thread, cs, CFS_DAEMON_FLAGS);
         if (rc >= 0) {
                 CDEBUG(D_CHANGELOG, "start changelog thread: %d\n", rc);
                 return 0;

@@ -221,7 +221,8 @@ static void *cfs_thread_helper(void *data)
         (void)f(arg);
         return NULL;
 }
-int cfs_create_thread(cfs_thread_t func, void *arg)
+
+int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flags)
 {
         pthread_t tid;
         pthread_attr_t tattr;

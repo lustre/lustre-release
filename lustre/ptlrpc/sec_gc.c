@@ -236,8 +236,7 @@ int sptlrpc_gc_init(void)
         memset(&sec_gc_thread, 0, sizeof(sec_gc_thread));
         cfs_waitq_init(&sec_gc_thread.t_ctl_waitq);
 
-        rc = cfs_kernel_thread(sec_gc_main, &sec_gc_thread,
-                               CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(sec_gc_main, &sec_gc_thread, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("can't start gc thread: %d\n", rc);
                 return rc;

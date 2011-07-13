@@ -5901,7 +5901,7 @@ ks_init_tdi_data()
         cfs_init_event(&ks_data.ksnd_engine_mgr[i].start, TRUE, FALSE);
         cfs_init_event(&ks_data.ksnd_engine_mgr[i].exit, TRUE, FALSE);
         CFS_INIT_LIST_HEAD(&ks_data.ksnd_engine_mgr[i].list);
-        cfs_kernel_thread(KsDeliveryEngineThread, &ks_data.ksnd_engine_mgr[i], 0);
+        cfs_create_thread(KsDeliveryEngineThread, &ks_data.ksnd_engine_mgr[i], 0);
     }
 
     /* register pnp handlers to watch network condition */

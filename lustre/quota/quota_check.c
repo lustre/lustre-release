@@ -174,8 +174,8 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         /* we get ref for exp because target_quotacheck_callback() will use this
          * export later b=18126 */
         class_export_get(exp);
-        rc = cfs_kernel_thread(target_quotacheck_thread, qta,
-                               CLONE_VM|CLONE_FILES);
+        rc = cfs_create_thread(target_quotacheck_thread, qta,
+                               CFS_DAEMON_FLAGS);
         if (rc >= 0) {
                 /* target_quotacheck_thread will drop the ref on exp and release
                  * obt_quotachecking */

@@ -287,8 +287,7 @@ int mdt_ck_thread_start(struct mdt_device *mdt)
         int rc;
 
         cfs_waitq_init(&thread->t_ctl_waitq);
-        rc = cfs_kernel_thread(mdt_ck_thread_main, mdt,
-                               (CLONE_VM | CLONE_FILES));
+        rc = cfs_create_thread(mdt_ck_thread_main, mdt, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("cannot start mdt_ck thread, rc = %d\n", rc);
                 return rc;

@@ -461,7 +461,7 @@ typedef struct _cfs_thread_context {
     void *              arg;
 } cfs_thread_context_t;
 
-int cfs_kernel_thread(int (*func)(void *), void *arg, int flag);
+int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag);
 
 /*
  * thread creation flags from Linux, not used in winnt
@@ -480,6 +480,7 @@ int cfs_kernel_thread(int (*func)(void *), void *arg, int flag);
 
 #define CLONE_SIGNAL    (CLONE_SIGHAND | CLONE_THREAD)
 
+#define CFS_DAEMON_FLAGS (CLONE_VM|CLONE_FILES)
 
 /*
  * group_info: linux/sched.h

@@ -72,7 +72,6 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 #define cfs_mt_wait_for_completion(c) cfs_wait_for_completion(c)
 #define cfs_mt_complete(c)            cfs_complete(c)
 #define cfs_mt_fini_completion(c)     cfs_fini_completion(c)
-#define cfs_create_thread(func, a)    cfs_kernel_thread(func, a, 0)
 
 EXPORT_SYMBOL(lnet_acceptor_port);
 
@@ -542,7 +541,7 @@ lnet_acceptor_start(void)
         if (lnet_count_acceptor_nis() == 0)  /* not required */
                 return 0;
 
-        rc2 = cfs_create_thread(lnet_acceptor, (void *)(ulong_ptr_t)secure);
+        rc2 = cfs_create_thread(lnet_acceptor, (void *)(ulong_ptr_t)secure, 0);
         if (rc2 < 0) {
                 CERROR("Can't start acceptor thread: %d\n", rc);
                 cfs_mt_fini_completion(&lnet_acceptor_state.pta_signal);

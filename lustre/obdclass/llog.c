@@ -375,7 +375,7 @@ int llog_process_flags(struct llog_handle *loghandle, llog_cb_t cb,
 
 #ifdef __KERNEL__
         cfs_init_completion(&lpi->lpi_completion);
-        rc = cfs_kernel_thread(llog_process_thread, lpi, CLONE_VM | CLONE_FILES);
+        rc = cfs_create_thread(llog_process_thread, lpi, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE_PTR(lpi);

@@ -513,8 +513,8 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
                 LASSERT(rq_state == 0);
                 rq_state = RQ_RUNNING | (later ? RQ_LATER : RQ_NOW);
                 cfs_spin_unlock(&config_list_lock);
-                rc = cfs_kernel_thread(mgc_requeue_thread, 0,
-                                       CLONE_VM | CLONE_FILES);
+                rc = cfs_create_thread(mgc_requeue_thread, NULL,
+                                       CFS_DAEMON_FLAGS);
                 if (rc < 0) {
                         CERROR("log %s: cannot start requeue thread (%d),"
                                "no more log updates!\n", cld->cld_logname, rc);
