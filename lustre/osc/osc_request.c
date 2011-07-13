@@ -4490,6 +4490,16 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 break;
         }
         case OBD_CLEANUP_EXPORTS: {
+                /* LU-464
+                 * for echo client, export may be on zombie list, wait for
+                 * zombie thread to cull it, because cli.cl_import will be
+                 * cleared in client_disconnect_export():
+                 *   class_export_destroy() -> obd_cleanup() ->
+                 *   echo_device_free() -> echo_client_cleanup() ->
+                 *   obd_disconnect() -> osc_disconnect() ->
+                 *   client_disconnect_export()
+                 */
+                obd_zombie_barrier();
                 /* If we set up but never connected, the
                    client import will not have been cleaned. */
                 if (obd->u.cli.cl_import) {
