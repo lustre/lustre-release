@@ -1076,12 +1076,9 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
         vio->cui_ra_window_set = 0;
         result = 0;
         if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
-                int    op;
                 size_t count;
 
                 count = io->u.ci_rw.crw_count;
-                op    = io->ci_type == CIT_READ ?
-                        LPROC_LL_READ_BYTES : LPROC_LL_WRITE_BYTES;
                 /* "If nbyte is 0, read() will return 0 and have no other
                  *  results."  -- Single Unix Spec */
                 if (count == 0)
@@ -1089,7 +1086,6 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                 else {
                         cio->cui_tot_count = count;
                         cio->cui_tot_nrsegs = 0;
-                        ll_stats_ops_tally(sbi, op, count);
                 }
         } else if (io->ci_type == CIT_SETATTR) {
                 if (cl_io_is_trunc(io))

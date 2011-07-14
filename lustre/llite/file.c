@@ -891,8 +891,21 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         GOTO(out, result);
 out:
         cl_io_fini(env, io);
-        if (iot == CIT_WRITE)
-                lli->lli_write_rc = result < 0 ? : 0;
+
+        if (iot == CIT_READ) {
+                if (result >= 0)
+                        ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode),
+                                           LPROC_LL_READ_BYTES, result);
+        } else if (iot == CIT_WRITE) {
+                if (result >= 0) {
+                        ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode),
+                                           LPROC_LL_WRITE_BYTES, result);
+                        lli->lli_write_rc = 0;
+                } else {
+                        lli->lli_write_rc = result;
+                }
+        }
+
         return result;
 }
 
