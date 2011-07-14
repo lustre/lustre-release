@@ -40,17 +40,17 @@
  * the underlying block storage device(s).
  * This tool have two working modes
  * 1. full mode
- * 2. fast mode
+ * 2. partial mode
  *
  * In full mode, the program creates a subdirectory in the test
- * fileysytem, writes n(files_in_dir, default=16) large(4GB) files to
+ * filesystem, writes n(files_in_dir, default=32) large(4GB) files to
  * the directory with the test pattern at the start of each 4kb block.
  * The test pattern contains timestamp, relative file offset and per
- * file unique idenfifier(inode number).  This continues until the
+ * file unique identifier(inode number).  This continues until the
  * whole filesystem is full and then the tool verifies that the data
  * in all of the test files is correct.
  *
- * In fast mode, the tool creates test directories with the
+ * In partial mode, the tool creates test directories with the
  * EXT3_TOPDIR_FL flag set (if supported) to spread the directory data
  * around the block device instead of localizing it in a single place.
  * The number of directories equals to the number of block groups in the
@@ -89,6 +89,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
+#include <sys/time.h>
 #include <gnu/stubs.h>
 #include <gnu/stubs.h>
 
@@ -149,7 +150,7 @@ void usage(int status)
 	if (status != 0) {
 		printf("\nUsage: %s [OPTION]... <filesystem path> ...\n",
 		       progname);
-		printf("ext3 filesystem verification tool.\n"
+		printf("Filesystem verification tool.\n"
 		       "\t-t {seconds}, --timestamp,  set test time"
 		       "(default=current time())\n"
 		       "\t-o {offset}, --offset, directory starting offset"
@@ -208,7 +209,7 @@ int verify_chunk(char *chunk_buf, const size_t chunksize,
 
 /*
  * fill_chunk: Fills the chunk with current or user specified timestamp
- * and  offset. The test patters is filled at the beginning of
+ * and offset. The test pattern is filled at the beginning of
  * each 4kB(BLOCKSIZE) blocks in chunk_buf.
  */
 void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
@@ -262,6 +263,7 @@ retry:
 		fprintf(stderr, "\n%s: write %s@%llu+%zi short: %ld written\n",
 			progname, file, offset, nrequested, nwritten);
 		offset += nwritten;
+		chunk_buf += nwritten;
 		nrequested -= nwritten;
 		goto retry;
 	}
@@ -408,31 +410,110 @@ char *new_dir(char *tempdir, int dir_num)
 }
 
 /*
- * show_filename: Displays name of current file read/write
+ * calc_total_bytes: calculates total bytes that need to be
+ * written into or read from the filesystem.
  */
-void show_filename(char *op, char *filename)
+static unsigned long long calc_total_bytes(const char *op)
 {
-	static time_t last;
-	time_t now;
-	double diff;
+	unsigned long long total_bytes = 0;
+	struct statfs64 statbuf;
 
-	now = time(NULL);
-	diff = now - last;
-	if (diff > 4 || verbose > 2) {
+	if (full) {
+		if (statfs64(testdir, &statbuf) == 0) {
+			if (strcmp(op, "write") == 0)
+				total_bytes = (unsigned long long)
+					(statbuf.f_bavail * statbuf.f_bsize);
+			else if (strcmp(op, "read") == 0)
+				total_bytes = (unsigned long long)
+					(statbuf.f_blocks * statbuf.f_bsize);
+			else {
+				fprintf(stderr, "\n%s: invalid operation: %s\n",
+					progname, op);
+				return -1;
+			}
+		} else {
+			fprintf(stderr, "\n%s: unable to stat %s: %s\n",
+				progname, testdir, strerror(errno));
+			return -errno;
+		}
+	} else {
+		total_bytes = num_dirs * files_in_dir * file_size;
+	}
+
+	return total_bytes;
+}
+
+/*
+ * show_rate: displays the current read/write file name and performance,
+ * along with an estimate of how long the whole read/write operation
+ * will continue.
+ */
+void show_rate(char *op, char *filename, const struct timeval *start_time,
+	       const unsigned long long total_bytes,
+	       const unsigned long long curr_bytes)
+{
+	static struct timeval last_time;
+	static unsigned long long last_bytes;
+	static char last_op;
+	struct timeval curr_time;
+	double curr_delta, overall_delta, curr_rate, overall_rate;
+	double total_time, remain_time;
+	int remain_hours, remain_minutes, remain_seconds;
+
+	if (last_time.tv_sec == 0)
+		last_time = *start_time;
+
+	if (last_op != op[0]) {
+		last_bytes = 0;
+		last_time = *start_time;
+		last_op = op[0];
+	}
+
+	gettimeofday(&curr_time, NULL);
+
+	curr_delta = (curr_time.tv_sec - last_time.tv_sec) +
+		(double)(curr_time.tv_usec - last_time.tv_usec) / 1000000;
+
+	overall_delta = (curr_time.tv_sec - start_time->tv_sec) +
+		(double)(curr_time.tv_usec - start_time->tv_usec) / 1000000;
+
+	curr_rate = (curr_bytes - last_bytes) / curr_delta;
+	overall_rate = curr_bytes / overall_delta;
+
+	if (curr_rate == 0) {
+		last_time = curr_time;
+		return;
+	}
+	total_time = total_bytes / curr_rate;
+	remain_time = total_time - overall_delta;
+
+	remain_hours = remain_time / 3600;
+	remain_minutes = (remain_time - remain_hours * 3600) / 60;
+	remain_seconds = (remain_time - remain_hours * 3600 -
+		remain_minutes * 60);
+
+	if (curr_delta > 4 || verbose > 2) {
 		if (isatty_flag)
 			printf("\r");
-		printf("%s File name: %s          ", op, filename);
+
+		printf("%s filename: %s, current %5g MB/s, overall %5g MB/s, "
+		       "est %u:%u:%u left", op, filename,
+		       curr_rate / ONE_MB, overall_rate / ONE_MB,
+		       remain_hours, remain_minutes, remain_seconds);
+
 		if (isatty_flag)
 			fflush(stdout);
 		else
 			printf("\n");
-		last = now;
 	}
+
+	last_time = curr_time;
+	last_bytes = curr_bytes;
 }
 
 /*
  * dir_write: This function writes directories and files on device.
- * it works for both full and fast modes.
+ * it works for both full and partial modes.
  */
 static int dir_write(char *chunk_buf, size_t chunksize,
 		     time_t time_st, unsigned long dir_num)
@@ -443,6 +524,9 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 	struct stat64 file;
 	int file_num = 999999999;
 	ino_t inode_st = 0;
+	struct timeval start_time;
+	unsigned long long total_bytes;
+	unsigned long long curr_bytes = 0;
 
 #ifdef HAVE_EXT2FS_EXT2FS_H
 	if (!full && fsetflags(testdir, EXT2_TOPDIR_FL))
@@ -463,6 +547,19 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 			progname, filecount, strerror(errno));
 		return 6;
 	}
+
+	/* calculate total bytes that need to be written */
+	total_bytes = calc_total_bytes("write");
+	if (total_bytes <= 0) {
+		fprintf(stderr, "\n%s: unable to calculate total bytes\n",
+			progname);
+		return 7;
+	}
+
+	if (!full && (dir_num != 0))
+		total_bytes -= dir_num * files_in_dir * file_size;
+
+	gettimeofday(&start_time, NULL);
 	for (; dir_num < num_dirs; num_files++, file_num++) {
 		int fd, ret;
 
@@ -499,17 +596,20 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 			break;
 		}
 
-		if (verbose > 1)
-			show_filename("write", tempfile);
-
 		ret = write_chunks(fd, 0, file_size, chunk_buf, chunksize,
 				   time_st, inode_st, tempfile);
 		close(fd);
 		if (ret < 0) {
 			if (ret != -ENOSPC)
 				return 1;
+			curr_bytes = total_bytes;
 			break;
 		}
+
+		curr_bytes += file_size;
+		if (verbose > 1)
+			show_rate("write", tempfile, &start_time,
+				  total_bytes, curr_bytes);
 
 		fseek(countfile, 0, SEEK_SET);
 		if (fprintf(countfile, "%lu", num_files) < 1 ||
@@ -522,7 +622,8 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 
 	if (verbose) {
 		verbose++;
-		show_filename("write", tempfile);
+		show_rate("write", tempfile, &start_time,
+			  total_bytes, curr_bytes);
 		printf("\nwrite complete\n");
 		verbose--;
 	}
@@ -532,7 +633,7 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 
 /*
  * dir_read: This function reads directories and files on device.
- * it works for both full and fast modes.
+ * it works for both full and partial modes.
  */
 static int dir_read(char *chunk_buf, size_t chunksize,
 		    time_t time_st, unsigned long dir_num)
@@ -543,7 +644,22 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 	struct stat64 file;
 	int file_num = 0;
 	ino_t inode_st = 0;
+	struct timeval start_time;
+	unsigned long long total_bytes;
+	unsigned long long curr_bytes = 0;
 
+	/* calculate total bytes that need to be read */
+	total_bytes = calc_total_bytes("read");
+	if (total_bytes <= 0) {
+		fprintf(stderr, "\n%s: unable to calculate total bytes\n",
+			progname);
+		return 1;
+	}
+
+	if (dir_num != 0)
+		total_bytes -= dir_num * files_in_dir * file_size;
+
+	gettimeofday(&start_time, NULL);
 	for (count = 0; count < num_files && dir_num < num_dirs; count++) {
 		int fd, ret;
 
@@ -570,9 +686,6 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 			break;
 		}
 
-		if (verbose > 1)
-			show_filename("read", tempfile);
-
 		if (count == num_files)
 			file_size = file.st_size;
 		ret = read_chunks(fd, 0, file_size, chunk_buf, chunksize,
@@ -581,12 +694,18 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 		if (ret)
 			return 1;
 
+		curr_bytes += file_size;
+		if (verbose > 1)
+			show_rate("read", tempfile, &start_time,
+				  total_bytes, curr_bytes);
+
 		if (++file_num >= files_in_dir)
 			file_num = 0;
 	}
 	if (verbose > 1){
 		verbose++;
-		show_filename("read", tempfile);
+		show_rate("read", tempfile, &start_time,
+			  total_bytes, curr_bytes);
 		printf("\nread complete\n");
 		verbose--;
 	}

@@ -40,14 +40,14 @@
  * handling IO beyond 2TB boundary.
  * This tool have two working modes
  * 1. full mode
- * 2. fast mode
+ * 2. partial mode
  *
  * In full mode, the program writes a test pattern on the entire disk.
  * The test pattern (device offset and timestamp) is written at the
  * beginning of each 4kB block. When the whole device is full the read
  * operation is performed to verify that the test pattern is correct.
  *
- * In fast mode, the program writes data at the critical locations
+ * In partial mode, the program writes data at the critical locations
  * of the device such as start of the device, before and after multiple of 1GB
  * offset and at the end.
  *
@@ -273,7 +273,7 @@ int verify_chunk(char *chunk_buf, const size_t chunksize,
 
 /*
  * fill_chunk: Fills the chunk with current or user specified timestamp
- * and  offset. The test patters is filled at the beginning of
+ * and offset. The test pattern is filled at the beginning of
  * each 4kB(BLOCKSIZE) blocks in chunk_buf.
  */
 void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
@@ -353,6 +353,7 @@ retry:
 		fprintf(stderr, "\n%s: write %s@%llu+%zi short: %ld written\n",
 			progname, file, offset, nrequested, nwritten);
 		offset += nwritten;
+		chunk_buf += nwritten;
 		nrequested -= nwritten;
 		goto retry;
 	}
