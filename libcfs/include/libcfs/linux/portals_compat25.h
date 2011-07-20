@@ -61,7 +61,7 @@
 #define cfs_wait_event_interruptible(wq, condition, ret)               \
         ret = wait_event_interruptible(wq, condition)
 #define cfs_wait_event_interruptible_exclusive(wq, condition, ret)     \
-        ret = wait_event_interruptible(wq, condition)
+        ret = wait_event_interruptible_exclusive(wq, condition)
 
 #define UML_PID(tsk) ((tsk)->pid)
 
