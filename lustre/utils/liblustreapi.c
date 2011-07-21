@@ -1602,8 +1602,6 @@ int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
         int fd, rc = 0;
 
         fname = strrchr(path, '/');
-        if (strlen(fname) + 1 < sizeof(struct lov_user_md))
-                return ENAMETOOLONG;
 
         /* It should be a file (or other non-directory) */
         if (fname == NULL) {
