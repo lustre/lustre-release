@@ -223,14 +223,16 @@ static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 static int seq_fid_alloc_prep(struct lu_client_seq *seq,
                               cfs_waitlink_t *link)
 {
-
-        cfs_waitq_add(&seq->lcs_waitq, link);
         if (seq->lcs_update) {
-                cfs_up(&seq->lcs_sem);
+                cfs_waitq_add(&seq->lcs_waitq, link);
                 cfs_set_current_state(CFS_TASK_UNINT);
+                cfs_up(&seq->lcs_sem);
+
                 cfs_waitq_wait(link, CFS_TASK_UNINT);
-                cfs_set_current_state(CFS_TASK_RUNNING);
+
                 cfs_down(&seq->lcs_sem);
+                cfs_waitq_del(&seq->lcs_waitq, link);
+                cfs_set_current_state(CFS_TASK_RUNNING);
                 return -EAGAIN;
         }
         ++seq->lcs_update;
@@ -238,13 +240,11 @@ static int seq_fid_alloc_prep(struct lu_client_seq *seq,
         return 0;
 }
 
-static void seq_fid_alloc_fini(struct lu_client_seq *seq,
-                               cfs_waitlink_t *link)
+static void seq_fid_alloc_fini(struct lu_client_seq *seq)
 {
         LASSERT(seq->lcs_update == 1);
         cfs_down(&seq->lcs_sem);
         --seq->lcs_update;
-        cfs_waitq_del(&seq->lcs_waitq, link);
         cfs_waitq_signal(&seq->lcs_waitq);
 }
 
@@ -280,6 +280,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                 if (rc) {
                         CERROR("%s: Can't allocate new sequence, "
                                "rc %d\n", seq->lcs_name, rc);
+                        seq_fid_alloc_fini(seq);
                         cfs_up(&seq->lcs_sem);
                         RETURN(rc);
                 }
@@ -297,7 +298,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                  */
                 rc = 1;
 
-                seq_fid_alloc_fini(seq, &link);
+                seq_fid_alloc_fini(seq);
                 break;
         }
 
