@@ -41,4 +41,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
-DIST_SOURCES = $(kqswlnd-objs:%.o=%.c) qswlnd.h
+EXTRA_DIST = $(kqswlnd-objs:%.o=%.c) qswlnd.h

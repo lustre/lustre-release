@@ -46,4 +46,4 @@ modulefs_DATA = fld$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES := $(fld-objs:%.o=%.c) fld_internal.h
+EXTRA_DIST := $(fld-objs:%.o=%.c) fld_internal.h

@@ -20,4 +20,4 @@ endif # MODULES
 install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ selftest
-DIST_SOURCES = $(lnet_selftest-objs:%.o=%.c) console.h conrpc.h rpc.h selftest.h timer.h
+EXTRA_DIST = $(lnet_selftest-objs:%.o=%.c) console.h conrpc.h rpc.h selftest.h timer.h

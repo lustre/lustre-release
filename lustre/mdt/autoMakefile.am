@@ -39,4 +39,4 @@ modulefs_DATA = mdt$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES := $(mdt-objs:%.o=%.c) mdt_internal.h
+EXTRA_DIST := $(mdt-objs:%.o=%.c) mdt_internal.h
