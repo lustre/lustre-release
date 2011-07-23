@@ -2436,7 +2436,8 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
         CFS_LIST_HEAD(rpc_list);
         CFS_LIST_HEAD(tmp_list);
         unsigned int ending_offset;
-        unsigned  starting_offset = 0;
+        obd_off starting_offset = OBD_OBJECT_EOF;
+        int starting_page_off = 0;
         int srvlock = 0, mem_tight = 0;
         struct cl_object *clob = NULL;
         ENTRY;
@@ -2482,7 +2483,13 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                 /* If there is a gap at the start of this page, it can't merge
                  * with any previous page, so we'll hand the network a
                  * "fragmented" page array that it can't transfer in 1 RDMA */
-                if (page_count != 0 && oap->oap_page_off != 0)
+                if (oap->oap_obj_off < starting_offset) {
+                        if (starting_page_off != 0)
+                                break;
+
+                        starting_page_off = oap->oap_page_off;
+                        starting_offset = oap->oap_obj_off + starting_page_off;
+                } else if (oap->oap_page_off != 0)
                         break;
 
                 /* in llite being 'ready' equates to the page being locked
@@ -2560,10 +2567,6 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                 lop_update_pending(cli, lop, cmd, -1);
                 cfs_list_del_init(&oap->oap_urgent_item);
 
-                if (page_count == 0)
-                        starting_offset = (oap->oap_obj_off+oap->oap_page_off) &
-                                          (PTLRPC_MAX_BRW_SIZE - 1);
-
                 /* ask the caller for the size of the io as the rpc leaves. */
                 if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE)) {
                         oap->oap_count =
@@ -2628,6 +2631,7 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
 
         aa = ptlrpc_req_async_args(req);
 
+        starting_offset &= PTLRPC_MAX_BRW_SIZE - 1;
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
@@ -2968,9 +2972,8 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
 int osc_queue_async_io(const struct lu_env *env, struct obd_export *exp,
                        struct lov_stripe_md *lsm, struct lov_oinfo *loi,
-                       struct osc_async_page *oap, int cmd, obd_off off,
-                       int count, obd_flag brw_flags,
-                       enum async_flags async_flags)
+                       struct osc_async_page *oap, int cmd, int off,
+                       int count, obd_flag brw_flags, enum async_flags async_flags)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         int rc = 0;

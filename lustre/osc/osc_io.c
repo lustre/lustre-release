@@ -299,14 +299,24 @@ static int osc_io_prepare_write(const struct lu_env *env,
 {
         struct osc_device *dev = lu2osc_dev(slice->cpl_obj->co_lu.lo_dev);
         struct obd_import *imp = class_exp2cliimp(dev->od_exp);
-
+        struct osc_io     *oio = cl2osc_io(env, ios);
+        int result = 0;
         ENTRY;
 
         /*
          * This implements OBD_BRW_CHECK logic from old client.
          */
 
-        RETURN(imp == NULL || imp->imp_invalid ? -EIO : 0);
+        if (imp == NULL || imp->imp_invalid)
+                result = -EIO;
+        if (result == 0 && oio->oi_lockless)
+                /* this page contains `invalid' data, but who cares?
+                 * nobody can access the invalid data.
+                 * in osc_io_commit_write(), we're going to write exact
+                 * [from, to) bytes of this page to OST. -jay */
+                cl_page_export(env, slice->cpl_page, 1);
+
+        RETURN(result);
 }
 
 static int osc_io_commit_write(const struct lu_env *env,
@@ -314,6 +324,7 @@ static int osc_io_commit_write(const struct lu_env *env,
                                const struct cl_page_slice *slice,
                                unsigned from, unsigned to)
 {
+        struct osc_io         *oio = cl2osc_io(env, ios);
         struct osc_page       *opg = cl2osc_page(slice);
         struct osc_object     *obj = cl2osc(opg->ops_cl.cpl_obj);
         struct osc_async_page *oap = &opg->ops_oap;
@@ -330,6 +341,10 @@ static int osc_io_commit_write(const struct lu_env *env,
         if (!client_is_remote(osc_export(obj)) &&
             cfs_capable(CFS_CAP_SYS_RESOURCE))
                 oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
+
+        if (oio->oi_lockless)
+                /* see osc_io_prepare_write() for lockless io handling. */
+                cl_page_clip(env, slice->cpl_page, from, to);
 
         RETURN(0);
 }

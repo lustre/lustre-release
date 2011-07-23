@@ -159,9 +159,8 @@ void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli);
 
 int osc_queue_async_io(const struct lu_env *env, struct obd_export *exp,
                        struct lov_stripe_md *lsm, struct lov_oinfo *loi,
-                       struct osc_async_page *oap, int cmd, obd_off off,
-                       int count, obd_flag brw_flags,
-                       enum async_flags async_flags);
+                       struct osc_async_page *oap, int cmd, int off,
+                       int count,  obd_flag brw_flags, enum async_flags async_flags);
 int osc_teardown_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                             struct lov_oinfo *loi, struct osc_async_page *oap);
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *cfg);

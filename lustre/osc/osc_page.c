@@ -232,7 +232,8 @@ static int osc_page_cache_add(const struct lu_env *env,
         osc_page_transfer_get(opg, "transfer\0cache");
         result = osc_queue_async_io(env, osc_export(obj), NULL, obj->oo_oinfo,
                                     &opg->ops_oap, OBD_BRW_WRITE | noquota,
-                                    0, 0, brw_flags, 0);
+                                    opg->ops_from, opg->ops_to - opg->ops_from,
+                                    brw_flags, 0);
         if (result != 0)
                 osc_page_transfer_put(env, opg);
         else
@@ -365,7 +366,7 @@ static int osc_page_print(const struct lu_env *env,
 
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
                           "1< %#x %d %u %s %s %s > "
-                          "2< "LPU64" %u %#x %#x | %p %p %p %p %p > "
+                          "2< "LPU64" %u %u %#x %#x | %p %p %p %p %p > "
                           "3< %s %p %d %lu %d > "
                           "4< %d %d %d %lu %s | %s %s %s %s > "
                           "5< %s %s %s %s | %d %s %s | %d %s %s>\n",
@@ -377,7 +378,7 @@ static int osc_page_print(const struct lu_env *env,
                           osc_list(&oap->oap_urgent_item),
                           osc_list(&oap->oap_rpc_item),
                           /* 2 */
-                          oap->oap_obj_off, oap->oap_page_off,
+                          oap->oap_obj_off, oap->oap_page_off, oap->oap_count,
                           oap->oap_async_flags, oap->oap_brw_flags,
                           oap->oap_request,
                           oap->oap_cli, oap->oap_loi, oap->oap_caller_ops,
